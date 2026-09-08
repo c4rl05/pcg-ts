@@ -28,7 +28,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import type { InstancesItem, NodeHandle } from "../index.js";
+import type { InstancesItem, NodeHandle, ParamSchema } from "../index.js";
 import {
   Graph,
   cook,
@@ -48,6 +48,7 @@ import {
 import {
   CODE_ECHOES,
   COUNT_CLAIMS,
+  PRIMITIVE_FAMILIES,
   ERROR_TRANSCRIPTS,
   SITE_PAGES,
   TRANSCRIPT_CLAIMS,
@@ -114,19 +115,63 @@ function page(name: string): string {
 }
 
 /**
+ * Every declared param in the standard library, paired with its node.
+ *
+ * Read once, at load, for the same reason the primitive catalog is: a
+ * sibling suite may register a throwaway node type into the same
+ * process, and a param invented by a test is not one the docs owe
+ * anyone a sentence about.
+ */
+const PARAMS: readonly { readonly type: string; readonly key: string; readonly schema: ParamSchema }[] =
+  listNodeTypes().flatMap((t) =>
+    Object.entries(t.params ?? {}).map(([key, schema]) => ({ type: t.type, key, schema })),
+  );
+
+const FIELD_CAPABLE = PARAMS.filter((p) => p.schema.acceptsField);
+
+/**
+ * "Source node" has three defensible readings and they give 5, 6 and 10
+ * — see the sentence in llms.txt, which states the definition beside the
+ * count for exactly that reason. This is the one it states: a node that
+ * declares no inputs at all, less the two categories whose pins are
+ * per-instance (`composite`) or injected (`io`).
+ */
+const SOURCE_NODES = listNodeTypes().filter(
+  (t) => (t.inputs ?? []).length === 0 && t.category !== "io" && t.category !== "composite",
+);
+
+/**
  * The truth for every stated count.
  *
  * Node types and field functions come straight from the live registries.
  * Primitives and corpus examples come from their generated catalogs,
  * which are themselves pinned to the live registries by
  * primitives.test.ts and graphIndex.test.ts — so the chain still ends at
- * the code, and this file never counts anything by hand.
+ * the code, and this file never counts anything by hand. The param
+ * arithmetic llms.txt states is derived here for the same reason: a
+ * sentence that says which params accept a field is a claim about the
+ * registry, so the registry answers it.
  */
 const TRUTH: Record<string, number> = {
   "listNodeTypes().length": listNodeTypes().length,
   "listFieldFns().length": listFieldFns().length,
   "docs/primitives.json entries": readJson("docs/primitives.json").length,
   "docs/graphs.json entries": readJson("docs/graphs.json").length,
+  "field-capable params": FIELD_CAPABLE.length,
+  "field-capable f32 params": FIELD_CAPABLE.filter((p) => p.schema.type === "f32").length,
+  "field-capable vec3 params": FIELD_CAPABLE.filter((p) => p.schema.type === "vec3").length,
+  "node types with a field-capable param": new Set(FIELD_CAPABLE.map((p) => p.type)).size,
+  "standard-library declared params": PARAMS.length,
+  "seed params": PARAMS.filter((p) => p.key === "seed").length,
+  "source nodes": SOURCE_NODES.length,
+  ...Object.fromEntries(
+    PRIMITIVE_FAMILIES.map((family) => [
+      `primitives in ${family}`,
+      (readJson("docs/primitives.json") as { name: string }[]).filter((p) =>
+        p.name.startsWith(`${family}/`),
+      ).length,
+    ]),
+  ),
 };
 
 describe("site version stamps", () => {

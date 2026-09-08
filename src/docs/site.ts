@@ -488,6 +488,24 @@ export interface CountClaim {
 }
 
 /**
+ * The closed set of primitive families, in the order llms.txt lists them.
+ *
+ * Closed is the point: the guide calls it "a CLOSED set of seven
+ * families, and the family is a promise about the pin shape", so a new
+ * family is a change to the vocabulary and should fail here until the
+ * sentence that promises seven is rewritten too.
+ */
+export const PRIMITIVE_FAMILIES = [
+  "shape",
+  "fill",
+  "transform",
+  "compose",
+  "filter",
+  "place",
+  "write",
+] as const;
+
+/**
  * Which sentence states which count, and what decides it.
  *
  * `source` is the name of the live registry, quoted verbatim in failures
@@ -624,6 +642,78 @@ export const COUNT_CLAIMS: readonly CountClaim[] = [
     source: "listFieldFns().length",
     pattern: /`listFieldFns\(\)` returns all ([\d,]+) names at runtime/g,
   },
+  // The rest of llms.txt's registry arithmetic, added when the guide was
+  // first checked against the library it describes. Every one of these was
+  // wrong at that point — the field-capable sweep by more than half, the
+  // primitive families by one each — because the guide has no generator
+  // and the numbers were counted by hand on the day they were written.
+  // They are all sentences an agent would act on: "which params take a
+  // field" is a decision, not a decoration.
+  {
+    page: "llms.txt",
+    label: "field-capable params (sweep headline)",
+    source: "field-capable params",
+    pattern: /WHICH PARAMS ACCEPT ONE — ([\d,]+) of the standard library's/g,
+  },
+  {
+    page: "llms.txt",
+    label: "declared params in the standard library",
+    source: "standard-library declared params",
+    pattern: /of the standard library's ([\d,]+), across/g,
+  },
+  {
+    page: "llms.txt",
+    label: "node types carrying a field-capable param",
+    source: "node types with a field-capable param",
+    pattern: /across ([\d,]+)\s+node types/g,
+  },
+  {
+    page: "llms.txt",
+    label: "field-capable params (f32/vec3 split)",
+    source: "field-capable params",
+    pattern: /all ([\d,]+) are `f32`/g,
+  },
+  {
+    page: "llms.txt",
+    label: "field-capable f32 params",
+    source: "field-capable f32 params",
+    pattern: /are `f32` \(([\d,]+)\)/g,
+  },
+  {
+    page: "llms.txt",
+    label: "field-capable vec3 params",
+    source: "field-capable vec3 params",
+    pattern: /or `vec3` \(([\d,]+)\)/g,
+  },
+  // Stated with its definition in the prose, because three different
+  // readings of "source node" give three different numbers and only this
+  // one makes the parenthetical that follows it complete.
+  {
+    page: "llms.txt",
+    label: "source nodes (zero declared inputs, less io/composite)",
+    source: "source nodes",
+    pattern: /the ([\d,]+) source nodes/g,
+  },
+  {
+    page: "llms.txt",
+    label: "eager seed params",
+    source: "seed params",
+    pattern: /all ([\d,]+) `seed` params/g,
+  },
+  {
+    page: "llms.txt",
+    label: "named primitives",
+    source: "docs/primitives.json entries",
+    pattern: /([\d,]+) named subgraphs/g,
+  },
+  ...PRIMITIVE_FAMILIES.map((family) => ({
+    page: "llms.txt",
+    label: `primitives in the ${family} family`,
+    source: `primitives in ${family}`,
+    // Anchored at the bullet, so the family word cannot be matched in the
+    // prose that describes one of its members.
+    pattern: new RegExp(String.raw`^- ${family} \(([\d,]+)\)`, "gm"),
+  })),
 ];
 
 export interface StatedCount {

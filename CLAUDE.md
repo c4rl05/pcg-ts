@@ -117,7 +117,7 @@ a parent — these are three different kinds of thing and the old single
   the version with no placement rules in it, and the claim used to be that
   their identical module names made the diff between them read as what the
   rules added. THAT IS NO LONGER TRUE and the two are independent demos:
-  `main.ts` shares not one line (505 against 1287), `graph.ts` and `lap.ts`
+  `main.ts` shares not one line (532 against 2167), `graph.ts` and `lap.ts`
   have diverged in BOTH directions — road has its own `dressVerges` and a
   simpler `Lap` with no corner model, 95 and 27 lines racetrack does not
   have — and only `spline.ts` is still identical. Read them as two demos

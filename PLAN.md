@@ -790,6 +790,19 @@ to say something a `vec3` plus one bit would say. Commit `9656a8f`
 declined `step`/`label`/`group` on `ParamSchema` for a related reason
 and that decision still holds; this is not a re-run of it.
 
+**3. ~~`llms.txt` has no generator, and it was the staleest thing
+here.~~** — GATED 2026-09-08, and the entry was right that a generator
+is the wrong instrument. What shipped is the check the last sentence
+below asks for, widened from phrases to NAME SETS: `src/docs/llms.ts`
+extracts the node, primitive and field-fn names the guide lists, and
+`llms.test.ts` fails when the registry holds one it does not. The
+measurement that justified it: 17 of 59 node types, 3 of 37 primitives
+and 1 of 63 field fns had no entry, and fourteen sentences quoted a
+count the registry had moved past — the field-capable param sweep was
+off by more than half (44 written, 67 real). The numbers went into
+`COUNT_CLAIMS` beside the site's, so there is one table for "a sentence
+states a number that moved". The original entry follows.
+
 **3. `llms.txt` has no generator, and it was the staleest thing here.**
 It still gave the binding budget as the reason channels were not device
 produced, still said the resident spawner "does not fill it yet", and
@@ -1816,6 +1829,9 @@ the two HTML pages from package.json), a roadmap row in
 and a tag cut only AFTER the version is settled. Publishing is interactive
 (npm 2FA is a passkey), so it ends with a command for a human to type.
 
+The version half SHIPPED in `a68b374` (0.17.0, both files). What is
+below is the half that did not.
+
 STILL OPEN, found by the audit this pass actually did: 41 of 190 runtime
 exports are named in none of `llms.txt`, `README.md` or
 `docs/authoring.md` — including `isField`, `defineNode`,
@@ -2533,8 +2549,10 @@ graph in `graphs/`. The second is better: it fails on the drift rather
 than papering over it, and it is the same "prose nothing tests" defect
 this file records twice below.
 
-**Documentation that quotes measured output has no assertion behind
-it.** Phase 44's docs pass found the manual's Part II transcripts had
+**~~Documentation that quotes measured output has no assertion behind
+it.~~** — SHIPPED in `485dca0`: `ERROR_TRANSCRIPTS` in `src/docs/site.ts`
+re-derives the manual's transcripts by running the live library, and two
+of them were already wrong when it was written. Phase 44's docs pass found the manual's Part II transcripts had
 silently become fiction — 1008 points where the library now produces
 1038, a stale determinism fingerprint, an error listing 25 registered
 types against a registry of 38 — because phases 42-44 moved per-point
