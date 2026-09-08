@@ -127,6 +127,107 @@ round 20 — which is a property of that node, not of this one, and is the
 sharpest form of the ordinal warning: wire the merge the other way and
 every pointer shifts and the edges still build.
 
+### ~~The resolve-before-mutate defect class~~ — AUDITED CLOSED 2026-09-08
+
+Three nodes resolved a field-capable param AFTER mutating an attribute
+that param could read. The house rule was already written on `resolveOn`
+in `src/nodes/util.ts` -- resolve every field-capable param BEFORE
+mutating anything a param could read -- and these were the adopters that
+did not follow it. Fixed in `setBounds`, `quotaRebalance` and
+`pathPointAt`; see the two commits, which carry the failing inputs.
+
+The class has TWO halves and they need different fixes, which is why
+finding one does not find the other. ORDERING: the field resolves after
+the write and reads what this cook just produced (`setBounds`,
+`quotaRebalance`). ALIASING: the resolve order is already right, but a
+later `replace()` on a column the resolved view points into zeroes it
+before it is read (`pathPointAt`, where every point silently sought
+parameter 0). Both exist because `attribute()` returns a live zero-copy
+subarray and `replace` reuses matching storage in place.
+
+**AUDITED AND CLOSED.** 33 nodes carry 67 field-capable params; the
+enumeration is provably complete because `resolveOn` /
+`resolveOnMaybeGpu` / `resolveOnAllowingNonFinite` are called from
+exactly 14 node files and `util.ts`, and no node resolves a field
+anywhere else. The 41 field-capable params under `src/primitives/` add no
+surface -- each forwards to one of these or is a targetless knob spliced
+into a recipe. Verdicts: 32 CLEAN, 1 UNREACHABLE-BY-CONSTRUCTION
+(`orientAlongVector`, whose only mutated column is the f32x4 `rot`, which
+`requireTuple([1,3])` cannot admit). Zero remaining defects. The three
+that were found were the three that existed.
+
+THE STRUCTURAL REASON THE REST ARE SAFE is the thing worth keeping, and
+it is one line: `cloneGeometry` deep-copies every column, so a node that
+resolves against the INPUT and writes into a fresh or cloned geometry is
+immune to both halves. The hazard is exactly the shape
+`clone -> resolve on the clone -> write the clone`, which is what all
+three defective nodes had and what a new node should be read for.
+
+Two things the audit surfaced that were NOT the class. `pathCoverage`
+did not refuse `coveredAttr` and `hitsAttr` being the same name, and one
+name let the u32 count silently replace the bool flag while the cook
+reported success -- now refused, for the reason `quotaRebalance` refuses
+`targetAttr === unmetAttr`. And `setAttribute`'s two string-selection
+loops both explain why they need no aliasing snapshot but only the index
+one was pinned by a test; the `select` path now has one that names the
+target the SAME as the selector column and asserts the numbers survive.
+
+One correction to the audit's own report, for whoever reads it next: it
+called `runFit` "saved only by resolving on the primitive domain while
+writing point columns". That understates it. `runFit`'s two field
+resolves (`gap` and `period`) both happen BEFORE its first `replace`, so
+it satisfies the primary rule outright; the disjoint domain is a second,
+independent protection rather than the only one.
+
+### Stretch: a field-capable per-target count on `copyToPoints` — MEASURED AND DECLINED, 2026-09-08
+
+The 2026-08-25 note under "What was NOT added, and why" set the condition
+itself: the cut idiom goes in first, and if it proves painful, that is the
+evidence. Three growth graphs later there is evidence, and it does not buy
+the feature.
+
+`examples-tree` runs the cut every round for twelve rounds. Measured by
+capping `maxRounds` one round at a time and differencing the point count,
+with the bud count read from the loop's own `moves`:
+
+```
+  round   buds  made(3x)   kept  killed   total
+      1      1         3      1       2       2
+      4      2         6      6       0      11
+      7     25        75     51      24      99
+     10    229       687    482     205     917
+     12   1040      3120   2256     864    4213
+     13   2256      6768      0    6768    4213
+  TOTAL          12,639   4,212   8,427          (66.7% discarded)
+```
+
+Three slots are emitted per bud and roughly one survives, so the waste is
+STRUCTURAL rather than incidental — it is a constant factor of about three
+on every round, not a tail. The last round is the whole problem in
+miniature: 6,768 points made and every one discarded, because a fixed point
+has to run one round producing nothing in order to learn that it is done.
+
+That is 47x the ~270 the original note measured, and it is STILL not
+painful. The whole cook is 69 ms warm (coral, for scale, is 181 ms), so the
+waste is worth about 45 ms on a graph that cooks once. The regime where a
+factor of three would matter is a streamed cell re-cooking per frame, and
+NO SHIPPED GRAPH IS IN THAT REGIME — which is the same argument that
+declined lowering the fold's element threshold, and it should be applied
+the same way here.
+
+THE MEASUREMENT ALSO FOUND THE FEATURE IS BIGGER THAN THE NOTE ASSUMED, and
+this is the part worth keeping. A variable count breaks `mod(index, N)`,
+which is the only way a child currently learns WHICH slot it is: the
+identity holds solely because copies arrive in contiguous per-target blocks
+of a constant width, and a per-target count makes the width vary. So the
+count is unusable for this case without a companion that writes the
+within-block offset — a `sourceIndexAttr` beside the existing
+`targetIndexAttr`, which nothing else is asking for. Two changes, not one
+param, and the second has no other caller.
+
+**Recommendation: do not schedule.** Revisit if a STREAMED growth loop
+appears, and cost it as two nodes' worth of change rather than as a param.
+
 ### Stretch: a `splitBounds` node — NOT NEEDED, the graph does it, 2026-09-08
 
 Proposed alongside the parent-pointer entry above: a core node that

@@ -364,6 +364,16 @@ export const pathCoverage = standardNode<PathCoverageParams>({
         "pathCoverage: nothing to write — set coveredAttr (the bool covered/not flag) or hitsAttr (the count of rays that hit), or both; both are currently empty",
       );
     }
+    if (wantCovered && params.coveredAttr === params.hitsAttr) {
+      // Both land on the POINT domain and both are written at the end, so
+      // one name means the u32 count replaces the bool flag and the cook
+      // reports success having written half of what was asked for. Refused
+      // for the reason quotaRebalance refuses targetAttr === unmetAttr:
+      // two different facts need two names.
+      throw new Error(
+        `pathCoverage: params "coveredAttr" and "hitsAttr" are both "${params.coveredAttr}", but they are two different facts about the same point — a bool covered/not flag and a u32 count of rays that hit — and one column cannot hold both. Written to one name the count silently replaces the flag. Give them two names (e.g. "covered" and "coverHits").`,
+      );
+    }
     const rayCount = params.rayCount;
     if (!Number.isInteger(rayCount) || rayCount < 1) {
       throw new Error(

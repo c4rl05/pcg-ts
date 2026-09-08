@@ -523,6 +523,26 @@ describe("pathCoverage: refusals", () => {
     expect(message).toContain("hitsAttr");
   });
 
+  it("refuses one name for both slots, which would discard the flag", async () => {
+    // Both land on the point domain and both are written at the end, so a
+    // shared name lets the u32 count replace the bool flag while the cook
+    // still reports success.
+    const message = await refusal(straightPath(2), boxCloud([ROOF]), {
+      coveredAttr: "cover",
+      hitsAttr: "cover",
+    });
+    expect(message).toContain("are both \"cover\"");
+    expect(message).toContain("one column cannot hold both");
+    // CONTROL: two names is the ordinary case and must still cook.
+    const ok = await runNode(
+      pathCoverage,
+      { coveredAttr: "cover", hitsAttr: "coverHits" },
+      { path: [makeGeometryItem(straightPath(2))], boxes: [makeGeometryItem(boxCloud([ROOF]))] },
+    );
+    expect(firstGeo(ok.out).attrs.point.require("cover").type).toBe("bool");
+    expect(firstGeo(ok.out).attrs.point.require("coverHits").type).toBe("u32");
+  });
+
   it("refuses a threshold no fan could ever reach", async () => {
     const message = await refusal(straightPath(2), boxCloud([ROOF]), {
       rayCount: 4,

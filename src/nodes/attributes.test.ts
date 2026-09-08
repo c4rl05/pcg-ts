@@ -535,6 +535,58 @@ describe("setAttribute weighted string tables", () => {
     ]);
   });
 
+  it("selects from the very column it is replacing, which is why no snapshot is needed", async () => {
+    // The reason both string loops give for taking no aliasing snapshot,
+    // run rather than asserted in a comment: a selector column can only
+    // view NUMERIC storage, and replacing a numeric column with a STRING
+    // one allocates fresh storage instead of resetting the buffer the
+    // resolved view still points into. Name the target the same as the
+    // selector and the read must still see the numbers it was handed.
+    const cloud = cloudAt(line(3));
+    const sel = cloud.attrs.point.add("kind", "f32", 1, 0);
+    [0, 0.5, 0.99].forEach((v, i) => sel.set(i, v));
+    const geo = firstGeo(
+      (
+        await runNode(
+          setAttribute,
+          {
+            name: "kind", // the SAME column the selector reads
+            type: "string",
+            values: ["a", "b"],
+            select: fieldFromJson({ fn: "attribute", name: "kind" }),
+          },
+          { in: [makeGeometryItem(cloud)] },
+        )
+      ).out,
+    );
+    const attr = geo.attrs.point.require("kind");
+    expect(attr.type).toBe("string");
+    // A reset buffer would hand every point 0 and read "a" three times.
+    expect([0, 1, 2].map((i) => attr.getString(i))).toEqual(["a", "b", "b"]);
+
+    // CONTROL: the same selection under a DIFFERENT target name, where no
+    // aliasing is possible, must give the identical answer.
+    const apart = cloudAt(line(3));
+    const sel2 = apart.attrs.point.add("sel", "f32", 1, 0);
+    [0, 0.5, 0.99].forEach((v, i) => sel2.set(i, v));
+    const other = firstGeo(
+      (
+        await runNode(
+          setAttribute,
+          {
+            name: "kind",
+            type: "string",
+            values: ["a", "b"],
+            select: fieldFromJson({ fn: "attribute", name: "sel" }),
+          },
+          { in: [makeGeometryItem(apart)] },
+        )
+      ).out,
+    );
+    const control = other.attrs.point.require("kind");
+    expect([0, 1, 2].map((i) => control.getString(i))).toEqual(["a", "b", "b"]);
+  });
+
   it("is total: non-finite and out-of-range selectors land on defined entries", async () => {
     // The property the index selector documents, kept: no per-element
     // throw, ever. NaN and -Infinity take the first entry, +Infinity the
