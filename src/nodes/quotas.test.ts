@@ -14,7 +14,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { createPointCloud, type Geometry } from "../data/index.js";
-import { attribute, component } from "../fields/index.js";
+import { add, attribute, component, lt, mul } from "../fields/index.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { hashCombine } from "../random/index.js";
 import { quotaRebalance, type QuotaRebalanceParams } from "./quotas.js";
@@ -590,5 +590,85 @@ describe("quotaRebalance: degenerate populations", () => {
     const cats = [...Array<number>(10).fill(0), ...Array<number>(10).fill(1)];
     const target = await rebalance(population(cats), { min: [0.5, 0.5], max: [0.5, 0.5] });
     expect(target.every((t) => t === -1)).toBe(true);
+  });
+});
+
+describe("quotaRebalance: the destination column is INPUT to the fields that read it", () => {
+  // THE REPEATUNTIL IDIOM IS THE WHOLE REASON THIS BLOCK EXISTS. The
+  // node's own description sends authors to `repeatUntil`, "so that a
+  // redraw which lands in the wrong category is simply seen again on the
+  // next round" — and a graph written that way reads the PREVIOUS round's
+  // destination back, because that column is the only record of what the
+  // last round decided. `targetAttr` is an ordinary point attribute, so
+  // the input may well carry one; the node used to `replace` and fill it
+  // with -1 BEFORE resolving its four field-capable params on the same
+  // domain, and every such field then read a column of -1 that no author
+  // wrote. The house rule is in the header of `resolveOn`: resolve every
+  // field-capable param before mutating any attribute a param could read.
+  //
+  // `eligible` and `priority` are the two checked here. All four params
+  // go through the one helper and the one resolve phase, so `include` and
+  // `category` cannot be right while these two are wrong.
+
+  /** A population plus the destination column a previous round left on it. */
+  function withPreviousRound(cats: readonly number[], movedLastRound: (i: number) => boolean): Geometry {
+    const geo = population(cats);
+    const prev = geo.attrs.point.add("quotaTarget", "i32", 1);
+    // What a round actually leaves behind: the category a moving point was
+    // told to join, and -1 on every point that stayed.
+    for (let i = 0; i < cats.length; i++) prev.set(i, movedLastRound(i) ? 1 : -1);
+    return geo;
+  }
+
+  it("resolves `eligible` against the destinations the cook was HANDED", async () => {
+    // 15 / 5 of 20 puts category 0 at 0.75 against a 0.5 ceiling, so five
+    // of it have to leave — unless none of them may. `eligible` is the
+    // idiom the description recommends: a point that already moved last
+    // round carries a target >= 0 and is pinned this round, a point that
+    // stayed carries -1 and is free. Every member of category 0 moved,
+    // so the category has no donor at all and NOTHING moves.
+    const cats = [...Array<number>(15).fill(0), ...Array<number>(5).fill(1)];
+    const moved = async (movedLastRound: (i: number) => boolean): Promise<number> => {
+      const target = await rebalance(withPreviousRound(cats, movedLastRound), {
+        min: [0, 0.25],
+        max: [0.5, 1],
+        eligible: lt(attribute("quotaTarget"), 0),
+      });
+      return target.filter((t) => t >= 0).length;
+    };
+    expect(await moved((i) => (cats[i] as number) === 0)).toBe(0);
+    // THE CONTROL, and it is what tells this apart from a node that never
+    // moves anything under these bands: the SAME expression over a column
+    // saying nobody moved last round frees every member, and five go.
+    // Before the fix both lines answered 5, because both read the -1s this
+    // node had just written rather than the ones the input carried.
+    expect(await moved(() => false)).toBe(5);
+  });
+
+  it("resolves `priority` against the destinations the cook was HANDED", async () => {
+    // 12 / 8 of 20: category 0 is 0.6 against a 0.5 ceiling, so two go.
+    // Priority is the x coordinate — which is the point index — pushed 100
+    // behind for any point that already moved last round, so "leave the
+    // ones you just redrew alone". Every priority is distinct, so the
+    // order is arithmetic end to end and never reaches the identity
+    // tiebreak. Points 0 and 1 moved last round and sit at 100 and 101;
+    // the rest of category 0 runs from -98 to -89, so the two that leave
+    // are 2 and 3.
+    const cats = [...Array<number>(12).fill(0), ...Array<number>(8).fill(1)];
+    const leavers = async (movedLastRound: (i: number) => boolean): Promise<number[]> => {
+      const target = await rebalance(withPreviousRound(cats, movedLastRound), {
+        min: [0, 0.4],
+        max: [0.5, 1],
+        priority: add(component(attribute("P"), 0), mul(attribute("quotaTarget"), 100)),
+      });
+      return target.map((t, i) => (t >= 0 ? i : -1)).filter((i) => i >= 0);
+    };
+    expect(await leavers((i) => i < 2)).toEqual([2, 3]);
+    // THE CONTROL: the same expression over a column saying nobody moved
+    // subtracts a flat 100 from every point, which leaves the x order
+    // alone, and the two lowest are 0 and 1. That is also the answer the
+    // node gave BEFORE the fix for both cases, which is the defect stated
+    // as a number: the previous round was invisible.
+    expect(await leavers(() => false)).toEqual([0, 1]);
   });
 });

@@ -1225,7 +1225,7 @@ export const pathPointAt = standardNode<PathPointAtParams>({
       default: 0.5,
       acceptsField: true,
       description:
-        "Where along the polyline to place the point, read according to `mode`. Field-capable, resolved on the INPUT points before any of them move — so it can read `curveU` and express a move relative to where the point already is (for example lerp(attribute('curveU'), target, amount)), which is the usual way to use this node. Values outside the range clamp.",
+        "Where along the polyline to place the point, read according to `mode`. Field-capable, resolved on the INPUT points before any of them move — so it can read `curveU` and express a move relative to where the point already is (for example lerp(attribute('curveU'), target, amount)), which is the usual way to use this node. A BARE attribute('curveU') is equally sound and is the re-seek: this node writes `tangent` and `curveU` afresh, and a resolved column that turns out to be the live storage of either is snapshotted before that write, so the parameter read is always the one this cook was HANDED and never a column this node has already reset. Values outside the range clamp.",
     },
   },
   // `parameter` may resolve on the GPU. It is evaluated on the cloned
@@ -1268,6 +1268,27 @@ export const pathPointAt = standardNode<PathPointAtParams>({
       "pathPointAt",
       "parameter",
     );
+    // The resolved column can be a zero-copy VIEW of a column this node
+    // is about to reset — `attribute("curveU")` hands back that column
+    // itself — and replace() keeps matching storage and zeroes it IN
+    // PLACE, so the read below would find zeros and every point would
+    // seek the start of its own path. Snapshot when it aliases either
+    // column this node writes, the same guard setAttribute takes against
+    // its own target. Resolving first is not enough here: the ordering is
+    // already right, and it is the reset that destroys the answer.
+    //
+    // `curveU` is the reachable half. `tangent` is checked anyway rather
+    // than reasoned away: requireReportSlot above has refused any
+    // `tangent` that is not f32x3 and requireTuple has refused a tuple-3
+    // `parameter`, so no `at` can be a view of it TODAY — but that is an
+    // invariant held in two other functions, and the check is two buffer
+    // comparisons once per cook.
+    const seek: Column = ["tangent", "curveU"].some((name) => {
+      const a = geo.attrs.point.get(name);
+      return a !== undefined && a.data.buffer === at.data.buffer;
+    })
+      ? { data: at.data.slice(), tupleSize: at.tupleSize }
+      : at;
     const P = geo.attrs.point.require("P");
     const pd = P.data;
     const ps = P.tupleSize;
@@ -1288,7 +1309,7 @@ export const pathPointAt = standardNode<PathPointAtParams>({
       const m = table.closed ? nv - 1 : nv;
       for (let k = 0; k < m; k++) {
         const p = pts[k];
-        const raw = readComp(at, p, 0);
+        const raw = readComp(seek, p, 0);
         const want = params.mode === "fraction" ? raw * L : raw;
         const s = want < 0 ? 0 : want > L ? L : want;
         locateOnArcLength(found, table.cum, s);

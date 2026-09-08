@@ -2219,6 +2219,83 @@ describe("pathPointAt", () => {
     expect(positionsOf(geo).map((p) => Math.round(p[0] * 1000) / 1000)).toEqual([2, 3, 4, 5, 6]);
   });
 
+  it("seeks a BARE stored curveU, not the column it is about to zero", async () => {
+    // `attribute("curveU")` hands back a live zero-copy VIEW of that
+    // column, and this node's own replace("curveU", ...) reuses the same
+    // storage and resets it to 0 — so the read below used to find zeros
+    // and every point sought the start of its own path. The lerp case
+    // above never saw it: lerp allocates a column of its own, so nothing
+    // aliases. Re-seeking a path by a curveU an earlier node wrote is
+    // the graph this protects, and curveU is a documented OUTPUT of
+    // these nodes, so the column a bare read finds is always live.
+    // (Same aliasing setAttribute snapshots against.)
+    const evenly = async (): Promise<Geometry> =>
+      firstGeo(
+        (
+          await runNode(
+            pathResample,
+            { mode: "count", count: 5 },
+            { in: [makeGeometryItem(createPolyline([0, 0, 0, 8, 0, 0]))] },
+          )
+        ).out,
+      );
+    // A REAL curveU, produced by pathResample, then REVERSED in place:
+    // the parameter each point must seek is not the one it sits at, so
+    // neither "everything stayed put" nor "everything went to 0" passes.
+    const reversed = async (scale = 1): Promise<Geometry> => {
+      const even = await evenly();
+      const u = even.attrs.point.require("curveU");
+      const was = [u.get(0), u.get(1), u.get(2), u.get(3), u.get(4)];
+      expect(was).toEqual([0, 0.25, 0.5, 0.75, 1]);
+      was.forEach((_, i) => u.set(i, was[was.length - 1 - i] * scale));
+      return even;
+    };
+    const xs = (geo: Geometry): number[] =>
+      positionsOf(geo).map((p) => Math.round(p[0] * 1000) / 1000);
+
+    const geo = await placed(
+      { mode: "fraction", parameter: attribute("curveU", 1) },
+      await reversed(),
+    );
+    expect(xs(geo)).toEqual([8, 6, 4, 2, 0]);
+    // ...and the curveU it reports is the parameter it was asked for.
+    const out = geo.attrs.point.require("curveU");
+    expect([out.get(0), out.get(2), out.get(4)]).toEqual([1, 0.5, 0]);
+
+    // The alias is in the READ, which happens before the mode is applied,
+    // so 'distance' is hit identically: the same column scaled by the
+    // path's own length names the same five places.
+    expect(
+      xs(await placed({ mode: "distance", parameter: attribute("curveU", 1) }, await reversed(8))),
+    ).toEqual([8, 6, 4, 2, 0]);
+
+    // CONTROL: the comparison must be able to report a difference, and
+    // the zeroed-column failure is exactly what a constant 0 produces.
+    expect(xs(await placed({ mode: "fraction", parameter: 0 }, await reversed()))).toEqual([
+      0, 0, 0, 0, 0,
+    ]);
+    expect(xs(await placed({ mode: "distance", parameter: 0 }, await reversed(8)))).toEqual([
+      0, 0, 0, 0, 0,
+    ]);
+  });
+
+  it("cannot be handed the OTHER column it writes: tangent is a tuple-3 refusal", async () => {
+    // Why the snapshot above only ever fires for `curveU`. `tangent` is
+    // the node's other reset target, but requireReportSlot has already
+    // refused any `tangent` that is not f32x3, so a bare read of it is a
+    // tuple-3 column and the width check rejects it before the reset can
+    // matter. Documentation of an invariant held in two other functions,
+    // which is why the guard checks both columns anyway.
+    const msg = await rejection(
+      runNode(
+        pathPointAt,
+        { parameter: attribute("tangent") },
+        { in: [makeGeometryItem(await placed({ parameter: 0.5 }, ell()))] },
+      ),
+    );
+    expect(msg).toContain('pathPointAt: param "parameter" must evaluate to tupleSize 1, got 3');
+  });
+
   it("keeps the points, their attributes and the topology", async () => {
     const src = withAttr(ell(), "tag", [7, 8, 9]);
     const geo = await placed({ parameter: 0.25 }, src);

@@ -134,7 +134,7 @@ export const quotaRebalance = standardNode<QuotaRebalanceParams>({
       default: 0,
       acceptsField: true,
       description:
-        "Which category each point is IN, as an index into `min`/`max`: 0 for the first entry, 1 for the second, and so on. Read as floor(value), and a point whose index lands outside [0, min.length) is refused naming the point — not clamped, because a category the author did not list is a scheme the author did not state, and folding it into the first or last one would balance a mix nobody asked for. Field-capable and evaluated on the point domain, which is the usual way it arrives: a band decided from a position and a size is an expression, not a column somebody wrote. Only read for points `include` leaves in, so an element outside the scheme needs no category at all.",
+        "Which category each point is IN, as an index into `min`/`max`: 0 for the first entry, 1 for the second, and so on. Read as floor(value), and a point whose index lands outside [0, min.length) is refused naming the point — not clamped, because a category the author did not list is a scheme the author did not state, and folding it into the first or last one would balance a mix nobody asked for. Field-capable and evaluated on the point domain, which is the usual way it arrives: a band decided from a position and a size is an expression, not a column somebody wrote. Only read for points `include` leaves in, so an element outside the scheme needs no category at all. Resolved against the INPUT geometry INCLUDING the column `targetAttr` names, which this node does not reset until all four of its field-capable params have resolved — so a category derived from the previous round's destination reads that round.",
     },
     min: {
       type: "numberList",
@@ -153,21 +153,21 @@ export const quotaRebalance = standardNode<QuotaRebalanceParams>({
       default: 1,
       acceptsField: true,
       description:
-        "Nonzero (the default) puts the point IN the scheme: it is counted in its category's share and it may be chosen to move. Zero takes it out of both — not counted in any share, never moved, and its `category` never even read, so an element outside the scheme needs no category to be given one. This is the exclusion for elements that are STRUCTURE rather than population: a tunnel's ribs are all one category by geometry and a lap can carry forty of them, which would take that category from a tenth of the population to a quarter and make the stated mix unreachable on any track that has a tunnel. Compare `eligible`, which is the other exclusion and does the opposite thing to the denominator.",
+        "Nonzero (the default) puts the point IN the scheme: it is counted in its category's share and it may be chosen to move. Zero takes it out of both — not counted in any share, never moved, and its `category` never even read, so an element outside the scheme needs no category to be given one. This is the exclusion for elements that are STRUCTURE rather than population: a tunnel's ribs are all one category by geometry and a lap can carry forty of them, which would take that category from a tenth of the population to a quarter and make the stated mix unreachable on any track that has a tunnel. Compare `eligible`, which is the other exclusion and does the opposite thing to the denominator. Resolved on the same terms as the other three field-capable params: against the input, `targetAttr`'s column included, before this cook writes anything — so an exclusion decided by what the previous round did reads that round and not a column of -1.",
     },
     eligible: {
       type: "f32",
       default: 1,
       acceptsField: true,
       description:
-        "Nonzero (the default) allows this point to be chosen to LEAVE its category. Zero pins it: it still counts toward its category's share — it is part of the population — but is never selected to move. This is the exclusion for elements a STRONGER RULE already placed, and the distinction from `include` is the whole reason there are two params. Switching `include` off would hide the element from the shares as well, so the mix would be balanced against a population that is not the one on screen; switching `eligible` off leaves the arithmetic honest and takes only the element off the table. A category whose members are all ineligible simply cannot give any up, and the rebalance stops when it runs out of donors rather than looping.",
+        "Nonzero (the default) allows this point to be chosen to LEAVE its category. Zero pins it: it still counts toward its category's share — it is part of the population — but is never selected to move. This is the exclusion for elements a STRONGER RULE already placed, and the distinction from `include` is the whole reason there are two params. Switching `include` off would hide the element from the shares as well, so the mix would be balanced against a population that is not the one on screen; switching `eligible` off leaves the arithmetic honest and takes only the element off the table. A category whose members are all ineligible simply cannot give any up, and the rebalance stops when it runs out of donors rather than looping. IT MAY READ THE PREVIOUS ROUND'S DESTINATIONS, and that is the sharpest thing to put here inside the repeatUntil this node is written for: `lt(attribute(\"quotaTarget\"), 0)` pins whatever the last round already redrew, so the changes spread over the population instead of falling on the same elements twice. The column `targetAttr` names is resolved against BEFORE it is reset, so a field here sees the round before and never the -1s this cook is about to write. ROUND ONE HAS TO SEED IT: attribute() refuses a column that is not there, naming it, rather than resolving to a silent -1, so a loop whose first pass reads the destination writes it once upstream (a setAttribute of -1) instead of relying on this node to have been round zero.",
     },
     priority: {
       type: "f32",
       default: 0,
       acceptsField: true,
       description:
-        "Which members of an over-full category leave FIRST: lowest value first, ties broken by point identity. The default of 0 makes every point tie, so the whole decision falls to identity — a stable, position-derived order that is the right answer when the choice genuinely does not matter. IT USUALLY DOES MATTER, and in a way that is invisible in the counts: priority by a position or arc coordinate takes the first k members along that axis, and since a category's members are spread over the whole population, 'the first k' is a CONTIGUOUS PATCH. Every change then lands in one stretch and the result reads as a repair rather than a mix, while every share is exactly right. randomField spreads them instead; a measure of how poorly each element suits its current category concentrates the changes where they were least deserved, which is usually what 'minimum change' was meant to mean.",
+        "Which members of an over-full category leave FIRST: lowest value first, ties broken by point identity. The default of 0 makes every point tie, so the whole decision falls to identity — a stable, position-derived order that is the right answer when the choice genuinely does not matter. IT USUALLY DOES MATTER, and in a way that is invisible in the counts: priority by a position or arc coordinate takes the first k members along that axis, and since a category's members are spread over the whole population, 'the first k' is a CONTIGUOUS PATCH. Every change then lands in one stretch and the result reads as a repair rather than a mix, while every share is exactly right. randomField spreads them instead; a measure of how poorly each element suits its current category concentrates the changes where they were least deserved, which is usually what 'minimum change' was meant to mean. THE PREVIOUS ROUND is available to it on the same guarantee the other three field-capable params get — the column `targetAttr` names is resolved against before it is reset — so sending whatever moved last time to the back of the queue is an expression over attribute(\"quotaTarget\"), not a second column the caller has to carry.",
     },
     unmetAttr: {
       type: "string",
@@ -179,7 +179,7 @@ export const quotaRebalance = standardNode<QuotaRebalanceParams>({
       type: "string",
       default: "quotaTarget",
       description:
-        "POINT attribute (i32) receiving the category each point should JOIN: an index into `min`/`max` for a point that must move, and -1 for every point that stays where it is, including every point `include` switched off. So the test for 'did this point move' is `>= 0` and needs no comparison against the category column — which matters, because a point outside the scheme has no category this node ever read. May not be empty: a quotaRebalance that writes nothing is a cook that looks like it worked. Same reporting-slot rule as the rest of the library — an existing column of a different shape under this name is refused rather than silently deleted and re-added, and a same-shape one is reset.",
+        "POINT attribute (i32) receiving the category each point should JOIN: an index into `min`/`max` for a point that must move, and -1 for every point that stays where it is, including every point `include` switched off. So the test for 'did this point move' is `>= 0` and needs no comparison against the category column — which matters, because a point outside the scheme has no category this node ever read. May not be empty: a quotaRebalance that writes nothing is a cook that looks like it worked. Same reporting-slot rule as the rest of the library — an existing column of a different shape under this name is refused rather than silently deleted and re-added, and a same-shape one is reset. THE COLUMN THIS NAMES IS ALSO AN INPUT, which matters exactly where this node is meant to sit. It is an ordinary point attribute, so the geometry handed in may already carry one, and inside a repeatUntil that one IS the previous round's decision. All four field-capable params — `category`, `include`, `eligible`, `priority` — are resolved against it BEFORE it is reset, so a field naming it reads the round that came before and never the -1s this cook is about to write. On the FIRST round no such column exists yet and a field naming it is REFUSED by name — see `eligible`, which is where that idiom is written down. The reset is still total: whatever the round before left is gone from the OUTPUT, which carries this cook's decision alone.",
     },
   },
   execute({ inputs, params, checkCancelled }) {
@@ -285,14 +285,36 @@ export const quotaRebalance = standardNode<QuotaRebalanceParams>({
 
     const geo = cloneGeometry(src);
     const n = geo.attrs.point.count;
-    const target = geo.attrs.point.replace(targetAttr, "i32", 1, STAYS).data;
-    if (n === 0) return { out: [makeGeometryItem(geo)] };
-    target.fill(STAYS, 0, n);
+    if (n === 0) {
+      // Nothing to resolve on, and nothing a field could say about zero
+      // points — but the column is still written, because a caller reads
+      // it unconditionally and an empty cook is not a failed one.
+      geo.attrs.point.replace(targetAttr, "i32", 1, STAYS);
+      return { out: [makeGeometryItem(geo)] };
+    }
 
+    // ALL FOUR PARAMS RESOLVE BEFORE THE DESTINATION COLUMN IS TOUCHED.
+    // `targetAttr` is an ordinary point attribute and the INPUT may
+    // already carry one — the repeatUntil idiom this node's description
+    // recommends is exactly a graph that reads the previous round's
+    // destinations back, since that column is the only record of what the
+    // last round decided. Replacing it first filled it with -1, and every
+    // field naming it then read a column no author wrote. The house rule
+    // is stated in the header of `resolveOn`: resolve every field-capable
+    // param BEFORE mutating any attribute a param could read.
+    //
+    // NO SNAPSHOT IS NEEDED HERE, unlike setBounds, and the reason is
+    // worth keeping: `scalarPerPoint` copies into a fresh Float64Array
+    // rather than handing back the resolved column, so nothing survives
+    // this phase that could alias the storage `replace` resets. Only the
+    // ordering was ever wrong.
     const include = scalarPerPoint(geo, "include", params.include, n);
     const eligible = scalarPerPoint(geo, "eligible", params.eligible, n);
     const priority = scalarPerPoint(geo, "priority", params.priority, n);
     const categoryRaw = scalarPerPoint(geo, "category", params.category, n);
+
+    const target = geo.attrs.point.replace(targetAttr, "i32", 1, STAYS).data;
+    target.fill(STAYS, 0, n);
 
     // Current category per point, and the counts that make the shares.
     // `cur` is mutated as moves are assigned, exactly as the population it
