@@ -443,3 +443,216 @@ function hasLuneWitness(
   }
   return false;
 }
+
+/** Params of {@link connectByIndex}. */
+export interface ConnectByIndexParams {
+  index: FieldParam;
+  rootValue: number;
+  outOfRange: string;
+  degreeAttr: string;
+  lengthAttr: string;
+  missCountAttr: string;
+}
+
+/** Build one edge per point from a parent-pointer column. */
+export const connectByIndex = standardNode<ConnectByIndexParams>({
+  type: "connectByIndex",
+  category: "point op",
+  description:
+    "Builds one 2-vertex `polyline` per point, from that point to the point its `index` names — the edge set a PARENT POINTER describes. Built over the SAME points that arrived, so every point attribute survives and a junction is genuinely one point shared by every edge that meets there. This is the constructor for anything that GREW: a tree's branches, a root system, a river network, a dendrite, a crack. WHY IT IS A NODE AND NOT A RECIPE: `pointsToPath` is the only other path constructor and it PARTITIONS — `groupAttr` is read once per point and that point joins exactly one group — so its groups are vertex-disjoint chains and every point ends with degree at most 2. A star (1 -> 0, 2 -> 0, 3 -> 0) can emit at most two of its three edges under ANY assignment of group keys, because the centre belongs to one chain only. Branching is precisely the case that excludes. THE SHAPE IS NOT THE GAP — `connectPoints` already gives a point three incident edges and more, and this file's own header says a degree-5 point is expressible today. What no shipped node can do is be HANDED the answer: `connectPoints` asks its question in SPACE and decides the pairs itself, and `transferByIndex` IS handed an index but spends it on VALUES and promises it changes no topology. DIRECTION IS THE PAYLOAD, and this is where it differs from `connectPoints` deliberately: vertex 0 of each edge is the point that named the index and vertex 1 is the point it named, so child-to-parent is recoverable from the topology itself rather than needing a separate column. `connectPoints` orders its endpoints by key because a proximity edge has no direction to preserve; a parent pointer has nothing else. Edges come out in POINT ORDER, one per point that names a usable parent. A ROOT names `rootValue` (-1 by default, the sentinel `copyToPoints`' `targetIndexAttr` writes and `quotaRebalance` uses for 'stays') and contributes no edge — that is ordinary data, not a miss, which is why it is a separate param from `outOfRange`: a forest of several trees is a normal input here, and a node that could not say 'this one has no parent' could not describe one. THE INDEX IS AN ORDINAL, NOT AN IDENTITY, and it carries `transferByIndex`'s trap in a sharper form: a filter, a sort, a resample, a partition or a `mergePoints` anywhere between the node that COMPUTED the pointers and this one renumbers every point, and index 7 is then whatever landed seventh. There the damage is a wrong value; here it is a wrong EDGE, and a plausible-looking one. Compute the pointers and spend them with no renumbering step in between. PARTITIONING: an edge reads one stored index and the point it names, and consults no third point, so a cell holding both decides that edge exactly — emit it from the cell owning its FIRST vertex under the half-open rule and the cells tile the network with no duplicate and no gap, exactly as `connectPoints` documents. The halo is whatever bound the PRODUCER of the index column already needed, and is not this node's to invent; that is what separates this from the two things Stretch actually cut — CHAINING degree-2 runs into polylines, which is not partition-invariant at the primitive domain, and `findPath`, for which no finite halo suffices. (`maxDegree` itself is recorded there as halo-exact and merely unbuilt, not refused.) ONE CONDITION, and it is the ordinal again: `connectPoints` pairs by POSITION, which survives a repartition, while this node pairs by ORDINAL, which does not. So the argument holds only while the pointers are produced in the SAME numbering this node reads them in — a partitioned cook must compute its pointers inside the cell that spends them, never across a split. Any existing topology on the input is REPLACED and its vertex and primitive attributes drop with it, and the downstream rule `connectPoints` states applies unchanged: a network routed through any node that REMOVES points arrives as a plain cloud.",
+  inputs: [{ name: "in", kind: "geometry" }],
+  outputs: [{ name: "out", kind: "geometry" }],
+  params: {
+    index: {
+      type: "f32",
+      default: -1,
+      acceptsField: true,
+      description:
+        "Which point each point links to, as an ordinal counting from 0, resolved on the point domain. TRUNCATED TOWARD ZERO before it is read, on `transferByIndex`'s rule and for its reason, so 3.9 and 3.0 both name point 3. AS A FIELD THIS IS THE POINT OF THE NODE: `attribute(\"parent\")` spends a column an earlier stage settled, which is how a growth loop's `targetIndexAttr` or a `sampleNearestPoint` `indexAttr` becomes an edge. As a plain number it is one parent shared by every point — a star, and mostly useful for a test — with one catch worth stating: the point it names then names ITSELF, which the default `outOfRange` refuses, so a plain index wants `outOfRange: \"skip\"` alongside it. Note also that the shipped defaults (`index` -1 against `rootValue` -1) make every point a root, so an unconfigured node emits no primitives at all rather than failing. PRECISION: a field resolves to an f32 column and f32 represents every integer only to 16,777,216, so a pointer computed beyond that lands on a neighbouring integer — the arithmetic that produced it is where the precision went, not this node, and a cloud that large wants an i32 attribute read straight through `attribute()`. NON-FINITE IS REFUSED before this node reads a thing, through two different doors: a FIELD is caught by the shared resolver guard, which names this param and the offending element and says how to guard the expression, while a PLAIN number is caught by the param schema wherever a graph is loaded, patched or exposed. `execute` itself has no check, because neither door can be walked past. NaN and the infinities are what a broken sub-expression produces, and none of them is a pointer under any reading. If a broken pointer should be a root rather than a failed cook, say so — map it to `rootValue` with a select() and it is data again.",
+    },
+    rootValue: {
+      type: "f32",
+      default: -1,
+      description:
+        "The index value meaning THIS POINT HAS NO PARENT: it contributes no edge, and that is not a miss. -1 by default, matching the sentinel `copyToPoints`' `targetIndexAttr` writes and `quotaRebalance` uses for 'stays'. Compared AFTER the same truncation the index takes, so -1.5 and -1 are the same root. A rootValue that lands INSIDE [0, pointCount-1] is legal and silently drops every edge naming THAT POINT, counting no miss, because a root is not a miss — it is a sentinel, and one a real ordinal could equal is an ambiguous sentinel. -1 cannot collide with any ordinal, which is why it is the default. A forest of several trees, a growth loop's seed point, and a network still being built all need to say this, which is why it is separate from `outOfRange`: folding the two together would make 'no parent yet' indistinguishable from 'this pointer is broken', and the first is the ordinary state of the data while the second is a defect worth stopping for.",
+    },
+    outOfRange: {
+      type: "enum",
+      default: "error",
+      enum: ["error", "skip"],
+      description:
+        "How a pointer that is neither usable nor `rootValue` is read: one outside [0, pointCount-1], or one naming the point ITSELF, which would be a 2-vertex polyline whose two vertices are the same point and is never what an author meant. 'error' (the default) refuses the cook naming the point and the value, which is right when the pointers were COMPUTED by the graph and a bad one is a defect upstream. 'skip' emits no edge for that point and counts it in `missCountAttr`, which is right when the pointers are DATA the graph does not control — read from a table, carried across a cell boundary, or produced by a stage that legitimately does not resolve every one. THERE IS NO 'clamp' OR 'wrap', and their absence is deliberate: `transferByIndex` can clamp because the nearest VALUE is a defensible answer, but the nearest EDGE is not — clamping would silently wire a whole subtree onto point 0 and the result would look like a real network.",
+    },
+    degreeAttr: {
+      type: "string",
+      default: "",
+      description:
+        "Name of a u32 point attribute receiving each point's DEGREE — how many emitted edges touch it, counting BOTH directions, so a fork with three children and one parent reads 4 and a tip reads 1. Empty (the default) writes none. This is how a grown structure is read back: tips are degree 1, a root with no parent is degree 1 too, and anything above 2 is a fork. The shape is this node's to pick (u32, tuple 1), so a name the input already holds under a DIFFERENT shape is REFUSED rather than overwritten — writing it would delete that column outright and the cook would still look fine. A same-shape column IS reused and reset, so re-running this node over its own output is fine.",
+    },
+    lengthAttr: {
+      type: "string",
+      default: "",
+      description:
+        "Name of an f32 PRIMITIVE attribute receiving each edge's length in world units. Empty (the default) writes none. On a grown structure this is the segment length, which is what a taper or a cost driver wants. The shape is this node's to pick (f32, tuple 1), so a name already present on the output's primitive domain under a different shape is REFUSED — which in practice means `primtype`, the string attribute that marks these primitives as polylines and without which nothing downstream would recognise them.",
+    },
+    missCountAttr: {
+      type: "string",
+      default: "",
+      description:
+        "When non-empty, writes the number of points whose pointer was SKIPPED into a u32 DETAIL attribute of this name. Always 0 under `outOfRange` 'error', which cannot reach this. ROOTS ARE NOT COUNTED — a root is data, not a miss. Empty = don't record. A count is a cook statistic and cannot be filtered on; for WHICH points, read `degreeAttr` and compare against what you expected. This is a reporting slot whose shape this node picks (u32, tuple 1), so a name the detail domain already holds under a different shape is REFUSED rather than deleted and re-added — give it a name of its own (a \"__\" prefix marks it internal) or removeAttribute the clash first.",
+    },
+  },
+  execute({ inputs, params, seed: nodeSeed }) {
+    // Params before geometry, on connectPoints' rule: a bad setting
+    // reported as a geometry problem sends the author to debug the wrong
+    // thing entirely.
+    const mode = params.outOfRange;
+    if (mode !== "error" && mode !== "skip") {
+      throw new Error(
+        `connectByIndex: unknown outOfRange "${mode}"; valid settings: error, skip`,
+      );
+    }
+    if (!Number.isFinite(params.rootValue)) {
+      throw new Error(
+        `connectByIndex: rootValue must be a finite number, got ${params.rootValue}; it is the index value meaning "no parent" and is compared after truncation, so -1 is the usual choice`,
+      );
+    }
+    const root = Math.trunc(params.rootValue);
+    const src = requireGeometry(inputs, "in", "connectByIndex");
+    // Reporting slots are checked before any work: a refusal must cost
+    // nothing. degreeAttr lands on the point domain and missCountAttr on
+    // the detail domain, both of which survive the clone untouched, so the
+    // input's own columns are the ones at risk.
+    if (params.degreeAttr !== "") {
+      requireReportSlot({
+        attrs: src.attrs.point,
+        nodeType: "connectByIndex",
+        param: "degreeAttr",
+        name: params.degreeAttr,
+        type: "u32",
+        tupleSize: 1,
+        domain: "point",
+        suggestion: "degree",
+      });
+    }
+    if (params.missCountAttr !== "") {
+      requireReportSlot({
+        attrs: src.attrs.detail,
+        nodeType: "connectByIndex",
+        param: "missCountAttr",
+        name: params.missCountAttr,
+        type: "u32",
+        tupleSize: 1,
+        domain: "detail",
+        suggestion: "unlinked",
+      });
+    }
+    if (params.lengthAttr === PRIMTYPE_ATTR) {
+      throw new Error(
+        `connectByIndex: lengthAttr "${PRIMTYPE_ATTR}" is the string attribute that marks these primitives as polylines; writing an f32 length there would delete it and leave primitives nothing downstream recognises. Name the length something else (e.g. "edgeLength").`,
+      );
+    }
+
+    const n = src.pointCount;
+    const view = positionView(src, "connectByIndex", "in");
+    const pd = view.data;
+    const ps = view.stride;
+    // Resolved against the INPUT, before the clone exists and before
+    // anything is written: the house rule stated on resolveOn, and the
+    // defect fixed in setBounds, quotaRebalance and pathPointAt. Nothing
+    // here writes through `src`, which is what makes reading it safe.
+    const idx = requireScalarColumn(
+      resolveOn(src, "point", params.index, nodeSeed, "connectByIndex", "index"),
+      "connectByIndex",
+      "index",
+      "point",
+      "a parent pointer",
+    );
+
+    // One pass in point order, so the edge order IS the point order and
+    // nothing has to be sorted back into place afterwards.
+    const child: number[] = [];
+    const parent: number[] = [];
+    let missed = 0;
+    for (let i = 0; i < n; i++) {
+      // Finiteness is already decided: resolveOn refuses a field that
+      // evaluates to NaN or an infinity anywhere, with the shared message
+      // that names the element and says how to guard the expression. A
+      // second check here would be dead code standing where a reader
+      // would trust it.
+      const k = Math.trunc(idx.data[i]);
+      if (k === root) continue; // a root: no parent, no edge, and no miss
+      if (k < 0 || k >= n || k === i) {
+        if (mode === "error") {
+          const why =
+            k === i
+              ? "names itself, which would be an edge whose two vertices are the same point"
+              : `is outside [0, ${n - 1}]`;
+          throw new Error(
+            `connectByIndex: point ${i} has index ${k}, which ${why}. Set outOfRange "skip" to drop such points and count them instead, or map them to rootValue (${root}) upstream if they are meant to be roots.`,
+          );
+        }
+        missed++;
+        continue;
+      }
+      child.push(i);
+      parent.push(k);
+    }
+
+    const geo = cloneGeometry(src);
+    const count = child.length;
+    const pointIndices = new Uint32Array(count * 2);
+    const primVertexStart = new Uint32Array(count);
+    const primVertexCount = new Uint32Array(count);
+    for (let e = 0; e < count; e++) {
+      // Vertex 0 is the point that NAMED the index, vertex 1 the point it
+      // named, so child-to-parent survives in the topology itself.
+      pointIndices[e * 2] = child[e];
+      pointIndices[e * 2 + 1] = parent[e];
+      primVertexStart[e] = e * 2;
+      primVertexCount[e] = 2;
+    }
+    // Rebuilds the vertex and primitive domains, so anything landing on
+    // the primitive domain has to be written after it.
+    setPolylineTopology(geo, pointIndices, primVertexStart, primVertexCount);
+
+    if (params.degreeAttr !== "") {
+      const deg = geo.attrs.point.replace(params.degreeAttr, "u32", 1, 0).data;
+      for (let e = 0; e < count; e++) {
+        deg[child[e]]++;
+        deg[parent[e]]++;
+      }
+    }
+    if (params.lengthAttr !== "") {
+      // The primitive domain exists only now, and holds exactly the
+      // primtype column setPolylineTopology stamped, so this is an
+      // OUTPUT-side collision. Unreachable today because the guard above
+      // catches that one name first with a message of its own; marked
+      // anyway, for the reason connectPoints marks its twin.
+      requireReportSlot({
+        attrs: geo.attrs.primitive,
+        on: "output",
+        nodeType: "connectByIndex",
+        param: "lengthAttr",
+        name: params.lengthAttr,
+        type: "f32",
+        tupleSize: 1,
+        domain: "primitive",
+        suggestion: "edgeLength",
+      });
+      const len = geo.attrs.primitive.replace(params.lengthAttr, "f32", 1, 0).data;
+      for (let e = 0; e < count; e++) {
+        const a = child[e] * ps;
+        const b = parent[e] * ps;
+        const dx = pd[a] - pd[b];
+        const dy = pd[a + 1] - pd[b + 1];
+        const dz = pd[a + 2] - pd[b + 2];
+        len[e] = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      }
+    }
+    if (params.missCountAttr !== "") {
+      geo.attrs.detail.replace(params.missCountAttr, "u32", 1, 0).set(0, missed);
+    }
+    return { out: [makeGeometryItem(geo)] };
+  },
+});

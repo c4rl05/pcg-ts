@@ -43,9 +43,14 @@
  *   value the way a `ParamSchema` describes a node param, and are read by
  *   {@link inlineParamMetaOf} (see it for why they live in the graph)
  * - `{ fn: "add", args: [a, b] }` — likewise sub, mul, div, min, max,
- *   lt, le, gt, ge, eq, ne, dot, atan2 (2 args); abs, floor, length,
- *   normalize, sin, cos, tan, asin, acos, atan (1 arg); clamp, lerp,
- *   select (3); remap (5); vec (1+)
+ *   mod, rem, pow, step, lt, le, gt, ge, eq, ne, dot, cross, distance,
+ *   atan2 (2 args); abs, sign, floor, trunc, fract, sqrt, exp, exp2,
+ *   log, log2, length, normalize, sin, cos, tan, asin, acos, atan
+ *   (1 arg); clamp, lerp, smoothstep, select (3); remap (5); vec (1+).
+ *   THIS LIST IS A COURTESY AND IT ROTS — it was silently missing exp,
+ *   sqrt, pow, mod and nine others until an author read it, concluded
+ *   `exp` did not exist, and wrote around it. `pcg fields` prints the
+ *   REGISTRY, which is the only description of it that cannot disagree
  * - `{ fn: "component", args: [a], index: 0 }`
  * - `{ fn: "ramp", args: [a], stops: [[0, 0], [1, 1]] }`
  * - `{ fn: "lookup", args: [a], table: [0.4, 1, -2] }` — the table entry

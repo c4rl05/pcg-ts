@@ -51,7 +51,8 @@ const ROOT_SURFACE = [
   "TRANSFER_DET_EPS", "VERSION", "World", "WorldValidationError", "abs", "acos", "add",
   "applyGraphParamTargets", "applyParamPatches", "asin", "atan", "atan2", "attribute", "attributeIs", "attributeReduce",
   "attributeRemap", "buildInstanceBatches", "byAttribute", "capture", "captureAsync", "clamp",
-  "cloneGeometry", "component", "composeTRS", "connectPoints", "constant", "cook",
+  "cloneGeometry", "component", "composeTRS", "connectByIndex", "connectPoints",
+  "constant", "cook",
   "copyToPoints", "cos", "createGpuCookStats", "createPointCloud", "createPolyline", "cross",
   "createTriangleMesh", "dataInput", "defineNode", "describeGraphAssets", "describeGraphParams",
   // The three halves of the per-instance ABI a HOST needs and the library

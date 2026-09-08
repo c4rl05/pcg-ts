@@ -32,7 +32,7 @@ import { hasNodeType } from "./registry.js";
 import { surfaceSample } from "./samplers.js";
 import { pointGrid } from "./sources.js";
 import { sweepProfile } from "./surfaces.js";
-import { connectPoints } from "./topology.js";
+import { connectByIndex, connectPoints } from "./topology.js";
 import { occlusionCull } from "./visibility.js";
 import { pathCoverage } from "./coverage.js";
 import { runFit } from "./runs.js";
@@ -50,6 +50,7 @@ const MODULE_WITNESSES: readonly { readonly type: string }[] = [
   sweepProfile, // surfaces.ts
   surfaceSample, // samplers.ts
   pointsToPath, // paths.ts
+  connectByIndex, // topology.ts
   connectPoints, // topology.ts
   pointNeighborhood, // neighborhood.ts
   transformPoints, // pointOps.ts

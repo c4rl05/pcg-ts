@@ -246,6 +246,52 @@
         ]
       }
     },
+    "basics-colonnade.json": {
+      "outputs": {
+        "colonnade": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 3230,
+              "vertex": 12480,
+              "primitive": 4160,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "rot:f32x4",
+                "scale:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "seed:u32",
+                "t:f32",
+                "normal:f32x3",
+                "uv:f32x2"
+              ],
+              "primitive": [
+                "primtype:string"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -28.0018,
+                0,
+                -17.0002
+              ],
+              "max": [
+                28.0018,
+                15.5,
+                17.0002
+              ]
+            }
+          }
+        ]
+      }
+    },
     "basics-compose-primitives.json": {
       "outputs": {
         "instances": [
@@ -3565,6 +3611,49 @@
         ]
       }
     },
+    "basics-six-fold.json": {
+      "outputs": {
+        "flake": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 180,
+              "vertex": 180,
+              "primitive": 90,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "rot:f32x4",
+                "scale:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "seed:u32"
+              ],
+              "primitive": [
+                "primtype:string"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -46,
+                0,
+                -39.8372
+              ],
+              "max": [
+                46,
+                0,
+                39.8372
+              ]
+            }
+          }
+        ]
+      }
+    },
     "basics-spawn-by-species.json": {
       "outputs": {
         "instances": [
@@ -3765,6 +3854,46 @@
         ]
       }
     },
+    "basics-spiral-stair.json": {
+      "outputs": {
+        "stair": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 504,
+              "vertex": 756,
+              "primitive": 252,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "uv:f32x2",
+                "rot:f32x4",
+                "scale:f32x3",
+                "seed:u32"
+              ],
+              "primitive": [
+                "primtype:string"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -11.6,
+                -0.25,
+                -11.6
+              ],
+              "max": [
+                11.6,
+                15.65,
+                11.6
+              ]
+            }
+          }
+        ]
+      }
+    },
     "basics-stations-on-a-path.json": {
       "outputs": {
         "markers": [
@@ -3940,6 +4069,51 @@
                 10,
                 10,
                 10
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "basics-suspension-bridge.json": {
+      "outputs": {
+        "bridge": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 196,
+              "vertex": 196,
+              "primitive": 35,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "rot:f32x4",
+                "scale:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "seed:u32",
+                "cableY:f32",
+                "deckY:f32"
+              ],
+              "primitive": [
+                "primtype:string"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -80,
+                -6,
+                0
+              ],
+              "max": [
+                80,
+                33,
+                0
               ]
             }
           }
@@ -4650,6 +4824,57 @@
                 }
               }
             ]
+          }
+        ]
+      }
+    },
+    "examples-coral.json": {
+      "outputs": {
+        "coral": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 2484,
+              "vertex": 4966,
+              "primitive": 2483,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "rot:f32x4",
+                "scale:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "seed:u32",
+                "parent:i32",
+                "fresh:u32",
+                "nearDist:f32",
+                "degree:u32"
+              ],
+              "primitive": [
+                "primtype:string",
+                "edgeLength:f32"
+              ],
+              "detail": [
+                "moves:f32"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -19.9961,
+                0,
+                -19.9932
+              ],
+              "max": [
+                19.9959,
+                0,
+                19.9971
+              ]
+            }
           }
         ]
       }

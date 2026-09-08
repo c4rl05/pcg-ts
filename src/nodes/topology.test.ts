@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { createPointCloud, setPolylineTopology, type Geometry } from "../data/index.js";
 import { primitiveIdentities } from "../data/identity.js";
-import { attribute, constant } from "../fields/index.js";
+import { attribute, constant, type FieldLike } from "../fields/index.js";
 import { Graph, cook, makeGeometryItem, type NodeHandle } from "../graph/index.js";
 import { dataInput, type DataInputParams } from "../runtime/index.js";
 import {
+  connectByIndex,
   connectPoints,
   deserializeGraph,
+  pointsToPath,
   filterByBounds,
   filterPrimitivesByBounds,
   serializeGraph,
@@ -961,5 +963,361 @@ describe("connectPoints with a per-point radius", () => {
     });
     // The middle point witnesses against the long 0->4 edge.
     expect(thinned.primitiveCount).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// connectByIndex
+
+/** A cloud carrying a `parent` i32 column, which is the node's whole input. */
+function pointered(points: readonly (readonly number[])[], parents: readonly number[]): Geometry {
+  const geo = cloud(points);
+  const col = geo.attrs.point.add("parent", "i32", 1, -1);
+  parents.forEach((k, i) => col.set(i, k));
+  return geo;
+}
+
+/** Run connectByIndex over the `parent` column and return the output. */
+async function link(
+  geo: Geometry,
+  params: Partial<{
+    index: FieldLike;
+    rootValue: number;
+    outOfRange: string;
+    degreeAttr: string;
+    lengthAttr: string;
+    missCountAttr: string;
+  }> = {},
+): Promise<Geometry> {
+  const out = await runNode(
+    connectByIndex,
+    { index: attribute("parent"), ...params },
+    { in: [makeGeometryItem(geo)] },
+  );
+  return firstGeo(out.out);
+}
+
+
+/** A cloud carrying a `walk` i32 column for pointsToPath's orderAttr. */
+function withWalk(geo: Geometry, walk: readonly number[]): Geometry {
+  const col = geo.attrs.point.add("walk", "i32", 1, 0);
+  walk.forEach((v, i) => col.set(i, v));
+  return geo;
+}
+
+describe("connectByIndex builds the edge set a parent pointer describes", () => {
+  it("emits one edge per non-root point, in point order, child vertex first", async () => {
+    // A chain 0 <- 1 <- 2 <- 3. Point 0 is the root and contributes none.
+    const geo = await link(
+      pointered(
+        [
+          [0, 0, 0],
+          [1, 0, 0],
+          [2, 0, 0],
+          [3, 0, 0],
+        ],
+        [-1, 0, 1, 2],
+      ),
+    );
+    expect(geo.primitiveCount).toBe(3);
+    // Child first: the point that NAMED the index leads every edge.
+    expect(edgeIndices(geo)).toEqual([
+      [1, 0],
+      [2, 1],
+      [3, 2],
+    ]);
+  });
+
+  it("expresses a STAR, which is the case pointsToPath cannot reach", async () => {
+    // Three points all naming the same centre. This is the shape the node
+    // exists for: pointsToPath partitions its input, so its groups are
+    // vertex-disjoint chains and no grouping can give one point three
+    // incident edges. The control below is that claim, run.
+    const pts = [
+      [0, 0, 0],
+      [1, 0, 0],
+      [0, 0, 1],
+      [-1, 0, 0],
+    ] as const;
+    const star = await link(pointered(pts, [-1, 0, 0, 0]), { degreeAttr: "degree" });
+    expect(star.primitiveCount).toBe(3);
+    expect(edgeIndices(star)).toEqual([
+      [1, 0],
+      [2, 0],
+      [3, 0],
+    ]);
+    expect(star.attrs.point.require("degree").get(0, 0)).toBe(3);
+
+    // CONTROL: the best pointsToPath can do over the same four points is
+    // one chain through the centre, which touches it exactly twice.
+    const chained = firstGeo(
+      (
+        await runNode(
+          pointsToPath,
+          { closed: false, orderAttr: "walk" },
+          { in: [makeGeometryItem(withWalk(cloud([...pts]), [1, 0, 2, 3]))] },
+        )
+      ).out,
+    );
+    // One polyline of four vertices, not three 2-vertex edges, so degree is
+    // counted over ADJACENT pairs rather than by reading edges off.
+    expect(chained.primitiveCount).toBe(1);
+    const start = chained.primVertexStart[0];
+    const walkPts = Array.from(
+      { length: chained.primVertexCount[0] },
+      (_, k) => chained.vertexToPoint[start + k],
+    );
+    let touches = 0;
+    for (let k = 0; k + 1 < walkPts.length; k++) {
+      if (walkPts[k] === 0 || walkPts[k + 1] === 0) touches++;
+    }
+    expect(touches).toBe(2);
+    expect(touches).toBeLessThan(3);
+  });
+
+  it("a root contributes no edge and is not a miss", async () => {
+    const geo = await link(
+      pointered(
+        [
+          [0, 0, 0],
+          [1, 0, 0],
+          [5, 0, 0],
+          [6, 0, 0],
+        ],
+        [-1, 0, -1, 2],
+      ),
+      { missCountAttr: "unlinked" },
+    );
+    // Two trees, two roots, two edges — and nothing counted as missing.
+    expect(geo.primitiveCount).toBe(2);
+    expect(geo.attrs.detail.require("unlinked").get(0, 0)).toBe(0);
+  });
+
+  it("a different rootValue is honoured, and -1 is then an ordinary bad index", async () => {
+    const pts = [
+      [0, 0, 0],
+      [1, 0, 0],
+    ] as const;
+    // 99 is the root here, so point 0 links to nothing and point 1 links to 0.
+    const geo = await link(pointered([...pts], [99, 0]), { rootValue: 99 });
+    expect(edgeIndices(geo)).toEqual([[1, 0]]);
+    // CONTROL: with the default rootValue the same 99 is out of range.
+    await expect(link(pointered([...pts], [99, 0]))).rejects.toThrow(/is outside \[0, 1\]/);
+  });
+
+  it("refuses an out-of-range pointer by point and value, and says how to proceed", async () => {
+    await expect(
+      link(
+        pointered(
+          [
+            [0, 0, 0],
+            [1, 0, 0],
+          ],
+          [-1, 7],
+        ),
+      ),
+    ).rejects.toThrow(/point 1 has index 7, which is outside \[0, 1\]/);
+  });
+
+  it("refuses a self-reference with its own reason", async () => {
+    await expect(
+      link(
+        pointered(
+          [
+            [0, 0, 0],
+            [1, 0, 0],
+          ],
+          [-1, 1],
+        ),
+      ),
+    ).rejects.toThrow(/names itself/);
+  });
+
+  it("skips and counts instead, when the pointers are data rather than arithmetic", async () => {
+    const geo = await link(
+      pointered(
+        [
+          [0, 0, 0],
+          [1, 0, 0],
+          [2, 0, 0],
+          [3, 0, 0],
+        ],
+        [-1, 0, 42, 2],
+      ),
+      { outOfRange: "skip", missCountAttr: "unlinked" },
+    );
+    expect(edgeIndices(geo)).toEqual([
+      [1, 0],
+      [3, 2],
+    ]);
+    expect(geo.attrs.detail.require("unlinked").get(0, 0)).toBe(1);
+  });
+
+  it("degree counts both directions, so a fork reads above 2 and a tip reads 1", async () => {
+    const geo = await link(
+      pointered(
+        [
+          [0, 0, 0],
+          [0, 1, 0],
+          [1, 2, 0],
+          [-1, 2, 0],
+        ],
+        [-1, 0, 1, 1],
+      ),
+      { degreeAttr: "degree" },
+    );
+    const deg = geo.attrs.point.require("degree");
+    expect(deg.get(0, 0)).toBe(1); // root, one child
+    expect(deg.get(1, 0)).toBe(3); // one parent, two children — the fork
+    expect(deg.get(2, 0)).toBe(1); // tip
+    expect(deg.get(3, 0)).toBe(1); // tip
+  });
+
+  it("writes each edge's own length, in edge order", async () => {
+    const geo = await link(
+      pointered(
+        [
+          [0, 0, 0],
+          [3, 4, 0],
+          [3, 4, 12],
+        ],
+        [-1, 0, 1],
+      ),
+      { lengthAttr: "edgeLength" },
+    );
+    const len = geo.attrs.primitive.require("edgeLength");
+    expect(len.get(0, 0)).toBeCloseTo(5, 6);
+    expect(len.get(1, 0)).toBeCloseTo(12, 6);
+  });
+
+  it("refuses a non-finite pointer rather than reading it as anything", async () => {
+    let message = "no throw";
+    try {
+      await link(
+        pointered(
+          [
+            [0, 0, 0],
+            [1, 0, 0],
+          ],
+          [-1, 0],
+        ),
+        { index: constant(Number.NaN) },
+      );
+    } catch (e) {
+      message = e instanceof Error ? e.message : String(e);
+    }
+    // The shared resolver guard, not a check of this node's own: it fires
+    // before a single pointer is read, and its message is the one that
+    // explains how to guard the expression.
+    expect(message).toContain("connectByIndex");
+    expect(message).toContain('param "index" resolved to NaN');
+    expect(message).toContain("element 0");
+  });
+
+  it("replaces any topology the input arrived with", async () => {
+    const geo = pointered(
+      [
+        [0, 0, 0],
+        [1, 0, 0],
+        [2, 0, 0],
+      ],
+      [-1, 0, 1],
+    );
+    // An unrelated 3-vertex polyline on the way in.
+    setPolylineTopology(geo, [0, 1, 2], [0], [3]);
+    expect(geo.primitiveCount).toBe(1);
+    const out = await link(geo);
+    expect(out.primitiveCount).toBe(2);
+    for (let p = 0; p < out.primitiveCount; p++) expect(out.primVertexCount[p]).toBe(2);
+  });
+
+  it("every point a root builds no primitive, and does not fall over doing it", async () => {
+    // The only path that hands setPolylineTopology empty arrays, and the
+    // state the shipped defaults produce: index -1 against rootValue -1.
+    const geo = await link(
+      pointered(
+        [
+          [0, 0, 0],
+          [1, 0, 0],
+        ],
+        [-1, -1],
+      ),
+      { missCountAttr: "unlinked", degreeAttr: "degree" },
+    );
+    expect(geo.primitiveCount).toBe(0);
+    expect(geo.pointCount).toBe(2);
+    expect(geo.attrs.detail.require("unlinked").get(0, 0)).toBe(0);
+    expect(geo.attrs.point.require("degree").get(0, 0)).toBe(0);
+  });
+
+  it("an empty cloud is an empty network, not a refusal", async () => {
+    const geo = await link(pointered([], []), { missCountAttr: "unlinked" });
+    expect(geo.pointCount).toBe(0);
+    expect(geo.primitiveCount).toBe(0);
+    expect(geo.attrs.detail.require("unlinked").get(0, 0)).toBe(0);
+  });
+
+  it("a PLAIN index is a star, and needs outOfRange skip because one point names itself", async () => {
+    const pts = [
+      [0, 0, 0],
+      [1, 0, 0],
+      [2, 0, 0],
+    ] as const;
+    // Point 0 would name itself, which the default refuses outright.
+    await expect(link(pointered([...pts], [0, 0, 0]), { index: 0 })).rejects.toThrow(
+      /names itself/,
+    );
+    // With skip it is the star the param description promises: point 0 is
+    // dropped as self-naming, 1 and 2 link to it.
+    const geo = await link(pointered([...pts], [0, 0, 0]), {
+      index: 0,
+      outOfRange: "skip",
+      missCountAttr: "unlinked",
+      degreeAttr: "degree",
+    });
+    expect(edgeIndices(geo)).toEqual([
+      [1, 0],
+      [2, 0],
+    ]);
+    expect(geo.attrs.detail.require("unlinked").get(0, 0)).toBe(1);
+    expect(geo.attrs.point.require("degree").get(0, 0)).toBe(2);
+  });
+
+  it("a rootValue that collides with a real ordinal silently drops those edges", async () => {
+    // Documented rather than prevented: a root is not a miss, so choosing a
+    // sentinel a real ordinal can equal deletes edges and counts nothing.
+    // -1 is the default precisely because no ordinal can equal it.
+    // No -1 here: with rootValue 2 the DEFAULT sentinel is just another
+    // out-of-range pointer, which is the same trap seen from the other side.
+    const parents = [2, 2, 0, 2];
+    const geo = await link(
+      pointered(
+        [
+          [0, 0, 0],
+          [1, 0, 0],
+          [2, 0, 0],
+          [3, 0, 0],
+        ],
+        parents,
+      ),
+      { rootValue: 2, missCountAttr: "unlinked" },
+    );
+    // Only point 2 -> 0 survives; the two pointers naming 2 read as roots.
+    expect(edgeIndices(geo)).toEqual([[2, 0]]);
+    expect(geo.attrs.detail.require("unlinked").get(0, 0)).toBe(0);
+    // CONTROL: the same pointers under the default sentinel build all three.
+    const withDefault = await link(
+      pointered(
+        [
+          [0, 0, 0],
+          [1, 0, 0],
+          [2, 0, 0],
+          [3, 0, 0],
+        ],
+        parents,
+      ),
+    );
+    // Under the default sentinel every one of the four is a real ordinal.
+    expect(withDefault.primitiveCount).toBe(4);
   });
 });

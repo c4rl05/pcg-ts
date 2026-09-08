@@ -4,11 +4,12 @@ Generated from the graphs in [`graphs`](../graphs) by `node scripts/gen-graphs.m
 
 Each file teaches ONE thing and cooks from JSON alone — no runtime-injected data, so `pcg cook <file>` on a clean install reproduces exactly what the corpus test asserts.
 
-83 examples, alphabetical by file:
+88 examples, alphabetical by file:
 
 - [basics-a-draw-that-survives-a-move.json](#basics-a-draw-that-survives-a-movejson) — keep a random draw when the point moves
 - [basics-attribute-from-noise.json](#basics-attribute-from-noisejson) — write an attribute from a noise field
 - [basics-attribute-remap.json](#basics-attribute-remapjson) — rescale an attribute to a new range
+- [basics-colonnade.json](#basics-colonnadejson) — a colonnade spaced along the arc, not along the parameter
 - [basics-compose-primitives.json](#basics-compose-primitivesjson) — compose several primitives into a scatter
 - [basics-connect-by-reach.json](#basics-connect-by-reachjson) — connect a cloud by each point's own reach
 - [basics-copy-to-points.json](#basics-copy-to-pointsjson) — give every copy the attributes of the point it landed on
@@ -61,11 +62,14 @@ Each file teaches ONE thing and cooks from JSON alone — no runtime-injected da
 - [basics-shift-along-a-path.json](#basics-shift-along-a-pathjson) — draw the chain between scattered beads, from nothing but each one's successor
 - [basics-sightline-cull.json](#basics-sightline-culljson) — clear a line of sight by moving the props, not by deleting them
 - [basics-signed-distance.json](#basics-signed-distancejson) — a signed distance field, and which side of it
+- [basics-six-fold.json](#basics-six-foldjson) — one arm, six times over
 - [basics-spawn-by-species.json](#basics-spawn-by-speciesjson) — spawn a different asset per point
 - [basics-spawn-instances.json](#basics-spawn-instancesjson) — turn points into instance batches
+- [basics-spiral-stair.json](#basics-spiral-stairjson) — treads winding up a helix
 - [basics-stations-on-a-path.json](#basics-stations-on-a-pathjson) — read a lap's own frame and width at thirty arbitrary stations, and place markers there
 - [basics-subgraph-exposed-params.json](#basics-subgraph-exposed-paramsjson) — wrap a graph as one node with its own knobs
 - [basics-surface-sample.json](#basics-surface-samplejson) — scatter points over a mesh surface
+- [basics-suspension-bridge.json](#basics-suspension-bridgejson) — the cable sets every hanger
 - [basics-sweep-profile.json](#basics-sweep-profilejson) — put a real surface on a curve
 - [basics-tile-an-arc.json](#basics-tile-an-arcjson) — tile a repeated piece over three stretches of one lap, choosing the piece once per stretch
 - [basics-tiling-a-field.json](#basics-tiling-a-fieldjson) — tile a field across the origin
@@ -74,6 +78,7 @@ Each file teaches ONE thing and cooks from JSON alone — no runtime-injected da
 - [basics-two-kinds-of-bounds.json](#basics-two-kinds-of-boundsjson) — two things called bounds, and they are not the same thing
 - [basics-under-cover.json](#basics-under-coverjson) — measure what runs under cover, where the route passes close to itself
 - [basics-volume-scatter.json](#basics-volume-scatterjson) — fill a box with points, then carve it
+- [examples-coral.json](#examples-coraljson) — a dendrite grown by aggregation
 - [examples-forest.json](#examples-forestjson) — plant a hillside, thinned by slope and treeline
 - [examples-gpu-fields.json](#examples-gpu-fieldsjson) — a fusable chain, on the CPU or the device
 - [examples-headless-scatter.json](#examples-headless-scatterjson) — headless scatter
@@ -151,6 +156,34 @@ Cook it: `pcg cook graphs/basics-attribute-from-noise.json --stats`
 **Outputs:** `points` (from `fit`.`out`)
 
 Cook it: `pcg cook graphs/basics-attribute-remap.json --stats`
+
+## basics-colonnade.json
+
+**a colonnade spaced along the arc, not along the parameter**
+
+Thirty columns and the beam they carry, over a curve, and NOTHING HERE IS AN INSTANCE. Two nodes split the work: `arcTile` decides WHERE the repeated piece goes by measuring the path, and `sweepProfile` decides WHAT it is by turning points into triangles. A spawner would need a host that already owns a column model; this graph cooks the column.
+
+THE PATH CURVES SO THAT THE SPACING RULE IS VISIBLE. It is 128 corner points at even ANGLE round a 26 x 15 ellipse — the parameterization anything walking a curve's own points gets for free, and the one an every-Nth-point pick inherits. Those points are 0.7367 apart at the ends of the major axis and 1.2759 apart at the ends of the minor one: the gaps at one end of the building are 73% wider than at the other, so a column per path point reads as uneven while every number in the graph still says 'even'. (The 1.7319 those chords measure is the polygon's answer to the ellipse's own arc-speed ratio, 26/15 = 1.7333; a 128-gon does not quite reach it.) `arcTile` reads the CHORD table instead: one range covering 131.10 of the loop's 131.12 units takes ceil(131.10 / 4.4) = 30 tiles at the centres of 30 equal sub-intervals, so the pitch is 4.370 whatever the curvature underneath is doing. On a straight path the two rules agree exactly and the lesson is invisible, which is the whole reason this is not a portico.
+
+THE ONE GAP THAT IS NOT 4.370 IS THE SEAM, and it is worth knowing why. The range is a geometry rather than params — one point carrying `runStart` 0 and `runSpan` 131.10 — and 131.10 is deliberately two hundredths under the measured perimeter, because `arcTile` REFUSES a range longer than a closed path and a graph should not be one rounding away from failing to cook. Tiles land at the centres of equal sub-intervals OF THE RANGE, so that slack does not spread: it collects at the join, where the last tile and the first sit 4.391 apart instead of 4.370. Half a percent, invisible, and the honest price of the margin — ask for the full 131.12 and the ring is uniform to the last unit, at the cost of betting on a chord sum.
+
+THE SHAFT IS SWEPT AND THE STATIONS ONLY PLACE IT. `copyToPoints` with `topology: "keep"` stamps a five-point vertical polyline on each of the 30 stations — 150 points, 30 polylines — and ONE `sweepProfile` turns all thirty into tubes, because that node sweeps every polyline it is handed. The swell, which a classical shaft has instead of a straight taper, is the field `0.9 - 0.22 t*t` on `radius`, and it is exact rather than averaged because `sweepProfile` does not resample: one ring per input point, at the point. `t` is `fraction` written on the TEMPLATE, BEFORE the copy — five points, so 0, 0.25, 0.5, 0.75, 1. Move that same `setAttribute` after `copyToPoints` and `fraction` ramps once across all 150 points instead, giving each column a thirtieth of the ramp: the swell vanishes and what comes out is thirty near-cylinders whose radius falls from 0.900 at the first to 0.680 at the last — a per-column radius where a per-column shape was meant. A ramp has to be authored on the domain it describes. Five rings is the resolution of that shape, and `pathResample` on the template is the knob, not a subdivision param this node does not have.
+
+THE BEAM AND THE PLINTH ARE THE SAME NODE WITH ANOTHER PROFILE. The entablature is a 'square' section swept along the loop lifted to y 14.4, so it spans 13.3 to 15.5 and swallows the tops of the 14-unit shafts — which is why `caps` is off on the columns: a cap nobody can see is triangles nobody asked for. The plinth is a 'ribbon', an open two-point strip 4.0 wide lying flat on the ground, which is the profile a step wants and the one a closed section cannot be, since 'square' would put as much stone below the floor as above it.
+
+WHAT IT DELIBERATELY DOES NOT DO: no capitals, no flutes, no arch — an arched arcade wants the piece to span BETWEEN stations rather than stand on one, which measures the pitch instead of the position and belongs with the ranges. It does not vary the columns either, because a per-tile draw is what `arcTile`'s `rangeNames` exists to prevent and what `basics-tile-an-arc` is about. And it spawns nothing, so there is no asset id in it to check against a host.
+
+**Tags:** `basics`, `path`, `tiling`, `surface`, `sweep`
+
+**Seed:** 1103
+
+**Node types:** `arcTile`, `copyToPoints`, `mergePrimitives`, `pointLine`, `pointsToPath`, `setAttribute`, `subgraph`, `sweepProfile`, `transformPoints`
+
+**Primitives:** `shape/path-loop`
+
+**Outputs:** `colonnade` (from `peristyle`.`out`)
+
+Cook it: `pcg cook graphs/basics-colonnade.json --stats`
 
 ## basics-compose-primitives.json
 
@@ -1172,6 +1205,30 @@ A SIGNED DISTANCE FIELD, which is what `distance` and `sign` are for together. `
 
 Cook it: `pcg cook graphs/basics-signed-distance.json --stats`
 
+## basics-six-fold.json
+
+**one arm, six times over**
+
+Symmetry BY CONSTRUCTION rather than by luck. One arm is authored — a shaft with seven pairs of side spurs whose length swells toward mid-arm and shrinks again at the tip — and the six-fold figure is that arm stamped onto six target points that share a position and differ in their `rot`. `copyToPoints` COMPOSES the target's transform onto the source (P = targetP + targetRot * (targetScale * sourceP), rot = targetRot * sourceRot), so the arm never learns that it is one of six: the rotation lives entirely on the target cloud, as a quaternion computed from the point index, `(0, sin(i*pi/6), 0, cos(i*pi/6))` — a turn of i*60 degrees about Y, because the figure lies in the ground plane and is read from above. The targets also differ in `seed`, which `pointLine` hashes from the index: coincident targets sharing a seed too would collapse the six copies of a primitive into one identity, and `copyToPoints` names that hazard for exactly this case.
+
+The alternative spelling is six arms with six baked-in angles. It draws the same picture and loses the invariant: the arm becomes six places to edit and nothing enforces they stay equal, so the first asymmetric edit is a bug that looks like a design. But what it buys is narrower than 'six lives in one place', because it does not: the hub count is 6, `hubTurn` turns by pi/6, and the arm's own spurs branch by that same pi/6 — three literals that must agree and that nothing checks. What the arm does not know is HOW MANY copies exist: it is built once, in its own frame, and the count belongs to the target cloud alone, so the six can never disagree about their shape however wrong the angle. This makes the arms identical, not the flake correct.
+
+A plain line repeated six times would show nothing — a hexagon's worth of spokes is symmetric whatever you do — so the spurs are what make the repetition legible. They branch at 60 degrees, the same 60 that separates the arms, so every spur runs parallel to a neighbouring arm. Ice Ih is hexagonal, basal-plane branching runs along the six equivalent a-directions the lattice provides, and a side branch has no other 60-degree family available. So the six-fold SYMMETRY is inherited from the crystal; whether a flake is a six-armed dendrite at all belongs to the weather, since the same lattice grows needles and columns at other temperatures.
+
+The arm here is authored, not grown. A real flake's arms match because they rode the same parcel of air, not because one was copied — six SIMILAR arms, where this is six identical ones. Making them merely similar is a different graph, not a smaller edit: the arm is finished BEFORE it is stamped, so nothing carried onto the copies afterwards — `targetNames`, a per-target seed, a noise at the hub — can reach back and change a spur already placed. That needs `forEach` over the hub points. No central plate either, no sub-branching on the spurs (that is `basics-self-similar-frond`, which stamps the same rule onto its own output), and no thickness: 15 polylines per arm, 90 in the flake.
+
+**Tags:** `basics`, `copy`, `symmetry`, `paths`
+
+**Seed:** 1106
+
+**Node types:** `copyToPoints`, `mergePrimitives`, `pointLine`, `pointsToPath`, `setAttribute`
+
+**Primitives:** *(none)*
+
+**Outputs:** `flake` (from `flake`.`out`)
+
+Cook it: `pcg cook graphs/basics-six-fold.json --stats`
+
 ## basics-spawn-by-species.json
 
 **spawn a different asset per point**
@@ -1207,6 +1264,36 @@ Cook it: `pcg cook graphs/basics-spawn-by-species.json --stats`
 **Outputs:** `instances` (from `spawn`.`instances`)
 
 Cook it: `pcg cook graphs/basics-spawn-instances.json --stats`
+
+## basics-spiral-stair.json
+
+**treads winding up a helix**
+
+Index-driven layout that leaves the plane, and then puts a real piece of geometry on every station it computed. Tread i sits at angle `i * 2*pi/20` and height `i * 0.8`, so ANGLE AND RISE ARE BOTH FUNCTIONS OF `index()`: twenty treads to a turn, 20 of them, 19 steps and 0.95 of a turn up a helix of radius 7.6. `basics-phyllotaxis` computes position from the index too and is the graph to read against this one — it stays flat, it writes only P, and it instances nothing, so what it teaches ends at the arrangement.
+
+THE ROTATION IS THE SAME INDEX, WRITTEN AS A QUATERNION. A tread's long axis must point away from the centre, and at angle `th` outward is (cos th, 0, sin th). A yaw of `a` about +Y takes local +X to (cos a, 0, -sin a), so the yaw wanted is `-th` and `rot` is the four numbers [0, -sin(th/2), 0, cos(th/2)] — two trig calls on a half angle the graph already has, which is why it is spelled directly rather than through `orientAlongVector`. That node's `direction` is field-capable and would reach the identical quaternion from vec(-sin th, 0, cos th); reach for it when the direction is DATA — a `tangent` column, a curve frame, a neighbour's position — rather than arithmetic already in hand. Local +Z falls out as the plan tangent, so the tread's width lies along the direction of travel with nothing further to state.
+
+THE YAW IS THE WHOLE ROTATION, AND THAT IS A DECISION. The helix's real tangent climbs 0.80 for every 2.388 of arc at the tread's centre radius, a little over 18 degrees. Orienting the tread to the FULL three-dimensional tangent would tilt every one of them by that angle, which is not a stair but a spiral ramp cut into 20 pieces. So the tread follows the helix IN PLAN and is left level on purpose, and the rise is carried by the gap between treads rather than by their attitude: 'face along the curve' is two different requests once a curve leaves the plane, and this graph answers one of them.
+
+IT STOPS AT 0.95 OF A TURN, AND THAT IS ALSO A DECISION. Past one full turn tread 20 sits directly above tread 0 and the flight starts hiding itself: from anywhere above, the run you can actually follow is only ever the last turn, and the rest is a stack of edges. Nineteen steps of a twentieth is the most a single readable flight holds. More height is a second flight, not a longer one — and the arithmetic here does not care either way, which is exactly the point: `count` is the only number that changes.
+
+`copyToPoints` WITH `topology: "keep"` IS NOT A CONVENIENCE HERE. The source is one `meshPrimitive` box — 24 points and 12 triangles, and the only mesh a serialized graph can cook at all, since `dataInput`'s items are injected at runtime and a saved file carries none. Copying it onto the 20 stations composes P = targetP + targetRot * (targetScale * sourceP) per copy, with scale 1 throughout, and yields 480 points and 240 triangles. Drop the topology, which is the default, and 480 loose points come out with no surface on them: a POLYLINE source can be rebuilt downstream (`targetIndexAttr`, then `pointsToPath` grouping on it), but nothing here rebuilds a TRIANGLE — both surface nodes, `sweepProfile` and `extrudePolygon`, start from polyline topology. For a mesh source, 'keep' is what makes the copies geometry instead of a cloud somebody has to reconstruct.
+
+A RECTANGLE IS NOT A WEDGE, and the numbers say by how much. The tread is 8.0 by 3.3, reaching from radius 3.6 out to 11.6, and one twentieth of a turn is 3.644 of arc at the outer edge against 1.131 at the inner one. So the rim is very nearly solid — 0.344 of daylight between consecutive treads, which is what makes the flight read as one thing — while at the newel the same 3.3 overlaps its neighbour by 2.169, just under two thirds of its own width. A real stair fixes that with a wedge and `meshPrimitive`, building a plane or a box and nothing else, cannot; the overlap survives the picture only because consecutive treads are 0.80 apart in y, and because the stair does not go inside radius 3.6 at all. `extrudePolygon` over a four-point closed polyline is the honest fix, at the price of authoring the corners.
+
+THE NEWEL IS MERGED, NOT COPIED: one thing spanning the whole rise, so it is a second `meshPrimitive` joined by `mergePrimitives`, where putting it in the copy source would give 20 of them stacked in one place. Its 5.2 square reaches 3.677 at the corners against the treads' 3.6 — which is enough for the eight treads flanking the diagonals to bite into it, and not enough for the other twelve: those stand off by 0.866, and the four square-on to a face by a full 1.0. That is the same wedge problem one axis over, since a square core meets a circular inner edge no better than a rectangular tread fills a wedge, and the plan view shows sky through the gap. A newel of 7.2 or more closes it, at the price of a core that owns the picture. The proportions are still a picture's rather than a building code's — the rise is 0.34 of the going where a built stair is nearer 0.6 — because a stair steep enough to climb is taller than it is wide, and a camera looking down at a scene from a fixed pose crops exactly that. Nothing here reads the seed, the layout being arithmetic on the index all the way down, so this graph cooks the same 504 points every time.
+
+**Tags:** `basics`, `copy`, `structure`, `mesh`, `fields`
+
+**Seed:** 1104
+
+**Node types:** `copyToPoints`, `mergePrimitives`, `meshPrimitive`, `pointLine`, `setAttribute`
+
+**Primitives:** *(none)*
+
+**Outputs:** `stair` (from `stair`.`out`)
+
+Cook it: `pcg cook graphs/basics-spiral-stair.json --stats`
 
 ## basics-stations-on-a-path.json
 
@@ -1273,6 +1360,32 @@ Cook it: `pcg cook graphs/basics-subgraph-exposed-params.json --stats`
 **Outputs:** `points` (from `onSurface`.`out`)
 
 Cook it: `pcg cook graphs/basics-surface-sample.json --stats`
+
+## basics-suspension-bridge.json
+
+**the cable sets every hanger**
+
+A suspension bridge is the clearest case of a DERIVED quantity: a hanger is not a design decision, it is a subtraction. One row of 65 stations spans the gap, `cableY` and `deckY` are each written once on it as a scalar attribute, and below that row no height is typed in again. Each hanger's length is `cableY - deckY` at its own station and each tower's is `cableY` measured from its own foot, so moving the sag moves all 31 hangers AND both towers, and nothing can disagree with the curve it hangs from. The alternative is a table of lengths, correct exactly once and wrong the moment anything upstream moves — silently, because a wrong-length hanger is still a valid line. An earlier draft made that mistake in miniature: the towers were a `pointLine` with a literal scale of 39, which is `cableY(80) + 6` by hand. It validated, cooked and rendered pixel for pixel the same; nothing would have reported it until the sag changed.
+
+The curve is a PARABOLA, `5 + 0.004375 * x^2`, and catenary would be the wrong word for the right shape. A catenary — `cosh` — is what a chain takes under its own weight, uniform along the CURVE. A main cable is loaded by the deck through the hangers, and that load is uniform along the HORIZONTAL, which integrates to a parabola. So the parabola is not a stand-in: for a deck-dominated cable it is the exact answer, and the catenary is the case with no bridge hanging off it. (A real cable has weight of its own, so the true shape lies between the two; parabolic is a limit, not an identity.) The grammar has no `cosh` — run `pcg fields` for the catalogue — but it has `exp`, so the unloaded curve `a * (cosh(x/a) - 1)` is two `exp` calls away. Matched to the same towers and the same 28-unit sag, which needs a = 118.7, the two part by 0.26 units at x = 57: under one percent of the sag, worth stating in words and not worth spending nodes on.
+
+The deck is not flat: a camber of 2.5 at mid-span falling to 0 at the towers makes the subtraction a real difference of two heights rather than the cable height renamed, which a flat deck would have let the graph pretend.
+
+Hangers and towers are the SAME primitive: one two-point unit segment to (0, 1, 0), stamped by `copyToPoints` onto targets carrying a `scale` the copy multiplies into the source before placing it. They differ in which stations they stand on and how far below the deck their foot sits: the hanger stands on the deck and takes `cableY - deckY`, the tower drops 6 and takes `cableY` minus its own `P.y`, the same sentence measured from a lower foot. Both site lists are filters on `index` over the one station row — every second station minus the two ends for the hangers, exactly those ends for the towers — not second `pointLine`s, which would restate the span and drift.
+
+What this does not do: it is an ELEVATION, one cable plane at z = 0, so the top view is a single line by construction. Two cables with the deck slung between them, backstays to an anchorage, a tower that is a frame rather than a stroke — each is more geometry, none is more mechanism.
+
+**Tags:** `basics`, `fields`, `attributes`, `copy`, `paths`
+
+**Seed:** 1105
+
+**Node types:** `copyToPoints`, `filterByExpression`, `mergePrimitives`, `pointLine`, `pointsToPath`, `setAttribute`
+
+**Primitives:** *(none)*
+
+**Outputs:** `bridge` (from `bridge`.`out`)
+
+Cook it: `pcg cook graphs/basics-suspension-bridge.json --stats`
 
 ## basics-sweep-profile.json
 
@@ -1445,6 +1558,24 @@ Cook it: `pcg cook graphs/basics-under-cover.json --stats`
 **Outputs:** `instances` (from `blocks`.`instances`)
 
 Cook it: `pcg cook graphs/basics-volume-scatter.json --stats`
+
+## examples-coral.json
+
+**a dendrite grown by aggregation**
+
+AGGREGATION, which is the shape `pointsToPath` cannot describe and `connectByIndex` exists for. A seed point sits at the origin and a fixed cloud of candidates fills the box around it. Each round every candidate asks the structure so far for its nearest member; the ones within 1.2 units of it join, each REMEMBERING THE INDEX it was answered with, and the structure grows outward one shell at a time until no candidate is close enough to anything. What comes out is a parent pointer per point, and `connectByIndex` turns that column into the edges -- one 2-vertex polyline per point, from the point to the point it stuck to. Every link is its own edge and there are no linear runs to group by, so no assignment of `pointsToPath` group keys reaches this: its groups are vertex-disjoint chains, and a point three candidates chose would have to appear in three of them. THE INDEX SURVIVES THE ROUNDS, and that is the one thing this graph has to get right. An index is an ORDINAL, so a pointer is only worth keeping while nothing renumbers what it points into. `mergePoints` concatenates in connection order, existing points first, so the structure's own indices never move and a pointer written in round 3 still names the same point in round 20. Attach the new points the other way round and every pointer in the structure would silently shift by however many joined that round -- the edges would still build, and they would be wrong. The two nodes meet on a convention rather than on a wire: `sampleNearestPoint` writes -1 when it finds nothing and `connectByIndex` reads -1 as a root by default, so an unanswered point comes out as a point with no parent rather than as an error. THIS GRAPH NEVER EXERCISES THAT: `maxDistance` 0 means unlimited and the structure is never empty, so every candidate is answered and the only -1 in the cook is the seed's own, written before the loop. The convention still matters, because it is what lets a bounded reach be dropped in later without a second node to translate the sentinel. THE EPSILON IS NOT A TOLERANCE, it is what keeps a candidate from attaching twice: once a candidate has joined, the structure contains a point at exactly its position, so its nearest distance is 0 on every later round. Asking for a distance strictly ABOVE zero excludes the copy of itself, which is cheaper and more exact than carrying a used flag through the loop on a cloud that is broadcast fresh every round. WHY THE CANDIDATES ARE FIXED rather than drawn per round: `repeatUntil` does not rotate its seed, by design, so a scatter inside the body would draw the IDENTICAL cloud every round and the structure would see the same candidates forever. Randomness inside a growth loop has to come from the DATA changing, not from the seed moving -- here the structure grows, so different candidates come within reach each round from the same fixed cloud. It settles when a round attaches nothing, counted by summing a 0/1 `fresh` flag into the detail domain; mode `count` would report the element count and ignore the attribute, and over a structure that only grows it would never reach zero. THE STICK RADIUS IS MEASURED AGAINST THE CANDIDATE SPACING and is not a number to pick in world units, which took two failed cooks to learn. BELOW the mean spacing nothing propagates past the first ring: at 2.7 against a spacing of 2.86 this graph settled at THREE POINTS, because the points that joined had no unclaimed neighbour inside their own reach. Comfortably ABOVE it every candidate is already within reach of something on the first round and the entire cloud aggregates at once: at 2.4 against a spacing of 1.47, all 20,000 attached and the edge set was a solid hairball rather than a dendrite. What is shown here is the narrow band just above the spacing -- 1.2 against 0.8. It is PLANAR for the same reason: the identical rule in a 3D box draws as a ball of wire, and nothing about the mechanism needs the third dimension to be seen. One more thing this model does NOT have, and the description should not pretend otherwise: screening. Real diffusion-limited aggregation attaches one walker at a time, so tips shadow the interior and grow faster. Here every candidate is answered simultaneously, so what grows is a shell at a time and the branching comes from which neighbour was nearest, not from a race.
+
+**Tags:** `examples`, `growth`, `topology`, `repeat`
+
+**Seed:** 2202
+
+**Node types:** `attributeReduce`, `connectByIndex`, `filterByExpression`, `mergePoints`, `pointLine`, `pointScatterInBounds`, `repeatUntil`, `sampleNearestPoint`, `setAttribute`, `transformPoints`
+
+**Primitives:** *(none)*
+
+**Outputs:** `coral` (from `edges`.`out`)
+
+Cook it: `pcg cook graphs/examples-coral.json --stats`
 
 ## examples-forest.json
 
