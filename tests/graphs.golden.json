@@ -4879,6 +4879,46 @@
         ]
       }
     },
+    "examples-facade.json": {
+      "outputs": {
+        "panels": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 6336,
+              "vertex": 9504,
+              "primitive": 3168,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "uv:f32x2",
+                "rot:f32x4",
+                "scale:f32x3",
+                "seed:u32"
+              ],
+              "primitive": [
+                "primtype:string"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -11.951,
+                0.0566,
+                -0.172
+              ],
+              "max": [
+                11.954,
+                14.952,
+                0.172
+              ]
+            }
+          }
+        ]
+      }
+    },
     "examples-forest.json": {
       "outputs": {
         "instances": [

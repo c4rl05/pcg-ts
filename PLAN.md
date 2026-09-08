@@ -40,7 +40,7 @@ waiting for anything. Its body stays because the analysis under it is
 what the outcome tested — several of these scored badly, and a survey
 that guessed wrong is worth more to the next survey than a deleted one.
 
-### Building edges from a parent-pointer column, 2026-09-08
+### ~~Building edges from a parent-pointer column~~ — SHIPPED 2026-09-08
 
 Wanted: a node that reads a per-point index column and emits one
 2-vertex `polyline` per point, running from that point to the point its
@@ -104,6 +104,63 @@ record is ~270 intermediate points, "which is nothing". A growth loop
 running the cut every round for a dozen rounds is the first caller that
 could plausibly move that number, and it has to be measured rather than
 assumed.
+
+**SHIPPED 2026-09-08**, with three corrections the survey above got wrong
+and one it did not anticipate. The impossibility proof holds exactly as
+written, but "no arrangement of the shipped nodes reaches it" was too
+strong: `connectPoints` already produces a point of degree 3, and this
+file's own topology header has always said a degree-5 point is
+expressible. The gap is not the SHAPE, it is that nothing could be handed
+the answer. `maxDegree` is recorded in Stretch as halo-exact and unbuilt,
+not cut, so the partition argument names the wrong precedent; what was
+cut is the CHAINING of degree-2 runs and `findPath`. And the halo claim
+needs one condition the survey skipped: `connectPoints` pairs by
+POSITION, which survives a repartition, while this node pairs by ORDINAL,
+which does not — so a partitioned cook has to compute its pointers inside
+the cell that spends them.
+
+The caller arrived with it rather than after it. `examples-coral` grows a
+dendrite by aggregation, and its 2483 edges over 2484 points are exactly
+a tree. It works only because `mergePoints` concatenates existing points
+FIRST, so an ordinal written in round 3 still names the same point in
+round 20 — which is a property of that node, not of this one, and is the
+sharpest form of the ordinal warning: wire the merge the other way and
+every pointer shifts and the edges still build.
+
+### Stretch: a `splitBounds` node — NOT NEEDED, the graph does it, 2026-09-08
+
+Proposed alongside the parent-pointer entry above: a core node that
+recursively splits a box along an axis, emitting cells tagged with depth,
+parent and axis. It would have been the split-grammar primitive, and the
+argument for it was that the corpus had no facade, no floorplan and no
+BSP of any kind.
+
+**Recommendation: do not schedule.** `examples-facade` does it in twelve
+nodes with nothing new. A CELL IS ALREADY A POINT: the standard
+`boundsMin`/`boundsMax` pair every point carries IS the box, `setBounds`
+is field-capable per point so both halves are computed in one node, and
+`repeatUntil` carrying a growing set of cells is the recursion. The axis
+is argmax of the three spans, spelled with the 0/1 predicates the grammar
+has, and the stop is a depth cap and a size floor together.
+
+What the exercise actually bought was a DEFECT worth more than the node.
+The cut fraction was drawn per child, and the two halves of one cell have
+different seeds, so they drew different fractions and cut at two
+different coordinates: every cell stayed a valid box, the picture still
+looked like a subdivided panel, and 23.1 of 360 square units were simply
+missing. The rule it teaches is general to every fan-out in this library
+— a decision SHARED by the children is made on the parent and carried in
+`targetNames`, and only a decision that differs per child may be drawn
+after the fan-out. The same rule is why the tree's rule cloud needs
+distinct seeds, seen from the other side. Summed leaf area against root
+area is the assertion that catches it, and no picture can.
+
+If a node is ever wanted here it should be bought on a SECOND consumer —
+a floorplan with rooms and doors would be one — and it should carry the
+cell KIND that this graph does not have. Every cell here splits by the
+same rule, which makes a Mondrian rather than a grammar; choosing the
+rule by a per-cell string through `byAttribute` is the next thing, and
+nothing in the library is in its way.
 
 ### Stretch: quaternion field functions — REFUTED BY THE CORPUS, 2026-09-08
 

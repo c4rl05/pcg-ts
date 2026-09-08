@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="dark" />
 <title>pcg-ts — the graph corpus</title>
-<meta name="description" content="Every graph in the pcg-ts corpus, cooked in the editor: 88 files, 72 basics, 8 examples, 8 pipeline." />
+<meta name="description" content="Every graph in the pcg-ts corpus, cooked in the editor: 89 files, 72 basics, 9 examples, 8 pipeline." />
 <link rel="icon" href="./icon.svg" type="image/svg+xml" />
 </head>
 <body>
@@ -516,8 +516,8 @@ body:has(.shell) .grid-guide .wrap { max-width: 1180px; }
 <header class="page-head">
   <div class="wrap">
     <p class="eyebrow">Corpus</p>
-    <h1>88 graphs, every one a file you can cook</h1>
-    <p class="lead">Every graph in <code>graphs/</code>, cooked in the editor and shot from the frame it draws into. <strong>72 basics, 8 examples, 8 pipeline.</strong> Each file teaches one thing and cooks from JSON alone — <code>pcg cook graphs/&lt;name&gt;.json</code> reproduces what you see here from the seed the file carries, on any machine and in any cook order.</p>
+    <h1>89 graphs, every one a file you can cook</h1>
+    <p class="lead">Every graph in <code>graphs/</code>, cooked in the editor and shot from the frame it draws into. <strong>72 basics, 9 examples, 8 pipeline.</strong> Each file teaches one thing and cooks from JSON alone — <code>pcg cook graphs/&lt;name&gt;.json</code> reproduces what you see here from the seed the file carries, on any machine and in any cook order.</p>
     <p class="sub">Hover a card for the node graph behind the frame. Click to open it in the <a href="./editor/">editor</a> and change it live. The files themselves are in <a href="https://github.com/C4RL05/pcg-ts/tree/main/graphs">graphs/</a>; the same index in prose is <a href="./graphs.md">graphs.md</a>.</p>
   </div>
 </header>
@@ -533,7 +533,7 @@ body:has(.shell) .grid-guide .wrap { max-width: 1180px; }
         <button type="button" data-family="pipeline" aria-pressed="false">pipeline</button>
       </div>
       <label class="switch"><input type="checkbox" id="graphs-on"> node graphs</label>
-      <span class="count" id="count" aria-live="polite">88 graphs</span>
+      <span class="count" id="count" aria-live="polite">89 graphs</span>
     </div>
   </div>
 </div>
@@ -618,10 +618,11 @@ body:has(.shell) .grid-guide .wrap { max-width: 1180px; }
     </div>
   </section>
   <section class="family" id="family-examples">
-    <p class="eyebrow">examples · 8 graphs</p>
+    <p class="eyebrow">examples · 9 graphs</p>
     <p class="blurb">Whole scenes rather than single ideas — each one exists because something in the library only shows up at that size.</p>
     <div class="grid">
       <a class="tile" id="examples-coral" href="./editor/?graph=examples-coral" data-family="examples" data-find="examples-coral a dendrite grown by aggregation examples growth topology repeat"><span class="frame"><img class="scene" src="./gallery/examples-coral.webp" width="720" height="480" loading="lazy" decoding="async" alt="examples-coral cooked in the editor: a dendrite grown by aggregation — 2,484 points"><img class="graph" src="./gallery/examples-coral.graph.webp" width="720" height="480" loading="lazy" decoding="async" alt=""></span><span class="meta"><b>examples-coral</b><span class="what">a dendrite grown by aggregation</span><span class="facts">5 nodes · 2,484 pts · 2,483 prims</span></span></a>
+      <a class="tile" id="examples-facade" href="./editor/?graph=examples-facade" data-family="examples" data-find="examples-facade split a box until the pieces are small enough examples structure repeat bounds"><span class="frame"><img class="scene" src="./gallery/examples-facade.webp" width="720" height="480" loading="lazy" decoding="async" alt="examples-facade cooked in the editor: split a box until the pieces are small enough — 6,336 points"><img class="graph" src="./gallery/examples-facade.graph.webp" width="720" height="480" loading="lazy" decoding="async" alt=""></span><span class="meta"><b>examples-facade</b><span class="what">split a box until the pieces are small enough</span><span class="facts">12 nodes · 6,336 pts · 3,168 prims</span></span></a>
       <a class="tile" id="examples-forest" href="./editor/?graph=examples-forest" data-family="examples" data-find="examples-forest plant a hillside, thinned by slope and treeline examples terrain placement filter spawner"><span class="frame"><img class="scene" src="./gallery/examples-forest.webp" width="720" height="480" loading="lazy" decoding="async" alt="examples-forest cooked in the editor: plant a hillside, thinned by slope and treeline — 4,225 points, 1,806 instances"><img class="graph" src="./gallery/examples-forest.graph.webp" width="720" height="480" loading="lazy" decoding="async" alt=""></span><span class="meta"><b>examples-forest</b><span class="what">plant a hillside, thinned by slope and treeline</span><span class="facts">10 nodes · 4,225 pts · 1,806 inst</span></span></a>
       <a class="tile" id="examples-gpu-fields" href="./editor/?graph=examples-gpu-fields" data-family="examples" data-find="examples-gpu-fields a fusable chain, on the cpu or the device gpu fields attributes performance"><span class="frame"><img class="scene" src="./gallery/examples-gpu-fields.webp" width="720" height="480" loading="lazy" decoding="async" alt="examples-gpu-fields cooked in the editor: a fusable chain, on the CPU or the device — 40,000 points"><img class="graph" src="./gallery/examples-gpu-fields.graph.webp" width="720" height="480" loading="lazy" decoding="async" alt=""></span><span class="meta"><b>examples-gpu-fields</b><span class="what">a fusable chain, on the CPU or the device</span><span class="facts">6 nodes · 40,000 pts</span></span></a>
       <a class="tile" id="examples-headless-scatter" href="./editor/?graph=examples-headless-scatter" data-family="examples" data-find="examples-headless-scatter headless scatter headless scatter fields cli"><span class="frame"><img class="scene" src="./gallery/examples-headless-scatter.webp" width="720" height="480" loading="lazy" decoding="async" alt="examples-headless-scatter cooked in the editor: headless scatter — 421 points"><img class="graph" src="./gallery/examples-headless-scatter.graph.webp" width="720" height="480" loading="lazy" decoding="async" alt=""></span><span class="meta"><b>examples-headless-scatter</b><span class="what">headless scatter</span><span class="facts">4 nodes · 421 pts</span></span></a>
@@ -651,7 +652,7 @@ body:has(.shell) .grid-guide .wrap { max-width: 1180px; }
 <footer>
   <div class="wrap">
     <span>pcg-ts v0.17.0</span>
-    <span>88 graphs</span>
+    <span>89 graphs</span>
     <a href="./index.html">home</a>
     <a href="./manual.html">user manual</a>
     <a href="https://github.com/C4RL05/pcg-ts">github.com/C4RL05/pcg-ts</a>
