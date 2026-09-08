@@ -4,7 +4,7 @@ Generated from the graphs in [`graphs`](../graphs) by `node scripts/gen-graphs.m
 
 Each file teaches ONE thing and cooks from JSON alone — no runtime-injected data, so `pcg cook <file>` on a clean install reproduces exactly what the corpus test asserts.
 
-80 examples, alphabetical by file:
+83 examples, alphabetical by file:
 
 - [basics-a-draw-that-survives-a-move.json](#basics-a-draw-that-survives-a-movejson) — keep a random draw when the point moves
 - [basics-attribute-from-noise.json](#basics-attribute-from-noisejson) — write an attribute from a noise field
@@ -42,6 +42,7 @@ Each file teaches ONE thing and cooks from JSON alone — no runtime-injected da
 - [basics-path-resample.json](#basics-path-resamplejson) — even out the spacing along a path
 - [basics-path-segments.json](#basics-path-segmentsjson) — draw a curve as solid geometry
 - [basics-paths-by-group.json](#basics-paths-by-groupjson) — cut one cloud into several separate paths
+- [basics-phyllotaxis.json](#basics-phyllotaxisjson) — the golden angle packs a disc
 - [basics-point-grid.json](#basics-point-gridjson) — place points on a regular grid
 - [basics-points-to-path.json](#basics-points-to-pathjson) — build a path from a point cloud
 - [basics-primitive-ref.json](#basics-primitive-refjson) — reference a shipped primitive by name
@@ -56,6 +57,7 @@ Each file teaches ONE thing and cooks from JSON alone — no runtime-injected da
 - [basics-scatter-along-a-path.json](#basics-scatter-along-a-pathjson) — scatter a lap with as many markers as its own length asks for
 - [basics-scatter-in-bounds.json](#basics-scatter-in-boundsjson) — scatter points in a box
 - [basics-scatter-in-world.json](#basics-scatter-in-worldjson) — scatter points anchored to the world, not to the box
+- [basics-self-similar-frond.json](#basics-self-similar-frondjson) — a frond made of smaller fronds
 - [basics-shift-along-a-path.json](#basics-shift-along-a-pathjson) — draw the chain between scattered beads, from nothing but each one's successor
 - [basics-sightline-cull.json](#basics-sightline-culljson) — clear a line of sight by moving the props, not by deleting them
 - [basics-signed-distance.json](#basics-signed-distancejson) — a signed distance field, and which side of it
@@ -78,6 +80,7 @@ Each file teaches ONE thing and cooks from JSON alone — no runtime-injected da
 - [examples-rig.json](#examples-rigjson) — a suspended rig, built from curves
 - [examples-riverbank.json](#examples-riverbankjson) — Riverbank
 - [examples-streamed-terrain.json](#examples-streamed-terrainjson) — one cell of a streamed world, halo and all
+- [examples-tree.json](#examples-treejson) — grow a tree by rewriting a point cloud
 - [pipeline-1-boundary.json](#pipeline-1-boundaryjson) — staged pipeline 1/5 — the ground and the wall
 - [pipeline-2-districts.json](#pipeline-2-districtsjson) — staged pipeline 2/5 — district centres and the field they claim
 - [pipeline-3-lots-edits.json](#pipeline-3-lots-editsjson) — staged pipeline 3/5, edited — hand-placed plots that win on priority
@@ -773,6 +776,24 @@ With `groupAttr` set, `pointsToPath` splits the cloud by a whole-number point at
 
 Cook it: `pcg cook graphs/basics-paths-by-group.json --stats`
 
+## basics-phyllotaxis.json
+
+**the golden angle packs a disc**
+
+Layout computed from the point's own INDEX rather than drawn from a noise or a scatter: point i sits at angle `i * a` and radius `c * sqrt(i)`, which is the arrangement a sunflower head, a pinecone and a succulent all use. The sqrt is what makes it a packing rather than a spiral — equal area per point, so the density is the same at the rim as at the centre — and the ANGLE is what makes it uniform. Both arms here run the identical expression and differ only in `a`. On the left `a` is the golden angle, 2.3999632, which is 2*pi times an irrational number: no point ever lands on a previous one's ray, so the florets interleave and the eye reads the two families of counter-rotating arcs nobody placed. On the right `a` is 2*pi/8, a RATIONAL turn, and every eighth point shares a ray: the same sqrt spacing collapses into eight spokes with wedges of nothing between them. That is the whole lesson — the packing comes from the angle being incommensurable with a full turn, not from the radius law, which both arms share. Distinct from the shipped `shape/spiral` primitive, which is Archimedean and evenly spaced in ANGLE: that draws one winding curve, this fills an area. Positions are overwritten wholesale, so the source only has to supply the right NUMBER of points and an index to read; a `pointLine` is the cheapest thing that does. Nothing here writes `scale` — a bare cloud draws every point the same size whatever `scale` says, and a column the renderer ignores would be a graph claiming something it does not show.
+
+**Tags:** `basics`, `fields`, `layout`
+
+**Seed:** 1101
+
+**Node types:** `mergePoints`, `pointLine`, `setAttribute`, `transformPoints`
+
+**Primitives:** *(none)*
+
+**Outputs:** `points` (from `both`.`out`)
+
+Cook it: `pcg cook graphs/basics-phyllotaxis.json --stats`
+
 ## basics-point-grid.json
 
 **place points on a regular grid**
@@ -1056,6 +1077,24 @@ The same shape of graph as 'scatter points in a box', with the one difference th
 **Outputs:** `points` (from `scatter`.`out`)
 
 Cook it: `pcg cook graphs/basics-scatter-in-world.json --stats`
+
+## basics-self-similar-frond.json
+
+**a frond made of smaller fronds**
+
+Self-similarity WITHOUT recursion, which this library does not have: a subgraph may not reference itself, so a structure whose parts are smaller copies of the whole is spelled by applying one rule a fixed number of times and reading the unrolled result. The rule is `copyToPoints`, and what makes it a rule rather than a stamp is that it COMPOSES TRANSFORMS: a copy lands at `targetP + targetRot * (targetScale * sourceP)`, takes `targetRot * sourceRot`, and multiplies the scales. So a template carrying a per-point `rot` and a tapering `scale` is not decoration — it IS the production, and every point of the parent says where its child goes, which way it points and how much smaller it is. Here one template does all three levels. `rachis` is twenty points along a line; `scale` tapers them base to tip, and `rot` turns alternate points to alternate sides, so the template describes both a stem AND the placement of whatever is stamped on it. Stamping the template onto ITSELF gives the pinnae, stamping that result onto the template again gives the pinnules, and `topology: "keep"` re-emits the source polyline once per target so each copy arrives as a path rather than a loose cloud. Three levels is a choice, not a limit: a fourth is one more node and one more multiply on the count. The compounding is the point — a level-2 leaflet carries the product of two turns and two tapers, which is why the outline curves although nothing here computes a curve. What this graph cannot do is stop when the parts get small enough, or branch a different number of times at different places; that wants a loop with a settle condition rather than a fixed chain, and `basics-repeat-until-settled` is where that lives.
+
+**Tags:** `basics`, `copy`, `structure`, `paths`
+
+**Seed:** 1102
+
+**Node types:** `copyToPoints`, `mergePrimitives`, `pointLine`, `pointsToPath`, `setAttribute`
+
+**Primitives:** *(none)*
+
+**Outputs:** `frond` (from `frond`.`out`)
+
+Cook it: `pcg cook graphs/basics-self-similar-frond.json --stats`
 
 ## basics-shift-along-a-path.json
 
@@ -1514,6 +1553,24 @@ The corpus graph a `World` can BIND, not just cook: every per-cell quantity is a
 **Outputs:** `points` (from `size`.`out`), `populationRank` (from `rank`.`out`)
 
 Cook it: `pcg cook graphs/examples-streamed-terrain.json --stats`
+
+## examples-tree.json
+
+**grow a tree by rewriting a point cloud**
+
+GROWTH AS A FIXED POINT, because this library has no recursion: a subgraph may not reference itself, so a structure that grows is spelled as a loop whose body REWRITES the whole cloud and whose carry is the structure so far. `repeatUntil` feeds each round's carry output back to its carry input, and the body is free to emit MORE points than it received -- that is what makes it a growth grammar rather than the relaxation loop it is usually reached for. Each round: take the points marked `active` (the buds), stamp the rule cloud on them to fan each bud out into three children, decide where each child goes, kill the ones the rules reject, mark the parents inactive and merge. The loop stops when no bud is left. THE RULE IS `copyToPoints` and the rule cloud is three coincident points at the origin, which is a fan-out multiplier and nothing else -- slot 0 continues the current branch, slots 1 and 2 are candidate branches. `slot` is recoverable as `mod(index, 3)` ONLY because copies land in contiguous per-target blocks, so it must be written before anything filters and renumbers. The three rule points need DISTINCT SEEDS: a copy's seed is hashCombine(source, target), per-point randomness keys on identity (stored position plus `seed`), and three children of one bud share a position until they are moved -- with equal rule seeds they would draw identically and the three slots would go the same way. DIRECTION is where a tree is won or lost. A continuation keeps the parent direction and wanders slightly; a branch mostly DISCARDS it and leaves sideways. One shared rule does not work: the gravity term then dominates every child and the result is a bundle of near-parallel whips, which is what this graph produced before the two cases were split. THE SEED IS NOT ROTATED PER ROUND, by design -- a fixed point exists only if the body is the same function every round -- and nothing here needs it to be. Randomness keys on IDENTITY, and every child is a new point at a position no point held before, so fresh draws come from the data changing rather than from the seed moving. SETTLING is `attributeReduce` mode `sum` over the 0/1 `active` flag. Mode `count` is the trap: it reports the element count and ignores the attribute named, so over a carry that only grows it is never zero and the loop silently burns its whole budget and reports `converged` false. THE CARRY CANNOT FAN OUT. Exactly one node may be the carry input, so the round needs the tree twice -- once to filter for buds, once to mark the old points inactive -- and an identity `transformPoints` is the pass-through both read from. BRANCH IDS are packed, `depth * 262144 + parentIdx * 4 + slot`, so the two candidate branches of one bud cannot collide. Every field resolves through f32, so the packing is exact only while it stays under 2^24: at this depth it is nowhere near, but a deeper tree or a wider round wants the bound rechecked rather than assumed. `pointsToPath` then groups on that id and orders on `order`, the position along a branch, with `shortGroups: "skip"` because a branch that never grew is data rather than an authoring error. WHAT IT COSTS: growth from ONE bud is exponential, so the early rounds decide everything and a tree that branches too late never gets going -- gated two segments up rather than one, this same graph settles at 19 points and 3 branches instead of 4213 and 1040. WHAT IT CANNOT DO: weld a junction. A branch's first point is its own, coincident with the parent it grew from but in a different group, so the two are separate polylines that meet by position rather than by sharing a vertex. Sharing it would need an edge built from a parent INDEX, which is the one thing no node here can author.
+
+**Tags:** `examples`, `growth`, `repeat`, `paths`
+
+**Seed:** 2201
+
+**Node types:** `attributeReduce`, `copyToPoints`, `filterByAttribute`, `filterByExpression`, `mergePoints`, `pointLine`, `pointsToPath`, `repeatUntil`, `setAttribute`, `transformPoints`
+
+**Primitives:** *(none)*
+
+**Outputs:** `tree` (from `branches`.`out`)
+
+Cook it: `pcg cook graphs/examples-tree.json --stats`
 
 ## pipeline-1-boundary.json
 

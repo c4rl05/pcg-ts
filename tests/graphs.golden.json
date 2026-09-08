@@ -2307,6 +2307,46 @@
         ]
       }
     },
+    "basics-phyllotaxis.json": {
+      "outputs": {
+        "points": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 1600,
+              "vertex": 0,
+              "primitive": 0,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "rot:f32x4",
+                "scale:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "seed:u32"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -99.7695,
+                0,
+                -45.1982
+              ],
+              "max": [
+                100.028,
+                0,
+                45.0848
+              ]
+            }
+          }
+        ]
+      }
+    },
     "basics-point-grid.json": {
       "outputs": {
         "points": [
@@ -3186,6 +3226,49 @@
                 39.6613,
                 0,
                 39.7267
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "basics-self-similar-frond.json": {
+      "outputs": {
+        "frond": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 8420,
+              "vertex": 8420,
+              "primitive": 421,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "rot:f32x4",
+                "scale:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "seed:u32"
+              ],
+              "primitive": [
+                "primtype:string"
+              ]
+            },
+            "bounds": {
+              "min": [
+                0,
+                0,
+                -3.7554
+              ],
+              "max": [
+                11.2385,
+                0,
+                3.8274
               ]
             }
           }
@@ -6407,6 +6490,60 @@
                 63.9978,
                 0,
                 63.85
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "examples-tree.json": {
+      "outputs": {
+        "tree": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 4213,
+              "vertex": 2997,
+              "primitive": 1040,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "rot:f32x4",
+                "scale:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "seed:u32",
+                "dir:f32x3",
+                "len:f32",
+                "depth:i32",
+                "branchId:i32",
+                "order:i32",
+                "active:u32",
+                "parentIdx:i32",
+                "slot:i32"
+              ],
+              "primitive": [
+                "primtype:string"
+              ],
+              "detail": [
+                "moves:f32"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -8.7528,
+                0,
+                -8.0992
+              ],
+              "max": [
+                5.1902,
+                21.9134,
+                7.5668
               ]
             }
           }
