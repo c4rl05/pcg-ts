@@ -170,15 +170,20 @@ a parent — these are three different kinds of thing and the old single
   regenerate. CI diffs `docs` after running the docs chain, so a stale
   build passes CI silently: the source can be right and the live
   demos months behind it. Run this whenever anything under `editor/`,
-  `demos/` or `shared/` changes — **and whenever `src/` does**, which is
-  the case that actually bites: the pages import `pcg-ts` from `dist/`, so
-  a library commit that touches no page at all still leaves the committed
-  bundle behind. Measured on 2026-08-29: a `src/three` change shipped, and
-  the built `three-*.js` chunk carried none of it until the next demo edit
-  happened to force a rebuild. Check the BUILT site rather than the dev
-  server — relative bases, hashed asset names and minified components are
-  exactly what the dev server does not exercise. `npm run build` first,
-  for the same reason `npm run docs` needs it
+  `demos/`, `shared/` or `graphs/` changes — **and whenever `src/` does**,
+  which is the case that actually bites: the pages import `pcg-ts` from
+  `dist/`, so a library commit that touches no page at all still leaves the
+  committed bundle behind. Measured on 2026-08-29: a `src/three` change
+  shipped, and the built `three-*.js` chunk carried none of it until the
+  next demo edit happened to force a rebuild. `graphs/` counts because
+  `shared/presets.ts` globs the corpus at BUILD time and each chunk embeds
+  its graph's JSON verbatim, so an added or edited graph is invisible to the
+  hosted editor until this runs — that one has a gate,
+  `tests/builtSiteCoverage.test.ts`, which fails on a missing or out-of-date
+  chunk and names the command; the `src/` case has none. Check the BUILT
+  site rather than the dev server — relative bases, hashed asset names and
+  minified components are exactly what the dev server does not exercise.
+  `npm run build` first, for the same reason `npm run docs` needs it
 - `npm run preview -- <graph.json>` — render any serialized graph from
   fixed camera poses (hero / ground / top) into `preview/`, with a JSON
   sidecar. Opens a real browser; see `scripts/preview.mjs` for why it is a
