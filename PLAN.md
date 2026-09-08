@@ -263,6 +263,37 @@ same rule, which makes a Mondrian rather than a grammar; choosing the
 rule by a per-cell string through `byAttribute` is the next thing, and
 nothing in the library is in its way.
 
+**SECOND CONSUMER, 2026-09-08 — and it sharpens the recommendation rather
+than reversing it.** `examples-floorplan` is the floorplan this entry asked
+for. The split machinery is shared VERBATIM — the argmax over the three
+spans, the parent-decided cut, the two-slot fan-out, the bounds write, about
+78 lines of it — and ONLY THE STOP RULE differs. A facade stops on a bounded
+SIZE; a plan stops on a bounded floor AREA, because a long thin room has a
+small area while its longest wall says otherwise.
+
+That is evidence for a shared RECIPE, not for a node. A node serving both
+would have to take its stop rule as a field, at which point it is
+`repeatUntil` with extra steps and a worse name. And the obvious extraction
+— a `transform/split-bounds` primitive — is deliberately NOT made yet, for a
+reason worth writing down because it applies to every primitive: a
+primitive's params are VALUES spliced into its own expressions, never
+expressions themselves, so an extracted recipe has to FIX the form of the
+stop rule and expose only its numbers. Two consumers that disagree about the
+form are not evidence for which form to fix. A THIRD that agrees with either
+one is what buys the extraction, and it should be extracted then rather than
+guessed at now.
+
+The floorplan did buy the CELL KIND the facade was noted as lacking, and it
+is a string attribute a `byAttribute` or a `spawnInstances` can dispatch on,
+written with an index selector — `ge(area, 13) + ge(area, 19)`, since the
+grammar has no switch and summing 0/1 predicates is how a staircase of
+thresholds is spelled. One cook was lost to it: THE BANDS MUST SIT INSIDE
+THE STOP RULE'S OWN RANGE. Leaves stop splitting once their area falls under
+`minArea`, so a threshold above it can never fire and all 73 rooms came back
+the same kind, with nothing wrong anywhere for a test to catch. With a cut
+between 0.34 and 0.66 the leaves land roughly in [0.34, 1] of `minArea`, and
+that is the interval a band list has to be chosen inside.
+
 ### Stretch: quaternion field functions — REFUTED BY THE CORPUS, 2026-09-08
 
 Proposed: `quatFromAxisAngle`, `quatMul` and `rotateVec` as field-grammar

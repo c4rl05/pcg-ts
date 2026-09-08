@@ -2443,8 +2443,8 @@ stale and a stale skill is worse than none.
 
 ## Example corpus (index: docs/graphs.md, machine-readable: docs/graphs.json)
 
-89 graphs under `graphs/`, each named by what it teaches and
-carrying its own `meta` block: 72 single-concept `basics-*.json`, 9
+90 graphs under `graphs/`, each named by what it teaches and
+carrying its own `meta` block: 72 single-concept `basics-*.json`, 10
 composed `examples-*.json`, plus the 8-file staged pipeline
 `pipeline-*.json` below. Every one cooks from
 JSON alone — no `dataInput`, whose items never survive serialization —

@@ -1,0 +1,13121 @@
+var e=`{
+  "formatVersion": 1,
+  "seed": 2204,
+  "meta": {
+    "title": "rooms from a split footprint, with a circulation net",
+    "description": "THE SECOND CONSUMER of the subdivision \`examples-facade\` introduced, built to answer whether a \`splitBounds\` NODE is wanted. The answer it gives is no, and the reason is specific: the split machinery is identical between the two graphs -- the argmax over the three spans, the cut carried down from the parent, the two-slot fan-out, the bounds write -- and ONLY THE STOP RULE differs. A facade wants panels under a bounded SIZE; a plan wants rooms under a bounded floor AREA, because a long thin room has a small area while its longest wall says otherwise. A node would have to take the stop rule as a field to serve both, at which point it is \`repeatUntil\` with extra steps. What the two graphs share is a RECIPE WITH ONE HOLE IN IT, and extracting it into \`src/primitives/\` is the obvious move -- deliberately not made here. A primitive's params are VALUES spliced into its own expressions, never expressions themselves, so an extracted recipe has to fix the FORM of the stop rule and expose only its numbers. Two consumers that disagree about the form are not yet evidence for which form to fix; a third that agrees with either one would be. A ROOM IS A POINT, exactly as a panel was: \`boundsMin\`/\`boundsMax\` is the room, and the plan is the set of leaves. The root box is thin in Y, so the vertical span is never the longest and the cuts alternate between the two floor axes on their own -- the same trick the facade uses to stay flat, turned ninety degrees. THE KIND IS READ OFF THE AREA, which is the thing the facade deliberately did not have. A cell with no kind splits by one rule and makes a Mondrian; giving each leaf a STRING kind is what turns a subdivision into a plan you can talk about. It is spelled as \`setAttribute\` with an INDEX selector -- \`ge(area, 13) + ge(area, 19)\` counts how many thresholds an area clears and lands on 0, 1 or 2 in \`values\` -- because the grammar has no \`and\`/\`or\` and no switch, and summing predicates is how a staircase of thresholds is written here. THE BANDS MUST SIT INSIDE THE STOP RULE'S RANGE, which is not obvious and cost a cook: leaves stop splitting once their area falls under \`minArea\`, so a threshold ABOVE it can never fire and every room comes back the same kind. With a cut between 0.34 and 0.66 the leaves land roughly in [0.34, 1] of minArea, and the bands are chosen inside that. That column is a real string attribute: \`byAttribute\` can dispatch on it, \`filterByAttribute\` can cut on it, and \`spawnInstances\` could send each kind to a different asset. DOORS ARE A PROXIMITY GRAPH, AND THAT IS NOT THE SAME AS ADJACENCY -- said plainly because the picture will not say it. \`connectPoints\` in \`relativeNeighborhood\` mode over the room centres keeps a pair only when no third centre is closer to both, which thins the complete graph into a circulation-looking net that still contains a spanning tree, so the plan is connected. But two rooms sharing a wall are not always each other's near neighbours, and two rooms that merely pass close diagonally can be joined. A true adjacency test asks whether two boxes share a FACE, which is a question about a pair of cells that no node in this library asks. Reading this graph as 'which rooms are next to each other' is reading it wrong; reading it as 'a circulation net over the rooms' is what it is. WHAT IT INHERITS WITHOUT RESTATING: the cut fraction is decided on the PARENT and carried in \`targetNames\`, because the two halves of a cell have different seeds and would otherwise cut at two different coordinates and leave a sliver belonging to neither. The facade's description carries that measurement (23.1 of 360 square units, invisible in the render); the same guard is why the rooms here tile their footprint exactly.",
+    "tags": [
+      "examples",
+      "structure",
+      "repeat",
+      "topology"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "rootPt",
+      "type": "pointLine",
+      "params": {
+        "mode": "endpoints",
+        "count": 1,
+        "start": [
+          0,
+          0,
+          0
+        ],
+        "end": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "rootCell",
+      "type": "setBounds",
+      "params": {
+        "boundsMin": [
+          -14.0,
+          0,
+          -10.0
+        ],
+        "boundsMax": [
+          14.0,
+          0.25,
+          10.0
+        ]
+      }
+    },
+    {
+      "id": "rootDepth",
+      "type": "setAttribute",
+      "params": {
+        "name": "depth",
+        "domain": "point",
+        "type": "i32",
+        "tupleSize": 1,
+        "value": 0,
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "rootLive",
+      "type": "setAttribute",
+      "params": {
+        "name": "live",
+        "domain": "point",
+        "type": "u32",
+        "tupleSize": 1,
+        "value": 1,
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "rules",
+      "type": "pointLine",
+      "params": {
+        "mode": "endpoints",
+        "count": 2,
+        "start": [
+          0,
+          0,
+          0
+        ],
+        "end": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "ruleP",
+      "type": "setAttribute",
+      "params": {
+        "name": "P",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            0,
+            0,
+            0
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "ruleSeed",
+      "type": "setAttribute",
+      "params": {
+        "name": "seed",
+        "domain": "point",
+        "type": "u32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "add",
+          "args": [
+            23,
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "index"
+                },
+                5119
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "split",
+      "type": "repeatUntil",
+      "params": {
+        "maxRounds": 11,
+        "settleAttr": "moves"
+      },
+      "subgraph": {
+        "graph": {
+          "formatVersion": 1,
+          "seed": 0,
+          "nodes": [
+            {
+              "id": "pass",
+              "type": "transformPoints",
+              "params": {
+                "translate": [
+                  0,
+                  0,
+                  0
+                ],
+                "rotateEuler": [
+                  0,
+                  0,
+                  0
+                ],
+                "scale": [
+                  1,
+                  1,
+                  1
+                ]
+              }
+            },
+            {
+              "id": "open",
+              "type": "filterByAttribute",
+              "params": {
+                "attribute": "live",
+                "comparison": "eq",
+                "value": 1,
+                "topology": "drop"
+              }
+            },
+            {
+              "id": "keepLo",
+              "type": "setAttribute",
+              "params": {
+                "name": "cellMin",
+                "domain": "point",
+                "type": "f32",
+                "tupleSize": 3,
+                "value": {
+                  "fn": "attribute",
+                  "name": "boundsMin",
+                  "tupleSize": 3
+                },
+                "select": 0,
+                "values": [],
+                "weights": [],
+                "stringValue": "",
+                "seed": 0
+              }
+            },
+            {
+              "id": "keepHi",
+              "type": "setAttribute",
+              "params": {
+                "name": "cellMax",
+                "domain": "point",
+                "type": "f32",
+                "tupleSize": 3,
+                "value": {
+                  "fn": "attribute",
+                  "name": "boundsMax",
+                  "tupleSize": 3
+                },
+                "select": 0,
+                "values": [],
+                "weights": [],
+                "stringValue": "",
+                "seed": 0
+              }
+            },
+            {
+              "id": "where",
+              "type": "setAttribute",
+              "params": {
+                "name": "cutFrac",
+                "domain": "point",
+                "type": "f32",
+                "tupleSize": 1,
+                "value": {
+                  "fn": "add",
+                  "args": [
+                    0.34,
+                    {
+                      "fn": "mul",
+                      "args": [
+                        0.32,
+                        {
+                          "fn": "randomField",
+                          "key": "cut"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "select": 0,
+                "values": [],
+                "weights": [],
+                "stringValue": "",
+                "seed": 0
+              }
+            },
+            {
+              "id": "halves",
+              "type": "copyToPoints",
+              "params": {
+                "targetNames": [
+                  "cellMin",
+                  "cellMax",
+                  "depth",
+                  "cutFrac"
+                ],
+                "targetIndexAttr": "",
+                "sourceGroupAttr": "",
+                "targetGroupAttr": "",
+                "topology": "drop"
+              }
+            },
+            {
+              "id": "slot",
+              "type": "setAttribute",
+              "params": {
+                "name": "slot",
+                "domain": "point",
+                "type": "i32",
+                "tupleSize": 1,
+                "value": {
+                  "fn": "mod",
+                  "args": [
+                    {
+                      "fn": "index"
+                    },
+                    2
+                  ]
+                },
+                "select": 0,
+                "values": [],
+                "weights": [],
+                "stringValue": "",
+                "seed": 0
+              }
+            },
+            {
+              "id": "deeper",
+              "type": "setAttribute",
+              "params": {
+                "name": "depth",
+                "domain": "point",
+                "type": "i32",
+                "tupleSize": 1,
+                "value": {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "depth"
+                    },
+                    1
+                  ]
+                },
+                "select": 0,
+                "values": [],
+                "weights": [],
+                "stringValue": "",
+                "seed": 0
+              }
+            },
+            {
+              "id": "cut",
+              "type": "setBounds",
+              "params": {
+                "boundsMin": {
+                  "fn": "vec",
+                  "args": [
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "ge",
+                                  "args": [
+                                    {
+                                      "fn": "sub",
+                                      "args": [
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMax",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 0
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 0
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "sub",
+                                      "args": [
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMax",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 1
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 1
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "ge",
+                                  "args": [
+                                    {
+                                      "fn": "sub",
+                                      "args": [
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMax",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 0
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 0
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "sub",
+                                      "args": [
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMax",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 2
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 2
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "attribute",
+                              "name": "slot"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "component",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "cellMin",
+                                          "tupleSize": 3
+                                        }
+                                      ],
+                                      "index": 0
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "mul",
+                                              "args": [
+                                                {
+                                                  "fn": "ge",
+                                                  "args": [
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "ge",
+                                                  "args": [
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 2
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 2
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                1,
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 1
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            1,
+                                            {
+                                              "fn": "add",
+                                              "args": [
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        1,
+                                                        {
+                                                          "fn": "mul",
+                                                          "args": [
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 2
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "cutFrac"
+                                },
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "ge",
+                                              "args": [
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "ge",
+                                              "args": [
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 2
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 2
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMax",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 0
+                                            },
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMin",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 0
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "add",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "mul",
+                                              "args": [
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    1,
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                1,
+                                                {
+                                                  "fn": "add",
+                                                  "args": [
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "mul",
+                                                          "args": [
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            1,
+                                                            {
+                                                              "fn": "mul",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "ge",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 1
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 1
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "ge",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 2
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 2
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "cellMin",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 0
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "ge",
+                                      "args": [
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMax",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 1
+                                            },
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMin",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 1
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMax",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 0
+                                            },
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMin",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 0
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "ge",
+                                      "args": [
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMax",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 1
+                                            },
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMin",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 1
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMax",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 2
+                                            },
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMin",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 2
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "attribute",
+                              "name": "slot"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "component",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "cellMin",
+                                          "tupleSize": 3
+                                        }
+                                      ],
+                                      "index": 0
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "mul",
+                                              "args": [
+                                                {
+                                                  "fn": "ge",
+                                                  "args": [
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "ge",
+                                                  "args": [
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 2
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 2
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                1,
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 1
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            1,
+                                            {
+                                              "fn": "add",
+                                              "args": [
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        1,
+                                                        {
+                                                          "fn": "mul",
+                                                          "args": [
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 2
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "cutFrac"
+                                },
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "ge",
+                                              "args": [
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "ge",
+                                              "args": [
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 2
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 2
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMax",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 0
+                                            },
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMin",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 0
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "add",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "mul",
+                                              "args": [
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    1,
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                1,
+                                                {
+                                                  "fn": "add",
+                                                  "args": [
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "mul",
+                                                          "args": [
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            1,
+                                                            {
+                                                              "fn": "mul",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "ge",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 1
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 1
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "ge",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 2
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 2
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "cellMin",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 1
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "sub",
+                              "args": [
+                                1,
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "ge",
+                                              "args": [
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "ge",
+                                              "args": [
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 2
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 2
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            1,
+                                            {
+                                              "fn": "mul",
+                                              "args": [
+                                                {
+                                                  "fn": "ge",
+                                                  "args": [
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "ge",
+                                                  "args": [
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 2
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 2
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "attribute",
+                              "name": "slot"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "component",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "cellMin",
+                                          "tupleSize": 3
+                                        }
+                                      ],
+                                      "index": 0
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "mul",
+                                              "args": [
+                                                {
+                                                  "fn": "ge",
+                                                  "args": [
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "ge",
+                                                  "args": [
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 2
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 2
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                1,
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 1
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            1,
+                                            {
+                                              "fn": "add",
+                                              "args": [
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        1,
+                                                        {
+                                                          "fn": "mul",
+                                                          "args": [
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 2
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "cutFrac"
+                                },
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "ge",
+                                              "args": [
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "ge",
+                                              "args": [
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 2
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 2
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMax",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 0
+                                            },
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMin",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 0
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "add",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "mul",
+                                              "args": [
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    1,
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                1,
+                                                {
+                                                  "fn": "add",
+                                                  "args": [
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "mul",
+                                                          "args": [
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            1,
+                                                            {
+                                                              "fn": "mul",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "ge",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 1
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 1
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "ge",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 2
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 2
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "cellMin",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 2
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "boundsMax": {
+                  "fn": "vec",
+                  "args": [
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "ge",
+                                  "args": [
+                                    {
+                                      "fn": "sub",
+                                      "args": [
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMax",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 0
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 0
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "sub",
+                                      "args": [
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMax",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 1
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 1
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "ge",
+                                  "args": [
+                                    {
+                                      "fn": "sub",
+                                      "args": [
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMax",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 0
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 0
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "sub",
+                                      "args": [
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMax",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 2
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 2
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "sub",
+                              "args": [
+                                1,
+                                {
+                                  "fn": "attribute",
+                                  "name": "slot"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "component",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "cellMin",
+                                          "tupleSize": 3
+                                        }
+                                      ],
+                                      "index": 0
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "mul",
+                                              "args": [
+                                                {
+                                                  "fn": "ge",
+                                                  "args": [
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "ge",
+                                                  "args": [
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 2
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 2
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                1,
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 1
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            1,
+                                            {
+                                              "fn": "add",
+                                              "args": [
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        1,
+                                                        {
+                                                          "fn": "mul",
+                                                          "args": [
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 2
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "cutFrac"
+                                },
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "ge",
+                                              "args": [
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "ge",
+                                              "args": [
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 2
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 2
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMax",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 0
+                                            },
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMin",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 0
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "add",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "mul",
+                                              "args": [
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    1,
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                1,
+                                                {
+                                                  "fn": "add",
+                                                  "args": [
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "mul",
+                                                          "args": [
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            1,
+                                                            {
+                                                              "fn": "mul",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "ge",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 1
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 1
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "ge",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 2
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 2
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "cellMax",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 0
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "ge",
+                                      "args": [
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMax",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 1
+                                            },
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMin",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 1
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMax",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 0
+                                            },
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMin",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 0
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "ge",
+                                      "args": [
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMax",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 1
+                                            },
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMin",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 1
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMax",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 2
+                                            },
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMin",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 2
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "sub",
+                              "args": [
+                                1,
+                                {
+                                  "fn": "attribute",
+                                  "name": "slot"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "component",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "cellMin",
+                                          "tupleSize": 3
+                                        }
+                                      ],
+                                      "index": 0
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "mul",
+                                              "args": [
+                                                {
+                                                  "fn": "ge",
+                                                  "args": [
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "ge",
+                                                  "args": [
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 2
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 2
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                1,
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 1
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            1,
+                                            {
+                                              "fn": "add",
+                                              "args": [
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        1,
+                                                        {
+                                                          "fn": "mul",
+                                                          "args": [
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 2
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "cutFrac"
+                                },
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "ge",
+                                              "args": [
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "ge",
+                                              "args": [
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 2
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 2
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMax",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 0
+                                            },
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMin",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 0
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "add",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "mul",
+                                              "args": [
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    1,
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                1,
+                                                {
+                                                  "fn": "add",
+                                                  "args": [
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "mul",
+                                                          "args": [
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            1,
+                                                            {
+                                                              "fn": "mul",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "ge",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 1
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 1
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "ge",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 2
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 2
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "cellMax",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 1
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "sub",
+                              "args": [
+                                1,
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "ge",
+                                              "args": [
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "ge",
+                                              "args": [
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 2
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 2
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            1,
+                                            {
+                                              "fn": "mul",
+                                              "args": [
+                                                {
+                                                  "fn": "ge",
+                                                  "args": [
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "ge",
+                                                  "args": [
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 2
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 2
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "sub",
+                              "args": [
+                                1,
+                                {
+                                  "fn": "attribute",
+                                  "name": "slot"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "ge",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 0
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "component",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "cellMin",
+                                          "tupleSize": 3
+                                        }
+                                      ],
+                                      "index": 0
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "mul",
+                                              "args": [
+                                                {
+                                                  "fn": "ge",
+                                                  "args": [
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 0
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "ge",
+                                                  "args": [
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 1
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMax",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 2
+                                                        },
+                                                        {
+                                                          "fn": "component",
+                                                          "args": [
+                                                            {
+                                                              "fn": "attribute",
+                                                              "name": "cellMin",
+                                                              "tupleSize": 3
+                                                            }
+                                                          ],
+                                                          "index": 2
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                1,
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 1
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            1,
+                                            {
+                                              "fn": "add",
+                                              "args": [
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "sub",
+                                                      "args": [
+                                                        1,
+                                                        {
+                                                          "fn": "mul",
+                                                          "args": [
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "component",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "cellMin",
+                                              "tupleSize": 3
+                                            }
+                                          ],
+                                          "index": 2
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "cutFrac"
+                                },
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "ge",
+                                              "args": [
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 1
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "ge",
+                                              "args": [
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 0
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMax",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 2
+                                                    },
+                                                    {
+                                                      "fn": "component",
+                                                      "args": [
+                                                        {
+                                                          "fn": "attribute",
+                                                          "name": "cellMin",
+                                                          "tupleSize": 3
+                                                        }
+                                                      ],
+                                                      "index": 2
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMax",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 0
+                                            },
+                                            {
+                                              "fn": "component",
+                                              "args": [
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "cellMin",
+                                                  "tupleSize": 3
+                                                }
+                                              ],
+                                              "index": 0
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "add",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "mul",
+                                              "args": [
+                                                {
+                                                  "fn": "mul",
+                                                  "args": [
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 0
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "ge",
+                                                      "args": [
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 1
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMax",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            },
+                                                            {
+                                                              "fn": "component",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "attribute",
+                                                                  "name": "cellMin",
+                                                                  "tupleSize": 3
+                                                                }
+                                                              ],
+                                                              "index": 2
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "fn": "sub",
+                                                  "args": [
+                                                    1,
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 1
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                1,
+                                                {
+                                                  "fn": "add",
+                                                  "args": [
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 1
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "ge",
+                                                          "args": [
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 0
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "sub",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMax",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                },
+                                                                {
+                                                                  "fn": "component",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "attribute",
+                                                                      "name": "cellMin",
+                                                                      "tupleSize": 3
+                                                                    }
+                                                                  ],
+                                                                  "index": 2
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "fn": "mul",
+                                                      "args": [
+                                                        {
+                                                          "fn": "mul",
+                                                          "args": [
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 0
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "fn": "ge",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 1
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "sub",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMax",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    },
+                                                                    {
+                                                                      "fn": "component",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "attribute",
+                                                                          "name": "cellMin",
+                                                                          "tupleSize": 3
+                                                                        }
+                                                                      ],
+                                                                      "index": 2
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "fn": "sub",
+                                                          "args": [
+                                                            1,
+                                                            {
+                                                              "fn": "mul",
+                                                              "args": [
+                                                                {
+                                                                  "fn": "ge",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 1
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 1
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "fn": "ge",
+                                                                  "args": [
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 0
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "fn": "sub",
+                                                                      "args": [
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMax",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 2
+                                                                        },
+                                                                        {
+                                                                          "fn": "component",
+                                                                          "args": [
+                                                                            {
+                                                                              "fn": "attribute",
+                                                                              "name": "cellMin",
+                                                                              "tupleSize": 3
+                                                                            }
+                                                                          ],
+                                                                          "index": 2
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMax",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                },
+                                                {
+                                                  "fn": "component",
+                                                  "args": [
+                                                    {
+                                                      "fn": "attribute",
+                                                      "name": "cellMin",
+                                                      "tupleSize": 3
+                                                    }
+                                                  ],
+                                                  "index": 2
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "cellMax",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 2
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": "stillOpen",
+              "type": "setAttribute",
+              "params": {
+                "name": "live",
+                "domain": "point",
+                "type": "u32",
+                "tupleSize": 1,
+                "value": {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "lt",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "depth"
+                        },
+                        9
+                      ]
+                    },
+                    {
+                      "fn": "gt",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "boundsMax",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 0
+                                },
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "boundsMin",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 0
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "boundsMax",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 2
+                                },
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "boundsMin",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 2
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        26.0
+                      ]
+                    }
+                  ]
+                },
+                "select": 0,
+                "values": [],
+                "weights": [],
+                "stringValue": "",
+                "seed": 0
+              }
+            },
+            {
+              "id": "leaves",
+              "type": "filterByAttribute",
+              "params": {
+                "attribute": "live",
+                "comparison": "eq",
+                "value": 0,
+                "topology": "drop"
+              }
+            },
+            {
+              "id": "join",
+              "type": "mergePoints",
+              "params": {}
+            },
+            {
+              "id": "moves",
+              "type": "attributeReduce",
+              "params": {
+                "name": "live",
+                "domain": "point",
+                "mode": "sum",
+                "outName": "moves"
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from": [
+                "pass",
+                "out"
+              ],
+              "to": [
+                "open",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "open",
+                "out"
+              ],
+              "to": [
+                "keepLo",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "keepLo",
+                "out"
+              ],
+              "to": [
+                "keepHi",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "keepHi",
+                "out"
+              ],
+              "to": [
+                "where",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "where",
+                "out"
+              ],
+              "to": [
+                "halves",
+                "target"
+              ]
+            },
+            {
+              "from": [
+                "halves",
+                "out"
+              ],
+              "to": [
+                "slot",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "slot",
+                "out"
+              ],
+              "to": [
+                "deeper",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "deeper",
+                "out"
+              ],
+              "to": [
+                "cut",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "cut",
+                "out"
+              ],
+              "to": [
+                "stillOpen",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "pass",
+                "out"
+              ],
+              "to": [
+                "leaves",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "leaves",
+                "out"
+              ],
+              "to": [
+                "join",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "stillOpen",
+                "out"
+              ],
+              "to": [
+                "join",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "join",
+                "out"
+              ],
+              "to": [
+                "moves",
+                "in"
+              ]
+            }
+          ],
+          "outputs": []
+        },
+        "inputs": [
+          {
+            "name": "carry",
+            "node": "pass",
+            "pin": "in"
+          },
+          {
+            "name": "rules",
+            "node": "halves",
+            "pin": "source"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "carry",
+            "node": "moves",
+            "pin": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "centre",
+      "type": "setAttribute",
+      "params": {
+        "name": "P",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "mul",
+          "args": [
+            0.5,
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "boundsMin",
+                  "tupleSize": 3
+                },
+                {
+                  "fn": "attribute",
+                  "name": "boundsMax",
+                  "tupleSize": 3
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "kind",
+      "type": "setAttribute",
+      "params": {
+        "name": "kind",
+        "domain": "point",
+        "type": "string",
+        "tupleSize": 1,
+        "value": {
+          "fn": "add",
+          "args": [
+            {
+              "fn": "ge",
+              "args": [
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "boundsMax",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 0
+                        },
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "boundsMin",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 0
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "boundsMax",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 2
+                        },
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "boundsMin",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 2
+                        }
+                      ]
+                    }
+                  ]
+                },
+                13
+              ]
+            },
+            {
+              "fn": "ge",
+              "args": [
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "boundsMax",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 0
+                        },
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "boundsMin",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 0
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "boundsMax",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 2
+                        },
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "boundsMin",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 2
+                        }
+                      ]
+                    }
+                  ]
+                },
+                19
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [
+          "closet",
+          "room",
+          "hall"
+        ],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "slab",
+      "type": "setAttribute",
+      "params": {
+        "name": "scale",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "mul",
+          "args": [
+            0.9,
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "boundsMax",
+                  "tupleSize": 3
+                },
+                {
+                  "fn": "attribute",
+                  "name": "boundsMin",
+                  "tupleSize": 3
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "unitBox",
+      "type": "meshPrimitive",
+      "params": {
+        "shape": "box",
+        "size": [
+          1,
+          1,
+          1
+        ],
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "orientation": "xz",
+        "subdivisions": [
+          1,
+          1,
+          1
+        ],
+        "flip": false
+      }
+    },
+    {
+      "id": "rooms",
+      "type": "copyToPoints",
+      "params": {
+        "targetNames": [],
+        "targetIndexAttr": "",
+        "sourceGroupAttr": "",
+        "targetGroupAttr": "",
+        "topology": "keep"
+      }
+    },
+    {
+      "id": "lift",
+      "type": "transformPoints",
+      "params": {
+        "translate": [
+          0,
+          0.75,
+          0
+        ],
+        "rotateEuler": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "doors",
+      "type": "connectPoints",
+      "params": {
+        "mode": "relativeNeighborhood",
+        "radius": 12.0,
+        "degreeAttr": "degree",
+        "lengthAttr": "doorRun"
+      }
+    },
+    {
+      "id": "plan",
+      "type": "mergePrimitives",
+      "params": {}
+    }
+  ],
+  "connections": [
+    {
+      "from": [
+        "rootPt",
+        "out"
+      ],
+      "to": [
+        "rootCell",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rootCell",
+        "out"
+      ],
+      "to": [
+        "rootDepth",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rootDepth",
+        "out"
+      ],
+      "to": [
+        "rootLive",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rootLive",
+        "out"
+      ],
+      "to": [
+        "split",
+        "carry"
+      ]
+    },
+    {
+      "from": [
+        "rules",
+        "out"
+      ],
+      "to": [
+        "ruleP",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "ruleP",
+        "out"
+      ],
+      "to": [
+        "ruleSeed",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "ruleSeed",
+        "out"
+      ],
+      "to": [
+        "split",
+        "rules"
+      ]
+    },
+    {
+      "from": [
+        "split",
+        "carry"
+      ],
+      "to": [
+        "centre",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "centre",
+        "out"
+      ],
+      "to": [
+        "kind",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "kind",
+        "out"
+      ],
+      "to": [
+        "slab",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "unitBox",
+        "out"
+      ],
+      "to": [
+        "rooms",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "slab",
+        "out"
+      ],
+      "to": [
+        "rooms",
+        "target"
+      ]
+    },
+    {
+      "from": [
+        "kind",
+        "out"
+      ],
+      "to": [
+        "lift",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "lift",
+        "out"
+      ],
+      "to": [
+        "doors",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rooms",
+        "out"
+      ],
+      "to": [
+        "plan",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "doors",
+        "out"
+      ],
+      "to": [
+        "plan",
+        "in"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "id": "plan",
+      "pin": "out",
+      "name": "plan"
+    }
+  ]
+}
+`;export{e as default};

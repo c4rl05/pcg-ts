@@ -4919,6 +4919,59 @@
         ]
       }
     },
+    "examples-floorplan.json": {
+      "outputs": {
+        "plan": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 800,
+              "vertex": 1244,
+              "primitive": 430,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "uv:f32x2",
+                "rot:f32x4",
+                "scale:f32x3",
+                "seed:u32",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "depth:i32",
+                "live:u32",
+                "cellMin:f32x3",
+                "cellMax:f32x3",
+                "cutFrac:f32",
+                "slot:i32",
+                "kind:string",
+                "degree:u32"
+              ],
+              "primitive": [
+                "primtype:string",
+                "doorRun:f32"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -13.8061,
+                0.0125,
+                -9.8594
+              ],
+              "max": [
+                13.8271,
+                0.875,
+                9.8845
+              ]
+            }
+          }
+        ]
+      }
+    },
     "examples-forest.json": {
       "outputs": {
         "instances": [

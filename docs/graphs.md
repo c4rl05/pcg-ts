@@ -4,7 +4,7 @@ Generated from the graphs in [`graphs`](../graphs) by `node scripts/gen-graphs.m
 
 Each file teaches ONE thing and cooks from JSON alone — no runtime-injected data, so `pcg cook <file>` on a clean install reproduces exactly what the corpus test asserts.
 
-89 examples, alphabetical by file:
+90 examples, alphabetical by file:
 
 - [basics-a-draw-that-survives-a-move.json](#basics-a-draw-that-survives-a-movejson) — keep a random draw when the point moves
 - [basics-attribute-from-noise.json](#basics-attribute-from-noisejson) — write an attribute from a noise field
@@ -80,6 +80,7 @@ Each file teaches ONE thing and cooks from JSON alone — no runtime-injected da
 - [basics-volume-scatter.json](#basics-volume-scatterjson) — fill a box with points, then carve it
 - [examples-coral.json](#examples-coraljson) — a dendrite grown by aggregation
 - [examples-facade.json](#examples-facadejson) — split a box until the pieces are small enough
+- [examples-floorplan.json](#examples-floorplanjson) — rooms from a split footprint, with a circulation net
 - [examples-forest.json](#examples-forestjson) — plant a hillside, thinned by slope and treeline
 - [examples-gpu-fields.json](#examples-gpu-fieldsjson) — a fusable chain, on the CPU or the device
 - [examples-headless-scatter.json](#examples-headless-scatterjson) — headless scatter
@@ -1595,6 +1596,24 @@ RECURSIVE SUBDIVISION WITHOUT RECURSION, which is the third thing this corpus do
 **Outputs:** `panels` (from `panels`.`out`)
 
 Cook it: `pcg cook graphs/examples-facade.json --stats`
+
+## examples-floorplan.json
+
+**rooms from a split footprint, with a circulation net**
+
+THE SECOND CONSUMER of the subdivision `examples-facade` introduced, built to answer whether a `splitBounds` NODE is wanted. The answer it gives is no, and the reason is specific: the split machinery is identical between the two graphs -- the argmax over the three spans, the cut carried down from the parent, the two-slot fan-out, the bounds write -- and ONLY THE STOP RULE differs. A facade wants panels under a bounded SIZE; a plan wants rooms under a bounded floor AREA, because a long thin room has a small area while its longest wall says otherwise. A node would have to take the stop rule as a field to serve both, at which point it is `repeatUntil` with extra steps. What the two graphs share is a RECIPE WITH ONE HOLE IN IT, and extracting it into `src/primitives/` is the obvious move -- deliberately not made here. A primitive's params are VALUES spliced into its own expressions, never expressions themselves, so an extracted recipe has to fix the FORM of the stop rule and expose only its numbers. Two consumers that disagree about the form are not yet evidence for which form to fix; a third that agrees with either one would be. A ROOM IS A POINT, exactly as a panel was: `boundsMin`/`boundsMax` is the room, and the plan is the set of leaves. The root box is thin in Y, so the vertical span is never the longest and the cuts alternate between the two floor axes on their own -- the same trick the facade uses to stay flat, turned ninety degrees. THE KIND IS READ OFF THE AREA, which is the thing the facade deliberately did not have. A cell with no kind splits by one rule and makes a Mondrian; giving each leaf a STRING kind is what turns a subdivision into a plan you can talk about. It is spelled as `setAttribute` with an INDEX selector -- `ge(area, 13) + ge(area, 19)` counts how many thresholds an area clears and lands on 0, 1 or 2 in `values` -- because the grammar has no `and`/`or` and no switch, and summing predicates is how a staircase of thresholds is written here. THE BANDS MUST SIT INSIDE THE STOP RULE'S RANGE, which is not obvious and cost a cook: leaves stop splitting once their area falls under `minArea`, so a threshold ABOVE it can never fire and every room comes back the same kind. With a cut between 0.34 and 0.66 the leaves land roughly in [0.34, 1] of minArea, and the bands are chosen inside that. That column is a real string attribute: `byAttribute` can dispatch on it, `filterByAttribute` can cut on it, and `spawnInstances` could send each kind to a different asset. DOORS ARE A PROXIMITY GRAPH, AND THAT IS NOT THE SAME AS ADJACENCY -- said plainly because the picture will not say it. `connectPoints` in `relativeNeighborhood` mode over the room centres keeps a pair only when no third centre is closer to both, which thins the complete graph into a circulation-looking net that still contains a spanning tree, so the plan is connected. But two rooms sharing a wall are not always each other's near neighbours, and two rooms that merely pass close diagonally can be joined. A true adjacency test asks whether two boxes share a FACE, which is a question about a pair of cells that no node in this library asks. Reading this graph as 'which rooms are next to each other' is reading it wrong; reading it as 'a circulation net over the rooms' is what it is. WHAT IT INHERITS WITHOUT RESTATING: the cut fraction is decided on the PARENT and carried in `targetNames`, because the two halves of a cell have different seeds and would otherwise cut at two different coordinates and leave a sliver belonging to neither. The facade's description carries that measurement (23.1 of 360 square units, invisible in the render); the same guard is why the rooms here tile their footprint exactly.
+
+**Tags:** `examples`, `structure`, `repeat`, `topology`
+
+**Seed:** 2204
+
+**Node types:** `attributeReduce`, `connectPoints`, `copyToPoints`, `filterByAttribute`, `mergePoints`, `mergePrimitives`, `meshPrimitive`, `pointLine`, `repeatUntil`, `setAttribute`, `setBounds`, `transformPoints`
+
+**Primitives:** *(none)*
+
+**Outputs:** `plan` (from `plan`.`out`)
+
+Cook it: `pcg cook graphs/examples-floorplan.json --stats`
 
 ## examples-forest.json
 
