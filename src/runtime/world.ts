@@ -63,7 +63,10 @@ export interface WorldOptions {
    * send their cell cooks here instead of cooking on this thread;
    * `bind` levels are untouched, and with no pool every level cooks
    * locally exactly as before (bindPatches levels via the local patch
-   * fallback) — the bytes are identical either way.
+   * fallback) — the same patches applied by the same code, so the bytes
+   * are identical either way UNLESS a GPU resolver is set: the local
+   * fallback receives one and a worker cannot have one, per the bullet
+   * below.
    *
    * Semantics that shift with a pool, stated plainly:
    * - `UpdateOptions.budgetMs` bounds SCHEDULING, not cook wall time:
@@ -1541,8 +1544,12 @@ export class World {
     } else {
       // bindPatches without a pool: the local fallback. The SAME
       // application code the cook worker host runs (applyParamPatches),
-      // so the two paths cannot drift — a patched level cooks to the
-      // same bytes with and without WorldOptions.pool.
+      // so the two paths cannot drift in what they PATCH. The cook that
+      // follows them still can: a worker has no render device, so with a
+      // GPU resolver set this fallback resolves on it (`opts.gpu ??
+      // this.gpu`, below) where the pooled path is CPU-only. "Same bytes
+      // with and without WorldOptions.pool" holds for the patches always,
+      // and for the cooked output only when no resolver is in play.
       const { patches, seed } = normalizeBindPatches(
         (def.bindPatches as NonNullable<LevelDef["bindPatches"]>)(ctx),
       );

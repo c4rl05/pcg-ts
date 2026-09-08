@@ -2561,6 +2561,126 @@ now policed by `COUNT_CLAIMS` in `src/docs/site.ts` (19 claims). The
 transcripts are not. Fixing it means either generating them or asserting
 them, and both are real work.
 
+**A fourth rung on the partition-invariance ladder: zero hops, UNBOUNDED
+REACH.** Surveyed 2026-09-08. `docs/authoring.md:3849-3890` grades an op by
+how many hops of dependency it takes before its answer settles — zero
+(exact at its own reach), one (exact at a stated width), unbounded (no halo
+width works). Those three rungs conflate two axes that Voronoi separates:
+the empty-circumcircle test consults only POSITIONS and never another
+element's answer, so it is zero-hop, yet its footprint is data-dependent
+and no param bounds it. That combination is absent from the ladder, and
+its absence cost a session — `findPath`'s cut was read as governing
+Voronoi, which it does not.
+
+The distinction is load-bearing rather than taxonomic, because it decides
+whether a CERTIFICATE exists. `findPath` has no local check that says the
+global path is right. A circumcircle is an explicit footprint you can test
+for containment in what you gathered. An op that can audit its own reach is
+a different kind of thing from one that cannot, and the ladder should say
+so — one rung, plus the cross-reference now on the `maxDegree` entry, which
+is where the misreading started.
+
+**Voronoi cell topology — three routes, and the two cheap ones need no new
+invariance argument.** Surveyed 2026-09-08, then verified by an independent
+agent which strengthened one route and downgraded another. Neither
+"voronoi" nor "delaunay" appeared anywhere in this file or `docs/` before
+this entry: there is no standing rejection, only `findPath` being pointed
+at them.
+
+- Cheapest, and it is nearly free: `worley` already computes the feature
+  point and cell coords (`src/noise/worley.ts:80-82`) and then returns only
+  a distance — `WORLEY_OUTPUTS` is `["f1","f2","f2-f1"]`. Its site set is
+  one per unit cell over a fixed 3x3x3 walk (7x7x7 under `exact: true`), so
+  a `cellId` / feature-point output is invariance-free BY CONSTRUCTION: the
+  lattice bounds the reach and no halo argument is required. The documented
+  ~7e-5 wrong-F1 rate of the default walk is a determinism-SAFE error — a
+  pure function of position, hence the same wrong answer in every
+  partition. Approximate is not the same as non-invariant, and this is the
+  clearest case of that distinction in the library. Cracked mud, leaf cells
+  and the causeway want jittered-lattice Voronoi, not arbitrary-cloud
+  Voronoi, so this route covers the motivating subjects outright.
+- Next: a `gabriel` mode on `connectPoints`. A Gabriel edge (i,j) exists iff
+  the closed disc on diameter `ij` is empty. The Gabriel disc is CONTAINED
+  IN the relative-neighbourhood lune, so `topology.ts:400-402`'s shipped
+  argument subsumes it outright rather than merely paralleling it —
+  halo-exact at `radius`, zero new machinery. Gabriel sits between RNG and
+  Delaunay and contains the EMST. Watch the closed disc on duplicate and
+  cocircular points, and settle the strict/closed boundary the way
+  `topology.ts:92` settled the radius test.
+- Real work: certified Voronoi cells. Gathering sites within `R` of `p`, a
+  site `q` contributes a face only if `|pq| <= 2 *` the cell's radius, so a
+  computed cell contained in `B(p, R/2)` IS the global cell. Proved and
+  tight; strict inequality kills the ties; detection is one-sided and
+  SILENT if unchecked, so the containment check is mandatory rather than
+  advisory, and its failure names the site and the halo width to widen to.
+  Ownership is cleaner here than for edges: a cell's canonical owner is its
+  site, so `filterPrimitivesByBounds`' `vertex: "first"` tiebreak is not
+  needed at all.
+- Downgraded on verification: radius-bounded DELAUNAY. The emptiness
+  argument holds, but "the global triangulation" is not well defined under
+  cocircularity, and two cells with identical gathered points can still
+  disagree through INSERTION ORDER. It needs a deterministic tie-break
+  (symbolic perturbation) on top of the halo — a requirement the other
+  three routes do not carry, and the reason Gabriel rather than Delaunay is
+  the entry point.
+
+**Marching cubes / mesh-from-field — admissible, on five preconditions.**
+Surveyed 2026-09-08. The first draft of this entry claimed the invariance
+answer was nearly free; an independent agent refuted that as stated, and
+what follows is the repaired version.
+
+The rung is right: a cube's triangles depend on its 8 corner samples and
+nothing else, so MC is zero-hop and not `findPath`'s rung. World-anchoring
+is sound and has a shipped exemplar in `pointScatterInWorld`, and
+`volumeSample` (`src/nodes/samplers.ts:554-700`) already implements the
+lattice with the right index-to-position discipline, resolving its
+field-capable `jitter` on the un-jittered centres. The premise and the
+hazard were what was wrong:
+
+- "Fields are pure functions of position" is FALSE in general. `fraction`
+  is `index/(count-1)`, and `fraction` and `index` are in this ladder's own
+  unbounded list precisely because they measure the population present in
+  this cook. MC is zero-hop only for a POSITION-PURE field, which the node
+  must enforce itself: fields are a named gap in the static reach check
+  (`src/runtime/reach.ts:23-76`), so nothing else will catch it.
+- Mixed CPU/GPU cooking is STRUCTURAL, not a rare fallback.
+  `src/runtime/world.ts:74-77` — pool cooks are CPU-only, so one `update()`
+  with a worker pool cooks `bind` levels on the GPU and `bindPatches`
+  levels on the CPU in the same frame. Below that, `too-many-buffers` and
+  `run-too-large` make a dense cell fall back while its sparse neighbour
+  fuses, and suffix-only retry splits a single run across both paths.
+- And a corner classification is a COMPARE. `docs/authoring.md:5162-5165`:
+  "Branchy ops (select, compares, ramp segments, worley cell walks) may
+  flip at knife-edge inputs whose operands differ within tolerance."
+  Tolerance on a VALUE does not bound tolerance on a DECISION, so two cells
+  on different paths can disagree about a corner's sign and crack the seam.
+  The budgets are not small — simplex raw 40 ULP, fbm simplex 64, composite
+  32, each row bounding that expression rather than the grammar function,
+  and all measured on one adapter. The library already named and enforced
+  this exact distinction: `specKeysOnIdentity` (`src/gpu/run.ts:500-585`)
+  refuses a device-written `P` to an identity-keyed consumer over "that
+  six-order-of-magnitude gap between 'reads position' and 'keys on
+  position'". An MC corner sign keys on the sample; it does not merely read
+  it.
+- Ownership needs a cube-index half-open rule of its own.
+  `filterPrimitivesByBounds` over the emitted triangles makes holes rather
+  than tiling them.
+- Welding must be cell-local. Across a seam there is no sibling access, so
+  the geometry agrees while the numbering does not — the shape of the
+  `maxDegree` chaining refusal below, and of the standing "values carry,
+  identity does not" rule.
+
+The five preconditions, then: position-pure field, globally-integer-indexed
+lattice, cube-index half-open ownership, a single cook path, cell-local
+welding. Worth recording separately that the GPU version is a DIFFERENT
+problem from the invariance one and the harder of the two: `src/gpu` has no
+atomics, no indirect dispatch and no append buffers, output size is always
+host-computed before dispatch (`src/gpu/evaluator.ts:590`), and the one
+variable-cardinality case that ships — multi-asset spawner batches — is
+deliberately planned host-side with no device-side sort
+(`src/gpu/run.ts:73-88`). "Field to geometry on the device" is the
+on-brand pitch and is exactly the thing the GPU path has never done.
+
 ## Stretch — surveyed and NOT scheduled
 
 - **A lap-periodic density envelope for placement density along a
@@ -2754,7 +2874,11 @@ them, and both are real work.
   primitive domain, because the edge set and the geometry agree across a
   split while the grouping does not. (`findPath` remains cut for the
   related reason that no finite halo suffices for a global shortest
-  path.)
+  path. That is a statement about SHORTEST PATHS, not a general one
+  about geometric topology: it does not govern Voronoi or marching
+  cubes, both of which are zero-hop. Read the fourth-rung entry in
+  Backlog before citing this sentence at either — doing so cost a
+  session on 2026-09-08.)
 
 - **Per-cause serialization refusal messages.** `fieldToJson` refuses
   with one message that *enumerates* all three causes — a `makeField`
