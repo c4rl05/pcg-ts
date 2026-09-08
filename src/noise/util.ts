@@ -117,6 +117,11 @@ export type NoiseRange = readonly [number, number];
  *   feature always lies in a face-adjacent cell, at most √6 away, and
  *   f2-f1 ∈ [0, f2]. Valid for both the approximate and `exact` search
  *   (the exact search can only find nearer features).
+ * - `worleyNoise.cell`: [0, 1] — a hash of the winning cell's integer
+ *   coords, so the range is `hashFloat`'s own [0, 1). Unlike the other
+ *   three this range is not a bound on a distance: the value is
+ *   piecewise constant per cell and its distribution is uniform, so
+ *   `normalized` is the identity on it.
  *
  * fbm ranges are per-configuration; see {@link noiseOutputRange}.
  */
@@ -128,6 +133,7 @@ export const NOISE_RAW_RANGES: {
     readonly f1: NoiseRange;
     readonly f2: NoiseRange;
     readonly "f2-f1": NoiseRange;
+    readonly cell: NoiseRange;
   };
 } = {
   valueNoise: [0, 1],
@@ -137,6 +143,7 @@ export const NOISE_RAW_RANGES: {
     f1: [0, Math.sqrt(3)],
     f2: [0, Math.sqrt(6)],
     "f2-f1": [0, Math.sqrt(6)],
+    cell: [0, 1],
   },
 };
 

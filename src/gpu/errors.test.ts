@@ -52,6 +52,25 @@ describe("layout and GPU-constraint errors", () => {
     expect(e.message).toContain('"density"');
   });
 
+  it("worley cell is refused by name, not lowered as a distance", () => {
+    // The lane selection is a ternary chain ending in f2-f1, so the
+    // failure this guards against is silent: `cell` would have compiled
+    // to a DIFFERENT field and returned plausible numbers.
+    const e = compileError({ fn: "worleyNoise", opts: { output: "cell" } });
+    expect(e).toBeInstanceOf(GpuCompileError);
+    expect(e.message).toContain('worleyNoise output "cell" is not supported by the WGSL compiler');
+    expect(e.message).toContain('lowerable outputs: "f1", "f2", "f2-f1"');
+    expect(e.message).toContain("compile-error");
+  });
+
+  it("the three distance outputs still lower", () => {
+    // The negative control for the refusal above: it must reject `cell`
+    // specifically, not worley.
+    for (const output of ["f1", "f2", "f2-f1"]) {
+      expect(() => compileFieldSpec({ fn: "worleyNoise", opts: { output } } as never, LAYOUT)).not.toThrow();
+    }
+  });
+
   it("missing attribute against an empty layout says so", () => {
     const e = compileError({ fn: "attribute", name: "x" }, { attributes: {} });
     expect(e.message).toContain("the layout declares no attributes");

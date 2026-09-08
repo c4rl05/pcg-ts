@@ -888,11 +888,17 @@ into `constant`). All 63 fns (`listFieldFns()`):
       seed?: int | { from: "node", variant?: int }, frequency?: number,
       offset?: [x, y, z], position?: spec, normalized?: false } }`
     valueNoise in [0,1); perlin/simplex approx [-1,1]
-  - `{ fn: "worleyNoise", opts?: { ...same, output?: "f1" | "f2" | "f2-f1",
+  - `{ fn: "worleyNoise", opts?: { ...same, output?: "f1" | "f2" | "f2-f1" | "cell",
       exact?: false } }`
     (distance to nearest/2nd-nearest feature point; f1 in [0, ~1.73);
     `exact: true` widens the cell search until provably exhaustive —
-    slower, use when the fast approximation's rare artifacts matter)
+    slower, use when the fast approximation's rare artifacts matter.
+    `output: "cell"` is not a distance: it is a hash of the winning
+    cell in [0,1), constant across a whole Voronoi cell, for colouring
+    or seeding the partition rather than measuring position inside it.
+    A value, not an identity — cells can collide. It defaults `exact`
+    to true and is the one output that does not lower to WGSL, falling
+    back to the CPU with a `compile-error` reason)
   - `{ fn: "fbm", base: "perlinNoise" | "valueNoise" | "simplexNoise" | "worleyNoise",
       opts?: { ...same, octaves?: 4, lacunarity?: 2, gain?: 0.5 } }`
     (sum not renormalized: range grows toward base * (1-gain^octaves)/(1-gain))

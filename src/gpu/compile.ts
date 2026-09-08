@@ -990,7 +990,7 @@ interface NoiseOptsSpec {
   readonly offset?: readonly number[];
   readonly position?: unknown;
   readonly normalized?: boolean;
-  readonly output?: "f1" | "f2" | "f2-f1";
+  readonly output?: "f1" | "f2" | "f2-f1" | "cell";
   readonly exact?: boolean;
   readonly octaves?: number;
   readonly lacunarity?: number;
@@ -1160,6 +1160,24 @@ for (const fnName of ["valueNoise", "perlinNoise", "simplexNoise"] as const) {
 HANDLERS.set("worleyNoise", (spec, path, ctx) => {
   const opts = noiseOpts(spec);
   const output = opts.output ?? "f1";
+  // The lane selection below is a ternary chain ending in f2-f1, so an
+  // output it does not know would lower to a DIFFERENT field rather than
+  // fail — refuse by name first. `cell` is the standing case and it is
+  // refused on its merits, not merely for want of a lane: it reports
+  // which feature won a comparison, and comparisons are exactly what
+  // f32 rounding is free to flip at knife-edge queries (see the branchy
+  // ops note in the parity section of docs/authoring.md, which names
+  // worley cell walks). A wrong lane costs the distances ~1e-7; it costs
+  // `cell` a wholly unrelated value, which no ULP budget can express.
+  // Refusing lets the resolver fall back and count a `compile-error`,
+  // which is the documented contract for a path that cannot run here.
+  if (output !== "f1" && output !== "f2" && output !== "f2-f1") {
+    throw new GpuCompileError(
+      `${path}.opts.output: worleyNoise output "${output}" is not supported by the WGSL ` +
+        `compiler; lowerable outputs: "f1", "f2", "f2-f1". This spec resolves on the CPU ` +
+        `instead (a "compile-error" fallback), which is byte-identical, not an approximation.`,
+    );
+  }
   const exact = opts.exact === true;
   const seed = saltedSeed("worleyNoise", noiseSeedSource(opts.seed, path, ctx), ctx);
   const sp = compileSamplePoint("worleyNoise", spec, path, ctx);

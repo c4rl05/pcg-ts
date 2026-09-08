@@ -59,8 +59,8 @@
  *   32 of them; `mod` in front of it is how a table wraps
  * - `{ fn: "valueNoise" | "perlinNoise" | "simplexNoise", opts?: { seed?,
  *   frequency?, offset?: [x,y,z], position?: spec, normalized?: false } }`
- * - `{ fn: "worleyNoise", opts?: { ...noise opts, output?: "f1" | "f2" | "f2-f1",
- *   exact?: false } }`
+ * - `{ fn: "worleyNoise", opts?: { ...noise opts, output?: "f1" | "f2" | "f2-f1"
+ *   | "cell", exact?: false } }`
  * - `{ fn: "fbm", base: "perlinNoise", opts?: { ...noise opts, octaves?,
  *   lacunarity?, gain? } }`
  *
@@ -2131,7 +2131,7 @@ register(
   "worleyNoise",
   "per-element",
   ["opts"],
-  `{ fn: "worleyNoise", opts?: { seed?, frequency?, offset?, position?, normalized?, output?: "f1" | "f2" | "f2-f1", exact? } }`,
+  `{ fn: "worleyNoise", opts?: { seed?, frequency?, offset?, position?, normalized?, output?: "f1" | "f2" | "f2-f1" | "cell", exact? } }`,
   {
     description:
       "Worley (cellular) noise: the Euclidean DISTANCE from the sample point to hashed feature " +
@@ -2143,11 +2143,17 @@ register(
       "7e-5 of them return a wrong f1 and about 7e-4 a wrong f2, so the `f2` and `f2-f1` outputs " +
       "are the ones that miss most often. Error magnitudes run around 0.016, with an adversarial " +
       "worst case near 0.036. `opts.exact: true` widens the search until provably correct, at the " +
-      `cost of more work. ${NOISE_OPTS_DOC}`,
+      "cost of more work. `cell` is the one output that is not a distance: it hashes the WINNING " +
+      "cell's coords to a constant in [0, 1), the same value everywhere inside one cell, which is " +
+      "how you colour or seed a Voronoi partition rather than describe a position within it. It is " +
+      "a value and not an identity — distinct cells can collide — and it defaults `exact` to true, " +
+      "because a missed feature costs the distances about 0.016 and costs `cell` a wholly " +
+      `unrelated value. \`cell\` does not lower to WGSL and falls back to the CPU. ${NOISE_OPTS_DOC}`,
     outputRange: [
       noiseRange(NOISE_RAW_RANGES.worleyNoise.f1, 'output: "f1" (the default) — at most a cube diagonal'),
       noiseRange(NOISE_RAW_RANGES.worleyNoise.f2, 'output: "f2"'),
       noiseRange(NOISE_RAW_RANGES.worleyNoise["f2-f1"], 'output: "f2-f1"'),
+      noiseRange(NOISE_RAW_RANGES.worleyNoise.cell, 'output: "cell" — a hash, not a distance'),
       NORMALIZED_RANGE,
     ],
   },

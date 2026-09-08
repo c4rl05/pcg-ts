@@ -2587,18 +2587,26 @@ agent which strengthened one route and downgraded another. Neither
 this entry: there is no standing rejection, only `findPath` being pointed
 at them.
 
-- Cheapest, and it is nearly free: `worley` already computes the feature
-  point and cell coords (`src/noise/worley.ts:80-82`) and then returns only
-  a distance — `WORLEY_OUTPUTS` is `["f1","f2","f2-f1"]`. Its site set is
-  one per unit cell over a fixed 3x3x3 walk (7x7x7 under `exact: true`), so
-  a `cellId` / feature-point output is invariance-free BY CONSTRUCTION: the
-  lattice bounds the reach and no halo argument is required. The documented
-  ~7e-5 wrong-F1 rate of the default walk is a determinism-SAFE error — a
-  pure function of position, hence the same wrong answer in every
-  partition. Approximate is not the same as non-invariant, and this is the
-  clearest case of that distinction in the library. Cracked mud, leaf cells
-  and the causeway want jittered-lattice Voronoi, not arbitrary-cloud
-  Voronoi, so this route covers the motivating subjects outright.
+- ~~Cheapest, and it is nearly free: expose the winning cell from
+  `worley`.~~ **SHIPPED** as `output: "cell"`. Named `cell` and not
+  `cellId`: it is a hash into [0, 1) and distinct cells can collide, so
+  calling it an id would claim exactly the identity this repo polices
+  elsewhere ("THE INDEX IS AN ORDINAL, NOT AN IDENTITY"). Invariance-free
+  by construction as predicted — one feature per unit cell over a fixed
+  walk bounds the reach, so it needs no halo. Two things the survey did
+  not foresee. It defaults `exact` to TRUE, because the approximation's
+  error changes kind with the output: a missed feature costs f1 ~0.016
+  and costs `cell` a wholly unrelated value, so the cheap walk is not a
+  defensible default for a discrete output. And it does NOT lower to
+  WGSL — cell selection is a compare, `docs/authoring.md` already warns
+  that branchy ops "may flip at knife-edge inputs whose operands differ
+  within tolerance" and names worley cell walks, so no ULP budget can
+  express its parity. It refuses with a `GpuCompileError` and falls back
+  counting `compile-error`. That refusal also closed a latent hole: the
+  compiler's output ternary ended in `f2-f1`, so any unrecognised output
+  silently lowered to a different field.
+  Still open on this route: the feature-point POSITION, which is a
+  `Field<3>` and so does not fit `makeNoiseField`'s scalar shape.
 - Next: a `gabriel` mode on `connectPoints`. A Gabriel edge (i,j) exists iff
   the closed disc on diameter `ij` is empty. The Gabriel disc is CONTAINED
   IN the relative-neighbourhood lune, so `topology.ts:400-402`'s shipped

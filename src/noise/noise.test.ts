@@ -229,6 +229,122 @@ describe("worley outputs", () => {
   });
 });
 
+describe("worley cell output", () => {
+  // The worley kind salt ("worl"), mirrored for the brute-force
+  // reference exactly as the exact-mode block below does.
+  const WORLEY_SALT = 0x776f726c;
+
+  /**
+   * The coords of the cell owning the nearest feature, brute-forced over
+   * a Chebyshev-radius-4 block, plus the hash the sampler should report
+   * for it. Same arithmetic and same visit order as the implementation,
+   * so the tie-break agrees.
+   */
+  function bruteForceWinner(
+    seed: number,
+    x: number,
+    y: number,
+    z: number,
+  ): { key: string; hash: number } {
+    const s = hash2(WORLEY_SALT, seed >>> 0);
+    const qx = Math.fround(x); // P storage rounds positions to f32
+    const qy = Math.fround(y);
+    const qz = Math.fround(z);
+    const cx = Math.floor(qx);
+    const cy = Math.floor(qy);
+    const cz = Math.floor(qz);
+    let f1 = Infinity;
+    let wx = 0;
+    let wy = 0;
+    let wz = 0;
+    for (let dz = -4; dz <= 4; dz++) {
+      for (let dy = -4; dy <= 4; dy++) {
+        for (let dx = -4; dx <= 4; dx++) {
+          const gx = cx + dx;
+          const gy = cy + dy;
+          const gz = cz + dz;
+          const px = gx + hashFloat(hash5(s, gx, gy, gz, 0));
+          const py = gy + hashFloat(hash5(s, gx, gy, gz, 1));
+          const pz = gz + hashFloat(hash5(s, gx, gy, gz, 2));
+          const ddx = px - qx;
+          const ddy = py - qy;
+          const ddz = pz - qz;
+          const d = Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
+          if (d < f1) {
+            f1 = d;
+            wx = gx;
+            wy = gy;
+            wz = gz;
+          }
+        }
+      }
+    }
+    return { key: `${wx},${wy},${wz}`, hash: hashFloat(hash5(s, wx, wy, wz, 3)) };
+  }
+
+  const POSITIONS = gridPositions(11, 0.29);
+
+  it("hashes the cell brute force says won", () => {
+    const values = sample(worleyNoise({ seed: 5, output: "cell" }), POSITIONS);
+    for (let i = 0; i < values.length; i++) {
+      const want = bruteForceWinner(5, POSITIONS[i * 3], POSITIONS[i * 3 + 1], POSITIONS[i * 3 + 2]);
+      expect(values[i]).toBe(Math.fround(want.hash));
+    }
+  });
+
+  it("is constant on a cell, and separates cells", () => {
+    // The property the output exists for: it partitions space. Two
+    // queries agree iff they resolve to the same cell — which is what
+    // distinguishes it from the distances, none of which are constant
+    // anywhere. Distinct-cells-distinct-values would fail on a hash
+    // collision (~2^-24 a pair); at this cell count that is a real
+    // assertion, not a coin flip.
+    const values = sample(worleyNoise({ seed: 5, output: "cell" }), POSITIONS);
+    const byCell = new Map<string, number>();
+    for (let i = 0; i < values.length; i++) {
+      const { key } = bruteForceWinner(5, POSITIONS[i * 3], POSITIONS[i * 3 + 1], POSITIONS[i * 3 + 2]);
+      const seen = byCell.get(key);
+      if (seen === undefined) byCell.set(key, values[i]);
+      else expect(values[i]).toBe(seen);
+    }
+    expect(byCell.size).toBeGreaterThan(20);
+    expect(new Set(byCell.values()).size).toBe(byCell.size);
+  });
+
+  it("stays in [0, 1)", () => {
+    for (const seed of [0, 5, 99]) {
+      const values = sample(worleyNoise({ seed, output: "cell" }), POSITIONS);
+      for (let i = 0; i < values.length; i++) {
+        expect(values[i]).toBeGreaterThanOrEqual(0);
+        expect(values[i]).toBeLessThan(1);
+      }
+    }
+  });
+
+  it("defaults exact to true, and carries the resolved value into the spec", () => {
+    // The default turns on the output, so what the spec serializes has
+    // to be the EFFECTIVE search, not the absent option: a round-trip
+    // that dropped it would silently re-parse as the approximate walk.
+    expect(getFieldSpec(worleyNoise({ output: "cell" }))).toMatchObject({
+      fn: "worleyNoise",
+      opts: { output: "cell", exact: true },
+    });
+    expect(getFieldSpec(worleyNoise({ output: "f1" }))).toMatchObject({ opts: { exact: false } });
+    expect(worleyNoise({ output: "cell" }).key).not.toBe(
+      worleyNoise({ output: "cell", exact: false }).key,
+    );
+    expect(worleyNoise({ output: "cell" }).key).toBe(
+      worleyNoise({ output: "cell", exact: true }).key,
+    );
+  });
+
+  it("reports NaN where the distances report no answer", () => {
+    const values = sample(worleyNoise({ seed: 5, output: "cell" }), [Number.NaN, 0, 0, 0, Infinity, 0]);
+    expect(values[0]).toBeNaN();
+    expect(values[1]).toBeNaN();
+  });
+});
+
 describe("fbm", () => {
   const positions = gridPositions(20, 0.43); // 8000 samples
 
@@ -306,8 +422,11 @@ describe("noise grammar tables", () => {
     // nothing — the two ends withhold together.
     const offGrammar = worleyNoise({ output: "f3" as WorleyNoiseOpts["output"] });
     expect(getFieldSpec(offGrammar)).toBeUndefined();
+    // Anchored at both ends: a substring match would keep passing while
+    // the message grew an output the list had lost, which is exactly the
+    // drift this assertion exists to catch.
     expect(() => fieldFromJson({ fn: "worleyNoise", opts: { output: "f3" } })).toThrow(
-      /output must be one of: f1, f2, f2-f1/,
+      new RegExp(`output must be one of: ${WORLEY_OUTPUTS.join(", ")}$`),
     );
   });
 });
@@ -675,6 +794,14 @@ describe("golden determinism", () => {
       [
         0.24490109086036682, 0.1834302693605423, 0.1337987631559372, 0.1463695913553238,
         0.006526454817503691,
+      ],
+    ],
+    [
+      "worley cell",
+      worleyNoise({ seed: 7, output: "cell" }),
+      [
+        0.3992850184440613, 0.8859787583351135, 0.4688814878463745, 0.995563805103302,
+        0.5388161540031433,
       ],
     ],
     [

@@ -1461,7 +1461,7 @@ after scaling), `position?` (a nested spec, tuple 3), `normalized?`
 | `valueNoise` | — | [0, 1) |
 | `perlinNoise` | — | approximately [-1, 1] |
 | `simplexNoise` | — | approximately [-1, 1] |
-| `worleyNoise` | `output?: "f1" \| "f2" \| "f2-f1"`, `exact?: false` | f1 in [0, ~1.73); f2 >= f1 |
+| `worleyNoise` | `output?: "f1" \| "f2" \| "f2-f1" \| "cell"`, `exact?: false` | f1 in [0, ~1.73); f2 >= f1; cell in [0, 1) |
 | `fbm` | `base` (required: one of the four noise fn names), `octaves?: 4`, `lacunarity?: 2`, `gain?: 0.5` | Sum is not renormalized: grows toward `baseRange * (1 - gain^octaves) / (1 - gain)` |
 
 `normalized: true` affinely remaps the noise's documented raw range to

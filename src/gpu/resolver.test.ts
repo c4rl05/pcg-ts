@@ -102,6 +102,25 @@ describe("GpuFieldEvaluator eligibility gate (device-free)", () => {
     expect(stats.fallbacks).toEqual({ "compile-error": 2 });
   });
 
+  it("worley cell falls back with reason compile-error", () => {
+    // The output is CPU-only by design, so the contract it must meet is
+    // the documented one: fall back with a machine-readable reason
+    // rather than lower something else. The device is untouchable, so
+    // returning null is proof no dispatch was attempted.
+    const ev = new GpuFieldEvaluator(untouchableDevice());
+    const stats = createGpuCookStats();
+    const geo = makeParityGeometry(4);
+    const ctx = { geo, domain: "point" as const, seed: 0 };
+    const cell = fieldFromJson({ fn: "worleyNoise", opts: { output: "cell" } });
+    expect(ev.resolveField(cell, ctx, stats)).toBeNull();
+    expect(stats.fallbacks).toEqual({ "compile-error": 1 });
+    // Negative control: a distance output on the same evaluator does
+    // reach a dispatch, so the fallback above is about `cell` and not
+    // about worley or about this geometry.
+    const f1 = fieldFromJson({ fn: "worleyNoise", opts: { output: "f1" } });
+    expect(() => ev.resolveField(f1, ctx, stats)).toThrow(/fake device was touched/);
+  });
+
   it("planRun applies the evaluator's own flag, not a default", () => {
     // The run planner is the fourth seam, and the only one the evaluator
     // reaches by passing the flag ONWARD rather than reading it. If that
