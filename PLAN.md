@@ -40,6 +40,113 @@ waiting for anything. Its body stays because the analysis under it is
 what the outcome tested — several of these scored badly, and a survey
 that guessed wrong is worth more to the next survey than a deleted one.
 
+### Building edges from a parent-pointer column, 2026-09-08
+
+Wanted: a node that reads a per-point index column and emits one
+2-vertex `polyline` per point, running from that point to the point its
+index names. `connectByIndex`, beside `connectPoints` rather than a
+third mode inside it.
+
+IMPOSSIBLE TODAY, and the proof is short. `pointsToPath` is the only
+path constructor, and it PARTITIONS: `groupAttr` is read once per point
+and that point is pushed into exactly one bucket (`src/nodes/paths.ts`),
+so the groups are vertex-disjoint chains and every point ends with
+degree at most 2. A star -- 1 -> 0, 2 -> 0, 3 -> 0 -- can emit at most
+two of its three edges under ANY assignment of group keys, because the
+centre can belong to one chain only. Branching is precisely the excluded
+case. `connectPoints` has exactly two modes and both ask their question
+in SPACE; `relativeNeighborhood` keeps cycles, which is what a road
+wants and a dendrite does not.
+
+The REPRESENTATION is not the gap. `src/nodes/topology.ts` says it
+outright -- a 2-vertex polyline over shared points IS an edge, and a
+point of degree 5 is expressible today. What is missing is anything that
+AUTHORS one from an index the graph computed.
+
+The library already PRODUCES that column in two places --
+`sampleNearestPoint`'s `indexAttr` and `copyToPoints`' `targetIndexAttr`
+-- and `transferByIndex` can spend one only on attribute VALUES; its own
+header promises the output "keeps the destination's count, order,
+identities and topology". Two producers, one consumer, and the consumer
+cannot build a graph.
+
+The workaround costs the invariant this library sells. Duplicate the
+cloud, `transferByIndex` the parent's P onto the copy, merge, and
+`pointsToPath` on a per-edge id: right picture, wrong topology. A degree
+5 junction becomes five coincident points, the cloud doubles, and
+`degreeAttr`, `promoteAttribute` and `pointNeighborhood` all stop
+meaning what they mean everywhere else.
+
+PARTITION INVARIANCE, because the nearest standing refusal is about
+exactly this. The `maxDegree` entry in Stretch cuts the CHAINING of
+degree-2 runs into polylines, and cuts `findPath`, because no finite
+halo suffices for a global answer. A parent-pointer edge is not that
+shape: it reads one stored index and the point that index names, so a
+cell holding both decides that edge exactly, and the half-open
+first-vertex rule `connectPoints` already documents tiles the network
+with no duplicate and no gap. The halo is whatever bound the PRODUCER of
+the index column already needed, and is not this node's to invent. Say
+so in the node's own header -- the question will be asked again.
+
+THE CALLER is aggregation: a diffusion-limited coral, a crack network, a
+dendrite, a root system. Each grows by attaching a new point to an
+arbitrary existing one, so every link is its own edge and there are no
+linear runs to group by. A branching TREE does NOT need this node --
+branches are chains and `pointsToPath` builds them -- but it does want
+the welded junction, which today is two coincident points in two groups
+and two swept tubes that interpenetrate.
+
+Held beside it and NOT bought here: a field-capable per-target count on
+`copyToPoints`. Its condition is already written under "What was NOT
+added, and why" in the 2026-08-25 notes below -- the cut idiom goes in
+first, and if it proves painful that is the evidence. The measurement on
+record is ~270 intermediate points, "which is nothing". A growth loop
+running the cut every round for a dozen rounds is the first caller that
+could plausibly move that number, and it has to be measured rather than
+assumed.
+
+### Stretch: quaternion field functions — REFUTED BY THE CORPUS, 2026-09-08
+
+Proposed: `quatFromAxisAngle`, `quatMul` and `rotateVec` as field-grammar
+functions, on the argument that a growth system built on `copyToPoints`
+takes its child rotation from a shared rule cloud whose `rot` is
+constant per slot, so every branch turns by an identical angle and the
+result is a rigid fractal rather than a tree.
+
+**Recommendation: do not schedule.** The premise is false, and the
+counterexample is in our own corpus.
+
+`orientAlongVector` takes BOTH `direction` and `up` as fields
+(`src/nodes/pointOps.ts`). Direction is two degrees of freedom and `up`
+is the third; together they span SO(3) per point, and the `up` param's
+own doc says why it is there -- "a per-point up is what a curve that
+turns over needs". `graphs/examples-rig.json` already spends exactly
+this on per-element twist about a per-element axis, with no quaternion
+algebra anywhere: `up = cos(radialAngle) * curveNormal +
+sin(radialAngle) * curveBinormal`. `write/random-yaw` ships the random
+case as a primitive, built from `vec`/`cos`/`sin`/`mul`/`randomField`.
+`transformPoints` composes `rot <- R * rot` with a field-capable
+`rotateEuler`.
+
+So per-branch angular variation is not merely expressible; it is a
+shipped idiom that predates the proposal. The rigid fractal was an
+AUTHORING mistake -- the rotation had been left in a constant rule cloud
+when it belonged in a per-child direction field.
+
+The `and`/`or` precedent applies in its corrected form: not "no
+synonyms", but no synonym for an operation whose existing spelling is
+already the obvious one. Here it is worse than a synonym. The grammar
+has no CSE and no let-binding, so a hand-written Hamilton product
+expands to roughly 205 spec nodes -- and shipping `quatMul` would
+LICENSE authors to write that where one field-capable `up` already
+answers the question.
+
+What survives is much smaller and belongs on its own merits:
+`orientAlongVector` REPLACES `rot` rather than composing a delta onto
+it, and `transformPoints` composes but also moves `P`. That is one mode
+param on one node, not three grammar functions, and nothing is currently
+asking for it.
+
 ### ~~Killing the racetrack's TypeScript prelude: four library gaps~~ — DONE 2026-08-27
 
 **THE PRELUDE IS GONE.** `demos/racetrack/main.ts` cooks
@@ -2673,6 +2780,13 @@ It is a separate node rather than a fourth mapping for the reason
 spatial query, and the gap between the two opens exactly where a curve
 folds. A node whose param list decided which of two incompatible questions
 was being asked would be one node in name only.
+
+**SHIPPED since this was written** (`src/nodes/transferByIndex.ts`, and
+in the generated node catalog). The survey above is what it was built
+from. The node's own header carries the warning this entry did not
+anticipate: the index is an ORDINAL, not an identity, so a filter, a
+sort, a resample or a partition anywhere upstream of `source` renumbers
+every point and index 7 becomes whatever landed in slot 7.
 
 **What was NOT added, and why.** `copyToPoints` makes exactly
 `source x target` copies, so a per-parent VARIABLE child count -- the
