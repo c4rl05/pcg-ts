@@ -1496,43 +1496,67 @@ export const setBounds = standardNode<SetBoundsParams>({
       default: [0, 0, 0],
       acceptsField: true,
       description:
-        "Minimum corner written to every point's boundsMin, in world units. As a FIELD it is PER POINT, which is the reading that makes this node worth more than a constant: an extent derived from the point's own `scale`, or from a species attribute, gives every instance the box it actually occupies rather than one box the whole cloud shares. Must evaluate to THREE numbers per point — a scalar is REFUSED rather than broadcast, because broadcasting would quietly hand every point a cube when a box was asked for.",
+        "Minimum corner written to every point's boundsMin, in world units. As a FIELD it is PER POINT, which is the reading that makes this node worth more than a constant: an extent derived from the point's own `scale`, or from a species attribute, gives every instance the box it actually occupies rather than one box the whole cloud shares. Must evaluate to THREE numbers per point — a scalar is REFUSED rather than broadcast, because broadcasting would quietly hand every point a cube when a box was asked for. Both corners are resolved against the INPUT geometry before either is written, so a field here reading `boundsMax` sees the corner this cook was HANDED, never one this node produced.",
     },
     boundsMax: {
       type: "vec3",
       default: [1, 1, 1],
       acceptsField: true,
       description:
-        "Maximum corner written to every point's boundsMax, in world units. As a FIELD it is PER POINT, on the same terms as boundsMin, and refuses a scalar for the same reason. Nothing here checks that max exceeds min: the two are written independently, and a point whose corners cross is a point with an inside-out box, which is what the author asked for and what a downstream reader will see.",
+        "Maximum corner written to every point's boundsMax, in world units. As a FIELD it is PER POINT, on the same terms as boundsMin, and refuses a scalar for the same reason. Nothing here checks that max exceeds min: the two are written independently, and a point whose corners cross is a point with an inside-out box, which is what the author asked for and what a downstream reader will see. Independently RESOLVED, too: a field here reading `boundsMin` sees the input's corner rather than the one this cook just wrote, so the two params cannot observe each other in either order. Both corners are standard point attributes, so a field naming one always finds it; a geometry with the column deliberately removed refuses here rather than resolving to a silent zero.",
     },
   },
   execute({ inputs, params, seed: nodeSeed }) {
     const geo = cloneGeometry(requireGeometry(inputs, "in", "setBounds"));
     const set = geo.attrs.point;
-    for (const [name, value] of [
+    const corners = [
       ["boundsMin", params.boundsMin],
       ["boundsMax", params.boundsMax],
-    ] as const) {
+    ] as const;
+    // BOTH corners resolve against the INPUT, before either is written.
+    // Resolving inside the write loop made the answer depend on which
+    // corner the loop reached first: `boundsMax` reading
+    // `attribute("boundsMin")` saw the corner this cook had just
+    // stamped, while the same expression the other way round -- resolved
+    // before anything was written -- correctly saw the input. Nothing in
+    // these params' descriptions orders the two writes, so neither may
+    // observe the other. Both corners are STANDARD point attributes
+    // (`src/data/points.ts`), so a corner reading one always reads a
+    // live column: the hazard is unconditional, not a corner case.
+    const resolved = corners.map(([name, value]) => {
+      if (!isField(value)) return null;
+      const col = boundsCorner(geo, name, value, nodeSeed);
+      // A resolved column can be a zero-copy VIEW of either corner --
+      // `attribute("boundsMin")` hands back that column itself -- and
+      // the write phase overwrites both. Snapshot when it aliases one,
+      // the same guard setAttribute takes against its own target.
+      const aliases = corners.some(([other]) => {
+        const a = set.get(other);
+        return a !== undefined && a.data.buffer === col.data.buffer;
+      });
+      return aliases ? col.data.slice() : col.data;
+    });
+    corners.forEach(([name, value], k) => {
       let attr = set.get(name);
       if (!attr || attr.type !== "f32" || attr.tupleSize !== 3) {
         if (attr) set.remove(name);
         attr = set.add(name, "f32", 3, [0, 0, 0]);
       }
+      const src = resolved[k];
       // A plain corner still goes through `fill`: same bytes, and it does
       // not pay for a resolved column to write one repeated value.
-      if (!isField(value)) {
+      if (src === null) {
         attr.fill(value as AttrDefault, 0, set.count);
-        continue;
+        return;
       }
-      const col = boundsCorner(geo, name, value, nodeSeed);
       const out = attr.data;
       for (let i = 0; i < set.count; i++) {
         const o = i * 3;
-        out[o] = col.data[o];
-        out[o + 1] = col.data[o + 1];
-        out[o + 2] = col.data[o + 2];
+        out[o] = src[o];
+        out[o + 1] = src[o + 1];
+        out[o + 2] = src[o + 2];
       }
-    }
+    });
     return { out: [makeGeometryItem(geo)] };
   },
 });

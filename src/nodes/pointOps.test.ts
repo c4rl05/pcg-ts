@@ -8,6 +8,7 @@ import {
   setPolylineTopology,
 } from "../data/index.js";
 import {
+  add,
   attribute,
   component,
   constant,
@@ -1477,6 +1478,109 @@ describe("setBounds", () => {
         in: [makeGeometryItem(cloudAt([[0, 0, 0]]))] ,
       }),
     ).rejects.toThrow(/must evaluate to THREE numbers per point/);
+  });
+
+  it("resolves both corners against the INPUT, in either direction", async () => {
+    // Each corner is asked to read the OTHER one. Both must see the
+    // geometry this cook was HANDED. The node used to resolve inside the
+    // write loop, so `boundsMin` was already stamped by the time
+    // `boundsMax` resolved and read it back -- while the reverse
+    // direction, resolving before anything was written, was correct. One
+    // param order right and the other wrong is the tell: nothing in the
+    // docs makes these two writes ordered, so neither may observe the
+    // other. (Same aliasing setAttribute snapshots against.)
+    const seed = (): ReturnType<typeof cloudAt> => {
+      const c = cloudAt([[0, 0, 0], [1, 1, 1]]);
+      const lo = c.attrs.point.require("boundsMin");
+      const hi = c.attrs.point.require("boundsMax");
+      for (let i = 0; i < 2; i++) {
+        lo.setTuple(i, [7, 8, 9]);
+        hi.setTuple(i, [3, 4, 5]);
+      }
+      return c;
+    };
+    const maxReadsMin = firstGeo(
+      (
+        await runNode(
+          setBounds,
+          { boundsMin: [-1, -1, -1], boundsMax: attribute("boundsMin", 3) },
+          { in: [makeGeometryItem(seed())] },
+        )
+      ).out,
+    );
+    expect(maxReadsMin.attrs.point.require("boundsMin").getTuple(0)).toEqual([-1, -1, -1]);
+    expect(maxReadsMin.attrs.point.require("boundsMax").getTuple(0)).toEqual([7, 8, 9]);
+    expect(maxReadsMin.attrs.point.require("boundsMax").getTuple(1)).toEqual([7, 8, 9]);
+
+    const minReadsMax = firstGeo(
+      (
+        await runNode(
+          setBounds,
+          { boundsMin: attribute("boundsMax", 3), boundsMax: [-1, -1, -1] },
+          { in: [makeGeometryItem(seed())] },
+        )
+      ).out,
+    );
+    expect(minReadsMax.attrs.point.require("boundsMax").getTuple(0)).toEqual([-1, -1, -1]);
+    expect(minReadsMax.attrs.point.require("boundsMin").getTuple(0)).toEqual([3, 4, 5]);
+  });
+
+  it("a corner that reads ITSELF keeps the input's value", async () => {
+    // Documentation, not a guard: the old write loop copied element by
+    // element out of the very column it was writing, at the same index,
+    // so a self-read was an identity no-op and passed before the fix too.
+    // The two tests above are the ones that discriminate.
+    const input = cloudAt([[0, 0, 0]]);
+    input.attrs.point.require("boundsMax").setTuple(0, [2, 3, 4]);
+    const geo = firstGeo(
+      (
+        await runNode(
+          setBounds,
+          { boundsMax: attribute("boundsMax", 3) },
+          { in: [makeGeometryItem(input)] },
+        )
+      ).out,
+    );
+    expect(geo.attrs.point.require("boundsMax").getTuple(0)).toEqual([2, 3, 4]);
+  });
+
+  it("a DERIVED read of the other corner is what snapshotting alone cannot fix", async () => {
+    // `add(...)` allocates its own column, so nothing here aliases either
+    // target and the snapshot guard never fires. Only resolving before the
+    // write phase gets this right. A later "fix" that guarded inside
+    // boundsCorner and left the ordering alone would pass every other test
+    // in this block and fail this one.
+    const c = cloudAt([[0, 0, 0]]);
+    c.attrs.point.require("boundsMin").setTuple(0, [7, 8, 9]);
+    const geo = firstGeo(
+      (
+        await runNode(
+          setBounds,
+          { boundsMin: [-1, -1, -1], boundsMax: add(attribute("boundsMin", 3), vec(1, 1, 1)) },
+          { in: [makeGeometryItem(c)] },
+        )
+      ).out,
+    );
+    expect(geo.attrs.point.require("boundsMax").getTuple(0)).toEqual([8, 9, 10]);
+  });
+
+  it("a mutual swap reads the input on both sides", async () => {
+    // The exact statement of what the two params now promise: neither may
+    // observe the other's write, whichever order the node writes in.
+    const c = cloudAt([[0, 0, 0]]);
+    c.attrs.point.require("boundsMin").setTuple(0, [7, 8, 9]);
+    c.attrs.point.require("boundsMax").setTuple(0, [3, 4, 5]);
+    const geo = firstGeo(
+      (
+        await runNode(
+          setBounds,
+          { boundsMin: attribute("boundsMax", 3), boundsMax: attribute("boundsMin", 3) },
+          { in: [makeGeometryItem(c)] },
+        )
+      ).out,
+    );
+    expect(geo.attrs.point.require("boundsMin").getTuple(0)).toEqual([3, 4, 5]);
+    expect(geo.attrs.point.require("boundsMax").getTuple(0)).toEqual([7, 8, 9]);
   });
 });
 
