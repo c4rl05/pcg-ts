@@ -405,6 +405,91 @@ describe("meshFromField", () => {
     ).rejects.toThrow(/connected input needs points with a "P" attribute/);
   });
 
+  it("gives the same surface however the corners are split into chunks", async () => {
+    // The field is sampled in chunks so a budgeted cook can cancel inside
+    // the resolve, and a chunk boundary falls wherever the corner count
+    // puts it. These two boxes have different extents, so their lattices
+    // are different sizes and their chunks land in different places —
+    // and the overlap has to be bit-identical anyway, because a
+    // position-pure field cannot tell one split from another. That is
+    // the property the purity screen buys, stated as a test rather than
+    // as a comment.
+    const field = sphere(5) as unknown as number;
+    const common = { field, cellSize: 0.35 };
+    // Both lattices are well over one chunk (65,536 corners): 55^3 and
+    // 61^3 of them, so neither is the single-chunk path.
+    const wide = await mesh({ ...common, boundsMin: [-9, -9, -9], boundsMax: [9, 9, 9] });
+    const tall = await mesh({ ...common, boundsMin: [-8, -9, -10], boundsMax: [9, 10, 9] });
+    const inBox = (t: Tri): boolean => t.v.every((v) => (v[0] as number) >= 0);
+    const key = (t: Tri): string => t.v.map(vkey).join(" ");
+    const a = triangles(wide).filter(inBox).map(key).sort();
+    const b = triangles(tall).filter(inBox).map(key).sort();
+    expect(a.length).toBeGreaterThan(1000);
+    expect(b).toEqual(a);
+  });
+
+  it("can be cancelled inside the resolve, not only around it", async () => {
+    // The reason for chunking at all. A partitioned world cooks under a
+    // deadline and cancels between checks, so one resolve over the whole
+    // lattice was a single uninterruptible call however small the budget
+    // — the check before it could only ever fire before any work. Counted
+    // rather than asserted in prose: a multi-chunk lattice has to check
+    // several times, and a single-chunk one is allowed not to.
+    let checks = 0;
+    const run = async (cellSize: number): Promise<number> => {
+      checks = 0;
+      await meshFromField.execute({
+        inputs: { in: [] },
+        params: {
+          ...meshFromField.defaultParams,
+          field: sphere(5) as unknown as number,
+          cellSize,
+          boundsMin: [-9, -9, -9],
+          boundsMax: [9, 9, 9],
+        },
+        seed: 1,
+        checkCancelled() {
+          checks++;
+        },
+      });
+      return checks;
+    };
+    // 55^3 = 166,375 corners, three chunks of 65,536.
+    const many = await run(0.35);
+    // 8^3 = 512 corners, one chunk.
+    const few = await run(3);
+    expect(many).toBeGreaterThan(few);
+    expect(many).toBeGreaterThan(3);
+
+    // And a cancellation raised inside the resolve really does stop the
+    // cook, rather than being swallowed until the meshing loop.
+    // Synchronously, because this node's execute is: `resolveOn` is the
+    // CPU resolver and returns a column rather than a promise, which is
+    // itself the reason the fifth precondition holds for free — there is
+    // no GPU path for two cells to disagree across.
+    let n = 0;
+    expect(() =>
+      meshFromField.execute({
+        inputs: { in: [] },
+        params: {
+          ...meshFromField.defaultParams,
+          field: sphere(5) as unknown as number,
+          cellSize: 0.35,
+          boundsMin: [-9, -9, -9],
+          boundsMax: [9, 9, 9],
+        },
+        seed: 1,
+        checkCancelled() {
+          if (++n === 2) throw new Error("budget spent");
+        },
+      }),
+    ).toThrow("budget spent");
+    // Stopped at the SECOND check, which is inside the resolve loop: a
+    // whole-lattice resolve would have run to completion after the one
+    // check that preceded it.
+    expect(n).toBe(2);
+  });
+
   it("cooks byte-identically twice", async () => {
     const params = {
       field: sphere(3) as unknown as number,

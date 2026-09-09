@@ -68,16 +68,29 @@ import { optionalGeometry, requireScalarColumn, resolveOn, type FieldParam } fro
  * with the CUBE of the bounds over the cell size, so a cell size that
  * looks reasonable on a 10-unit box asks for billions on a 1000-unit one.
  *
- * BYTES ARE THE BINDING CONSTRAINT, not evaluations, which a first draft
- * of this comment had backwards. The lattice is a real point cloud so the
- * field resolves through the ordinary path, and a standard cloud carries
- * the full attribute schema — P, rot, scale, density, bounds, color, seed
- * — at about 90 bytes a corner whether or not anything reads them, plus
- * the gradient and the value column. An audit measured 164 to 324 MB of
- * resident memory for one cook at the previous cap of 2^22; this one
- * authorizes about a quarter of that.
+ * The number moved twice and the arithmetic is worth keeping. It was
+ * first set on evaluations, which was wrong — bytes bind. A standard
+ * point cloud carries the full attribute schema (P, rot, scale, density,
+ * bounds, color, seed) at about 90 bytes a corner whether or not anything
+ * reads them, so at 2^22 the lattice alone authorized around 380 MB, and
+ * an audit measured 164 to 324 MB resident for one cook. Sampling in
+ * CHUNKS took that term out: the cloud is now one chunk, and what scales
+ * with the lattice is the value column (4 bytes) and the gradient (12),
+ * so 2^22 corners is about 67 MB and the cap can go back where it was.
  */
-const MAX_FIELD_SAMPLES = 1_048_576;
+const MAX_FIELD_SAMPLES = 4_194_304;
+
+/**
+ * Corners per field-resolve chunk, and the unit of this node's
+ * cancellation granularity.
+ *
+ * Sized so the longest uninterruptible span is a few milliseconds of
+ * field evaluation on an ordinary expression rather than the whole
+ * lattice, and so the transient cloud stays around 6 MB. Smaller would
+ * pay the per-chunk cloud allocation more often for cancellation nobody
+ * asked for; larger walks back toward the single call this replaced.
+ */
+const CHUNK_CORNERS = 65_536;
 
 /** Ceiling on emitted triangles, for the same reason one size up. */
 const MAX_TRIANGLES = 1_048_576;
@@ -183,7 +196,7 @@ export const meshFromField = standardNode<MeshFromFieldParams>({
       default: 0,
       acceptsField: true,
       description:
-        "The scalar field to contour. A plain number contours nothing — a constant never crosses anything — so this is a field param that only makes sense as a field. Any expression of position works: a noise for a cloud or a rock, `sub(length(position()), r)` for a sphere, the difference of two for a carve. IT MUST BE A FUNCTION OF POSITION AND THAT IS ENFORCED: `fraction`, `index` and `attribute` are refused by name, because the first two measure the population of this cook and the third can only reach the bookkeeping columns of the lattice this node builds. The refusal names the offending position inside the expression. A field composed with the CODE combinators carries no spec and so cannot be screened at all; that one is the author's promise, and breaking it does not throw, it makes a partitioned world disagree with itself at the seams. Resolved on the CPU over the lattice corners, once per cook.",
+        "The scalar field to contour. A plain number contours nothing — a constant never crosses anything — so this is a field param that only makes sense as a field. Any expression of position works: a noise for a cloud or a rock, `sub(length(position()), r)` for a sphere, the difference of two for a carve. IT MUST BE A FUNCTION OF POSITION AND THAT IS ENFORCED: `fraction`, `index` and `attribute` are refused by name, because the first two measure the population of this cook and the third can only reach the bookkeeping columns of the lattice this node builds. The refusal names the offending position inside the expression. A field composed with the CODE combinators carries no spec and so cannot be screened at all; that one is the author's promise, and breaking it does not throw, it makes a partitioned world disagree with itself at the seams. Resolved on the CPU over the lattice corners, in chunks — a partitioned world cooks under a deadline, and one resolve over every corner at once is a single uninterruptible call however small the budget. The chunking cannot move the answer precisely BECAUSE of the purity rule above: a field that reads only position cannot tell one split of the corners from another.",
     },
     isoValue: {
       type: "f32",
@@ -320,44 +333,92 @@ export const meshFromField = standardNode<MeshFromFieldParams>({
       );
     }
 
-    // The lattice as a real point cloud, so the field resolves through the
-    // ordinary path with the ordinary context. Positions are computed
-    // from GLOBAL integer indices rather than accumulated, so a corner
-    // lands on the same float in every window that samples it.
-    const grid = createPointCloud(samples);
-    const gp = grid.attrs.point.require("P").data;
-    const gseed = grid.attrs.point.require("seed").data;
-    let at = 0;
-    for (let k = 0; k < sz; k++) {
-      // The fill and the single resolve below are the two long phases;
-      // without this the first of them is uninterruptible.
-      checkCancelled();
-      const gk = k0 - 1 + k;
-      for (let j = 0; j < sy; j++) {
-        const gj = j0 - 1 + j;
-        for (let i = 0; i < sx; i++) {
-          const gi = i0 - 1 + i;
-          gp[at * 3] = gi * h;
-          gp[at * 3 + 1] = gj * h;
-          gp[at * 3 + 2] = gk * h;
-          // Keyed on the GLOBAL corner, so a field reading `seed` (which
-          // `randomField` does through the point's identity) is anchored
-          // to the world like the position is.
-          gseed[at] = hashCombine(nodeSeed, gi, gj, gk);
-          at++;
-        }
-      }
-    }
-    checkCancelled();
-    const value = requireScalarColumn(
-      resolveOn(grid, "point", params.field, nodeSeed, "meshFromField", "field"),
-      "meshFromField",
-      "field",
-      "point",
-      "a field value",
-    ).data;
-
     const sxy = sx * sy;
+
+    // THE LATTICE IS SAMPLED IN CHUNKS, and the reason is a cook budget
+    // rather than memory. A partitioned world cooks under a deadline and
+    // cancels between checks; one `resolveOn` over every corner at once
+    // is a single uninterruptible call, so a cell that wanted 300 ms took
+    // 300 ms whatever the budget said, and `checkCancelled` before it
+    // bought nothing. Per chunk, the longest uninterruptible span is one
+    // chunk's worth of field evaluation.
+    //
+    // AND IT IS THE PURITY SCREEN THAT MAKES IT SOUND. Chunking hands the
+    // field a different EvalContext per chunk, with a different element
+    // count and different ordinals — which is exactly what `fraction` and
+    // `index` read, and exactly why they are refused above. A field that
+    // is a function of POSITION cannot tell one split from another, so
+    // every chunking gives the same values to the last bit. Without that
+    // screen this optimisation would silently change the answer.
+    //
+    // A fresh cloud per chunk rather than one resized: it keeps the peak
+    // at one chunk's standard point schema (about 90 bytes a corner, of
+    // which this reads two columns) instead of the whole lattice's, and
+    // it leaves no question about state carried between evaluations.
+    // ONE COORDINATE PER LATTICE PLANE, not one per corner. A corner's
+    // position is a product of its global index and the cell size, so the
+    // lattice holds only `sx + sy + sz` distinct numbers and storing
+    // `samples` of them was always redundant — it only looked necessary
+    // while the cloud was the place they lived.
+    //
+    // f32 ARRAYS AND NOT f64, and that is correctness rather than
+    // thrift. The field is evaluated on the cloud's `P` column, which is
+    // f32, so every sample belongs to the f32 position. Interpolating
+    // between f64 positions would place the vertex on a slightly
+    // different segment from the one the two values were measured on.
+    // Writing through Float32Array rounds exactly as the column does.
+    const planeX = new Float32Array(sx);
+    const planeY = new Float32Array(sy);
+    const planeZ = new Float32Array(sz);
+    for (let i = 0; i < sx; i++) planeX[i] = (i0 - 1 + i) * h;
+    for (let j = 0; j < sy; j++) planeY[j] = (j0 - 1 + j) * h;
+    for (let k = 0; k < sz; k++) planeZ[k] = (k0 - 1 + k) * h;
+    /** World position of the corner at packed sample index `c`. */
+    const cornerAt = (c: number, axis: 0 | 1 | 2): number =>
+      axis === 0
+        ? (planeX[c % sx] as number)
+        : axis === 1
+          ? (planeY[Math.floor(c / sx) % sy] as number)
+          : (planeZ[Math.floor(c / sxy)] as number);
+
+    const value = new Float32Array(samples);
+    const chunk = Math.min(samples, CHUNK_CORNERS);
+    for (let base = 0; base < samples; base += chunk) {
+      checkCancelled();
+      const n = Math.min(chunk, samples - base);
+      const grid = createPointCloud(n);
+      const gp = grid.attrs.point.require("P").data;
+      const gseed = grid.attrs.point.require("seed").data;
+      for (let at = 0; at < n; at++) {
+        // Positions come from GLOBAL integer indices rather than being
+        // accumulated, so a corner lands on the same float in every
+        // window that samples it — and, now, in every chunk it lands in.
+        const c = base + at;
+        const gi = i0 - 1 + (c % sx);
+        const gj = j0 - 1 + (Math.floor(c / sx) % sy);
+        const gk = k0 - 1 + Math.floor(c / sxy);
+        gp[at * 3] = cornerAt(c, 0);
+        gp[at * 3 + 1] = cornerAt(c, 1);
+        gp[at * 3 + 2] = cornerAt(c, 2);
+        // Keyed on the GLOBAL corner, so a field reading `seed` (which
+        // `randomField` does through the point's identity) is anchored
+        // to the world like the position is.
+        gseed[at] = hashCombine(nodeSeed, gi, gj, gk);
+      }
+      const col = requireScalarColumn(
+        resolveOn(grid, "point", params.field, nodeSeed, "meshFromField", "field"),
+        "meshFromField",
+        "field",
+        "point",
+        "a field value",
+      );
+      // `subarray(0, n)`: a column's `data` is its BACKING array and
+      // carries capacity slack past the element count, so copying it
+      // whole would write another chunk's corners with values no point
+      // holds.
+      value.set(col.data.subarray(0, n), base);
+    }
+
     /** Local sample index of the corner at local lattice coords. */
     const idx = (i: number, j: number, k: number): number => i + j * sx + k * sxy;
 
@@ -427,11 +488,16 @@ export const meshFromField = standardNode<MeshFromFieldParams>({
       // denominator cannot be zero: the classification below used the
       // same two numbers and the same comparison.
       const t = (iso - va) / (vb - va);
-      const ia = (tetIdx[a] as number) * 3;
-      const ib = (tetIdx[b] as number) * 3;
-      cx[n] = (gp[ia] as number) + ((gp[ib] as number) - (gp[ia] as number)) * t;
-      cy[n] = (gp[ia + 1] as number) + ((gp[ib + 1] as number) - (gp[ia + 1] as number)) * t;
-      cz[n] = (gp[ia + 2] as number) + ((gp[ib + 2] as number) - (gp[ia + 2] as number)) * t;
+      const ca = tetIdx[a] as number;
+      const cb = tetIdx[b] as number;
+      const ia = ca * 3;
+      const ib = cb * 3;
+      const ax0 = cornerAt(ca, 0);
+      const ay0 = cornerAt(ca, 1);
+      const az0 = cornerAt(ca, 2);
+      cx[n] = ax0 + (cornerAt(cb, 0) - ax0) * t;
+      cy[n] = ay0 + (cornerAt(cb, 1) - ay0) * t;
+      cz[n] = az0 + (cornerAt(cb, 2) - az0) * t;
       // NORMALIZED HERE, once, and that is not tidiness. The winding
       // below is chosen by comparing the triangle's geometric normal
       // against the sum of its three vertex normals, and the vertices

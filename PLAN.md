@@ -2848,6 +2848,30 @@ nothing but an expression" is false — `meshPrimitive` and `pointGrid`
 take no input either. The true claim is narrower and better: it is the
 only node whose SHAPE AND TOPOLOGY come out of an expression.
 
+THE RESOLVE IS CHUNKED, which was the first thing building the demo
+asked for. One `resolveOn` over every corner is a single uninterruptible
+call, so a cell that wanted 300 ms took 300 ms whatever the cook budget
+said and the `checkCancelled` before it could only ever fire before any
+work — useless to a partitioned world, which is the one caller this node
+was built for. Sampling in chunks of 65 536 corners makes the longest
+uninterruptible span one chunk's field evaluation.
+
+Two things fell out of it. THE PURITY SCREEN IS WHAT MAKES IT SOUND, and
+that is worth stating because it is not obvious: each chunk is a
+different EvalContext with a different element count, which is exactly
+what `fraction` and `index` read, so without the screen this would have
+silently changed the answer. And the per-corner point cloud went away —
+the lattice holds only `sx + sy + sz` distinct coordinates, so per-axis
+f32 tables replaced the whole-lattice position column, which took the
+90-bytes-a-corner term out of the memory bound and let
+`MAX_FIELD_SAMPLES` go back to 2^22.
+
+Measured, interleaved, three pairs: 304 ms against 294 ms on the corpus
+graph, so interruptibility costs about 3.3% — the per-chunk cloud
+allocation. The corpus golden did not move a byte, which is the check
+that says the axis tables reproduce the f32 rounding the samples were
+taken at.
+
 Still open, and both recorded rather than attempted: the GPU version,
 which the entry below argues is a different and harder problem; and a
 `uv`, which an isosurface has no natural parameterisation for.
