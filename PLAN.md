@@ -739,6 +739,16 @@ exported type NAMES is added or renamed (not when a WGSL scalar type is:
 `GpuScalarType` is a TypeScript type whose subject happens to be one,
 which is exactly the ambiguity that makes "a gpu type" the wrong phrase
 for this).
+  **SHIPPED, and the gate was struck rather than waited on.** The
+  deferral was priced at three more TypeScript program builds per run;
+  the file memoizes the surface so it builds ONE, and measures 2.1 s
+  including vitest's own startup against a suite that runs over two
+  minutes. That was buying twenty-two unguarded public names — fourteen
+  of them the `*Like` structural shapes that ARE the contract a host
+  satisfies when it hands this module a device, and the reason
+  `pcg-ts/gpu` needs no WebGPU type dependency. The cost was real and
+  smaller than it sounded; the root and `three` pins can take the same
+  memo whenever anyone is next in them.
 
 ### What the Fantasynth integration asked for, and what it found, 2026-08-29
 
@@ -957,6 +967,11 @@ not be bent to avoid it, but a versioning story for the panel format is
 a decision someone should take on purpose rather than by accumulation.
 Related: `smoke-dist.mjs` never imports `pcg-ts/panels`, so the subpath's
 six exported names are pinned in source and unchecked across the build.
+  **SHIPPED.** A thirteenth case, and it parses a spec rather than only
+  checking `parsePanelSpec` is a function: a built entry can export
+  something that throws on first use, and that one call is what every
+  consumer of the subpath makes. Negative control run — removing
+  `dist/panels/index.js` fails the manifest check by name.
 
 ### An unlatched band mix chases without bound, 2026-09-02
 
@@ -1573,6 +1588,15 @@ which is why the same graph packs ten ternary digits into one f32
 (`encodeCommittedStretches`) to make a ten-entry table readable inside an
 expression; the alternative, an inline `param` per entry, multiplies by the
 seven call sites that read it.
+  **SHIPPED** as `normalize`. The design question the entry did not name
+  was what a normalized MIN or MAX would mean, and the answer is nothing:
+  a distribution is accumulated mass and a running extreme accumulates
+  none, so `reduce` other than `sum` is refused by name rather than
+  divided by. Two more edges decided in the param doc: a path whose total
+  is 0 or non-finite writes 0 at every point rather than sending a NaN
+  down the column, and `totalAttr` keeps reporting the RAW total, which is
+  the one thing normalizing would otherwise destroy. The idiom the node's
+  own description sells went from four nodes to two.
 
 ### Field-expression reuse: A3 and D3, 2026-08-17
 

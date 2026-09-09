@@ -1340,6 +1340,7 @@ export interface PathScanParams {
   outName: string;
   reduce: string;
   mode: string;
+  normalize: boolean;
   totalAttr: string;
 }
 
@@ -1348,7 +1349,7 @@ export const pathScan = standardNode<PathScanParams>({
   type: "pathScan",
   category: "attribute",
   description:
-    "Writes a RUNNING FOLD of a numeric point attribute along every polyline, in the path's own walk order — by default a prefix SUM, the accumulating counterpart to attributeReduce's collapse, and under `reduce` a running minimum or maximum over that same walk instead. This is the operation a field cannot express at any length: a field resolves each element from that element alone, so 'how much of this attribute lies BEHIND me along the curve' has no formulation in the grammar, and the quantities that need it are ordinary — distance travelled, accumulated cost, an inventory that fills as the path runs, and above all a CUMULATIVE DISTRIBUTION, which is what turns a per-sample density into placements. Order is the path's, which is why this is a path node rather than a domain-wide one: a scan without an order is not defined, and a polyline is where this library keeps one. A CLOSED path scans from its seam and does not count the repeated last vertex twice, under every fold — and the skip is not merely tidiness for the folds that could absorb it. A min or a max is idempotent, so folding the seam vertex's value in a second time could not move the path's answer; but the second VISIT would also re-WRITE the seam point's own column entry, with the fold over nearly the whole path rather than with what stands behind that point, and that is wrong under all three. One rule, one set of visited points, three folds. Points in no polyline are left at the fold's IDENTITY — zero for a sum, which is what they have always read, and ±Infinity for a min or a max — and a point visited by several polylines takes the last one in primitive order, both matching writeTangents and pathRuns. NaN CONTRIBUTES NOTHING rather than poisoning everything downstream of it — zero to a sum, and no candidate to a min or a max — which matters more here than in attributeReduce: there one bad element spoils one statistic, here it would spoil the whole tail of a column. INVERSE-TRANSFORM SAMPLING, the reason the SUM exists, is then three nodes — scan a per-sample density with `totalAttr` set, divide by that total for a CDF in 0..1, and transferAttribute 'nearest' from a cloud of N evenly spaced targets in CDF space back onto the frames. Each target lands on the sample whose CDF is nearest its own, which places exactly N points in proportion to the density, with no rejection and no approximate count. THAT IDIOM IS `reduce` 'sum' AND NOTHING ELSE, and the nearest-in-CDF lookup is the part that gives it away: a distribution is accumulated MASS, and a running extreme accumulates none — it opens at the first value rather than at zero and moves only where a record is set, so the buckets it lays out have width only at the samples that beat the record and ZERO width everywhere else. Evenly spaced targets in that space land on the records and nowhere else, which is not sampling in proportion to anything. WHAT THE OTHER FOLDS ARE FOR is the GROUPED REDUCTION the library otherwise cannot spell: pointsToPath with a `groupAttr` cuts a cloud into one path per group, `reduce` 'max' with `totalAttr` set writes each group's maximum onto the primitive domain, and promoteAttribute (primitive to point) hands it back to every point of its own group. attributeReduce has min and max but collapses a WHOLE domain onto the detail domain and cannot group, so 'the largest value in each group, on every member of that group' had no expression at all before this param and came out as a hand-written loop in whatever host needed it.",
+    "Writes a RUNNING FOLD of a numeric point attribute along every polyline, in the path's own walk order — by default a prefix SUM, the accumulating counterpart to attributeReduce's collapse, and under `reduce` a running minimum or maximum over that same walk instead. This is the operation a field cannot express at any length: a field resolves each element from that element alone, so 'how much of this attribute lies BEHIND me along the curve' has no formulation in the grammar, and the quantities that need it are ordinary — distance travelled, accumulated cost, an inventory that fills as the path runs, and above all a CUMULATIVE DISTRIBUTION, which is what turns a per-sample density into placements. Order is the path's, which is why this is a path node rather than a domain-wide one: a scan without an order is not defined, and a polyline is where this library keeps one. A CLOSED path scans from its seam and does not count the repeated last vertex twice, under every fold — and the skip is not merely tidiness for the folds that could absorb it. A min or a max is idempotent, so folding the seam vertex's value in a second time could not move the path's answer; but the second VISIT would also re-WRITE the seam point's own column entry, with the fold over nearly the whole path rather than with what stands behind that point, and that is wrong under all three. One rule, one set of visited points, three folds. Points in no polyline are left at the fold's IDENTITY — zero for a sum, which is what they have always read, and ±Infinity for a min or a max — and a point visited by several polylines takes the last one in primitive order, both matching writeTangents and pathRuns. NaN CONTRIBUTES NOTHING rather than poisoning everything downstream of it — zero to a sum, and no candidate to a min or a max — which matters more here than in attributeReduce: there one bad element spoils one statistic, here it would spoil the whole tail of a column. INVERSE-TRANSFORM SAMPLING, the reason the SUM exists, is then TWO nodes — scan a per-sample density with `normalize` set, which writes the CDF in 0..1 directly, and transferAttribute 'nearest' from a cloud of N evenly spaced targets in CDF space back onto the frames. It was four before `normalize` existed, because the total landed on the primitive domain and had to be promoted back onto the points and divided by hand — with 'first' rather than the obvious 'average', which was correct only by the accident that a point usually belongs to one polyline. Each target lands on the sample whose CDF is nearest its own, which places exactly N points in proportion to the density, with no rejection and no approximate count. THAT IDIOM IS `reduce` 'sum' AND NOTHING ELSE, and the nearest-in-CDF lookup is the part that gives it away: a distribution is accumulated MASS, and a running extreme accumulates none — it opens at the first value rather than at zero and moves only where a record is set, so the buckets it lays out have width only at the samples that beat the record and ZERO width everywhere else. Evenly spaced targets in that space land on the records and nowhere else, which is not sampling in proportion to anything. WHAT THE OTHER FOLDS ARE FOR is the GROUPED REDUCTION the library otherwise cannot spell: pointsToPath with a `groupAttr` cuts a cloud into one path per group, `reduce` 'max' with `totalAttr` set writes each group's maximum onto the primitive domain, and promoteAttribute (primitive to point) hands it back to every point of its own group. attributeReduce has min and max but collapses a WHOLE domain onto the detail domain and cannot group, so 'the largest value in each group, on every member of that group' had no expression at all before this param and came out as a hand-written loop in whatever host needed it.",
   inputs: [{ name: "in", kind: "geometry" }],
   outputs: [{ name: "out", kind: "geometry" }],
   params: {
@@ -1377,6 +1378,12 @@ export const pathScan = standardNode<PathScanParams>({
       enum: ["inclusive", "exclusive"],
       description:
         "Whether a point's own value is part of its own running value. 'inclusive' ends the last point of a path on the path's whole fold; 'exclusive' starts the first point at the `reduce` fold's identity — zero for a sum, which is the one that makes a CDF whose first bucket is reachable, and ±Infinity for a min or a max, which is what 'the smallest thing strictly behind me' means when there is nothing behind me yet. Neither is more correct — pick by which end you need exact.",
+    },
+    normalize: {
+      type: "bool",
+      default: false,
+      description:
+        "Divide every point's running value by its own path's TOTAL, so the column comes out as a 0..1 CUMULATIVE DISTRIBUTION rather than an accumulating quantity. That is what the sum exists for, and until this param it cost two more nodes and a hazard: `totalAttr` lands on the PRIMITIVE domain, so a graph had to promoteAttribute it back onto the points and then divide — and the promote had to be 'first' rather than the obvious 'average', which is correct only by the accident that a point usually belongs to one polyline. Both nodes and the accident go away here, because the total is already in hand at the moment the column is written. `reduce` MUST BE 'sum' when this is set, and the refusal is by name: a distribution is accumulated MASS, and a running extreme accumulates none — it opens at the first value rather than at zero and moves only where a record is set, so dividing by it produces a number with no meaning rather than a wrong CDF. A path whose total is 0, or not finite, writes 0 at every one of its points: there is no distribution to express, and 0 is the answer that stays inside the range this param promises rather than an infinity or a NaN travelling downstream. A total that is NEGATIVE is divided by as it stands, so a density that goes below zero does not give a CDF in 0..1 — that is a fact about the input rather than something to clamp away. `totalAttr` still reports the RAW total, never 1: the total is a fact about the path, and it would otherwise be the one thing normalizing destroys. With `mode` 'inclusive' the last point of each path reads exactly 1; with 'exclusive' the first reads exactly 0 and the last falls short of 1 by its own share, which is the end you want when the buckets have to be reachable.",
     },
     totalAttr: {
       type: "string",
@@ -1407,6 +1414,11 @@ export const pathScan = standardNode<PathScanParams>({
     if (outName === name) {
       throw new Error(
         `pathScan: params "name" and "outName" are both "${name}"; a scan cannot be written over its own source, because every element after the first would fold in the running values this node had already written rather than the values it was given`,
+      );
+    }
+    if (params.normalize && params.reduce !== "sum") {
+      throw new Error(
+        `pathScan: normalize is set with reduce "${params.reduce}"; a cumulative distribution is accumulated MASS, and a running ${params.reduce} accumulates none — it opens at the first value rather than at zero and moves only where a record is set, so dividing by it yields a number with no meaning. Use reduce "sum" to normalize, or drop normalize to keep the running ${params.reduce}.`,
       );
     }
     if (totalAttr !== "" && totalAttr === outName) {
@@ -1462,6 +1474,7 @@ export const pathScan = standardNode<PathScanParams>({
     const walks = polylineWalks(geo, "pathScan");
     const sd = geo.attrs.point.require(name).data;
     const exclusive = params.mode === "exclusive";
+    const normalize = params.normalize;
     const takeMin = params.reduce === "min";
     const takeMax = params.reduce === "max";
     // Hoisted so the fold below is one loop-invariant test on the sum
@@ -1535,8 +1548,30 @@ export const pathScan = standardNode<PathScanParams>({
           }
         }
       }
+      // NORMALIZED IN A SECOND PASS over the same points, because the
+      // divisor is the path's whole total and nothing knows it until the
+      // walk has finished. `m` rather than `pts.length` for the same
+      // reason the fold used it: a closed path's repeated last vertex is
+      // the closure, and its point was written once already.
+      if (normalize) {
+        for (let c = 0; c < ts; c++) {
+          const total = acc[c] as number;
+          // A total of 0 has no distribution in it, and a non-finite one
+          // is not a quantity to divide by. Both write 0 rather than the
+          // NaN or the infinity the division would give, which is the
+          // only answer that stays inside the range this param promises.
+          const scale = total !== 0 && Number.isFinite(total) ? 1 / total : 0;
+          for (let k = 0; k < m; k++) {
+            const o = (pts[k] as number) * ts + c;
+            out[o] = (out[o] as number) * scale;
+          }
+        }
+      }
       if (totals) {
         const t = walk.prim * ts;
+        // The RAW total, after the normalization above rather than
+        // before: `acc` is untouched by it, and the total is the one
+        // thing normalizing the column would otherwise destroy.
         for (let c = 0; c < ts; c++) totals.data[t + c] = acc[c];
       }
     }

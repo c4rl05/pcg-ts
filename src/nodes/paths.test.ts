@@ -3195,6 +3195,102 @@ describe("a road's width reaches the lamps standing on it", () => {
 });
 
 describe("pathScan", () => {
+  describe("pathScan normalize", () => {
+    /** A single open path of `n` points carrying `values` as `w`. */
+    const weighted = (values: readonly number[]): Geometry => {
+      const geo = createPointCloud(values.length);
+      const P = geo.attrs.point.require("P");
+      const w = geo.attrs.point.replace("w", "f32", 1, 0);
+      values.forEach((v, i) => {
+        P.setTuple(i, [i, 0, 0]);
+        w.set(i, v);
+      });
+      const idx = new Uint32Array(values.length);
+      for (let i = 0; i < values.length; i++) idx[i] = i;
+      setPolylineTopology(geo, idx, new Uint32Array([0]), new Uint32Array([values.length]));
+      return geo;
+    };
+
+    const scanned = async (
+      values: readonly number[],
+      params: Record<string, unknown>,
+    ): Promise<number[]> => {
+      const out = await runNode(pathScan, { name: "w", outName: "cdf", ...params }, {
+        in: [makeGeometryItem(weighted(values))],
+      });
+      // `.data` is the backing array and carries CAPACITY SLACK past the
+      // element count — reading it whole reports zeros no point holds.
+      const geo = firstGeo(out.out);
+      const col = geo.attrs.point.require("cdf");
+      return Array.from({ length: geo.pointCount }, (_, i) => col.get(i, 0));
+    };
+
+    it("writes the CDF directly, ending at exactly 1", async () => {
+      // The whole point of the param: what used to be a scan, a promote
+      // and a divide is now one node, and the last point reads 1 exactly
+      // rather than 1 within a rounding of the division that was done by
+      // hand somewhere downstream.
+      const got = await scanned([1, 3, 4, 2], { normalize: true });
+      [0.1, 0.4, 0.8, 1].forEach((want, i) => expect(got[i]).toBeCloseTo(want, 6));
+      // The last one EXACTLY, which is the claim worth making: the
+      // divisor is the value being divided, so the quotient is 1 in f64
+      // and 1 in the f32 column, where a division done downstream would
+      // have landed near it.
+      expect(got[3]).toBe(1);
+    });
+
+    it("agrees with the promote-and-divide idiom it replaces", async () => {
+      // The equivalence that lets the old graphs be rewritten: same
+      // numbers, two fewer nodes. Compared against the raw scan divided
+      // by the reported total, which is what those graphs computed.
+      const values = [0.5, 2, 1.25, 3, 0.75];
+      const raw = await scanned(values, {});
+      const total = values.reduce((a, b) => a + b, 0);
+      const normalized = await scanned(values, { normalize: true });
+      normalized.forEach((v, i) => expect(v).toBeCloseTo((raw[i] as number) / total, 6));
+    });
+
+    it("starts at exactly 0 in exclusive mode", async () => {
+      const got = await scanned([1, 3, 4, 2], { normalize: true, mode: "exclusive" });
+      expect(got[0]).toBe(0);
+      // ...and falls short of 1 by the last point's own share, which is
+      // what makes every bucket reachable.
+      expect(got[3]).toBeCloseTo(0.8, 6);
+    });
+
+    it("reports the RAW total, never 1", async () => {
+      // The total is a fact about the path and the one thing normalizing
+      // the column would otherwise destroy.
+      const out = await runNode(
+        pathScan,
+        { name: "w", outName: "cdf", normalize: true, totalAttr: "mass" },
+        { in: [makeGeometryItem(weighted([1, 3, 4, 2]))] },
+      );
+      expect(firstGeo(out.out).attrs.primitive.require("mass").get(0, 0)).toBeCloseTo(10, 6);
+    });
+
+    it("writes 0 for a path with no mass rather than a NaN", async () => {
+      // 0/0 is the case that would otherwise send a NaN down the whole
+      // column, and there is genuinely no distribution to express.
+      expect(await scanned([0, 0, 0], { normalize: true })).toEqual([0, 0, 0]);
+      expect(await scanned([Number.NaN, Number.NaN], { normalize: true })).toEqual([0, 0]);
+    });
+
+    it("refuses a running extreme by name", async () => {
+      await expect(scanned([1, 2, 3], { normalize: true, reduce: "max" })).rejects.toThrow(
+        /normalize is set with reduce "max".*accumulated MASS.*Use reduce "sum"/s,
+      );
+    });
+
+    it("changes nothing when it is off", async () => {
+      // The default has to be byte-identical to the node before the param
+      // existed, which is the whole reason it is opt-in.
+      const values = [1, 3, 4, 2];
+      expect(await scanned(values, { normalize: false })).toEqual(await scanned(values, {}));
+      expect(await scanned(values, {})).toEqual([1, 4, 8, 10]);
+    });
+  });
+
   async function scan(params: Record<string, unknown>, src: Geometry): Promise<Geometry> {
     return firstGeo((await runNode(pathScan, params, { in: [makeGeometryItem(src)] })).out);
   }

@@ -35,6 +35,7 @@ const INDEX = distUrl("dist/index.js");
 const PRIMITIVES = distUrl("dist/primitives/index.js");
 const THREE = distUrl("dist/three/index.js");
 const GPU = distUrl("dist/gpu/index.js");
+const PANELS = distUrl("dist/panels/index.js");
 const CLI = distUrl("dist/cli/index.js");
 const WORKER = distUrl("dist/worker/index.js");
 const ENTRY_NODE = distUrl("dist/worker/entryNode.js");
@@ -88,6 +89,26 @@ const importCases = [
     code: `
       const gpu = await import(${GPU});
       if (typeof gpu.compileFieldSpec !== "function") throw new Error("compileFieldSpec missing");
+    `,
+  },
+  {
+    // The last published subpath to get one. `pcg-ts/panels` is pinned in
+    // source by `tests/panelSpec.test.ts`, which runs the parser over
+    // every file in `graphs/panels/` — but from SOURCE, so nothing had
+    // ever imported the built entry. A subpath that is exported in
+    // package.json and never imported from `dist/` is exactly the shape
+    // of the failures this script exists to catch.
+    name: "pcg-ts/panels imported alone",
+    code: `
+      const panels = await import(${PANELS});
+      if (typeof panels.parsePanelSpec !== "function") throw new Error("parsePanelSpec missing");
+      // Parse something, rather than only checking a name is present: a
+      // built entry can export a function that throws on first use, and
+      // this is the one call every consumer of the subpath makes.
+      const spec = panels.parsePanelSpec({
+        sections: [{ title: "t", controls: [{ param: "n.p", label: "l" }] }],
+      });
+      if (spec.sections.length !== 1) throw new Error("parsePanelSpec returned no sections");
     `,
   },
   {
@@ -206,6 +227,7 @@ const requiredEntries = [
   "dist/primitives/index.js",
   "dist/three/index.js",
   "dist/gpu/index.js",
+  "dist/panels/index.js",
   "dist/cli/index.js",
   "dist/worker/index.js",
   "dist/worker/entryNode.js",
