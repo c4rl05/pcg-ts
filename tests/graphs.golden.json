@@ -1890,6 +1890,43 @@
         ]
       }
     },
+    "basics-mesh-from-field.json": {
+      "outputs": {
+        "cave": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 144624,
+              "vertex": 144624,
+              "primitive": 48208,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "normal:f32x3"
+              ],
+              "primitive": [
+                "primtype:string"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -8.1646,
+                -6.1141,
+                -9.6891
+              ],
+              "max": [
+                8.8599,
+                6.1961,
+                8.8492
+              ]
+            }
+          }
+        ]
+      }
+    },
     "basics-mesh-primitive.json": {
       "outputs": {
         "mesh": [

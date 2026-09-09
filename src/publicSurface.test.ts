@@ -94,7 +94,7 @@ const ROOT_SURFACE = [
   "listNodeTypes", "listSubgraphs", "log", "log2", "lookup",
   "lt", "makeField",
   "makeGeometryItem", "makeInstancesItem", "makeValueItem", "max", "mergePoints", "mergePrimitives",
-  "meshPrimitive", "min", "mod",
+  "meshFromField", "meshPrimitive", "min", "mod",
   "mul", "ne", "nodeSeed", "noiseOutputRange", "normalize",
   // Drops points whose oriented box blocks a line of sight from a moving
   // eye, pushing them clear first and dropping only what cannot be moved.

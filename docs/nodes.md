@@ -2,7 +2,7 @@
 
 Generated from the node registry metadata (`listNodeTypes()`) by `node scripts/gen-node-reference.mjs` — do not edit by hand. The same metadata, machine-readable, is in [nodes.json](./nodes.json). For the graph JSON format and field-expression grammar see [authoring.md](./authoring.md).
 
-60 node types, grouped by `category` (node sections below are alphabetical):
+61 node types, grouped by `category` (node sections below are alphabetical):
 
 **attribute**
 
@@ -75,6 +75,7 @@ Generated from the node registry metadata (`listNodeTypes()`) by `node scripts/g
 
 **source**
 
+- [meshFromField](#meshfromfield) — Turns a scalar FIELD into a triangle mesh: the surface where the field crosses `isoValue`.
 - [meshPrimitive](#meshprimitive) — Builds a parametric triangle mesh with no input: shape 'plane' is one axis-aligned rectangle, shape 'box' is six of them around a volume.
 - [pointGrid](#pointgrid) — Creates a regular grid of points: countX * countY * countZ points starting at origin, stepped by spacing per axis.
 - [pointLine](#pointline) — Creates `count` evenly spaced points on a straight line.
@@ -431,6 +432,27 @@ Concatenates every connected geometry, in connection order, KEEPING TOPOLOGY: po
 **Outputs:** `out` (geometry)
 
 **Params:** *(none)*
+
+## meshFromField
+
+Turns a scalar FIELD into a triangle mesh: the surface where the field crosses `isoValue`. Other nodes build geometry from no input at all — meshPrimitive makes a box, pointGrid a lattice — but their SHAPE is written into the node; this is the only one whose shape and topology come out of an EXPRESSION, which is how a cave, a blob, an eroded cliff or a melted rock gets made, which is to say every shape that is easy to write as 'where is this quantity zero' and hard to model any other way. Output is 3-vertex `poly` primitives carrying P and a `normal` taken from the field's own GRADIENT, so the surface shades smoothly however coarse the lattice; there is no `uv`, deliberately, because an isosurface has no natural parameterisation and a planar one would be a lie on every vertical face — use triplanar shading, or transferAttribute with mapping 'nearest' from something that does have UVs. IT CONTOURS BY TETRAHEDRA, NOT CUBES. Marching cubes looks 8 corner signs up in a 256-entry table, several of whose cases are genuinely ambiguous — a face with two diagonal corners inside can be joined either way — so the table encodes a convention that neighbouring cubes must agree on or the mesh cracks. Splitting each cube into 6 tetrahedra removes the choice: 4 corners, no ambiguous case, watertight because there is nothing to get wrong rather than because a table is right. The cost is roughly twice the triangles for the same lattice, which is the trade being made. THE LATTICE IS ANCHORED TO THE WORLD, not to `boundsMin`. Cube (i, j, k) always spans [i * cellSize, (i+1) * cellSize) whatever bounds asked for it, so two windows that overlap sample the same corners at the same positions and agree bit for bit — the property `volumeSample` deliberately does not have, since its cell size is a request divided into the extent it was given. `cellSize` here is exact and the bounds are widened outward to whole cubes. An optional geometry input replaces the bounds params with that geometry's own point extents, which chooses the REGION and never the lattice: contour around a scatter and the cubes are still the world's cubes. PARTITIONING: a tetrahedron reads 4 corner samples and no neighbour's answer, so this is zero-hop; a cell of a partitioned world cooks the cubes its own bounds cover and the union tiles them, because a cube belongs to exactly one cell under a half-open rule on its INDEX. Nothing is welded — every triangle carries its own three points — so no cell ever depends on a number another cell chose. Two conditions are on the caller. The field must be a function of POSITION: `fraction` and `index` measure the population of this cook and `attribute` can only read the bookkeeping columns of a cloud this node manufactured, so all three are REFUSED by name (a field built with the code combinators carries no spec and cannot be screened, which makes it the author's promise instead). And the field must resolve on ONE path for a given world: CPU and GPU agree within a published tolerance, a corner classification is a COMPARE, and no tolerance bounds a comparison, so two cells that resolved the same corner differently can disagree about its sign and crack the seam.
+
+**Category:** source
+
+**Inputs:** `in` (geometry)
+
+**Outputs:** `out` (geometry)
+
+**Params:**
+
+| Param | Type | Default | Range | Enum | Field | Description |
+| --- | --- | --- | --- | --- | --- | --- |
+| `field` | f32 | `0` |  |  | yes | The scalar field to contour. A plain number contours nothing — a constant never crosses anything — so this is a field param that only makes sense as a field. Any expression of position works: a noise for a cloud or a rock, `sub(length(position()), r)` for a sphere, the difference of two for a carve. IT MUST BE A FUNCTION OF POSITION AND THAT IS ENFORCED: `fraction`, `index` and `attribute` are refused by name, because the first two measure the population of this cook and the third can only reach the bookkeeping columns of the lattice this node builds. The refusal names the offending position inside the expression. A field composed with the CODE combinators carries no spec and so cannot be screened at all; that one is the author's promise, and breaking it does not throw, it makes a partitioned world disagree with itself at the seams. Resolved on the CPU over the lattice corners, once per cook. |
+| `isoValue` | f32 | `0` |  |  |  | The value the surface sits at. Moving it grows or shrinks the solid without re-sampling anything conceptually — for a signed distance it is a plain offset, and for a noise it is a threshold, which is why an eroded rock and a cave are the same graph with two settings. The surface passes EXACTLY through this value: a vertex is placed by linear interpolation along the lattice edge that crosses it, so evaluating the field at any emitted vertex returns this number to within the interpolation's own error, which is what `isosurface.test.ts` measures. |
+| `cellSize` | f32 | `1` | >= 0 |  |  | Lattice cube edge in world units, and unlike volumeSample's it is EXACT rather than a request. The lattice is anchored at the world origin, so cube (i, j, k) spans [i * cellSize, (i+1) * cellSize) whatever bounds asked for it, and the bounds are widened outward to whole cubes rather than divided into them. That is the whole partitioning story in one sentence: two windows that overlap sample the same corners at the same world positions, so they agree bit for bit, where a lattice fitted to its own bounds would put its corners somewhere different in every window. Cost grows with the CUBE of the bounds over this value, and every sample is a field evaluation, so halving it is eight times the work. |
+| `boundsMin` | vec3 | `[-8,-8,-8]` |  |  |  | Low corner of the region to contour, in world units, and IGNORED when a geometry is connected — the input's own point extents replace both bounds then. Widened outward to the enclosing whole cube, so the surface is never clipped mid-cube by a bound that fell inside one. Under a partitioned world this is the cell's own rectangle: bind it per cell, and because the lattice is world-anchored rather than bounds-anchored the cells agree about every corner they share. |
+| `boundsMax` | vec3 | `[8,8,8]` |  |  |  | High corner of the region to contour, in world units, and IGNORED when a geometry is connected. HALF-OPEN: the last cube walked is the one ending at or before this face, so two cells whose rectangles meet on a cell-size multiple tile the surface instead of both emitting the seam. The low face is widened OUTWARD to a whole cube, so the contoured region can reach up to one cube below `boundsMin` — a solid that leaves the box is left open there rather than capped, since this node emits the surface it found and never invents a lid. Note also that the FIELD is evaluated one cube further out again on every face, because the gradient that gives the normals is a central difference and needs a corner beyond the ones it reports on. A field with a pole just outside the box therefore still refuses the cook, and moving the box is the fix. |
+| `inside` | enum | `"below"` |  | `below`, `above` |  | Which side of `isoValue` is solid, which decides only two things: which way the surface faces, and hence which way the winding runs. 'below' (the default) treats field < isoValue as inside, the convention a signed distance uses — negative within the shape. 'above' is the one a density or an occupancy noise wants, where more means more material. The surface geometry is identical either way; flipping this turns it inside out rather than moving it. |
 
 ## meshPrimitive
 

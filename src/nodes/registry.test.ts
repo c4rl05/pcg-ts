@@ -426,6 +426,7 @@ describe("category metadata", () => {
       connectByIndex: "point op",
       connectPoints: "point op",
       voronoiCells: "point op",
+      meshFromField: "source",
       filterByDensity: "filter",
       filterByBounds: "filter",
       filterByAttribute: "filter",

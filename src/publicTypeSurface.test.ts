@@ -77,7 +77,7 @@ const ROOT_TYPE_SURFACE = [
   // size derived as length / count). See src/graph/data.ts.
   "InstanceAttributes",
   "InstanceBatch", "InstancesItem", "JitterPointsParams", "LevelDef", "MergePointsParams",
-  "MergePrimitivesParams", "MeshPrimitiveParams", "NodeDef", "NodeDoneInfo", "NodeExecuteArgs",
+  "MergePrimitivesParams", "MeshFromFieldParams", "MeshPrimitiveParams", "NodeDef", "NodeDoneInfo", "NodeExecuteArgs",
   "NodeExecutionError", "NodeHandle", "NodeOutputs", "NodeSeedRef", "NodeSpec", "NodeTypeInfo",
   "NoiseFactory", "NoiseOpts", "NoiseRange", "NonFiniteReport", "OcclusionCullParams",
   "OpenAssetSet", "OrientAlongVectorParams", "ParamPatch", "ParamSchema", "ParamType",

@@ -23,6 +23,7 @@
  */
 import { setAttribute } from "./attributes.js";
 import { voronoiCells } from "./cells.js";
+import { meshFromField } from "./isosurface.js";
 import { filterByDensity } from "./filtering.js";
 import { valueConstant } from "./mathNodes.js";
 import { meshPrimitive } from "./meshes.js";
@@ -54,6 +55,7 @@ const MODULE_WITNESSES: readonly { readonly type: string }[] = [
   connectByIndex, // topology.ts
   connectPoints, // topology.ts
   voronoiCells, // cells.ts
+  meshFromField, // isosurface.ts
   pointNeighborhood, // neighborhood.ts
   transformPoints, // pointOps.ts
   filterByDensity, // filtering.ts

@@ -2752,7 +2752,83 @@ at them.
   three routes do not carry, and the reason Gabriel rather than Delaunay is
   the entry point.
 
-**Marching cubes / mesh-from-field — admissible, on five preconditions.**
+**~~Marching cubes~~ / mesh-from-field — SHIPPED as `meshFromField`, by
+marching TETRAHEDRA.** The entry below is what the survey said; this is
+what building it found.
+
+NOT MARCHING CUBES, and the swap is the interesting decision. Marching
+cubes classifies eight corners into one of 256 cases and reads the
+triangles out of a table, several of whose cases are genuinely ambiguous
+— a face with two diagonal corners inside can be joined either way — so
+the table encodes a convention that neighbouring cubes must share or the
+mesh cracks. That table is also a large block of data with no derivation
+in it: a mistyped entry is a hole in a mesh, and nothing in this repo
+could have told me which entry. Splitting each cube into six tetrahedra
+removes the choice entirely: four corners, sixteen masks, three shapes,
+no ambiguous case. The decomposition used is the Freudenthal one, six
+tets sharing the main diagonal, chosen because it is
+TRANSLATION-INVARIANT — adjacent cubes cut their shared face on the same
+diagonal, which a decomposition that alternated would not. Cost is about
+twice the triangles. An independent verifier re-derived the partition
+(Monte-Carlo over 400 000 points: every one in exactly one tet, volumes
+summing to 1.000000000) and checked all three axes agree on the face
+diagonal.
+
+THE FIVE PRECONDITIONS, and how they actually came out. Position-purity
+is ENFORCED rather than assumed: `fraction`, `index` and `attribute` are
+refused by name after a walk of the field's spec. The lattice is
+world-anchored, which `volumeSample` is not — its cell size is a request
+divided into whatever extent it was handed, so two of its windows agree
+about nothing, while two of these agree bit for bit. Cell-local welding
+became NO welding: every triangle carries its own three points, so no
+window ever depends on a number another chose, and the gradient normals
+make the shading smooth anyway. Single cook path could not be enforced
+from inside the node and is stated in its description instead. Only the
+half-open ownership rule was written correctly first time — and it was
+not: see below.
+
+FOUR DEFECTS THE VERIFIER FOUND, two of them blocking, all now fixed and
+pinned by tests.
+- The cube range was CLOSED on the high side (`floor(max/h) + 1`), not
+  half-open. Invisible on a box whose faces fall mid-cube and fatal on
+  one whose faces land on a cell multiple — which is exactly what a
+  partitioned world's rectangles do. Measured at 344 doubled triangles
+  across one seam. `ceil(max/h)` is the rule the description already
+  claimed.
+- The position-purity screen could be WALKED PAST. A `param` node carries
+  its bound spec beside the node rather than inside it, so the walk that
+  reads a node's own keys saw an innocent unknown fn; a `fraction` bound
+  to a param went straight through and made two windows disagree in their
+  overlap. Every other walk in the library that has to look through a
+  param does so; this one did not.
+- Zero-area triangles shipped wherever a lattice sample sat EXACTLY on
+  the iso value — 26% of them on a sphere whose radius is a whole number
+  of cells. Dropped now, which is safe for the watertightness because
+  such a triangle is A, A, B and its directed edges cancel.
+- The winding compared the geometric normal against the sum of the RAW
+  gradients while the vertices shipped NORMALIZED ones, so the two could
+  disagree (about 0.5% of an fbm blob's triangles). Normalizing at the
+  crossing makes them the same quantity by construction.
+
+AND ONE COMMENT THAT WAS WRONG ABOUT WHY. The zero-gradient fallback was
+justified as "a flat region of the field, where the surface has no
+orientation". That is not what triggers it: a central difference ALIASES,
+so `cos(pi x)` sampled at whole-unit spacing differs to exactly zero
+everywhere while its true gradient is at a MAXIMUM on the surface —
+every one of 9 408 vertices took the fallback. The fallback is now the
+triangle's own geometric normal, which is an orientation the surface
+really has.
+
+Also corrected in three files: "the only node that makes geometry from
+nothing but an expression" is false — `meshPrimitive` and `pointGrid`
+take no input either. The true claim is narrower and better: it is the
+only node whose SHAPE AND TOPOLOGY come out of an expression.
+
+Still open, and both recorded rather than attempted: the GPU version,
+which the entry below argues is a different and harder problem; and a
+`uv`, which an isosurface has no natural parameterisation for.
+
+**The survey that preceded it — admissible, on five preconditions.**
 Surveyed 2026-09-08. The first draft of this entry claimed the invariance
 answer was nearly free; an independent agent refuted that as stated, and
 what follows is the repaired version.

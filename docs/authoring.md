@@ -3882,6 +3882,21 @@ lie inside the pair's own neighbourhood, so it is already in that halo.
 is at most `d(i, j)` from either endpoint, and `d(i, j)` is already under
 the radius, so that witness is in the halo too.
 
+One op sits below even that rung, and it is worth naming because it
+looks like it should be harder. `meshFromField` contours a scalar field
+into a mesh, and needs NO HALO AT ALL: it does not read elements that
+arrived, it manufactures its own lattice, and a cube's triangles are a
+function of that cube's eight corner samples. The lattice is anchored to
+the WORLD rather than to the bounds it was given — cube `(i, j, k)`
+always spans the same world box — so two cells sample the same corners
+at the same positions and get the same floats, and the union of their
+cubes is the whole surface with no seam to reconcile. What that op pays
+instead is a PRECONDITION: its field must be a function of position, so
+`fraction`, `index` and `attribute` are refused by name. An op that
+manufactures its own domain has moved the invariance question from the
+halo to the expression, and the expression is where it now has to be
+answered.
+
 **Zero hops with UNBOUNDED REACH — exact only where it can prove it.**
 The answer still consults no third element's answer, but its footprint is
 decided by the DATA and no param bounds it. A Voronoi cell is the type

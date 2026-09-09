@@ -1,0 +1,86 @@
+{
+  "formatVersion": 1,
+  "seed": 8821,
+  "meta": {
+    "title": "a rock nobody modelled",
+    "description": "Every other node in this library samples a field ONTO something that already exists — points a scatter made, vertices a sweep built. `meshFromField` has no such input. It walks a lattice, asks the field for a value at every corner, and emits the surface where that value crosses `isoValue`. The rock here is one expression and nothing modelled it: a squashed sphere written as a signed distance, plus four octaves of noise centred on zero so the noise erodes it inward and outward rather than only inflating it. Raise the amplitude and the overhangs become arches and then detach; lower `isoValue` and the whole thing shrinks toward its core. That is the argument for describing a shape as an inequality — every one of those is a number, not a modelling session. IT CONTOURS BY TETRAHEDRA, NOT CUBES. Marching cubes classifies a cube's eight corners into one of 256 cases and looks the triangles up in a table, and several of those cases are genuinely AMBIGUOUS: a face with two diagonal corners inside can be joined either way, so the table encodes a convention neighbouring cubes must agree on or the surface cracks. Splitting each cube into six tetrahedra removes the choice — four corners, sixteen cases, nothing to decide — and the mesh is watertight because there is nothing to get wrong rather than because a table is right. The cost is about twice the triangles for the same lattice, and `isosurface.test.ts` measures that rather than asserting it: over six cell sizes it checks that every DIRECTED edge is matched by its reverse, which is what says a mesh has no hole, and which holds only because two tetrahedra meeting on a lattice edge interpolate it in the same direction and so compute the same floats. THE LATTICE IS ANCHORED TO THE WORLD and `cellSize` is exact, which is the whole difference between this node and `volumeSample`, whose cell size is a request divided into whatever extent it was handed. Cube (i, j, k) always spans the same world box, so two overlapping windows sample the same corners at the same positions and produce the same triangles bit for bit — which is what lets a world like this be cooked one cell at a time. Normals come from the field's own GRADIENT rather than from the triangles, so a coarse lattice still shades smoothly; there is no `uv`, because an isosurface has no natural parameterisation and a planar one would be a lie on every vertical face.",
+    "tags": ["basics", "fields", "noise", "mesh", "surface"]
+  },
+  "nodes": [
+    {
+      "id": "cave",
+      "type": "meshFromField",
+      "params": {
+        "isoValue": 0,
+        "cellSize": 0.38,
+        "boundsMin": [-12, -9, -12],
+        "boundsMax": [12, 9, 12],
+        "inside": "below",
+        "field": {
+          "fn": "add",
+          "args": [
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "length",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "position"
+                        },
+                        {
+                          "fn": "vec",
+                          "args": [1, 1.45, 1]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                8.0
+              ]
+            },
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "fbm",
+                      "base": "simplexNoise",
+                      "opts": {
+                        "frequency": 0.1,
+                        "octaves": 4,
+                        "seed": {
+                          "from": "node",
+                          "variant": 2
+                        },
+                        "normalized": true,
+                        "position": {
+                          "fn": "position"
+                        }
+                      }
+                    },
+                    0.5
+                  ]
+                },
+                6.5
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": [],
+  "outputs": [
+    {
+      "id": "cave",
+      "pin": "out",
+      "name": "cave"
+    }
+  ]
+}

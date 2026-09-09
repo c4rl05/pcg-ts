@@ -4,7 +4,7 @@ Generated from the graphs in [`graphs`](../graphs) by `node scripts/gen-graphs.m
 
 Each file teaches ONE thing and cooks from JSON alone — no runtime-injected data, so `pcg cook <file>` on a clean install reproduces exactly what the corpus test asserts.
 
-94 examples, alphabetical by file:
+95 examples, alphabetical by file:
 
 - [basics-a-draw-that-survives-a-move.json](#basics-a-draw-that-survives-a-movejson) — keep a random draw when the point moves
 - [basics-attribute-from-noise.json](#basics-attribute-from-noisejson) — write an attribute from a noise field
@@ -35,6 +35,7 @@ Each file teaches ONE thing and cooks from JSON alone — no runtime-injected da
 - [basics-mask-by-species.json](#basics-mask-by-speciesjson) — let a string attribute drive a field
 - [basics-merge-points.json](#basics-merge-pointsjson) — concatenate two clouds into one
 - [basics-merge-primitives.json](#basics-merge-primitivesjson) — join an authored path to a generated network
+- [basics-mesh-from-field.json](#basics-mesh-from-fieldjson) — a rock nobody modelled
 - [basics-mesh-primitive.json](#basics-mesh-primitivejson) — build a mesh a saved graph can cook
 - [basics-neighborhood-count.json](#basics-neighborhood-countjson) — measure how crowded each point is
 - [basics-neighborhood-varying-radius.json](#basics-neighborhood-varying-radiusjson) — measure a neighbourhood at each point's own scale
@@ -670,6 +671,24 @@ Cook it: `pcg cook graphs/basics-merge-points.json --stats`
 **Outputs:** `network` (from `network`.`out`)
 
 Cook it: `pcg cook graphs/basics-merge-primitives.json --stats`
+
+## basics-mesh-from-field.json
+
+**a rock nobody modelled**
+
+Every other node in this library samples a field ONTO something that already exists — points a scatter made, vertices a sweep built. `meshFromField` has no such input. It walks a lattice, asks the field for a value at every corner, and emits the surface where that value crosses `isoValue`. The rock here is one expression and nothing modelled it: a squashed sphere written as a signed distance, plus four octaves of noise centred on zero so the noise erodes it inward and outward rather than only inflating it. Raise the amplitude and the overhangs become arches and then detach; lower `isoValue` and the whole thing shrinks toward its core. That is the argument for describing a shape as an inequality — every one of those is a number, not a modelling session. IT CONTOURS BY TETRAHEDRA, NOT CUBES. Marching cubes classifies a cube's eight corners into one of 256 cases and looks the triangles up in a table, and several of those cases are genuinely AMBIGUOUS: a face with two diagonal corners inside can be joined either way, so the table encodes a convention neighbouring cubes must agree on or the surface cracks. Splitting each cube into six tetrahedra removes the choice — four corners, sixteen cases, nothing to decide — and the mesh is watertight because there is nothing to get wrong rather than because a table is right. The cost is about twice the triangles for the same lattice, and `isosurface.test.ts` measures that rather than asserting it: over six cell sizes it checks that every DIRECTED edge is matched by its reverse, which is what says a mesh has no hole, and which holds only because two tetrahedra meeting on a lattice edge interpolate it in the same direction and so compute the same floats. THE LATTICE IS ANCHORED TO THE WORLD and `cellSize` is exact, which is the whole difference between this node and `volumeSample`, whose cell size is a request divided into whatever extent it was handed. Cube (i, j, k) always spans the same world box, so two overlapping windows sample the same corners at the same positions and produce the same triangles bit for bit — which is what lets a world like this be cooked one cell at a time. Normals come from the field's own GRADIENT rather than from the triangles, so a coarse lattice still shades smoothly; there is no `uv`, because an isosurface has no natural parameterisation and a planar one would be a lie on every vertical face.
+
+**Tags:** `basics`, `fields`, `noise`, `mesh`, `surface`
+
+**Seed:** 8821
+
+**Node types:** `meshFromField`
+
+**Primitives:** *(none)*
+
+**Outputs:** `cave` (from `cave`.`out`)
+
+Cook it: `pcg cook graphs/basics-mesh-from-field.json --stats`
 
 ## basics-mesh-primitive.json
 

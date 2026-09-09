@@ -79,10 +79,10 @@ describe("the shipped panel corpus conforms to the published format", () => {
     // without. If one is renamed, this is the assertion that says so
     // instead of the sweep silently checking one file fewer.
     for (const name of [
-      "basics-fit-runs.json",
-      "basics-sightline-cull.json",
-      "basics-tile-an-arc.json",
-      "basics-under-cover.json",
+      "basics-mesh-from-field.json",
+      "basics-voronoi-plots.json",
+      "basics-worley-cells.json",
+      "basics-worley-feature.json",
     ]) {
       expect(panelFiles, `${name} is no longer in graphs/panels/`).toContain(name);
       const raw: unknown = JSON.parse(readFileSync(join(PANELS_DIR, name), "utf8"));
