@@ -54,9 +54,9 @@ so the groups are vertex-disjoint chains and every point ends with
 degree at most 2. A star -- 1 -> 0, 2 -> 0, 3 -> 0 -- can emit at most
 two of its three edges under ANY assignment of group keys, because the
 centre can belong to one chain only. Branching is precisely the excluded
-case. `connectPoints` has exactly two modes and both ask their question
-in SPACE; `relativeNeighborhood` keeps cycles, which is what a road
-wants and a dendrite does not.
+case. `connectPoints` has three modes and all ask their question in
+SPACE; `relativeNeighborhood` keeps cycles, which is what a road wants
+and a dendrite does not.
 
 The REPRESENTATION is not the gap. `src/nodes/topology.ts` says it
 outright -- a 2-vertex polyline over shared points IS an edge, and a
@@ -2607,14 +2607,44 @@ at them.
   silently lowered to a different field.
   Still open on this route: the feature-point POSITION, which is a
   `Field<3>` and so does not fit `makeNoiseField`'s scalar shape.
-- Next: a `gabriel` mode on `connectPoints`. A Gabriel edge (i,j) exists iff
-  the closed disc on diameter `ij` is empty. The Gabriel disc is CONTAINED
-  IN the relative-neighbourhood lune, so `topology.ts:400-402`'s shipped
-  argument subsumes it outright rather than merely paralleling it —
-  halo-exact at `radius`, zero new machinery. Gabriel sits between RNG and
-  Delaunay and contains the EMST. Watch the closed disc on duplicate and
-  cocircular points, and settle the strict/closed boundary the way
-  `topology.ts:92` settled the radius test.
+- ~~Next: a `gabriel` mode on `connectPoints`.~~ **SHIPPED.** Halo-exact at
+  `radius` as predicted, on the lune argument's own shape: a witness inside
+  the sphere on `ij` as diameter is at most `d(i,j)` from either endpoint,
+  and `d(i,j)` is already under the radius, so it is in row `i` of the same
+  adjacency and no wider halo is needed. Added to the shipped halo-exactness
+  loop and to `crossPartition`'s `EDGE_MODES` rather than being argued for
+  in prose alone. Zero new machinery, as predicted: it reads the same three
+  squared distances the lune test already computes, needing no centre, no
+  radius and no square root.
+  The strict/closed boundary went CLOSED, plus an explicit skip of any
+  candidate COINCIDENT with an endpoint — and getting there took a wrong
+  answer first. Shipped strict initially, reasoning from duplicate points:
+  a `C` sharing `j`'s position gives `d(C,i)^2 + 0 == d(i,j)^2`, which a
+  closed test counts as a witness, so duplicating a point would silently
+  delete the edges at it. Verification refuted the result that came with
+  that choice. The equality case is EVERY RIGHT ANGLE, not an exotic tie:
+  on a plain 5x5 unit lattice an open test keeps both diagonals of all 16
+  cells and returns a cross-hatch, and antipodal pairs off `Math.cos`/`sin`
+  hit the tie exactly in f64 about half the time. Worse, it was a different
+  graph — the crossing diagonals of a square are not planar, so the open
+  test was NOT a subgraph of the Delaunay edges, which is the property the
+  Gabriel graph is closed in order to have. The published claim was wrong
+  in three files.
+  Closed plus the coincidence skip gets both: a point at zero distance from
+  an endpoint IS that endpoint, and the scan already skipped `j` by INDEX,
+  so skipping it by POSITION is the same exclusion honestly applied. It
+  also makes the halo bound strict rather than `<=`. Pinned now by the
+  lattice coming out as cells with no diagonal, by the square dropping
+  both, and by a duplicate still keeping its edges.
+  The entry's two containments both held, and they point opposite ways for
+  the same reason, which is worth stating once because it reads like a
+  contradiction: the Gabriel DISC is contained in the RNG LUNE (a `C` with
+  `d(C,i)^2 + d(C,j)^2 < d^2` has both distances under `d`), so the disc
+  catches FEWER witnesses, so gabriel disqualifies fewer pairs and keeps
+  MORE edges. Smaller exclusion region, larger graph:
+  `relativeNeighborhood` is a SUBSET of `gabriel`, which is a subset of the
+  radius network. Both inclusions are asserted strict on a real cloud, so
+  the chain is measured rather than assumed.
 - Real work: certified Voronoi cells. Gathering sites within `R` of `p`, a
   site `q` contributes a face only if `|pq| <= 2 *` the cell's radius, so a
   computed cell contained in `B(p, R/2)` IS the global cell. Proved and

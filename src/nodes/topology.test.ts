@@ -156,7 +156,7 @@ describe("connectPoints radius mode", () => {
   it("refuses an unknown mode and a radius that is not a finite number >= 0", async () => {
     const geo = cloud([[0, 0, 0]]);
     await expect(connect(geo, { mode: "nearest" })).rejects.toThrow(
-      /connectPoints: unknown mode "nearest"; valid modes: radius, relativeNeighborhood/,
+      /connectPoints: unknown mode "nearest"; valid modes: radius, relativeNeighborhood, gabriel$/,
     );
     for (const bad of [-1, NaN, Number.POSITIVE_INFINITY]) {
       await expect(connect(geo, { radius: bad })).rejects.toThrow(
@@ -277,6 +277,15 @@ describe("connectPoints is indifferent to the order its points arrive in", () =>
     expect(a.primitiveCount).toBeGreaterThan(30);
     expect(edgeKeys(b)).toEqual(edgeKeys(a));
   });
+
+  it("holds for gabriel too", async () => {
+    const geo = latticeCloud(80, 12, 0.25);
+    const shuffled = permutePoints(geo, shuffledOrder(geo.pointCount, 4242));
+    const a = await connect(geo, { mode: "gabriel", radius: 2 });
+    const b = await connect(shuffled, { mode: "gabriel", radius: 2 });
+    expect(a.primitiveCount).toBeGreaterThan(30);
+    expect(edgeKeys(b)).toEqual(edgeKeys(a));
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -380,7 +389,7 @@ const partitionWindows: readonly Window[] = [
 const partitionCloud = (): Geometry => latticeCloud(120, 77, 0.5, 16);
 
 describe("connectPoints is halo-exact at haloWidth >= radius", () => {
-  for (const mode of ["radius", "relativeNeighborhood"]) {
+  for (const mode of ["radius", "relativeNeighborhood", "gabriel"]) {
     it(`split with halo equals whole (${mode})`, async () => {
       const geo = partitionCloud();
       const radius = partitionRadius;
@@ -492,6 +501,155 @@ describe("connectPoints relativeNeighborhood", () => {
   });
 });
 
+describe("connectPoints gabriel", () => {
+  /** O(n^3) reference: no third point strictly inside the sphere on `ij`. */
+  const bruteForce = (pts: readonly (readonly [number, number, number])[], radius: number) => {
+    const d2 = (a: number, b: number) =>
+      (pts[a][0] - pts[b][0]) ** 2 + (pts[a][1] - pts[b][1]) ** 2 + (pts[a][2] - pts[b][2]) ** 2;
+    const out: string[] = [];
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        const ij = d2(i, j);
+        if (!(ij < radius * radius)) continue;
+        let witnessed = false;
+        for (let c = 0; c < pts.length && !witnessed; c++) {
+          if (c === i || c === j) continue;
+          const ci = d2(c, i);
+          const cj = d2(c, j);
+          if (ci === 0 || cj === 0) continue; // coincident is not a third point
+          if (ci + cj <= ij) witnessed = true;
+        }
+        if (!witnessed) out.push(`${i}-${j}`);
+      }
+    }
+    return out.sort();
+  };
+
+  it("drops the span a midpoint sits inside", async () => {
+    const line = cloud([
+      [0, 0, 0],
+      [1, 0, 0],
+      [2, 0, 0],
+    ]);
+    const g = await connect(line, { mode: "gabriel", radius: 3 });
+    // 1 + 1 < 4: the midpoint is strictly inside the sphere on (0, 2).
+    expect(edgeIndices(g).map(([a, b]) => `${a}-${b}`).sort()).toEqual(["0-1", "1-2"]);
+  });
+
+  it("drops a square's diagonals, because the sphere is CLOSED", async () => {
+    // The case that decides closed-vs-open, and the reason it is closed.
+    // Each far corner sits EXACTLY on the sphere over a diagonal
+    // (1 + 1 == 2), which is a right angle — so an OPEN test would find no
+    // witness and keep both diagonals, returning the non-planar K4 and a
+    // cross-hatch on any lattice. Closed, the corner witnesses and the
+    // diagonals go, which is what keeps this a subgraph of the Delaunay
+    // edges and what makes the mode read as cells.
+    const square = cloud([
+      [0, 0, 0],
+      [1, 0, 0],
+      [0, 0, 1],
+      [1, 0, 1],
+    ]);
+    const spans = edgeIndices(await connect(square, { mode: "gabriel", radius: 2 }))
+      .map(([a, b]) => `${Math.min(a, b)}-${Math.max(a, b)}`)
+      .sort();
+    expect(spans).toEqual(["0-1", "0-2", "1-3", "2-3"]);
+  });
+
+  it("a unit lattice comes out as cells rather than cross-hatched", async () => {
+    // The observable form of the same decision, on an input shape a PCG
+    // graph actually produces. Every unit cell's two diagonals are right
+    // angles, so an open test keeps all 32 of them; closed keeps none, and
+    // every surviving edge has unit length.
+    const pts: [number, number, number][] = [];
+    for (let x = 0; x < 5; x++) for (let z = 0; z < 5; z++) pts.push([x, 0, z]);
+    const g = await connect(cloud(pts), { mode: "gabriel", radius: 1.5 });
+    const P = g.attrs.point.require("P");
+    for (const [a, b] of edgeIndices(g)) {
+      const d = Math.hypot(P.get(a, 0) - P.get(b, 0), P.get(a, 2) - P.get(b, 2));
+      expect(d).toBeCloseTo(1, 10); // never the 1.414 diagonal
+    }
+    expect(g.primitiveCount).toBe(40); // 2 * 5 * 4 grid edges, no diagonals
+  });
+
+  it("keeps an edge the lune test drops", async () => {
+    // Where the two tests actually differ: the apex is inside the LUNE of
+    // the base pair (closer to both ends than they are to each other) but
+    // outside the SPHERE on that pair, so relativeNeighborhood drops the
+    // base and gabriel keeps it. This is the whole reason to offer both.
+    const wide = cloud([
+      [0, 0, 0],
+      [2, 0, 0],
+      [1, 1.2, 0],
+    ]);
+    const spans = async (mode: string) =>
+      edgeIndices(await connect(wide, { mode, radius: 3 }))
+        .map(([a, b]) => `${Math.min(a, b)}-${Math.max(a, b)}`)
+        .sort();
+    expect(await spans("gabriel")).toEqual(["0-1", "0-2", "1-2"]);
+    expect(await spans("relativeNeighborhood")).toEqual(["0-2", "1-2"]);
+  });
+
+  it("a duplicated point does not delete the edges at it", async () => {
+    // Point 2 sits exactly on point 1. The closed test alone would witness
+    // edge 0-1 away (d(2,0)^2 + 0 == d(0,1)^2), so duplicating a point
+    // would silently cost edges; the coincidence skip is what prevents it.
+    const dup = cloud([
+      [0, 0, 0],
+      [1, 0, 0],
+      [1, 0, 0],
+    ]);
+    const g = await connect(dup, { mode: "gabriel", radius: 3 });
+    const spans = edgeIndices(g)
+      .map(([a, b]) => `${Math.min(a, b)}-${Math.max(a, b)}`)
+      .sort();
+    expect(spans).toContain("0-1");
+    expect(spans).toContain("0-2");
+  });
+
+  it("matches a brute-force reference over a scatter", async () => {
+    const pts: [number, number, number][] = [];
+    for (let i = 0; i < 60; i++) {
+      const h = (n: number) => ((Math.sin(n) * 43758.5453) % 1 + 1) % 1;
+      pts.push([h(i * 3.1) * 8, h(i * 5.7) * 8, h(i * 9.3) * 8]);
+    }
+    const radius = 3;
+    const got = edgeIndices(await connect(cloud(pts), { mode: "gabriel", radius }))
+      .map(([a, b]) => `${Math.min(a, b)}-${Math.max(a, b)}`)
+      .sort();
+    const want = bruteForce(pts, radius);
+    expect(want.length).toBeGreaterThan(30); // not a vacuous comparison
+    expect(got).toEqual(want);
+  });
+
+  it("sits between the two other modes and stays as connected", async () => {
+    // RNG subset of gabriel subset of radius, with both inclusions STRICT
+    // on this cloud so the chain is a real measurement and not a tautology.
+    const geo = latticeCloud(150, 314, 0.25, 20);
+    const radius = 2;
+    const keys = async (mode: string) => new Set(edgeKeys(await connect(geo, { mode, radius })));
+    const full = await keys("radius");
+    const gab = await keys("gabriel");
+    const rng = await keys("relativeNeighborhood");
+    for (const k of gab) expect(full.has(k)).toBe(true);
+    for (const k of rng) expect(gab.has(k)).toBe(true);
+    expect(rng.size).toBeLessThan(gab.size);
+    expect(gab.size).toBeLessThan(full.size);
+
+    // Contains a minimum spanning tree, so it cannot disconnect what the
+    // radius reached — the same observable relativeNeighborhood is held to.
+    const components = (g: Geometry): number => {
+      const parent = Array.from({ length: g.pointCount }, (_, i) => i);
+      const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+      for (const [a, b] of edgeIndices(g)) parent[find(a)] = find(b);
+      return new Set(Array.from({ length: g.pointCount }, (_, i) => find(i))).size;
+    };
+    expect(components(await connect(geo, { mode: "gabriel", radius }))).toBe(
+      components(await connect(geo, { radius })),
+    );
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Reporting slots
 
@@ -600,7 +758,7 @@ describe("connectPoints edge limit", () => {
       /connectPoints: radius 10 connects more than 1048576 pairs over 1500 points/,
     );
     await expect(connect(cloud(pts), { radius: 10 })).rejects.toThrow(
-      /Lower `radius`.*relativeNeighborhood' does NOT help/s,
+      /Lower `radius`.*relativeNeighborhood' or 'gabriel' does NOT help/s,
     );
   });
 });
@@ -962,6 +1120,18 @@ describe("connectPoints with a per-point radius", () => {
       mode: "relativeNeighborhood",
     });
     // The middle point witnesses against the long 0->4 edge.
+    expect(thinned.primitiveCount).toBe(2);
+  });
+
+  it("gabriel still finds its witness under mixed reaches", async () => {
+    // Same point for the sphere test as for the lune: it reads DISTANCES,
+    // so the widest-reach candidate scan cannot hide a witness from it.
+    const at: number[][] = [[0, 0, 0], [4, 0, 0], [2, 0.5, 0]];
+    const thinned = await connect(reachCloud(at, [5, 5, 5]), {
+      radius: reachField(),
+      mode: "gabriel",
+    });
+    // 4.25 + 4.25 < 16: the middle point is inside the sphere on 0->4.
     expect(thinned.primitiveCount).toBe(2);
   });
 });

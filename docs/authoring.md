@@ -3308,6 +3308,7 @@ Two modes, and the choice between them is not a quality knob:
 | --- | --- | --- |
 | `radius` | every pair closer than `radius` | you want the dense neighbourhood graph — a scaffold, a proximity mesh. Edge count grows with the square of the point count. |
 | `relativeNeighborhood` | such a pair only when no third point is closer to **both** endpoints than they are to each other (the lune test) | you want something road-shaped: sparse, connected, still holding cycles. |
+| `gabriel` | such a pair only when no third point lies inside the **sphere on that pair as its diameter** | you want something cell-shaped: plots, cracked ground, leaf venation. It disqualifies strictly fewer pairs than the lune test, so `relativeNeighborhood` is a subset of it and it is a subset of the Delaunay edges. |
 
 `relativeNeighborhood` is the one to reach for by default. It **contains
 a minimum spanning tree**, so it never disconnects what the radius
@@ -3861,6 +3862,9 @@ holds every point within `radius` of its own rectangle decides its edges
 exactly, at `haloWidth >= radius` and no more. `relativeNeighborhood`
 looks like it adds a hop and does not — its disqualifying witness must
 lie inside the pair's own neighbourhood, so it is already in that halo.
+`gabriel` is the same: a point inside the sphere on the pair as diameter
+is at most `d(i, j)` from either endpoint, and `d(i, j)` is already under
+the radius, so that witness is in the halo too.
 
 **One hop — exact at a stated width.** The answer reads its neighbours'
 *stored values*, but never its neighbours' *answers*.

@@ -468,9 +468,11 @@ a direction, and `splineSample` walks it by arc length.
 
 The same representation, allowed to branch, is a **network**.
 `connectPoints` joins a cloud into one 2-vertex polyline per edge over
-the *same* points — every pair within a `radius`, or the sparser
+the *same* points — every pair within a `radius`, the sparser
 `relativeNeighborhood` lune test that keeps a road-shaped net which still
-contains a minimum spanning tree — so a crossroads where three roads meet
+contains a minimum spanning tree, or the `gabriel` sphere test between the
+two, which keeps the short cross-links that close cells and so reads as
+plots or cracked ground rather than as roads — so a crossroads where three roads meet
 is genuinely one point of degree 3, carrying everything it carried
 before. There is **no edge domain and none is needed**: an edge is a
 `primitive`, so a per-edge value is `promoteAttribute` point→primitive,

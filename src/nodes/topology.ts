@@ -73,8 +73,8 @@ const EMPTY_F64 = new Float64Array(0);
 const MAX_EDGES_HINT =
   "Lower `radius` (the pair count grows with radius^2 over a surface and radius^3 through a volume), " +
   "thin the cloud upstream with selfPrune or filterByDensity, or cook the region in cells. " +
-  "Switching mode to 'relativeNeighborhood' does NOT help: it keeps far fewer edges, but it " +
-  "SELECTS them from the same radius neighbourhood, which is what this limit measures.";
+  "Switching mode to 'relativeNeighborhood' or 'gabriel' does NOT help: they keep fewer edges, but " +
+  "they SELECT them from the same radius neighbourhood, which is what this limit measures.";
 
 /** Params of {@link connectPoints}. */
 export interface ConnectPointsParams {
@@ -89,16 +89,16 @@ export const connectPoints = standardNode<ConnectPointsParams>({
   type: "connectPoints",
   category: "point op",
   description:
-    "Connects a point cloud into a NETWORK: one 2-vertex `polyline` primitive per edge, built over the SAME points that arrived, so every point attribute survives and a junction is genuinely one point shared by every edge that meets there. This is how you get roads between district centres, a trail net between camps, or a triangulated-looking scaffold to displace. There is no edge domain and none is needed — per-edge values come from promoteAttribute point->primitive (`min` for a width, `first` for a kind) and setAttribute on domain 'primitive', and per-junction values from promoteAttribute primitive->point (`max`). mode 'radius' connects every pair closer than `radius`. mode 'relativeNeighborhood' keeps such a pair ONLY when no third point is closer to BOTH of its endpoints than they are to each other (the lune test): that thins a dense blob into a road-like net that still CONTAINS a minimum spanning tree — so the network stays connected wherever the radius does — while leaving the cycles a road layout wants and a tree does not have. Distances are 3D over P and the test is STRICT (d < radius), which is what makes this node's answer independent of how the cloud was windowed: a pair at exactly `radius` is not an edge. Edges come out in a canonical order fixed by the POINTS (identity, then position bits, then seed) and never by the order they arrived in, and each edge's FIRST vertex is its lower-keyed endpoint — reorder the input and you get the same network, permuted. PARTITIONING: an edge reads two stored positions and no third point, so a cell that also holds every point within `radius` of its own rectangle decides its edges exactly; emit an edge from the cell that owns its FIRST vertex under the half-open rule (filterByBounds' 'halfOpen'), and the cells tile the network with no duplicate and no gap. The wiring is three NODES, so a partitioned network cook is a serializable graph and needs no host code: widen the cell's rectangle by `radius` — or, when `radius` is a field, by the GLOBAL MAXIMUM it can return anywhere in the world — and clip the cloud to it with filterByBounds ('halfOpen'), run this node, then run filterPrimitivesByBounds on the UNWIDENED rectangle with vertex 'first' and the same 'halfOpen' boundary — that node keeps the primitives whose FIRST vertex lies back inside the cell, and it is one of the two filters in the library that trim topology instead of dropping it. The relativeNeighborhood witness lies inside the pair's own neighbourhood, so it needs no wider halo. Any existing topology on the input is REPLACED, and its vertex and primitive attributes drop with it. Downstream, any node that can REMOVE points drops topology — filterByDensity, filterByBounds, filterByAttribute, filterByExpression, selfPrune, partitionByAttribute — and so does mergePoints, so a network that passes through one stops being a network — use mergePrimitives to combine this node's output with another network, an authored path or a mesh, which concatenates points, vertices AND primitives and renumbers the references; category is not the rule, since projectToPlane is categorised `filter` and PRESERVES topology, and so do filterPrimitivesByBounds and filterPrimitivesByAttribute, which filter the PRIMITIVE domain and are the nodes to reach for when a network has to be cut down rather than a cloud — the second tests a primitive attribute, so a network thinned by its own `lengthAttr` (or by a promoted or setAttribute-authored per-edge value) stays a network, and the thinning happens before anything downstream pays for the edges it removes. degreeAttr and lengthAttr are reporting slots whose shape this node picks, so pointing either at an existing attribute of a DIFFERENT shape is refused rather than silently deleting it.",
+    "Connects a point cloud into a NETWORK: one 2-vertex `polyline` primitive per edge, built over the SAME points that arrived, so every point attribute survives and a junction is genuinely one point shared by every edge that meets there. This is how you get roads between district centres, a trail net between camps, or a triangulated-looking scaffold to displace. There is no edge domain and none is needed — per-edge values come from promoteAttribute point->primitive (`min` for a width, `first` for a kind) and setAttribute on domain 'primitive', and per-junction values from promoteAttribute primitive->point (`max`). mode 'radius' connects every pair closer than `radius`. mode 'relativeNeighborhood' keeps such a pair ONLY when no third point is closer to BOTH of its endpoints than they are to each other (the lune test): that thins a dense blob into a road-like net that still CONTAINS a minimum spanning tree — so the network stays connected wherever the radius does — while leaving the cycles a road layout wants and a tree does not have. mode 'gabriel' applies the other classical test — no third point inside the SPHERE on the pair as diameter — which disqualifies strictly fewer pairs, so relativeNeighborhood is a SUBSET of gabriel and gabriel is a subset of the Delaunay edges. It is the mode for a CELLULAR subject rather than a road one: it keeps the short cross-links that close small polygons, so a scatter comes out as plots, cracked ground or leaf venation instead of a branching net. It contains a minimum spanning tree for the same reason relativeNeighborhood does. Distances are 3D over P and the test is STRICT (d < radius), which is what makes this node's answer independent of how the cloud was windowed: a pair at exactly `radius` is not an edge. Edges come out in a canonical order fixed by the POINTS (identity, then position bits, then seed) and never by the order they arrived in, and each edge's FIRST vertex is its lower-keyed endpoint — reorder the input and you get the same network, permuted. PARTITIONING: an edge reads two stored positions and no third point, so a cell that also holds every point within `radius` of its own rectangle decides its edges exactly; emit an edge from the cell that owns its FIRST vertex under the half-open rule (filterByBounds' 'halfOpen'), and the cells tile the network with no duplicate and no gap. The wiring is three NODES, so a partitioned network cook is a serializable graph and needs no host code: widen the cell's rectangle by `radius` — or, when `radius` is a field, by the GLOBAL MAXIMUM it can return anywhere in the world — and clip the cloud to it with filterByBounds ('halfOpen'), run this node, then run filterPrimitivesByBounds on the UNWIDENED rectangle with vertex 'first' and the same 'halfOpen' boundary — that node keeps the primitives whose FIRST vertex lies back inside the cell, and it is one of the two filters in the library that trim topology instead of dropping it. The relativeNeighborhood witness lies inside the pair's own neighbourhood, so it needs no wider halo, and neither does the gabriel witness: a point inside the sphere on the pair as diameter is at most `d(i,j)` from either endpoint, which the radius already bounds. Any existing topology on the input is REPLACED, and its vertex and primitive attributes drop with it. Downstream, any node that can REMOVE points drops topology — filterByDensity, filterByBounds, filterByAttribute, filterByExpression, selfPrune, partitionByAttribute — and so does mergePoints, so a network that passes through one stops being a network — use mergePrimitives to combine this node's output with another network, an authored path or a mesh, which concatenates points, vertices AND primitives and renumbers the references; category is not the rule, since projectToPlane is categorised `filter` and PRESERVES topology, and so do filterPrimitivesByBounds and filterPrimitivesByAttribute, which filter the PRIMITIVE domain and are the nodes to reach for when a network has to be cut down rather than a cloud — the second tests a primitive attribute, so a network thinned by its own `lengthAttr` (or by a promoted or setAttribute-authored per-edge value) stays a network, and the thinning happens before anything downstream pays for the edges it removes. degreeAttr and lengthAttr are reporting slots whose shape this node picks, so pointing either at an existing attribute of a DIFFERENT shape is refused rather than silently deleting it.",
   inputs: [{ name: "in", kind: "geometry" }],
   outputs: [{ name: "out", kind: "geometry" }],
   params: {
     mode: {
       type: "enum",
       default: "radius",
-      enum: ["radius", "relativeNeighborhood"],
+      enum: ["radius", "relativeNeighborhood", "gabriel"],
       description:
-        "Which pairs become edges. 'radius' connects every pair closer than `radius` — dense, and the count grows with the square of the point count. 'relativeNeighborhood' additionally requires that no third point is closer to BOTH endpoints than they are to each other, which keeps a sparse, road-like net (it contains a minimum spanning tree, so it does not disconnect what the radius reached, and it keeps cycles, so it is a network rather than a tree). Both modes read the same radius neighbourhood, so 'relativeNeighborhood' costs at least as much to compute and is bounded by the same edge limit.",
+        "Which pairs become edges. 'radius' connects every pair closer than `radius` — dense, and the count grows with the square of the point count. 'relativeNeighborhood' additionally requires that no third point is closer to BOTH endpoints than they are to each other (the lune test), which keeps a sparse, road-like net (it contains a minimum spanning tree, so it does not disconnect what the radius reached, and it keeps cycles, so it is a network rather than a tree). 'gabriel' requires instead that no third point lies inside the SPHERE having the pair as its diameter, which is a strictly weaker condition than the lune: every relativeNeighborhood edge is also a gabriel edge, so gabriel sits BETWEEN the two other modes in density and likewise contains a minimum spanning tree. Reach for it when relativeNeighborhood thins a layout too far — it keeps the short cross-links that close small cells, which is what makes it read as cracked ground, leaf venation or plot boundaries rather than as a road net. All three modes read the same radius neighbourhood and are bounded by the same edge limit, so neither test costs a wider search than 'radius'.",
     },
     radius: {
       type: "f32",
@@ -125,9 +125,9 @@ export const connectPoints = standardNode<ConnectPointsParams>({
     // Params before geometry: a bad mode reported as a geometry problem
     // sends the author to debug the wrong thing entirely.
     const mode = params.mode;
-    if (mode !== "radius" && mode !== "relativeNeighborhood") {
+    if (mode !== "radius" && mode !== "relativeNeighborhood" && mode !== "gabriel") {
       throw new Error(
-        `connectPoints: unknown mode "${mode}"; valid modes: radius, relativeNeighborhood`,
+        `connectPoints: unknown mode "${mode}"; valid modes: radius, relativeNeighborhood, gabriel`,
       );
     }
     const uniformRadius = typeof params.radius === "number" ? params.radius : undefined;
@@ -228,8 +228,8 @@ export const connectPoints = standardNode<ConnectPointsParams>({
     // that grow to as many as MAX_EDGES entries. `neighbors.length >>> 1` is
     // the EXACT edge count in 'radius' mode — the relation is symmetric, so
     // each pair occupies two CSR entries and exactly one of the two visits
-    // emits it — and a tight ceiling in 'relativeNeighborhood', which keeps
-    // a subset of the same pairs.
+    // emits it — and a tight ceiling in 'relativeNeighborhood' and
+    // 'gabriel', which each keep a subset of the same pairs.
     let edgeA = EMPTY_U32;
     let edgeB = EMPTY_U32;
     let edgeD2 = EMPTY_F64;
@@ -277,7 +277,8 @@ export const connectPoints = standardNode<ConnectPointsParams>({
       }
       for (let i = 0; i < n; i++) {
         // Polled tighter than the usual 1023: one point costs O(degree)
-        // pairs here, and O(degree^2) in relativeNeighborhood.
+        // pairs here, and O(degree^2) in relativeNeighborhood and gabriel,
+        // which both scan row `i` again per candidate pair.
         if ((i & 63) === 0) checkCancelled();
         const oi = i * ps;
         const ax = pd[oi];
@@ -310,6 +311,9 @@ export const connectPoints = standardNode<ConnectPointsParams>({
             if (!(d2 < (r2i > r2j ? r2i : r2j))) continue;
           }
           if (mode === "relativeNeighborhood" && hasLuneWitness(adj, pd, ps, i, j, d2)) {
+            continue;
+          }
+          if (mode === "gabriel" && hasGabrielWitness(adj, pd, ps, i, j, d2)) {
             continue;
           }
           edgeA[count] = i;
@@ -440,6 +444,87 @@ function hasLuneWitness(
     dy = cy - jy;
     dz = cz - jz;
     if (dx * dx + dy * dy + dz * dz < d2) return true;
+  }
+  return false;
+}
+
+/**
+ * The Gabriel test: is there a third point strictly inside the sphere
+ * having `ij` as its DIAMETER? A point C is inside exactly when the angle
+ * at C is obtuse, which by the law of cosines is
+ * `d(C, i)^2 + d(C, j)^2 < d(i, j)^2` — so the test needs no centre, no
+ * radius and no square root, only the same three squared distances the
+ * lune test already computes.
+ *
+ * THE SPHERE IS CLOSED, and a candidate COINCIDENT with either endpoint
+ * is skipped instead. Both halves of that are load-bearing.
+ *
+ * Closed is what makes this the Gabriel graph rather than something near
+ * it. The equality case is not exotic — it is every right angle, so on a
+ * unit lattice the two diagonals of every cell sit EXACTLY on each
+ * other's sphere, and an open test keeps them all and returns a
+ * cross-hatch. That is both the wrong picture for the cellular subjects
+ * this mode exists for and a different graph: the crossing diagonals of a
+ * square are not planar, so an open test is not a subgraph of the
+ * Delaunay edges the way the Gabriel graph is.
+ *
+ * The coincidence skip is what a strict test was reaching for and misses.
+ * A `C` sharing an endpoint's exact position satisfies the closed test
+ * automatically (`d(C, i)^2 + 0 == d(i, j)^2`), so duplicating a point
+ * would silently delete the edges at it. But a point at zero distance
+ * from an endpoint IS that endpoint, and the scan already skips `j` by
+ * INDEX — skipping it by POSITION too is the same exclusion honestly
+ * applied, and it costs nothing anywhere else.
+ *
+ * THE HALO ARGUMENT IS THE LUNE'S, and the skip is what keeps it strict:
+ * with `d(C, i)` and `d(C, j)` both nonzero, `d(C, i)^2 < d(i, j)^2`, so
+ * `d(C, i) < d(i, j) < radius` and the witness is necessarily inside
+ * `i`'s OWN radius neighbourhood. So this mode needs no wider halo than
+ * the radius mode either, and reads row `i` of the same adjacency.
+ *
+ * Distances come from the stored coordinates by the same expression in
+ * every direction, so the same triple gives the same verdict whichever
+ * endpoint the scan reached first.
+ */
+function hasGabrielWitness(
+  adj: Adjacency,
+  pd: ArrayLike<number>,
+  ps: number,
+  i: number,
+  j: number,
+  d2: number,
+): boolean {
+  const oi = i * ps;
+  const oj = j * ps;
+  const ix = pd[oi];
+  const iy = pd[oi + 1];
+  const iz = pd[oi + 2];
+  const jx = pd[oj];
+  const jy = pd[oj + 1];
+  const jz = pd[oj + 2];
+  const end = adj.offsets[i + 1];
+  for (let k = adj.offsets[i]; k < end; k++) {
+    const c = adj.neighbors[k];
+    if (c === j) continue; // rows never contain `i` itself
+    const oc = c * ps;
+    const cx = pd[oc];
+    const cy = pd[oc + 1];
+    const cz = pd[oc + 2];
+    const dix = cx - ix;
+    const diy = cy - iy;
+    const diz = cz - iz;
+    const djx = cx - jx;
+    const djy = cy - jy;
+    const djz = cz - jz;
+    const ci = dix * dix + diy * diy + diz * diz;
+    const cj = djx * djx + djy * djy + djz * djz;
+    // A candidate sitting exactly on an endpoint is that endpoint, not a
+    // third point: skip it as the `c === j` test above skips it by index.
+    if (ci === 0 || cj === 0) continue;
+    // Negated so a NaN coordinate can never witness an edge away, exactly
+    // as the lune test above is negated. Closed (`<=`): see the header.
+    if (!(ci + cj <= d2)) continue;
+    return true;
   }
   return false;
 }

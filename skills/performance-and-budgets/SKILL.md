@@ -291,8 +291,8 @@ transfer, a neighbourhood query or a noise field costs per point.
 pair count grows with `radius^2` over a surface and `radius^3` through a
 volume — so it is `radius` that runs away, and a guard at 1,048,576 edges
 fails during the scan rather than after allocating. Switching to
-`relativeNeighborhood` does not help the cost: it keeps far fewer edges but
-selects them from the same neighbourhood. Lower `radius`, thin the cloud
+`relativeNeighborhood` or `gabriel` does not help the cost: they keep fewer
+edges but select them from the same neighbourhood. Lower `radius`, thin the cloud
 upstream (`selfPrune`, `filterByDensity`) — upstream, because a filter
 placed *after* it also destroys the network — or cook the region in cells.
 

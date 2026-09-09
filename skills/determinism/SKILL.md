@@ -196,8 +196,8 @@ populate all three rungs:
 Two payoffs from stating it this way. The zero-hop rung is where the
 argument is *structural* rather than measured: `connectPoints` needs no
 seam experiment because no third point can enter the decision, and
-`relativeNeighborhood` stays on that rung because its disqualifying witness
-must lie inside the pair's own neighbourhood. And the unbounded rung is a
+`relativeNeighborhood` and `gabriel` stay on that rung because each one's
+disqualifying witness must lie inside the pair's own neighbourhood. And the unbounded rung is a
 design constraint, not a bug to fix later — it is why `connectPoints` ships
 a local lune test that *contains* an MST instead of an MST mode, and why no
 shortest-path node ships at all. Worse than unbounded are the ops with no

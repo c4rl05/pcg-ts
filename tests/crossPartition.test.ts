@@ -118,8 +118,8 @@ type Head =
 
 /** How the edge network at the end of the chain is built, when there is one. */
 interface EdgeOptions {
-  /** `connectPoints` mode. Both are halo-exact at `haloWidth >= radius`. */
-  readonly mode?: "radius" | "relativeNeighborhood";
+  /** `connectPoints` mode. All are halo-exact at `haloWidth >= radius`. */
+  readonly mode?: "radius" | "relativeNeighborhood" | "gabriel";
   /**
    * Write each point's DEGREE. Legal only where every cook sees the whole
    * cloud: a point sitting in a cell's HALO has its degree truncated by
@@ -979,14 +979,17 @@ const edgeWindow = (box: Box, halo: number, opts: ChainOptions): Promise<Geometr
   cookWindow([box.min[0] - halo, box.min[1] - halo], [box.max[0] + halo, box.max[1] + halo], opts);
 
 /** The chain the edge suites cook, with and without the jitter. */
-const edgeChain = (mode: "radius" | "relativeNeighborhood", jitter: boolean): ChainOptions => ({
+const edgeChain = (
+  mode: "radius" | "relativeNeighborhood" | "gabriel",
+  jitter: boolean,
+): ChainOptions => ({
   sourceDensity: EDGE_DENSITY,
   filter: true,
   jitter,
   edges: { mode },
 });
 
-const EDGE_MODES = ["radius", "relativeNeighborhood"] as const;
+const EDGE_MODES = ["radius", "relativeNeighborhood", "gabriel"] as const;
 
 // ---------------------------------------------------------------------------
 
@@ -1100,7 +1103,13 @@ describe("edges: split with halo equals whole", () => {
       // `relativeNeighborhood` is here on the same bound and not a wider
       // one because its lune witness is closer to `A` than `B` is, hence
       // inside `A`'s own radius neighbourhood — the mode thins the network
-      // without widening what a cell has to see.
+      // without widening what a cell has to see. `gabriel` is here on that
+      // same bound by the same shape of argument: a witness inside the
+      // sphere on `AB` as diameter satisfies d(C,A)^2 <= d(A,B)^2 -
+      // d(C,B)^2, so d(C,A) <= d(A,B) < RADIUS and it too is already in
+      // `A`'s own neighbourhood. The one case that reaches the equality is
+      // a `C` sitting on top of `B`, which is still inside the row because
+      // the row's test is d < RADIUS and d(C,A) is then d(A,B).
       const opts = edgeChain(mode, false);
       const whole = await pieceOf(REGION, RADIUS, opts, "whole");
       expect(whole.length).toBeGreaterThan(100);
