@@ -495,6 +495,18 @@ export interface CountClaim {
  * family is a change to the vocabulary and should fail here until the
  * sentence that promises seven is rewritten too.
  */
+export const CORPUS_FAMILIES = ["basics", "examples", "pipeline"] as const;
+
+/**
+ * The corpus families llms.txt breaks its graph count down by.
+ *
+ * Added after both root-level corpus counts were found stale on the same
+ * day — llms.txt two behind and README.md thirteen — while the three
+ * HTML pages were correct, because only those were gated. The claim
+ * patterns here are anchored in prose rather than in markup for exactly
+ * that reason: an HTML-shaped pattern silently covers nothing in a text
+ * file, which is how the drift lasted.
+ */
 export const PRIMITIVE_FAMILIES = [
   "shape",
   "fill",
@@ -706,6 +718,33 @@ export const COUNT_CLAIMS: readonly CountClaim[] = [
     source: "docs/primitives.json entries",
     pattern: /([\d,]+) named subgraphs/g,
   },
+  {
+    page: "llms.txt",
+    label: "corpus graphs (example corpus section)",
+    source: "docs/graphs.json entries",
+    pattern: /^([\d,]+) graphs under `graphs\/`/gm,
+  },
+  {
+    page: "README.md",
+    label: "corpus graphs (a recipe is not a demo)",
+    source: "docs/graphs.json entries",
+    pattern: /one of the ([\d,]+) files in `graphs\/`/g,
+  },
+  ...CORPUS_FAMILIES.map((family) => ({
+    page: "llms.txt",
+    label: `corpus graphs in the ${family} family`,
+    source: `corpus graphs in ${family}`,
+    // One sentence states all three, so each count is located by the
+    // filename glob that follows it. `[^`]*` is what keeps them apart: a
+    // run with no backtick in it cannot reach across the PREVIOUS
+    // family's glob, so the number this matches is always the nearest one
+    // before its own — and it survives the line wrapping that a
+    // whitespace-free pattern does not.
+    // `\d[\d,]*` and not `[\d,]+`: a bare comma is a legal match for the
+    // latter, and the list separates the families with one, so the group
+    // captured "," and read as 0.
+    pattern: new RegExp(String.raw`(\d[\d,]*)[^\x60]*\x60${family}-\*\.json\x60`, "g"),
+  })),
   ...PRIMITIVE_FAMILIES.map((family) => ({
     page: "llms.txt",
     label: `primitives in the ${family} family`,

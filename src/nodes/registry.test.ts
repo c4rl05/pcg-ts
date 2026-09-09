@@ -425,6 +425,7 @@ describe("category metadata", () => {
       pathPointAt: "point op",
       connectByIndex: "point op",
       connectPoints: "point op",
+      voronoiCells: "point op",
       filterByDensity: "filter",
       filterByBounds: "filter",
       filterByAttribute: "filter",

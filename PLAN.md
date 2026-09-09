@@ -2580,6 +2580,15 @@ a different kind of thing from one that cannot, and the ladder should say
 so — one rung, plus the cross-reference now on the `maxDegree` entry, which
 is where the misreading started.
 
+**SHIPPED** into `docs/authoring.md`'s ladder alongside `voronoiCells`,
+which is the rung's type specimen and the reason to write it now rather
+than as taxonomy. One correction the survey had backwards, learned from
+building it: a certificate audits the op's own REACH PARAM against the
+elements it was handed, and cannot audit the handing. So the rung's
+guarantee is conditional on the halo rather than a substitute for getting
+it right, and the paragraph says so — see the certified-cells entry below
+for the counterexample that settled it.
+
 **Voronoi cell topology — three routes, and the two cheap ones need no new
 invariance argument.** Surveyed 2026-09-08, then verified by an independent
 agent which strengthened one route and downgraded another. Neither
@@ -2645,15 +2654,48 @@ at them.
   `relativeNeighborhood` is a SUBSET of `gabriel`, which is a subset of the
   radius network. Both inclusions are asserted strict on a real cloud, so
   the chain is measured rather than assumed.
-- Real work: certified Voronoi cells. Gathering sites within `R` of `p`, a
-  site `q` contributes a face only if `|pq| <= 2 *` the cell's radius, so a
-  computed cell contained in `B(p, R/2)` IS the global cell. Proved and
-  tight; strict inequality kills the ties; detection is one-sided and
-  SILENT if unchecked, so the containment check is mandatory rather than
-  advisory, and its failure names the site and the halo width to widen to.
-  Ownership is cleaner here than for edges: a cell's canonical owner is its
-  site, so `filterPrimitivesByBounds`' `vertex: "first"` tiebreak is not
-  needed at all.
+- ~~Real work: certified Voronoi cells.~~ **SHIPPED** as `voronoiCells`,
+  one closed polyline per site. The certificate proved out exactly as
+  written — an independent verifier re-derived it and found the shipped
+  strictness (strict gather `d^2 < R^2`, strict check `corner^2 < (R/2)^2`)
+  one epsilon stronger than the weakest sound rule, in the conservative
+  direction. Three things the entry did not foresee, and the first is the
+  one that matters.
+  THE CERTIFICATE AUDITS THE RADIUS, NOT THE HALO, and the entry's
+  "detection is one-sided" reads as the opposite. Its premise is that the
+  cook was handed every site within `R`; a halo narrower than `R` breaks
+  that premise where no local check can look, and the cell that comes back
+  is CERTIFIED AND WRONG rather than absent. Constructed and pinned in
+  `cells.test.ts`: sixty sites on a circle of radius 0.99 give the middle
+  site a 60-gon reaching 0.4957 at `R = 1`; withhold ONE of them and the
+  cell becomes a 59-gon reaching 0.4977, still inside 0.5, still certified,
+  a different polygon. The published claim ("a halo narrower than this does
+  not produce a wrong cell, it produces no cell") was wrong in three files.
+  The halo is a floor.
+  OWNERSHIP IS NOT CLEANER THAN FOR EDGES; it is the same rule with a wider
+  halo. A cell's points are CORNERS, so `filterPrimitivesByBounds` — which
+  tests a vertex — can only say which window holds the ring's FIRST corner,
+  never which holds the site, and `P` is overwritten with the corner so the
+  site is not recoverable from the ring at all. The two differ by at most
+  `R/2`, which is exactly what the certificate bounds, so the graph recipe
+  takes `1.5 * R` of halo and `vertex: "first"` like any network. Measured
+  at 7 of 333 cells claimed across a seam by a window their site is not in.
+  Owning by SITE is exact at `R` and host code can do it; no shipped filter
+  tests a point attribute's position, so a graph cannot.
+  Two defects the verifier found and this fixed: `uncertifiedAttr` read 0
+  at `radius: 0` (the loop that increments it never ran), which is the
+  number that would tell an author their radius is fine; and the
+  duplicate-corner merge used a threshold relative to `radius`, which is
+  wrong because f32 resolution follows the COORDINATE — at `radius: 1000`
+  it deleted a legitimate corner pair 10^7 ulps apart. The merge now tests
+  `Math.fround` of the world coordinate, which is literally the write it
+  guards, so it is a fact about the output column rather than a tolerance.
+  A merge is needed at all because a LATTICE is the knife edge here, as it
+  was for gabriel: the bisector with a diagonal neighbour passes through a
+  corner the axis clips already placed, and the unit square came out with
+  six corners before the crossing test was made strict and five after.
+  Still open: cells are 2D in the XZ plane, decided rather than deferred —
+  every subject that wants them is planar and a 3D cell is a polyhedron.
 - Downgraded on verification: radius-bounded DELAUNAY. The emptiness
   argument holds, but "the global triangulation" is not well defined under
   cocircularity, and two cells with identical gathered points can still

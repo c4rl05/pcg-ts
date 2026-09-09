@@ -99,7 +99,8 @@ const ROOT_TYPE_SURFACE = [
   "TransferAlongPathParams", "TransferAttrDomain", "TransferAttributeParams",
   "TransferByIndexParams", "TransferMappingResult", "TransferNearestOptions",
   "TransferRaycastOptions", "TransferUvOptions", "TransformPointsParams", "UpdateOptions",
-  "UpdateStats", "ValueConstantParams", "ValueItem", "VolumeSampleParams", "World",
+  "UpdateStats", "ValueConstantParams", "ValueItem", "VolumeSampleParams", "VoronoiCellsParams",
+  "World",
   "WorldOptions", "WorldStats", "WorldValidationError", "WorleyNoiseOpts", "WrapperKind",
   "WriteCurveFrameParams", "WriteTangentsParams",
 ] as const;

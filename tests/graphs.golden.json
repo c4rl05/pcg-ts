@@ -4871,6 +4871,100 @@
         ]
       }
     },
+    "basics-voronoi-plots.json": {
+      "outputs": {
+        "massing": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 3402,
+              "vertex": 5616,
+              "primitive": 1872,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "rot:f32x4",
+                "scale:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "seed:u32",
+                "height:f32",
+                "normal:f32x3",
+                "uv:f32x2"
+              ],
+              "primitive": [
+                "primtype:string",
+                "plotArea:f32"
+              ],
+              "detail": [
+                "openPlots:u32"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -20.1845,
+                0,
+                -18.4676
+              ],
+              "max": [
+                16.4332,
+                12.7288,
+                16.9206
+              ]
+            }
+          }
+        ],
+        "plots": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 567,
+              "vertex": 666,
+              "primitive": 99,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "rot:f32x4",
+                "scale:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "seed:u32",
+                "height:f32"
+              ],
+              "primitive": [
+                "primtype:string",
+                "plotArea:f32"
+              ],
+              "detail": [
+                "openPlots:u32"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -20.1845,
+                0,
+                -18.4676
+              ],
+              "max": [
+                16.4332,
+                0,
+                16.9206
+              ]
+            }
+          }
+        ]
+      }
+    },
     "basics-worley-cells.json": {
       "outputs": {
         "points": [

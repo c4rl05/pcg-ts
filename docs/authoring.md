@@ -3851,8 +3851,10 @@ would have both cells emit that point.
 A halo only buys exactness when the operation's **reach is bounded**, and
 "bounded" is a stronger condition than "local". The useful question is
 not whether an op looks local but **how many hops of dependency it takes
-before its answer is settled** — and there are three rungs, which the
-shipped nodes populate all the way down.
+before its answer is settled** — and there are four rungs, which the
+shipped nodes populate all the way down. The fourth was added when
+`voronoiCells` shipped, because it splits an axis the other three
+conflate: how many hops, and how far.
 
 **Zero hops — exact, and the cheapest case to reason about.** The answer
 reads only stored values of the elements it names, and consults no third
@@ -3865,6 +3867,56 @@ lie inside the pair's own neighbourhood, so it is already in that halo.
 `gabriel` is the same: a point inside the sphere on the pair as diameter
 is at most `d(i, j)` from either endpoint, and `d(i, j)` is already under
 the radius, so that witness is in the halo too.
+
+**Zero hops with UNBOUNDED REACH — exact only where it can prove it.**
+The answer still consults no third element's answer, but its footprint is
+decided by the DATA and no param bounds it. A Voronoi cell is the type
+specimen: one distant site in an otherwise empty plain owns half the
+world, and there is no radius that makes that false. Read by hop count
+alone this looks like the first rung; read by reach alone it looks like
+the third. It is neither, and the difference is not taxonomy — it decides
+whether a **certificate** exists.
+
+A certificate is a local test that says whether the halo you took was
+wide enough. `findPath` has none: no inspection of a cell's own result
+tells you the global shortest path agrees. A Voronoi cell has one, and it
+is one line. Gather the sites within `radius` of a site and intersect
+their half-planes; if every corner of the result lands within `radius /
+2` of the site, that result IS the cell the whole world would have given,
+because a site further away than `radius` cannot be nearer than this one
+to any ground that close to it. So `voronoiCells` takes a halo of
+`radius` like any bounded op, and then CHECKS, per site, that the RADIUS
+sufficed — emitting nothing where it did not. Given the halo, a cell is
+either the global answer or absent, and never a plausible wrong polygon.
+
+Read that premise as carefully as the conclusion, because it is the one
+thing on this rung a certificate does NOT buy. The check audits the
+radius against the cloud the node was handed; it cannot audit the cloud.
+A halo narrower than `radius` withholds a site the proof assumes was
+seen, and the cell that comes back is then certified AND wrong — by
+however much was withheld, so: small, plausible and silent. The halo is a
+floor. Widening it past the requirement is what is free.
+
+The ownership step has a wrinkle the edge recipe does not, and it is the
+certificate that both causes and bounds it. A cell's points are CORNERS,
+so `filterPrimitivesByBounds` — which tests a vertex — can only express
+"the window holding the ring's FIRST corner", not "the window holding the
+site". Those differ by at most `radius / 2`, because that is what the
+certificate proves about every corner, so a window can be handed a cell
+whose site lies that far outside it and must have gathered around that
+site too. The halo for a serialized graph is therefore `1.5 * radius`,
+and `radius` alone is exact only if the owner is chosen by SITE, which
+host code can do and a graph currently cannot.
+
+That last clause is the whole reason the check is mandatory rather than
+advisory. Truncation is invisible in the output: a cell cut short by a
+missing neighbour is still a convex polygon of the right shape and size,
+and nothing downstream can tell it from a real one. An op on this rung
+that does not certify is not a fast approximation, it is a silent one.
+Note also what the certificate does NOT buy: a site on the outer boundary
+of any finite cloud owns ground running to infinity, so no radius
+certifies it and the diagram always loses its hull. That is the correct
+answer, not a tuning failure.
 
 **One hop — exact at a stated width.** The answer reads its neighbours'
 *stored values*, but never its neighbours' *answers*.

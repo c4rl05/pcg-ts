@@ -138,7 +138,8 @@ const ROOT_SURFACE = [
   "subgraphContentHash",
   "subgraphNode", "surfaceSample", "sweepProfile", "tan", "transferAttribute", "transferNearest",
   "transferRaycast", "transferUv", "transformPoints", "trunc", "validateGraphMeta", "valueConstant",
-  "valueNoise", "vec", "volumeSample", "withInlineParamValue", "worleyNoise", "writeCurveFrame",
+  "valueNoise", "vec", "volumeSample", "voronoiCells", "withInlineParamValue", "worleyNoise",
+  "writeCurveFrame",
   // Narrows a CellContext to its "xz" form. Public because every `bind`
   // on a square-cell level wants the cell rectangle and only a
   // world-space context has one — `cellMode: "path"` carries an arc range

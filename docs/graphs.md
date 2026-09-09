@@ -4,7 +4,7 @@ Generated from the graphs in [`graphs`](../graphs) by `node scripts/gen-graphs.m
 
 Each file teaches ONE thing and cooks from JSON alone — no runtime-injected data, so `pcg cook <file>` on a clean install reproduces exactly what the corpus test asserts.
 
-92 examples, alphabetical by file:
+93 examples, alphabetical by file:
 
 - [basics-a-draw-that-survives-a-move.json](#basics-a-draw-that-survives-a-movejson) — keep a random draw when the point moves
 - [basics-attribute-from-noise.json](#basics-attribute-from-noisejson) — write an attribute from a noise field
@@ -79,6 +79,7 @@ Each file teaches ONE thing and cooks from JSON alone — no runtime-injected da
 - [basics-two-kinds-of-bounds.json](#basics-two-kinds-of-boundsjson) — two things called bounds, and they are not the same thing
 - [basics-under-cover.json](#basics-under-coverjson) — measure what runs under cover, where the route passes close to itself
 - [basics-volume-scatter.json](#basics-volume-scatterjson) — fill a box with points, then carve it
+- [basics-voronoi-plots.json](#basics-voronoi-plotsjson) — a scatter becomes plots, and the plots become massing
 - [basics-worley-cells.json](#basics-worley-cellsjson) — colour and lift a Voronoi cell
 - [examples-coral.json](#examples-coraljson) — a dendrite grown by aggregation
 - [examples-facade.json](#examples-facadejson) — split a box until the pieces are small enough
@@ -1580,6 +1581,24 @@ Cook it: `pcg cook graphs/basics-under-cover.json --stats`
 **Outputs:** `instances` (from `blocks`.`instances`)
 
 Cook it: `pcg cook graphs/basics-volume-scatter.json --stats`
+
+## basics-voronoi-plots.json
+
+**a scatter becomes plots, and the plots become massing**
+
+`voronoiCells` answers the question `connectPoints` leaves implicit. That node draws the EDGES between neighbouring sites; this one draws the REGIONS — the ground each site is nearer to than any other — as one closed polyline per site, which is a plot, a plate, a territory or a leaf cell. It emits closed polylines rather than N-gon faces precisely so this graph is possible: `extrudePolygon` reads closed polylines and nothing else, so the plan becomes massing with one more node and no conversion. The per-plot height is the other half of the lesson. `storeys` writes a `height` on the SITES, before any cell exists; every ring vertex then carries its own site's point attributes, so `massing` reads one value per plot and each block gets a FLAT top. Compare `basics-extrude-polygon`, where the same field resolves per CORNER and tilts every roof — same param, same node, and the difference is only which points carry the value. THE RADIUS IS A GATHER, NOT A PLOT SIZE. A cell is built from the sites within `radius` and is the answer the WHOLE cloud would have given exactly when every corner lands within `radius / 2` of its site — because a site further away than `radius` cannot be nearer than this one to any ground that close to it. Every cell is checked against that and a cell that fails is never emitted, which is the whole reason this node can exist under a partitioned cook: the operation reads only stored positions and so is zero-hop, but its footprint is DATA-DEPENDENT and no param bounds it, and the certificate is what turns that into a radius you can confirm rather than hope for. It confirms the RADIUS and not the halo: it audits the cell against the cloud the node was handed, so a halo narrower than `radius` withholds a site the proof assumed was seen and the cell that comes back is certified and wrong. The halo is a floor. It also explains the picture: the scatter loses its OUTER RING of plots, because a site on the outside of any finite cloud owns ground running off to infinity and NO radius certifies that. Sweep `radius` in the panel and watch it happen — plots appear as it widens, and then stop appearing: at 14 this cloud has settled at 99 of its 120 sites, and 18 gives exactly the same 99. The 21 it never reaches are the hull, and their absence is the honest answer rather than a bug; `uncertifiedAttr` counts them, which is how you tell that case from a radius simply set too small.
+
+**Tags:** `basics`, `topology`, `voronoi`, `surface`, `mesh`, `attributes`
+
+**Seed:** 3307
+
+**Node types:** `extrudePolygon`, `pointScatterInBounds`, `setAttribute`, `voronoiCells`
+
+**Primitives:** *(none)*
+
+**Outputs:** `massing` (from `massing`.`out`), `plots` (from `plots`.`out`)
+
+Cook it: `pcg cook graphs/basics-voronoi-plots.json --stats`
 
 ## basics-worley-cells.json
 

@@ -22,6 +22,7 @@
  * {@link ensureStandardNodesRegistered} first.
  */
 import { setAttribute } from "./attributes.js";
+import { voronoiCells } from "./cells.js";
 import { filterByDensity } from "./filtering.js";
 import { valueConstant } from "./mathNodes.js";
 import { meshPrimitive } from "./meshes.js";
@@ -52,6 +53,7 @@ const MODULE_WITNESSES: readonly { readonly type: string }[] = [
   pointsToPath, // paths.ts
   connectByIndex, // topology.ts
   connectPoints, // topology.ts
+  voronoiCells, // cells.ts
   pointNeighborhood, // neighborhood.ts
   transformPoints, // pointOps.ts
   filterByDensity, // filtering.ts

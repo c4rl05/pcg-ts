@@ -48,6 +48,7 @@ import {
 import {
   CODE_ECHOES,
   COUNT_CLAIMS,
+  CORPUS_FAMILIES,
   PRIMITIVE_FAMILIES,
   ERROR_TRANSCRIPTS,
   SITE_PAGES,
@@ -164,6 +165,14 @@ const TRUTH: Record<string, number> = {
   "standard-library declared params": PARAMS.length,
   "seed params": PARAMS.filter((p) => p.key === "seed").length,
   "source nodes": SOURCE_NODES.length,
+  ...Object.fromEntries(
+    CORPUS_FAMILIES.map((family) => [
+      `corpus graphs in ${family}`,
+      (readJson("docs/graphs.json") as { file: string }[]).filter((g) =>
+        g.file.startsWith(`${family}-`),
+      ).length,
+    ]),
+  ),
   ...Object.fromEntries(
     PRIMITIVE_FAMILIES.map((family) => [
       `primitives in ${family}`,

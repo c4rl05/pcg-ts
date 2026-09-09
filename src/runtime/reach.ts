@@ -213,6 +213,14 @@ const REACH_PARAM: Readonly<Record<string, string>> = {
   pointNeighborhood: "radius",
   // Builds an edge for every pair closer than `radius`.
   connectPoints: "radius",
+  // Gathers the sites within `radius` of each site to bound its cell, and
+  // then certifies that RADIUS was wide enough. Not the halo: the check
+  // asks whether the cell fits inside `radius / 2`, and it assumes the
+  // cook was handed every site within `radius`. A narrower halo breaks
+  // that assumption where the node cannot see it, and the cell it
+  // certifies is then WRONG rather than absent — measured, in
+  // `src/nodes/cells.test.ts`. This is a floor, not a hint.
+  voronoiCells: "radius",
   // Keeps a point only against the points within `minDistance`; see the
   // mode rule below for why that is only half the story.
   selfPrune: "minDistance",

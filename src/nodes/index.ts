@@ -81,6 +81,7 @@ export * from "./pointScatterOnPath.js";
 export * from "./transferAlongPath.js";
 export * from "./transferByIndex.js";
 export * from "./topology.js";
+export * from "./cells.js";
 export * from "./neighborhood.js";
 export * from "./pointOps.js";
 export * from "./filtering.js";
