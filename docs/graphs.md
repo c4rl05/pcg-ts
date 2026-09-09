@@ -4,7 +4,7 @@ Generated from the graphs in [`graphs`](../graphs) by `node scripts/gen-graphs.m
 
 Each file teaches ONE thing and cooks from JSON alone — no runtime-injected data, so `pcg cook <file>` on a clean install reproduces exactly what the corpus test asserts.
 
-90 examples, alphabetical by file:
+91 examples, alphabetical by file:
 
 - [basics-a-draw-that-survives-a-move.json](#basics-a-draw-that-survives-a-movejson) — keep a random draw when the point moves
 - [basics-attribute-from-noise.json](#basics-attribute-from-noisejson) — write an attribute from a noise field
@@ -78,6 +78,7 @@ Each file teaches ONE thing and cooks from JSON alone — no runtime-injected da
 - [basics-two-kinds-of-bounds.json](#basics-two-kinds-of-boundsjson) — two things called bounds, and they are not the same thing
 - [basics-under-cover.json](#basics-under-coverjson) — measure what runs under cover, where the route passes close to itself
 - [basics-volume-scatter.json](#basics-volume-scatterjson) — fill a box with points, then carve it
+- [basics-worley-cells.json](#basics-worley-cellsjson) — colour and lift a Voronoi cell
 - [examples-coral.json](#examples-coraljson) — a dendrite grown by aggregation
 - [examples-facade.json](#examples-facadejson) — split a box until the pieces are small enough
 - [examples-floorplan.json](#examples-floorplanjson) — rooms from a split footprint, with a circulation net
@@ -1560,6 +1561,24 @@ Cook it: `pcg cook graphs/basics-under-cover.json --stats`
 **Outputs:** `instances` (from `blocks`.`instances`)
 
 Cook it: `pcg cook graphs/basics-volume-scatter.json --stats`
+
+## basics-worley-cells.json
+
+**colour and lift a Voronoi cell**
+
+`worleyNoise` normally answers a DISTANCE — how far the sample is from the nearest feature point. `output: "cell"` answers WHICH cell won instead, as a hash in [0, 1) that is the same value everywhere inside one cell. That is the difference between describing a position within the partition and addressing the partition itself: `plate` here drives both the tint and a per-plate height, and no distance output can hold one plate flat while its neighbour sits higher, because no distance is constant anywhere. The cracks are the other half of the same diagram — `f2-f1` is small exactly where two features are equidistant, which is the cell border, so dropping the points below a threshold opens the gaps. THE TWO OUTPUTS ARE COMPUTED IN ONE NODE, as the two lanes of a tuple-2 attribute, and that is load-bearing rather than tidy: `seed: { from: "node" }` derives from the COOKING NODE's seed, so the same spec in two different `setAttribute` nodes is two different diagrams and the cracks would cut across the plates instead of outlining them. One node, one seed, one diagram; `component` takes the lanes back apart. Two more things worth knowing: `cell` defaults `exact` to true, because a missed feature costs a distance about 0.016 and costs a cell hash a wholly unrelated value; and it is the one noise output that does not lower to WGSL, so it resolves on the CPU with a `compile-error` fallback rather than being approximated. Its reach is bounded by construction — one feature per unit cell over a fixed search — so unlike Voronoi over an arbitrary point set it is partition-invariant under a `World` at any cell size, and needs no halo.
+
+**Tags:** `basics`, `fields`, `noise`, `attributes`, `voronoi`
+
+**Seed:** 1091
+
+**Node types:** `filterByExpression`, `pointGrid`, `setAttribute`, `transformPoints`
+
+**Primitives:** *(none)*
+
+**Outputs:** `points` (from `tint`.`out`)
+
+Cook it: `pcg cook graphs/basics-worley-cells.json --stats`
 
 ## examples-coral.json
 

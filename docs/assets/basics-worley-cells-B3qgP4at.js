@@ -1,0 +1,184 @@
+var e=`{
+  "formatVersion": 1,
+  "seed": 1091,
+  "meta": {
+    "title": "colour and lift a Voronoi cell",
+    "description": "\`worleyNoise\` normally answers a DISTANCE — how far the sample is from the nearest feature point. \`output: \\"cell\\"\` answers WHICH cell won instead, as a hash in [0, 1) that is the same value everywhere inside one cell. That is the difference between describing a position within the partition and addressing the partition itself: \`plate\` here drives both the tint and a per-plate height, and no distance output can hold one plate flat while its neighbour sits higher, because no distance is constant anywhere. The cracks are the other half of the same diagram — \`f2-f1\` is small exactly where two features are equidistant, which is the cell border, so dropping the points below a threshold opens the gaps. THE TWO OUTPUTS ARE COMPUTED IN ONE NODE, as the two lanes of a tuple-2 attribute, and that is load-bearing rather than tidy: \`seed: { from: \\"node\\" }\` derives from the COOKING NODE's seed, so the same spec in two different \`setAttribute\` nodes is two different diagrams and the cracks would cut across the plates instead of outlining them. One node, one seed, one diagram; \`component\` takes the lanes back apart. Two more things worth knowing: \`cell\` defaults \`exact\` to true, because a missed feature costs a distance about 0.016 and costs a cell hash a wholly unrelated value; and it is the one noise output that does not lower to WGSL, so it resolves on the CPU with a \`compile-error\` fallback rather than being approximated. Its reach is bounded by construction — one feature per unit cell over a fixed search — so unlike Voronoi over an arbitrary point set it is partition-invariant under a \`World\` at any cell size, and needs no halo.",
+    "tags": ["basics", "fields", "noise", "attributes", "voronoi"]
+  },
+  "nodes": [
+    {
+      "id": "ground",
+      "type": "pointGrid",
+      "params": {
+        "countX": 150,
+        "countY": 1,
+        "countZ": 150,
+        "spacing": [0.36, 1, 0.36],
+        "origin": [-27, 0, -27]
+      }
+    },
+    {
+      "id": "cells",
+      "type": "setAttribute",
+      "params": {
+        "name": "cells",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 2,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "worleyNoise",
+              "opts": {
+                "seed": { "from": "node", "variant": 0 },
+                "frequency": 0.11,
+                "output": "cell",
+                "position": { "fn": "position" }
+              }
+            },
+            {
+              "fn": "worleyNoise",
+              "opts": {
+                "seed": { "from": "node", "variant": 0 },
+                "frequency": 0.11,
+                "output": "f2-f1",
+                "position": { "fn": "position" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "crack",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "step",
+          "args": [
+            0.055,
+            { "fn": "component", "args": [{ "fn": "attribute", "name": "cells" }], "index": 1 }
+          ]
+        }
+      }
+    },
+    {
+      "id": "heave",
+      "type": "transformPoints",
+      "params": {
+        "translate": {
+          "fn": "vec",
+          "args": [
+            0,
+            {
+              "fn": "mul",
+              "args": [
+                { "fn": "component", "args": [{ "fn": "attribute", "name": "cells" }], "index": 0 },
+                4.5
+              ]
+            },
+            0
+          ]
+        }
+      }
+    },
+    {
+      "id": "tint",
+      "type": "setAttribute",
+      "params": {
+        "name": "color",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "add",
+              "args": [
+                0.28,
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [{ "fn": "attribute", "name": "cells" }],
+                      "index": 0
+                    },
+                    0.62
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "add",
+              "args": [
+                0.11,
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "fract",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [{ "fn": "attribute", "name": "cells" }],
+                              "index": 0
+                            },
+                            3.7
+                          ]
+                        }
+                      ]
+                    },
+                    0.4
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "add",
+              "args": [
+                0.04,
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "fract",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [{ "fn": "attribute", "name": "cells" }],
+                              "index": 0
+                            },
+                            7.1
+                          ]
+                        }
+                      ]
+                    },
+                    0.16
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": [
+    { "from": ["ground", "out"], "to": ["cells", "in"] },
+    { "from": ["cells", "out"], "to": ["crack", "in"] },
+    { "from": ["crack", "out"], "to": ["heave", "in"] },
+    { "from": ["heave", "out"], "to": ["tint", "in"] }
+  ],
+  "outputs": [{ "id": "tint", "pin": "out", "name": "points" }]
+}
+`;export{e as default};

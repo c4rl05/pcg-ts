@@ -4828,6 +4828,47 @@
         ]
       }
     },
+    "basics-worley-cells.json": {
+      "outputs": {
+        "points": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 17117,
+              "vertex": 0,
+              "primitive": 0,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "rot:f32x4",
+                "scale:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "seed:u32",
+                "cells:f32x2",
+                "color:f32x3"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -27,
+                0.0998,
+                -27
+              ],
+              "max": [
+                26.64,
+                4.3803,
+                26.64
+              ]
+            }
+          }
+        ]
+      }
+    },
     "examples-coral.json": {
       "outputs": {
         "coral": [
