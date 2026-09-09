@@ -442,7 +442,7 @@ Field-capable params (marked "Field" in [nodes.md](./nodes.md), or
 of a constant: `{ "fn": <name>, ... }`. Wherever a spec takes arguments
 (`args` entries, noise `position`), a finite number or number array is
 also accepted and wraps into `constant`. Specs nest arbitrarily (up to
-256 levels). `listFieldFns()` returns all 63 names at runtime.
+256 levels). `listFieldFns()` returns all 64 names at runtime.
 
 ### Which params accept one
 
@@ -1462,7 +1462,21 @@ after scaling), `position?` (a nested spec, tuple 3), `normalized?`
 | `perlinNoise` | — | approximately [-1, 1] |
 | `simplexNoise` | — | approximately [-1, 1] |
 | `worleyNoise` | `output?: "f1" \| "f2" \| "f2-f1" \| "cell"`, `exact?: false` | f1 in [0, ~1.73); f2 >= f1; cell in [0, 1) |
+| `worleyFeature` | `exact?: true` — and no `output`, no `normalized` | tuple 3, a WORLD POSITION, so no range: it tracks the query |
 | `fbm` | `base` (required: one of the four noise fn names), `octaves?: 4`, `lacunarity?: 2`, `gain?: 0.5` | Sum is not renormalized: grows toward `baseRange * (1 - gain^octaves) / (1 - gain)` |
+
+`worleyFeature` is the odd row and the table cannot quite hold it.
+Everything else here answers with a MEASUREMENT, one number per element,
+and this answers with a POSITION — three, and in the caller's own units,
+with `frequency` and `offset` undone before the value is stored. That is
+why it is its own fn rather than a fifth `worleyNoise` output: it has no
+range to normalize into, it cannot be an `fbm` base (summing octaves of a
+position means nothing), and its width is 3. Same seed, frequency and
+offset as `worleyNoise` describe the SAME diagram, so `cell` and this can
+be read side by side — one names the region, the other anchors it. Like
+`cell` it does not lower to WGSL: picking a winner is a compare, and a
+compare that rounds the other way moves the answer a whole cell rather
+than an ulp.
 
 `normalized: true` affinely remaps the noise's documented raw range to
 exactly [0, 1] — so a wrapper like
@@ -5320,8 +5334,12 @@ bytes, since the pool rounds every allocation up to a power of two with
 a 256-byte floor — and
 `GpuFieldEvaluator.pipelineCacheSize` reports the live pipeline cache.
 `compileFieldSpec(spec, { attributes })` exposes the generated WGSL and
-its bind-layout plan directly, and `supportedGpuFieldFns()` lists the
-compilable fns.
+its bind-layout plan directly. `supportedGpuFieldFns()` lists the fns
+the compiler ANSWERS FOR, which is every grammar fn — a handler may
+still refuse, and a refusal is an answer that drives the CPU fallback —
+while `lowerableGpuFieldFns()` lists the ones that actually compile.
+Today the difference is `worleyFeature`, and `worleyNoise` is on both
+lists while refusing its own `cell` output.
 
 The editor shows the whole surface at once: its `cook` selector cooks
 the graph you have open three ways — CPU, GPU per-node (a resolver

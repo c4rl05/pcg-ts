@@ -2614,8 +2614,56 @@ at them.
   counting `compile-error`. That refusal also closed a latent hole: the
   compiler's output ternary ended in `f2-f1`, so any unrecognised output
   silently lowered to a different field.
-  Still open on this route: the feature-point POSITION, which is a
-  `Field<3>` and so does not fit `makeNoiseField`'s scalar shape.
+  ~~Still open on this route: the feature-point POSITION, which is a
+  `Field<3>` and so does not fit `makeNoiseField`'s scalar shape.~~
+  **SHIPPED** as `worleyFeature`, and the blocker turned out to be in the
+  wrong place. The GRAMMAR imposed no obstacle at all — a fn's output
+  width is never declared, it is discovered from `Column.tupleSize` at
+  evaluation, so `position` and `cross` have returned 3 all along with
+  only prose to say so. The scalar shape that actually bound was
+  `makeNoiseField`'s: a `Field<1>` return, a `(x,y,z) => number` sampler,
+  and a `NoiseFactory` type that `fbm` consumes. Widening those would have
+  moved the hot loop of every noise, so the seed/key/spec prologue came
+  out as `noisePlumbing` instead and the vector case got its own body —
+  the shared part shared, the different part written once.
+  A SEPARATE FN AND NOT A FIFTH `output`, decided on three counts that all
+  point the same way: it has no range, so `NOISE_RAW_RANGES` cannot key
+  it and `normalized` is meaningless; it cannot be an fbm base, since
+  summing octaves of a position means nothing; and an `output` value that
+  changed the RETURN WIDTH would need an overload to stay type-safe. It is
+  the only noise value in WORLD space — `frequency` and `offset` are
+  undone before the store — because a position in the noise's internal
+  space would be useless to the caller, and `sub(worleyFeature,
+  position())` is the vector that orients scales, shingles and cracked
+  plates, which no distance output can express.
+  A MEASUREMENT CLAIM THAT WENT IN WRONG AND CAME BACK OUT, worth keeping
+  as the shape of the mistake. The first draft asserted that over 800 000
+  random queries plus 8 788 corner-adjacent ones the approximate and exact
+  walks never disagreed about the winner, and reasoned that "a miss exists
+  but need not move the winner". Verification refuted both halves. The
+  sampling had no power — a miss needs a query corner-adjacent to its
+  cell, and 800 000 uniform points contain almost none, so at the real
+  5.3e-5 corner-adjacent rate the null result was about 60% likely by
+  chance. And the reasoning was a plain logic error: there is ONE feature
+  per cell, so a feature the 3x3x3 block missed is in a different cell,
+  and a nearer feature IS the new winner — a missed f1 and a changed
+  winner are the same event, which `worleyNoise`'s own documented ~7e-5
+  already said. A reproducible counterexample is now pinned in the tests
+  at the very seed the first draft sampled, two answers 1.6 world units
+  apart. The lesson is not "measure more" but "a null result over the
+  wrong population is not a measurement".
+  Three defects the same audit found and this fixed: `frequency: 0` is
+  now REFUSED rather than handing back three infinities, because the map
+  it names has no inverse and a position is what the caller asked for;
+  the inverse divides instead of multiplying by a precomputed reciprocal,
+  which was off the correctly-rounded quotient by an ulp on about 0.04%
+  of coordinates; and the `normalized` refusal was reachable only after
+  `parseNoiseOpts` had already advertised `normalized` as allowed and
+  type-checked it, so the option now leaves the allowed list for this fn.
+  One claim it also corrected: the output is in the space of whatever
+  `opts.position` reads, WORLD space only by default — so the
+  position-scaling substitution the grammar recommends when it refuses a
+  field-valued frequency does not preserve this output at all.
 - ~~Next: a `gabriel` mode on `connectPoints`.~~ **SHIPPED.** Halo-exact at
   `radius` as predicted, on the lune argument's own shape: a witness inside
   the sphere on `ij` as diameter is at most `d(i,j)` from either endpoint,

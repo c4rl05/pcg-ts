@@ -1,7 +1,30 @@
-import type { Field } from "../fields/index.js";
+import { type Field, elementCount, evaluateField, makeField } from "../fields/index.js";
 import type { WithheldReason } from "../fields/spec.js";
 import { hashFloat } from "../random/hash.js";
-import { NOISE_RAW_RANGES, type NoiseOpts, type NoiseSpecInfo, hash5, makeNoiseField } from "./util.js";
+import {
+  NOISE_RAW_RANGES,
+  type NoiseOpts,
+  type NoiseSpecInfo,
+  attachNoiseSpec,
+  hash5,
+  makeNoiseField,
+  noisePlumbing,
+} from "./util.js";
+
+/**
+ * How {@link worleyFeature}'s sampler answers: by WRITING three lanes,
+ * rather than returning one number the way every scalar noise does. An
+ * out-parameter and not a returned triple, because this runs once per
+ * sampled element and a fresh array each time would allocate per point in
+ * the one place this library never does.
+ */
+type VecSampler = (
+  x: number,
+  y: number,
+  z: number,
+  out: Float32Array,
+  at: number,
+) => void;
 
 /**
  * The `output` values the JSON grammar accepts (TS-only union at the call
@@ -210,4 +233,212 @@ export function worleyNoise(opts: WorleyNoiseOpts = {}): Field<1> {
     }
     return output === "f1" ? f1 : output === "f2" ? f2 : f2 - f1;
   }, spec);
+}
+
+/** Options for {@link worleyFeature}. */
+export interface WorleyFeatureOpts extends Omit<NoiseOpts, "normalized"> {
+  /**
+   * Search every cell that could hold the nearest feature rather than the
+   * 3x3x3 block around the query. Defaults to TRUE here, and for the same
+   * reason `output: "cell"` does: the approximate walk's error changes
+   * KIND when the answer is not a distance. A missed feature costs a
+   * distance about 0.016 and costs this a wholly different POINT, several
+   * cells away — so the cheap walk is not a defensible default for an
+   * answer that is discrete. Set it false only if you have measured that
+   * the occasional jump does not show.
+   */
+  exact?: boolean;
+}
+
+/**
+ * WHERE the nearest feature point is, as a world-space `Field<3>`.
+ *
+ * `worleyNoise` answers questions ABOUT the nearest feature — how far
+ * (`f1`), how much nearer than the runner-up (`f2-f1`), which cell won
+ * (`cell`). All of those are measurements, and a measurement cannot tell
+ * you where to put anything. This returns the point itself, which is what
+ * makes a worley partition PLACEABLE: subtract `position()` from it for a
+ * vector pointing at the cell's own centre — the thing that orients
+ * scales, shingles, cracked plates and petal veins — or write it onto a
+ * point to snap a cloud onto one anchor per cell.
+ *
+ * IT COMES BACK IN THE SAMPLED SPACE, which is WORLD SPACE by default and
+ * is the only noise output that has a space at all. Every other one is a
+ * number that does not care where it came from; this is a position, and a
+ * position in the noise's internal space (where `frequency` and `offset`
+ * have already been applied) would be useless to the caller. So the
+ * forward transform is undone before the value is stored, and
+ * `worleyFeature() - position()` is a vector in the units the graph is
+ * written in.
+ *
+ * "By default" is load-bearing, and two things follow. `frequency: 0` is
+ * REFUSED here though `worleyNoise` takes it happily: it maps all of
+ * space to one noise point, so the map is not injective and there is no
+ * position to hand back. And the substitution the `frequency` refusal
+ * recommends elsewhere — scale the POSITION instead of the frequency,
+ * which samples the same point — does NOT preserve this output. The
+ * inverse undoes `frequency` and `offset` and cannot undo an arbitrary
+ * position expression, so a point sampled through `mul(position(), 3)`
+ * comes back in THAT space, three times too far out.
+ *
+ * It has no `normalized` option, because a position has no range to
+ * normalize into: it tracks the query, so it is unbounded in exactly the
+ * way `f1` is not. It is not a NOISE BASE either — `fbm` sums octaves of
+ * a measurement and summing positions means nothing — which is why this
+ * is a separate function rather than a fifth `output` on `worleyNoise`.
+ *
+ * It does not lower to WGSL, for the reason `output: "cell"` does not:
+ * picking a winner is a COMPARE, and `docs/authoring.md` warns that a
+ * branchy op may flip at knife-edge inputs whose operands differ within
+ * tolerance. A flipped compare moves the answer to another cell, which no
+ * ULP budget can express. The compiler refuses it by name and the CPU
+ * resolves it instead, which is byte-identical rather than an
+ * approximation.
+ */
+export function worleyFeature(opts: WorleyFeatureOpts = {}): Field<3> {
+  const exact = opts.exact ?? true;
+  const kind = `worleyFeature${exact ? ":exact" : ""}`;
+  // Read here as well as inside the plumbing, because the INVERSE of the
+  // forward transform is this function's own business: the sampler works
+  // in noise space, and undoing `p * frequency + offset` in f64 before
+  // the f32 store is what keeps the returned point at the precision the
+  // caller's own coordinates have.
+  const frequency = opts.frequency ?? 1;
+  // REFUSED, and it is the one option `worleyNoise` takes that this one
+  // cannot. A frequency of 0 maps all of space to a single noise point,
+  // which is a perfectly good thing to ask a DISTANCE (worleyNoise
+  // answers a constant) and an unanswerable thing to ask a POSITION: the
+  // forward map is not injective, so it has no inverse, and undoing it
+  // arithmetically hands back an infinity per lane. Said here rather than
+  // shipped as GIGO because the caller is asking for coordinates and
+  // would get three infinities with nothing naming the cause.
+  if (frequency === 0) {
+    throw new Error(
+      "worleyFeature: frequency 0 has no inverse — it maps every position to the same noise " +
+        "point, so there is no world position to report back. Use a small non-zero frequency " +
+        "for one enormous cell, or worleyNoise if a constant distance is what you wanted.",
+    );
+  }
+  const [ox = 0, oy = 0, oz = 0] = opts.offset ?? [0, 0, 0];
+  const plumbing = noisePlumbing<VecSampler>(
+    kind,
+    WORLEY_SALT,
+    opts,
+    (seed) => (x, y, z, out, at) => {
+      const cx = Math.floor(x);
+      const cy = Math.floor(y);
+      const cz = Math.floor(z);
+      let f1 = Infinity;
+      // The winning feature point itself, in noise space. Tracked instead
+      // of the cell coords `worleyNoise` keeps, because the jitter is the
+      // half that makes it a POINT rather than a lattice site — and it is
+      // already computed on the way to the distance, so this draws no
+      // extra hash.
+      let wpx = 0;
+      let wpy = 0;
+      let wpz = 0;
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const gx = cx + dx;
+            const gy = cy + dy;
+            const gz = cz + dz;
+            const px = gx + hashFloat(hash5(seed, gx, gy, gz, 0));
+            const py = gy + hashFloat(hash5(seed, gx, gy, gz, 1));
+            const pz = gz + hashFloat(hash5(seed, gx, gy, gz, 2));
+            const ddx = px - x;
+            const ddy = py - y;
+            const ddz = pz - z;
+            const d = Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
+            if (d < f1) {
+              f1 = d;
+              wpx = px;
+              wpy = py;
+              wpz = pz;
+            }
+          }
+        }
+      }
+      if (exact) {
+        // The ring bound `worleyNoise` documents, on the f1 branch only:
+        // this output needs the WINNER settled and never the runner-up,
+        // which is the weaker and therefore cheaper condition.
+        let r = 1;
+        while (r < 3 && f1 > r) {
+          r++;
+          for (let dz = -r; dz <= r; dz++) {
+            const az = dz < 0 ? -dz : dz;
+            for (let dy = -r; dy <= r; dy++) {
+              const ay = dy < 0 ? -dy : dy;
+              for (let dx = -r; dx <= r; dx++) {
+                const ax = dx < 0 ? -dx : dx;
+                if (ax !== r && ay !== r && az !== r) continue;
+                const gx = cx + dx;
+                const gy = cy + dy;
+                const gz = cz + dz;
+                const px = gx + hashFloat(hash5(seed, gx, gy, gz, 0));
+                const py = gy + hashFloat(hash5(seed, gx, gy, gz, 1));
+                const pz = gz + hashFloat(hash5(seed, gx, gy, gz, 2));
+                const ddx = px - x;
+                const ddy = py - y;
+                const ddz = pz - z;
+                const d = Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
+                if (d < f1) {
+                  f1 = d;
+                  wpx = px;
+                  wpy = py;
+                  wpz = pz;
+                }
+              }
+            }
+          }
+        }
+      }
+      // The same GIGO guard the `cell` output carries. A non-finite query
+      // makes every candidate distance NaN, which never beats the initial
+      // Infinity, so nothing ever won and wpx/wpy/wpz are still zeros —
+      // and reporting the origin as "the nearest feature" is a plausible
+      // answer to an unanswerable question.
+      if (!Number.isFinite(f1)) {
+        out[at] = Number.NaN;
+        out[at + 1] = Number.NaN;
+        out[at + 2] = Number.NaN;
+        return;
+      }
+      // Divided, not multiplied by a precomputed reciprocal. `1 / f` is
+      // itself rounded, so the product misses the correctly-rounded
+      // quotient by an ulp on about 0.04% of coordinates at some
+      // frequencies — deterministic either way, but this IS the inverse
+      // rather than something within an ulp of it, and three divides sit
+      // under a 27-cell hash walk.
+      out[at] = (wpx - ox) / frequency;
+      out[at + 1] = (wpy - oy) / frequency;
+      out[at + 2] = (wpz - oz) / frequency;
+    },
+  );
+  const { key, pos } = plumbing;
+  const field = makeField<3>(key, 3, (ctx) => {
+    const sample = plumbing.samplerFor(ctx.seed);
+    const posCol = evaluateField(pos, ctx);
+    if (posCol.tupleSize !== 3) {
+      throw new Error(
+        `worleyFeature: position field must have tupleSize 3, got ${posCol.tupleSize}`,
+      );
+    }
+    const n = elementCount(ctx);
+    const p = posCol.data;
+    const out = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      sample(
+        p[i * 3] * frequency + ox,
+        p[i * 3 + 1] * frequency + oy,
+        p[i * 3 + 2] * frequency + oz,
+        out,
+        i * 3,
+      );
+    }
+    return { data: out, tupleSize: 3 };
+  });
+  attachNoiseSpec(field, plumbing, opts, { fn: "worleyFeature", extraOpts: { exact } });
+  return field;
 }

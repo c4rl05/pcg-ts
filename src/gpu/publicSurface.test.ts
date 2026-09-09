@@ -11,7 +11,8 @@ import { surfaceDiff, surfaceOf } from "../publicSurface.testsupport.js";
 
 const GPU_SURFACE = [
   "BUFFER_USAGE", "GpuCompileError", "GpuFieldEvaluator", "MAP_MODE", "WEBGPU_BACKEND",
-  "compileFieldSpec", "deviceTransformsBuffer", "supportedGpuFieldFns",
+  "compileFieldSpec", "deviceTransformsBuffer", "lowerableGpuFieldFns",
+  "supportedGpuFieldFns",
 ] as const;
 
 describe("public surface: pcg-ts/gpu", () => {

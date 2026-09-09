@@ -189,6 +189,7 @@ const SPECIAL_SHAPES: Readonly<Record<string, readonly Slot[]>> = {
   perlinNoise: NOISE_SHAPE,
   simplexNoise: NOISE_SHAPE,
   worleyNoise: NOISE_SHAPE,
+  worleyFeature: NOISE_SHAPE,
 };
 
 /** The one bare-identifier position in the syntax; see {@link SPECIAL_SHAPES}. */

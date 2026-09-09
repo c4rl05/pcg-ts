@@ -4,7 +4,7 @@ import { makeField } from "../fields/index.js";
 import { peekFieldSpec } from "../fields/spec.js";
 import { type FieldSpec, type FieldSpecArg, fieldFromJson, listFieldFns } from "../fields/fieldJson.js";
 import { constSlotValues, paramConstValues } from "./compile.js";
-import { compileFieldSpec, supportedGpuFieldFns } from "./index.js";
+import { compileFieldSpec, lowerableGpuFieldFns, supportedGpuFieldFns } from "./index.js";
 import type { FieldKernelLayout } from "./index.js";
 
 const LAYOUT: FieldKernelLayout = {
@@ -332,6 +332,7 @@ describe("grammar coverage", () => {
     perlinNoise: { fn: "perlinNoise" },
     simplexNoise: { fn: "simplexNoise" },
     worleyNoise: { fn: "worleyNoise" },
+    worleyFeature: { fn: "worleyFeature" },
     fbm: { fn: "fbm", base: "perlinNoise" },
     fract: { fn: "fract", args: [1.5] },
     // A NEGATIVE dividend: the whole point of a floored mod is what it does
@@ -361,7 +362,42 @@ describe("grammar coverage", () => {
     expect(Object.keys(MINIMAL_SPECS).sort()).toEqual(listFieldFns());
   });
 
+  /**
+   * Grammar fns the compiler answers for by REFUSING, which is an answer:
+   * it drives the documented `compile-error` fallback to the CPU. They
+   * stay in the table above so the coverage gate still sees every fn, and
+   * the refusal itself is asserted here rather than skipped — an
+   * exemption would let a fn that quietly started compiling go unnoticed.
+   */
+  const REFUSED: ReadonlySet<string> = new Set(["worleyFeature"]);
+
+  it("does not offer a fn that always refuses as a fix for a typo", () => {
+    // Two lists, and the difference between them is the point. The
+    // handler table has to hold every grammar fn or the coverage gate
+    // above cannot see one go missing; the list a caller is OFFERED after
+    // a typo must not name one that would refuse anyway. `compileNode`'s
+    // unknown-fn message reads the second — it is unreachable through a
+    // valid spec precisely because the first is complete, so what is
+    // asserted here is the function it reads rather than the message.
+    const lowerable = lowerableGpuFieldFns();
+    for (const fn of REFUSED) {
+      expect(supportedGpuFieldFns(), `${fn} keeps its handler`).toContain(fn);
+      expect(lowerable, `${fn} is not offered`).not.toContain(fn);
+    }
+    // Non-vacuity: the offered list is otherwise the whole table.
+    expect(lowerable.length).toBe(supportedGpuFieldFns().length - REFUSED.size);
+    expect(lowerable).toContain("perlinNoise");
+  });
+
   for (const [fn, spec] of Object.entries(MINIMAL_SPECS)) {
+    if (REFUSED.has(fn)) {
+      it(`refuses ${fn} by name`, () => {
+        expect(() => compileFieldSpec(spec as FieldSpecArg, LAYOUT)).toThrow(
+          /is not supported by the WGSL compiler.*compile-error/s,
+        );
+      });
+      continue;
+    }
     it(`compiles ${fn}`, () => {
       const k = compileFieldSpec(spec as FieldSpecArg, LAYOUT);
       expect(k.wgsl).toContain("@compute @workgroup_size(64)");

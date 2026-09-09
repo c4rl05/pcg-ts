@@ -60,8 +60,9 @@ means the fn that reads it).
 
 **It does not touch a noise that does not ask.** A noise field carries its own
 seed *inside its spec*, so `valueNoise` / `perlinNoise` / `simplexNoise` /
-`worleyNoise` / `fbm` — the grammar's actual names, which is what a `fn` field
-must say — are unaffected by a node-level seed unless the SPEC asks, either
+`worleyNoise` / `worleyFeature` / `fbm` — the grammar's actual names, which is
+what a `fn` field must say — are unaffected by a node-level seed unless the
+SPEC asks, either
 through an `opts.seed` written as the tagged `{ "from": "node", "variant": N }`
 or through an `opts.position` that reads the node seed. Measured, not
 assumed: on a fixed

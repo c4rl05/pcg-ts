@@ -20,6 +20,7 @@ import {
   PARITY_LAYOUT,
   DERIVED_FIELDS,
   MINIMAL_SPECS,
+  CPU_ONLY_FNS,
   PARITY_CASES,
   PARITY_COUNT,
   PARITY_SWEEP_COUNTS,
@@ -34,6 +35,19 @@ import { makeParityGeometry } from "./testGeometry.js";
 describe("device-test corpus", () => {
   it("minimal corpus covers every grammar fn (drift pin)", () => {
     expect(Object.keys(MINIMAL_SPECS).sort()).toEqual(listFieldFns());
+  });
+
+  it("the fns held out of the corpus are held out because they refuse", () => {
+    // The exclusion is a measurement, not a licence: if one of these ever
+    // started compiling it would have left the corpus for no reason.
+    expect(CPU_ONLY_FNS.size).toBeGreaterThan(0);
+    for (const fn of CPU_ONLY_FNS) {
+      const spec = MINIMAL_SPECS[fn];
+      expect(spec, fn).toBeDefined();
+      expect(() => compileFieldSpec(spec, PARITY_LAYOUT), fn).toThrow(
+        /is not supported by the WGSL compiler/,
+      );
+    }
   });
 
   it("every corpus spec compiles against the corpus layout", () => {

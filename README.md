@@ -856,8 +856,12 @@ In Node, `npm i -D webgpu` supplies Dawn bindings; the library itself
 depends on nothing.
 
 **The whole grammar compiles** — arithmetic, trig,
-`clamp`/`lerp`/`remap`/`select`/`ramp`, vector ops, and all noise
-including `fbm` and exact worley. Ten nodes resolve their field params on
+`clamp`/`lerp`/`remap`/`select`/`ramp`, vector ops, and the noise
+DISTANCES including `fbm` and exact worley. Two worley answers are
+CPU-only by design and refuse by name rather than approximating: the
+`cell` output and `worleyFeature`, both of which report which feature
+won a comparison, where a rounding that flips the compare moves the
+answer a whole cell rather than an ulp. Ten nodes resolve their field params on
 the device, subgraphs forward the resolver inward, and
 `WorldOptions.gpu` threads one into every cell cook. Element count is
 never a limit: kernels past the 4.19M-element dispatch ceiling chunk
@@ -1087,7 +1091,7 @@ reads as exactly what the rules added.
 has its own chapter above.
 
 A recipe that is only one cook of one graph is not a demo here; it is
-one of the 93 files in `graphs/`, cooked by `pcg cook`, rendered by
+one of the 94 files in `graphs/`, cooked by `pcg cook`, rendered by
 `npm run preview`, editable in the editor, and pictured in [the
 gallery](https://c4rl05.github.io/pcg-ts/gallery.html). All of it runs
 locally from one vite server:

@@ -1131,7 +1131,7 @@ g.<span class="n">output</span>(n, <span class="s">"out"</span>, <span class="s"
     <p>Note the generated id: a code-built node is named <code>&lt;type&gt;_&lt;n&gt;</code>, whereas a node loaded from JSON keeps the id you gave it. Both appear verbatim in error messages and in <code>describe()</code>, so meaningful ids in your documents pay for themselves the first time something fails.</p>
 
     <h3>listFieldFns()</h3>
-    <p>Returns the complete field-expression vocabulary as a sorted array of 63 names. This is the closed set — an <code>fn</code> not in this list is not a field function, and emitting one produces the error in chapter 11.</p>
+    <p>Returns the complete field-expression vocabulary as a sorted array of 64 names. This is the closed set — an <code>fn</code> not in this list is not a field function, and emitting one produces the error in chapter 11.</p>
     <div class="codeblock"><pre><code>[<span class="s">"abs"</span>, <span class="s">"acos"</span>, <span class="s">"add"</span>, <span class="s">"asin"</span>, <span class="s">"atan"</span>, <span class="s">"atan2"</span>, <span class="s">"attribute"</span>, <span class="s">"attributeIs"</span>,
  <span class="s">"byAttribute"</span>, <span class="s">"clamp"</span>, <span class="s">"component"</span>, <span class="s">"constant"</span>, <span class="s">"cos"</span>, <span class="s">"cross"</span>, <span class="s">"distance"</span>,
  <span class="s">"div"</span>, <span class="s">"dot"</span>, <span class="s">"eq"</span>, <span class="s">"exp"</span>, <span class="s">"exp2"</span>, <span class="s">"fbm"</span>, <span class="s">"floor"</span>, <span class="s">"fract"</span>, <span class="s">"fraction"</span>, <span class="s">"ge"</span>,
@@ -1139,7 +1139,7 @@ g.<span class="n">output</span>(n, <span class="s">"out"</span>, <span class="s"
  <span class="s">"mod"</span>, <span class="s">"mul"</span>, <span class="s">"ne"</span>, <span class="s">"nodeSeed"</span>, <span class="s">"normalize"</span>, <span class="s">"param"</span>, <span class="s">"perlinNoise"</span>,
  <span class="s">"position"</span>, <span class="s">"pow"</span>, <span class="s">"ramp"</span>, <span class="s">"randomField"</span>, <span class="s">"randomFrom"</span>, <span class="s">"rem"</span>, <span class="s">"remap"</span>, <span class="s">"select"</span>, <span class="s">"sign"</span>,
  <span class="s">"simplexNoise"</span>, <span class="s">"sin"</span>, <span class="s">"smoothstep"</span>, <span class="s">"sqrt"</span>, <span class="s">"step"</span>, <span class="s">"sub"</span>, <span class="s">"tan"</span>,
- <span class="s">"trunc"</span>, <span class="s">"valueNoise"</span>, <span class="s">"vec"</span>, <span class="s">"worleyNoise"</span>]</code></pre></div>
+ <span class="s">"trunc"</span>, <span class="s">"valueNoise"</span>, <span class="s">"vec"</span>, <span class="s">"worleyFeature"</span>, <span class="s">"worleyNoise"</span>]</code></pre></div>
 
     <h3>listSubgraphs()</h3>
     <p>The third registry, and the one an agent gains most from: the <strong>named primitives</strong>. A primitive is a registered subgraph — a tested recipe with exposed params — that a graph references by name rather than rebuilding out of node types. 37 named primitives ship with the library, and <code>listSubgraphs()</code> returns them as <code>{ name, subgraph, hash, meta }</code>: the canonical payload, its content hash, and a <code>meta</code> block whose <code>title</code> and <code>description</code> say what the recipe is for and how its knobs behave.</p>
@@ -1162,7 +1162,7 @@ pcg nodes                      <span class="c"># -> "60 node types, by category"
 pcg nodes pointGrid
 
 <span class="c"># the field vocabulary, and one fn's allowed keys</span>
-pcg fields                     <span class="c"># -> "63 field fns"</span>
+pcg fields                     <span class="c"># -> "64 field fns"</span>
 pcg fields randomField         <span class="c"># -> usage: { fn: "randomField", key?: 0 | "salt" }</span>
 
 <span class="c"># every command takes --json and prints the machine-readable report instead</span>
@@ -1179,7 +1179,7 @@ pcg nodes pointGrid --json</code></pre></div>
       <tbody>
         <tr><td><a href="https://github.com/C4RL05/pcg-ts/blob/main/docs/nodes.md">docs/nodes.md</a></td><td><a href="https://github.com/C4RL05/pcg-ts/blob/main/docs/nodes.json">docs/nodes.json</a></td><td>Every node type: pins, params, defaults, ranges. The JSON is a plain top-level array of the same 60 entries in the same shape <code>listNodeTypes()</code> returns.</td></tr>
         <tr><td><a href="https://github.com/C4RL05/pcg-ts/blob/main/docs/primitives.md">docs/primitives.md</a></td><td><a href="https://github.com/C4RL05/pcg-ts/blob/main/docs/primitives.json">docs/primitives.json</a></td><td>Every named primitive: its pins, its exposed params with their derived schemas, its content hash, and a <code>pcg run</code> line to cook it standalone.</td></tr>
-        <tr><td><a href="https://github.com/C4RL05/pcg-ts/blob/main/docs/graphs.md">docs/graphs.md</a></td><td><a href="https://github.com/C4RL05/pcg-ts/blob/main/docs/graphs.json">docs/graphs.json</a></td><td>The example corpus: 93 graphs under <code>graphs/</code>, indexed by what each one teaches, with its tags, seed, node types and referenced primitives.</td></tr>
+        <tr><td><a href="https://github.com/C4RL05/pcg-ts/blob/main/docs/graphs.md">docs/graphs.md</a></td><td><a href="https://github.com/C4RL05/pcg-ts/blob/main/docs/graphs.json">docs/graphs.json</a></td><td>The example corpus: 94 graphs under <code>graphs/</code>, indexed by what each one teaches, with its tags, seed, node types and referenced primitives.</td></tr>
       </tbody>
     </table>
     </div>
@@ -1380,16 +1380,19 @@ graph.<span class="n">setParam</span>(inputHandle, <span class="s">"items"</span
                      <span class="s">"stops"</span>: [[<span class="n">0</span>, <span class="n">0</span>], [<span class="n">0.5</span>, <span class="n">1</span>], [<span class="n">1</span>, <span class="n">0</span>]] }   <span class="c">// strictly ascending, clamped at the ends</span></code></pre></div>
 
     <h4>Noise</h4>
-    <p>All noise functions are scalar fields of the sample position, and are pure functions of seed plus position — the evaluation context's seed does not affect them.</p>
+    <p>Noise functions are fields of the sample position, and are pure functions of seed plus position — the evaluation context's seed does not affect them. All are scalar except <code>worleyFeature</code>, which answers a tuple-3 position.</p>
     <div class="codeblock"><pre><code>{ <span class="s">"fn"</span>: <span class="s">"valueNoise"</span> | <span class="s">"perlinNoise"</span> | <span class="s">"simplexNoise"</span>,
   <span class="s">"opts"</span>: { <span class="s">"seed"</span>: <span class="n">0</span>, <span class="s">"frequency"</span>: <span class="n">1</span>, <span class="s">"offset"</span>: [<span class="n">0</span>,<span class="n">0</span>,<span class="n">0</span>], <span class="s">"position"</span>: spec, <span class="s">"normalized"</span>: <span class="k">false</span> } }
 
 { <span class="s">"fn"</span>: <span class="s">"worleyNoise"</span>,
   <span class="s">"opts"</span>: { ...same, <span class="s">"output"</span>: <span class="s">"f1"</span> | <span class="s">"f2"</span> | <span class="s">"f2-f1"</span> | <span class="s">"cell"</span>, <span class="s">"exact"</span>: <span class="k">false</span> } }
 
+{ <span class="s">"fn"</span>: <span class="s">"worleyFeature"</span>,
+  <span class="s">"opts"</span>: { <span class="s">"seed"</span>, <span class="s">"frequency"</span>, <span class="s">"offset"</span>, <span class="s">"position"</span>, <span class="s">"exact"</span>: <span class="k">true</span> } }
+
 { <span class="s">"fn"</span>: <span class="s">"fbm"</span>, <span class="s">"base"</span>: <span class="s">"perlinNoise"</span> | <span class="s">"valueNoise"</span> | <span class="s">"simplexNoise"</span> | <span class="s">"worleyNoise"</span>,
   <span class="s">"opts"</span>: { ...same, <span class="s">"octaves"</span>: <span class="n">4</span>, <span class="s">"lacunarity"</span>: <span class="n">2</span>, <span class="s">"gain"</span>: <span class="n">0.5</span> } }</code></pre></div>
-    <p>Raw output ranges: <code>valueNoise</code> is [0, 1); Perlin and simplex are approximately [-1, 1]; worley <code>f1</code> is [0, ~1.73). The fBm sum is <em>not</em> renormalised, so its range grows with octaves. Rather than hardcoding constants, ask: <code>NOISE_RAW_RANGES</code> gives per-type ranges and <code>noiseOutputRange(field)</code> gives the range of a specific field instance, fBm-aware. Or sidestep the arithmetic entirely with <code>"normalized": true</code>, which affinely remaps the documented raw range to exactly [0, 1] and works on fBm too.</p>
+    <p>Raw output ranges: <code>valueNoise</code> is [0, 1); Perlin and simplex are approximately [-1, 1]; worley <code>f1</code> is [0, ~1.73). <code>worleyFeature</code> has none and takes no <code>normalized</code>: it answers a position, which tracks the query rather than occupying a range, and it refuses <code>frequency: 0</code> because that map has no inverse to report a position through. The fBm sum is <em>not</em> renormalised, so its range grows with octaves. Rather than hardcoding constants, ask: <code>NOISE_RAW_RANGES</code> gives per-type ranges and <code>noiseOutputRange(field)</code> gives the range of a specific field instance, fBm-aware. Or sidestep the arithmetic entirely with <code>"normalized": true</code>, which affinely remaps the documented raw range to exactly [0, 1] and works on fBm too.</p>
 
     <h4>A nested example</h4>
     <div class="codeblock"><pre><code>{ <span class="s">"fn"</span>: <span class="s">"clamp"</span>, <span class="s">"args"</span>: [
@@ -1400,7 +1403,7 @@ graph.<span class="n">setParam</span>(inputHandle, <span class="s">"items"</span
 
     <h3>What an agent can emit — and what it cannot</h3>
     <p>This is the boundary that matters most, because it is asymmetric and easy to get wrong in the safe-looking direction.</p>
-    <p><strong>You can emit any field the grammar describes.</strong> Those 63 functions, nested arbitrarily, are a complete generation target. Fields built from JSON via <code>fieldFromJson</code> carry their spec: <code>getFieldSpec(field)</code> returns it, <code>fieldToJson(field)</code> gives the JSON back, and the round trip is exact — <code>fieldToJson(fieldFromJson(spec))</code> deep-equals <code>spec</code>, verified.</p>
+    <p><strong>You can emit any field the grammar describes.</strong> Those 64 functions, nested arbitrarily, are a complete generation target. Fields built from JSON via <code>fieldFromJson</code> carry their spec: <code>getFieldSpec(field)</code> returns it, <code>fieldToJson(field)</code> gives the JSON back, and the round trip is exact — <code>fieldToJson(fieldFromJson(spec))</code> deep-equals <code>spec</code>, verified.</p>
     <p><strong>You cannot emit a code-authored field, and you cannot serialize one.</strong> A field composed with the code combinators — <code>clamp(add(0.2, mul(worleyNoise(...), 0.9)), 0, 1)</code> — cooks perfectly well but has no spec. <code>getFieldSpec</code> returns <code>undefined</code> for it, and <code>serializeGraph</code> on a graph containing one cannot represent that parameter. There is no specification for arbitrary code-authored fields, and there will not be one, because there is nothing finite to specify.</p>
     <p>Two consequences follow directly, and both are practical rather than theoretical:</p>
     <ul>
@@ -1469,7 +1472,7 @@ normalize,
 param, perlinNoise, position, pow, ramp, randomField, randomFrom, rem, remap, select,
 sign,
 simplexNoise, sin, smoothstep, sqrt, step, sub, tan, trunc, valueNoise, vec,
-worleyNoise
+worleyFeature, worleyNoise
 
 FieldJsonError: $: fn <span class="s">"clamp"</span> expects exactly 3 args, got 2</code></pre></div>
     <p>The <code>$</code> prefix is a path into the spec: nested failures report the position of the offending sub-expression rather than only the root.</p>
@@ -1676,7 +1679,7 @@ cmp a.json b.json</code></pre></div>
     <p>Look up what you are about to type rather than recalling it. From a shell that is two commands, and the answers are the same registries chapter 8 describes:</p>
     <div class="codeblock"><pre><code>pcg nodes pointScatterInBounds   <span class="c"># pins, and every param with its range</span>
 pcg fields fbm                   <span class="c"># the field fn's allowed keys and usage line</span></code></pre></div>
-    <p>Before either, though, ask whether the thing already exists. <code>docs/primitives.md</code> opens with a one-line summary of each named primitive and <code>docs/graphs.md</code> indexes 93 corpus graphs by what each one teaches — and copying the shape of a graph near your goal beats composing one from schemas. A primitive that fits collapses this whole step into one <code>ref</code> node.</p>
+    <p>Before either, though, ask whether the thing already exists. <code>docs/primitives.md</code> opens with a one-line summary of each named primitive and <code>docs/graphs.md</code> indexes 94 corpus graphs by what each one teaches — and copying the shape of a graph near your goal beats composing one from schemas. A primitive that fits collapses this whole step into one <code>ref</code> node.</p>
 
     <h3>2 · Emit</h3>
     <p>Write the document to a file. Use the chapter 9 example verbatim — four nodes, three connections, two outputs — saved as <code>g.json</code>. From here on the file on disk is the artifact; every command below reads it and none of them modifies it.</p>

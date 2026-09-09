@@ -10,7 +10,7 @@ import { perlinNoise } from "./perlin.js";
 import { simplexNoise } from "./simplex.js";
 import { NOISE_RAW_RANGES, hash2, hash5, noiseOutputRange, type NoiseFactory } from "./util.js";
 import { valueNoise } from "./value.js";
-import { worleyNoise, type WorleyNoiseOpts } from "./worley.js";
+import { worleyFeature, worleyNoise, type WorleyNoiseOpts } from "./worley.js";
 
 /** Context over a point cloud with P set from a flat xyz array. */
 function cloudCtx(positions: ArrayLike<number>): EvalContext {
@@ -1037,5 +1037,188 @@ describe("node-derived noise seeds", () => {
     expect(() =>
       fieldToJson(fbm(forwards, { seed: { from: "node", variant: 7 }, octaves: 2 })),
     ).toThrow(/fbm's `base` is not one of the built-in noise factories/);
+  });
+});
+
+describe("worleyFeature", () => {
+  const POS = gridPositions(9, 0.37);
+
+  /** The three lanes of a tuple-3 field, as an array of triples. */
+  function triples(field: Field, positions: ArrayLike<number>): Array<[number, number, number]> {
+    const col = evaluateField(field, cloudCtx(positions));
+    expect(col.tupleSize).toBe(3);
+    const out: Array<[number, number, number]> = [];
+    for (let i = 0; i < col.data.length; i += 3) {
+      out.push([col.data[i] as number, col.data[i + 1] as number, col.data[i + 2] as number]);
+    }
+    return out;
+  }
+
+  it("returns a tuple-3 field", () => {
+    const col = evaluateField(worleyFeature({ seed: 3 }), cloudCtx(POS));
+    expect(col.tupleSize).toBe(3);
+    expect(col.data.length).toBe(POS.length);
+  });
+
+  it("is the point f1 measures the distance to", () => {
+    // The invariant that pins BOTH the winner and the world-space claim
+    // in one number. In noise space the distance is f1; the forward
+    // transform scales by `frequency`, so the world-space distance from
+    // the query to the feature is exactly f1 / ABS(frequency). The
+    // absolute value is not pedantry — a negative frequency mirrors the
+    // sampling and the grammar accepts one, so the unsigned form is the
+    // only one that holds and the signed one reads as true only because
+    // nobody had tried it.
+    for (const frequency of [1, 0.35, 2.5, -1.7]) {
+      const feature = triples(worleyFeature({ seed: 11, frequency }), POS);
+      const f1 = sample(worleyNoise({ seed: 11, frequency, exact: true }), POS);
+      for (let i = 0; i < feature.length; i++) {
+        const [fx, fy, fz] = feature[i] as [number, number, number];
+        const dx = fx - (POS[i * 3] as number);
+        const dy = fy - (POS[i * 3 + 1] as number);
+        const dz = fz - (POS[i * 3 + 2] as number);
+        expect(Math.hypot(dx, dy, dz), `element ${i} at frequency ${frequency}`).toBeCloseTo(
+          (f1[i] as number) / Math.abs(frequency),
+          4,
+        );
+      }
+    }
+  });
+
+  it("undoes the offset as well as the frequency", () => {
+    // Offset moves the sampled point in noise space; a feature reported
+    // in world space must come back to where the query can reach it. The
+    // f1 identity above would pass on a wrong offset only if the error
+    // cancelled in the difference, which it cannot: the offset shifts the
+    // feature and not the query.
+    const feature = triples(worleyFeature({ seed: 7, frequency: 0.8, offset: [3, -2, 5] }), POS);
+    const f1 = sample(
+      worleyNoise({ seed: 7, frequency: 0.8, offset: [3, -2, 5], exact: true }),
+      POS,
+    );
+    for (let i = 0; i < feature.length; i++) {
+      const [fx, fy, fz] = feature[i] as [number, number, number];
+      expect(
+        Math.hypot(fx - (POS[i * 3] as number), fy - (POS[i * 3 + 1] as number), fz - (POS[i * 3 + 2] as number)),
+      ).toBeCloseTo((f1[i] as number) / 0.8, 4);
+    }
+  });
+
+  it("agrees with the cell output about where the borders are", () => {
+    // Two outputs, one diagram. `cell` hashes the winning cell's coords
+    // and this reports the winning feature's position, so they must be
+    // constant over exactly the same regions — a stronger statement than
+    // either alone, and the one that would catch a winner tracked in one
+    // loop and not the other.
+    const cell = sample(worleyNoise({ seed: 19, frequency: 0.6, output: "cell" }), POS);
+    const feature = triples(worleyFeature({ seed: 19, frequency: 0.6 }), POS);
+    const byCell = new Map<number, string>();
+    let distinct = 0;
+    for (let i = 0; i < feature.length; i++) {
+      const key = (feature[i] as number[]).join(",");
+      const seen = byCell.get(cell[i] as number);
+      if (seen === undefined) {
+        byCell.set(cell[i] as number, key);
+        distinct++;
+      } else {
+        expect(key, `element ${i}`).toBe(seen);
+      }
+    }
+    // Non-vacuity: the grid really does span many cells.
+    expect(distinct).toBeGreaterThan(20);
+  });
+
+  it("searches exactly rather than approximately by default", () => {
+    // `exact` defaults TRUE here for the reason it does on `cell`: the
+    // approximate walk's error is a different POINT, not a nudged number.
+    const byDefault = triples(worleyFeature({ seed: 5, frequency: 0.9 }), POS);
+    const spelled = triples(worleyFeature({ seed: 5, frequency: 0.9, exact: true }), POS);
+    expect(byDefault).toEqual(spelled);
+    // Keyed apart, so the two are genuinely different fields and a
+    // round trip cannot silently swap one for the other.
+    expect(worleyFeature({ seed: 5 }).key).not.toBe(worleyFeature({ seed: 5, exact: false }).key);
+    expect(worleyFeature({ seed: 5 }).key).toBe(worleyFeature({ seed: 5, exact: true }).key);
+    // The spec records the EFFECTIVE search, so a round trip cannot drop
+    // it and silently re-parse as the approximate walk — the same thing
+    // the `cell` output pins, and for the same reason.
+    expect(getFieldSpec(worleyFeature({ seed: 5 }))).toMatchObject({ opts: { exact: true } });
+
+    // AND HERE IS THE MISS ITSELF, because a first draft of this test
+    // asserted the two walks never disagree and that was wrong twice
+    // over. The sampling was wrong: a miss needs a query CORNER-ADJACENT
+    // to its cell, and 800 000 uniformly random points contain almost
+    // none, so the null result was luck. The reasoning was worse: there
+    // is one feature per cell, so a feature the 3x3x3 block missed is in
+    // a different cell, and a nearer feature IS the new winner — an f1
+    // miss and a winner change are the same event, which `worleyNoise`
+    // already puts at about 7e-5 of corner-adjacent queries.
+    //
+    // So the default earns itself, and this is the case it earns it on:
+    // the two answers below are about 1.6 world units apart, a whole cell
+    // and then some, where a distance output would have been wrong by
+    // roughly 0.016.
+    const q = [86.00048828125, -57.000492095947266, -191.99951171875];
+    const [approx] = triples(worleyFeature({ seed: 5, exact: false }), q);
+    const [certain] = triples(worleyFeature({ seed: 5, exact: true }), q);
+    const a = approx as [number, number, number];
+    const c = certain as [number, number, number];
+    expect(Math.hypot(a[0] - c[0], a[1] - c[1], a[2] - c[2])).toBeGreaterThan(1.5);
+    // And the two outputs move TOGETHER: the cell hash jumps at the same
+    // query, because they read the same winner.
+    const cellApprox = sample(worleyNoise({ seed: 5, output: "cell", exact: false }), q);
+    const cellExact = sample(worleyNoise({ seed: 5, output: "cell", exact: true }), q);
+    expect(cellApprox[0]).not.toBe(cellExact[0]);
+  });
+
+  it("refuses frequency 0, which has no inverse to report a position through", () => {
+    expect(() => worleyFeature({ frequency: 0 })).toThrow(
+      /worleyFeature: frequency 0 has no inverse.*worleyNoise if a constant distance/s,
+    );
+    expect(() =>
+      fieldFromJson({ fn: "worleyFeature", opts: { frequency: 0 } } as unknown as FieldSpec),
+    ).toThrow(/frequency 0 has no inverse/);
+    // worleyNoise keeps taking it: a constant distance is a fine answer
+    // to a degenerate map, and only the INVERSE is impossible.
+    expect(sample(worleyNoise({ seed: 1, frequency: 0 }), POS).every(Number.isFinite)).toBe(true);
+  });
+
+  it("answers a non-finite query with NaN rather than the origin", () => {
+    const [nan, inf] = triples(
+      worleyFeature({ seed: 2 }),
+      new Float32Array([Number.NaN, 0, 0, Number.POSITIVE_INFINITY, 0, 0]),
+    ) as [[number, number, number], [number, number, number]];
+    for (const v of [...nan, ...inf]) expect(Number.isNaN(v)).toBe(true);
+  });
+
+  it("round-trips through the JSON grammar", () => {
+    const spec = getFieldSpec(worleyFeature({ seed: 4, frequency: 0.5, exact: false }));
+    expect(spec).toEqual({
+      fn: "worleyFeature",
+      opts: { seed: 4, frequency: 0.5, offset: [0, 0, 0], exact: false },
+    });
+    const back = fieldFromJson(spec as FieldSpec);
+    expect(triples(back, POS)).toEqual(triples(worleyFeature({ seed: 4, frequency: 0.5, exact: false }), POS));
+  });
+
+  it("refuses `normalized` by name, with the fix", () => {
+    expect(() =>
+      fieldFromJson({ fn: "worleyFeature", opts: { normalized: true } } as unknown as FieldSpec),
+    ).toThrow(/worleyFeature has no `normalized` option.*world POSITION/s);
+  });
+
+  it("takes a node-seed ref like every other noise", () => {
+    const field = worleyFeature({ seed: { from: "node", variant: 2 } });
+    const at = (seed: number): Array<[number, number, number]> => {
+      const geo = createPointCloud(POS.length / 3);
+      geo.attrs.point.require("P").data.set(POS);
+      const col = evaluateField(field, { geo, domain: "point", seed });
+      const out: Array<[number, number, number]> = [];
+      for (let i = 0; i < col.data.length; i += 3) {
+        out.push([col.data[i] as number, col.data[i + 1] as number, col.data[i + 2] as number]);
+      }
+      return out;
+    };
+    expect(at(1)).toEqual(at(1));
+    expect(at(1)).not.toEqual(at(2));
   });
 });

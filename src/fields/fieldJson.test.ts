@@ -1590,7 +1590,7 @@ describe("variation classification", () => {
    */
   const PER_ELEMENT = [
     "attribute", "attributeIs", "byAttribute", "fbm", "fraction", "index", "param", "perlinNoise",
-    "position", "randomField", "simplexNoise", "valueNoise", "worleyNoise",
+    "position", "randomField", "simplexNoise", "valueNoise", "worleyFeature", "worleyNoise",
   ];
 
   it("every registered fn carries an explicit answer", () => {

@@ -14,7 +14,14 @@
  */
 import { describe, expect, it } from "vitest";
 import { createPointCloud } from "../data/index.js";
-import { fbm, perlinNoise, simplexNoise, valueNoise, worleyNoise } from "../noise/index.js";
+import {
+  fbm,
+  perlinNoise,
+  simplexNoise,
+  valueNoise,
+  worleyFeature,
+  worleyNoise,
+} from "../noise/index.js";
 import { fieldFromJson, listFieldFns } from "./fieldJson.js";
 import {
   abs,
@@ -398,6 +405,8 @@ const CASES: Case[] = [
   { name: "fbm tuned", make: () => fbm(simplexNoise, { octaves: 3, lacunarity: 1.7, gain: 0.6, seed: 11 }) },
   { name: "fbm negative gain", make: () => fbm(perlinNoise, { octaves: 3, gain: -0.5 }) },
   { name: "fbm worley base", make: () => fbm(worleyNoise, { octaves: 2 }) },
+  { name: "worley feature", make: () => worleyFeature({ seed: 3, frequency: 0.5 }) },
+  { name: "worley feature approximate", make: () => worleyFeature({ seed: 3, exact: false }) },
   { name: "fbm normalized", make: () => fbm(perlinNoise, { octaves: 2, normalized: true, frequency: 0.4, offset: [1, 2, 3] }) },
   {
     name: "fbm over a derived position",

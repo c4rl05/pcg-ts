@@ -201,6 +201,7 @@ export const MINIMAL_SPECS: Record<string, FieldSpecArg> = {
   perlinNoise: { fn: "perlinNoise" },
   simplexNoise: { fn: "simplexNoise" },
   worleyNoise: { fn: "worleyNoise" },
+  worleyFeature: { fn: "worleyFeature" },
   fbm: { fn: "fbm", base: "perlinNoise" },
 };
 
@@ -365,10 +366,24 @@ export const EXTENDED_SPECS: Record<string, FieldSpecArg> = {
   forestSpecies: { fn: "ge", args: [{ fn: "randomField", key: "species" }, 0.72] },
 };
 
+/**
+ * Grammar fns the WGSL compiler REFUSES, so they have no parity to
+ * measure: there is no device answer to compare a CPU one against.
+ *
+ * They stay in {@link MINIMAL_SPECS} so the drift pin still sees every
+ * grammar fn — dropping them there is how a fn goes missing quietly — and
+ * are filtered out of {@link paritySpecs} instead. `parity.test.ts`
+ * asserts each one actually refuses, so this is a recorded fact rather
+ * than an exemption.
+ */
+export const CPU_ONLY_FNS: ReadonlySet<string> = new Set(["worleyFeature"]);
+
 /** Every corpus spec as a flat `{ name, spec }` list (minimal + extended). */
 export function paritySpecs(): Array<{ name: string; spec: FieldSpecArg }> {
   return [
-    ...Object.entries(MINIMAL_SPECS).map(([name, spec]) => ({ name: `min:${name}`, spec })),
+    ...Object.entries(MINIMAL_SPECS)
+      .filter(([name]) => !CPU_ONLY_FNS.has(name))
+      .map(([name, spec]) => ({ name: `min:${name}`, spec })),
     ...Object.entries(EXTENDED_SPECS).map(([name, spec]) => ({ name, spec })),
   ];
 }

@@ -290,9 +290,36 @@ type Handler = (spec: Record<string, unknown>, path: string, ctx: CompileCtx) =>
 
 const HANDLERS = new Map<string, Handler>();
 
-/** Field fns the WGSL compiler supports, sorted (derived from its handler table). */
+/**
+ * Field fns the WGSL compiler ANSWERS FOR, sorted (derived from its
+ * handler table).
+ *
+ * "Answers for" rather than "lowers": a handler may refuse on the spot,
+ * and a refusal is an answer — it drives the documented `compile-error`
+ * fallback to the CPU, which is byte-identical rather than an
+ * approximation. `worleyNoise` has refused its `cell` output since that
+ * output existed, and `worleyFeature` refuses outright. What this list
+ * promises is that no grammar fn falls off the compiler's table
+ * unnoticed, which is what the coverage test in `compile.test.ts`
+ * enforces; whether a given spec lowers is decided by its handler.
+ */
 export function supportedGpuFieldFns(): string[] {
   return [...HANDLERS.keys()].sort();
+}
+
+/**
+ * Field fns whose handler ALWAYS refuses, so they never lower.
+ *
+ * Kept apart from the handler table rather than absent from it: the
+ * coverage test needs every grammar fn to have a handler, and a mistyped
+ * fn name needs a "supported fns" list that does not name something which
+ * cannot compile. Both, so both hold.
+ */
+const NEVER_LOWERS: ReadonlySet<string> = new Set(["worleyFeature"]);
+
+/** Field fns the compiler can actually lower, sorted — what a typo is offered. */
+export function lowerableGpuFieldFns(): string[] {
+  return supportedGpuFieldFns().filter((fn) => !NEVER_LOWERS.has(fn));
 }
 
 function compileNode(spec: Record<string, unknown>, path: string, ctx: CompileCtx): Val {
@@ -301,7 +328,7 @@ function compileNode(spec: Record<string, unknown>, path: string, ctx: CompileCt
   if (!handler) {
     throw new GpuCompileError(
       `${path}: field fn "${fn}" is not supported by the WGSL compiler; ` +
-        `supported fns: ${supportedGpuFieldFns().join(", ")}`,
+        `supported fns: ${lowerableGpuFieldFns().join(", ")}`,
     );
   }
   return handler(spec, path, ctx);
@@ -1192,6 +1219,25 @@ HANDLERS.set("worleyNoise", (spec, path, ctx) => {
         : ctx.emit(`${pair.ref}.y - ${pair.ref}.x`, 1);
   if (opts.normalized !== true) return raw;
   return emitNormalized(ctx, raw, NOISE_RAW_RANGES.worleyNoise[output], `${path}.opts.normalized`);
+});
+
+// Refused outright, and the reason is `cell`'s exactly: this reports
+// WHICH feature won a comparison, and f32 rounding is free to flip a
+// comparison at a knife-edge query (see the branchy ops note in the
+// parity section of docs/authoring.md, which names worley cell walks). A
+// flipped compare here does not move the answer by an ulp, it moves it to
+// a different cell — a whole unit away — and no ULP budget can express
+// that. Registered rather than omitted so the grammar-coverage test still
+// sees every fn, and so the message is this one rather than the generic
+// "unknown fn".
+HANDLERS.set("worleyFeature", (_spec, path) => {
+  throw new GpuCompileError(
+    `${path}: worleyFeature is not supported by the WGSL compiler. It reports WHICH feature ` +
+      `point won a comparison, and a comparison that rounds the other way in f32 moves the ` +
+      `answer to a different cell rather than by an ulp, which no tolerance can bound — the ` +
+      `same reason worleyNoise refuses its "cell" output. This spec resolves on the CPU instead ` +
+      `(a "compile-error" fallback), which is byte-identical, not an approximation.`,
+  );
 });
 
 /** Raw output range of an fbm base factory (worley defaults to f1). */

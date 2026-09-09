@@ -61,6 +61,8 @@
  *   frequency?, offset?: [x,y,z], position?: spec, normalized?: false } }`
  * - `{ fn: "worleyNoise", opts?: { ...noise opts, output?: "f1" | "f2" | "f2-f1"
  *   | "cell", exact?: false } }`
+ * - `{ fn: "worleyFeature", opts?: { seed?, frequency?, offset?, position?,
+ *   exact?: true } }` — a tuple-3 POSITION, not a measurement
  * - `{ fn: "fbm", base: "perlinNoise", opts?: { ...noise opts, octaves?,
  *   lacunarity?, gain? } }`
  *
@@ -173,8 +175,10 @@ import {
   type FbmOpts,
   type NodeSeedRef,
   type NoiseOpts,
+  type WorleyFeatureOpts,
   type WorleyNoiseOpts,
   fbm,
+  worleyFeature,
   worleyNoise,
 } from "../noise/index.js";
 // By path, not through `src/noise/index.ts`: the range bound and the
@@ -1978,11 +1982,18 @@ function parseNoiseOpts(
   spec: Record<string, unknown>,
   path: string,
   extraKeys: readonly string[],
+  omitKeys: readonly string[] = [],
 ): { opts: NoiseOpts; raw: Record<string, unknown> } {
   const rawOpts = spec.opts;
   if (rawOpts === undefined) return { opts: {}, raw: {} };
   if (!isPlainObject(rawOpts)) fail(`${path}.opts`, "opts must be an object");
+  // `omitKeys` narrows the SHARED list for one fn, so an option it cannot
+  // honour is not advertised as allowed. Without it a caller reading the
+  // unknown-key refusal is told `normalized` is fine, tries it, and is
+  // refused again by a different message — which is worse than either
+  // refusal alone.
   const allowed = new Set<string>([...NOISE_OPT_KEYS, ...extraKeys]);
+  for (const key of omitKeys) allowed.delete(key);
   for (const key of Object.keys(rawOpts)) {
     if (!allowed.has(key)) {
       fail(`${path}.opts`, `unknown noise option "${key}"; allowed: ${[...allowed].join(", ")}`);
@@ -2173,6 +2184,58 @@ register(
       worleyOpts.exact = raw.exact;
     }
     return worleyNoise(worleyOpts);
+  },
+);
+register(
+  "worleyFeature",
+  "per-element",
+  ["opts"],
+  `{ fn: "worleyFeature", opts?: { seed?, frequency?, offset?, position?, exact? } }`,
+  {
+    description:
+      "WHERE the nearest worley feature point is, as a tuple-3 WORLD POSITION. Every `worleyNoise` " +
+      "output is a measurement about the nearest feature — how far (`f1`), how much nearer than " +
+      "the runner-up (`f2-f1`), which cell won (`cell`) — and a measurement cannot say where to " +
+      "put anything. This is the point itself, which is what makes a worley partition PLACEABLE: " +
+      "subtract `position()` from it for a vector aimed at the cell's own centre, which is what " +
+      "orients scales, shingles, cracked plates and leaf veins, or write it onto a point to snap a " +
+      "cloud to one anchor per cell. Same seed, frequency and offset as `worleyNoise`, so a `cell` " +
+      "hash and this point describe the SAME diagram and can be read side by side. IT IS IN WORLD " +
+      "SPACE and it is the only noise value that is: `frequency` and `offset` are undone before " +
+      "the value is stored, so the result is in the units the graph is written in. There is no " +
+      "`normalized` option — a position has no range to map into, it tracks the query — and this " +
+      "is not a NOISE BASE, because summing octaves of a position means nothing, which is why it " +
+      "is its own fn rather than a fifth `output` on `worleyNoise`. `exact` defaults to TRUE here " +
+      "for the reason it does on `cell`: the cheap 3x3x3 walk's error changes kind when the answer " +
+      "is not a distance, costing a wholly different POINT rather than about 0.016 of one. Like " +
+      "`cell` it does not lower to WGSL — picking a winner is a compare, and a compare that flips " +
+      "at a knife edge moves the answer to another cell, which no ULP budget can express — so it " +
+      "resolves on the CPU, which is byte-identical rather than an approximation.",
+  },
+  (spec, path) => {
+    // Read BEFORE parsing, because `parseNoiseOpts` type-checks
+    // `normalized` on its way past and "normalized must be a boolean" is
+    // the wrong answer to an option that does not exist here.
+    const rawOpts = isPlainObject(spec.opts) ? spec.opts : {};
+    if (rawOpts.normalized !== undefined) {
+      fail(
+        `${path}.opts.normalized`,
+        "worleyFeature has no `normalized` option: it returns a world POSITION, which tracks the " +
+          "sample point and so has no range to map into [0, 1]. Normalize a MEASUREMENT instead " +
+          '({"fn": "worleyNoise", "opts": {"normalized": true}}), or remap this yourself once you ' +
+          "know the bounds your own cloud occupies",
+      );
+    }
+    const { opts, raw } = parseNoiseOpts(spec, path, ["exact"], ["normalized"]);
+    const { normalized: _normalized, ...rest } = opts;
+    const featureOpts: WorleyFeatureOpts = { ...rest };
+    if (raw.exact !== undefined) {
+      if (typeof raw.exact !== "boolean") {
+        fail(`${path}.opts.exact`, "exact must be a boolean");
+      }
+      featureOpts.exact = raw.exact;
+    }
+    return worleyFeature(featureOpts);
   },
 );
 

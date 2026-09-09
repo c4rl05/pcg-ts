@@ -101,7 +101,7 @@ const ROOT_TYPE_SURFACE = [
   "TransferRaycastOptions", "TransferUvOptions", "TransformPointsParams", "UpdateOptions",
   "UpdateStats", "ValueConstantParams", "ValueItem", "VolumeSampleParams", "VoronoiCellsParams",
   "World",
-  "WorldOptions", "WorldStats", "WorldValidationError", "WorleyNoiseOpts", "WrapperKind",
+  "WorldOptions", "WorldStats", "WorldValidationError", "WorleyFeatureOpts", "WorleyNoiseOpts", "WrapperKind",
   "WriteCurveFrameParams", "WriteTangentsParams",
 ] as const;
 

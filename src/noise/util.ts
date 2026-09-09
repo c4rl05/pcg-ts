@@ -410,29 +410,40 @@ export const GRAD3: Float32Array = new Float32Array([
   0, 1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1,
 ]);
 
+/** What {@link noisePlumbing} settles for a noise field before its sampler. */
+export interface NoisePlumbing<S> {
+  /** The field's structural key, already carrying seed, frequency and offset. */
+  readonly key: string;
+  /** The resolved position field the sampler reads. */
+  readonly pos: Field;
+  /** `opts.frequency`, defaulted. */
+  readonly frequency: number;
+  /** `opts.offset`, defaulted — passed on to {@link noiseOptsSpec} verbatim. */
+  readonly offset: readonly number[];
+  /** The seed as the spec must see it: a u32, or the ref that names one. */
+  readonly seed: number | NodeSeedRef;
+  /** This cook's sampler, memoized when the seed comes from the node. */
+  samplerFor(ctxSeed: number): S;
+}
+
 /**
- * Build a noise Field from per-sample logic: resolves the position input,
- * applies frequency/offset, and evaluates `sample` per element into an
- * f32 scalar column. `kindSalt` decorrelates noise types sharing a seed;
- * the effective seed passed to `makeSampler` is `hash2(kindSalt, seed)`,
- * where `seed` is `opts.seed` itself or — for a {@link NodeSeedRef} — the
- * u32 it resolves to against the evaluation context.
- * `rawRange` is the sampler's documented output range; when
- * `opts.normalized` is set the raw field is wrapped with
- * {@link normalize01} (the raw path stays bit-identical).
+ * Everything a noise field settles BEFORE its sampler shape is known:
+ * the seed (literal or node-derived), the frequency and offset, the
+ * position field, the structural key, and the sampler memo.
  *
- * `spec` names the factory in the JSON grammar so the field can carry a
- * derived {@link FieldSpec}; pass a {@link WithheldReason} to derive none
- * and say why.
+ * Extracted so a noise whose answer is not a scalar can share it.
+ * {@link makeNoiseField} is the scalar case and stays the common one;
+ * `worleyFeature` is the other, and returns a position rather than a
+ * measurement, so it has no range, no `normalized` and a width of 3.
+ * Copying forty lines of seed handling into it would have been the kind
+ * of duplicate that drifts on the next seed change.
  */
-export function makeNoiseField(
+export function noisePlumbing<S>(
   kind: string,
   kindSalt: number,
   opts: NoiseOpts,
-  rawRange: NoiseRange,
-  makeSampler: (seed: number) => (x: number, y: number, z: number) => number,
-  spec: NoiseSpecInfo | WithheldReason,
-): Field<1> {
+  makeSampler: (seed: number) => S,
+): NoisePlumbing<S> {
   const seedRef = isNodeSeedRef(opts.seed) ? opts.seed : undefined;
   const seed = seedRef === undefined ? ((opts.seed as number | undefined) ?? 0) >>> 0 : seedRef;
   const frequency = opts.frequency ?? 1;
@@ -447,36 +458,45 @@ export function makeNoiseField(
   // on the last resolved u32. A sampler is a closure over one number, so
   // that is one allocation per distinct seed per field, against a
   // per-element sample loop.
-  const literalSampler = seedRef === undefined ? makeSampler(hash2(kindSalt, seed as number)) : undefined;
+  const literalSampler =
+    seedRef === undefined ? makeSampler(hash2(kindSalt, seed as number)) : undefined;
   let lastSeed = -1;
-  let lastSampler: ((x: number, y: number, z: number) => number) | undefined;
-  const raw = makeField<1>(key, 1, (ctx) => {
-    let sample = literalSampler;
-    if (sample === undefined) {
-      const s = resolveNodeSeed(seedRef as NodeSeedRef, ctx.seed);
+  let lastSampler: S | undefined;
+  return {
+    key,
+    pos,
+    frequency,
+    offset,
+    seed,
+    samplerFor(ctxSeed: number): S {
+      if (literalSampler !== undefined) return literalSampler;
+      const s = resolveNodeSeed(seedRef as NodeSeedRef, ctxSeed);
       if (s !== lastSeed) {
         lastSampler = makeSampler(hash2(kindSalt, s));
         lastSeed = s;
       }
-      sample = lastSampler as (x: number, y: number, z: number) => number;
-    }
-    const posCol = evaluateField(pos, ctx);
-    if (posCol.tupleSize !== 3) {
-      throw new Error(`${kind}: position field must have tupleSize 3, got ${posCol.tupleSize}`);
-    }
-    const n = elementCount(ctx);
-    const p = posCol.data;
-    const out = new Float32Array(n);
-    for (let i = 0; i < n; i++) {
-      out[i] = sample(
-        p[i * 3] * frequency + ox,
-        p[i * 3 + 1] * frequency + oy,
-        p[i * 3 + 2] * frequency + oz,
-      );
-    }
-    return { data: out, tupleSize: 1 };
-  });
-  setNoiseOutputRange(raw, rawRange);
+      return lastSampler as S;
+    },
+  };
+}
+
+/**
+ * Derive the JSON spec for a noise field and attach it, returning what it
+ * decided so a caller that wraps the field (only `normalized` does) can
+ * mirror it.
+ *
+ * Shared for the reason {@link noisePlumbing} is: `worleyFeature` needs
+ * exactly this sequence and copying it would be the duplicate that
+ * drifts on the next spec change. An independent audit pointed out that
+ * the first extraction stopped one step short of it, which was fair.
+ */
+export function attachNoiseSpec(
+  field: Field,
+  plumbing: NoisePlumbing<unknown>,
+  opts: NoiseOpts,
+  spec: NoiseSpecInfo | WithheldReason,
+): { derived: DerivedSpec | undefined; withheld: WithheldReason | undefined } {
+  const { pos, frequency, offset, seed } = plumbing;
   // Only an EXPLICIT position lands in the spec (the default is implied by
   // its absence), so only that one contributes a nesting level.
   const positionSpec = opts.position === undefined ? undefined : peekFieldSpec(pos);
@@ -501,8 +521,57 @@ export function makeNoiseField(
     else if (depth > MAX_SPEC_DEPTH) withheld = { kind: "too-deep" };
     else derived = { spec: { fn: spec.fn, opts: optsSpec.opts }, depth };
   }
-  if (derived !== undefined) attachSpec(raw, derived.spec, derived.depth);
-  else if (withheld !== undefined) recordWithheld(raw, withheld);
+  if (derived !== undefined) attachSpec(field, derived.spec, derived.depth);
+  else if (withheld !== undefined) recordWithheld(field, withheld);
+  return { derived, withheld };
+}
+
+/**
+ * Build a noise Field from per-sample logic: resolves the position input,
+ * applies frequency/offset, and evaluates `sample` per element into an
+ * f32 scalar column. `kindSalt` decorrelates noise types sharing a seed;
+ * the effective seed passed to `makeSampler` is `hash2(kindSalt, seed)`,
+ * where `seed` is `opts.seed` itself or — for a {@link NodeSeedRef} — the
+ * u32 it resolves to against the evaluation context.
+ * `rawRange` is the sampler's documented output range; when
+ * `opts.normalized` is set the raw field is wrapped with
+ * {@link normalize01} (the raw path stays bit-identical).
+ *
+ * `spec` names the factory in the JSON grammar so the field can carry a
+ * derived {@link FieldSpec}; pass a {@link WithheldReason} to derive none
+ * and say why.
+ */
+export function makeNoiseField(
+  kind: string,
+  kindSalt: number,
+  opts: NoiseOpts,
+  rawRange: NoiseRange,
+  makeSampler: (seed: number) => (x: number, y: number, z: number) => number,
+  spec: NoiseSpecInfo | WithheldReason,
+): Field<1> {
+  const plumbing = noisePlumbing(kind, kindSalt, opts, makeSampler);
+  const { key, pos, frequency, offset, seed } = plumbing;
+  const [ox, oy, oz] = offset;
+  const raw = makeField<1>(key, 1, (ctx) => {
+    const sample = plumbing.samplerFor(ctx.seed);
+    const posCol = evaluateField(pos, ctx);
+    if (posCol.tupleSize !== 3) {
+      throw new Error(`${kind}: position field must have tupleSize 3, got ${posCol.tupleSize}`);
+    }
+    const n = elementCount(ctx);
+    const p = posCol.data;
+    const out = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      out[i] = sample(
+        p[i * 3] * frequency + ox,
+        p[i * 3 + 1] * frequency + oy,
+        p[i * 3 + 2] * frequency + oz,
+      );
+    }
+    return { data: out, tupleSize: 1 };
+  });
+  setNoiseOutputRange(raw, rawRange);
+  const { derived, withheld } = attachNoiseSpec(raw, plumbing, opts, spec);
   if (opts.normalized !== true) return raw;
   // The wrapper is a fresh field and needs its own spec; `normalize01`
   // mirrors this one with `normalized: true`, and mirrors the withheld

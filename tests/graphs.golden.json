@@ -5006,6 +5006,50 @@
         ]
       }
     },
+    "basics-worley-feature.json": {
+      "outputs": {
+        "reach": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 4232,
+              "vertex": 4232,
+              "primitive": 2116,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "rot:f32x4",
+                "scale:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "seed:u32",
+                "pairId:u32"
+              ],
+              "primitive": [
+                "primtype:string"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -17.7815,
+                -3.5215,
+                -17.6186
+              ],
+              "max": [
+                16.9887,
+                5.1977,
+                17.9618
+              ]
+            }
+          }
+        ]
+      }
+    },
     "examples-coral.json": {
       "outputs": {
         "coral": [

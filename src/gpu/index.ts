@@ -44,7 +44,8 @@ export {
   type GpuScalarType,
   type KernelInput,
 } from "./types.js";
-export { compileFieldSpec, supportedGpuFieldFns } from "./compile.js";
+export { compileFieldSpec, lowerableGpuFieldFns,
+  supportedGpuFieldFns } from "./compile.js";
 export {
   BUFFER_USAGE,
   MAP_MODE,

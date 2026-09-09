@@ -621,7 +621,7 @@ asked for, at the seams only.
 
 A field spec is `{ "fn": <name>, ...args }`. Entries in `args` arrays
 may be nested specs, finite numbers, or number arrays (plain values wrap
-into `constant`). All 63 fns (`listFieldFns()`):
+into `constant`). All 64 fns (`listFieldFns()`):
 
 - Inputs:
   - `{ fn: "constant", value: 1 | [1, 2, 3] }`
@@ -881,9 +881,10 @@ into `constant`). All 63 fns (`listFieldFns()`):
     way. A TUPLE-valued key is refused — a key is one number, and
     folding three into one is how two different keys come to share a
     stream
-- Noise (scalar fields of the sample position; pure function of seed +
+- Noise (fields of the sample position; pure function of seed +
   position — the context seed reaches them only through the tagged
-  `opts.seed` below):
+  `opts.seed` below). All are SCALAR except `worleyFeature`, which
+  answers a tuple-3 position:
   - `{ fn: "valueNoise" | "perlinNoise" | "simplexNoise", opts?: {
       seed?: int | { from: "node", variant?: int }, frequency?: number,
       offset?: [x, y, z], position?: spec, normalized?: false } }`
@@ -899,6 +900,28 @@ into `constant`). All 63 fns (`listFieldFns()`):
     A value, not an identity — cells can collide. It defaults `exact`
     to true and is the one output that does not lower to WGSL, falling
     back to the CPU with a `compile-error` reason)
+  - `{ fn: "worleyFeature", opts?: { seed?, frequency?, offset?, position?,
+      exact?: true } }`
+    (WHERE the nearest feature point is, as a tuple-3 POSITION — the
+    one noise value that is a position rather than a measurement, so
+    `frequency` and `offset` are undone before it is stored, returning
+    the point to the space of whatever `opts.position` reads, which is
+    WORLD space by default. Two consequences. `frequency: 0` is REFUSED
+    here though `worleyNoise` takes it: it maps all of space to one
+    noise point, so there is no inverse and no position to report. And
+    the substitution the `frequency` refusal recommends elsewhere —
+    scale the POSITION instead — does NOT preserve this output: the
+    inverse undoes `frequency` and `offset` and cannot undo an arbitrary
+    position expression, so the point comes back in that expression's
+    space.
+    Subtract `position()` from it for a vector aimed at the cell's own
+    centre; that is what orients scales, shingles, cracked plates and
+    leaf veins, and no distance output can say it. Same seed, frequency
+    and offset as `worleyNoise` describe the SAME diagram, so `cell` and
+    this can be read side by side. No `normalized` — a position has no
+    range — and not an fbm base, since summing positions means nothing,
+    which is why it is its own fn. `exact` defaults to true and it does
+    not lower to WGSL, for `cell`'s reasons)
   - `{ fn: "fbm", base: "perlinNoise" | "valueNoise" | "simplexNoise" | "worleyNoise",
       opts?: { ...same, octaves?: 4, lacunarity?: 2, gain?: 0.5 } }`
     (sum not renormalized: range grows toward base * (1-gain^octaves)/(1-gain))
@@ -2503,8 +2526,8 @@ stale and a stale skill is worse than none.
 
 ## Example corpus (index: docs/graphs.md, machine-readable: docs/graphs.json)
 
-93 graphs under `graphs/`, each named by what it teaches and
-carrying its own `meta` block: 75 single-concept `basics-*.json`, 10
+94 graphs under `graphs/`, each named by what it teaches and
+carrying its own `meta` block: 76 single-concept `basics-*.json`, 10
 composed `examples-*.json`, plus the 8-file staged pipeline
 `pipeline-*.json` below. Every one cooks from
 JSON alone — no `dataInput`, whose items never survive serialization —
