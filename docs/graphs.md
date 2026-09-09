@@ -4,7 +4,7 @@ Generated from the graphs in [`graphs`](../graphs) by `node scripts/gen-graphs.m
 
 Each file teaches ONE thing and cooks from JSON alone — no runtime-injected data, so `pcg cook <file>` on a clean install reproduces exactly what the corpus test asserts.
 
-91 examples, alphabetical by file:
+92 examples, alphabetical by file:
 
 - [basics-a-draw-that-survives-a-move.json](#basics-a-draw-that-survives-a-movejson) — keep a random draw when the point moves
 - [basics-attribute-from-noise.json](#basics-attribute-from-noisejson) — write an attribute from a noise field
@@ -26,6 +26,7 @@ Each file teaches ONE thing and cooks from JSON alone — no runtime-injected da
 - [basics-fit-runs.json](#basics-fit-runsjson) — fit a line through each row of props, and catch the row that only looks straight
 - [basics-flatten-and-remember.json](#basics-flatten-and-rememberjson) — flatten a cloud onto a plane and keep the height it lost
 - [basics-foreach-per-group.json](#basics-foreach-per-groupjson) — treat each group on its own
+- [basics-gabriel-cells.json](#basics-gabriel-cellsjson) — three ways to connect the same cloud
 - [basics-gather-by-index.json](#basics-gather-by-indexjson) — two hundred props each pick one of five kinds, by drawing its number
 - [basics-gather-on-path.json](#basics-gather-on-pathjson) — gather evenly spaced points into clumps along a curve
 - [basics-inline-field-params.json](#basics-inline-field-paramsjson) — put a field's shaping numbers on knobs without a wrapper
@@ -497,6 +498,24 @@ Cook it: `pcg cook graphs/basics-flatten-and-remember.json --stats`
 **Outputs:** `groups` (from `each`.`out`), `points` (from `rejoin`.`out`)
 
 Cook it: `pcg cook graphs/basics-foreach-per-group.json --stats`
+
+## basics-gabriel-cells.json
+
+**three ways to connect the same cloud**
+
+One scatter, three `connectPoints` modes, offset side by side so the choice is visible rather than described. LEFT is `radius`: every pair under the radius, which is the dense neighbourhood graph and grows with the square of the point count. MIDDLE is `gabriel`: a pair survives only when no third point lies inside the SPHERE having that pair as its diameter. RIGHT is `relativeNeighborhood`: a pair survives only when no third point is closer to BOTH endpoints than they are to each other (the lune test). The Gabriel sphere sits INSIDE that lune, so it catches fewer witnesses and disqualifies fewer pairs — which is why the middle is denser than the right, and why `relativeNeighborhood` is a subset of `gabriel` and `gabriel` a subset of the Delaunay edges. That ordering is the whole reason to have both: the lune test cuts the short cross-links and leaves a branching, road-shaped net, while gabriel keeps them and closes the small polygons, so a scatter reads as plots, cracked ground or leaf venation. All three contain a minimum spanning tree, so none of them disconnects what the radius reached, and all three are halo-exact at `haloWidth >= radius` — a disqualifying witness is always nearer to an endpoint than the pair is to each other, so it is already inside the neighbourhood the cell had to hold anyway. The sphere is CLOSED and a point coincident with an endpoint is not counted as a third point: right angles are common (every unit lattice cell has two), and an open test would keep every one of those diagonals and return a cross-hatch instead of cells.
+
+**Tags:** `basics`, `topology`, `networks`, `voronoi`
+
+**Seed:** 2207
+
+**Node types:** `connectPoints`, `mergePrimitives`, `pointScatterInBounds`, `transformPoints`
+
+**Primitives:** *(none)*
+
+**Outputs:** `networks` (from `all`.`out`)
+
+Cook it: `pcg cook graphs/basics-gabriel-cells.json --stats`
 
 ## basics-gather-by-index.json
 

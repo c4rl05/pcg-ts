@@ -1367,6 +1367,49 @@
         ]
       }
     },
+    "basics-gabriel-cells.json": {
+      "outputs": {
+        "networks": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 420,
+              "vertex": 3872,
+              "primitive": 1936,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "rot:f32x4",
+                "scale:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "seed:u32"
+              ],
+              "primitive": [
+                "primtype:string"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -29.9941,
+                0,
+                -8.9549
+              ],
+              "max": [
+                29.9409,
+                0,
+                8.7229
+              ]
+            }
+          }
+        ]
+      }
+    },
     "basics-gather-by-index.json": {
       "outputs": {
         "catalog": [
