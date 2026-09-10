@@ -89,6 +89,7 @@ export const SITE_INDEX: readonly ChromeGroup[] = [
       { label: "Racetrack", href: "demos/racetrack/" },
       { label: "Road", href: "demos/road/" },
       { label: "Lanterns", href: "demos/lanterns/" },
+      { label: "Cave", href: "demos/cave/" },
     ],
   },
   {

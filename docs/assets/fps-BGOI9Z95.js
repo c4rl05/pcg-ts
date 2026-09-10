@@ -1,0 +1,1 @@
+function e(e){let t=0,n=performance.now();return()=>{t++;let r=performance.now();r-n>=500&&(e((t*1e3/(r-n)).toFixed(0)),t=0,n=r)}}export{e as t};

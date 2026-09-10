@@ -135,6 +135,7 @@ export default defineConfig({
         racetrack: here("demos/racetrack/index.html"),
         road: here("demos/road/index.html"),
         lanterns: here("demos/lanterns/index.html"),
+        cave: here("demos/cave/index.html"),
       },
     },
   },

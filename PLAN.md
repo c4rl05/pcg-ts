@@ -2872,6 +2872,31 @@ allocation. The corpus golden did not move a byte, which is the check
 that says the axis tables reproduce the f32 rounding the samples were
 taken at.
 
+SHIPPED AS A DEMO TOO, `demos/cave`, which is what turned the
+partition claim from a unit test into a thing you can fly through. Up to
+then the tiling was measured by contouring one field over two boxes and
+comparing the overlap; the demo runs it through a real `World` — the
+FIRST `cellMode: "xyz"` level in the repo, because a cave has as much
+above and below as around and every other level here partitions the XZ
+plane and leaves Y unbounded.
+
+Two things it found, both fixed before it worked at all.
+`WorldThreeBinding` could not render a geometry output: it handled
+`instances` and drew geometry only as debug points, so a level whose
+graph ends in a surface node cooked correctly, reached `cellReady`, and
+put an empty group in the scene with no warning. It takes `meshes: true`
+now. And the resolve had to be chunked first, above, or a cell simply
+ignored the cook budget.
+
+What the demo says out loud, because it is the honest thing about
+streaming a volume: it is expensive. The cell count grows with the CUBE
+of the radius where a flat world's grows with the square, and a cell's
+triangles grow with the square of its size over the lattice. Measured on
+its own field, a 32 u cell at a 1 u lattice is about 62 000 triangles.
+The defaults land near a million in the scene, the panel names what each
+dial multiplies, and pushing `speed` past the streaming leaves `pending`
+above zero — which is the budget reporting rather than a stutter.
+
 Still open, and both recorded rather than attempted: the GPU version,
 which the entry below argues is a different and harder problem; and a
 `uv`, which an isosurface has no natural parameterisation for.

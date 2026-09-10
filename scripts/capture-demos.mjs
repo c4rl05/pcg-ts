@@ -128,6 +128,7 @@ const SIZES = {
   racetrack: { css: [1454, 783], out: [1454, 783] },
   road: { css: [1454, 783], out: [1454, 783] },
   lanterns: { css: [1454, 783], out: [1454, 783] },
+  cave: { css: [1454, 783], out: [1454, 783] },
 };
 
 /**
@@ -318,6 +319,21 @@ const DEMOS = [
     // so the framing does not depend on how long the boot took.
     settleWait: () => !!window.__capRow("speed"),
     settle: () => setRangeByLabel("speed", 0),
+  },
+  {
+    id: "cave",
+    path: "demos/cave/",
+    // The camera flies from the first frame, so freeze it BEFORE waiting
+    // for the world — otherwise the framing depends on how long the boot
+    // took, which is the one part of this page that is not reproducible.
+    // Stopped at the start position rather than mid-flight, so the shot
+    // is the same cube of the same world every time.
+    settleWait: () => !!window.__capRow("speed"),
+    settle: () => setRangeByLabel("speed", 0),
+    // "pending is 0" alone would fire before any cell had cooked, since
+    // the first update has not queued anything yet; the triangle count
+    // is what says a surface actually arrived.
+    ready: (s, has) => s["pending"] === "0" && has(s["triangles"]) && s["triangles"] !== "0",
   },
   {
     id: "galaxy",
