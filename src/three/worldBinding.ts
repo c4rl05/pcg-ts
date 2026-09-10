@@ -17,8 +17,11 @@
  */
 import {
   Group,
+  Mesh,
+  MeshStandardMaterial,
   type BufferGeometry,
   type InstancedMesh,
+  type Material,
   type Object3D,
   type Points,
   type PointsMaterial,
@@ -30,6 +33,7 @@ import {
 } from "../fields/index.js";
 import { isDeviceResidentInstances } from "../graph/data.js";
 import type { CellCoord, CellOutputs } from "../runtime/types.js";
+import { toBufferGeometry } from "./convert.js";
 import { toPointsObject } from "./debug.js";
 import type {
   DeviceCellBounds,
@@ -117,6 +121,45 @@ export interface WorldThreeBindingOptions {
    * the rest, and takes the default clone there.
    */
   readonly materialFor?: ToInstancedMeshesOptions["materialFor"];
+  /**
+   * Render `poly` geometry items as a THREE.Mesh (default false).
+   *
+   * WITHOUT IT A GEOMETRY OUTPUT DRAWS NOTHING, and that silence is what
+   * this option is really for. Until it existed this binding handled
+   * `instances` items and nothing else — a level whose graph ends in
+   * `meshFromField`, or in any of the surface nodes, cooked correctly,
+   * reached `cellReady`, and put a black screen in front of whoever
+   * wired it. There is no warning to hang the discovery on, because a
+   * geometry output a host does not want DRAWN is legitimate: a
+   * collision hull, a navigation mesh, something a later level samples.
+   * So the default stays "ignore" and this is how you say otherwise.
+   *
+   * An EMPTY geometry is skipped rather than refused — a cell of a
+   * volume is usually all solid or all void, so most cells of an
+   * isosurface world have no surface in them at all, and that is the
+   * normal case rather than an error. A non-empty geometry carrying no
+   * `poly` primitives IS refused, by `toBufferGeometry`, naming what it
+   * found instead: the caller asked for meshes and got something else,
+   * which is worth hearing about.
+   */
+  readonly meshes?: boolean;
+  /**
+   * Material for the meshes {@link meshes} builds.
+   *
+   * Supplied, it is the CALLER'S: never disposed by `cellEvicted`, by a
+   * recook swap, by a partial build failure or by `dispose()` — the same
+   * ownership {@link materialFor} takes for instanced batches, and for
+   * the same reason, since a material shared across cells that one
+   * evicting cell disposed would blank every cell still drawing through
+   * it.
+   *
+   * Absent, ONE is minted for the whole binding and disposed with it —
+   * not one per cell. A material is a shader program to the renderer, so
+   * per-cell minting climbs the program cache by one entry per cell per
+   * cook, which is the leak the teardown notes below already warn about
+   * for instanced meshes.
+   */
+  readonly meshMaterial?: Material;
   /** Also render geometry items as debug THREE.Points (default false). */
   readonly debugPoints?: boolean;
   /** Debug point size in world units (default 0.1). */
@@ -135,6 +178,8 @@ interface CellEntry {
   readonly group: Group;
   readonly instanced: InstancedMesh[];
   readonly debug: Points<BufferGeometry, PointsMaterial>[];
+  /** Meshes built from `poly` geometry items; each owns its geometry. */
+  readonly meshes: Mesh[];
   /** Adapter-built objects for device-resident batches. */
   readonly device: Object3D[];
   /**
@@ -228,6 +273,25 @@ export class WorldThreeBinding {
       opts.materialFor === undefined ? undefined : { materialFor: opts.materialFor };
   }
 
+  /**
+   * One material for every mesh this binding builds, minted on first use
+   * and disposed with the binding.
+   *
+   * Lazy so a binding that never sees a geometry item allocates nothing,
+   * and SHARED so the renderer compiles one program rather than one per
+   * cell. `ownedMaterial` stays undefined when the caller supplied one,
+   * which is what keeps `dispose` from touching a material it does not
+   * own.
+   */
+  private ownedMaterial: Material | undefined;
+
+  private meshMaterial(): Material {
+    const supplied = this.opts.meshMaterial;
+    if (supplied !== undefined) return supplied;
+    this.ownedMaterial ??= new MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
+    return this.ownedMaterial;
+  }
+
   /** Number of live cell groups (diagnostics/tests). */
   get cellCount(): number {
     return this.cells.size;
@@ -285,7 +349,7 @@ export class WorldThreeBinding {
     const key = cellKey(levelName, coord);
     const group = new Group();
     group.name = key;
-    const entry: CellEntry = { group, instanced: [], debug: [], device: [], handles: [] };
+    const entry: CellEntry = { group, instanced: [], debug: [], meshes: [], device: [], handles: [] };
     try {
       // Inside the guard, not before it: a retain pass that threw
       // half-way (a hostile `outputs` object, a getter with an opinion)
@@ -309,7 +373,21 @@ export class WorldThreeBinding {
                 group.add(mesh);
               }
             }
-          } else if (item.kind === "geometry" && this.opts.debugPoints === true) {
+          } else if (item.kind === "geometry" && this.opts.meshes === true) {
+      // Skipped rather than refused: a cube of a volume is usually all
+      // solid or all void, so most cells of an isosurface world hold no
+      // surface at all and an empty geometry is the normal case.
+      if (item.geo.primitiveCount > 0) {
+        const mesh = new Mesh(toBufferGeometry(item.geo), this.meshMaterial());
+        entry.meshes.push(mesh);
+        group.add(mesh);
+      }
+      if (this.opts.debugPoints === true) {
+        const points = toPointsObject(item.geo, { size: this.opts.debugPointSize ?? 0.1 });
+        entry.debug.push(points);
+        group.add(points);
+      }
+    } else if (item.kind === "geometry" && this.opts.debugPoints === true) {
             const points = toPointsObject(item.geo, {
               size: this.opts.debugPointSize ?? 0.1,
             });
@@ -373,6 +451,15 @@ export class WorldThreeBinding {
         this.removeCell(key);
       });
     }
+    // The one material this binding may have minted, and the only
+    // resource it holds outside a cell. Cleared as well as disposed, so a
+    // binding that is disposed and then somehow used again mints a fresh
+    // one rather than handing out a dead program. Guarded like every
+    // other step: a `dispose` listener that throws must not hide the cell
+    // failures gathered above.
+    const owned = this.ownedMaterial;
+    this.ownedMaterial = undefined;
+    if (owned !== undefined) failure = attempt(failure, () => owned.dispose());
     if (failure !== undefined) throw failure.err;
   }
 
@@ -573,8 +660,18 @@ export class WorldThreeBinding {
       failure = attempt(failure, () => points.geometry.dispose());
       failure = attempt(failure, () => points.material.dispose());
     }
+    // A mesh built from a geometry item owns its BufferGeometry — this
+    // binding converted it from the cell's own cooked geometry, so no
+    // other cell can be drawing from it. Its material is the opposite:
+    // one object shared by every mesh of every cell, so it outlives the
+    // cell and is disposed with the binding (or never, when the caller
+    // supplied it).
+    for (const mesh of entry.meshes) {
+      failure = attempt(failure, () => mesh.geometry.dispose());
+    }
     entry.instanced.length = 0;
     entry.debug.length = 0;
+    entry.meshes.length = 0;
     // Device batches: the renderer-side objects go first (destroying a
     // buffer a live bind group still points at would fault on the next
     // draw), and the handle releases run in a `finally` so a throwing

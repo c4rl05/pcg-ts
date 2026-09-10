@@ -1,7 +1,20 @@
-import { BoxGeometry, Group, InstancedMesh, MeshBasicMaterial, Points, type Material } from "three";
+import {
+  BoxGeometry,
+  Group,
+  InstancedMesh,
+  Mesh,
+  MeshBasicMaterial,
+  Points,
+  type Material,
+} from "three";
 import { describe, expect, it } from "vitest";
-import { createPointCloud } from "../data/index.js";
-import { makeGeometryItem, makeInstancesItem, makeValueItem } from "../graph/index.js";
+import { createPointCloud, createTriangleMesh, setPolylineTopology, type Geometry } from "../data/index.js";
+import {
+  makeGeometryItem,
+  makeInstancesItem,
+  makeValueItem,
+  type DataCollection,
+} from "../graph/index.js";
 import { buildInstanceBatches } from "../spawn/instances.js";
 import { ownsMaterial } from "./instanced.js";
 import { WorldThreeBinding } from "./worldBinding.js";
@@ -375,5 +388,112 @@ describe("WorldThreeBinding materialFor", () => {
     expect(minted).toHaveLength(1);
     binding.dispose();
     expect(disposed).toEqual(minted);
+  });
+});
+
+describe("WorldThreeBinding: geometry as meshes", () => {
+  /** A one-triangle `poly` geometry, the smallest thing that can draw. */
+  function makeTriangle(): Geometry {
+    return createTriangleMesh(new Float32Array([0, 0, 0, 1, 0, 0, 0, 0, 1]), new Uint32Array([0, 1, 2]));
+  }
+
+  const meshOutputs = (): Record<string, DataCollection> => ({
+    main: [makeGeometryItem(makeTriangle())],
+  });
+
+  it("draws nothing for a geometry item unless asked, which is the trap", () => {
+    // The silence this option exists to break. A level whose graph ends
+    // in a surface node cooks correctly, reaches cellReady, and puts an
+    // empty group in the scene — pinned here so the default is a
+    // decision rather than an oversight.
+    const root = new Group();
+    const binding = new WorldThreeBinding({ group: root, assets: makeAssets() });
+    binding.cellReady("cave", [0, 0, 0], meshOutputs());
+    expect((root.children[0] as Group).children).toHaveLength(0);
+  });
+
+  it("builds one Mesh per non-empty geometry item when meshes is on", () => {
+    const root = new Group();
+    const binding = new WorldThreeBinding({ group: root, assets: makeAssets(), meshes: true });
+    binding.cellReady("cave", [1, -2, 3], meshOutputs());
+    const cell = root.children[0] as Group;
+    expect(cell.name).toBe("cave|1,-2,3");
+    const meshes = cell.children.filter((c) => c instanceof Mesh && !(c instanceof InstancedMesh));
+    expect(meshes).toHaveLength(1);
+    expect((meshes[0] as Mesh).geometry.getAttribute("position").count).toBe(3);
+  });
+
+  it("skips an EMPTY geometry rather than refusing it", () => {
+    // Most cubes of a volume hold no surface at all, so this is the
+    // normal case for an isosurface world and not an error.
+    const root = new Group();
+    const binding = new WorldThreeBinding({ group: root, assets: makeAssets(), meshes: true });
+    binding.cellReady("cave", [0, 0, 0], { main: [makeGeometryItem(createPointCloud(0))] });
+    expect((root.children[0] as Group).children).toHaveLength(0);
+    expect(binding.cellCount).toBe(1);
+  });
+
+  it("refuses a NON-EMPTY geometry that carries no poly primitives", () => {
+    // The caller asked for meshes and got something else, which is worth
+    // hearing about — unlike the empty case, which is expected.
+    const root = new Group();
+    const binding = new WorldThreeBinding({ group: root, assets: makeAssets(), meshes: true });
+    const cloud = createPointCloud(3);
+    const idx = new Uint32Array([0, 1, 2]);
+    setPolylineTopology(cloud, idx, new Uint32Array([0]), new Uint32Array([3]));
+    expect(() => binding.cellReady("cave", [0, 0, 0], { main: [makeGeometryItem(cloud)] })).toThrow(
+      /no "poly" primitives/,
+    );
+  });
+
+  it("shares ONE material across every mesh and disposes it with the binding", () => {
+    // A material is a shader program to the renderer, so one per cell
+    // would climb the program cache by one entry per cell per cook.
+    const root = new Group();
+    const binding = new WorldThreeBinding({ group: root, assets: makeAssets(), meshes: true });
+    binding.cellReady("cave", [0, 0, 0], meshOutputs());
+    binding.cellReady("cave", [1, 0, 0], meshOutputs());
+    const materialOf = (i: number): Material =>
+      ((root.children[i] as Group).children[0] as Mesh).material as Material;
+    expect(materialOf(0)).toBe(materialOf(1));
+    let disposed = 0;
+    materialOf(0).addEventListener("dispose", () => disposed++);
+    binding.dispose();
+    expect(disposed).toBe(1);
+  });
+
+  it("never disposes a material the caller supplied", () => {
+    // The ownership `materialFor` takes for instanced batches, for the
+    // same reason: a material shared across cells that one evicting cell
+    // disposed would blank every cell still drawing through it.
+    const root = new Group();
+    const meshMaterial = new MeshBasicMaterial();
+    let disposed = 0;
+    meshMaterial.addEventListener("dispose", () => disposed++);
+    const binding = new WorldThreeBinding({
+      group: root,
+      assets: makeAssets(),
+      meshes: true,
+      meshMaterial,
+    });
+    binding.cellReady("cave", [0, 0, 0], meshOutputs());
+    expect(((root.children[0] as Group).children[0] as Mesh).material).toBe(meshMaterial);
+    binding.cellEvicted("cave", [0, 0, 0]);
+    binding.dispose();
+    expect(disposed).toBe(0);
+  });
+
+  it("disposes a mesh's own geometry on evict", () => {
+    // The geometry is this binding's — converted from the cell's cooked
+    // one, so no other cell can be drawing from it.
+    const root = new Group();
+    const binding = new WorldThreeBinding({ group: root, assets: makeAssets(), meshes: true });
+    binding.cellReady("cave", [4, 4, 4], meshOutputs());
+    const geometry = ((root.children[0] as Group).children[0] as Mesh).geometry;
+    let disposed = 0;
+    geometry.addEventListener("dispose", () => disposed++);
+    binding.cellEvicted("cave", [4, 4, 4]);
+    expect(disposed).toBe(1);
+    expect(root.children).toHaveLength(0);
   });
 });
