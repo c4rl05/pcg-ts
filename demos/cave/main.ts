@@ -31,13 +31,14 @@
  * that fought the camera out of the rock would be a demo about collision.
  */
 import { DoubleSide, Group, MeshStandardMaterial, PointLight } from "three";
+import { createPointCloud, evaluateField, type Field } from "pcg-ts";
 import { World } from "pcg-ts";
 import { WorldThreeBinding } from "pcg-ts/three";
 import { createScene } from "../../shared/scene.js";
 import { createOverlay } from "../../shared/overlay.js";
 import { attachGraphPanel } from "../../shared/graph/panel.js";
 import { attachWordmark } from "../../shared/wordmark.js";
-import { makeCaveLevel, type CaveOptions } from "./levels.js";
+import { caveField, makeCaveLevel, type CaveOptions } from "./levels.js";
 
 /**
  * Per-frame cook budget, in ms. Seven is what the other streaming pages
@@ -91,7 +92,7 @@ const { camera } = scene;
  * Parented to the camera so it travels, and the camera is added to the
  * scene because three only walks lights it can reach from the root.
  */
-const lamp = new PointLight(0xffe4bd, 150, 110, 1.5);
+const lamp = new PointLight(0xffe4bd, 220, 165, 1.4);
 camera.add(lamp);
 scene.scene.add(camera);
 
@@ -123,6 +124,8 @@ const overlay = createOverlay({
 
 let options: CaveOptions = { ...defaults };
 let rig: Rig | undefined;
+/** The level's field, kept so the camera can probe the shape it flies in. */
+let field: Field<1> = caveField(defaults);
 let updating = false;
 let flying = true;
 /**
@@ -146,6 +149,8 @@ const setCells = overlay.addStat("cells");
 const setTris = overlay.addStat("triangles");
 const setPending = overlay.addStat("pending");
 const setCook = overlay.addStat("last cook");
+/** What the camera's own probe says about the way ahead. */
+const setClear = overlay.addStat("ahead");
 
 /** Triangles currently in the scene, summed as cells arrive and leave. */
 const cellTriangles = new Map<string, number>();
@@ -182,6 +187,7 @@ function buildWorld(): void {
     meshMaterial: rockMaterial,
   });
   const built = makeCaveLevel(options);
+  field = built.field;
   panel.set([{ name: "cave", graph: built.graph }]);
 
   const next: Rig = { world: undefined as unknown as World, group, binding, abort: new AbortController(), disposed: false };
@@ -289,6 +295,144 @@ attachWordmark();
 let heading = 0;
 let pitch = 0;
 const keys = new Set<string>();
+
+/**
+ * THE CAMERA ASKS THE SAME FIELD THE WALLS CAME FROM.
+ *
+ * A cave demo whose camera flies into rock is a demo about rock, so this
+ * one looks where it is going — and the interesting part is what it looks
+ * at. Not the triangles: those exist only for the cells that happen to be
+ * cooked, so a camera steering by geometry would be steering by whatever
+ * the cook budget had got to. It samples the FIELD instead, which is a
+ * function of position and answers everywhere, including in the cubes
+ * that have not been contoured yet and the ones that never will be.
+ *
+ * That is the whole argument for fields as a first-class value rather
+ * than a way of authoring meshes: the shape is a question you can ask,
+ * and the mesh is only one of the answers.
+ */
+/** Enough slots for the widest probe below; all are evaluated, unused ones ignored. */
+const PROBE_MAX = 32;
+const probeCloud = createPointCloud(PROBE_MAX);
+const probeP = probeCloud.attrs.point.require("P");
+
+/** Evaluate the field at whatever is currently in the probe cloud. */
+function readProbes(): ArrayLike<number> {
+  return evaluateField(field, { geo: probeCloud, domain: "point", seed: 0 }).data;
+}
+
+/** Yaw and pitch offsets tried each frame, nearest to straight ahead first. */
+const CANDIDATES: readonly (readonly [number, number])[] = [
+  [0, 0],
+  [0.45, 0],
+  [-0.45, 0],
+  [0, 0.4],
+  [0, -0.4],
+  [0.95, 0],
+  [-0.95, 0],
+];
+/** How far ahead to look, in world units — inside the fog, over a cell. */
+const LOOK = 26;
+/** How hard the avoidance turns, in radians per second per unit of offset. */
+const AVOID = 2.2;
+/** Step used to difference the field, and to push out of it. */
+const STEP = 2.5;
+
+/** Unit direction for a yaw/pitch pair. */
+function aim(h: number, v: number): [number, number, number] {
+  return [Math.sin(h) * Math.cos(v), Math.sin(v), Math.cos(h) * Math.cos(v)];
+}
+
+/**
+ * Openness along each candidate direction: the WORST field value at two
+ * distances, so a wall close in cannot hide behind open space beyond it.
+ * Higher is more open, since `inside: "below"` makes low values rock.
+ */
+function lookAround(): number[] {
+  let at = 0;
+  for (const [dy, dp] of CANDIDATES) {
+    const [dx, dyy, dz] = aim(heading + dy, pitch + dp);
+    for (const t of [LOOK * 0.45, LOOK]) {
+      probeP.setTuple(at++, [
+        camera.position.x + dx * t,
+        camera.position.y + dyy * t,
+        camera.position.z + dz * t,
+      ]);
+    }
+  }
+  const v = readProbes();
+  const out: number[] = [];
+  for (let i = 0; i < CANDIDATES.length; i++) {
+    out.push(Math.min(v[i * 2] as number, v[i * 2 + 1] as number));
+  }
+  return out;
+}
+
+/**
+ * How open it is right here, and which way is more open.
+ *
+ * TURNING IS NOT ENOUGH ON ITS OWN, which the first version of this got
+ * wrong: a camera that is already inside rock can only fly along inside
+ * it, however well it steers. So the field is differenced at the camera
+ * and the camera is pushed up that gradient — toward higher values, which
+ * is toward air — whenever it is under the threshold. It is the same
+ * central difference `meshFromField` takes for its normals, on the same
+ * field, which is why the push is always perpendicular to the wall the
+ * shading shows.
+ */
+function clearance(): { here: number; grad: [number, number, number] } {
+  const { x, y, z } = camera.position;
+  probeP.setTuple(0, [x, y, z]);
+  probeP.setTuple(1, [x + STEP, y, z]);
+  probeP.setTuple(2, [x - STEP, y, z]);
+  probeP.setTuple(3, [x, y + STEP, z]);
+  probeP.setTuple(4, [x, y - STEP, z]);
+  probeP.setTuple(5, [x, y, z + STEP]);
+  probeP.setTuple(6, [x, y, z - STEP]);
+  const v = readProbes();
+  return {
+    here: v[0] as number,
+    grad: [
+      (v[1] as number) - (v[2] as number),
+      (v[3] as number) - (v[4] as number),
+      (v[5] as number) - (v[6] as number),
+    ],
+  };
+}
+
+/**
+ * Put the camera somewhere open before the first frame.
+ *
+ * The origin is as likely to be inside rock as out of it, and a demo that
+ * opens on a wall has already lost the argument it is making. Twenty-five
+ * candidates on a coarse lattice, the most open one wins — deterministic,
+ * so the seed alone decides where the flight starts and the capture gets
+ * the same frame every run.
+ */
+function pickStart(): void {
+  const spread = [-24, -12, 0, 12, 24];
+  let bestValue = -Infinity;
+  let best: [number, number, number] = [0, 0, 0];
+  for (const y of spread) {
+    let at = 0;
+    const row: [number, number, number][] = [];
+    for (const x of spread) {
+      for (const z of spread) {
+        row.push([x, y, z]);
+        probeP.setTuple(at++, [x, y, z]);
+      }
+    }
+    const v = readProbes();
+    for (let i = 0; i < row.length; i++) {
+      if ((v[i] as number) > bestValue) {
+        bestValue = v[i] as number;
+        best = row[i] as [number, number, number];
+      }
+    }
+  }
+  camera.position.set(best[0], best[1], best[2]);
+}
+
 addEventListener("keydown", (e) => keys.add(e.key.toLowerCase()));
 addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
 
@@ -303,6 +447,7 @@ addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
   },
 };
 
+pickStart();
 buildWorld();
 
 scene.start((dt) => {
@@ -310,6 +455,41 @@ scene.start((dt) => {
   const climb = (keys.has("w") || keys.has("arrowup") ? 1 : 0) - (keys.has("s") || keys.has("arrowdown") ? 1 : 0);
   heading += turn * 0.9 * dt;
   pitch = Math.max(-0.5, Math.min(0.5, pitch + climb * 0.6 * dt));
+
+  if (flying) {
+    // OUT FIRST, then aim. Being inside rock is the state steering cannot
+    // fix, so the push up the gradient runs whether or not the pilot is
+    // flying manually — it is the floor of the behaviour rather than part
+    // of the autopilot.
+    const { here, grad } = clearance();
+    const inside = here <= options.threshold;
+    if (inside) {
+      const len = Math.hypot(grad[0], grad[1], grad[2]);
+      if (len > 0) {
+        const push = (speed + 6) * dt;
+        camera.position.x += (grad[0] / len) * push;
+        camera.position.y += (grad[1] / len) * push;
+        camera.position.z += (grad[2] / len) * push;
+      }
+    }
+    setClear(inside ? "in rock" : "open");
+
+    // Then steer toward the most open direction, unless the pilot is
+    // steering. Manual input WINS rather than blending: a demo that
+    // fought the arrow keys would be worse than one that flew into a
+    // wall.
+    if (turn === 0 && climb === 0) {
+      const open = lookAround();
+      let best = 0;
+      for (let i = 1; i < open.length; i++) {
+        if ((open[i] as number) > (open[best] as number)) best = i;
+      }
+      const [dy, dp] = CANDIDATES[best] as readonly [number, number];
+      heading += dy * AVOID * dt;
+      pitch = Math.max(-0.5, Math.min(0.5, pitch + dp * AVOID * dt));
+    }
+  }
+
   if (flying) {
     const forward = speed * dt;
     camera.position.x += Math.sin(heading) * Math.cos(pitch) * forward;

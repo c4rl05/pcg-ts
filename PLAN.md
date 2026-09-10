@@ -2888,6 +2888,30 @@ put an empty group in the scene with no warning. It takes `meshes: true`
 now. And the resolve had to be chunked first, above, or a cell simply
 ignored the cook budget.
 
+THE CAMERA SAMPLES THE FIELD, which is the part worth stealing. A cave
+demo whose camera flies into rock is a demo about rock, so this one looks
+where it is going — and what it looks at is not the triangles. Those
+exist only for the cells the cook budget has reached, so a camera
+steering by geometry would be steering by whatever had arrived. It probes
+the FIELD instead, the same object the level contours, which answers
+everywhere including in the cubes that have not been contoured and the
+ones that never will be. That is the argument for fields as a value
+rather than a way of authoring meshes: the shape is a question you can
+ask, and the mesh is one of the answers.
+Two halves, because the first version had only one and it was not enough.
+Seven ray probes pick the most open direction and steer toward it — but
+steering cannot help a camera that is ALREADY inside rock, which just
+flies along inside it. So the field is also differenced at the camera and
+the camera pushed up that gradient whenever it is under the threshold,
+the same central difference `meshFromField` takes for its normals. And
+the opening position is chosen by probing a coarse lattice of candidates,
+because the origin is as likely to be rock as air and a demo that opens
+on a wall has lost its own argument.
+One knock-on worth recording: the capture script froze this page by
+setting `speed` to 0, which stopped it travelling and not TURNING, so the
+picture never settled and the stable-frame wait never ended. It calls the
+page's pause probe now.
+
 What the demo says out loud, because it is the honest thing about
 streaming a volume: it is expensive. The cell count grows with the CUBE
 of the radius where a flat world's grows with the square, and a cell's

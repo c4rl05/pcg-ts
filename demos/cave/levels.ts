@@ -30,6 +30,7 @@ import {
   fbm,
   meshFromField,
   simplexNoise,
+  type Field,
   type LevelDef,
   type MeshFromFieldParams,
   type NodeHandle,
@@ -51,14 +52,36 @@ export interface CaveOptions {
   readonly seed: number;
 }
 
+/**
+ * The shape of the cave, as a field.
+ *
+ * Exported because the page uses it TWICE and it matters that it is the
+ * same object both times: once as the thing `meshFromField` contours into
+ * the walls you see, and once as the thing the camera asks "is there rock
+ * that way" before it steers. A field is a function you can evaluate
+ * anywhere, not a baked artifact, so the flight and the geometry cannot
+ * drift apart — there is nothing for them to disagree about.
+ */
+export function caveField(opts: Pick<CaveOptions, "frequency" | "seed">): Field<1> {
+  return fbm(simplexNoise, {
+    octaves: 4,
+    frequency: opts.frequency,
+    normalized: true,
+    seed: opts.seed,
+  });
+}
+
 /** Handles the demo needs to re-bind without rebuilding the graph. */
 export interface CaveLevel {
   readonly level: LevelDef;
   readonly graph: Graph;
+  /** The same field the graph contours, for the camera to probe. */
+  readonly field: Field<1>;
 }
 
 export function makeCaveLevel(opts: CaveOptions): CaveLevel {
   const graph = new Graph();
+  const field = caveField(opts);
   // Four octaves, normalized, so `threshold` reads as a fraction rather
   // than as a number whose useful range you have to know. The field is
   // built with the COMBINATOR api and still carries a spec, which is what
@@ -73,12 +96,7 @@ export function makeCaveLevel(opts: CaveOptions): CaveLevel {
       // `below` is solid, so the normals point away from the rock and
       // into the space the camera is flying through.
       inside: "below",
-      field: fbm(simplexNoise, {
-        octaves: 4,
-        frequency: opts.frequency,
-        normalized: true,
-        seed: opts.seed,
-      }),
+      field,
     },
     "rock",
   );
@@ -86,6 +104,7 @@ export function makeCaveLevel(opts: CaveOptions): CaveLevel {
 
   return {
     graph,
+    field,
     level: {
       name: "cave",
       cellMode: "xyz",

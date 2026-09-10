@@ -328,8 +328,14 @@ const DEMOS = [
     // took, which is the one part of this page that is not reproducible.
     // Stopped at the start position rather than mid-flight, so the shot
     // is the same cube of the same world every time.
-    settleWait: () => !!window.__capRow("speed"),
-    settle: () => setRangeByLabel("speed", 0),
+    //
+    // THE PROBE AND NOT THE SPEED SLIDER, which the first version used and
+    // which stopped being enough when the camera learned to steer around
+    // rock: at speed 0 it stops travelling but keeps TURNING, so the
+    // picture never settles and the stable-frame wait never ends. The
+    // probe stops the whole flight.
+    settleWait: () => !!window.pcgCave,
+    settle: () => window.pcgCave.pause(true),
     // "pending is 0" alone would fire before any cell had cooked, since
     // the first update has not queued anything yet; the triangle count
     // is what says a surface actually arrived.
