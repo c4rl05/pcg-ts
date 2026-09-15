@@ -19,7 +19,7 @@
  * must run, or the tarball is deleted and the command fails.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -253,7 +253,15 @@ export function packFromRepo({ repoRoot = REPO_ROOT, label = "candidate", role, 
     mkdirSync(dest, { recursive: true });
     const out = join(dest, file);
     if (existsSync(out)) throw new Error(`--from-repo: ${out} already exists; tarballs are immutable, choose another --label`);
-    renameSync(join(scratch, info.filename), out);
+    // The scratch dir is under the OS temp root, which on Windows is often a
+    // different volume from the repo: rename then fails with EXDEV. Copy and
+    // remove instead — the scratch dir is deleted afterwards either way.
+    try {
+      renameSync(join(scratch, info.filename), out);
+    } catch (err) {
+      if (err?.code !== "EXDEV") throw err;
+      copyFileSync(join(scratch, info.filename), out);
+    }
     const manifest = {
       role: role ?? label,
       file,
