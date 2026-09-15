@@ -414,7 +414,7 @@ describe("named subgraph registry", () => {
     registerSubgraph("scatter/grid", recipe);
     registerSubgraph("fill/rows", recipe);
     expect(() => deserializeGraph(refGraph("scater/grid"))).toThrow(
-      /node "s": unknown subgraph "scater\/grid"; registered subgraphs: fill\/rows, scatter\/grid/,
+      /node "s": unknown subgraph "scater\/grid"; did you mean "scatter\/grid"\? registered subgraphs: fill\/rows, scatter\/grid/,
     );
   });
 
@@ -716,7 +716,7 @@ describe("named subgraph registry", () => {
     );
     // The typo that would otherwise turn a pinned ref into an unpinned one.
     expect(() => deserializeGraph(withRef({ name: "test/jitter", hsh: "abc" }))).toThrow(
-      /node "s" ref: unknown key "hsh"; valid keys: name, hash/,
+      /node "s" ref: unknown key "hsh"; did you mean "hash"\? valid keys: name, hash/,
     );
   });
 
@@ -755,7 +755,7 @@ describe("named subgraph registry", () => {
         outputs: [],
       }),
     ).toThrow(
-      /node "s": unknown key "refs"; valid keys: id, type, params, subgraph, ref\. The format is closed .* There is no annotation key: descriptive text belongs in the graph's "meta" block/s,
+      /node "s": unknown key "refs"; did you mean "ref"\? valid keys: id, type, params, subgraph, ref\. The format is closed .* There is no annotation key: descriptive text belongs in the graph's "meta" block/s,
     );
   });
 
@@ -770,7 +770,7 @@ describe("named subgraph registry", () => {
         outputs: [],
       }),
     ).toThrow(
-      /deserializeGraph: unknown key "note"; valid keys: formatVersion, seed, meta, params, nodes, connections, outputs/,
+      /deserializeGraph: unknown key "note"; did you mean "nodes"\? valid keys: formatVersion, seed, meta, params, nodes, connections, outputs/,
     );
   });
 
@@ -783,7 +783,7 @@ describe("named subgraph registry", () => {
       ),
     } as SerializedGraph;
     expect(() => deserializeGraph(typo)).toThrow(
-      /node "sub" subgraph payload: unknown key "prams"; valid keys: graph, inputs, outputs, params/,
+      /node "sub" subgraph payload: unknown key "prams"; did you mean "params"\? valid keys: graph, inputs, outputs, params/,
     );
   });
 
@@ -849,7 +849,7 @@ describe("named subgraph registry", () => {
       ),
     };
     expect(() => deserializeGraph(typo)).toThrow(
-      /node "sub" subgraph inputs\[0\]: unknown key "kind"; valid keys: name, node, pin/,
+      /node "sub" subgraph inputs\[0\]: unknown key "kind"; did you mean "pin"\? valid keys: name, node, pin/,
     );
   });
 

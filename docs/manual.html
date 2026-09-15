@@ -1208,12 +1208,13 @@ pcg nodes pointGrid --json</code></pre></div>
     </dl>
 
     <p><strong>The format is closed, at every object position.</strong> An unrecognized key is an error, not something quietly ignored — inside the graph object, a node, a <code>subgraph</code> payload, a <code>ref</code>, a connection, a declared output, an exposed-pin or exposed-param declaration. This matters more to a generator than to a person, because the near-miss is the dangerous case: <code>"refs"</code> for <code>"ref"</code> under a lenient reader would have cooked as an ordinary subgraph node and reported success. The consequence is deliberate and permanent — a future field an old reader could <em>misread</em> arrives with a <code>formatVersion</code> bump, never by riding along unnoticed:</p>
-    <div class="codeblock"><pre><code>deserializeGraph: unknown key <span class="s">"notes"</span>; valid keys: formatVersion, seed, meta,
-params, nodes, connections, outputs. The format is closed — an unrecognized
+    <div class="codeblock"><pre><code>deserializeGraph: unknown key <span class="s">"notes"</span>; did you mean <span class="s">"nodes"</span>? valid keys:
+formatVersion, seed, meta, params, nodes, connections, outputs. The format is closed — an unrecognized
 key is a typo, not an extension, so a future field arrives with a formatVersion
 bump. There is no annotation key: descriptive text belongs in the graph's
 <span class="s">"meta"</span> block ({ title, description, tags })</code></pre></div>
     <p>That is narrower than "a future format field", and the narrowing is the honest statement of what the rule protects. An added <em>key</em> is not the hazard it was written against: the list is closed, so an old reader meeting <code>params</code> refuses it by name rather than ignoring it, and nothing rides along. <code>meta</code> arrived that way, then the inline <code>value</code> on a <code>param</code> spec node, then <code>params</code> — all at format version 1. The bump is not free either: the subgraph content hash covers <code>formatVersion</code>, so moving it moves every pinned <code>ref</code> in the corpus. Spend it on a change to what an <em>existing</em> key means.</p>
+    <p>One key sits outside the closed lists: <code>"$schema"</code> on the outermost graph object, a string naming the JSON Schema the file follows so an editor can validate and complete it. The loader ignores its value, <code>serializeGraph</code> never writes it and no content hash sees it; a subgraph payload's graph may not carry it.</p>
 
     <h3>A complete working example</h3>
     <p>This document deserializes, cooks, and round-trips as written. It scatters two thousand points over a hundred-unit square, writes a normalized four-octave fBm into the <code>density</code> attribute, keeps points probabilistically against that density, and spawns the survivors.</p>
@@ -1425,8 +1426,11 @@ graph.<span class="n">setParam</span>(inputHandle, <span class="s">"items"</span
 
     <p>Every string below is real output, produced by feeding the named mistake to the published build.</p>
 
-    <div class="code-label">Unknown node type — the message enumerates the entire registry</div>
+    <p>A load reports <em>every</em> fault it finds, not just the first: the message carries one line per fault, and <code>error.diagnostics</code> carries the same faults as records, each with a stable <code>code</code>, a JSON pointer <code>path</code> into the document and, where there is one, the node, param or pin. Where a name was misspelled, the nearest valid names come first as <code>did you mean</code> — a suggestion only; the document is still refused.</p>
+
+    <div class="code-label">Unknown node type — the nearest names first, then the entire registry</div>
     <div class="codeblock"><pre><code>GraphSerializationError: node <span class="s">"a"</span>: unknown node type <span class="s">"pointScatterInBox"</span>;
+did you mean <span class="s">"pointScatterInBounds"</span> or <span class="s">"pointScatterInWorld"</span>?
 registered types: arcTile, attributeReduce, attributeRemap, connectByIndex,
 connectPoints, copyToPoints, dataInput, extrudePolygon, filterByAttribute,
 filterByBounds,
@@ -1445,13 +1449,15 @@ volumeSample, voronoiCells, writeCurveFrame, writeTangents</code></pre></div>
 
     <div class="code-label">Unknown parameter — the message enumerates that type's parameters</div>
     <div class="codeblock"><pre><code>GraphSerializationError: node <span class="s">"a"</span>: unknown param <span class="s">"counts"</span> for type
-<span class="s">"pointScatterInBounds"</span>; valid params: count, boundsMin, boundsMax, seed</code></pre></div>
+<span class="s">"pointScatterInBounds"</span>; did you mean <span class="s">"count"</span>? valid params: count, boundsMin,
+boundsMax, seed</code></pre></div>
 
     <div class="code-label">Range and enum violations — the bound and the legal set are both stated</div>
     <div class="codeblock"><pre><code>GraphSerializationError: node <span class="s">"a"</span> param <span class="s">"count"</span>: -5 is below the minimum 0
 
-GraphSerializationError: node <span class="s">"a"</span> param <span class="s">"mode"</span>: expected one of
-<span class="s">"threshold"</span>, <span class="s">"probabilistic"</span>, got <span class="s">"probablistic"</span></code></pre></div>
+GraphSerializationError: node <span class="s">"a"</span> param <span class="s">"mode"</span>: did you mean
+<span class="s">"probabilistic"</span>? expected one of <span class="s">"threshold"</span>, <span class="s">"probabilistic"</span>, got
+<span class="s">"probablistic"</span></code></pre></div>
 
     <div class="code-label">Wiring — the connection index, the node, and the valid pins</div>
     <div class="codeblock"><pre><code>GraphSerializationError: connections[0]: node <span class="s">"a"</span> has no output pin
@@ -1511,7 +1517,7 @@ WorldValidationError: level 0 (<span class="s">"a"</span>): cookOutputs names un
 
     <h3>The same errors from the CLI</h3>
     <p>The <code>pcg</code> commands print the library's own message verbatim — they do not summarize it, so nothing above is lost by driving the library from a shell instead of from a process. What the CLI adds is a coarse classification the message does not carry: <strong>exit <code>1</code> means a named thing does not exist or the run failed</strong> (every error class in the table above lands here), and <strong>exit <code>2</code> means the command line itself was wrong</strong> — an unknown or repeated flag, a missing flag value, a number of the wrong shape, or contradictory targets like <code>--node</code> together with <code>--output</code>. A correction loop should branch on that first: a <code>2</code> is your invocation and never the graph, so re-reading the graph is wasted work.</p>
-    <p>The registry errors get the same enumerate-the-alternatives treatment for primitives that they get for node types: <code>pcg run fill/scatter-uneven</code> exits <code>1</code> with <code>unknown subgraph "fill/scatter-uneven"; registered subgraphs:</code> followed by every registered name. And <code>pcg validate</code> is the cheapest error surface there is — it deserializes and reports structure without cooking anything, so it catches unknown types, unknown params, bad pins, unknown keys and cycles before any work happens. Run it after every edit.</p>
+    <p>The registry errors get the same enumerate-the-alternatives treatment for primitives that they get for node types: <code>pcg run fill/scatter-uneven</code> exits <code>1</code> with <code>unknown subgraph "fill/scatter-uneven"; did you mean "fill/scatter-even"? registered subgraphs:</code> followed by every registered name. And <code>pcg validate</code> is the cheapest error surface there is — it deserializes and reports structure without cooking anything, so it catches unknown types, unknown params, bad pins, unknown keys and cycles before any work happens. Run it after every edit.</p>
   </section>
 
   <section>

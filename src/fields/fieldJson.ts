@@ -187,12 +187,14 @@ import {
 // documented output ranges are published from the ONE table the noise
 // factories are built against, so `pcg fields perlinNoise` cannot print a
 // range the field does not have.
-import { MAX_SEED_VARIANT, NOISE_RAW_RANGES } from "../noise/util.js";
+import { MAX_FBM_OCTAVES, MAX_SEED_VARIANT, NOISE_RAW_RANGES } from "../noise/util.js";
 import {
   type Diagnostic,
   type DiagnosticCode,
   errorDiagnostics,
 } from "../diagnostics/index.js";
+// By path: the phrasing helper is internal plumbing the barrel does not carry.
+import { suggestNames } from "../diagnostics/didYouMean.js";
 
 /**
  * Errors raised while converting fields to or from JSON specs.
@@ -331,8 +333,134 @@ const NORMALIZED_RANGE: RangeDoc = { min: 0, max: 1, note: "opts.normalized: tru
 
 const FNS = new Map<string, FnDef>();
 
-function fail(path: string, message: string): never {
-  throw new FieldJsonError(`${path}: ${message}`);
+/**
+ * What a refusal states as data beside its sentence. `at` extends the
+ * record's pointer below the message's own path, for a refusal whose
+ * message names the spec but whose offending value is one key down (an
+ * unknown fn is quoted at the spec and located at its `fn`).
+ */
+interface FaultDetail {
+  readonly code?: DiagnosticCode;
+  readonly at?: string;
+  readonly key?: string;
+  readonly got?: unknown;
+  readonly valid?: readonly string[];
+  readonly didYouMean?: readonly string[];
+  readonly fix?: string;
+  readonly expected?: string;
+}
+
+/**
+ * Throw the refusal at `path`, with its record.
+ *
+ * The message is `path: message`, as it always was. The record carries the
+ * same location as an RFC 6901 pointer relative to the spec that was
+ * passed in (`$.args[0].opts` is `/args/0/opts`), which a caller embedding
+ * the spec in a larger document prefixes with the spec's own pointer.
+ */
+function fail(path: string, message: string, detail: FaultDetail = {}): never {
+  const text = `${path}: ${message}`;
+  const pointer = specPathToPointer(path);
+  const got = scalarGot(detail.got);
+  const record: Diagnostic = {
+    code: detail.code ?? "invalid-field-spec",
+    severity: "error",
+    message: text,
+    ...(pointer !== undefined ? { path: pointer + (detail.at ?? "") } : {}),
+    ...(detail.key !== undefined ? { key: detail.key } : {}),
+    ...(got !== undefined ? { got } : {}),
+    ...(detail.valid !== undefined ? { valid: detail.valid } : {}),
+    ...(detail.expected !== undefined ? { expected: detail.expected } : {}),
+    ...(detail.didYouMean !== undefined && detail.didYouMean.length > 0
+      ? { didYouMean: detail.didYouMean }
+      : {}),
+    ...(detail.fix !== undefined ? { fix: detail.fix } : {}),
+  };
+  throw new FieldJsonError(text, [record]);
+}
+
+/**
+ * A value a record may quote as `got`: a string, a boolean, or a finite
+ * number. Anything else is left out rather than quoted — a record list
+ * holding a value JSON cannot carry fails validation as a WHOLE, and the
+ * error would then lose every structured field to protect one.
+ */
+function scalarGot(v: unknown): string | number | boolean | undefined {
+  if (typeof v === "string" || typeof v === "boolean") return v;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  return undefined;
+}
+
+/**
+ * `err` with its record's pointer cut back to the deepest location `spec`
+ * actually holds. A refusal of a MISSING key (`{fn: "attribute"}` with no
+ * `name`) is worded at the key — `$.name: attribute requires…` — but a
+ * pointer to a key that is not there resolves to nothing, so the record
+ * points at the object that lacks it instead. The message is unchanged.
+ */
+function locatedInSpec(err: FieldJsonError, spec: unknown): FieldJsonError {
+  const record = err.diagnostics[0];
+  if (err.diagnostics.length !== 1 || record?.path === undefined || record.path === "") return err;
+  let cur: unknown = spec;
+  let kept = "";
+  for (const token of record.path.slice(1).split("/")) {
+    const key = token.replace(/~1/g, "/").replace(/~0/g, "~");
+    if (typeof cur !== "object" || cur === null || !Object.hasOwn(cur, key)) break;
+    cur = (cur as Record<string, unknown>)[key];
+    kept += `/${token}`;
+  }
+  if (kept === record.path) return err;
+  const moved = new FieldJsonError(err.message, [{ ...record, path: kept }]);
+  if (err.cause !== undefined) moved.cause = err.cause;
+  if (err.stack !== undefined) moved.stack = err.stack;
+  return moved;
+}
+
+/** One RFC 6901 reference token: `~` as `~0`, `/` as `~1`. */
+function pointerToken(segment: string): string {
+  return segment.replace(/~/g, "~0").replace(/\//g, "~1");
+}
+
+/**
+ * The grammar's own path notation as an RFC 6901 pointer relative to the
+ * spec: `$` is `""`, `.key` a key token, `[3]` an index, `["a.b"]` a quoted
+ * key. A `<name>` step is where a BOUND field was spliced in, which is not
+ * part of the document, so the pointer stops at the reference that named
+ * it. `undefined` for a path that does not start at `$` (none does today).
+ */
+function specPathToPointer(path: string): string | undefined {
+  if (!path.startsWith("$")) return undefined;
+  let out = "";
+  let i = 1;
+  while (i < path.length) {
+    const c = path[i];
+    if (c === ".") {
+      let j = i + 1;
+      while (j < path.length && path[j] !== "." && path[j] !== "[" && path[j] !== "<") j++;
+      out += `/${pointerToken(path.slice(i + 1, j))}`;
+      i = j;
+    } else if (c === "[" && path[i + 1] === '"') {
+      // A JSON string literal: find its closing quote, skipping escapes.
+      let j = i + 2;
+      while (j < path.length && path[j] !== '"') j += path[j] === "\\" ? 2 : 1;
+      let key: string;
+      try {
+        key = JSON.parse(path.slice(i + 1, j + 1)) as string;
+      } catch {
+        return out;
+      }
+      out += `/${pointerToken(key)}`;
+      i = j + 2;
+    } else if (c === "[") {
+      const j = path.indexOf("]", i);
+      if (j < 0) return out;
+      out += `/${path.slice(i + 1, j)}`;
+      i = j + 1;
+    } else {
+      return out;
+    }
+  }
+  return out;
 }
 
 function isNumberArray(v: unknown): v is number[] {
@@ -369,9 +497,18 @@ function checkKeys(spec: Record<string, unknown>, def: FnDef, path: string): voi
   const allowed = new Set<string>(["fn", ...def.keys]);
   for (const key of Object.keys(spec)) {
     if (!allowed.has(key)) {
+      const near = suggestNames(key, allowed);
       fail(
         path,
-        `unknown key "${key}" for fn "${String(spec.fn)}"; allowed keys: ${[...allowed].join(", ")} — usage: ${def.usage}`,
+        `unknown key "${key}" for fn "${String(spec.fn)}"; ${near.clause}allowed keys: ${[...allowed].join(", ")} — usage: ${def.usage}`,
+        {
+          code: "unknown-field-key",
+          at: `/${pointerToken(key)}`,
+          key,
+          valid: [...allowed],
+          didYouMean: near.names,
+          ...(near.only !== undefined ? { fix: `rename "${key}" to "${near.only}"` } : {}),
+        },
       );
     }
   }
@@ -383,9 +520,21 @@ function requireArgs(spec: Record<string, unknown>, path: string, arity: number 
     fail(path, `fn "${String(spec.fn)}" requires an "args" array`);
   }
   if (arity === "variadic") {
-    if (args.length < 1) fail(path, `fn "${String(spec.fn)}" requires at least 1 arg, got 0`);
+    if (args.length < 1) {
+      fail(path, `fn "${String(spec.fn)}" requires at least 1 arg, got 0`, {
+        code: "field-arity",
+        at: "/args",
+        got: 0,
+        expected: "at least 1 arg",
+      });
+    }
   } else if (args.length !== arity) {
-    fail(path, `fn "${String(spec.fn)}" expects exactly ${arity} arg${arity === 1 ? "" : "s"}, got ${args.length}`);
+    fail(path, `fn "${String(spec.fn)}" expects exactly ${arity} arg${arity === 1 ? "" : "s"}, got ${args.length}`, {
+      code: "field-arity",
+      at: "/args",
+      got: args.length,
+      expected: `exactly ${arity} arg${arity === 1 ? "" : "s"}`,
+    });
   }
   return args;
 }
@@ -419,7 +568,16 @@ function buildSpec(spec: Record<string, unknown>, path: string): Field {
     }
     const def = FNS.get(fn);
     if (!def) {
-      fail(path, `unknown field fn "${fn}"; valid fns: ${listFieldFns().join(", ")}`);
+      const valid = listFieldFns();
+      const near = suggestNames(fn, valid);
+      fail(path, `unknown field fn "${fn}"; ${near.clause}valid fns: ${valid.join(", ")}`, {
+        code: "unknown-field-fn",
+        at: "/fn",
+        got: fn,
+        valid,
+        didYouMean: near.names,
+        ...(near.only !== undefined ? { fix: `replace "${fn}" with "${near.only}"` } : {}),
+      });
     }
     checkKeys(spec, def, path);
     return def.build(spec, path);
@@ -1959,7 +2117,15 @@ function parseNoiseSeed(raw: unknown, path: string): number | NodeSeedRef {
   if (!isPlainObject(raw)) fail(path, `${SEED_FORMS}; got ${describeValue(raw)}`);
   for (const key of Object.keys(raw)) {
     if (!(SEED_REF_KEYS as readonly string[]).includes(key)) {
-      fail(path, `unknown key ${JSON.stringify(key)} in a node-seed ref; ${SEED_FORMS}`);
+      const near = suggestNames(key, SEED_REF_KEYS);
+      fail(path, `unknown key ${JSON.stringify(key)} in a node-seed ref; ${near.clause}${SEED_FORMS}`, {
+        code: "unknown-field-key",
+        at: `/${pointerToken(key)}`,
+        key,
+        valid: SEED_REF_KEYS,
+        didYouMean: near.names,
+        ...(near.only !== undefined ? { fix: `rename "${key}" to "${near.only}"` } : {}),
+      });
     }
   }
   if (raw.from !== "node") {
@@ -1993,6 +2159,11 @@ function parseNoiseSeed(raw: unknown, path: string): number | NodeSeedRef {
   fail(`${path}.variant`, `${SEED_FORMS}; got ${describeValue(raw.variant)}`);
 }
 
+/** An octave count as the refusal quotes it. */
+function describeOctaves(v: unknown): string {
+  return typeof v === "number" ? String(v) : describeValue(v);
+}
+
 function parseNoiseOpts(
   spec: Record<string, unknown>,
   path: string,
@@ -2011,7 +2182,15 @@ function parseNoiseOpts(
   for (const key of omitKeys) allowed.delete(key);
   for (const key of Object.keys(rawOpts)) {
     if (!allowed.has(key)) {
-      fail(`${path}.opts`, `unknown noise option "${key}"; allowed: ${[...allowed].join(", ")}`);
+      const near = suggestNames(key, allowed);
+      fail(`${path}.opts`, `unknown noise option "${key}"; ${near.clause}allowed: ${[...allowed].join(", ")}`, {
+        code: "unknown-field-key",
+        at: `/${pointerToken(key)}`,
+        key,
+        valid: [...allowed],
+        didYouMean: near.names,
+        ...(near.only !== undefined ? { fix: `rename "${key}" to "${near.only}"` } : {}),
+      });
     }
   }
   const opts: {
@@ -2188,7 +2367,14 @@ register(
     const worleyOpts: WorleyNoiseOpts = { ...opts };
     if (raw.output !== undefined) {
       if (typeof raw.output !== "string" || !WORLEY_OUTPUTS.includes(raw.output)) {
-        fail(`${path}.opts.output`, `output must be one of: ${WORLEY_OUTPUTS.join(", ")}`);
+        const near =
+          typeof raw.output === "string" ? suggestNames(raw.output, WORLEY_OUTPUTS) : suggestNames("", []);
+        fail(`${path}.opts.output`, `${near.clause}output must be one of: ${WORLEY_OUTPUTS.join(", ")}`, {
+          got: raw.output,
+          valid: WORLEY_OUTPUTS,
+          didYouMean: near.names,
+          ...(near.only !== undefined ? { fix: `replace "${String(raw.output)}" with "${near.only}"` } : {}),
+        });
       }
       worleyOpts.output = raw.output as WorleyNoiseOpts["output"];
     }
@@ -2284,17 +2470,39 @@ register(
   },
   (spec, path) => {
     const base = spec.base;
-    if (typeof base !== "string" || !(base in NOISE_FACTORIES)) {
+    // Own keys only: `in` walks the prototype, so `base: "toString"` passed
+    // this check and reached a factory call on Object.prototype.toString.
+    if (typeof base !== "string" || !Object.hasOwn(NOISE_FACTORIES, base)) {
+      const bases = Object.keys(NOISE_FACTORIES);
+      const near = typeof base === "string" ? suggestNames(base, bases) : suggestNames("", []);
       fail(
         `${path}.base`,
-        `fbm base must be one of: ${Object.keys(NOISE_FACTORIES).join(", ")}; got ${describeValue(base) === "a string" ? `"${String(base)}"` : describeValue(base)}`,
+        `${near.clause}fbm base must be one of: ${bases.join(", ")}; got ${describeValue(base) === "a string" ? `"${String(base)}"` : describeValue(base)}`,
+        {
+          got: base,
+          valid: bases,
+          didYouMean: near.names,
+          ...(near.only !== undefined ? { fix: `replace "${String(base)}" with "${near.only}"` } : {}),
+        },
       );
     }
     const { opts, raw } = parseNoiseOpts(spec, path, ["octaves", "lacunarity", "gain"]);
     const fbmOpts: FbmOpts = { ...opts };
     if (raw.octaves !== undefined) {
-      if (typeof raw.octaves !== "number" || !Number.isInteger(raw.octaves) || raw.octaves < 1) {
-        fail(`${path}.opts.octaves`, "octaves must be a positive integer");
+      if (
+        typeof raw.octaves !== "number" ||
+        !Number.isInteger(raw.octaves) ||
+        raw.octaves < 1 ||
+        raw.octaves > MAX_FBM_OCTAVES
+      ) {
+        fail(
+          `${path}.opts.octaves`,
+          `octaves must be an integer from 1 to ${MAX_FBM_OCTAVES}, got ${describeOctaves(raw.octaves)}. Each octave is a ` +
+            "noise layer built and evaluated on its own, and by octave 24 at the default lacunarity the " +
+            "sampled frequency has outrun what a float position resolves, so more octaves cost time and " +
+            "memory and add no detail",
+          { key: "octaves", got: raw.octaves, expected: `an integer from 1 to ${MAX_FBM_OCTAVES}` },
+        );
       }
       fbmOpts.octaves = raw.octaves;
     }
@@ -2726,7 +2934,8 @@ export function fieldFromJson(spec: FieldSpec, bindings?: FieldBindings): Field 
   try {
     field = buildSpec(spec, "$");
   } catch (err) {
-    throw bindings === undefined ? err : withBindingContext(err, spec, bindings);
+    const located = err instanceof FieldJsonError ? locatedInSpec(err, spec) : err;
+    throw bindings === undefined ? located : withBindingContext(located, spec, bindings);
   } finally {
     currentBindings = outer;
   }

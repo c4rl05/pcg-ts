@@ -1478,7 +1478,7 @@ export const ERROR_TRANSCRIPTS: readonly ErrorTranscript[] = [
   },
   {
     mistake: 'filterByDensity with mode "probablistic"',
-    startsWith: 'GraphSerializationError: node "a" param "mode": expected one of',
+    startsWith: 'GraphSerializationError: node "a" param "mode": did you mean',
   },
   {
     mistake: 'a connection from an output pin named "output"',

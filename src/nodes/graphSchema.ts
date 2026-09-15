@@ -43,7 +43,7 @@ import {
   describeSubgraphParams,
 } from "../graph/index.js";
 import { NOISE_BASES, WORLEY_OUTPUTS } from "../noise/bases.js";
-import { MAX_SEED_VARIANT } from "../noise/util.js";
+import { MAX_FBM_OCTAVES, MAX_SEED_VARIANT } from "../noise/util.js";
 import { type JsonSchemaObject, paramJsonSchema } from "./paramTypeMap.js";
 import { type NodeTypeInfo, listNodeTypes } from "./registry.js";
 import { deserializeGraph } from "./serialize.js";
@@ -100,7 +100,8 @@ const OUT_OF_SCOPE =
   "and cycles; the reserved exposed-pin names (each, eachPoint, carry) and the __in_/__out_ plumbing names; " +
   "that a targetless exposed param is read by some expression in its body; and the param VALUES on a wrapper " +
   "node with an INLINE payload, which the payload's own declarations type rather than a registry. null for a graph's connections or outputs, or for a node's params, is read as absent, as the loader " +
-  "reads it. A top-level \"$schema\" string is admitted here; the loader in this release does not yet accept it.";
+  "reads it. A top-level \"$schema\" string is admitted, as the loader admits it — on the outermost graph only, " +
+  "never inside a subgraph payload — and neither reads its value.";
 
 // ---------------------------------------------------------------------------
 // The field grammar's non-`args` keys.
@@ -224,7 +225,7 @@ export const FIELD_SPEC_KEY_RULES: Readonly<Record<string, FieldKeyEntry>> = {
     byFn: {
       fbm: noiseOpts({
         normalized: BOOLEAN,
-        octaves: { type: "integer", minimum: 1 },
+        octaves: { type: "integer", minimum: 1, maximum: MAX_FBM_OCTAVES },
         lacunarity: NUMBER,
         gain: NUMBER,
       }),

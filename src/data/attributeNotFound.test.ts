@@ -48,7 +48,8 @@ describe("AttributeNotFoundError", () => {
     });
     const err = attributeNotFound(geo, "point", "heigth");
     expect(err.didYouMean).toEqual(["height"]);
-    expect(err.message).toMatch(/; available point attributes: [^;]*height; did you mean "height"\?$/);
+    // The suggestion comes BEFORE the list it was drawn from.
+    expect(err.message).toMatch(/ not found; did you mean "height"\? available point attributes: [^;]*height$/);
   });
 
   it("joins several suggestions with commas and a final or", () => {

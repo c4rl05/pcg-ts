@@ -21,12 +21,19 @@ import {
   noiseOptsSpec,
   noiseOutputRange,
   normalize01,
+  MAX_FBM_OCTAVES,
   setNoiseOutputRange,
 } from "./util.js";
 
 /** Options for {@link fbm}. */
 export interface FbmOpts extends NoiseOpts {
-  /** Number of layered octaves. Default 4. */
+  /**
+   * Number of layered octaves. Default 4. Above {@link MAX_FBM_OCTAVES} the
+   * graph format refuses the count, so the field carries no `fbm` spec: it
+   * cooks, and saves as its octave tree only where that tree is describable
+   * on its own (a literal seed, not normalized, within the nesting cap);
+   * otherwise saving it is refused naming the count.
+   */
   octaves?: number;
   /** Frequency multiplier between octaves. Default 2. */
   lacunarity?: number;
@@ -212,6 +219,21 @@ function deriveFbmSpec(
       withheld: {
         kind: "ungrammatical",
         detail: "fbm's `base` is not one of the built-in noise factories",
+      },
+    };
+  }
+  // The grammar's reader refuses more octaves than this (an unbounded count
+  // in a file is an allocation anyone can ask for), so a spec carrying more
+  // would save to a file that cannot be reopened. Withheld instead: where
+  // the octave tree carries an `add` spec of its own that is what gets
+  // written, and it reloads; where it does not (a node-seed ref, or the
+  // normalized wrapper, which the grammar only states on `fbm`), saving is
+  // refused with this reason rather than writing what cannot be read.
+  if (resolved.octaves > MAX_FBM_OCTAVES) {
+    return {
+      withheld: {
+        kind: "ungrammatical",
+        detail: `fbm's \`octaves\` is ${resolved.octaves}, and a graph file carries at most ${MAX_FBM_OCTAVES}`,
       },
     };
   }

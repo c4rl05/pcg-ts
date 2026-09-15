@@ -25,6 +25,8 @@
  */
 import { Graph, type GraphMeta, type NodeHandle } from "../graph/index.js";
 import { inferWrapperKind, type WrapperKind } from "../graph/subgraph.js";
+// By path: the phrasing helper is internal plumbing the diagnostics barrel does not carry.
+import { suggestNames } from "../diagnostics/didYouMean.js";
 import { hashCombine, hashString } from "../random/index.js";
 import {
   deserializeGraph,
@@ -158,7 +160,10 @@ export function stripProbeBreadcrumb(probeId: string, message: string): string {
   // `: ` for the bare form and for `inner graph`; a lone space for a
   // qualifier that is kept, so only the `node "<id>"` token is removed.
   const escaped = probeId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return message.replace(new RegExp(`^node "${escaped}"(?: inner graph)?(?:: | )`), "");
+  // Multiline: a load that collected several faults under the probe
+  // carries the breadcrumb once PER LINE, and every one of them names the
+  // same scaffolding node.
+  return message.replace(new RegExp(`^node "${escaped}"(?: inner graph)?(?:: | )`, "gm"), "");
 }
 
 function fail(name: string, message: string): never {
@@ -475,10 +480,19 @@ export function getRegisteredSubgraph(name: string): RegisteredSubgraph {
  * both use for an unknown name, so the two cannot drift.
  */
 export function unknownSubgraphMessage(name: string): string {
-  const names = [...registry.keys()].sort();
+  const names = registeredSubgraphNames();
   return names.length === 0
     ? `unknown subgraph ${JSON.stringify(name)} — no subgraphs are registered; call registerSubgraph(name, spec) before loading a graph that references one`
-    : `unknown subgraph ${JSON.stringify(name)}; registered subgraphs: ${names.join(", ")}`;
+    : `unknown subgraph ${JSON.stringify(name)}; ${suggestNames(name, names).clause}registered subgraphs: ${names.join(", ")}`;
+}
+
+/**
+ * @internal Every registered name, sorted by code unit: the list
+ * {@link unknownSubgraphMessage} prints and the candidates its suggestion
+ * is drawn from, so a loader's record and its message name the same set.
+ */
+export function registeredSubgraphNames(): string[] {
+  return [...registry.keys()].sort();
 }
 
 /**

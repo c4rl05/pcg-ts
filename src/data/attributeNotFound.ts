@@ -135,8 +135,8 @@ function otherDomainClause(init: AttributeNotFoundInit): { clause: string; fix?:
  *
  * ```text
  * <prefix><domain> attribute "<name>" not found[ on <on>]
- *   ; available <domain> attributes: <names in insertion order, or (none)>
- *   ; did you mean "<a>", "<b>" or "<c>"?
+ *   ; [did you mean "<a>", "<b>" or "<c>"? ]available <domain> attributes:
+ *     <names in insertion order, or (none)>
  *   ; "<name>" exists on the <d1> and <d2> domains — <reader> cannot read
  *     another domain's attribute; promote it first with promoteAttribute
  *     (name "<name>", from "<d1>", to "<domain>"[, mode "first"])
@@ -188,12 +188,15 @@ export class AttributeNotFoundError extends Error {
     const didYouMean = Object.freeze([...init.didYouMean]);
     const frozen: AttributeNotFoundInit = { ...init, available, foundOn, didYouMean };
     const { clause, fix } = otherDomainClause(frozen);
+    // The suggestion leads the list it was drawn from, the layout every
+    // did-you-mean in the library uses: an agent reads the likely fix before
+    // the enumeration, not after it.
     const clauses = [
       `${init.prefix ?? ""}${init.domain} attribute ${JSON.stringify(init.attribute)} not found` +
         (init.on === undefined ? "" : ` on ${init.on}`),
-      `available ${init.domain} attributes: ${available.join(", ") || "(none)"}`,
+      (didYouMean.length > 0 ? `did you mean ${quoted(didYouMean)}? ` : "") +
+        `available ${init.domain} attributes: ${available.join(", ") || "(none)"}`,
     ];
-    if (didYouMean.length > 0) clauses.push(`did you mean ${quoted(didYouMean)}?`);
     if (clause !== "") clauses.push(clause);
     const message = clauses.join("; ") + (init.suffix ?? "");
     super(message, options);

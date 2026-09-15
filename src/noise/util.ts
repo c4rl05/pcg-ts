@@ -31,6 +31,23 @@ import { hashFinalize, hashMix, hashSeed } from "../random/hash.js";
 export const MAX_SEED_VARIANT = 2 ** 24;
 
 /**
+ * The most octaves an fBm may sum, inclusive. A bound and not a taste: the
+ * count is an allocation — `fbm` builds one noise layer per octave, and the
+ * GPU kernel carries one array entry per octave — so an unbounded count is
+ * a way to exhaust memory with one number (`octaves: 1000000` in a graph
+ * file loaded clean and killed the process at cook). And it costs nothing:
+ * by octave 24 at the default lacunarity the sampled frequency has outrun
+ * what a float position resolves. Read in three places that must agree:
+ * the field grammar's reader refuses more, the graph JSON Schema states the
+ * same maximum, and a code-built `fbm` over the bound withholds its `fbm`
+ * spec, so it never writes a file the reader then refuses. Such a field
+ * still cooks; it saves as its octave tree when that tree is itself
+ * describable (a literal seed, not normalized, within the nesting cap), and
+ * otherwise `serializeGraph` refuses it naming the octave count.
+ */
+export const MAX_FBM_OCTAVES = 32;
+
+/**
  * A noise seed derived from the COOKING NODE's seed rather than written
  * as a literal: `hashCombine(ctx.seed, variant)`, in u32 integer math.
  *

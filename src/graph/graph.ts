@@ -8,6 +8,8 @@ import { type Field, isField } from "../fields/index.js";
 import { fieldFromJson } from "../fields/fieldJson.js";
 import { hashCombine, hashString } from "../random/index.js";
 import type { DataCollection } from "./data.js";
+// By path: the phrasing helper is internal plumbing the diagnostics barrel does not carry.
+import { suggestNames } from "../diagnostics/didYouMean.js";
 import { GraphCycleError, GraphValidationError } from "./errors.js";
 import type { NodeDef, PinDef } from "./node.js";
 import { paramScan, refLabel } from "./paramScan.js";
@@ -120,6 +122,42 @@ function checkParamValue(
 
 function listPins(pins: readonly PinDef[]): string {
   return pins.map((p) => `"${p.name}"`).join(", ") || "(none)";
+}
+
+/**
+ * The refusal for a pin `node` does not have: the sentence, with the
+ * nearest pin names before any list, and the record behind it.
+ * `listed` says whether the message goes on to list every pin — `connect`
+ * never has, `disconnect` always has — so each keeps its own shape and
+ * only gains the suggestion.
+ */
+function unknownPinError(
+  nodeId: string,
+  side: "input" | "output",
+  pin: string,
+  pins: readonly PinDef[],
+  listed: boolean,
+): GraphValidationError {
+  const valid = pins.map((p) => p.name);
+  const near = suggestNames(pin, valid);
+  const head = `node "${nodeId}" has no ${side} pin "${pin}"`;
+  const message = listed
+    ? `${head}; ${near.clause}${side} pins: ${listPins(pins)}`
+    : near.clause === ""
+      ? head
+      : `${head}; ${near.clause.trimEnd()}`;
+  return new GraphValidationError(message, undefined, [
+    {
+      code: "unknown-pin",
+      severity: "error",
+      message,
+      nodeId,
+      pin,
+      valid,
+      ...(near.names.length > 0 ? { didYouMean: near.names } : {}),
+      ...(near.only !== undefined ? { fix: `replace "${pin}" with "${near.only}"` } : {}),
+    },
+  ]);
 }
 
 /**
@@ -565,15 +603,17 @@ export class Graph {
     const dst = this.require(to.id);
     const out = findPin(src.def.outputs, fromPin);
     if (!out) {
-      throw new GraphValidationError(`node "${src.id}" has no output pin "${fromPin}"`);
+      throw unknownPinError(src.id, "output", fromPin, src.def.outputs, false);
     }
     const inp = findPin(dst.def.inputs, toPin);
     if (!inp) {
-      throw new GraphValidationError(`node "${dst.id}" has no input pin "${toPin}"`);
+      throw unknownPinError(dst.id, "input", toPin, dst.def.inputs, false);
     }
     if (out.kind !== "any" && inp.kind !== "any" && out.kind !== inp.kind) {
       throw new GraphValidationError(
         `cannot connect ${src.id}.${fromPin} (${out.kind}) to ${dst.id}.${toPin} (${inp.kind})`,
+        undefined,
+        "pin-kind-mismatch",
       );
     }
     if (
@@ -582,6 +622,8 @@ export class Graph {
     ) {
       throw new GraphValidationError(
         `input pin ${dst.id}.${toPin} is already connected (declare it multi to allow several)`,
+        undefined,
+        "input-pin-occupied",
       );
     }
     if (src.id === dst.id || this.reaches(dst.id, src.id)) {
@@ -617,14 +659,10 @@ export class Graph {
     const src = this.require(from.id);
     const dst = this.require(to.id);
     if (!findPin(src.def.outputs, fromPin)) {
-      throw new GraphValidationError(
-        `node "${src.id}" has no output pin "${fromPin}"; output pins: ${listPins(src.def.outputs)}`,
-      );
+      throw unknownPinError(src.id, "output", fromPin, src.def.outputs, true);
     }
     if (!findPin(dst.def.inputs, toPin)) {
-      throw new GraphValidationError(
-        `node "${dst.id}" has no input pin "${toPin}"; input pins: ${listPins(dst.def.inputs)}`,
-      );
+      throw unknownPinError(dst.id, "input", toPin, dst.def.inputs, true);
     }
     const idx = this._connections.findIndex(
       (c) => c.from === from.id && c.fromPin === fromPin && c.to === to.id && c.toPin === toPin,

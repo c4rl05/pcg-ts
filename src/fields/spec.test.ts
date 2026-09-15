@@ -23,6 +23,7 @@ import {
   worleyNoise,
 } from "../noise/index.js";
 import { fieldFromJson, listFieldFns } from "./fieldJson.js";
+import { MAX_FBM_OCTAVES } from "../noise/util.js";
 import {
   abs,
   acos,
@@ -974,8 +975,13 @@ describe("derivation stops at the parser's nesting cap", () => {
     const wrapper = (o: Parameters<typeof perlinNoise>[0] = {}) => perlinNoise(o);
     expect(getFieldSpec(fbm(wrapper, { octaves: 4 }))?.fn).toBe("add");
     expect(getFieldSpec(fbm(wrapper, { octaves: MAX_DEPTH + 44 }))).toBeUndefined();
-    // A built-in base names itself in one level, so it is unaffected.
-    expect(getFieldSpec(fbm(perlinNoise, { octaves: MAX_DEPTH + 44 }))?.fn).toBe("fbm");
+    // A built-in base names itself in one level, up to the grammar's octave
+    // bound. Past it the `fbm` spec is withheld — the reader refuses that
+    // count — and the field falls back to its octave tree, which the depth
+    // cap then stops like any other.
+    expect(getFieldSpec(fbm(perlinNoise, { octaves: MAX_FBM_OCTAVES }))?.fn).toBe("fbm");
+    expect(getFieldSpec(fbm(perlinNoise, { octaves: MAX_FBM_OCTAVES + 1 }))?.fn).toBe("add");
+    expect(getFieldSpec(fbm(perlinNoise, { octaves: MAX_DEPTH + 44 }))).toBeUndefined();
   });
 });
 

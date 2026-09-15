@@ -388,7 +388,9 @@ describe("pcg cli — validate", () => {
       }),
     });
     expect(await runCli(["validate", "/bad.json"], io.io)).toBe(EXIT_FAILURE);
-    expect(io.stderr()).toContain('node "a": unknown node type "scatterPoints"; registered types: ');
+    expect(io.stderr()).toContain(
+      'node "a": unknown node type "scatterPoints"; did you mean "jitterPoints"? registered types: ',
+    );
   });
 
   it("a missing file and invalid JSON are named by the CLI", async () => {

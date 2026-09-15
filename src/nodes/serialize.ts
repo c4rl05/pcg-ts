@@ -8,8 +8,11 @@
 import {
   type Diagnostic,
   type DiagnosticCode,
+  diagnosticsOf,
   errorDiagnostics,
 } from "../diagnostics/index.js";
+// By path: the phrasing helper is internal plumbing the diagnostics barrel does not carry.
+import { type NameSuggestion, suggestNames } from "../diagnostics/didYouMean.js";
 import { isField } from "../fields/index.js";
 import {
   Graph,
@@ -37,12 +40,14 @@ import {
   type WrapperKind,
 } from "../graph/subgraph.js";
 import {
+  FieldJsonError,
   type FieldSpec,
   fieldFromJson,
   fieldToJson,
   inlineParamValuesOf,
 } from "../fields/fieldJson.js";
 import { forEachNode } from "./forEach.js";
+import type { RepeatUntilParams } from "./params.generated.js";
 import { REPEAT_UNTIL_PARAM_SCHEMAS, repeatUntilNode } from "./repeatUntil.js";
 import { getNodeType, hasNodeType, listNodeTypes, standardNode } from "./registry.js";
 import { type ExposedParamDecl, resolveExposedParam } from "./subgraphParams.js";
@@ -59,6 +64,7 @@ import {
   _subgraphKey,
   getRegisteredSubgraph,
   hasRegisteredSubgraph,
+  registeredSubgraphNames,
   unknownSubgraphMessage,
 } from "./subgraphRegistry.js";
 
@@ -274,6 +280,15 @@ const FORMAT_VERSION = 1;
  * lenient nested object is the same near-miss one level down, and the
  * nested positions are where the plausible typos live (`enum` or
  * `acceptsField` on an exposed param, `description` on a declared output).
+ *
+ * ONE key sits outside these lists, deliberately and narrowly:
+ * `$schema` ({@link SCHEMA_KEY}) on the outermost graph object, a string
+ * naming the JSON Schema the file follows. It is not a format field and
+ * cannot be misread as one — the loader never reads its value, the writer
+ * never writes it, and it reaches no content hash — so admitting it opens
+ * no extension door. It is refused in a nested payload's graph, which
+ * `hashableGraph` covers verbatim, and it is not listed among the "valid
+ * keys" a refusal prints, because an author never needs it to fix a typo.
  */
 const GRAPH_KEYS = [
   "formatVersion",
@@ -284,6 +299,13 @@ const GRAPH_KEYS = [
   "connections",
   "outputs",
 ] as const;
+/**
+ * The one key outside {@link GRAPH_KEYS} a graph object may carry, and only
+ * the OUTERMOST one: the JSON Schema the file follows, for an editor's
+ * validation and completion. The loader ignores its value and the writer
+ * never emits it, so it touches no content hash and no round trip.
+ */
+const SCHEMA_KEY = "$schema";
 const GRAPH_PARAM_KEYS = ["name", "value", "targets", "min", "max", "description"] as const;
 const NODE_KEYS = ["id", "type", "params", "subgraph", "ref"] as const;
 const SUBGRAPH_PAYLOAD_KEYS = ["graph", "inputs", "outputs", "params"] as const;
@@ -312,33 +334,242 @@ const DERIVED_EXPOSED_PARAM_KEYS: Readonly<Record<string, string>> = {
   acceptsInfinite: "derived from the targets' registered schemas; remove it",
 };
 
-function fail(message: string): never {
-  throw new GraphSerializationError(message);
+/**
+ * A WRITER refusal: thrown at once, with one record. Serializing stops at
+ * the first thing it cannot write — there is no document yet to point
+ * into, and a live graph that cannot be written has one fault worth
+ * fixing before the next matters. Reading is the opposite case; see
+ * {@link fault}.
+ */
+function fail(message: string, code: DiagnosticCode = "not-serializable"): never {
+  throw new GraphSerializationError(message, code);
+}
+
+/* ------------------------------------------------------------------ *
+ * Reading collects every fault
+ * ------------------------------------------------------------------ */
+
+/**
+ * Most records one load reports. A load that finds more stops looking and
+ * appends one `truncated` record, so a hostile or badly broken file cannot
+ * make the error unbounded — and an author fixing a hundred faults gets
+ * the next hundred on the next load.
+ */
+const MAX_LOAD_RECORDS = 100;
+
+/** A load fault as the reader builds it: a record less its severity, which is always "error". */
+type Fault = Omit<Diagnostic, "severity" | "got"> & { readonly got?: unknown };
+
+/** RFC 6901 JSON pointer suffix for one step. */
+type Locate = (suffix: string) => string;
+
+/** Pointers under `base`, one step at a time. */
+function under(base: string): Locate {
+  return (suffix) => base + suffix;
 }
 
 /**
- * Refuse any key outside `valid`, naming the offender and listing them.
+ * Every pointer collapsed onto `base`: a fault inside a registered recipe
+ * the node reached by `ref` lives in no document the caller holds, so the
+ * nearest place in THEIR document is the reference itself.
+ */
+function collapsedOn(base: string): Locate {
+  return () => base;
+}
+
+/**
+ * `locate` one step further down. Collapsing survives it: a child of a
+ * collapsed locator is still collapsed, where `under(locate(step))` would
+ * start growing a path inside a document nobody holds.
+ */
+function child(locate: Locate, step: string): Locate {
+  return (suffix) => locate(step + suffix);
+}
+
+/** One RFC 6901 reference token: `~` as `~0`, `/` as `~1`. */
+function pointerToken(segment: string): string {
+  return segment.replace(/~/g, "~0").replace(/\//g, "~1");
+}
+
+/**
+ * The pointer to `obj[key]` when the key is present, else to `obj` itself:
+ * a missing value has no location of its own, and a record should point at
+ * something the document holds.
+ */
+function keyPath(obj: Record<string, unknown>, key: string, locate: Locate): string {
+  return Object.hasOwn(obj, key) ? locate(`/${pointerToken(key)}`) : locate("");
+}
+
+/**
+ * A value a record may quote as `got`: a string, a boolean, null or a
+ * finite number. Structured values are left out rather than quoted — the
+ * message already shows them — and anything JSON cannot carry would fail
+ * the record list's validation as a whole.
+ */
+function scalarGot(v: unknown): string | number | boolean | null | undefined {
+  if (v === null || typeof v === "string" || typeof v === "boolean") return v;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  return undefined;
+}
+
+/** A fault as a record, `got` kept only when it is a scalar (see {@link scalarGot}). */
+function toRecord(f: Fault): Diagnostic {
+  const { got, ...rest } = f;
+  const quoted = scalarGot(got);
+  return { ...rest, severity: "error", ...(quoted !== undefined ? { got: quoted } : {}) };
+}
+
+/**
+ * Thrown to abandon the current unit (a node, a param, a connection...).
+ * `record` is the fault that ended it; `undefined` means the fault was
+ * already reported further in — a wrapper whose body failed — and the unit
+ * is only being given up on.
+ */
+class LoadFault extends Error {
+  // A declared field, not a constructor parameter property: some suites run
+  // this source under Node's type stripping, which refuses those.
+  readonly record: Diagnostic | undefined;
+  constructor(record: Diagnostic | undefined) {
+    super(record?.message ?? "abandoned: its faults were already reported");
+    this.name = "LoadFault";
+    this.record = record;
+  }
+}
+
+/** Thrown when the record cap is exceeded; unwinds the whole load. */
+class LoadCapReached extends Error {
+  constructor() {
+    super(`more than ${MAX_LOAD_RECORDS} load faults`);
+    this.name = "LoadCapReached";
+  }
+}
+
+/** End the current unit with this fault. */
+function fault(f: Fault): never {
+  throw new LoadFault(toRecord(f));
+}
+
+/** Where a load's records go. `count` is what THIS sink has taken. */
+interface Sink {
+  report(f: Fault): void;
+  readonly count: number;
+}
+
+/** The records of one whole load, capped. */
+class LoadRecords implements Sink {
+  readonly records: Diagnostic[] = [];
+  get count(): number {
+    return this.records.length;
+  }
+  report(f: Fault): void {
+    if (this.records.length >= MAX_LOAD_RECORDS) throw new LoadCapReached();
+    this.records.push(toRecord(f));
+  }
+}
+
+/**
+ * A sink that restates each fault one level out before passing it on —
+ * how a subgraph body's faults reach the outer load with the wrapper's
+ * breadcrumb and pointer — and counts what came through it.
+ */
+function nestedSink(parent: Sink, restate: (f: Fault) => Fault): Sink {
+  let count = 0;
+  return {
+    get count() {
+      return count;
+    },
+    report(f: Fault) {
+      parent.report(restate(f));
+      count++;
+    },
+  };
+}
+
+/**
+ * Run one unit. A {@link LoadFault} ends only that unit: its record goes
+ * to `sink` and the load moves on to the next unit. Anything else — a
+ * library bug, the cap — is not a load fault and propagates.
+ * Returns whether the unit completed.
+ */
+function unit(sink: Sink, body: () => void): boolean {
+  try {
+    body();
+    return true;
+  } catch (err) {
+    if (!(err instanceof LoadFault)) throw err;
+    if (err.record !== undefined) sink.report(err.record);
+    return false;
+  }
+}
+
+/** The message of any thrown value. */
+function errText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/** `didYouMean` and `fix` for a record, from a suggestion. */
+function suggestionFields(
+  near: NameSuggestion,
+  fix: (to: string) => string,
+): Pick<Fault, "didYouMean" | "fix"> {
+  return {
+    ...(near.names.length > 0 ? { didYouMean: near.names } : {}),
+    ...(near.only !== undefined ? { fix: fix(near.only) } : {}),
+  };
+}
+
+/** The refusal of one key outside `valid`, as a record. */
+function unknownKeyFault(
+  key: string,
+  valid: readonly string[],
+  where: string,
+  note: string,
+  path: string,
+): Fault {
+  const near = suggestNames(key, valid);
+  return {
+    code: "unknown-key",
+    message: `${where}: unknown key ${JSON.stringify(key)}; ${near.clause}valid keys: ${valid.join(", ")}${note}`,
+    path,
+    key,
+    valid: [...valid],
+    ...suggestionFields(near, (to) => `rename "${key}" to "${to}"`),
+  };
+}
+
+/**
+ * Report every key outside `valid`, naming the offender and listing them.
+ * Reported, not thrown: an extra key does not stop the object it sits on
+ * from being read, so the rest of that object is still checked.
  *
  * `refused` names keys that are not merely unrecognized but deliberately
  * not authorable, and says why — a near-miss an author would otherwise
  * repeat.
  */
 function checkKeys(
+  sink: Sink,
   obj: Record<string, unknown>,
   valid: readonly string[],
   where: string,
   note: string,
+  locate: Locate,
   refused: Readonly<Record<string, string>> = {},
 ): void {
   for (const key of Object.keys(obj)) {
     if (valid.includes(key)) continue;
+    const path = locate(`/${pointerToken(key)}`);
     const reason = Object.prototype.hasOwnProperty.call(refused, key) ? refused[key] : undefined;
     if (reason !== undefined) {
-      fail(
-        `${where}: key ${JSON.stringify(key)} cannot be authored — it is ${reason}. Valid keys: ${valid.join(", ")}`,
-      );
+      sink.report({
+        code: "unauthorable-key",
+        message: `${where}: key ${JSON.stringify(key)} cannot be authored — it is ${reason}. Valid keys: ${valid.join(", ")}`,
+        path,
+        key,
+        valid: [...valid],
+      });
+      continue;
     }
-    fail(`${where}: unknown key ${JSON.stringify(key)}; valid keys: ${valid.join(", ")}${note}`);
+    sink.report(unknownKeyFault(key, valid, where, note, path));
   }
 }
 
@@ -423,7 +654,7 @@ standardNode<Record<string, never>>({
  * ones; see {@link REPEAT_UNTIL_PARAM_SCHEMAS}, which is the single
  * definition both the factory and this entry read.
  */
-standardNode<{ maxRounds: number; settleAttr: string }>({
+standardNode<RepeatUntilParams>({
   type: "repeatUntil",
   category: "composite",
   // See the `subgraph` entry above.
@@ -475,7 +706,7 @@ function readGraphMeta(v: unknown, where: string): GraphMeta | undefined {
   try {
     return validateGraphMeta(v, where);
   } catch (err) {
-    fail(err instanceof Error ? err.message : String(err));
+    fault({ code: "invalid-meta", message: errText(err), path: "/meta" });
   }
 }
 
@@ -499,19 +730,30 @@ function checkNoShadowedGraphParam(
   spec: FieldSpec,
   declared: ReadonlySet<string>,
   where: string,
+  at: Pick<Fault, "path" | "nodeId" | "param">,
 ): void {
   if (declared.size === 0) return;
   for (const name of Object.keys(inlineParamValuesOf(spec))) {
     if (!declared.has(name)) continue;
-    fail(
-      `${where}: {"fn": "param", "name": ${JSON.stringify(name)}} carries its own "value", but the graph declares "${name}" in its top-level "params" — the graph's value would win and the inline one would be a number nothing reads. Drop the inline "value" to read the graph's, or rename one of the two`,
-    );
+    fault({
+      code: "shadowed-graph-param",
+      message: `${where}: {"fn": "param", "name": ${JSON.stringify(name)}} carries its own "value", but the graph declares "${name}" in its top-level "params" — the graph's value would win and the inline one would be a number nothing reads. Drop the inline "value" to read the graph's, or rename one of the two`,
+      ...at,
+    });
   }
+}
+
+/** A graph param that read cleanly, with its index in the document's `params`. */
+interface ReadGraphParam {
+  readonly param: GraphParam;
+  readonly index: number;
 }
 
 /**
  * Read the optional top-level `params` block into the graph's declared
- * params, refusing what a reader could otherwise misunderstand.
+ * params, refusing what a reader could otherwise misunderstand. Each
+ * declaration is its own unit: one that is refused is left out, and the
+ * rest are still read.
  *
  * Nested payloads are refused outright. A body's names are bound by its
  * WRAPPER's exposed params, and two binders that can disagree is the
@@ -519,68 +761,96 @@ function checkNoShadowedGraphParam(
  * that `hashableGraph` covers a payload verbatim, so admitting a key there
  * would move every pinned `ref` hash in the corpus.
  */
-function readGraphParams(v: unknown, nested: boolean): readonly GraphParam[] {
+function readGraphParams(v: unknown, nested: boolean, sink: Sink): ReadGraphParam[] {
   if (v === undefined) return [];
   if (nested) {
-    fail(
-      `a subgraph payload's graph cannot declare "params": a body's names are bound by its wrapper's exposed params, which is the one binder a body has. Declare it under the payload's "params" (an exposed param with no targets reads a name the body's expressions use), or hoist the value to the OUTER graph's "params" and pass it in through the wrapper's own param slot`,
-    );
+    sink.report({
+      code: "invalid-graph-param",
+      message: `a subgraph payload's graph cannot declare "params": a body's names are bound by its wrapper's exposed params, which is the one binder a body has. Declare it under the payload's "params" (an exposed param with no targets reads a name the body's expressions use), or hoist the value to the OUTER graph's "params" and pass it in through the wrapper's own param slot`,
+      path: "/params",
+    });
+    return [];
   }
   if (!Array.isArray(v)) {
-    fail(
-      `"params" must be an array of { name, value, min?, max?, description? }, got ${JSON.stringify(v)}. It is an array rather than an object so a repeated name is detectable: JSON.parse collapses duplicate object keys before any reader sees them`,
-    );
+    sink.report({
+      code: "invalid-section",
+      message: `"params" must be an array of { name, value, min?, max?, description? }, got ${JSON.stringify(v)}. It is an array rather than an object so a repeated name is detectable: JSON.parse collapses duplicate object keys before any reader sees them`,
+      path: "/params",
+    });
+    return [];
   }
   const seen = new Set<string>();
-  const out: GraphParam[] = [];
+  const out: ReadGraphParam[] = [];
   v.forEach((raw: unknown, i: number) => {
-    if (!isPlainObject(raw)) {
-      fail(`params[${i}]: expected an object { name, value, ... }, got ${JSON.stringify(raw)}`);
-    }
-    checkKeys(raw, GRAPH_PARAM_KEYS, `params[${i}]`, NO_ANNOTATION_KEY);
-    const name = raw.name;
-    if (typeof name !== "string" || name === "") {
-      fail(`params[${i}]: "name" must be a non-empty string, got ${JSON.stringify(name)}`);
-    }
-    if (seen.has(name)) {
-      fail(
-        `params[${i}]: duplicate graph param "${name}"; declare each name once (a second declaration cannot be a redefinition, because a reference names one value)`,
-      );
-    }
-    seen.add(name);
-    for (const key of ["min", "max"] as const) {
-      const bound = raw[key];
-      if (bound !== undefined && (typeof bound !== "number" || !Number.isFinite(bound))) {
-        fail(`params[${i}] ("${name}"): "${key}" must be a finite number, got ${JSON.stringify(bound)}`);
+    const at = under(`/params/${i}`);
+    unit(sink, () => {
+      if (!isPlainObject(raw)) {
+        fault({
+          code: "invalid-graph-param",
+          message: `params[${i}]: expected an object { name, value, ... }, got ${JSON.stringify(raw)}`,
+          path: at(""),
+        });
       }
-    }
-    if (raw.description !== undefined && typeof raw.description !== "string") {
-      fail(
-        `params[${i}] ("${name}"): "description" must be a string, got ${JSON.stringify(raw.description)}`,
-      );
-    }
-    const targets = readGraphParamTargets(raw.targets, `params[${i}] ("${name}")`);
-    const param: GraphParam = {
-      name,
-      value: raw.value as ParamValue,
-      ...(targets !== undefined ? { targets } : {}),
-      ...(raw.min !== undefined ? { min: raw.min as number } : {}),
-      ...(raw.max !== undefined ? { max: raw.max as number } : {}),
-      ...(raw.description !== undefined ? { description: raw.description as string } : {}),
-    };
-    // A TARGETED param's value is judged later, against the schema its
-    // targets merge into — which cannot be read until the nodes exist. This
-    // pass checks only what is knowable now: the name, and (for a targetless
-    // param) the numeric shape.
-    const error = graphParamError(param, `params[${i}]`);
-    if (error !== undefined) fail(error);
-    out.push(param);
+      checkKeys(sink, raw, GRAPH_PARAM_KEYS, `params[${i}]`, NO_ANNOTATION_KEY, at);
+      const name = raw.name;
+      if (typeof name !== "string" || name === "") {
+        fault({
+          code: "invalid-graph-param",
+          message: `params[${i}]: "name" must be a non-empty string, got ${JSON.stringify(name)}`,
+          path: keyPath(raw, "name", at),
+          got: name,
+        });
+      }
+      if (seen.has(name)) {
+        fault({
+          code: "duplicate-graph-param",
+          message: `params[${i}]: duplicate graph param "${name}"; declare each name once (a second declaration cannot be a redefinition, because a reference names one value)`,
+          path: at("/name"),
+          got: name,
+        });
+      }
+      seen.add(name);
+      for (const key of ["min", "max"] as const) {
+        const bound = raw[key];
+        if (bound !== undefined && (typeof bound !== "number" || !Number.isFinite(bound))) {
+          fault({
+            code: "invalid-graph-param",
+            message: `params[${i}] ("${name}"): "${key}" must be a finite number, got ${JSON.stringify(bound)}`,
+            path: at(`/${key}`),
+            got: bound,
+            expected: "a finite number",
+          });
+        }
+      }
+      if (raw.description !== undefined && typeof raw.description !== "string") {
+        fault({
+          code: "invalid-graph-param",
+          message: `params[${i}] ("${name}"): "description" must be a string, got ${JSON.stringify(raw.description)}`,
+          path: at("/description"),
+          got: raw.description,
+          expected: "a string",
+        });
+      }
+      const targets = readGraphParamTargets(raw.targets, `params[${i}] ("${name}")`, raw, at, sink);
+      const param: GraphParam = {
+        name,
+        value: raw.value as ParamValue,
+        ...(targets !== undefined ? { targets } : {}),
+        ...(raw.min !== undefined ? { min: raw.min as number } : {}),
+        ...(raw.max !== undefined ? { max: raw.max as number } : {}),
+        ...(raw.description !== undefined ? { description: raw.description as string } : {}),
+      };
+      // A TARGETED param's value is judged later, against the schema its
+      // targets merge into — which cannot be read until the nodes exist. This
+      // pass checks only what is knowable now: the name, and (for a targetless
+      // param) the numeric shape.
+      const error = graphParamError(param, `params[${i}]`);
+      if (error !== undefined) fault({ code: "invalid-graph-param", message: error, path: at("") });
+      out.push({ param, index: i });
+    });
   });
   return out;
 }
-
-
-
 
 /** Value equality for a param: numbers, strings, bools, and flat lists. */
 function sameParamValue(a: unknown, b: unknown): boolean {
@@ -631,6 +901,43 @@ export function applyGraphParamTargets(
   params: readonly GraphParam[],
   authored: ReadonlyMap<string, ReadonlySet<string>>,
 ): GraphParam[] {
+  // Standalone, the first fault throws: a caller rebuilding a graph by hand
+  // has no document to collect records against.
+  const sink: Sink = {
+    count: 0,
+    report(f: Fault): never {
+      const record = toRecord(f);
+      throw new GraphSerializationError(record.message, [record]);
+    },
+  };
+  return applyTargets(
+    graph,
+    params.map((param, index) => ({ param, index })),
+    authored,
+    sink,
+    () => false,
+    () => undefined,
+  );
+}
+
+/**
+ * {@link applyGraphParamTargets}, one declaration per unit: a declaration
+ * that cannot be applied is left out of the result and the next is still
+ * tried. A target naming a node `isSkipped` — one the load could not build,
+ * or cannot tell apart, already reported — is left out without a word,
+ * since every complaint about it would restate that fault; the declaration's
+ * other targets are still resolved and applied. `nodeParamPath` locates an
+ * authored node param in the document, for the one fault that is the
+ * node's value rather than the declaration's.
+ */
+function applyTargets(
+  graph: Graph,
+  params: readonly ReadGraphParam[],
+  authored: ReadonlyMap<string, ReadonlySet<string>>,
+  sink: Sink,
+  isSkipped: (node: string) => boolean,
+  nodeParamPath: (node: string, param: string) => string | undefined,
+): GraphParam[] {
   // Which declaration owns which slot. A slot with two owners has no
   // defined value — measured before this guard, two params targeting one
   // `countX` simply let the LAST one win, 90 points against 40, with
@@ -639,101 +946,156 @@ export function applyGraphParamTargets(
   // inner slot… is a hard error naming the params and the slot"), and the
   // two mechanisms must not disagree about a question they both answer.
   const owner = new Map<string, string>();
-  return params.map((param) => {
-    const targets = param.targets;
-    if (targets === undefined || targets.length === 0) return param;
-    let resolved;
-    try {
-      resolved = resolveExposedParam(graph, {
-        name: param.name,
-        targets: targets.map((t) => ({ node: { id: t.node }, param: t.param })),
-        // `description` is optional on a graph param and REQUIRED by the
-        // resolver, so the fallback says where the missing sentence goes —
-        // the same answer `inlineParamSchema` gives for an undocumented
-        // inline value, in the same voice.
-        description:
-          param.description ??
-          `Graph param "${param.name}", driving ${targets.map((t) => `"${t.node}".${t.param}`).join(", ")}. The graph says nothing else about it — write "description" beside the value to say what turning it does.`,
-        default: param.value,
-        ...(param.min !== undefined ? { min: param.min } : {}),
-        ...(param.max !== undefined ? { max: param.max } : {}),
-      });
-    } catch (err) {
-      fail(`graph param "${param.name}": ${err instanceof Error ? err.message : String(err)}`);
-    }
-    const withSchema: GraphParam = { ...param, schema: resolved.schema };
-    const bad = graphParamError(withSchema, "params");
-    if (bad !== undefined) fail(bad);
-    for (const t of targets) {
-      // A target holding a FIELD is refused rather than overwritten.
-      // Writing the value would leave the authored expression in the FILE
-      // and dead in the COOK — measured: a `translate` of
-      // `mul(position, 2)` under a declared 3 cooks a flat 3, while the
-      // JSON still shows the expression. That is the hazard this session
-      // keeps closing: a graph that does something its own text does not
-      // say. Both readings are defensible, so neither is chosen silently.
-      const slot = `"${t.node}".${t.param}`;
-      const claimed = owner.get(slot);
-      if (claimed !== undefined) {
-        fail(
-          claimed === param.name
-            ? `graph param "${param.name}" lists ${slot} twice; name each slot once — writing it twice cannot mean anything a single write does not`
-            : `graph params "${claimed}" and "${param.name}" both target ${slot}, so the slot has two declared values and takes whichever is applied last. Drive it from one of them, or split the slot into two params`,
-        );
+  const out: GraphParam[] = [];
+  for (const { param, index } of params) {
+    const at = under(`/params/${index}`);
+    unit(sink, () => {
+      const targets = param.targets;
+      if (targets === undefined || targets.length === 0) {
+        out.push(param);
+        return;
       }
-      owner.set(slot, param.name);
-      const held = graph.getParams({ id: t.node } as NodeHandle<Record<string, unknown>>)[t.param];
-      if (isField(held)) {
-        fail(
-          `graph param "${param.name}" targets "${t.node}".${t.param}, which holds a FIELD EXPRESSION. Writing the declared value there would leave that expression in the file and dead in the cook, so it is refused rather than chosen for you: either drop the expression from that param (the declaration then drives it), or drop the target and have the expression READ the name instead — a `+"`param`"+` reference inside it binds to the same declared value.`,
-        );
-      }
-      // A literal that DISAGREES with its driver is a hand edit that would
-      // be silently discarded: the declaration wins on every load, so the
-      // number in the file would sit there meaning nothing. Serialization
-      // writes the driven value back, so a round-tripped graph always
-      // agrees and never reaches this — only a file somebody edited does,
-      // which is exactly when it is worth saying.
-      const wasAuthored = authored.get(t.node)?.has(t.param) === true;
-      if (wasAuthored && held !== undefined && !isField(held) && !sameParamValue(held, param.value)) {
-        fail(
-          `node "${t.node}" param "${t.param}" is ${JSON.stringify(held)}, but graph param "${param.name}" drives it to ${JSON.stringify(param.value)}. The declaration wins on every load, so the value written on the node would be discarded silently: change the declaration, or drop the target and let the node keep its own value`,
-        );
-      }
+      // Original indices kept, so a record still points at the entry it is about.
+      const kept = targets.map((t, j) => ({ t, j })).filter(({ t }) => !isSkipped(t.node));
+      if (kept.length === 0) return;
+      let resolved;
       try {
-        graph.setParam({ id: t.node } as NodeHandle<Record<string, unknown>>, t.param, param.value as never);
+        resolved = resolveExposedParam(graph, {
+          name: param.name,
+          targets: kept.map(({ t }) => ({ node: { id: t.node }, param: t.param })),
+          // `description` is optional on a graph param and REQUIRED by the
+          // resolver, so the fallback says where the missing sentence goes —
+          // the same answer `inlineParamSchema` gives for an undocumented
+          // inline value, in the same voice.
+          description:
+            param.description ??
+            `Graph param "${param.name}", driving ${targets.map((t) => `"${t.node}".${t.param}`).join(", ")}. The graph says nothing else about it — write "description" beside the value to say what turning it does.`,
+          default: param.value,
+          ...(param.min !== undefined ? { min: param.min } : {}),
+          ...(param.max !== undefined ? { max: param.max } : {}),
+        });
       } catch (err) {
-        fail(
-          `graph param "${param.name}" cannot write "${t.node}".${t.param}: ${err instanceof Error ? err.message : String(err)}`,
-        );
+        fault({
+          code: "invalid-graph-param-target",
+          message: `graph param "${param.name}": ${errText(err)}`,
+          path: at("/targets"),
+        });
       }
-    }
-    return withSchema;
-  });
+      const withSchema: GraphParam = { ...param, schema: resolved.schema };
+      const bad = graphParamError(withSchema, "params");
+      if (bad !== undefined) fault({ code: "invalid-graph-param", message: bad, path: at("") });
+      kept.forEach(({ t, j }) => {
+        // A target holding a FIELD is refused rather than overwritten.
+        // Writing the value would leave the authored expression in the FILE
+        // and dead in the COOK — measured: a `translate` of
+        // `mul(position, 2)` under a declared 3 cooks a flat 3, while the
+        // JSON still shows the expression. That is the hazard this session
+        // keeps closing: a graph that does something its own text does not
+        // say. Both readings are defensible, so neither is chosen silently.
+        const slot = `"${t.node}".${t.param}`;
+        const targetPath = at(`/targets/${j}`);
+        const claimed = owner.get(slot);
+        if (claimed !== undefined) {
+          fault({
+            code: "duplicate-param-target",
+            message:
+              claimed === param.name
+                ? `graph param "${param.name}" lists ${slot} twice; name each slot once — writing it twice cannot mean anything a single write does not`
+                : `graph params "${claimed}" and "${param.name}" both target ${slot}, so the slot has two declared values and takes whichever is applied last. Drive it from one of them, or split the slot into two params`,
+            path: targetPath,
+            nodeId: t.node,
+            param: t.param,
+          });
+        }
+        owner.set(slot, param.name);
+        const held = graph.getParams({ id: t.node } as NodeHandle<Record<string, unknown>>)[t.param];
+        if (isField(held)) {
+          fault({
+            code: "target-holds-field",
+            message: `graph param "${param.name}" targets "${t.node}".${t.param}, which holds a FIELD EXPRESSION. Writing the declared value there would leave that expression in the file and dead in the cook, so it is refused rather than chosen for you: either drop the expression from that param (the declaration then drives it), or drop the target and have the expression READ the name instead — a `+"`param`"+` reference inside it binds to the same declared value.`,
+            path: targetPath,
+            nodeId: t.node,
+            param: t.param,
+          });
+        }
+        // A literal that DISAGREES with its driver is a hand edit that would
+        // be silently discarded: the declaration wins on every load, so the
+        // number in the file would sit there meaning nothing. Serialization
+        // writes the driven value back, so a round-tripped graph always
+        // agrees and never reaches this — only a file somebody edited does,
+        // which is exactly when it is worth saying.
+        const wasAuthored = authored.get(t.node)?.has(t.param) === true;
+        if (wasAuthored && held !== undefined && !isField(held) && !sameParamValue(held, param.value)) {
+          fault({
+            code: "driven-param-conflict",
+            message: `node "${t.node}" param "${t.param}" is ${JSON.stringify(held)}, but graph param "${param.name}" drives it to ${JSON.stringify(param.value)}. The declaration wins on every load, so the value written on the node would be discarded silently: change the declaration, or drop the target and let the node keep its own value`,
+            path: nodeParamPath(t.node, t.param) ?? targetPath,
+            nodeId: t.node,
+            param: t.param,
+          });
+        }
+        try {
+          graph.setParam({ id: t.node } as NodeHandle<Record<string, unknown>>, t.param, param.value as never);
+        } catch (err) {
+          fault({
+            code: "invalid-graph-param",
+            message: `graph param "${param.name}" cannot write "${t.node}".${t.param}: ${errText(err)}`,
+            path: at(""),
+            nodeId: t.node,
+            param: t.param,
+          });
+        }
+      });
+      out.push(withSchema);
+    });
+  }
+  return out;
 }
 
 /** Read a graph param's optional `targets`, or undefined when it has none. */
 function readGraphParamTargets(
   v: unknown,
   where: string,
+  raw: Record<string, unknown>,
+  at: Locate,
+  sink: Sink,
 ): readonly { node: string; param: string }[] | undefined {
   if (v === undefined) return undefined;
   if (!Array.isArray(v)) {
-    fail(`${where}: "targets" must be an array of { node, param }, got ${JSON.stringify(v)}`);
+    fault({
+      code: "invalid-graph-param",
+      message: `${where}: "targets" must be an array of { node, param }, got ${JSON.stringify(v)}`,
+      path: keyPath(raw, "targets", at),
+    });
   }
   const out: { node: string; param: string }[] = [];
-  v.forEach((raw: unknown, i: number) => {
-    if (!isPlainObject(raw)) {
-      fail(`${where}: targets[${i}] must be an object { node, param }, got ${JSON.stringify(raw)}`);
+  v.forEach((entry: unknown, i: number) => {
+    const entryAt = child(at, `/targets/${i}`);
+    if (!isPlainObject(entry)) {
+      fault({
+        code: "invalid-graph-param",
+        message: `${where}: targets[${i}] must be an object { node, param }, got ${JSON.stringify(entry)}`,
+        path: entryAt(""),
+      });
     }
-    checkKeys(raw, EXPOSED_PARAM_TARGET_KEYS, `${where} targets[${i}]`, NO_ANNOTATION_KEY);
-    const node = raw.node;
-    const param = raw.param;
+    checkKeys(sink, entry, EXPOSED_PARAM_TARGET_KEYS, `${where} targets[${i}]`, NO_ANNOTATION_KEY, entryAt);
+    const node = entry.node;
+    const param = entry.param;
     if (typeof node !== "string" || node === "") {
-      fail(`${where}: targets[${i}].node must be a non-empty string, got ${JSON.stringify(node)}`);
+      fault({
+        code: "invalid-graph-param",
+        message: `${where}: targets[${i}].node must be a non-empty string, got ${JSON.stringify(node)}`,
+        path: keyPath(entry, "node", entryAt),
+        got: node,
+      });
     }
     if (typeof param !== "string" || param === "") {
-      fail(`${where}: targets[${i}].param must be a non-empty string, got ${JSON.stringify(param)}`);
+      fault({
+        code: "invalid-graph-param",
+        message: `${where}: targets[${i}].param must be a non-empty string, got ${JSON.stringify(param)}`,
+        path: keyPath(entry, "param", entryAt),
+        got: param,
+      });
     }
     out.push({ node, param });
   });
@@ -744,14 +1106,42 @@ function readGraphParamTargets(
 }
 
 /**
- * Validate a plain (non-field) param value against its schema. `where`
- * names the node and param for error messages. The rules themselves live
- * in the graph layer beside {@link ParamSchema}, so the exposed-param
- * resolver applies exactly the same ones.
+ * Validate a plain (non-field) param value against its schema, for the
+ * WRITER. `where` names the node and param for error messages. The rules
+ * themselves live in the graph layer beside {@link ParamSchema}, so the
+ * exposed-param resolver applies exactly the same ones.
  */
 function checkParamValue(schema: ParamSchema, value: unknown, where: string): void {
   const bad = paramValueError(schema, value);
-  if (bad !== undefined) fail(`${where}: ${bad}`);
+  if (bad !== undefined) fail(`${where}: ${bad}`, "invalid-param-value");
+}
+
+/**
+ * The READER's refusal of a plain param value, or undefined when it fits.
+ * An enum value gets the nearest allowed values before the list — `did you
+ * mean "probabilistic"? expected one of …` — so the suggestion is read
+ * before the enumeration it was drawn from.
+ */
+function paramValueFault(
+  schema: ParamSchema,
+  value: unknown,
+  where: string,
+  at: Pick<Fault, "path" | "nodeId" | "param">,
+): Fault | undefined {
+  const bad = paramValueError(schema, value);
+  if (bad === undefined) return undefined;
+  if (schema.type === "enum" && typeof value === "string" && schema.enum !== undefined) {
+    const near = suggestNames(value, schema.enum);
+    return {
+      code: "invalid-param-value",
+      message: `${where}: ${near.clause}${bad}`,
+      ...at,
+      got: value,
+      valid: [...schema.enum],
+      ...suggestionFields(near, (to) => `replace "${value}" with "${to}"`),
+    };
+  }
+  return { code: "invalid-param-value", message: `${where}: ${bad}`, ...at, got: value };
 }
 
 /**
@@ -937,7 +1327,7 @@ function buildEmbeddedSubgraphNode(
     inner = serializeGraphRec(spec.graph, seen);
   } catch (err) {
     if (err instanceof GraphSerializationError) {
-      fail(`node "${id}" inner graph: ${err.message}`);
+      fail(`node "${id}" inner graph: ${err.message}`, err.diagnostics[0]?.code);
     }
     throw err;
   }
@@ -1231,33 +1621,111 @@ function serializeGraphRec(graph: Graph, seen: Set<Graph>): SerializedGraph {
   }
 }
 
-function checkEndpoint(v: unknown, label: string): [string, string] {
+function checkEndpoint(v: unknown, label: string, path: string): [string, string] {
   if (!Array.isArray(v) || v.length !== 2 || typeof v[0] !== "string" || typeof v[1] !== "string") {
-    fail(`${label}: expected [nodeId, pinName], got ${JSON.stringify(v)}`);
+    fault({
+      code: "invalid-connection",
+      message: `${label}: expected [nodeId, pinName], got ${JSON.stringify(v)}`,
+      path,
+      expected: "[nodeId, pinName]",
+    });
   }
   return [v[0], v[1]];
 }
 
+/**
+ * The refusal of a node id nothing in the graph has, with the nearest ids
+ * before the list of the ones it does.
+ */
+function unknownNodeFault(
+  head: string,
+  id: string,
+  known: readonly string[],
+  path: string,
+): Fault {
+  const near = suggestNames(id, known);
+  return {
+    code: "unknown-node",
+    message: `${head} "${id}"; ${near.clause}known nodes: ${known.join(", ")}`,
+    path,
+    got: id,
+    valid: [...known],
+    ...suggestionFields(near, (to) => `replace "${id}" with "${to}"`),
+  };
+}
+
+/**
+ * The refusal of a pin a node does not have, in the loader's own wording
+ * (`valid output pins: …`); `none` is what an empty list reads as.
+ */
+function unknownPinFault(
+  head: string,
+  nodeId: string,
+  side: "input" | "output",
+  pin: string,
+  pins: readonly { readonly name: string }[],
+  path: string,
+  none: string,
+): Fault {
+  const valid = pins.map((p) => p.name);
+  const near = suggestNames(pin, valid);
+  return {
+    code: "unknown-pin",
+    message: `${head}node "${nodeId}" has no ${side} pin "${pin}"; ${near.clause}valid ${side} pins: ${valid.join(", ") || none}`,
+    path,
+    nodeId,
+    pin,
+    valid,
+    ...suggestionFields(near, (to) => `replace "${pin}" with "${to}"`),
+  };
+}
+
 /** Read and validate the exposed-pin list of a subgraph payload. */
-function readExposedPins(v: unknown, inner: Graph, where: string): ExposedPin[] {
+function readExposedPins(
+  v: unknown,
+  inner: Graph,
+  where: string,
+  locate: Locate,
+  sink: Sink,
+  id: string,
+): ExposedPin[] {
   if (v === undefined) return [];
   if (!Array.isArray(v)) {
-    fail(`${where}: expected an array of { name, node, pin } objects, got ${JSON.stringify(v)}`);
+    fault({
+      code: "invalid-exposed-pin",
+      message: `${where}: expected an array of { name, node, pin } objects, got ${JSON.stringify(v)}`,
+      path: locate(""),
+      nodeId: id,
+    });
   }
   return v.map((e: unknown, i: number): ExposedPin => {
+    const at = child(locate, `/${i}`);
     if (
       !isPlainObject(e) ||
       typeof e.name !== "string" ||
       typeof e.node !== "string" ||
       typeof e.pin !== "string"
     ) {
-      fail(`${where}[${i}]: expected { name, node, pin } strings, got ${JSON.stringify(e)}`);
+      fault({
+        code: "invalid-exposed-pin",
+        message: `${where}[${i}]: expected { name, node, pin } strings, got ${JSON.stringify(e)}`,
+        path: at(""),
+        nodeId: id,
+      });
     }
-    checkKeys(e, EXPOSED_PIN_KEYS, `${where}[${i}]`, NO_ANNOTATION_KEY);
+    checkKeys(sink, e, EXPOSED_PIN_KEYS, `${where}[${i}]`, NO_ANNOTATION_KEY, at);
     if (!inner._nodes.has(e.node)) {
-      fail(
-        `${where}[${i}] ("${e.name}"): unknown inner node "${e.node}"; inner nodes: ${[...inner._nodes.keys()].join(", ")}`,
-      );
+      const known = [...inner._nodes.keys()];
+      const near = suggestNames(e.node, known);
+      fault({
+        code: "invalid-exposed-pin",
+        message: `${where}[${i}] ("${e.name}"): unknown inner node "${e.node}"; ${near.clause}inner nodes: ${known.join(", ")}`,
+        path: at("/node"),
+        nodeId: id,
+        got: e.node,
+        valid: known,
+        ...suggestionFields(near, (to) => `replace "${e.node}" with "${to}"`),
+      });
     }
     return { name: e.name, node: { id: e.node }, pin: e.pin };
   });
@@ -1269,60 +1737,98 @@ function readExposedPins(v: unknown, inner: Graph, where: string): ExposedPin[] 
  * targets by `resolveExposedParam`, so a payload claiming a type or a
  * field capability the inner params do not have is not representable.
  */
-function readExposedParams(v: unknown, inner: Graph, where: string): ExposedParamDecl[] {
+function readExposedParams(
+  v: unknown,
+  inner: Graph,
+  where: string,
+  locate: Locate,
+  sink: Sink,
+  id: string,
+): ExposedParamDecl[] {
   if (v === undefined) return [];
   if (!Array.isArray(v)) {
-    fail(
-      `${where}: expected an array of { name, targets, description, default } objects, got ${JSON.stringify(v)}`,
-    );
+    fault({
+      code: "invalid-exposed-param",
+      message: `${where}: expected an array of { name, targets, description, default } objects, got ${JSON.stringify(v)}`,
+      path: locate(""),
+      nodeId: id,
+    });
   }
   return v.map((e: unknown, i: number): ExposedParamDecl => {
+    const at = child(locate, `/${i}`);
     if (!isPlainObject(e) || typeof e.name !== "string" || typeof e.description !== "string") {
-      fail(
-        `${where}[${i}]: expected { name, targets, description, default } with string name and description, got ${JSON.stringify(e)}`,
-      );
+      fault({
+        code: "invalid-exposed-param",
+        message: `${where}[${i}]: expected { name, targets, description, default } with string name and description, got ${JSON.stringify(e)}`,
+        path: at(""),
+        nodeId: id,
+      });
     }
     checkKeys(
+      sink,
       e,
       EXPOSED_PARAM_KEYS,
       `${where}[${i}] ("${e.name}")`,
       EXPOSED_PARAM_NO_ANNOTATION_KEY,
+      at,
       DERIVED_EXPOSED_PARAM_KEYS,
     );
     // Absent and empty both mean "writes nowhere", which is legal exactly
     // when a field expression in the body reads the name instead — the
     // wrapper checks that, since only it can see the body.
     if (e.targets !== undefined && !Array.isArray(e.targets)) {
-      fail(
-        `${where}[${i}] ("${e.name}"): "targets" must be an array of { node, param } objects — empty or absent for a param the body's field expressions read by name — got ${JSON.stringify(e.targets)}`,
-      );
+      fault({
+        code: "invalid-exposed-param",
+        message: `${where}[${i}] ("${e.name}"): "targets" must be an array of { node, param } objects — empty or absent for a param the body's field expressions read by name — got ${JSON.stringify(e.targets)}`,
+        path: at("/targets"),
+        nodeId: id,
+      });
     }
     const declaredTargets: readonly unknown[] = e.targets === undefined ? [] : (e.targets as unknown[]);
     const targets = declaredTargets.map((t: unknown, j: number) => {
+      const targetAt = child(at, `/targets/${j}`);
       if (!isPlainObject(t) || typeof t.node !== "string" || typeof t.param !== "string") {
-        fail(
-          `${where}[${i}] ("${e.name}") targets[${j}]: expected { node, param } strings, got ${JSON.stringify(t)}`,
-        );
+        fault({
+          code: "invalid-exposed-param",
+          message: `${where}[${i}] ("${e.name}") targets[${j}]: expected { node, param } strings, got ${JSON.stringify(t)}`,
+          path: targetAt(""),
+          nodeId: id,
+        });
       }
       checkKeys(
+        sink,
         t,
         EXPOSED_PARAM_TARGET_KEYS,
         `${where}[${i}] ("${e.name}") targets[${j}]`,
         NO_ANNOTATION_KEY,
+        targetAt,
       );
       if (!inner._nodes.has(t.node)) {
-        fail(
-          `${where}[${i}] ("${e.name}") targets[${j}]: unknown inner node "${t.node}"; inner nodes: ${[...inner._nodes.keys()].join(", ")}`,
-        );
+        const known = [...inner._nodes.keys()];
+        const near = suggestNames(t.node, known);
+        fault({
+          code: "invalid-exposed-param",
+          message: `${where}[${i}] ("${e.name}") targets[${j}]: unknown inner node "${t.node}"; ${near.clause}inner nodes: ${known.join(", ")}`,
+          path: targetAt("/node"),
+          nodeId: id,
+          got: t.node,
+          valid: known,
+          ...suggestionFields(near, (to) => `replace "${t.node}" with "${to}"`),
+        });
       }
       return { node: { id: t.node }, param: t.param };
     });
     for (const bound of ["min", "max"] as const) {
       const b = e[bound];
       if (b !== undefined && (typeof b !== "number" || !Number.isFinite(b))) {
-        fail(
-          `${where}[${i}] ("${e.name}"): "${bound}" must be a finite number when present, got ${JSON.stringify(b)}`,
-        );
+        fault({
+          code: "invalid-exposed-param",
+          message: `${where}[${i}] ("${e.name}"): "${bound}" must be a finite number when present, got ${JSON.stringify(b)}`,
+          path: at(`/${bound}`),
+          nodeId: id,
+          got: b,
+          expected: "a finite number",
+        });
       }
     }
     return {
@@ -1364,30 +1870,148 @@ interface ReadContext {
   readonly nested?: boolean;
 }
 
+/**
+ * What reading one node's params needs to know about the node: where it
+ * sits, what it may set, how to word an unknown key, and which keys were
+ * accepted (the authored set a graph param's conflict check reads).
+ */
+interface ParamReading {
+  readonly id: string;
+  readonly at: Locate;
+  readonly schemaOf: (key: string) => ParamSchema | undefined;
+  readonly valid: readonly string[];
+  readonly unknownMessage: (key: string, clause: string) => string;
+  readonly declaredParams: ReadonlySet<string>;
+  readonly bindings: Readonly<Record<string, number | readonly number[]>>;
+  readonly accepted: Set<string>;
+}
+
+/**
+ * The record for a field expression that did not build, under the param
+ * that holds it. A grammar refusal already carries a pointer relative to
+ * the spec, which lands under the param's own; any other failure (a
+ * combinator refusing a tuple size) is located at the param.
+ */
+function fieldFault(err: unknown, where: string, path: string, nodeId: string, param: string): Fault {
+  const inner = diagnosticsOf(err)[0];
+  const grammar = err instanceof FieldJsonError ? inner : undefined;
+  return {
+    code: inner !== undefined && inner.code !== "error" ? inner.code : "invalid-field-spec",
+    message: `${where}: ${errText(err)}`,
+    path: path + (grammar?.path ?? ""),
+    nodeId,
+    param,
+    ...(grammar?.key !== undefined ? { key: grammar.key } : {}),
+    ...(grammar?.got !== undefined ? { got: grammar.got } : {}),
+    ...(grammar?.valid !== undefined ? { valid: grammar.valid } : {}),
+    ...(grammar?.expected !== undefined ? { expected: grammar.expected } : {}),
+    ...(grammar?.didYouMean !== undefined ? { didYouMean: grammar.didYouMean } : {}),
+    ...(grammar?.fix !== undefined ? { fix: grammar.fix } : {}),
+  };
+}
+
+/**
+ * Read one node's params, each its own unit: a refused param is dropped and
+ * reported, and the rest are still read — the node is built without it, so
+ * its pins stay known to the connections that name them.
+ */
+function readParams(paramsJson: Record<string, unknown>, r: ParamReading, sink: Sink): Record<string, unknown> {
+  const params: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(paramsJson)) {
+    unit(sink, () => {
+      const path = r.at(`/params/${pointerToken(key)}`);
+      const schema = r.schemaOf(key);
+      if (schema === undefined) {
+        const near = suggestNames(key, r.valid);
+        fault({
+          code: "unknown-param",
+          message: r.unknownMessage(key, near.clause),
+          path,
+          nodeId: r.id,
+          param: key,
+          valid: [...r.valid],
+          ...suggestionFields(near, (to) => `rename "${key}" to "${to}"`),
+        });
+      }
+      const where = `node "${r.id}" param "${key}"`;
+      if (schema.acceptsField === true && isPlainObject(value)) {
+        checkNoShadowedGraphParam(value as FieldSpec, r.declaredParams, where, {
+          path,
+          nodeId: r.id,
+          param: key,
+        });
+        try {
+          params[key] = fieldFromJson(value as FieldSpec, r.bindings);
+        } catch (err) {
+          fault(fieldFault(err, where, path, r.id, key));
+        }
+      } else {
+        const bad = paramValueFault(schema, value, where, { path, nodeId: r.id, param: key });
+        if (bad !== undefined) fault(bad);
+        params[key] = Array.isArray(value) ? [...(value as unknown[])] : value;
+      }
+      r.accepted.add(key);
+    });
+  }
+  return params;
+}
+
 /** Read and validate a node's `ref` object. */
-function readSubgraphRef(id: string, v: unknown): SerializedSubgraphRef {
+function readSubgraphRef(
+  id: string,
+  v: unknown,
+  at: Locate,
+  sink: Sink,
+): SerializedSubgraphRef {
   if (!isPlainObject(v)) {
-    fail(
-      `node "${id}": "ref" must be an object { name, hash? } naming a registered subgraph, got ${JSON.stringify(v)}`,
-    );
+    fault({
+      code: "invalid-subgraph-ref",
+      message: `node "${id}": "ref" must be an object { name, hash? } naming a registered subgraph, got ${JSON.stringify(v)}`,
+      path: at(""),
+      nodeId: id,
+    });
   }
   checkKeys(
+    sink,
     v,
     SUBGRAPH_REF_KEYS,
     `node "${id}" ref`,
     " (a reference carries the registered name and, when it pins itself, that content hash — nothing else)",
+    at,
   );
   if (typeof v.name !== "string" || v.name === "") {
-    fail(
-      `node "${id}": "ref".name must be a non-empty string naming a registered subgraph, got ${JSON.stringify(v.name)}`,
-    );
+    fault({
+      code: "invalid-subgraph-ref",
+      message: `node "${id}": "ref".name must be a non-empty string naming a registered subgraph, got ${JSON.stringify(v.name)}`,
+      path: keyPath(v, "name", at),
+      nodeId: id,
+      got: v.name,
+    });
   }
   if (v.hash !== undefined && typeof v.hash !== "string") {
-    fail(
-      `node "${id}": "ref".hash must be a string when present (the hash registerSubgraph reported), got ${JSON.stringify(v.hash)}`,
-    );
+    fault({
+      code: "invalid-subgraph-ref",
+      message: `node "${id}": "ref".hash must be a string when present (the hash registerSubgraph reported), got ${JSON.stringify(v.hash)}`,
+      path: at("/hash"),
+      nodeId: id,
+      got: v.hash,
+    });
   }
   return { name: v.name, ...(typeof v.hash === "string" ? { hash: v.hash } : {}) };
+}
+
+/** Everything a wrapper node's reader needs beyond its JSON. */
+interface WrapperReading {
+  readonly graph: Graph;
+  readonly id: string;
+  readonly at: Locate;
+  readonly nodeJson: Record<string, unknown>;
+  readonly paramsJson: Record<string, unknown>;
+  readonly ctx: ReadContext;
+  readonly wrapper: WrapperKind;
+  readonly bindings: Readonly<Record<string, number | readonly number[]>>;
+  readonly declaredParams: ReadonlySet<string>;
+  readonly accepted: Set<string>;
 }
 
 /**
@@ -1396,32 +2020,42 @@ function readSubgraphRef(id: string, v: unknown): SerializedSubgraphRef {
  * by the same code below, so a reference and an embedded copy of the same
  * recipe produce the same def, the same memo key and the same cooked bytes.
  */
-function addSubgraphNode(
-  graph: Graph,
-  id: string,
-  nodeJson: Record<string, unknown>,
-  paramsJson: Record<string, unknown>,
-  ctx: ReadContext,
-  wrapper: WrapperKind,
-  bindings: Readonly<Record<string, number | readonly number[]>>,
-  declaredParams: ReadonlySet<string>,
-): NodeHandle {
+function addSubgraphNode(w: WrapperReading, sink: Sink): NodeHandle {
+  const { id, at, nodeJson, ctx } = w;
   const refJson = nodeJson.ref;
   const payload = nodeJson.subgraph;
   if (refJson !== undefined && payload !== undefined) {
-    fail(
-      `node "${id}": carries both "ref" and "subgraph"; a subgraph node either references a registered subgraph by name ("ref") or embeds its inner graph ("subgraph"), never both — remove whichever is not intended`,
-    );
+    fault({
+      code: "subgraph-ref-and-payload",
+      message: `node "${id}": carries both "ref" and "subgraph"; a subgraph node either references a registered subgraph by name ("ref") or embeds its inner graph ("subgraph"), never both — remove whichever is not intended`,
+      path: at(""),
+      nodeId: id,
+    });
   }
   if (refJson !== undefined) {
-    const ref = readSubgraphRef(id, refJson);
+    const refAt = under(at("/ref"));
+    const ref = readSubgraphRef(id, refJson, refAt, sink);
     if (ctx.seenNames.has(ref.name)) {
-      fail(
-        `node "${id}": subgraph reference cycle ${[...ctx.seenNames, ref.name].map((n) => JSON.stringify(n)).join(" -> ")}; named subgraph references must be acyclic — resolving one would resolve itself forever`,
-      );
+      fault({
+        code: "subgraph-cycle",
+        message: `node "${id}": subgraph reference cycle ${[...ctx.seenNames, ref.name].map((n) => JSON.stringify(n)).join(" -> ")}; named subgraph references must be acyclic — resolving one would resolve itself forever`,
+        path: refAt("/name"),
+        nodeId: id,
+        got: ref.name,
+      });
     }
     if (!hasRegisteredSubgraph(ref.name)) {
-      fail(`node "${id}": ${unknownSubgraphMessage(ref.name)}`);
+      const valid = registeredSubgraphNames();
+      const near = suggestNames(ref.name, valid);
+      fault({
+        code: "unknown-subgraph",
+        message: `node "${id}": ${unknownSubgraphMessage(ref.name)}`,
+        path: refAt("/name"),
+        nodeId: id,
+        got: ref.name,
+        valid,
+        ...suggestionFields(near, (to) => `replace "${ref.name}" with "${to}"`),
+      });
     }
     const entry = getRegisteredSubgraph(ref.name);
     // A pin is opt-in, and a mismatch is a hard error: the author who
@@ -1431,53 +2065,80 @@ function addSubgraphNode(
     // reaches nobody, which makes it indistinguishable from cooking the
     // near-miss silently.
     if (ref.hash !== undefined && ref.hash !== entry.hash) {
-      fail(
-        `node "${id}": subgraph "${ref.name}" is pinned to content hash ${ref.hash}, but the registered one hashes ${entry.hash} — the primitive changed since this graph was written. Re-save the graph to adopt the new version, or remove "hash" from the ref to follow the registry.`,
-      );
+      fault({
+        code: "subgraph-hash-mismatch",
+        message: `node "${id}": subgraph "${ref.name}" is pinned to content hash ${ref.hash}, but the registered one hashes ${entry.hash} — the primitive changed since this graph was written. Re-save the graph to adopt the new version, or remove "hash" from the ref to follow the registry.`,
+        path: refAt("/hash"),
+        nodeId: id,
+        got: ref.hash,
+        expected: entry.hash,
+      });
     }
     ctx.seenNames.add(ref.name);
     try {
       return buildSubgraphNode(
-        graph,
-        id,
+        w,
         entry.subgraph as unknown as Record<string, unknown>,
-        paramsJson,
-        ctx,
         ref,
-        wrapper,
-        bindings,
-        declaredParams,
+        collapsedOn(at("/ref")),
+        sink,
       );
     } finally {
       ctx.seenNames.delete(ref.name);
     }
   }
   if (!isPlainObject(payload)) {
-    fail(
-      `node "${id}": a "${wrapper}" node needs a "subgraph" payload object { graph, inputs, outputs } carrying its inner graph, or a "ref" { name } naming a registered one, got ${JSON.stringify(payload)}`,
-    );
+    fault({
+      code: "missing-subgraph-payload",
+      message: `node "${id}": a "${w.wrapper}" node needs a "subgraph" payload object { graph, inputs, outputs } carrying its inner graph, or a "ref" { name } naming a registered one, got ${JSON.stringify(payload)}`,
+      path: keyPath(nodeJson, "subgraph", at),
+      nodeId: id,
+    });
   }
   if (ctx.seenPayloads.has(payload)) {
-    fail(
-      `node "${id}": its subgraph payload reaches itself (a payload cycle); subgraph nesting must be acyclic`,
-    );
+    fault({
+      code: "subgraph-cycle",
+      message: `node "${id}": its subgraph payload reaches itself (a payload cycle); subgraph nesting must be acyclic`,
+      path: at("/subgraph"),
+      nodeId: id,
+    });
   }
   ctx.seenPayloads.add(payload);
   try {
-    return buildSubgraphNode(
-      graph,
-      id,
-      payload,
-      paramsJson,
-      ctx,
-      undefined,
-      wrapper,
-      bindings,
-      declaredParams,
-    );
+    return buildSubgraphNode(w, payload, undefined, under(at("/subgraph")), sink);
   } finally {
     ctx.seenPayloads.delete(payload);
   }
+}
+
+/**
+ * A body's fault restated one level out: the wrapper's breadcrumb in front
+ * of the message, the pointer re-rooted at the body (or collapsed onto the
+ * `ref` that reached it), and the wrapper's id prepended to the node path.
+ * A fix is dropped when the body is a registered recipe, since applying it
+ * would mean editing the registry rather than the caller's document.
+ */
+function restateBodyFault(f: Fault, id: string, locate: Locate, viaRef: boolean): Fault {
+  const { fix, ...rest } = f;
+  const innerPath = f.nodePath ?? (f.nodeId !== undefined ? [f.nodeId] : []);
+  return {
+    ...rest,
+    message: `node "${id}" inner graph: ${f.message}`,
+    path: locate(f.path ?? ""),
+    nodeId: id,
+    nodePath: [id, ...innerPath],
+    ...(fix !== undefined && !viaRef ? { fix } : {}),
+  };
+}
+
+/** The code a wrapper factory's refusal gets, by what it was refusing. */
+function wrapperFactoryCode(err: unknown): DiagnosticCode {
+  const carried = diagnosticsOf(err)[0]?.code;
+  if (carried !== undefined && carried !== "error") return carried;
+  const text = errText(err);
+  if (/reserved/.test(text)) return "reserved-plumbing-name";
+  if (/exposed param/.test(text)) return "invalid-exposed-param";
+  return "invalid-exposed-pin";
 }
 
 /**
@@ -1485,50 +2146,85 @@ function addSubgraphNode(
  * then re-wrap it through `subgraphNode` so the instance is
  * indistinguishable from a code-first one. `ref`, when present, is
  * recorded against the def so serialization writes the reference back out.
+ * `locate` points into the payload — or, for a `ref`, at the reference.
+ *
+ * Any fault in the BODY ends the node — every record the body produced,
+ * down to a stray key at its top, because a body that took records is not
+ * one the wrapper can be trusted to cook — and so does any refused exposed
+ * pin or param declaration, since the interface is then unknown: the node is
+ * not built and nothing that names it is checked. A stray key on the payload
+ * object or on one exposed declaration is reported and does NOT end it; the
+ * key changes nothing about what is built. The node's own params are read
+ * one by one like any node's.
+ *
+ * For a `ref`, every payload record is located at the reference and loses
+ * its `fix`: the recipe lives in the registry, not in the caller's document,
+ * so a mechanical edit has nowhere to be applied.
  */
 function buildSubgraphNode(
-  graph: Graph,
-  id: string,
+  w: WrapperReading,
   payload: Record<string, unknown>,
-  paramsJson: Record<string, unknown>,
-  ctx: ReadContext,
   ref: SerializedSubgraphRef | undefined,
-  wrapper: WrapperKind,
-  bindings: Readonly<Record<string, number | readonly number[]>>,
-  declaredParams: ReadonlySet<string>,
+  locate: Locate,
+  sink: Sink,
 ): NodeHandle {
-  checkKeys(payload, SUBGRAPH_PAYLOAD_KEYS, `node "${id}" subgraph payload`, NO_ANNOTATION_KEY);
-  let inner: Graph;
-  try {
-    inner = deserializeGraphRec(payload.graph, { ...ctx, nested: true });
-  } catch (err) {
-    if (err instanceof GraphSerializationError) {
-      fail(`node "${id}" inner graph: ${err.message}`);
+  const { graph, id, ctx, wrapper } = w;
+  const withoutFix = (r: Fault): Fault => {
+    const { fix: _fix, ...rest } = r;
+    return rest;
+  };
+  const payloadSink = ref === undefined ? sink : nestedSink(sink, withoutFix);
+  const payloadStep = <T>(read: () => T): T => {
+    if (ref === undefined) return read();
+    try {
+      return read();
+    } catch (err) {
+      if (err instanceof LoadFault && err.record?.fix !== undefined) {
+        throw new LoadFault(toRecord(withoutFix(err.record)));
+      }
+      throw err;
     }
-    throw err;
-  }
-  const inputs = readExposedPins(payload.inputs, inner, `node "${id}" subgraph inputs`);
-  const outputs = readExposedPins(payload.outputs, inner, `node "${id}" subgraph outputs`);
+  };
+  checkKeys(payloadSink, payload, SUBGRAPH_PAYLOAD_KEYS, `node "${id}" subgraph payload`, NO_ANNOTATION_KEY, locate);
+  const bodyAt: Locate =
+    ref !== undefined ? locate : Object.hasOwn(payload, "graph") ? child(locate, "/graph") : collapsedOn(locate(""));
+  const bodySink = nestedSink(sink, (f) => restateBodyFault(f, id, bodyAt, ref !== undefined));
+  const inner = deserializeGraphRec(payload.graph, { ...ctx, nested: true }, bodySink);
+  if (inner === undefined || bodySink.count > 0) throw new LoadFault(undefined);
+  const inputs = payloadStep(() =>
+    readExposedPins(payload.inputs, inner, `node "${id}" subgraph inputs`, child(locate, "/inputs"), payloadSink, id),
+  );
+  const outputs = payloadStep(() =>
+    readExposedPins(payload.outputs, inner, `node "${id}" subgraph outputs`, child(locate, "/outputs"), payloadSink, id),
+  );
   // Re-wrapping injects plumbing under reserved names ("__in_<name>"
   // portal nodes, "__out_<name>" outputs); detect collisions with the
   // payload's own content up front so the error states the mechanism and
   // the fix instead of a bare duplicate-id failure from Graph.add.
-  for (const exp of inputs) {
+  inputs.forEach((exp, k) => {
     const portalId = `__in_${exp.name}`;
     if (inner._nodes.has(portalId)) {
-      fail(
-        `node "${id}": inner node id "${portalId}" collides with the portal node injected for exposed input "${exp.name}" — ids "__in_<name>" and "__out_<name>" are reserved for subgraph plumbing; rename the inner node or the exposed pin`,
-      );
+      fault({
+        code: "reserved-plumbing-name",
+        message: `node "${id}": inner node id "${portalId}" collides with the portal node injected for exposed input "${exp.name}" — ids "__in_<name>" and "__out_<name>" are reserved for subgraph plumbing; rename the inner node or the exposed pin`,
+        path: locate(`/inputs/${k}/name`),
+        nodeId: id,
+        got: exp.name,
+      });
     }
-  }
-  for (const exp of outputs) {
+  });
+  outputs.forEach((exp, k) => {
     const outName = `__out_${exp.name}`;
     if (inner._outputs.some((o) => o.name === outName)) {
-      fail(
-        `node "${id}": inner output "${outName}" collides with the output injected for exposed output "${exp.name}" — ids "__in_<name>" and "__out_<name>" are reserved for subgraph plumbing; rename the inner output or the exposed pin`,
-      );
+      fault({
+        code: "reserved-plumbing-name",
+        message: `node "${id}": inner output "${outName}" collides with the output injected for exposed output "${exp.name}" — ids "__in_<name>" and "__out_<name>" are reserved for subgraph plumbing; rename the inner output or the exposed pin`,
+        path: locate(`/outputs/${k}/name`),
+        nodeId: id,
+        got: exp.name,
+      });
     }
-  }
+  });
   // A recipe records a body and its exposed pins and NOTHING about which
   // wrapper cooks them, so the kind lives only in the referencing node's
   // `type`. That leaves one way to reach the wrong answer through
@@ -1554,14 +2250,19 @@ function buildSubgraphNode(
   if (wrapper !== "forEach") {
     const iterated = inputs.filter((e) => ITERATED_PIN_NAMES.has(e.name));
     if (iterated.length > 0) {
-      fail(
-        `node "${id}": a "${wrapper}" node cannot expose ${iterated
-          .map((e) => `"${e.name}"`)
-          .join(" or ")} — those names are reserved for the pin a "forEach" iterates, and this body is ` +
+      fault({
+        code: "wrapper-kind-mismatch",
+        message:
+          `node "${id}": a "${wrapper}" node cannot expose ${iterated
+            .map((e) => `"${e.name}"`)
+            .join(" or ")} — those names are reserved for the pin a "forEach" iterates, and this body is ` +
           `written to be looped over. As a "${wrapper}" it would cook over the whole collection and ` +
           `emit one result where K were meant. Change this node's "type" to "forEach"${recipeNote}, or ` +
           "rename the exposed input if that is not what the body means.",
-      );
+        path: w.at("/type"),
+        nodeId: id,
+        got: wrapper,
+      });
     }
   }
   // The same refusal for the other loop's reserved name, on BOTH sides —
@@ -1576,22 +2277,39 @@ function buildSubgraphNode(
     ] as const) {
       const carried = pins.filter((e) => CARRIED_PIN_NAMES.has(e.name));
       if (carried.length > 0) {
-        fail(
-          `node "${id}": a "${wrapper}" node cannot expose ${side} ${carried
-            .map((e) => `"${e.name}"`)
-            .join(" or ")} — that name is reserved for the pin a "repeatUntil" feeds back into itself, and ` +
+        fault({
+          code: "wrapper-kind-mismatch",
+          message:
+            `node "${id}": a "${wrapper}" node cannot expose ${side} ${carried
+              .map((e) => `"${e.name}"`)
+              .join(" or ")} — that name is reserved for the pin a "repeatUntil" feeds back into itself, and ` +
             `this body is written to be relaxed to a fixed point. As a "${wrapper}" it would cook ONE pass ` +
             `where "until it settles" was meant. Change this node's "type" to "repeatUntil"${recipeNote}, ` +
             `or rename the exposed ${side} if a single pass is what you want.`,
-        );
+          path: w.at("/type"),
+          nodeId: id,
+          got: wrapper,
+        });
       }
     }
   }
-  const decls = readExposedParams(payload.params, inner, `node "${id}" subgraph params`);
+  const decls = payloadStep(() =>
+    readExposedParams(payload.params, inner, `node "${id}" subgraph params`, child(locate, "/params"), payloadSink, id),
+  );
+  const exposed: ExposedParam[] = decls.map((decl, k) => {
+    try {
+      return resolveExposedParam(inner, decl);
+    } catch (err) {
+      fault({
+        code: "invalid-exposed-param",
+        message: `node "${id}": ${errText(err)}`,
+        path: locate(`/params/${k}`),
+        nodeId: id,
+      });
+    }
+  });
   let def;
-  let exposed: readonly ExposedParam[];
   try {
-    exposed = decls.map((decl) => resolveExposedParam(inner, decl));
     // The one place the two wrappers part company on the way in. Both read
     // the same payload — a forEach is a subgraph plus a loop, and the loop
     // is named by a reserved exposed-input name inside `inputs`, so the
@@ -1603,7 +2321,12 @@ function buildSubgraphNode(
           ? repeatUntilNode(inner, inputs, outputs, exposed)
           : subgraphNode(inner, inputs, outputs, exposed);
   } catch (err) {
-    fail(`node "${id}": ${err instanceof Error ? err.message : String(err)}`);
+    fault({
+      code: wrapperFactoryCode(err),
+      message: `node "${id}": ${errText(err)}`,
+      path: locate(""),
+      nodeId: id,
+    });
   }
   // Values, validated against the schemas just derived — exactly the
   // treatment a standard node's params get, including field capability.
@@ -1617,31 +2340,22 @@ function buildSubgraphNode(
       declared.set(name, schema);
     }
   }
-  const params: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(paramsJson)) {
-    const schema = declared.get(key);
-    if (schema === undefined) {
-      fail(
-        `node "${id}": unknown param "${key}"; this subgraph node exposes: ${[...declared.keys()].join(", ") || "(none)"} (an exposed param must be declared under "params" ${ref === undefined ? 'in the node\'s "subgraph" payload' : `in the registered recipe of "${ref.name}"`})`,
-      );
-    }
-    const where = `node "${id}" param "${key}"`;
-    if (schema.acceptsField === true && isPlainObject(value)) {
-      // The wrapper's OWN slot lives in the outer graph, so the outer
-      // graph's params bind it — this is the one hop by which a
-      // graph-scoped value reaches a body, `withExposedParams` substituting
-      // it the rest of the way at cook time.
-      checkNoShadowedGraphParam(value as FieldSpec, declaredParams, where);
-      try {
-        params[key] = fieldFromJson(value as FieldSpec, bindings);
-      } catch (err) {
-        fail(`${where}: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    } else {
-      checkParamValue(schema, value, where);
-      params[key] = Array.isArray(value) ? [...(value as unknown[])] : value;
-    }
-  }
+  const exposedNames = [...declared.keys()];
+  const params = readParams(
+    w.paramsJson,
+    {
+      id,
+      at: w.at,
+      schemaOf: (key) => declared.get(key),
+      valid: exposedNames,
+      unknownMessage: (key, clause) =>
+        `node "${id}": unknown param "${key}"; ${clause}this subgraph node exposes: ${exposedNames.join(", ") || "(none)"} (an exposed param must be declared under "params" ${ref === undefined ? 'in the node\'s "subgraph" payload' : `in the registered recipe of "${ref.name}"`})`,
+      declaredParams: w.declaredParams,
+      bindings: w.bindings,
+      accepted: w.accepted,
+    },
+    sink,
+  );
   // Recorded per DEF, and a def is created fresh for every reference (a
   // live graph can be wrapped exactly once), so no two references share
   // this record and serialization can write each one back out as it came.
@@ -1655,12 +2369,33 @@ function buildSubgraphNode(
  * schemas (type, enum membership, bounds, no unknown keys), and that
  * every connection and output references existing nodes and pins —
  * errors name the offending node id, param, or pin and list what would
- * be valid.
+ * be valid, with the nearest valid names first when there are any.
+ *
+ * **Every fault in one load.** A failed load throws ONE
+ * `GraphSerializationError` whose `diagnostics` holds a record per fault —
+ * with an RFC 6901 `path` into `json`, a code, and the node, param or pin
+ * it concerns — and whose message is those records' messages, one per
+ * line. Records come in phase order (document shape, `meta`, graph
+ * params, nodes, targets, connections, outputs), then document order, so
+ * the first is the fault a first-error reader would have stopped at. A
+ * load stops early only when the document's shape blocks everything else
+ * (not an object, a formatVersion this build does not read, `nodes` not an
+ * array), and after {@link MAX_LOAD_RECORDS} records, which it follows
+ * with one `truncated` record. A node whose params are refused is still
+ * built without them, so connections to it are still checked; a node that
+ * cannot be built at all is left out, and connections, outputs and
+ * targets naming it are skipped rather than reported again. Inside one
+ * field expression the grammar still stops at its first fault — one
+ * record per param.
  *
  * The key sets are closed at EVERY object position — the graph, a node, a
  * `subgraph` payload, a `ref`, a connection, a declared output, an
  * exposed-pin or exposed-param declaration, an exposed-param target — so
- * an unrecognized key is named rather than ignored.
+ * an unrecognized key is named rather than ignored. The one key outside
+ * them is `$schema` on the OUTERMOST graph object, a string naming the JSON
+ * Schema the file follows for an editor's benefit; the loader ignores it,
+ * {@link serializeGraph} never writes it, and a nested payload may not
+ * carry it.
  *
  * The optional `meta` block ({ title?, description?, tags? }) is read
  * onto {@link Graph.setMeta}; an unknown key inside it is an error, not a
@@ -1673,178 +2408,414 @@ function buildSubgraphNode(
  * at runtime (e.g. by the World) after deserialization.
  */
 export function deserializeGraph(json: unknown): Graph {
-  return deserializeGraphRec(json, { seenPayloads: new Set(), seenNames: new Set() });
-}
-
-function deserializeGraphRec(json: unknown, ctx: ReadContext): Graph {
-  if (!isPlainObject(json)) {
-    fail(`deserializeGraph: expected a serialized graph object, got ${JSON.stringify(json)}`);
-  }
-  checkKeys(json, GRAPH_KEYS, "deserializeGraph", NO_ANNOTATION_KEY);
-  if (json.formatVersion !== FORMAT_VERSION) {
-    fail(
-      `unsupported formatVersion ${JSON.stringify(json.formatVersion)}; this build reads formatVersion ${FORMAT_VERSION}`,
+  const sink = new LoadRecords();
+  let graph: Graph | undefined;
+  try {
+    graph = deserializeGraphRec(json, { seenPayloads: new Set(), seenNames: new Set() }, sink);
+  } catch (err) {
+    if (!(err instanceof LoadCapReached)) throw err;
+    sink.records.push(
+      toRecord({
+        code: "truncated",
+        message: `more than ${MAX_LOAD_RECORDS} faults; the rest were not reported — fix these and load again to see the next ones`,
+      }),
     );
   }
-  if (typeof json.seed !== "number" || !Number.isFinite(json.seed)) {
-    fail(`graph seed must be a finite number, got ${JSON.stringify(json.seed)}`);
+  if (graph === undefined || sink.records.length > 0) {
+    throw new GraphSerializationError(sink.records.map((r) => r.message).join("\n"), sink.records);
+  }
+  return graph;
+}
+
+/**
+ * Read one graph document into `sink`. Returns the graph, or `undefined`
+ * when the document's shape blocked reading it at all; a graph returned
+ * while `sink` took records is incomplete and must not be used.
+ */
+function deserializeGraphRec(json: unknown, ctx: ReadContext, sink: Sink): Graph | undefined {
+  let graph: Graph | undefined;
+  unit(sink, () => {
+    graph = readGraphDocument(json, ctx, sink);
+  });
+  return graph;
+}
+
+/** The top-level key check, with `$schema` admitted where it belongs. */
+function checkGraphKeys(json: Record<string, unknown>, nested: boolean, sink: Sink): void {
+  for (const key of Object.keys(json)) {
+    if ((GRAPH_KEYS as readonly string[]).includes(key)) continue;
+    if (key === SCHEMA_KEY) {
+      if (nested) {
+        sink.report({
+          code: "unknown-key",
+          message: `deserializeGraph: key "${SCHEMA_KEY}" belongs at the top of the file — it names the JSON Schema the whole document follows, so only the outermost graph object may carry it, never a subgraph payload's graph. Move it to the top-level object or remove it`,
+          path: `/${pointerToken(key)}`,
+          key,
+        });
+      } else if (typeof json[key] !== "string") {
+        sink.report({
+          code: "invalid-section",
+          message: `deserializeGraph: "${SCHEMA_KEY}" must be a string (the URL or path of the JSON Schema this file follows), got ${JSON.stringify(json[key])}`,
+          path: `/${pointerToken(key)}`,
+          key,
+          got: json[key],
+        });
+      }
+      continue;
+    }
+    sink.report(unknownKeyFault(key, GRAPH_KEYS, "deserializeGraph", NO_ANNOTATION_KEY, `/${pointerToken(key)}`));
+  }
+}
+
+function readGraphDocument(json: unknown, ctx: ReadContext, sink: Sink): Graph {
+  const nested = ctx.nested === true;
+  if (!isPlainObject(json)) {
+    fault({
+      code: "graph-not-object",
+      message: `deserializeGraph: expected a serialized graph object, got ${JSON.stringify(json)}`,
+      path: "",
+    });
+  }
+  checkGraphKeys(json, nested, sink);
+  if (json.formatVersion !== FORMAT_VERSION) {
+    fault({
+      code: "unsupported-format-version",
+      message: `unsupported formatVersion ${JSON.stringify(json.formatVersion)}; this build reads formatVersion ${FORMAT_VERSION}`,
+      path: keyPath(json, "formatVersion", under("")),
+      got: json.formatVersion,
+      expected: String(FORMAT_VERSION),
+    });
+  }
+  let seed = json.seed;
+  if (typeof seed !== "number" || !Number.isFinite(seed)) {
+    sink.report({
+      code: "invalid-seed",
+      message: `graph seed must be a finite number, got ${JSON.stringify(seed)}`,
+      path: keyPath(json, "seed", under("")),
+      got: seed,
+      expected: "a finite number",
+    });
+    seed = 0;
   }
   const nodesJson = json.nodes;
-  if (!Array.isArray(nodesJson)) fail(`"nodes" must be an array`);
-  const connectionsJson = json.connections ?? [];
-  if (!Array.isArray(connectionsJson)) fail(`"connections" must be an array`);
-  const outputsJson = json.outputs ?? [];
-  if (!Array.isArray(outputsJson)) fail(`"outputs" must be an array`);
+  if (!Array.isArray(nodesJson)) {
+    fault({ code: "invalid-section", message: `"nodes" must be an array`, path: keyPath(json, "nodes", under("")) });
+  }
+  const rawConnections = json.connections ?? [];
+  let connectionsJson: readonly unknown[] = [];
+  if (Array.isArray(rawConnections)) connectionsJson = rawConnections;
+  else sink.report({ code: "invalid-section", message: `"connections" must be an array`, path: "/connections" });
+  const rawOutputs = json.outputs ?? [];
+  let outputsJson: readonly unknown[] = [];
+  if (Array.isArray(rawOutputs)) outputsJson = rawOutputs;
+  else sink.report({ code: "invalid-section", message: `"outputs" must be an array`, path: "/outputs" });
 
-  const graph = new Graph(json.seed);
-  graph.setMeta(readGraphMeta(json.meta, `"meta"`));
+  const graph = new Graph(seed as number);
+  let meta: GraphMeta | undefined;
+  unit(sink, () => {
+    meta = readGraphMeta(json.meta, `"meta"`);
+  });
+  graph.setMeta(meta);
   // Declared BEFORE any node is read, because every field-valued param
   // below is built against these values: binding substitutes at BUILD time
   // (the only moment a value reaches `Field.key`, and so the only moment it
   // reaches a memo key), and deserialize is the earliest build that has
   // them.
-  const graphParams = readGraphParams(json.params, ctx.nested === true);
+  const graphParams = readGraphParams(json.params, nested, sink);
   // Only the BINDINGS are needed before the nodes: a targetless param
   // substitutes into expressions at build time. A targeted one is resolved
   // and applied after, because its schema comes from params that do not
   // exist yet — see `applyGraphParamTargets`.
-  const bindings = graphParamBindings(graphParams);
-  const declaredParams = new Set(graphParams.map((p) => p.name));
+  const bindings = graphParamBindings(graphParams.map((p) => p.param));
+  const declaredParams = new Set(graphParams.map((p) => p.param.name));
   const handles = new Map<string, NodeHandle>();
-  // Which param keys each node's JSON ACTUALLY carried. `getParams` merges
-  // the registry defaults, so it cannot tell "the author wrote 2" from
-  // "the author wrote nothing and the default is 10" — and only the first
-  // is worth objecting to when a graph param drives that slot.
+  // Every string id a node claimed, built or not: a second node reusing a
+  // poisoned node's id is still a duplicate.
+  const claimedIds = new Map<string, number>();
+  // Ids a reference cannot be checked against: nodes that could not be
+  // built, and ids two nodes claimed (which of the two a connection meant
+  // is unknowable). Their fault is already reported, so anything that names
+  // one is skipped rather than refused again.
+  const poisoned = new Set<string>();
+  // Set when a node could not be built before it claimed any id at all (not
+  // an object, a missing or empty id). A reference to an id no node has may
+  // then be a reference to THAT node, so it is not reported either.
+  let anonymousPoisoned = false;
+  const skipped = (id: string): boolean => poisoned.has(id) || (anonymousPoisoned && !handles.has(id));
+  // Which param keys each node's JSON carried AND the loader accepted.
+  // `getParams` merges the registry defaults, so it cannot tell "the author
+  // wrote 2" from "the author wrote nothing and the default is 10" — and
+  // only the first is worth objecting to when a graph param drives that
+  // slot. A refused key is left out, so its dropped value cannot be
+  // reported a second time as a conflict with its driver.
   const authoredParamKeys = new Map<string, ReadonlySet<string>>();
-  const knownIds = (): string => [...handles.keys()].join(", ");
+  const knownIds = (): string[] => [...handles.keys()];
 
   nodesJson.forEach((nodeJson: unknown, i: number) => {
-    if (!isPlainObject(nodeJson)) {
-      fail(`nodes[${i}]: expected a node object, got ${JSON.stringify(nodeJson)}`);
-    }
-    const id = nodeJson.id;
-    if (typeof id !== "string" || id === "") {
-      fail(`nodes[${i}]: node id must be a non-empty string, got ${JSON.stringify(id)}`);
-    }
-    if (handles.has(id)) {
-      fail(`nodes[${i}]: duplicate node id "${id}"`);
-    }
-    checkKeys(nodeJson, NODE_KEYS, `node "${id}"`, NO_ANNOTATION_KEY);
-    const type = nodeJson.type;
-    if (typeof type !== "string") {
-      fail(`node "${id}": type must be a string, got ${JSON.stringify(type)}`);
-    }
-    if (!hasNodeType(type)) {
-      fail(
-        `node "${id}": unknown node type "${type}"; registered types: ${listNodeTypes()
+    const at = under(`/nodes/${i}`);
+    let claimed: string | undefined;
+    const built = unit(sink, () => {
+      if (!isPlainObject(nodeJson)) {
+        fault({
+          code: "invalid-section",
+          message: `nodes[${i}]: expected a node object, got ${JSON.stringify(nodeJson)}`,
+          path: at(""),
+        });
+      }
+      const id = nodeJson.id;
+      if (typeof id !== "string" || id === "") {
+        fault({
+          code: "invalid-node-id",
+          message: `nodes[${i}]: node id must be a non-empty string, got ${JSON.stringify(id)}`,
+          path: keyPath(nodeJson, "id", at),
+          got: id,
+        });
+      }
+      if (claimedIds.has(id)) {
+        poisoned.add(id);
+        fault({
+          code: "duplicate-node-id",
+          message: `nodes[${i}]: duplicate node id "${id}"`,
+          path: at("/id"),
+          nodeId: id,
+          got: id,
+        });
+      }
+      claimedIds.set(id, i);
+      claimed = id;
+      checkKeys(sink, nodeJson, NODE_KEYS, `node "${id}"`, NO_ANNOTATION_KEY, at);
+      const type = nodeJson.type;
+      if (typeof type !== "string") {
+        fault({
+          code: "unknown-node-type",
+          message: `node "${id}": type must be a string, got ${JSON.stringify(type)}`,
+          path: keyPath(nodeJson, "type", at),
+          nodeId: id,
+          got: type,
+        });
+      }
+      if (!hasNodeType(type)) {
+        const valid = listNodeTypes()
           .map((t) => t.type)
-          .sort()
-          .join(", ")}`,
-      );
-    }
-    const paramsJson = nodeJson.params ?? {};
-    if (!isPlainObject(paramsJson)) {
-      fail(`node "${id}": params must be an object, got ${JSON.stringify(nodeJson.params)}`);
-    }
-    authoredParamKeys.set(id, new Set(Object.keys(paramsJson)));
-    if (type === "subgraph" || type === "forEach" || type === "repeatUntil") {
-      handles.set(
-        id,
-        addSubgraphNode(graph, id, nodeJson, paramsJson, ctx, type, bindings, declaredParams),
-      );
-      return;
-    }
-    // Both keys are inner-graph plumbing. Carried by any other type they
-    // are a mistake — and one that used to be ignored, which is exactly how
-    // a graph cooks something other than what it says.
-    for (const key of ["subgraph", "ref"] as const) {
-      if (nodeJson[key] !== undefined) {
-        fail(
-          `node "${id}": type "${type}" wraps no inner graph, so it cannot carry "${key}"; only "subgraph", "forEach" and "repeatUntil" nodes wrap one (inline under "subgraph", or by name under "ref")`,
-        );
+          .sort();
+        const near = suggestNames(type, valid);
+        fault({
+          code: "unknown-node-type",
+          message: `node "${id}": unknown node type "${type}"; ${near.clause}registered types: ${valid.join(", ")}`,
+          path: at("/type"),
+          nodeId: id,
+          got: type,
+          valid,
+          ...suggestionFields(near, (to) => `replace "${type}" with "${to}"`),
+        });
       }
-    }
-    const reg = getNodeType(type);
-    const params: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(paramsJson)) {
-      const schema = reg.info.params[key];
-      if (!schema) {
-        fail(
-          `node "${id}": unknown param "${key}" for type "${type}"; valid params: ${Object.keys(reg.info.params).join(", ")}`,
-        );
-      }
-      const where = `node "${id}" param "${key}"`;
-      if (schema.acceptsField === true && isPlainObject(value)) {
-        checkNoShadowedGraphParam(value as FieldSpec, declaredParams, where);
-        try {
-          params[key] = fieldFromJson(value as FieldSpec, bindings);
-        } catch (err) {
-          fail(`${where}: ${err instanceof Error ? err.message : String(err)}`);
-        }
+      const rawParams = nodeJson.params ?? {};
+      let paramsJson: Record<string, unknown> = {};
+      if (isPlainObject(rawParams)) {
+        paramsJson = rawParams;
       } else {
-        checkParamValue(schema, value, where);
-        params[key] = Array.isArray(value) ? [...(value as unknown[])] : value;
+        sink.report({
+          code: "invalid-section",
+          message: `node "${id}": params must be an object, got ${JSON.stringify(nodeJson.params)}`,
+          path: at("/params"),
+          nodeId: id,
+        });
       }
+      const accepted = new Set<string>();
+      authoredParamKeys.set(id, accepted);
+      if (type === "subgraph" || type === "forEach" || type === "repeatUntil") {
+        handles.set(
+          id,
+          addSubgraphNode(
+            {
+              graph,
+              id,
+              at,
+              nodeJson,
+              paramsJson,
+              ctx,
+              wrapper: type,
+              bindings,
+              declaredParams,
+              accepted,
+            },
+            sink,
+          ),
+        );
+        return;
+      }
+      // Both keys are inner-graph plumbing. Carried by any other type they
+      // are a mistake — and one that used to be ignored, which is exactly how
+      // a graph cooks something other than what it says. The node is still
+      // built: the key changes nothing about what it cooks.
+      for (const key of ["subgraph", "ref"] as const) {
+        if (nodeJson[key] !== undefined) {
+          sink.report({
+            code: "wrapper-key-on-plain-node",
+            message: `node "${id}": type "${type}" wraps no inner graph, so it cannot carry "${key}"; only "subgraph", "forEach" and "repeatUntil" nodes wrap one (inline under "subgraph", or by name under "ref")`,
+            path: at(`/${key}`),
+            nodeId: id,
+            key,
+          });
+        }
+      }
+      const reg = getNodeType(type);
+      const schemas = reg.info.params;
+      const valid = Object.keys(schemas);
+      const params = readParams(
+        paramsJson,
+        {
+          id,
+          at,
+          // Own keys only. A plain lookup reads the prototype, so a param
+          // named "toString" or "constructor" found a FUNCTION as its schema
+          // and was accepted and silently dropped instead of refused.
+          schemaOf: (key) => (Object.hasOwn(schemas, key) ? schemas[key] : undefined),
+          valid,
+          unknownMessage: (key, clause) =>
+            `node "${id}": unknown param "${key}" for type "${type}"; ${clause}valid params: ${valid.join(", ")}`,
+          declaredParams,
+          bindings,
+          accepted,
+        },
+        sink,
+      );
+      handles.set(id, graph.add(reg.def, params, id));
+    });
+    if (!built && claimed === undefined) anonymousPoisoned = true;
+    if (!built && claimed !== undefined && !handles.has(claimed) && claimedIds.get(claimed) === i) {
+      poisoned.add(claimed);
     }
-    handles.set(id, graph.add(reg.def, params, id));
   });
 
   // Now that every node exists, a targeted param can merge its schema from
   // the params it drives and write its value into them.
-  graph.setGraphParams(applyGraphParamTargets(graph, graphParams, authoredParamKeys));
+  graph.setGraphParams(
+    applyTargets(graph, graphParams, authoredParamKeys, sink, skipped, (node, param) => {
+      const index = claimedIds.get(node);
+      return index === undefined ? undefined : `/nodes/${index}/params/${pointerToken(param)}`;
+    }),
+  );
 
   connectionsJson.forEach((connJson: unknown, i: number) => {
-    if (!isPlainObject(connJson)) {
-      fail(`connections[${i}]: expected a connection object, got ${JSON.stringify(connJson)}`);
-    }
-    checkKeys(connJson, CONNECTION_KEYS, `connections[${i}]`, NO_ANNOTATION_KEY);
-    const [fromId, fromPin] = checkEndpoint(connJson.from, `connections[${i}].from`);
-    const [toId, toPin] = checkEndpoint(connJson.to, `connections[${i}].to`);
-    const from = handles.get(fromId);
-    if (!from) fail(`connections[${i}]: unknown source node "${fromId}"; known nodes: ${knownIds()}`);
-    const to = handles.get(toId);
-    if (!to) fail(`connections[${i}]: unknown target node "${toId}"; known nodes: ${knownIds()}`);
-    // Pins come from the instance's own def: for standard nodes that is
-    // the registered def, for subgraph nodes the per-instance exposed pins.
-    for (const [nodeId, pins, pin, side] of [
-      [fromId, graph.require(fromId).def.outputs, fromPin, "output"],
-      [toId, graph.require(toId).def.inputs, toPin, "input"],
-    ] as const) {
-      if (!pins.some((p) => p.name === pin)) {
-        fail(
-          `connections[${i}]: node "${nodeId}" has no ${side} pin "${pin}"; valid ${side} pins: ${pins.map((p) => p.name).join(", ") || "(none)"}`,
-        );
+    const at = under(`/connections/${i}`);
+    unit(sink, () => {
+      if (!isPlainObject(connJson)) {
+        fault({
+          code: "invalid-connection",
+          message: `connections[${i}]: expected a connection object, got ${JSON.stringify(connJson)}`,
+          path: at(""),
+        });
       }
-    }
-    try {
-      graph.connect(from, fromPin, to, toPin);
-    } catch (err) {
-      fail(`connections[${i}]: ${err instanceof Error ? err.message : String(err)}`);
-    }
+      checkKeys(sink, connJson, CONNECTION_KEYS, `connections[${i}]`, NO_ANNOTATION_KEY, at);
+      const [fromId, fromPin] = checkEndpoint(connJson.from, `connections[${i}].from`, keyPath(connJson, "from", at));
+      const [toId, toPin] = checkEndpoint(connJson.to, `connections[${i}].to`, keyPath(connJson, "to", at));
+      // Each end is checked unless it names a skipped node: a typo on the
+      // other end is still a fault of its own.
+      const fromSkipped = skipped(fromId);
+      const toSkipped = skipped(toId);
+      const from = handles.get(fromId);
+      if (!fromSkipped && !from) {
+        fault(unknownNodeFault(`connections[${i}]: unknown source node`, fromId, knownIds(), at("/from/0")));
+      }
+      const to = handles.get(toId);
+      if (!toSkipped && !to) {
+        fault(unknownNodeFault(`connections[${i}]: unknown target node`, toId, knownIds(), at("/to/0")));
+      }
+      // Pins come from the instance's own def: for standard nodes that is
+      // the registered def, for subgraph nodes the per-instance exposed pins.
+      for (const [nodeId, isSkipped, side, pin, path] of [
+        [fromId, fromSkipped, "output", fromPin, at("/from/1")],
+        [toId, toSkipped, "input", toPin, at("/to/1")],
+      ] as const) {
+        if (isSkipped) continue;
+        const def = graph.require(nodeId).def;
+        const pins = side === "output" ? def.outputs : def.inputs;
+        if (!pins.some((p) => p.name === pin)) {
+          fault(unknownPinFault(`connections[${i}]: `, nodeId, side, pin, pins, path, "(none)"));
+        }
+      }
+      if (fromSkipped || toSkipped) return;
+      try {
+        graph.connect(from as NodeHandle, fromPin, to as NodeHandle, toPin);
+      } catch (err) {
+        const carried = diagnosticsOf(err)[0]?.code;
+        fault({
+          code: carried !== undefined && carried !== "error" ? carried : "invalid-connection",
+          message: `connections[${i}]: ${errText(err)}`,
+          path: at(""),
+          nodeId: toId,
+          pin: toPin,
+        });
+      }
+    });
   });
 
+  // Every output name an entry claimed, declared, skipped or refused: a name
+  // reused after any of them is still a duplicate.
+  const outputNames = new Set<string>();
   outputsJson.forEach((outJson: unknown, i: number) => {
-    if (!isPlainObject(outJson)) {
-      fail(`outputs[${i}]: expected an output object, got ${JSON.stringify(outJson)}`);
-    }
-    checkKeys(outJson, OUTPUT_KEYS, `outputs[${i}]`, NO_ANNOTATION_KEY);
-    const { id, pin, name } = outJson;
-    if (typeof id !== "string" || typeof pin !== "string" || typeof name !== "string") {
-      fail(`outputs[${i}]: expected { id, pin, name } strings, got ${JSON.stringify(outJson)}`);
-    }
-    const handle = handles.get(id);
-    if (!handle) fail(`outputs[${i}]: unknown node "${id}"; known nodes: ${knownIds()}`);
-    const outPins = graph.require(id).def.outputs;
-    if (!outPins.some((p) => p.name === pin)) {
-      fail(
-        `outputs[${i}]: node "${id}" has no output pin "${pin}"; valid output pins: ${outPins.map((p) => p.name).join(", ")}`,
-      );
-    }
-    try {
-      graph.output(handle, pin, name);
-    } catch (err) {
-      fail(`outputs[${i}]: ${err instanceof Error ? err.message : String(err)}`);
-    }
+    const at = under(`/outputs/${i}`);
+    unit(sink, () => {
+      if (!isPlainObject(outJson)) {
+        fault({
+          code: "invalid-output",
+          message: `outputs[${i}]: expected an output object, got ${JSON.stringify(outJson)}`,
+          path: at(""),
+        });
+      }
+      checkKeys(sink, outJson, OUTPUT_KEYS, `outputs[${i}]`, NO_ANNOTATION_KEY, at);
+      const { id, pin, name } = outJson;
+      if (typeof id !== "string" || typeof pin !== "string" || typeof name !== "string") {
+        fault({
+          code: "invalid-output",
+          message: `outputs[${i}]: expected { id, pin, name } strings, got ${JSON.stringify(outJson)}`,
+          path: at(""),
+          expected: "{ id, pin, name } strings",
+        });
+      }
+      const duplicate = (): never =>
+        fault({
+          code: "duplicate-output-name",
+          message: `outputs[${i}]: output "${name}" is already declared`,
+          path: at("/name"),
+          nodeId: id,
+          pin,
+        });
+      // Claimed before anything else about this entry is judged: a second
+      // output reusing the name is a fault whether or not this one is.
+      const reused = outputNames.has(name);
+      outputNames.add(name);
+      if (skipped(id)) {
+        if (reused) duplicate();
+        return;
+      }
+      const handle = handles.get(id);
+      if (!handle) fault(unknownNodeFault(`outputs[${i}]: unknown node`, id, knownIds(), at("/id")));
+      const outPins = graph.require(id).def.outputs;
+      if (!outPins.some((p) => p.name === pin)) {
+        // No "(none)" here, unlike a connection's: this message never had one.
+        fault(unknownPinFault(`outputs[${i}]: `, id, "output", pin, outPins, at("/pin"), ""));
+      }
+      if (reused && !graph._outputs.some((o) => o.name === name)) duplicate();
+      try {
+        graph.output(handle, pin, name);
+      } catch (err) {
+        const carried = diagnosticsOf(err)[0]?.code;
+        fault({
+          code:
+            carried !== undefined && carried !== "error"
+              ? carried
+              : /already declared/.test(errText(err))
+                ? "duplicate-output-name"
+                : "invalid-output",
+          message: `outputs[${i}]: ${errText(err)}`,
+          path: at("/name"),
+          nodeId: id,
+          pin,
+        });
+      }
+    });
   });
 
   return graph;

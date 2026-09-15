@@ -19,6 +19,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
 import "../primitives/index.js";
 import { listFieldFnInfos } from "../fields/fieldJson.js";
+import { MAX_FBM_OCTAVES } from "../noise/util.js";
 import type { ParamSchema } from "../graph/index.js";
 import {
   FIELD_SPEC_KEY_RULES,
@@ -289,7 +290,49 @@ describe("graphJsonSchema: agreement with deserializeGraph", () => {
     ["a primitive under the wrong wrapper type", oneNode({ id: "p", type: "forEach", ref: { name: primitive.name }, params: {} })],
     ["formatVersion 2", { ...oneNode({ id: "n", type: fieldHost.type, params: {} }), formatVersion: 2 }],
     ["a dotted graph param name", oneNode({ id: "n", type: fieldHost.type, params: {} }, { params: [{ name: "a.b", value: 1 }] })],
+    // Parsed from text, not written as object literals: `{ __proto__: 1 }`
+    // in source sets a prototype instead of making a key, and a file on disk
+    // makes the key. The loader used to find Object.prototype members as
+    // param schemas and accept all four, dropping them without a word.
+    ...(["toString", "__proto__", "constructor", "hasOwnProperty"] as const).map(
+      (key): readonly [string, Json] => [
+        `a param named "${key}"`,
+        JSON.parse(
+          `{"formatVersion":1,"seed":0,"nodes":[{"id":"n","type":${JSON.stringify(fieldHost.type)},"params":{${JSON.stringify(key)}:1}}],"connections":[],"outputs":[]}`,
+        ) as Json,
+      ],
+    ),
+    // `base in NOISE_FACTORIES` walked the prototype.
+    ["an fbm base named after a prototype member", withField({ fn: "fbm", base: "toString" })],
+    // Loaded clean and ran the process out of memory at cook.
+    ["an fbm with a million octaves", withField({ fn: "fbm", base: "perlinNoise", opts: { octaves: 1000000 } })],
+    ["an fbm one octave past the bound", withField({ fn: "fbm", base: "perlinNoise", opts: { octaves: MAX_FBM_OCTAVES + 1 } })],
   ];
+
+  it("both accept a top-level $schema string, and both refuse a non-string one and one inside a payload", () => {
+    const base = oneNode({ id: "n", type: fieldHost.type, params: {} });
+    const top = { $schema: GRAPH_SCHEMA_ID, ...base };
+    expect(loaderAccepts(top)).toEqual({ ok: true });
+    expect(schemaAccepts(top), schemaErrors()).toBe(true);
+    for (const doc of [
+      { ...base, $schema: 3 },
+      oneNode({
+        id: "p",
+        type: "subgraph",
+        params: {},
+        subgraph: { graph: { $schema: GRAPH_SCHEMA_ID, formatVersion: 1, seed: 0, nodes: [] }, inputs: [], outputs: [] },
+      }),
+    ]) {
+      expect(loaderAccepts(doc).ok, "the loader accepted it").toBe(false);
+      expect(schemaAccepts(doc), "the schema accepted it").toBe(false);
+    }
+  });
+
+  it("both accept an fbm at exactly the octave bound", () => {
+    const doc = withField({ fn: "fbm", base: "perlinNoise", opts: { octaves: MAX_FBM_OCTAVES } });
+    expect(loaderAccepts(doc)).toEqual({ ok: true });
+    expect(schemaAccepts(doc), schemaErrors()).toBe(true);
+  });
 
   it.each(rejects)("both reject: %s", (_label, doc) => {
     expect(loaderAccepts(doc).ok, "the loader accepted it").toBe(false);

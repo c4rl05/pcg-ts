@@ -91,7 +91,7 @@ describe("a missing attribute through a node cook", () => {
     expect(missing).toBeInstanceOf(AttributeNotFoundError);
     expect(missing.didYouMean).toEqual(["density"]);
     expect(missing.foundOn).toEqual([]);
-    expect(missing.message).toMatch(/; did you mean "density"\?$/);
+    expect(missing.message).toMatch(/ not found; did you mean "density"\? available point attributes: [^;]*density/);
     expect(diagnosticsOf(err)[0]).toMatchObject({
       code: "attribute-not-found",
       nodeId: "copy",

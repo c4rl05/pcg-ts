@@ -129,7 +129,10 @@ function targetSchema(inner: Graph, name: string, target: ExposedParamTargetDecl
     );
   }
   const schemas = getNodeType(state.def.type).info.params;
-  const schema = schemas[target.param];
+  // Own keys only, as the loader's own param lookup: a plain read finds
+  // Object.prototype members, so a target named "toString" had a function
+  // for a schema.
+  const schema = Object.hasOwn(schemas, target.param) ? schemas[target.param] : undefined;
   if (schema === undefined) {
     bad(
       name,
