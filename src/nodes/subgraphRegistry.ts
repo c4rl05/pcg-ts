@@ -481,9 +481,66 @@ export function getRegisteredSubgraph(name: string): RegisteredSubgraph {
  */
 export function unknownSubgraphMessage(name: string): string {
   const names = registeredSubgraphNames();
-  return names.length === 0
-    ? `unknown subgraph ${JSON.stringify(name)} — no subgraphs are registered; call registerSubgraph(name, spec) before loading a graph that references one`
-    : `unknown subgraph ${JSON.stringify(name)}; ${suggestNames(name, names).clause}registered subgraphs: ${names.join(", ")}`;
+  const quoted = JSON.stringify(name);
+  if (names.length === 0 && isShippedPrimitiveName(name)) {
+    return `unknown subgraph ${quoted} — no subgraphs are registered, and ${quoted} is named like a shipped primitive: add ${PRIMITIVES_IMPORT} before loading the graph, which registers every shipped primitive (the pcg CLI imports it automatically); a subgraph of your own needs registerSubgraph(name, spec) first`;
+  }
+  if (names.length === 0) {
+    return `unknown subgraph ${quoted} — no subgraphs are registered; a shipped primitive is registered by ${PRIMITIVES_IMPORT} (the pcg CLI imports it automatically), so a script must import it before loading the graph; a subgraph of your own needs registerSubgraph(name, spec) first`;
+  }
+  const clause = suggestNames(name, names).clause;
+  if (missesShippedPrimitives(name, names)) {
+    return `unknown subgraph ${quoted} — it is named like a shipped primitive, and no shipped primitive is registered: add ${PRIMITIVES_IMPORT} before loading the graph (the pcg CLI imports it automatically); ${clause}registered subgraphs: ${names.join(", ")}`;
+  }
+  return `unknown subgraph ${quoted}; ${clause}registered subgraphs: ${names.join(", ")}`;
+}
+
+/**
+ * @internal The `fix` for an unknown subgraph name when the likely cause is
+ * that `pcg-ts/primitives` was never imported — the registry is empty, or
+ * the name is shaped like a shipped primitive and none is registered — and
+ * `undefined` otherwise, when the ordinary did-you-mean is the better fix.
+ */
+export function unknownSubgraphImportFix(name: string): string | undefined {
+  const names = registeredSubgraphNames();
+  if (names.length === 0) {
+    return isShippedPrimitiveName(name)
+      ? `add ${PRIMITIVES_IMPORT} before loading the graph — it registers every shipped primitive (the pcg CLI imports it automatically)`
+      : `add ${PRIMITIVES_IMPORT} before loading the graph if ${JSON.stringify(name)} is a shipped primitive (the pcg CLI imports it automatically), or call registerSubgraph(${JSON.stringify(name)}, spec) first if it is your own`;
+  }
+  return missesShippedPrimitives(name, names)
+    ? `add ${PRIMITIVES_IMPORT} before loading the graph — it registers every shipped primitive (the pcg CLI imports it automatically)`
+    : undefined;
+}
+
+/** The statement that registers the shipped vocabulary, as a script writes it. */
+const PRIMITIVES_IMPORT = `import "pcg-ts/primitives"`;
+
+/**
+ * @internal The families `pcg-ts/primitives` names its primitives under:
+ * `PRIMITIVE_FAMILIES` in `src/primitives/define.ts`, copied because the
+ * core cannot import the vocabulary without registering it. A test there
+ * holds the two lists equal.
+ */
+export const SHIPPED_PRIMITIVE_FAMILIES: readonly string[] = [
+  "shape",
+  "fill",
+  "transform",
+  "compose",
+  "filter",
+  "place",
+  "write",
+];
+
+/** Whether `name` is spelled `<family>/<leaf>` with a shipped family. */
+function isShippedPrimitiveName(name: string): boolean {
+  const slash = name.indexOf("/");
+  return slash > 0 && slash < name.length - 1 && SHIPPED_PRIMITIVE_FAMILIES.includes(name.slice(0, slash));
+}
+
+/** A primitive-shaped name, and not one registered name is primitive-shaped. */
+function missesShippedPrimitives(name: string, names: readonly string[]): boolean {
+  return isShippedPrimitiveName(name) && !names.some(isShippedPrimitiveName);
 }
 
 /**

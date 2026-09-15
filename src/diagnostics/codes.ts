@@ -95,6 +95,8 @@ export const DIAGNOSTIC_CODES = Object.freeze({
   usage: "The command line is malformed: a bad flag, a missing value or a missing argument.",
   "unknown-command": "The CLI was given a command it does not have.",
   "file-unreadable": "A file named on the command line cannot be read.",
+  "file-unwritable": "A file named on the command line cannot be written: its directory cannot be created, the path is a directory, or the host has no way to write it.",
+  "unknown-tag": "A tag was asked for on the command line that no graph in the shipped corpus carries.",
 
   // Agent rules (pcg agents).
   "agent-rules-missing": "The file pcg agents --check reads carries no pcg-ts agent-rules block, or does not exist.",

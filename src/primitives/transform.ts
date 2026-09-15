@@ -100,7 +100,7 @@ export function registerTransformPrimitives(): void {
         targets: [],
         default: 0,
         description:
-          "Offset added to the noise sample position — the per-instance re-roll, and the ONLY one: no seed can move a noise field.",
+          "Offset added to the noise sample position — the per-instance re-roll, and the ONLY one this primitive has: its noise sets no seed in its field spec, so it runs at the fixed seed 0 and neither the graph seed nor a node seed moves it.",
         acceptsField: true,
       },
     ],

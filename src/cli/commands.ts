@@ -251,7 +251,7 @@ function writeOut(outPath: string, write: () => void): void {
   } catch (err) {
     throw new CliError(
       `cannot write --out "${outPath}": ${err instanceof Error ? err.message : String(err)}; pass a path whose parent directories exist or can be created, and that is not itself a directory`,
-      { got: outPath, key: "--out" },
+      { code: "file-unwritable", got: outPath, key: "--out" },
     );
   }
 }
@@ -602,6 +602,8 @@ const graphsCommand: Command = {
       if (!tags.includes(tag)) {
         const near = suggestNames(tag, tags);
         throw new CliError(`graphs: unknown tag "${tag}"; ${near.clause}tags in the corpus: ${tags.join(", ")}`, {
+          code: "unknown-tag",
+          key: "--tag",
           got: tag,
           valid: tags,
           ...suggestionFields(near.names),
@@ -1496,6 +1498,7 @@ async function runRenderPng(
   if (writeBytes === undefined) {
     throw new CliError(
       `render: this CliIo has no writeBytes, so the PNG for --out ${outPath} cannot be written — give the io a writeBytes(path, data: Uint8Array) (makeNodeIo has one), or write the top-down SVG with --out <file>.svg`,
+      { code: "file-unwritable", got: outPath, key: "--out" },
     );
   }
 

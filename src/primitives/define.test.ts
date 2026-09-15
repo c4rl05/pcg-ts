@@ -12,6 +12,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { SerializedNode } from "../index.js";
+import { SHIPPED_PRIMITIVE_FAMILIES } from "../nodes/subgraphRegistry.js";
 import { PRIMITIVE_FAMILIES, definePrimitive, primitiveFamily } from "./define.js";
 
 /** A trivial two-node recipe: a scatter into a jitter. */
@@ -53,6 +54,13 @@ function define(name: string, params?: Parameters<typeof definePrimitive>[1]["pa
 }
 
 describe("the name is checked against the closed family set", () => {
+  it("is the family set the core's unknown-subgraph hint recognises", () => {
+    // The core copies the list (it cannot import this module without
+    // registering the vocabulary); a family added here and not there would
+    // lose the `import "pcg-ts/primitives"` hint for its names.
+    expect([...SHIPPED_PRIMITIVE_FAMILIES]).toEqual([...PRIMITIVE_FAMILIES]);
+  });
+
   it("accepts <family>/<kebab-case> for every family", () => {
     for (const family of PRIMITIVE_FAMILIES) expect(primitiveFamily(`${family}/a-b2-c`)).toBe(family);
   });

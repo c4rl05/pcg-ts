@@ -65,6 +65,7 @@ import {
   getRegisteredSubgraph,
   hasRegisteredSubgraph,
   registeredSubgraphNames,
+  unknownSubgraphImportFix,
   unknownSubgraphMessage,
 } from "./subgraphRegistry.js";
 
@@ -2047,6 +2048,7 @@ function addSubgraphNode(w: WrapperReading, sink: Sink): NodeHandle {
     if (!hasRegisteredSubgraph(ref.name)) {
       const valid = registeredSubgraphNames();
       const near = suggestNames(ref.name, valid);
+      const importFix = unknownSubgraphImportFix(ref.name);
       fault({
         code: "unknown-subgraph",
         message: `node "${id}": ${unknownSubgraphMessage(ref.name)}`,
@@ -2055,6 +2057,9 @@ function addSubgraphNode(w: WrapperReading, sink: Sink): NodeHandle {
         got: ref.name,
         valid,
         ...suggestionFields(near, (to) => `replace "${ref.name}" with "${to}"`),
+        // A load that never imported the vocabulary: the import is the fix,
+        // whatever near name the caller's own registrations happen to hold.
+        ...(importFix !== undefined ? { fix: importFix } : {}),
       });
     }
     const entry = getRegisteredSubgraph(ref.name);

@@ -483,6 +483,24 @@ describe("pcg inspect --dist / --group-by / --bands", () => {
     }
   });
 
+  it("codes a missing attribute as attribute-not-found under every flag, with what exists", async () => {
+    // The cook-time spelling of the same fault, so an agent reading --json
+    // meets one code for it whether the graph or the flag named the attribute.
+    for (const flags of [["--dist", "elevaton"], ["--bands", "elevaton=1,2"], ["--group-by", "elevaton"]]) {
+      const r = await run(["inspect", SMALL_PATH, ...flags, "--json"]);
+      expect({ flags, code: r.code }).toEqual({ flags, code: EXIT_FAILURE });
+      const record = JSON.parse(r.out).errors[0];
+      expect(record).toMatchObject({
+        code: "attribute-not-found",
+        key: flags[0],
+        got: "elevaton",
+        didYouMean: ["elevation"],
+        fix: `replace "elevaton" with "elevation"`,
+      });
+      expect(record.valid).toEqual(expect.arrayContaining(["P", "elevation", "species"]));
+    }
+  });
+
   it("leaves the text attribute table's columns where they were", async () => {
     const r = await run(["inspect", SMALL_PATH, "--rows", "0"]);
     const header = r.out.split("\n").find((l) => l.trim().startsWith("attr ") && l.includes("min"));

@@ -32,6 +32,7 @@ import {
   instanceAttributesOf,
   isDeviceResidentInstances,
 } from "../index.js";
+import { suggestNames } from "../diagnostics/didYouMean.js";
 import { CliUsageError, parseNumberValue } from "./args.js";
 import { CliError } from "./errors.js";
 import { plural, table } from "./format.js";
@@ -114,7 +115,16 @@ interface Population {
   readonly count: number;
   lookup(name: string): Column | undefined;
   /** What a missing name was, told to the reader: the names that do exist, and where. */
-  missing(name: string): string;
+  missing(name: string): MissingName;
+}
+
+/** A name the population does not have, as text and as record fields. */
+interface MissingName {
+  readonly text: string;
+  /** Every name the population does answer to. */
+  readonly valid: readonly string[];
+  /** A fix that is not a spelling: the name lives on another domain. */
+  readonly fix?: string;
 }
 
 function attributeColumn(attr: Attribute): Column {
@@ -140,10 +150,13 @@ function geometryPopulation(geo: Geometry, domain: Domain): Population {
     missing: (name) => {
       const here = [...set].map((a) => a.name);
       const elsewhere = DOMAINS.filter((d) => d !== domain && geo.attrs[d].get(name) !== undefined);
-      return (
-        `no ${domain} attribute "${name}"; ${domain} attributes: ${here.length === 0 ? "(none)" : here.join(", ")}` +
-        (elsewhere.length > 0 ? `; "${name}" is on the ${elsewhere.join(", ")} domain — pass --domain ${elsewhere[0]}` : "")
-      );
+      return {
+        text:
+          `no ${domain} attribute "${name}"; ${domain} attributes: ${here.length === 0 ? "(none)" : here.join(", ")}` +
+          (elsewhere.length > 0 ? `; "${name}" is on the ${elsewhere.join(", ")} domain — pass --domain ${elsewhere[0]}` : ""),
+        valid: here,
+        ...(elsewhere.length > 0 ? { fix: `pass --domain ${elsewhere[0]}` } : {}),
+      };
     },
   };
 }
@@ -253,12 +266,15 @@ function instancePopulation(item: InstancesItem): Population {
     source: "instances",
     count,
     lookup: (name) => pseudo.get(name) ?? channels.get(name),
-    missing: (name) =>
-      `no instance attribute "${name}"; an instance item exposes ${INSTANCE_PSEUDO_ATTRIBUTES.join(", ")}` +
-      (channels.size > 0 ? ` and its channels ${[...channels.keys()].join(", ")}` : " (it carries no channels)") +
-      (inconsistent.includes(name)
-        ? `; the channel "${name}" exists but not on every batch at one width, so it has no value for every instance`
-        : ""),
+    missing: (name) => ({
+      text:
+        `no instance attribute "${name}"; an instance item exposes ${INSTANCE_PSEUDO_ATTRIBUTES.join(", ")}` +
+        (channels.size > 0 ? ` and its channels ${[...channels.keys()].join(", ")}` : " (it carries no channels)") +
+        (inconsistent.includes(name)
+          ? `; the channel "${name}" exists but not on every batch at one width, so it has no value for every instance`
+          : ""),
+      valid: [...INSTANCE_PSEUDO_ATTRIBUTES, ...channels.keys()],
+    }),
   };
 }
 
@@ -296,7 +312,20 @@ function select(population: Population, ref: string, flag: string, where: string
       return { column, components: [c], selector: c };
     }
   }
-  throw new CliError(`inspect: flag "--${flag}" names "${ref}", but ${where} has ${population.missing(match?.[1] ?? ref)}`);
+  // The cook's own code for the same fault, so one attribute missing reads
+  // the same whether the graph named it or a flag did.
+  const name = match?.[1] ?? ref;
+  const missing = population.missing(name);
+  const near = suggestNames(name, missing.valid);
+  const fix = missing.fix ?? (near.only !== undefined ? `replace "${name}" with "${near.only}"` : undefined);
+  throw new CliError(`inspect: flag "--${flag}" names "${ref}", but ${where} has ${missing.text}`, {
+    code: "attribute-not-found",
+    key: `--${flag}`,
+    got: name,
+    valid: missing.valid,
+    ...(near.names.length > 0 ? { didYouMean: near.names } : {}),
+    ...(fix !== undefined ? { fix } : {}),
+  });
 }
 
 /** `scale[0]` for a tuple component, `riverDist` for a scalar. */

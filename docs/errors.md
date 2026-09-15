@@ -6,7 +6,7 @@ Every failure the library and the `pcg` CLI report carries one or more `Diagnost
 
 Codes are additive-only: a published code is never renamed, removed or given a different meaning, so it is safe to branch on. Match on `code`, never on `message`, which is prose and gets reworded.
 
-64 codes:
+66 codes:
 
 | Code | Meaning |
 |---|---|
@@ -70,6 +70,8 @@ Codes are additive-only: a published code is never renamed, removed or given a d
 | `usage` | The command line is malformed: a bad flag, a missing value or a missing argument. |
 | `unknown-command` | The CLI was given a command it does not have. |
 | `file-unreadable` | A file named on the command line cannot be read. |
+| `file-unwritable` | A file named on the command line cannot be written: its directory cannot be created, the path is a directory, or the host has no way to write it. |
+| `unknown-tag` | A tag was asked for on the command line that no graph in the shipped corpus carries. |
 | `agent-rules-missing` | The file pcg agents --check reads carries no pcg-ts agent-rules block, or does not exist. |
 | `agent-rules-stale` | The file's pcg-ts agent-rules block differs from the one the installed version renders. |
 | `agent-rules-malformed` | The agent-rules markers are not one BEGIN line followed by one END line, each alone on its line. |

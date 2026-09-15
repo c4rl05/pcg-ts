@@ -18,7 +18,12 @@ import {
   type SerializedSubgraph,
 } from "./index.js";
 import { subgraphNode } from "../graph/index.js";
-import { __defineSubgraphUnchecked, __resetSubgraphRegistry, listSubgraphs } from "./subgraphRegistry.js";
+import {
+  __defineSubgraphUnchecked,
+  __resetSubgraphRegistry,
+  getRegisteredSubgraph,
+  listSubgraphs,
+} from "./subgraphRegistry.js";
 import { firstGeo, snapshotGeometry } from "./nodes.testsupport.js";
 
 /**
@@ -418,10 +423,63 @@ describe("named subgraph registry", () => {
     );
   });
 
-  it("says so when nothing is registered at all", () => {
+  /** The one record a refused load carries. */
+  function refusal(graph: SerializedGraph): GraphSerializationError {
+    try {
+      deserializeGraph(graph);
+    } catch (err) {
+      if (err instanceof GraphSerializationError) return err;
+      throw err;
+    }
+    throw new Error("expected the load to be refused");
+  }
+
+  it("says so when nothing is registered at all, naming both ways to register one", () => {
     expect(() => deserializeGraph(refGraph("scatter/grid"))).toThrow(
-      /node "s": unknown subgraph "scatter\/grid" — no subgraphs are registered; call registerSubgraph\(name, spec\) before loading a graph that references one/,
+      /node "s": unknown subgraph "scatter\/grid" — no subgraphs are registered; a shipped primitive is registered by import "pcg-ts\/primitives" \(the pcg CLI imports it automatically\), so a script must import it before loading the graph; a subgraph of your own needs registerSubgraph\(name, spec\) first/,
     );
+    const record = refusal(refGraph("scatter/grid")).diagnostics[0];
+    expect(record?.code).toBe("unknown-subgraph");
+    expect(record?.fix).toBe(
+      'add import "pcg-ts/primitives" before loading the graph if "scatter/grid" is a shipped primitive (the pcg CLI imports it automatically), or call registerSubgraph("scatter/grid", spec) first if it is your own',
+    );
+  });
+
+  it("names the missing primitives import when a primitive-shaped name misses an empty registry", () => {
+    // The mistake a script makes: loading a graph that uses the shipped
+    // vocabulary without ever importing it. The fix names the import only.
+    const err = refusal(refGraph("fill/scatter-even"));
+    expect(err.message).toMatch(
+      /unknown subgraph "fill\/scatter-even" — no subgraphs are registered, and "fill\/scatter-even" is named like a shipped primitive: add import "pcg-ts\/primitives" before loading the graph/,
+    );
+    expect(err.diagnostics[0]?.fix).toBe(
+      'add import "pcg-ts/primitives" before loading the graph — it registers every shipped primitive (the pcg CLI imports it automatically)',
+    );
+    expect(() => getRegisteredSubgraph("fill/scatter-even")).toThrow(/import "pcg-ts\/primitives"/);
+  });
+
+  it("names the import when only the caller's own subgraphs are registered, and still lists them", () => {
+    registerSubgraph("my/rows", recipeOf(buildEmbedded()));
+    const err = refusal(refGraph("place/on-surface"));
+    expect(err.message).toMatch(
+      /unknown subgraph "place\/on-surface" — it is named like a shipped primitive, and no shipped primitive is registered: add import "pcg-ts\/primitives" before loading the graph \(the pcg CLI imports it automatically\); registered subgraphs: my\/rows$/,
+    );
+    const record = err.diagnostics[0];
+    expect(record?.valid).toEqual(["my/rows"]);
+    expect(record?.fix).toContain('import "pcg-ts/primitives"');
+  });
+
+  it("keeps the plain did-you-mean once a shipped-family name is registered", () => {
+    registerSubgraph("fill/scatter-even", recipeOf(buildEmbedded()));
+    const err = refusal(refGraph("fill/scatter-evn"));
+    expect(err.message).not.toContain("pcg-ts/primitives");
+    expect(err.diagnostics[0]).toMatchObject({
+      didYouMean: ["fill/scatter-even"],
+      fix: 'replace "fill/scatter-evn" with "fill/scatter-even"',
+    });
+    // A name outside the families never draws the import hint either.
+    registerSubgraph("my/rows", recipeOf(buildEmbedded()));
+    expect(refusal(refGraph("my/rowz")).message).not.toContain("pcg-ts/primitives");
   });
 
   // ---------------------------------------------------------------- hash

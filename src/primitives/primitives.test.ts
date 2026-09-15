@@ -547,6 +547,36 @@ describe("seeds and per-instance variation", () => {
     }
   });
 
+  it("no param text claims that no seed can move a noise field", () => {
+    // False in general: a noise whose opts carry `"seed": { "from": "node",
+    // "variant": N }` follows the graph seed. What IS true of a recipe whose
+    // own noise carries a literal seed is said about that recipe, below.
+    for (const name of NAMES) {
+      for (const p of getRegisteredSubgraph(name).subgraph.params ?? []) {
+        expect(p.description ?? "", `${name} param "${p.name}"`).not.toMatch(/no seed can move/i);
+      }
+    }
+  });
+
+  it("a variant that says no seed moves the noise is measured: two graph seeds, one wander", async () => {
+    // shape/path-meander has no input and no randomness besides its noise,
+    // so positions unchanged under a different graph seed (hence a different
+    // node seed) prove the claim its `variant` text makes. Only `P` is
+    // compared: the per-point `seed` attribute follows the graph seed, as it
+    // should, and says nothing about the noise.
+    const name = "shape/path-meander";
+    const variant = (getRegisteredSubgraph(name).subgraph.params ?? []).find((p) => p.name === "variant");
+    expect(variant?.description).toContain("neither the graph seed nor a node seed moves it");
+    const positions = async (seed: number): Promise<number[]> => {
+      const item = (await cookGraph(driverGraph(name, [{ id: "a" }], seed))).a_out?.[0];
+      if (item?.kind !== "geometry") throw new Error(`${name} emitted no geometry`);
+      return Array.from(item.geo.attrs.point.get("P")?.data ?? []);
+    };
+    const [one, other] = [await positions(1), await positions(99)];
+    expect(one.length).toBeGreaterThan(0);
+    expect(one).toEqual(other);
+  });
+
   it("a different variant gives a noise-bearing primitive a different result", async () => {
     for (const name of noiseBearing) {
       const graph = driverGraph(name, [
