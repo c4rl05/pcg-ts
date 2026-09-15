@@ -6,6 +6,7 @@
 import {
   type CookOptions,
   DOMAINS,
+  type DataCollection,
   type DataItem,
   type DescribedGraphParam,
   type DescribedSpawner,
@@ -38,6 +39,15 @@ import {
   stringFlag,
 } from "./args.js";
 import { CliError } from "./errors.js";
+import {
+  DEFAULT_BINS,
+  type DistributionRequest,
+  MAX_GROUPS,
+  distributionReport,
+  distributionText,
+  parseBands,
+} from "./distributions.js";
+import { cookFingerprint } from "./fingerprint.js";
 import { fmtFixed, fmtMs, fmtStat, fmtTuple, plural, table } from "./format.js";
 import { type TargetOptions, cookTarget, loadGraph } from "./graphSource.js";
 import type { CliIo } from "./io.js";
@@ -63,6 +73,7 @@ import {
 import {
   type AttrStats,
   type ItemSummary,
+  MAX_BINS,
   attrListText,
   itemLine,
   sampleRows,
@@ -670,6 +681,86 @@ const assetsCommand: Command = {
 // cook
 // ---------------------------------------------------------------------------
 
+const NO_TIMINGS_FLAG = {
+  kind: "boolean",
+  description:
+    "leave every elapsedMs out of the report, and the milliseconds out of the text, rather than zeroing them (a zero reads as a measurement); with --fingerprint this is the determinism check — two runs at one seed must print byte-identical reports",
+} as const;
+
+const FINGERPRINT_FLAG = {
+  kind: "boolean",
+  description:
+    "add a 16-hex digest of the cooked data, overall (fingerprint) and per output (outputFingerprints): FNV over the canonical JSON of every attribute column's bytes, topology array, instance transform and channel; with --no-timings this is the determinism check — the same graph at the same seed must print the same digest, and a different seed or one changed value moves it",
+} as const;
+
+/** The cook counters, with `elapsedMs` only when timings were asked for. */
+function statsJson(
+  stats: { readonly cooked: number; readonly cached: number; readonly elapsedMs: number },
+  timings: boolean,
+): { cooked: number; cached: number; elapsedMs?: number } {
+  return timings
+    ? { cooked: stats.cooked, cached: stats.cached, elapsedMs: stats.elapsedMs }
+    : { cooked: stats.cooked, cached: stats.cached };
+}
+
+/**
+ * The per-node records. Without timings each record loses its `elapsedMs`
+ * KEY rather than carrying a zero, so a report diff never mistakes an
+ * omitted measurement for a fast node.
+ */
+function nodesJson(
+  perNode: readonly NodeDoneInfo[],
+  timings: boolean,
+): { id: string; type: string; cached: boolean; elapsedMs?: number }[] {
+  return perNode.map((n) =>
+    timings
+      ? { id: n.id, type: n.type, cached: n.cached, elapsedMs: n.elapsedMs }
+      : { id: n.id, type: n.type, cached: n.cached },
+  );
+}
+
+/** `12 cooked, 3 cached, 4.2 ms` — or without the milliseconds. */
+function cookCountsLine(
+  stats: { readonly cooked: number; readonly cached: number; readonly elapsedMs: number },
+  timings: boolean,
+): string {
+  const counts = `${stats.cooked} cooked, ${stats.cached} cached`;
+  return timings ? `${counts}, ${fmtMs(stats.elapsedMs)}` : counts;
+}
+
+/** The `--stats` table, whose `elapsed` column is dropped along with the timings. */
+function perNodeTable(perNode: readonly NodeDoneInfo[], timings: boolean): string[] {
+  return table([
+    timings ? ["id", "type", "state", "elapsed"] : ["id", "type", "state"],
+    ...perNode.map((n) => {
+      const row = [n.id, n.type, n.cached ? "cached" : "cooked"];
+      return timings ? [...row, fmtMs(n.elapsedMs)] : row;
+    }),
+  ]);
+}
+
+/**
+ * The digests `--fingerprint` adds, as the two report keys. A per-output
+ * digest cannot live ON `outputs[name]`, which is an array of item
+ * summaries that existing consumers index directly; it sits beside it
+ * under the same name instead.
+ */
+function fingerprintJson(
+  outputs: Record<string, DataCollection>,
+): { fingerprint: string; outputFingerprints: Record<string, string> } {
+  const digest = cookFingerprint(outputs);
+  return { fingerprint: digest.fingerprint, outputFingerprints: { ...digest.outputs } };
+}
+
+/** `  fingerprint <hex>` after an output's listing line, when one was computed. */
+function outputDigestText(
+  digest: { readonly outputFingerprints: Readonly<Record<string, string>> } | undefined,
+  name: string,
+): string {
+  const hex = digest?.outputFingerprints[name];
+  return hex === undefined ? "" : `  fingerprint ${hex}`;
+}
+
 const cookCommand: Command = {
   spec: {
     name: "cook",
@@ -681,6 +772,8 @@ const cookCommand: Command = {
       budget: BUDGET_FLAG,
       stats: { kind: "boolean", description: "print per-node cook stats" },
       out: { kind: "string", value: "file", description: "write the JSON report to a file" },
+      "no-timings": NO_TIMINGS_FLAG,
+      fingerprint: FINGERPRINT_FLAG,
     },
   },
   async run(args, io) {
@@ -698,6 +791,8 @@ const cookCommand: Command = {
       onNodeDone: (info) => perNode.push(info),
     });
 
+    const timings = !boolFlag(args, "no-timings");
+    const digest = boolFlag(args, "fingerprint") ? fingerprintJson(result.outputs) : undefined;
     const outputs: Record<string, ItemSummary[]> = {};
     for (const name of Object.keys(result.outputs)) {
       outputs[name] = [...result.outputs[name]].map(summarizeItem);
@@ -707,38 +802,26 @@ const cookCommand: Command = {
       path,
       seed: graph.seed,
       out: outPath ?? null,
-      stats: {
-        cooked: result.stats.cooked,
-        cached: result.stats.cached,
-        elapsedMs: result.stats.elapsedMs,
-      },
-      nodes: perNode.map((n) => ({
-        id: n.id,
-        type: n.type,
-        cached: n.cached,
-        elapsedMs: n.elapsedMs,
-      })),
+      stats: statsJson(result.stats, timings),
+      nodes: nodesJson(perNode, timings),
+      ...(digest !== undefined ? digest : {}),
       outputs,
     };
 
     const lines = [
       `cooked ${path}${seed !== undefined ? ` (seed override ${graph.seed})` : ` (seed ${graph.seed})`}`,
-      `${result.stats.cooked} cooked, ${result.stats.cached} cached, ${fmtMs(result.stats.elapsedMs)}`,
+      cookCountsLine(result.stats, timings),
+      ...(digest !== undefined ? [`fingerprint ${digest.fingerprint}`] : []),
       "",
       "outputs:",
     ];
     for (const name of Object.keys(outputs)) {
-      lines.push(`  ${name} (${plural(outputs[name].length, "item")})`);
+      lines.push(`  ${name} (${plural(outputs[name].length, "item")})${outputDigestText(digest, name)}`);
       outputs[name].forEach((item, i) => lines.push(`    [${i}] ${itemLine(item)}`));
     }
     if (boolFlag(args, "stats")) {
       lines.push("", "per-node:");
-      lines.push(
-        ...table([
-          ["id", "type", "state", "elapsed"],
-          ...perNode.map((n) => [n.id, n.type, n.cached ? "cached" : "cooked", fmtMs(n.elapsedMs)]),
-        ]),
-      );
+      lines.push(...perNodeTable(perNode, timings));
     }
     if (outPath !== undefined) {
       io.writeFile(outPath, JSON.stringify(json, null, 2) + "\n");
@@ -809,11 +892,48 @@ function attrTables(attrs: readonly AttrStats[]): string[] {
   return lines;
 }
 
+/**
+ * What `--dist`, `--bins`, `--group-by` and `--bands` ask for, checked
+ * for shape before anything cooks. `undefined` when none of them was
+ * given, which is the ordinary inspect. The checks that need the data —
+ * a float `--group-by`, a missing attribute, too many groups — happen
+ * per item, after the cook, in `distributionReport`.
+ */
+function distributionRequest(args: ParsedArgs): DistributionRequest | undefined {
+  const dist = listFlag(args, "dist");
+  const repeated = dist.find((ref, i) => dist.indexOf(ref) !== i);
+  if (repeated !== undefined) {
+    // A repeat prints the same table twice, which reads as two different
+    // columns that happen to agree; the CLI refuses repeats elsewhere too.
+    throw new CliUsageError(`inspect: flag "--dist" was given "${repeated}" more than once; name each column once`);
+  }
+  const bins = intFlag(args, "bins", "inspect", { min: 1, max: MAX_BINS });
+  const groupBy = stringFlag(args, "group-by");
+  const bandsRaw = stringFlag(args, "bands");
+  if (groupBy !== undefined && bandsRaw !== undefined) {
+    throw new CliUsageError(
+      `inspect: --group-by and --bands each partition the elements into groups; pass one of them, not both`,
+    );
+  }
+  if (bins !== undefined && dist.length === 0) {
+    throw new CliUsageError(
+      `inspect: --bins sets the histogram of a --dist column, and no --dist was given; add --dist <attr>`,
+    );
+  }
+  if (dist.length === 0 && groupBy === undefined && bandsRaw === undefined) return undefined;
+  return {
+    dist,
+    bins: bins ?? DEFAULT_BINS,
+    ...(groupBy !== undefined ? { groupBy } : {}),
+    ...(bandsRaw !== undefined ? { bands: parseBands(bandsRaw) } : {}),
+  };
+}
+
 const inspectCommand: Command = {
   spec: {
     name: "inspect",
     summary:
-      "Cook one node's output pin (or a declared output) and report element counts per domain, attribute statistics, bounds, and the first sample rows.",
+      "Cook one node's output pin (or a declared output) and report element counts per domain, attribute statistics, bounds, and the first sample rows. --dist adds a column's percentiles and histogram, and --group-by or --bands splits them into groups whose counts sum to the total — the outcome check, as one command.",
     positionals: [GRAPH_ARG],
     flags: {
       ...TARGET_FLAGS,
@@ -823,7 +943,34 @@ const inspectCommand: Command = {
       domain: {
         kind: "string",
         value: "name",
-        description: "domain to sample rows from: point, vertex, primitive, detail (default point)",
+        description:
+          "domain to sample rows from, and that --dist, --group-by and --bands read: point, vertex, primitive, detail (default point); an instance item is read per instance whatever this says",
+      },
+      "no-timings": {
+        kind: "boolean",
+        description:
+          "leave elapsedMs out of the JSON report rather than zeroing it (a zero reads as a measurement), so two reports can be compared byte for byte",
+      },
+      dist: {
+        kind: "strings",
+        value: "attr",
+        description: `describe a numeric column: count, non-finite, min, max, mean, population stddev, the percentiles p0 p5 p25 p50 p75 p95 p100 and a histogram. One entry per tuple component (scale gives scale[0], scale[1], scale[2]; name one as scale[1]). Percentiles are NEAREST-RANK over the finite values sorted ascending — pP is the value at rank ceil(P/100 * n), p0 the first — so each is a value that occurs; -0 sorts before +0, and NaN and Infinity are counted in non-finite, never sorted or binned. On an instance item: @translate, @scale (the length of each column of the transform's 3x3) and the channels by name`,
+      },
+      bins: {
+        kind: "number",
+        value: "n",
+        description: `histogram bins for --dist, ${1} to ${MAX_BINS} (default ${DEFAULT_BINS}); equal width from min to max, each [lo, hi) and the last [lo, hi]; a column whose finite values are all equal gets one bin`,
+      },
+      "group-by": {
+        kind: "string",
+        value: "attr",
+        description: `split into one group per value of a string, i32, u32 or bool attribute (or @asset on an instance item), sorted, at most ${MAX_GROUPS}; a float attribute is refused — band it with --bands`,
+      },
+      bands: {
+        kind: "string",
+        value: "attr=e0,e1,…",
+        description:
+          "split by strictly increasing edges into the groups <e0, [e0,e1), …, >=eN and non-finite, so the counts always sum to the total, empty groups included; every group's histogram shares the population's bin edges",
       },
     },
   },
@@ -838,6 +985,8 @@ const inspectCommand: Command = {
       );
     }
     const domain = domainName as Domain;
+    const timings = !boolFlag(args, "no-timings");
+    const request = distributionRequest(args);
     const target = await cookTarget(
       graph,
       targetOptions(args, "inspect"),
@@ -846,6 +995,15 @@ const inspectCommand: Command = {
 
     const items = [...target.collection];
     const summaries = items.map(summarizeItem);
+    const reports =
+      request === undefined
+        ? undefined
+        : items.map((item, i) => distributionReport(item, i, domain, request) ?? null);
+    if (reports !== undefined && reports.every((r) => r === null)) {
+      throw new CliError(
+        `inspect: --dist, --group-by and --bands describe geometry elements or instances, but ${target.label} holds ${items.length === 0 ? "no items" : "only value items"}; point --node or --output at a geometry or instances pin`,
+      );
+    }
     const lines = [
       `${path} — ${target.label}`,
       `${plural(items.length, "item")}, cooked ${target.result.stats.cooked}, cached ${target.result.stats.cached}`,
@@ -853,31 +1011,32 @@ const inspectCommand: Command = {
     const sampled: unknown[] = [];
     summaries.forEach((summary, i) => {
       lines.push("", `item ${i}: ${itemLine(summary)}`);
-      if (summary.kind !== "geometry") {
-        sampled.push(null);
-        return;
-      }
-      for (const domainSummary of summary.geometry.domains) {
-        // A domain with no attributes says nothing the item line has not
-        // already said (its element count), so it is left out.
-        if (domainSummary.attrs.length === 0) continue;
-        lines.push(
-          `  ${domainSummary.domain} — ${plural(domainSummary.count, "element")}: ${attrListText(domainSummary.attrs)}`,
-        );
-        lines.push(...attrTables(domainSummary.attrs));
-      }
       const item = items[i];
-      if (item.kind !== "geometry") return;
-      const sample = sampleRows(item.geo, domain, rows);
-      sampled.push(sample);
-      if (sample.rows.length > 0) {
-        lines.push(`  first ${sample.rows.length} of ${sample.total} ${domain} rows:`);
-        lines.push(...table([sample.columns as string[], ...sample.rows.map((r) => [...r])], "    "));
-      } else if (rows === 0) {
-        lines.push(`  ${domain} rows not sampled (--rows 0; ${plural(sample.total, "element")})`);
+      if (summary.kind !== "geometry" || item.kind !== "geometry") {
+        sampled.push(null);
       } else {
-        lines.push(`  no ${domain} rows to sample (${plural(sample.total, "element")})`);
+        for (const domainSummary of summary.geometry.domains) {
+          // A domain with no attributes says nothing the item line has not
+          // already said (its element count), so it is left out.
+          if (domainSummary.attrs.length === 0) continue;
+          lines.push(
+            `  ${domainSummary.domain} — ${plural(domainSummary.count, "element")}: ${attrListText(domainSummary.attrs)}`,
+          );
+          lines.push(...attrTables(domainSummary.attrs));
+        }
+        const sample = sampleRows(item.geo, domain, rows);
+        sampled.push(sample);
+        if (sample.rows.length > 0) {
+          lines.push(`  first ${sample.rows.length} of ${sample.total} ${domain} rows:`);
+          lines.push(...table([sample.columns as string[], ...sample.rows.map((r) => [...r])], "    "));
+        } else if (rows === 0) {
+          lines.push(`  ${domain} rows not sampled (--rows 0; ${plural(sample.total, "element")})`);
+        } else {
+          lines.push(`  no ${domain} rows to sample (${plural(sample.total, "element")})`);
+        }
       }
+      const report = reports?.[i];
+      if (report !== undefined && report !== null) lines.push(...distributionText(report));
     });
 
     return {
@@ -885,13 +1044,13 @@ const inspectCommand: Command = {
       json: {
         path,
         target: target.label,
-        stats: {
-          cooked: target.result.stats.cooked,
-          cached: target.result.stats.cached,
-          elapsedMs: target.result.stats.elapsedMs,
-        },
+        stats: statsJson(target.result.stats, timings),
         domain,
-        items: summaries.map((summary, i) => ({ ...summary, sample: sampled[i] })),
+        items: summaries.map((summary, i) => ({
+          ...summary,
+          sample: sampled[i],
+          ...(reports !== undefined ? { distributions: reports[i] } : {}),
+        })),
       },
     };
   },
@@ -1381,6 +1540,8 @@ const runCommand: Command = {
       budget: BUDGET_FLAG,
       stats: { kind: "boolean", description: "print per-node cook stats" },
       out: { kind: "string", value: "file", description: "write the JSON report to a file" },
+      "no-timings": NO_TIMINGS_FLAG,
+      fingerprint: FINGERPRINT_FLAG,
     },
   },
   /**
@@ -1449,6 +1610,8 @@ const runCommand: Command = {
       onNodeDone: (info) => perNode.push(info),
     });
 
+    const timings = !boolFlag(args, "no-timings");
+    const digest = boolFlag(args, "fingerprint") ? fingerprintJson(result.outputs) : undefined;
     const outputs: Record<string, ItemSummary[]> = {};
     for (const outputName of Object.keys(result.outputs)) {
       outputs[outputName] = [...result.outputs[outputName]].map(summarizeItem);
@@ -1463,23 +1626,16 @@ const runCommand: Command = {
       params: wrapper.nodes[0].params,
       inputs: bindings.map((b) => ({ pin: b.pin, items: b.items.length })),
       out: outPath ?? null,
-      stats: {
-        cooked: result.stats.cooked,
-        cached: result.stats.cached,
-        elapsedMs: result.stats.elapsedMs,
-      },
-      nodes: perNode.map((n) => ({
-        id: n.id,
-        type: n.type,
-        cached: n.cached,
-        elapsedMs: n.elapsedMs,
-      })),
+      stats: statsJson(result.stats, timings),
+      nodes: nodesJson(perNode, timings),
+      ...(digest !== undefined ? digest : {}),
       outputs,
     };
 
     const lines = [
       `ran "${name}" #${entry.hash}${seed !== undefined ? ` (seed override ${graph.seed})` : ` (seed ${graph.seed})`}`,
-      `${result.stats.cooked} cooked, ${result.stats.cached} cached, ${fmtMs(result.stats.elapsedMs)}`,
+      cookCountsLine(result.stats, timings),
+      ...(digest !== undefined ? [`fingerprint ${digest.fingerprint}`] : []),
     ];
     const paramNames = Object.keys(json.params);
     if (paramNames.length > 0) {
@@ -1492,17 +1648,14 @@ const runCommand: Command = {
     }
     lines.push("", "outputs:");
     for (const outputName of Object.keys(outputs)) {
-      lines.push(`  ${outputName} (${plural(outputs[outputName].length, "item")})`);
+      lines.push(
+        `  ${outputName} (${plural(outputs[outputName].length, "item")})${outputDigestText(digest, outputName)}`,
+      );
       outputs[outputName].forEach((item, i) => lines.push(`    [${i}] ${itemLine(item)}`));
     }
     if (boolFlag(args, "stats")) {
       lines.push("", "per-node:");
-      lines.push(
-        ...table([
-          ["id", "type", "state", "elapsed"],
-          ...perNode.map((n) => [n.id, n.type, n.cached ? "cached" : "cooked", fmtMs(n.elapsedMs)]),
-        ]),
-      );
+      lines.push(...perNodeTable(perNode, timings));
     }
     if (outPath !== undefined) {
       io.writeFile(outPath, JSON.stringify(json, null, 2) + "\n");

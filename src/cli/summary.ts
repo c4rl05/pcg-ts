@@ -31,6 +31,12 @@ export interface AttrStats {
   readonly min?: readonly number[];
   readonly max?: readonly number[];
   readonly mean?: readonly number[];
+  /**
+   * Per-component POPULATION standard deviation over finite values
+   * (divides by the finite count, not by one less). JSON only: the text
+   * table's columns are greppable by position and keep their order.
+   */
+  readonly stddev?: readonly number[];
   /** Scalar slots that were not finite (NaN or +-Infinity). */
   readonly nonFinite?: number;
   /** String attributes: how many distinct values are actually used. */
@@ -77,12 +83,228 @@ export function attributeStats(attr: Attribute, count: number): AttrStats {
   }
   const anyFinite = finite.some((n) => n > 0);
   if (!anyFinite) return { ...base, nonFinite };
+  const mean = sum.map((v, c) => (finite[c] > 0 ? v / finite[c] : Number.NaN));
+  // A second pass, around the mean the first one settled: deviations from
+  // the final mean, not a running one, so the result is the textbook
+  // population figure rather than an approximation of it.
+  const squares = new Array<number>(ts).fill(0);
+  for (let i = 0; i < count; i++) {
+    const offset = i * ts;
+    for (let c = 0; c < ts; c++) {
+      const v = attr.data[offset + c];
+      if (!Number.isFinite(v)) continue;
+      const d = v - mean[c];
+      squares[c] += d * d;
+    }
+  }
   return {
     ...base,
     min: min.map((v, c) => (finite[c] > 0 ? v : Number.NaN)),
     max: max.map((v, c) => (finite[c] > 0 ? v : Number.NaN)),
-    mean: sum.map((v, c) => (finite[c] > 0 ? v / finite[c] : Number.NaN)),
+    mean,
+    stddev: squares.map((v, c) => populationStddev(v, finite[c], min[c], max[c])),
     nonFinite,
+  };
+}
+
+/**
+ * `sqrt(sumOfSquares / n)`, NaN when there is nothing to divide by, and
+ * exactly 0 for a constant column: the mean of `n` copies of 0.1 is not
+ * 0.1 in binary, so the deviations would otherwise sum to a residue that
+ * reads as spread where there is none.
+ */
+function populationStddev(sumOfSquares: number, n: number, min: number, max: number): number {
+  if (n === 0) return Number.NaN;
+  if (min === max) return 0;
+  return Math.sqrt(sumOfSquares / n);
+}
+
+// ---------------------------------------------------------------------------
+// Distributions: percentiles and histograms over one numeric column.
+// ---------------------------------------------------------------------------
+
+/** The percentiles a distribution reports, as `p<P>` keys. */
+export const PERCENTILES = [0, 5, 25, 50, 75, 95, 100] as const;
+
+/** Nearest-rank percentiles: every one of them is a value that occurs in the data. */
+export interface Percentiles {
+  readonly p0: number;
+  readonly p5: number;
+  readonly p25: number;
+  readonly p50: number;
+  readonly p75: number;
+  readonly p95: number;
+  readonly p100: number;
+}
+
+/**
+ * A histogram as `counts[i]` values in bin `i`, whose bounds are
+ * `edges[i]` and `edges[i + 1]`. Every bin is half-open `[lo, hi)` except
+ * the last, which is closed `[lo, hi]` so the maximum lands in it.
+ */
+export interface Histogram {
+  readonly edges: readonly number[];
+  readonly counts: readonly number[];
+}
+
+/** One numeric column's distribution. */
+export interface DistributionStats {
+  /** Every value examined, finite or not. */
+  readonly count: number;
+  /** How many of them were NaN or +-Infinity, and so left out of every other figure. */
+  readonly nonFinite: number;
+  /** The finite values' extremes, mean and population stddev; absent when there are none. */
+  readonly min?: number;
+  readonly max?: number;
+  readonly mean?: number;
+  readonly stddev?: number;
+  readonly percentiles?: Percentiles;
+  readonly histogram: Histogram;
+}
+
+/** Options for {@link distributionStats}. */
+export interface DistributionOptions {
+  /** Bin count when `edges` is not given: an integer from 1 to 100. */
+  readonly bins: number;
+  /**
+   * Fixed bin edges, shared across calls — how groups of one population
+   * get histograms that line up bin for bin. Finite and non-decreasing,
+   * at least two. A value outside them is counted in the nearest end bin;
+   * edges taken from {@link histogramEdges} over the whole population can
+   * never have one.
+   */
+  readonly edges?: readonly number[];
+}
+
+/** The most bins a histogram may ask for. */
+export const MAX_BINS = 100;
+
+/**
+ * `bins + 1` equal-width edges from `min` to `max`, with both ends exact.
+ * A constant column (`min === max`) gets ONE bin, `[min, max]`, whatever
+ * `bins` says: equal-width bins of zero width are all the same bin. For
+ * the same reason a span too narrow to hold `bins + 1` distinct doubles —
+ * an f32 column that varies in its last bit — gets fewer bins: edges that
+ * round onto their neighbour are dropped rather than kept as bins no value
+ * could ever land in.
+ */
+export function histogramEdges(min: number, max: number, bins: number): number[] {
+  if (!Number.isInteger(bins) || bins < 1 || bins > MAX_BINS) {
+    throw new RangeError(`histogramEdges: bins must be an integer from 1 to ${MAX_BINS}, got ${bins}`);
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min > max) {
+    throw new RangeError(`histogramEdges: needs finite min <= max, got ${min} .. ${max}`);
+  }
+  if (min === max) return [min, max];
+  const width = max - min;
+  const edges = [min];
+  for (let i = 1; i < bins; i++) {
+    const t = i / bins;
+    // `max - min` overflows for a span wider than the largest double; the
+    // two-term form cannot, and is only needed then.
+    const edge = Number.isFinite(width) ? min + width * t : min * (1 - t) + max * t;
+    if (edge > edges[edges.length - 1] && edge < max) edges.push(edge);
+  }
+  edges.push(max);
+  return edges;
+}
+
+/**
+ * The bin a finite value falls in: the LAST `i` with `edges[i] <= v`,
+ * clamped to the bins that exist. Found by search over the edges array
+ * rather than by dividing by the bin width, so the answer always agrees
+ * with the edges as printed — a division rounds differently from the
+ * addition that produced the edges, and a value sitting exactly on an
+ * edge would land in whichever bin the rounding chose.
+ */
+function binOf(edges: readonly number[], v: number): number {
+  const last = edges.length - 2;
+  let lo = 0;
+  let hi = last;
+  if (v < edges[0]) return 0;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (edges[mid] <= v) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+}
+
+/**
+ * The distribution of one numeric column: count, non-finite count,
+ * min/max/mean/population stddev, nearest-rank percentiles and a
+ * histogram.
+ *
+ * PERCENTILES ARE NEAREST-RANK. Over the `n` finite values sorted
+ * ascending, `pP` is the value at 1-based rank `ceil(P / 100 * n)`, and
+ * `p0` is the first. No interpolation, so every percentile is a value
+ * that actually occurs — a p50 of 0.5 over a column of zeros and ones
+ * describes no element there is.
+ *
+ * ORDERING. Values sort numerically, with `-0` before `+0` (the typed
+ * array sort's rule), so a column holding both reports `-0` as its
+ * minimum. NaN and +-Infinity are counted in `nonFinite` and never sorted,
+ * binned or averaged. For binning, `-0` and `+0` compare equal.
+ */
+export function distributionStats(
+  values: ArrayLike<number>,
+  options: DistributionOptions,
+): DistributionStats {
+  const count = values.length;
+  const sorted = new Float64Array(count);
+  let n = 0;
+  for (let i = 0; i < count; i++) {
+    const v = values[i];
+    if (Number.isFinite(v)) sorted[n++] = v;
+  }
+  const nonFinite = count - n;
+  const finite = sorted.subarray(0, n).sort();
+
+  let edges: readonly number[];
+  if (options.edges !== undefined) {
+    const given = options.edges;
+    if (given.length < 2 || given.some((e, i) => !Number.isFinite(e) || (i > 0 && e < given[i - 1]))) {
+      throw new RangeError(
+        `distributionStats: edges must be at least two finite, non-decreasing numbers, got [${given.join(", ")}]`,
+      );
+    }
+    edges = [...given];
+  } else {
+    edges = n === 0 ? [] : histogramEdges(finite[0], finite[n - 1], options.bins);
+  }
+  const counts = new Array<number>(Math.max(0, edges.length - 1)).fill(0);
+  if (counts.length > 0) {
+    for (let i = 0; i < n; i++) counts[binOf(edges, finite[i])]++;
+  }
+  const histogram = { edges, counts };
+  if (n === 0) return { count, nonFinite, histogram };
+
+  let sum = 0;
+  for (let i = 0; i < n; i++) sum += finite[i];
+  const mean = sum / n;
+  let squares = 0;
+  for (let i = 0; i < n; i++) {
+    const d = finite[i] - mean;
+    squares += d * d;
+  }
+  const at = (p: number): number => finite[Math.max(1, Math.ceil((p * n) / 100)) - 1];
+  return {
+    count,
+    nonFinite,
+    min: finite[0],
+    max: finite[n - 1],
+    mean,
+    stddev: populationStddev(squares, n, finite[0], finite[n - 1]),
+    percentiles: {
+      p0: at(0),
+      p5: at(5),
+      p25: at(25),
+      p50: at(50),
+      p75: at(75),
+      p95: at(95),
+      p100: at(100),
+    },
+    histogram,
   };
 }
 
@@ -211,7 +433,7 @@ export type ItemSummary =
  * spawner, since its column is indices into a table that does not cross
  * with it — so `Uint32Array` is unambiguously `u32`.
  */
-function channelType(column: AttrData): AttrType {
+export function channelType(column: AttrData): AttrType {
   if (column instanceof Float32Array) return "f32";
   if (column instanceof Int32Array) return "i32";
   if (column instanceof Uint8Array) return "bool";

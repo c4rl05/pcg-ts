@@ -54,13 +54,11 @@
  * perfectly valid.
  */
 import {
-  type Attribute,
   type AttrData,
   type DataCollection,
   type DataItem,
   DOMAINS,
   type Domain,
-  type Geometry,
   type InstanceBatch,
   type InstancesItem,
   cook,
@@ -844,135 +842,6 @@ export function diffGraphStats(
 // The determinism fingerprint: byte-exact, run against run.
 // ---------------------------------------------------------------------------
 
-const encoder = new TextEncoder();
-
-/**
- * A 64-bit hash of a byte range, as 16 hex characters: two independent
- * FNV-1a streams over the same bytes. One 32-bit stream would collide
- * once in four billion, which is a poor bet to make against a
- * determinism invariant that is checked on every run.
- */
-function hashBytes(bytes: Uint8Array): string {
-  let a = 0x811c9dc5;
-  let b = 0xcbf29ce4;
-  for (let i = 0; i < bytes.length; i++) {
-    const byte = bytes[i]!;
-    a = Math.imul(a ^ byte, 0x01000193) >>> 0;
-    b = Math.imul(b ^ byte, 0x9e3779b1) >>> 0;
-  }
-  return a.toString(16).padStart(8, "0") + b.toString(16).padStart(8, "0");
-}
-
-/** The used prefix of an attribute's storage, as bytes. Capacity beyond `count` is not data. */
-function attributeBytes(attr: Attribute, count: number): Uint8Array {
-  const used = count * attr.tupleSize;
-  const data = attr.data;
-  return new Uint8Array(data.buffer, data.byteOffset, used * data.BYTES_PER_ELEMENT);
-}
-
-function hashAttribute(attr: Attribute, count: number): string {
-  const value = hashBytes(attributeBytes(attr, count));
-  if (attr.type !== "string") return value;
-  // Indices alone say nothing: two runs agree on index 3 while disagreeing
-  // on what index 3 spells.
-  return value + ":" + hashBytes(encoder.encode(attr.stringTable.join("\u0000")));
-}
-
-/**
- * A CPU batch's channels as one hash per channel, keyed by name; absent
- * when the batch carries none, so a channel-less corpus fingerprints
- * exactly as it did before channels existed.
- */
-function channelFingerprint(batch: InstanceBatch): { channels?: Record<string, string> } {
-  const columns = instanceAttributesOf(batch);
-  const names = Object.keys(columns);
-  if (names.length === 0) return {};
-  const channels: Record<string, string> = {};
-  for (const name of names) {
-    const column = columns[name]!;
-    channels[name] = hashBytes(
-      new Uint8Array(column.buffer, column.byteOffset, column.byteLength),
-    );
-  }
-  return { channels };
-}
-
-function hashTypedArray(array: Uint32Array): string {
-  return hashBytes(new Uint8Array(array.buffer, array.byteOffset, array.byteLength));
-}
-
-function geometryFingerprint(geo: Geometry): Record<string, unknown> {
-  const domains: Record<string, Record<string, string>> = {};
-  for (const domain of DOMAINS) {
-    const set = geo.attrs[domain];
-    const columns: Record<string, string> = {};
-    for (const attr of set) columns[attr.name] = hashAttribute(attr, set.count);
-    domains[domain] = columns;
-  }
-  return {
-    counts: {
-      point: geo.pointCount,
-      vertex: geo.vertexCount,
-      primitive: geo.primitiveCount,
-      detail: geo.attrs.detail.count,
-    },
-    attrs: domains,
-    topology: {
-      vertexToPoint: hashTypedArray(geo.vertexToPoint),
-      primVertexStart: hashTypedArray(geo.primVertexStart),
-      primVertexCount: hashTypedArray(geo.primVertexCount),
-    },
-  };
-}
-
-/**
- * A float-exact fingerprint of a whole cook: every attribute column, the
- * topology arrays, and every instance transform, hashed. Two cooks of the
- * same graph on the same build must produce the identical structure —
- * that is the determinism invariant, and unlike the golden it compares a
- * run against a run, so an intended change to the numbers can never make
- * it stale.
- */
-export function graphFingerprint(outputs: Record<string, DataCollection>): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const name of Object.keys(outputs).sort()) {
-    result[name] = (outputs[name] ?? []).map((item): Record<string, unknown> => {
-      if (item.kind === "geometry") {
-        return { kind: "geometry", tags: [...item.tags].sort(), ...geometryFingerprint(item.geo) };
-      }
-      if (item.kind === "value") {
-        return { kind: "value", tags: [...item.tags].sort(), value: item.value };
-      }
-      if (isDeviceResidentInstances(item)) {
-        // Device transforms live in GPU memory and reading them throws;
-        // the corpus never cooks with a GPU, so this is a guard, not a path.
-        return {
-          kind: "instances",
-          tags: [...item.tags].sort(),
-          residency: "device",
-          batches: (item.deviceBatches ?? []).map((b) => ({ assetId: b.assetId, count: b.count })),
-        };
-      }
-      return {
-        kind: "instances",
-        tags: [...item.tags].sort(),
-        residency: "cpu",
-        batches: item.batches.map((b) => ({
-          assetId: b.assetId,
-          count: b.count,
-          transforms: hashBytes(
-            new Uint8Array(b.transforms.buffer, b.transforms.byteOffset, b.transforms.byteLength),
-          ),
-          // Channels are cook output like any other, so they belong in the
-          // determinism hash too — a channel whose values moved between two
-          // runs of one build is the same class of bug as a transform that
-          // did. Read through the normalizer so a batch spelling its colour
-          // as a plain `colors` hashes identically to one spelling it as the
-          // reserved channel.
-          ...channelFingerprint(b),
-        })),
-      };
-    });
-  }
-  return result;
-}
+// Moved to the CLI, which publishes it as `pcg cook --fingerprint`; the
+// corpus test and the pipeline suite keep importing it from here.
+export { graphFingerprint } from "../cli/fingerprint.js";
