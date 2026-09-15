@@ -1,0 +1,15 @@
+{
+  "state": "running",
+  "completed": 3,
+  "total": 54,
+  "wakeReasons": [],
+  "campaign": "pilot",
+  "sleepUntil": null,
+  "blockedSince": null,
+  "infraSince": null,
+  "updatedAt": "2026-09-15T15:35:20.444Z",
+  "pid": 28760,
+  "currentSlot": "r0.species-mix.A-prime",
+  "attempt": 1,
+  "lastSlot": "r0.trees-on-hills.A"
+}

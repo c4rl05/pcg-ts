@@ -1,0 +1,81 @@
+{
+  "state": "done",
+  "completed": 54,
+  "total": 54,
+  "wakeReasons": [],
+  "campaign": "pilot",
+  "sleepUntil": null,
+  "blockedSince": null,
+  "infraSince": null,
+  "updatedAt": "2026-09-15T22:24:01.212Z",
+  "pid": 19440,
+  "currentSlot": null,
+  "attempt": 1,
+  "lastLimit": {
+    "kind": "usage-limit",
+    "resetAt": "2026-09-15T17:20:00.000Z",
+    "evidence": "{\"status\":\"rejected\",\"resetsAt\":1789492800,\"rateLimitType\":\"five_hour\",\"overageStatus\":\"rejected\",\"overageDisabledReason\":\"out_of_credits\",\"isUsingOverage\":false,\"unifiedWindows\":{\"five_hour\":{\"utilization\":1,\"resetsAt\":1789492800},\"seven_day\":{\"utilization\":0.33,\"resetsAt\":1789790400}}}",
+    "source": "rate_limit_event"
+  },
+  "lastSlot": "r2.even-spacing.A-prime",
+  "gate": {
+    "decision": "stop",
+    "reasons": [
+      "(a) stripped arm 100.0% is not below both baselines (100.0%, 100.0%) by more than the A/A gap 0.0% and at least 17.0%: the eval may not see documentation",
+      "(c) task(s) at floor or ceiling across all arms, replace from reserve: even-spacing (ceiling), riverbank (ceiling), road-props (ceiling), settlement-roads (ceiling), species-mix (ceiling), trees-on-hills (ceiling)"
+    ],
+    "replaceTasks": [
+      {
+        "task": "even-spacing",
+        "solved": 9,
+        "n": 9,
+        "at": "ceiling"
+      },
+      {
+        "task": "riverbank",
+        "solved": 9,
+        "n": 9,
+        "at": "ceiling"
+      },
+      {
+        "task": "road-props",
+        "solved": 9,
+        "n": 9,
+        "at": "ceiling"
+      },
+      {
+        "task": "settlement-roads",
+        "solved": 9,
+        "n": 9,
+        "at": "ceiling"
+      },
+      {
+        "task": "species-mix",
+        "solved": 9,
+        "n": 9,
+        "at": "ceiling"
+      },
+      {
+        "task": "trees-on-hills",
+        "solved": 9,
+        "n": 9,
+        "at": "ceiling"
+      }
+    ],
+    "proposedReplacement": {
+      "drop": [
+        "even-spacing",
+        "riverbank",
+        "road-props",
+        "settlement-roads",
+        "species-mix",
+        "trees-on-hills"
+      ],
+      "add": [
+        "forest-clearing",
+        "spiral-stair"
+      ],
+      "short": 4
+    }
+  }
+}

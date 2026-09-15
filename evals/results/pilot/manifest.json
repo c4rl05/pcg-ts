@@ -1,0 +1,741 @@
+{
+  "campaign": "pilot",
+  "createdAt": "2026-09-15T16:30:24.454Z",
+  "model": "claude-sonnet-5",
+  "effort": null,
+  "agent": "claude-code",
+  "claudeVersion": "2.1.272",
+  "arms": [
+    {
+      "label": "A",
+      "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/baseline-0.17.0-0ad6998.tgz",
+      "sha256": "ee39df3869d9b71d678547bc4ae9b14aa8158e84e05d1ba08b55262655cf24bc",
+      "manifest": {
+        "role": "U0 baseline",
+        "file": "baseline-0.17.0-0ad6998.tgz",
+        "sha256": "ee39df3869d9b71d678547bc4ae9b14aa8158e84e05d1ba08b55262655cf24bc",
+        "version": "0.17.0",
+        "gitSha": "0ad699895f01d4de613a1db7c5002a35e3219092",
+        "dirty": false,
+        "srcLastChangedAt": "a67e9ec",
+        "node": "v22.20.0",
+        "packedAt": "2026-09-15"
+      }
+    },
+    {
+      "label": "A-prime",
+      "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/baseline-0.17.0-0ad6998.tgz",
+      "sha256": "ee39df3869d9b71d678547bc4ae9b14aa8158e84e05d1ba08b55262655cf24bc",
+      "manifest": {
+        "role": "U0 baseline",
+        "file": "baseline-0.17.0-0ad6998.tgz",
+        "sha256": "ee39df3869d9b71d678547bc4ae9b14aa8158e84e05d1ba08b55262655cf24bc",
+        "version": "0.17.0",
+        "gitSha": "0ad699895f01d4de613a1db7c5002a35e3219092",
+        "dirty": false,
+        "srcLastChangedAt": "a67e9ec",
+        "node": "v22.20.0",
+        "packedAt": "2026-09-15"
+      }
+    },
+    {
+      "label": "stripped",
+      "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/stripped-0.17.0-0ad6998.tgz",
+      "sha256": "fb5e99be1636b92a2a21c922824329ad1f4223d1e807f69d89b425089418f1ee",
+      "manifest": {
+        "role": "stripped arm: llms.txt, docs/, skills/ removed",
+        "file": "stripped-0.17.0-0ad6998.tgz",
+        "sha256": "fb5e99be1636b92a2a21c922824329ad1f4223d1e807f69d89b425089418f1ee",
+        "version": "0.17.0",
+        "gitSha": "0ad699895f01d4de613a1db7c5002a35e3219092",
+        "dirty": false,
+        "node": "v22.20.0",
+        "packedAt": "2026-09-15T12:44:02.339Z",
+        "derivedFrom": {
+          "file": "baseline-0.17.0-0ad6998.tgz",
+          "sha256": "ee39df3869d9b71d678547bc4ae9b14aa8158e84e05d1ba08b55262655cf24bc"
+        },
+        "removed": [
+          "docs/graphs.json",
+          "docs/nodes.json",
+          "docs/primitives.json",
+          "docs/authoring.md",
+          "docs/design.md",
+          "docs/graphs.md",
+          "docs/nodes.md",
+          "docs/primitives.md",
+          "skills/determinism/SKILL.md",
+          "skills/graph-authoring/SKILL.md",
+          "skills/performance-and-budgets/SKILL.md",
+          "llms.txt"
+        ],
+        "verification": "pcg --help ok; pcg nodes --json lists 61 node types; installed offline=true"
+      }
+    }
+  ],
+  "tasks": [
+    {
+      "id": "even-spacing",
+      "tier": "corpus-adjacent",
+      "reserve": false,
+      "source": "evals/tasks/even-spacing",
+      "sha256": "882c140082c5176b440ea7a1e9a2475546b540c5b62d2e76417c3a85bd1b7cba",
+      "files": {
+        "CALIBRATION.md": "b21aa0e42a3fe0bce74db265bd4218f6a8e4e328f2007ce54868f71e02eec129",
+        "brief.md": "34259e8fa639c6bcad8213841b7f0d359796dcae617bbf5ce5883443dc4eb92d",
+        "check.mjs": "1cb69dbe79d6ef43f95ce81f3c78988d11da263f0a1da858d3e00e4f6149b57a",
+        "negatives/bare-strip.expect.json": "dbd9d4854b7010e71fca850b2efe315a3bb7725409a7519a5d4f698df8d46bd7",
+        "negatives/bare-strip.graph.json": "880a1254b720ff8616b7885be8c836a432adb20cc0c3bfb051d50277526b1e15",
+        "negatives/jittered-grid.expect.json": "87eb6928271b166a220651d9bd230176f092170211db34c45644197ba80a3a35",
+        "negatives/jittered-grid.graph.json": "b8fd041e2d9198c78eb889aee31158d362a63742fd5d873ad5549477eee17789",
+        "negatives/over-pruned.expect.json": "9e7c82fab591d97638802c383a2ee3adf8856010539593c7256e14da0309124a",
+        "negatives/over-pruned.graph.json": "387a70465d3de95499f648315aaa053a1a5d26d7a15ded88ae355b4e2b81c296",
+        "negatives/oversized-square.expect.json": "fa59821b98b9dcd8a4696251646614a1ce3612f0b62cf6ebc4f99b32f0138e6b",
+        "negatives/oversized-square.graph.json": "19ca9008b8e001fecfb713a662812e63ff6d4563620517656339a7c6340c360b",
+        "reference.graph.json": "567e398cc58b510216d5b1c727b5745bd0e9b61359dbdd42513002ffc699b4b3",
+        "task.json": "c0c412468e7dc328ec0b43f222a47a1fc1837aab9ecebbe97a033feab02a913d"
+      },
+      "budgets": {
+        "turns": 40,
+        "wallMinutes": 20
+      }
+    },
+    {
+      "id": "riverbank",
+      "tier": "corpus-adjacent",
+      "reserve": false,
+      "source": "evals/tasks/riverbank",
+      "sha256": "552247a5a3ad32a8c8a3a6d8cb24c280ff388b59fdd38ce246609400877df0f2",
+      "files": {
+        "CALIBRATION.md": "a708e6d9e3873ffa8ea527b39baa3d04a392621de1499fe33e4984d1a2ee1ed4",
+        "brief.md": "2ce0bae03523e8d3b2940b93cb92fbda4f3931739e99e5a06e292d3ecc780118",
+        "check.mjs": "8465b6dac19f9b56d0e45c01bf063e7119555319fae1ec5a7f96fe08bf874a01",
+        "negatives/constant-scale.expect.json": "db5502a1530e8811197368a619623b7e3c4cea72c508c582702427cd173e1bbb",
+        "negatives/constant-scale.graph.json": "21729975231f7860843cb2e69f7c1b86cd2f3631b6e853ba070c1e8c6467d6f4",
+        "negatives/driftwood-inland.expect.json": "bd704303d31f4ddc05697c0fd77f1bbb14609f88bde128ab3b7d6f2e323ca845",
+        "negatives/driftwood-inland.graph.json": "ac368f9c81af5658a438095f41a541883576b6d0299ab30dec85b860a189efe4",
+        "negatives/driftwood-one-stretch.expect.json": "cee12065b0e931a4e2ae80614e591b3f6bec176c561c8a47969ad718e333b432",
+        "negatives/driftwood-one-stretch.graph.json": "d42dc6f2e47aece2b30d04f88023d8f368eba036b7a5b56377cb53ef2b0d4f86",
+        "negatives/floating-trees.expect.json": "784a980b263fd68542ed8786c94ae63b0e8a871ccfb330fb281e9c49b658f8f6",
+        "negatives/floating-trees.graph.json": "90a06c09f2e3366e2e98e3501dd207593f502125584ee696a3e6f230cbda9ff1",
+        "negatives/short-river.expect.json": "4c8f7617e861214cd670e87c0acd07f1f48cfcabc73a42dedc56c47efd90b789",
+        "negatives/short-river.graph.json": "968aa274290af0f17e49d45ab8ef17ff529e962fd948636cfcb16bdca265085a",
+        "negatives/trees-in-water.expect.json": "a8cfa2f91e6922cbdd7faf9dc817774d981297c068cc9ab763042b1f5fb8b0f0",
+        "negatives/trees-in-water.graph.json": "e9bec33148082580edc597f9bf762b343d8f28a6f71ddddfa70eba2f297600d0",
+        "negatives/uniform-trees.expect.json": "a77e0407a24f318837510b03e71d31402eede1f860632dee3297423da5a8a0c7",
+        "negatives/uniform-trees.graph.json": "e29bf3a5e236498207b7c334ca66f82e086519eb6fe4a6f9bee121ee24830a1d",
+        "reference.graph.json": "108aa8879fc323159cad478b7859e132e48490095c550e3d76adbc302c74973d",
+        "task.json": "365bacdf9f59bd6edc737554bf40d25b79318c2eb1b311a490dca2a00da49a84"
+      },
+      "budgets": {
+        "turns": 90,
+        "wallMinutes": 45
+      }
+    },
+    {
+      "id": "road-props",
+      "tier": "held-out",
+      "reserve": false,
+      "source": "../pcg-ts-private/evals/tasks/road-props",
+      "sha256": "7dec5dcb0677f1daa84a65001badb5faf8c07901eb76bd2bd342a0d15404195a",
+      "files": {
+        "CALIBRATION.md": "35276f6db0a0432a208aa62fc9945f67aa6ec2f8093e886ed4855aa7407f8b01",
+        "brief.md": "51f2446db8d63e18bdc146eb40b76308941ff75104c159284de048b15ffa38ec",
+        "check.mjs": "90964340c2c600d986386c788c0a53d86d3c6d523d843a9a75c37a3a58bb4ae9",
+        "negatives/facing-along.expect.json": "f1bc0f3dd1daef4112810b998c4af8a6ad1fcdec0c03c2a1fffe9255dbcdf2d7",
+        "negatives/facing-along.graph.json": "bc45f3f195bbeb6c0068256c21e54726af67b8f7259107c5de6c0f2119a34e8b",
+        "negatives/one-side.expect.json": "e84b106c256e0f53d36bc44a22b6f19776ce5ba1cf47a22a60f2d587855ddcf3",
+        "negatives/one-side.graph.json": "acfbead3573da2c4752782189b4b6651dcf719701bacc081dfcce11820f91ac9",
+        "negatives/straight-road.expect.json": "34456a355b08e73faf3dd11c9e61376d56d3b079eb640b41767b7a8d64422b3f",
+        "negatives/straight-road.graph.json": "287b0b6991a60fcebf6f177d625875a8b38f0794107f16068782e305ea50c445",
+        "negatives/wide-offset.expect.json": "fc4aa09063d0770ad7ad67b6c3bfed8924a8f2ebbe5831e75e646a91a539cd30",
+        "negatives/wide-offset.graph.json": "e25cf0a3866cc444adb377d3624a5b2307038052b247ced93bdd6515699571d9",
+        "negatives/wide-spacing.expect.json": "1db3911b8eded03d5628bfc4a37f552b2f008df4fca18fbed3173ee5799fd527",
+        "negatives/wide-spacing.graph.json": "6d94b6f1075341d17681cd2d00b4976318af3957869250496dce42334fcdc844",
+        "reference.graph.json": "0fa29c6c16bed1bad60aa99b4ac2105c110930beb26e92d0c669fc857cf4d01d",
+        "task.json": "35ab6e3f124c9bd15909ce258cc6052061aed18978594947cfb26feeb9a70516"
+      },
+      "budgets": {
+        "turns": 90,
+        "wallMinutes": 45
+      }
+    },
+    {
+      "id": "settlement-roads",
+      "tier": "corpus-adjacent",
+      "reserve": false,
+      "source": "evals/tasks/settlement-roads",
+      "sha256": "96f153681b526ca19d38c30c56b97ffc2611f3c1db9ec17eac599d9d9d899833",
+      "files": {
+        "CALIBRATION.md": "028ddb807d50b053bffe4ecc573d8a5a1090fac6d44b21476532dc02759235d4",
+        "brief.md": "c81941fd9c01b609825b3d2792983401b3bd1f1f9543bc0c9d5fbd6e0328cd6b",
+        "check.mjs": "302ea1cdc604d70fdf8019b52cb8abf8b9f2b53962fed478f3eabba6b188e22f",
+        "negatives/divided-network.expect.json": "815094053b9256b4b683bd5491520a22c3702fdf5e7c9b1238ff6899706acc22",
+        "negatives/divided-network.graph.json": "c9e3799e6792089fa172a8badc70d6170f2520a304a18b5267c598f227a7b5e5",
+        "negatives/radius-links.expect.json": "69b2d1d39462837a5020fbf232ee25de1927303e55a00815b0432a3888a58f1e",
+        "negatives/radius-links.graph.json": "b2dd6fb113ffffa106e178b1fbc954f0fd417d0bbc513c52200d8afd1d152ba9",
+        "negatives/resampled-roads.expect.json": "5400853b05dc6e80f1b5a37bb0ed1f1180b0ecc266f48b3fc187654277359c97",
+        "negatives/resampled-roads.graph.json": "aafec4fd44eeee7f90d0b2c1b12730c6dfe9225785e0bf7360b6f8871822dad8",
+        "negatives/short-reach.expect.json": "815094053b9256b4b683bd5491520a22c3702fdf5e7c9b1238ff6899706acc22",
+        "negatives/short-reach.graph.json": "e45f74bde8ecb181483a7af6c46b99cb3373cf933d0bd854afdf36dd8a96fe6b",
+        "negatives/unspaced-settlements.expect.json": "4c7a1b9914fe274dbf9d811d392f0867dc3f729efb91c09e1eb645f5d7a1144b",
+        "negatives/unspaced-settlements.graph.json": "1252d784180e89f76313edb9f91c8388772100a14a04afc14faceaee2778d42f",
+        "reference.graph.json": "5b9e49d5bb58f1cf529b09e6566edebb5cb1f1a947b97384dc424f6cd5f6f6ee",
+        "task.json": "e294b48ff998e364572f23a457ef3538c6207d85f8eae2ba31dc50fd2ae5367b"
+      },
+      "budgets": {
+        "turns": 60,
+        "wallMinutes": 30
+      }
+    },
+    {
+      "id": "species-mix",
+      "tier": "corpus-adjacent",
+      "reserve": false,
+      "source": "evals/tasks/species-mix",
+      "sha256": "04f3426156fff51e32579a16dd7b032886a0430abc6f2bd05555222952dfc782",
+      "files": {
+        "CALIBRATION.md": "04ef923544dcf1a9d237cd140ea8dbf4467ea1220327804490a8503a8482d373",
+        "brief.md": "62d345aaf56681441505815711ae56b6e3060a41d3fd3333a91c523340e52ba6",
+        "check.mjs": "f0c80754d44b56cdf65820fee3b4bcca3f91f4bd79bdaf2f3bd8bf2173c8bbf0",
+        "negatives/candidates-as-count.expect.json": "76539c444596700283fbae2cf53f192f2de8381f261885080c24ff116750eeb9",
+        "negatives/candidates-as-count.graph.json": "7b745c0596a72aee93dc7601572b04fbacbe65fd90d45eabed9a94a33ea5cfd2",
+        "negatives/diameter-as-radius.expect.json": "79bd17e4c89a5801cef160426731da6b5891ceeeea67591228b3ddc1d23755d1",
+        "negatives/diameter-as-radius.graph.json": "8ce873be40187224f582675f7013f3f7c50cc30a4555614ee52322c51b7e241c",
+        "negatives/equal-thirds.expect.json": "de94ff1284495cb3bfb113faaccc314bf27e0d8691d0e136bb66086bf415885e",
+        "negatives/equal-thirds.graph.json": "28c70e214bc5ea792e18a882c1ee2dcf1db7fa2e6b1b0b4a3e59017369163d5b",
+        "negatives/fallback-id.expect.json": "3fa953a4354f4b2c0387e32c7ba59a2f17168695b97c0805c9d384a89473e861",
+        "negatives/fallback-id.graph.json": "fbd83bc7e704c60977e1c40636e477d58661a5f418256e16d7fc3467463852df",
+        "negatives/split-by-side.expect.json": "cb01abc4ab8e8db12bce3531c2fdce78f0f09b2a8dbfa2286a8ce7e012ec4246",
+        "negatives/split-by-side.graph.json": "bdd6a04afebe6c775b91b88e2a95f5b59a9ba3048f25d7bbac20aeebbf3b7ad8",
+        "negatives/square-patch.expect.json": "9f84e291f64f9c78f065baec4cc1f7553d8b0b26e73a0c46145b7b6cdd2d8907",
+        "negatives/square-patch.graph.json": "6f7d10af6c982247605d541696b518f5f288068bf61289f95c0f87a05b49034c",
+        "reference.graph.json": "957e532f8083cc67dbe8c0ce990f0d5af0e8d365e70f6f805f2598ecad1322ed",
+        "task.json": "406ae79d31025f31a32edf9d913e2176afe81a73925b7be5aeaad5ad24343efc"
+      },
+      "budgets": {
+        "turns": 50,
+        "wallMinutes": 25
+      }
+    },
+    {
+      "id": "trees-on-hills",
+      "tier": "corpus-adjacent",
+      "reserve": false,
+      "source": "evals/tasks/trees-on-hills",
+      "sha256": "e54e9d5353f068886738bb706af1969deaac1ce6d0a14ac03ed4712062f9a401",
+      "files": {
+        "CALIBRATION.md": "20da3bf6b9fab5a2c1026b17684d260e31ea0adca18673369bf99124b095dbc2",
+        "brief.md": "66c3ea739d0e7b991710bd08de8e4d8edd43568c43c86265f4bc9cc3a93e6efb",
+        "check.mjs": "129fa9b177f151d03f5c8e629c6134f4f53a36a33c8dadcdc7d187d57dc800b2",
+        "negatives/flat-terrain.expect.json": "b864788c000c229450af6205b20e7f6eac98f60890b46947c18b30ed0655ad65",
+        "negatives/flat-terrain.graph.json": "4b2bf0988c0a6a4b19bc22a0817e3ea096a4e498ee755a2430188fb780d6e1f6",
+        "negatives/floating.expect.json": "490cdfb6d7aab3b6d9dc7794ebaed2aa71cc049e195247fbf3d91bb3b138fb36",
+        "negatives/floating.graph.json": "ff58c9a8e5ecbf0531191b7b06c32320a7ad6ca4c94b42b89fcee5f609f1bf8a",
+        "negatives/handful.expect.json": "7adfd567423ab2069f21f3cf57344e5c8b3bbc172538eef27b141009449c2dc1",
+        "negatives/handful.graph.json": "80522f891ccf702ae18b2877aa11772b076c7c2e3653c68840799ee9e72febce",
+        "negatives/no-slope-filter.expect.json": "134d72df331bb49a4a24aa2952f9c57bd309a1b7a29f7449cfd10d3d6596d075",
+        "negatives/no-slope-filter.graph.json": "2e068d5fcfe03efe7202855d259c9252ccafd1730b13407284abdef60efd7d44",
+        "reference.graph.json": "c2c50a6ddca75b3fba7fb70b0f761b5618301c82708f637299c0db9131d5811d",
+        "task.json": "aabb9b53fea7272137c3c685e0df461a787e0ac6bdf430eed9239c077a1e97fc"
+      },
+      "budgets": {
+        "turns": 70,
+        "wallMinutes": 35
+      }
+    }
+  ],
+  "reserveTasks": [
+    "forest-clearing",
+    "spiral-stair"
+  ],
+  "retryOf": null,
+  "runsPerTask": 3,
+  "scheduleSeed": 20260915,
+  "schedule": [
+    {
+      "slotIndex": 0,
+      "slotId": "r0.trees-on-hills.A-prime",
+      "runIndex": 0,
+      "task": "trees-on-hills",
+      "arm": "A-prime",
+      "block": 0
+    },
+    {
+      "slotIndex": 1,
+      "slotId": "r0.trees-on-hills.stripped",
+      "runIndex": 0,
+      "task": "trees-on-hills",
+      "arm": "stripped",
+      "block": 0
+    },
+    {
+      "slotIndex": 2,
+      "slotId": "r0.trees-on-hills.A",
+      "runIndex": 0,
+      "task": "trees-on-hills",
+      "arm": "A",
+      "block": 0
+    },
+    {
+      "slotIndex": 3,
+      "slotId": "r0.species-mix.A-prime",
+      "runIndex": 0,
+      "task": "species-mix",
+      "arm": "A-prime",
+      "block": 1
+    },
+    {
+      "slotIndex": 4,
+      "slotId": "r0.species-mix.stripped",
+      "runIndex": 0,
+      "task": "species-mix",
+      "arm": "stripped",
+      "block": 1
+    },
+    {
+      "slotIndex": 5,
+      "slotId": "r0.species-mix.A",
+      "runIndex": 0,
+      "task": "species-mix",
+      "arm": "A",
+      "block": 1
+    },
+    {
+      "slotIndex": 6,
+      "slotId": "r0.settlement-roads.stripped",
+      "runIndex": 0,
+      "task": "settlement-roads",
+      "arm": "stripped",
+      "block": 2
+    },
+    {
+      "slotIndex": 7,
+      "slotId": "r0.settlement-roads.A-prime",
+      "runIndex": 0,
+      "task": "settlement-roads",
+      "arm": "A-prime",
+      "block": 2
+    },
+    {
+      "slotIndex": 8,
+      "slotId": "r0.settlement-roads.A",
+      "runIndex": 0,
+      "task": "settlement-roads",
+      "arm": "A",
+      "block": 2
+    },
+    {
+      "slotIndex": 9,
+      "slotId": "r0.even-spacing.A-prime",
+      "runIndex": 0,
+      "task": "even-spacing",
+      "arm": "A-prime",
+      "block": 3
+    },
+    {
+      "slotIndex": 10,
+      "slotId": "r0.even-spacing.stripped",
+      "runIndex": 0,
+      "task": "even-spacing",
+      "arm": "stripped",
+      "block": 3
+    },
+    {
+      "slotIndex": 11,
+      "slotId": "r0.even-spacing.A",
+      "runIndex": 0,
+      "task": "even-spacing",
+      "arm": "A",
+      "block": 3
+    },
+    {
+      "slotIndex": 12,
+      "slotId": "r0.road-props.A",
+      "runIndex": 0,
+      "task": "road-props",
+      "arm": "A",
+      "block": 4
+    },
+    {
+      "slotIndex": 13,
+      "slotId": "r0.road-props.stripped",
+      "runIndex": 0,
+      "task": "road-props",
+      "arm": "stripped",
+      "block": 4
+    },
+    {
+      "slotIndex": 14,
+      "slotId": "r0.road-props.A-prime",
+      "runIndex": 0,
+      "task": "road-props",
+      "arm": "A-prime",
+      "block": 4
+    },
+    {
+      "slotIndex": 15,
+      "slotId": "r0.riverbank.stripped",
+      "runIndex": 0,
+      "task": "riverbank",
+      "arm": "stripped",
+      "block": 5
+    },
+    {
+      "slotIndex": 16,
+      "slotId": "r0.riverbank.A",
+      "runIndex": 0,
+      "task": "riverbank",
+      "arm": "A",
+      "block": 5
+    },
+    {
+      "slotIndex": 17,
+      "slotId": "r0.riverbank.A-prime",
+      "runIndex": 0,
+      "task": "riverbank",
+      "arm": "A-prime",
+      "block": 5
+    },
+    {
+      "slotIndex": 18,
+      "slotId": "r1.trees-on-hills.A-prime",
+      "runIndex": 1,
+      "task": "trees-on-hills",
+      "arm": "A-prime",
+      "block": 6
+    },
+    {
+      "slotIndex": 19,
+      "slotId": "r1.trees-on-hills.stripped",
+      "runIndex": 1,
+      "task": "trees-on-hills",
+      "arm": "stripped",
+      "block": 6
+    },
+    {
+      "slotIndex": 20,
+      "slotId": "r1.trees-on-hills.A",
+      "runIndex": 1,
+      "task": "trees-on-hills",
+      "arm": "A",
+      "block": 6
+    },
+    {
+      "slotIndex": 21,
+      "slotId": "r1.settlement-roads.A",
+      "runIndex": 1,
+      "task": "settlement-roads",
+      "arm": "A",
+      "block": 7
+    },
+    {
+      "slotIndex": 22,
+      "slotId": "r1.settlement-roads.A-prime",
+      "runIndex": 1,
+      "task": "settlement-roads",
+      "arm": "A-prime",
+      "block": 7
+    },
+    {
+      "slotIndex": 23,
+      "slotId": "r1.settlement-roads.stripped",
+      "runIndex": 1,
+      "task": "settlement-roads",
+      "arm": "stripped",
+      "block": 7
+    },
+    {
+      "slotIndex": 24,
+      "slotId": "r1.riverbank.A",
+      "runIndex": 1,
+      "task": "riverbank",
+      "arm": "A",
+      "block": 8
+    },
+    {
+      "slotIndex": 25,
+      "slotId": "r1.riverbank.stripped",
+      "runIndex": 1,
+      "task": "riverbank",
+      "arm": "stripped",
+      "block": 8
+    },
+    {
+      "slotIndex": 26,
+      "slotId": "r1.riverbank.A-prime",
+      "runIndex": 1,
+      "task": "riverbank",
+      "arm": "A-prime",
+      "block": 8
+    },
+    {
+      "slotIndex": 27,
+      "slotId": "r1.road-props.stripped",
+      "runIndex": 1,
+      "task": "road-props",
+      "arm": "stripped",
+      "block": 9
+    },
+    {
+      "slotIndex": 28,
+      "slotId": "r1.road-props.A",
+      "runIndex": 1,
+      "task": "road-props",
+      "arm": "A",
+      "block": 9
+    },
+    {
+      "slotIndex": 29,
+      "slotId": "r1.road-props.A-prime",
+      "runIndex": 1,
+      "task": "road-props",
+      "arm": "A-prime",
+      "block": 9
+    },
+    {
+      "slotIndex": 30,
+      "slotId": "r1.even-spacing.A",
+      "runIndex": 1,
+      "task": "even-spacing",
+      "arm": "A",
+      "block": 10
+    },
+    {
+      "slotIndex": 31,
+      "slotId": "r1.even-spacing.A-prime",
+      "runIndex": 1,
+      "task": "even-spacing",
+      "arm": "A-prime",
+      "block": 10
+    },
+    {
+      "slotIndex": 32,
+      "slotId": "r1.even-spacing.stripped",
+      "runIndex": 1,
+      "task": "even-spacing",
+      "arm": "stripped",
+      "block": 10
+    },
+    {
+      "slotIndex": 33,
+      "slotId": "r1.species-mix.A",
+      "runIndex": 1,
+      "task": "species-mix",
+      "arm": "A",
+      "block": 11
+    },
+    {
+      "slotIndex": 34,
+      "slotId": "r1.species-mix.stripped",
+      "runIndex": 1,
+      "task": "species-mix",
+      "arm": "stripped",
+      "block": 11
+    },
+    {
+      "slotIndex": 35,
+      "slotId": "r1.species-mix.A-prime",
+      "runIndex": 1,
+      "task": "species-mix",
+      "arm": "A-prime",
+      "block": 11
+    },
+    {
+      "slotIndex": 36,
+      "slotId": "r2.road-props.A",
+      "runIndex": 2,
+      "task": "road-props",
+      "arm": "A",
+      "block": 12
+    },
+    {
+      "slotIndex": 37,
+      "slotId": "r2.road-props.A-prime",
+      "runIndex": 2,
+      "task": "road-props",
+      "arm": "A-prime",
+      "block": 12
+    },
+    {
+      "slotIndex": 38,
+      "slotId": "r2.road-props.stripped",
+      "runIndex": 2,
+      "task": "road-props",
+      "arm": "stripped",
+      "block": 12
+    },
+    {
+      "slotIndex": 39,
+      "slotId": "r2.riverbank.A-prime",
+      "runIndex": 2,
+      "task": "riverbank",
+      "arm": "A-prime",
+      "block": 13
+    },
+    {
+      "slotIndex": 40,
+      "slotId": "r2.riverbank.stripped",
+      "runIndex": 2,
+      "task": "riverbank",
+      "arm": "stripped",
+      "block": 13
+    },
+    {
+      "slotIndex": 41,
+      "slotId": "r2.riverbank.A",
+      "runIndex": 2,
+      "task": "riverbank",
+      "arm": "A",
+      "block": 13
+    },
+    {
+      "slotIndex": 42,
+      "slotId": "r2.settlement-roads.A",
+      "runIndex": 2,
+      "task": "settlement-roads",
+      "arm": "A",
+      "block": 14
+    },
+    {
+      "slotIndex": 43,
+      "slotId": "r2.settlement-roads.stripped",
+      "runIndex": 2,
+      "task": "settlement-roads",
+      "arm": "stripped",
+      "block": 14
+    },
+    {
+      "slotIndex": 44,
+      "slotId": "r2.settlement-roads.A-prime",
+      "runIndex": 2,
+      "task": "settlement-roads",
+      "arm": "A-prime",
+      "block": 14
+    },
+    {
+      "slotIndex": 45,
+      "slotId": "r2.species-mix.A-prime",
+      "runIndex": 2,
+      "task": "species-mix",
+      "arm": "A-prime",
+      "block": 15
+    },
+    {
+      "slotIndex": 46,
+      "slotId": "r2.species-mix.stripped",
+      "runIndex": 2,
+      "task": "species-mix",
+      "arm": "stripped",
+      "block": 15
+    },
+    {
+      "slotIndex": 47,
+      "slotId": "r2.species-mix.A",
+      "runIndex": 2,
+      "task": "species-mix",
+      "arm": "A",
+      "block": 15
+    },
+    {
+      "slotIndex": 48,
+      "slotId": "r2.trees-on-hills.A-prime",
+      "runIndex": 2,
+      "task": "trees-on-hills",
+      "arm": "A-prime",
+      "block": 16
+    },
+    {
+      "slotIndex": 49,
+      "slotId": "r2.trees-on-hills.stripped",
+      "runIndex": 2,
+      "task": "trees-on-hills",
+      "arm": "stripped",
+      "block": 16
+    },
+    {
+      "slotIndex": 50,
+      "slotId": "r2.trees-on-hills.A",
+      "runIndex": 2,
+      "task": "trees-on-hills",
+      "arm": "A",
+      "block": 16
+    },
+    {
+      "slotIndex": 51,
+      "slotId": "r2.even-spacing.stripped",
+      "runIndex": 2,
+      "task": "even-spacing",
+      "arm": "stripped",
+      "block": 17
+    },
+    {
+      "slotIndex": 52,
+      "slotId": "r2.even-spacing.A",
+      "runIndex": 2,
+      "task": "even-spacing",
+      "arm": "A",
+      "block": 17
+    },
+    {
+      "slotIndex": 53,
+      "slotId": "r2.even-spacing.A-prime",
+      "runIndex": 2,
+      "task": "even-spacing",
+      "arm": "A-prime",
+      "block": 17
+    }
+  ],
+  "caps": {
+    "turns": 80,
+    "wallMinutes": 30,
+    "outputTokens": 250000,
+    "scorerMinutes": 10,
+    "installMinutes": 10
+  },
+  "limits": {
+    "wakeAfterBlockedHours": 48,
+    "wakeAfterInfraHours": 12,
+    "maxContaminatedReschedules": 1,
+    "contaminationRateWindow": 6,
+    "contaminationRateMax": 0.5
+  },
+  "window": "always",
+  "gate": {
+    "baselineArms": [
+      "A",
+      "A-prime"
+    ],
+    "strippedArm": "stripped",
+    "aaMaxGap": 0.28,
+    "strippedMinMargin": 0.17
+  },
+  "prompt": "You are working in a Node.js project at {{cwd}} (in Git Bash: {{cwdBash}}), where the npm package pcg-ts is installed. That is your working directory. Read brief.md in this directory and do what it asks. Work only inside this directory. When you finish, the graph must be saved as graph.json in this directory.",
+  "promptSha256": "c1138921dd2697c3871ec154cdb73c1fba53985b8416b176554de79626256add",
+  "graphFile": "graph.json",
+  "sandboxRoot": "C:/pcg-eval/sandboxes",
+  "harnessGit": {
+    "sha": "960e33fa6e63a68878f6861a4554564a1a4c0121",
+    "dirty": false
+  },
+  "harnessCode": {
+    "sha256": "600dd5c85cc6d0a75662fe588db28f21104d31d844abbac6ceed9ffca6237fea",
+    "files": {
+      "evals/harness/agents/claude-code.mjs": "374e7d21ef05e18b2fdc8c90325bf43df3bfc2131ec6a072b5606e513eb9976f",
+      "evals/harness/limits.mjs": "5e1d67ca81a72743154d603f11d6152d22a89fbf4e03c52d30bc408290fe585d",
+      "evals/harness/reclassify.mjs": "8b3596e551536a52f6f5d95616031528282fa5805503bec3edd8a7ede503abdf",
+      "evals/harness/run.mjs": "67fdf3277be9ef2db90491e7217cea0b7075f81645a7e2ca999224130a735647",
+      "evals/harness/sandbox.mjs": "94b60bd58a381b00e557f438fadfc9d1526fb7e21c5444f350b6a9f75d1e8abe",
+      "evals/harness/score.mjs": "022aa81a4bc6074246f3499cfbe8eb149801c301881aa8a1d3e76e361e4e6a4f",
+      "evals/harness/selftest.mjs": "d3afde1f332374fa521d3000b77b9dd4c78c18fa7dab9bb93f0f7ff64e602204",
+      "evals/lib/digest.mjs": "c0a658ca025cced1483c0d88ce3680e68da7fc6fd5fb9cdcc2f7dacb6aa5d835",
+      "evals/lib/digest.test.mjs": "605efe87f5042256dda6991492ef9274eb1b9c95a6ce9a3134d4ac43a44a1f99",
+      "evals/lib/geometry.mjs": "4db54395ba0accca321fce0c1872a45cd4352f4aea7e89b2b3c670fb27be0642",
+      "evals/lib/geometry.test.mjs": "001bf5a8d17314db95f05e8b59568fd52b366221bf170035f0e855cdb67aee3f",
+      "evals/lib/index.mjs": "d3acf23e28c874e6528bf05f04eb3f18201c5b4ba27c295a3bf8fc6a97a3ad85",
+      "evals/lib/items.mjs": "6183675d9adfe07fda0316900a5b340b1ca6349a7ea7cbfbfa3c8fe0a2c774ae",
+      "evals/lib/scorer.test.mjs": "ddf1a3232c212e15a12cc67dd9eb6ecff79d178bf91c6b4173c93e52fdce5f98"
+    }
+  },
+  "configPath": "evals/eval.config.json"
+}

@@ -1,0 +1,465 @@
+{
+  "campaign": "pilot",
+  "generatedAt": "2026-09-15T22:24:01.210Z",
+  "progress": {
+    "done": 54,
+    "total": 54,
+    "complete": true
+  },
+  "model": "claude-sonnet-5",
+  "claudeVersion": "2.1.272",
+  "claudeVersionsSeen": [
+    "2.1.272",
+    "2.1.273"
+  ],
+  "arms": [
+    "A",
+    "A-prime",
+    "stripped"
+  ],
+  "tasks": [
+    "even-spacing",
+    "riverbank",
+    "road-props",
+    "settlement-roads",
+    "species-mix",
+    "trees-on-hills"
+  ],
+  "summary": {
+    "cell": {
+      "even-spacing": {
+        "A": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        },
+        "A-prime": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        },
+        "stripped": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        }
+      },
+      "riverbank": {
+        "A": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        },
+        "A-prime": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        },
+        "stripped": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        }
+      },
+      "road-props": {
+        "A": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        },
+        "A-prime": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        },
+        "stripped": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        }
+      },
+      "settlement-roads": {
+        "A": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        },
+        "A-prime": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        },
+        "stripped": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        }
+      },
+      "species-mix": {
+        "A": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        },
+        "A-prime": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        },
+        "stripped": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        }
+      },
+      "trees-on-hills": {
+        "A": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        },
+        "A-prime": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        },
+        "stripped": {
+          "n": 3,
+          "solved": 3,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.4385029682449546,
+          "hi": 1
+        }
+      }
+    },
+    "byArm": {
+      "A": {
+        "n": 18,
+        "solved": 18,
+        "contaminated": 0,
+        "infra": 0,
+        "p": 1,
+        "lo": 0.8241207763533425,
+        "hi": 1
+      },
+      "A-prime": {
+        "n": 18,
+        "solved": 18,
+        "contaminated": 0,
+        "infra": 0,
+        "p": 1,
+        "lo": 0.8241207763533425,
+        "hi": 1
+      },
+      "stripped": {
+        "n": 18,
+        "solved": 18,
+        "contaminated": 0,
+        "infra": 0,
+        "p": 1,
+        "lo": 0.8241207763533425,
+        "hi": 1
+      }
+    },
+    "byTask": {
+      "even-spacing": {
+        "n": 9,
+        "solved": 9,
+        "p": 1,
+        "lo": 0.7008549515804559,
+        "hi": 1
+      },
+      "riverbank": {
+        "n": 9,
+        "solved": 9,
+        "p": 1,
+        "lo": 0.7008549515804559,
+        "hi": 1
+      },
+      "road-props": {
+        "n": 9,
+        "solved": 9,
+        "p": 1,
+        "lo": 0.7008549515804559,
+        "hi": 1
+      },
+      "settlement-roads": {
+        "n": 9,
+        "solved": 9,
+        "p": 1,
+        "lo": 0.7008549515804559,
+        "hi": 1
+      },
+      "species-mix": {
+        "n": 9,
+        "solved": 9,
+        "p": 1,
+        "lo": 0.7008549515804559,
+        "hi": 1
+      },
+      "trees-on-hills": {
+        "n": 9,
+        "solved": 9,
+        "p": 1,
+        "lo": 0.7008549515804559,
+        "hi": 1
+      }
+    }
+  },
+  "pairedDeltas": [
+    {
+      "arm": "A-prime",
+      "ref": "A",
+      "meanDelta": 0,
+      "perTask": {
+        "even-spacing": 0,
+        "riverbank": 0,
+        "road-props": 0,
+        "settlement-roads": 0,
+        "species-mix": 0,
+        "trees-on-hills": 0
+      },
+      "wins": 0,
+      "losses": 0,
+      "ties": 6,
+      "signTestP": 1
+    },
+    {
+      "arm": "stripped",
+      "ref": "A",
+      "meanDelta": 0,
+      "perTask": {
+        "even-spacing": 0,
+        "riverbank": 0,
+        "road-props": 0,
+        "settlement-roads": 0,
+        "species-mix": 0,
+        "trees-on-hills": 0
+      },
+      "wins": 0,
+      "losses": 0,
+      "ties": 6,
+      "signTestP": 1
+    }
+  ],
+  "processMetrics": {
+    "A": {
+      "runs": 18,
+      "turnsMean": 37.388888888888886,
+      "turnsMedian": 34,
+      "toolCallsMean": 36.388888888888886,
+      "validateCallsMean": 1.2777777777777777,
+      "validateFailureRate": 0,
+      "probeGraphsMean": 0,
+      "outputTokensMean": 24577.944444444445,
+      "wallMinutesMean": 4.780132407407407,
+      "capsHit": {
+        "turns": 1
+      },
+      "readShare": {
+        "llms": 0.9444444444444444,
+        "docs": 0.7777777777777778,
+        "skills": 0.1111111111111111,
+        "graphs": 0.8333333333333334
+      },
+      "graphProducedRate": 1
+    },
+    "A-prime": {
+      "runs": 18,
+      "turnsMean": 37.44444444444444,
+      "turnsMedian": 34,
+      "toolCallsMean": 36.44444444444444,
+      "validateCallsMean": 1.1111111111111112,
+      "validateFailureRate": 0,
+      "probeGraphsMean": 0,
+      "outputTokensMean": 26321.61111111111,
+      "wallMinutesMean": 5.387858333333331,
+      "capsHit": {
+        "turns": 1
+      },
+      "readShare": {
+        "llms": 0.9444444444444444,
+        "docs": 0.8888888888888888,
+        "skills": 0.16666666666666666,
+        "graphs": 0.8888888888888888
+      },
+      "graphProducedRate": 1
+    },
+    "stripped": {
+      "runs": 18,
+      "turnsMean": 38.611111111111114,
+      "turnsMedian": 33.5,
+      "toolCallsMean": 37.611111111111114,
+      "validateCallsMean": 1.6666666666666667,
+      "validateFailureRate": 0.03333333333333333,
+      "probeGraphsMean": 0,
+      "outputTokensMean": 23135.11111111111,
+      "wallMinutesMean": 4.810238888888889,
+      "capsHit": {},
+      "readShare": {
+        "llms": 0.3333333333333333,
+        "docs": 0.5,
+        "skills": 0.1111111111111111,
+        "graphs": 0.8333333333333334
+      },
+      "graphProducedRate": 1
+    }
+  },
+  "contaminated": [],
+  "infraErrors": [],
+  "scorerErrors": [],
+  "gate": {
+    "decision": "stop",
+    "complete": true,
+    "reasons": [
+      "(a) stripped arm 100.0% is not below both baselines (100.0%, 100.0%) by more than the A/A gap 0.0% and at least 17.0%: the eval may not see documentation",
+      "(c) task(s) at floor or ceiling across all arms, replace from reserve: even-spacing (ceiling), riverbank (ceiling), road-props (ceiling), settlement-roads (ceiling), species-mix (ceiling), trees-on-hills (ceiling)"
+    ],
+    "a": {
+      "pass": false,
+      "baseline": {
+        "A": 1,
+        "A-prime": 1
+      },
+      "stripped": 1,
+      "deltas": {
+        "A": 0,
+        "A-prime": 0
+      },
+      "aaGap": 0,
+      "requiredMargin": 0.17
+    },
+    "b": {
+      "pass": true,
+      "aaGap": 0,
+      "aaMaxGap": 0.28
+    },
+    "c": {
+      "pass": false,
+      "replaceTasks": [
+        {
+          "task": "even-spacing",
+          "solved": 9,
+          "n": 9,
+          "at": "ceiling"
+        },
+        {
+          "task": "riverbank",
+          "solved": 9,
+          "n": 9,
+          "at": "ceiling"
+        },
+        {
+          "task": "road-props",
+          "solved": 9,
+          "n": 9,
+          "at": "ceiling"
+        },
+        {
+          "task": "settlement-roads",
+          "solved": 9,
+          "n": 9,
+          "at": "ceiling"
+        },
+        {
+          "task": "species-mix",
+          "solved": 9,
+          "n": 9,
+          "at": "ceiling"
+        },
+        {
+          "task": "trees-on-hills",
+          "solved": 9,
+          "n": 9,
+          "at": "ceiling"
+        }
+      ]
+    }
+  },
+  "proposedReplacement": {
+    "drop": [
+      "even-spacing",
+      "riverbank",
+      "road-props",
+      "settlement-roads",
+      "species-mix",
+      "trees-on-hills"
+    ],
+    "add": [
+      "forest-clearing",
+      "spiral-stair"
+    ],
+    "short": 4
+  },
+  "caveat": "n = 18 runs per arm. A Wilson interval this wide detects only large effects; pass rates are not significance tests, and the gate is a go/stop rule, not a hypothesis test."
+}
