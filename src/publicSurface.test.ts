@@ -42,6 +42,10 @@ const ROOT_SURFACE = [
   // single source the docs render from, additive-only) and the reader
   // that recovers records from any thrown value. See src/diagnostics.
   "DIAGNOSTIC_CODES", "diagnosticsOf",
+  // A field read an attribute its domain does not carry. A class, not only
+  // a code, so a caller can branch with instanceof and read the typed facts
+  // (domain, available names, the domains that DO carry it) without parsing.
+  "AttributeNotFoundError",
   "FieldJsonError", "GRAPH_META_KEYS", "Geometry", "Graph",
   "GraphCycleError", "GraphError", "GraphSerializationError", "GraphValidationError",
   "NOISE_RAW_RANGES", "NodeExecutionError", "PRIMTYPE_ATTR", "Pcg32",

@@ -687,7 +687,7 @@ describe("filterByAttribute", () => {
     const cloud = cloudAt([[0, 0, 0]]);
     await expect(
       runNode(filterByAttribute, { attribute: "nope" }, { in: [makeGeometryItem(cloud)] }),
-    ).rejects.toThrow(/"nope" not found; available: P, rot/);
+    ).rejects.toThrow(/"nope" not found; available point attributes: P, rot/);
     await expect(
       runNode(filterByAttribute, { attribute: "P" }, { in: [makeGeometryItem(cloud)] }),
     ).rejects.toThrow(/tuple size 3/);
@@ -969,7 +969,7 @@ describe("filterPrimitivesByAttribute", () => {
     const chordPick = geo.attrs.point.add("chordPick", "f32", 1, 0);
     chordPick.set(0, 0.5);
     await expect(kept(geo, { attribute: "chordPick" })).rejects.toThrow(
-      /filterPrimitivesByAttribute: primitive attribute "chordPick" not found; available: primtype, roadKind, edgeLength — but "chordPick" IS a f32 POINT attribute here, which is the likeliest mix-up/,
+      /filterPrimitivesByAttribute: primitive attribute "chordPick" not found; available primitive attributes: primtype, roadKind, edgeLength — but "chordPick" IS a f32 POINT attribute here, which is the likeliest mix-up/,
     );
     await expect(kept(geo, { attribute: "chordPick" })).rejects.toThrow(
       /promoteAttribute \(name "chordPick", from "point", to "primitive"\).*filterByAttribute/s,
@@ -985,7 +985,7 @@ describe("filterPrimitivesByAttribute", () => {
   it("names the param, the value and the way out on every bad param", async () => {
     const geo = networkWithEdgeLengths(line, roads, lengths);
     await expect(kept(geo, { attribute: "nowhere" })).rejects.toThrow(
-      /filterPrimitivesByAttribute: primitive attribute "nowhere" not found; available: primtype, roadKind, edgeLength$/,
+      /filterPrimitivesByAttribute: primitive attribute "nowhere" not found; available primitive attributes: primtype, roadKind, edgeLength$/,
     );
     await expect(kept(geo, { attribute: "edgeLength", comparison: "GT" })).rejects.toThrow(
       /filterPrimitivesByAttribute: comparison must be one of eq, ne, lt, le, gt, ge, got "GT"/,
@@ -1008,7 +1008,7 @@ describe("filterPrimitivesByAttribute", () => {
     // author looking for a typo.
     const cloud = cloudAt(line);
     await expect(kept(cloud, { attribute: "edgeLength" })).rejects.toThrow(
-      /primitive attribute "edgeLength" not found; available: \(none\) — and this geometry has no primitives at all, so either none was ever built .* or a node between the builder and here removed points and the topology went with them/,
+      /primitive attribute "edgeLength" not found; available primitive attributes: \(none\) — and this geometry has no primitives at all, so either none was ever built .* or a node between the builder and here removed points and the topology went with them/,
     );
   });
 

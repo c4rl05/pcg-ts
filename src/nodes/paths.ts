@@ -49,6 +49,7 @@ import {
   type AttributeSet,
   type Geometry,
 } from "../data/index.js";
+import { attributeNotFound } from "../data/attributeNotFound.js";
 import type { Column } from "../fields/index.js";
 import { cloneGeometry, makeGeometryItem } from "../graph/index.js";
 import { hashCombine } from "../random/index.js";
@@ -1408,9 +1409,11 @@ export const pathScan = standardNode<PathScanParams>({
     const src = requireGeometry(inputs, "in", "pathScan");
     const attr = src.attrs.point.get(name);
     if (!attr) {
-      throw new Error(
-        `pathScan: point attribute "${name}" not found; available: ${src.attrs.point.names().join(", ") || "(none)"}`,
-      );
+      throw attributeNotFound(src, "point", name, {
+        prefix: "pathScan: ",
+        param: "name",
+        reader: "pathScan",
+      });
     }
     if (attr.type === "string") {
       throw new Error(
@@ -1650,9 +1653,11 @@ export const pathRuns = standardNode<PathRunsParams>({
     const src = requireGeometry(inputs, "in", "pathRuns");
     const attr = src.attrs.point.get(name);
     if (!attr) {
-      throw new Error(
-        `pathRuns: point attribute "${name}" not found; available: ${src.attrs.point.names().join(", ") || "(none)"}`,
-      );
+      throw attributeNotFound(src, "point", name, {
+        prefix: "pathRuns: ",
+        param: "name",
+        reader: "pathRuns",
+      });
     }
     if (attr.type === "string") {
       throw new Error(
@@ -1666,9 +1671,11 @@ export const pathRuns = standardNode<PathRunsParams>({
     }
     const bnd = src.attrs.point.get(boundary);
     if (!bnd) {
-      throw new Error(
-        `pathRuns: point attribute "${boundary}" not found; available: ${src.attrs.point.names().join(", ") || "(none)"}`,
-      );
+      throw attributeNotFound(src, "point", boundary, {
+        prefix: "pathRuns: ",
+        param: "boundary",
+        reader: "pathRuns",
+      });
     }
     if (bnd.type === "string") {
       throw new Error(

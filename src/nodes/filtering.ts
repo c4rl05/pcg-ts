@@ -27,6 +27,7 @@ import { type Column, isField } from "../fields/index.js";
 // authored constant, and copying a whole spec tree to answer that would
 // cost more than the question is worth.
 import { peekFieldSpec } from "../fields/spec.js";
+import { attributeNotFound } from "../data/attributeNotFound.js";
 import { pointIdentities } from "../data/identity.js";
 import { cloneGeometry, makeGeometryItem, type ParamSchema } from "../graph/index.js";
 import { hashCombine, hashFloat } from "../random/index.js";
@@ -505,7 +506,7 @@ function boundsColumn(
   seed: number,
 ): Column {
   return requireVec3Column(
-    resolveOnAllowingNonFinite(geo, domain, value, seed),
+    resolveOnAllowingNonFinite(geo, domain, value, seed, nodeType, param),
     nodeType,
     param,
     domain,
@@ -827,10 +828,14 @@ function requireFilterAttribute(
       domain === "primitive" && geo.primitiveCount === 0 && set.names().length === 0
         ? ` — and this geometry has no primitives at all, so either none was ever built (pointsToPath, connectPoints, meshPrimitive) or a node between the builder and here removed points and the topology went with them (filterByDensity, filterByBounds, filterByAttribute, filterByExpression and selfPrune all take topology "keep", which preserves the primitives that lose no point; partitionByAttribute and mergePoints do not, and need the network rebuilt after them)`
         : "";
-    throw new Error(
-      `${nodeType}: ${domain} attribute "${name}" not found; available: ${set.names().join(", ") || "(none)"}` +
-        `${otherDomainHint(geo, domain, name)}${gone}`,
-    );
+    // The generic other-domain clause is off: this node's own hint names the
+    // twin filter as well as the promote, which is the likelier fix here.
+    throw attributeNotFound(geo, domain, name, {
+      prefix: `${nodeType}: `,
+      param: "attribute",
+      otherDomain: "none",
+      suffix: `${otherDomainHint(geo, domain, name)}${gone}`,
+    });
   }
   if (attr.tupleSize !== 1) {
     throw new Error(
@@ -1110,7 +1115,14 @@ export const filterByExpression = standardNode<FilterByExpressionParams>({
     // means DROP THIS POINT, which this node's own description states and
     // the `> 0 || < 0` test below implements. A throw would delete a
     // documented meaning — see resolveOnAllowingNonFinite.
-    const col = resolveOnAllowingNonFinite(geo, "point", params.predicate, seed);
+    const col = resolveOnAllowingNonFinite(
+      geo,
+      "point",
+      params.predicate,
+      seed,
+      "filterByExpression",
+      "predicate",
+    );
     if (col.tupleSize !== 1) {
       throw new Error(
         `filterByExpression: predicate must evaluate to tuple size 1 (one flag per point), got tuple size ${col.tupleSize}; field comparisons broadcast elementwise, so comparing a vector such as gt(position(), 0) yields one flag per component — compare a single component instead, e.g. gt(component(position(), 1), 0)`,
@@ -1150,7 +1162,7 @@ function selfPruneScalar(
   // pinned by tests — "treats 0, negative and NaN radii as claiming
   // nothing, but still prunes them", and "ranks NaN lowest".
   return requireScalarColumn(
-    resolveOnAllowingNonFinite(geo, "point", value, seed),
+    resolveOnAllowingNonFinite(geo, "point", value, seed, "selfPrune", param),
     "selfPrune",
     param,
     "point",

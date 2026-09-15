@@ -1,3 +1,4 @@
+import { requireAttributeOn } from "../data/attributeNotFound.js";
 import { pointIdentities, primitiveIdentities } from "../data/identity.js";
 import { hashCombine, hashFloat, hashString } from "../random/index.js";
 import {
@@ -74,7 +75,7 @@ export function attribute(name: string, tupleSize?: number): Field {
   const quoted = JSON.stringify(name);
   const key = tupleSize === undefined ? `attr(${quoted})` : `attr(${quoted},${tupleSize})`;
   const field = makeField(key, tupleSize, (ctx) => {
-    const attr = ctx.geo.attrs[ctx.domain].require(name);
+    const attr = requireAttributeOn(ctx.geo, ctx.domain, name);
     if (attr.type === "string") {
       // THE message an author hits, not the one in the GPU compiler: that
       // path declines with `compile-error` and the node re-resolves here,
@@ -162,7 +163,7 @@ export function attributeIs(name: string, value: string): Field<1> {
   // quote can forge the key of a different (name, value) pair.
   const key = `attrIs(${JSON.stringify(name)},${JSON.stringify(value)})`;
   const field = makeField<1>(key, 1, (ctx) => {
-    const attr = ctx.geo.attrs[ctx.domain].require(name);
+    const attr = requireAttributeOn(ctx.geo, ctx.domain, name);
     if (attr.type !== "string") {
       throw new Error(
         `attributeIs "${name}": expected a string attribute, got ${attr.type}; ` +
@@ -306,7 +307,7 @@ export function byAttribute(
     `${keys.map((k, i) => `${JSON.stringify(k)}=${keyRef(branches[i].key)}`).join(",")},` +
     `else=${keyRef(fallback.key)})`;
   const field = makeField(key, staticTs, (ctx) => {
-    const attr = ctx.geo.attrs[ctx.domain].require(name);
+    const attr = requireAttributeOn(ctx.geo, ctx.domain, name);
     if (attr.type !== "string") {
       throw new Error(
         `byAttribute ${JSON.stringify(name)}: expected a string attribute, got ${attr.type}; ` +

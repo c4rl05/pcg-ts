@@ -3,7 +3,7 @@
  * measure, rescale, and clean up attributes.
  */
 import { describe, expect, it } from "vitest";
-import { createPointCloud, createTriangleMesh } from "../data/index.js";
+import { AttributeNotFoundError, createPointCloud, createTriangleMesh } from "../data/index.js";
 import { makeGeometryItem } from "../graph/index.js";
 import {
   attributeReduce,
@@ -129,8 +129,17 @@ describe("attributeReduce", () => {
   it("names the offender and the fix on misuse", async () => {
     const geo = [makeGeometryItem(withValues([1]))];
     await expect(runNode(attributeReduce, { name: "nope" }, { in: geo })).rejects.toThrow(
-      /point attribute "nope" not found; available: P, /,
+      /^attributeReduce: point attribute "nope" not found; available point attributes: P, /,
     );
+    await expect(runNode(attributeReduce, { name: "nope" }, { in: geo })).rejects.toBeInstanceOf(
+      AttributeNotFoundError,
+    );
+    // Named on another domain: the fix is this node's own domain param.
+    const onPrims = withValues([1]);
+    onPrims.attrs.detail.add("total", "f32", 1, 3);
+    await expect(
+      runNode(attributeReduce, { name: "total" }, { in: [makeGeometryItem(onPrims)] }),
+    ).rejects.toThrow(/; "total" exists on the detail domain — set param "domain" to "detail"$/);
     await expect(
       runNode(attributeReduce, { name: "", mode: "count", outName: "" }, { in: geo }),
     ).rejects.toThrow(/no output name/);
@@ -347,7 +356,7 @@ describe("attributeRemap", () => {
   it("names the offender and the fix on misuse", async () => {
     await expect(
       runNode(attributeRemap, { name: "nope" }, { in: [makeGeometryItem(withValues([1]))] }),
-    ).rejects.toThrow(/point attribute "nope" not found; available: P, /);
+    ).rejects.toThrow(/^attributeRemap: point attribute "nope" not found; available point attributes: P, /);
     const strings = createPointCloud(1);
     strings.attrs.point.add("s", "string", 1, "");
     await expect(
@@ -451,7 +460,7 @@ describe("removeAttribute", () => {
   it("errors on an unknown name by default, and skips it when strict is off", async () => {
     const geo = withValues([1]);
     await expect(remove(geo, { names: ["ghost"] })).rejects.toThrow(
-      /point attribute "ghost" not found; available: P, .*set strict false/s,
+      /^removeAttribute: point attribute "ghost" not found; available point attributes: P, .*set strict false/s,
     );
     const out = await remove(geo, { names: ["ghost", "v"], strict: false });
     expect(out.attrs.point.has("v")).toBe(false);

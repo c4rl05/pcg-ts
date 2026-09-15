@@ -174,6 +174,7 @@ export function errorDiagnostics(
  */
 const CODE_BY_ERROR_NAME: Readonly<Record<string, DiagnosticCode>> = Object.freeze({
   FieldJsonError: "invalid-field-spec",
+  AttributeNotFoundError: "attribute-not-found",
   GraphCycleError: "cycle",
   CookCancelledError: "cook-cancelled",
   NodeExecutionError: "node-execution-failed",

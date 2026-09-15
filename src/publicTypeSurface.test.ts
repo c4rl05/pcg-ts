@@ -43,7 +43,7 @@ import { entryPointSurface } from "./publicTypeSurface.testsupport.js";
  */
 const ROOT_TYPE_SURFACE = [
   "ArcTileParams", "AssetIdOrigin", "AttrData", "AttrDefault", "AttrType", "AttrTypeMap",
-  "Attribute", "AttributeReduceParams", "AttributeRemapParams", "AttributeSet", "BindPatches",
+  "Attribute", "AttributeNotFoundError", "AttributeReduceParams", "AttributeRemapParams", "AttributeSet", "BindPatches",
   "BuildInstanceBatchesOptions", "CellContext", "CellContextBase", "CellContextPath",
   "CellContextXYZ", "CellContextXZ", "CellCookRequest", "CellCoord", "CellCoord1", "CellCoord2",
   "CellCoord3", "CellId", "CellMode", "CellOutputs", "CellSnapshot", "Column", "ColumnData",
@@ -122,7 +122,7 @@ const ROOT_TYPE_SURFACE = [
  * the value pin.
  */
 const DUAL_SURFACE = [
-  "Attribute", "AttributeSet", "CookCancelledError", "FieldJsonError", "Geometry", "Graph",
+  "Attribute", "AttributeNotFoundError", "AttributeSet", "CookCancelledError", "FieldJsonError", "Geometry", "Graph",
   "GraphCycleError", "GraphError", "GraphSerializationError", "GraphValidationError",
   "NodeExecutionError", "Pcg32", "World", "WorldValidationError",
 ] as const;

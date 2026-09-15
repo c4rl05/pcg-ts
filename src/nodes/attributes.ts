@@ -15,6 +15,7 @@ import {
   type TransferAttrDomain,
   type TransferRaycastOptions,
 } from "../data/index.js";
+import { attributeNotFound } from "../data/attributeNotFound.js";
 import { isField, type Column } from "../fields/index.js";
 import { cloneGeometry, makeGeometryItem, type DataItem } from "../graph/index.js";
 import { hashCombine } from "../random/index.js";
@@ -185,7 +186,7 @@ function writeWeightedSelection(
   while (lastPick > 0 && ends[lastPick] === ends[lastPick - 1]) lastPick--;
   // Non-finite selectors are a defined selection here for the same reason
   // they are in the index mode — see the comment at the index loop.
-  const col = resolveOnAllowingNonFinite(geo, domain, params.select, seed);
+  const col = resolveOnAllowingNonFinite(geo, domain, params.select, seed, "setAttribute", "select");
   if (col.tupleSize !== 1 && col.tupleSize !== ts) {
     throw new Error(
       `setAttribute: select evaluates to tuple size ${col.tupleSize}, which is neither 1 (broadcast) nor tupleSize ${ts}`,
@@ -387,7 +388,7 @@ export const setAttribute = standardNode<SetAttributeParams>({
       // design — NaN and -Infinity land on entry 0, +Infinity on the last,
       // "never a per-element throw" — so a non-finite value here is a
       // defined selection rather than a broken recipe.
-      const col = resolveOnAllowingNonFinite(geo, domain, params.value, seed);
+      const col = resolveOnAllowingNonFinite(geo, domain, params.value, seed, "setAttribute", "value");
       if (col.tupleSize !== 1 && col.tupleSize !== ts) {
         throw new Error(
           `setAttribute: value evaluates to tuple size ${col.tupleSize}, which is neither 1 (broadcast) nor tupleSize ${ts}`,
@@ -856,9 +857,11 @@ export const attributeReduce = standardNode<AttributeReduceParams>({
     }
     const attr = set.get(params.name);
     if (!attr) {
-      throw new Error(
-        `attributeReduce: ${domain} attribute "${params.name}" not found; available: ${set.names().join(", ") || "(none)"}`,
-      );
+      throw attributeNotFound(geo, domain, params.name, {
+        prefix: "attributeReduce: ",
+        param: "name",
+        otherDomain: { domainParam: "domain" },
+      });
     }
     if (attr.type === "string") {
       throw new Error(
@@ -1021,9 +1024,11 @@ export const attributeRemap = standardNode<AttributeRemapParams>({
     const set = geo.attrs[domain];
     const attr = set.get(params.name);
     if (!attr) {
-      throw new Error(
-        `attributeRemap: ${domain} attribute "${params.name}" not found; available: ${set.names().join(", ") || "(none)"}`,
-      );
+      throw attributeNotFound(geo, domain, params.name, {
+        prefix: "attributeRemap: ",
+        param: "name",
+        otherDomain: { domainParam: "domain" },
+      });
     }
     if (attr.type === "string") {
       throw new Error(
@@ -1205,7 +1210,8 @@ export const removeAttribute = standardNode<RemoveAttributeParams>({
     },
   },
   execute({ inputs, params }) {
-    const geo = cloneGeometry(requireGeometry(inputs, "in", "removeAttribute"));
+    const input = requireGeometry(inputs, "in", "removeAttribute");
+    const geo = cloneGeometry(input);
     const domain = params.domain as Domain;
     const set = geo.attrs[domain];
     for (const name of params.names) {
@@ -1215,9 +1221,17 @@ export const removeAttribute = standardNode<RemoveAttributeParams>({
         );
       }
       if (!set.remove(name) && params.strict) {
-        throw new Error(
-          `removeAttribute: ${domain} attribute "${name}" not found; available: ${set.names().join(", ") || "(none)"} (set strict false to skip names that may be absent)`,
-        );
+        // Stated against the INPUT, not the half-stripped clone: the
+        // available list is then what the author connected. And no `fix`
+        // for a list of names — one `domain` serves them all, so moving it
+        // for this name can strand the others.
+        throw attributeNotFound(input, domain, name, {
+          prefix: "removeAttribute: ",
+          param: "names",
+          otherDomain: { domainParam: "domain" },
+          suffix: " (set strict false to skip names that may be absent)",
+          fixable: params.names.length === 1,
+        });
       }
     }
     return { out: [makeGeometryItem(geo)] };
@@ -1248,9 +1262,11 @@ export const partitionByAttribute = standardNode<PartitionByAttributeParams>({
     const geo = item.geo;
     const attr = geo.attrs.point.get(params.name);
     if (!attr) {
-      throw new Error(
-        `partitionByAttribute: point attribute "${params.name}" not found; available: ${geo.attrs.point.names().join(", ")}`,
-      );
+      throw attributeNotFound(geo, "point", params.name, {
+        prefix: "partitionByAttribute: ",
+        param: "name",
+        reader: "partitionByAttribute",
+      });
     }
     if (attr.tupleSize !== 1 || (attr.type !== "i32" && attr.type !== "u32" && attr.type !== "string")) {
       throw new Error(

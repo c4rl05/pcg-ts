@@ -21,6 +21,7 @@
  */
 import type { AttrDefault, Attribute, Geometry } from "../data/index.js";
 import type { Column } from "../fields/index.js";
+import { attributeNotFound } from "../data/attributeNotFound.js";
 import { pointIdentities } from "../data/identity.js";
 import { cloneGeometry, makeGeometryItem } from "../graph/index.js";
 import { UniformGrid, type PositionView } from "../spatial/index.js";
@@ -96,7 +97,7 @@ function deriveCellSize(view: PositionView): number {
  */
 function neighborhoodRadiusColumn(geo: Geometry, value: FieldParam, seed: number): Column {
   return requireScalarColumn(
-    resolveOnAllowingNonFinite(geo, "point", value, seed),
+    resolveOnAllowingNonFinite(geo, "point", value, seed, "pointNeighborhood", "radius"),
     "pointNeighborhood",
     "radius",
     "point",
@@ -191,9 +192,11 @@ export const pointNeighborhood = standardNode<PointNeighborhoodParams>({
     if (wantAverage) {
       const attr = set.get(params.averageAttr);
       if (!attr) {
-        throw new Error(
-          `pointNeighborhood: point attribute "${params.averageAttr}" not found; available: ${set.names().join(", ") || "(none)"}`,
-        );
+        throw attributeNotFound(geo, "point", params.averageAttr, {
+          prefix: "pointNeighborhood: ",
+          param: "averageAttr",
+          reader: "pointNeighborhood",
+        });
       }
       if (attr.type === "string") {
         throw new Error(
@@ -482,9 +485,13 @@ export const sampleNearestPoint = standardNode<SampleNearestPointParams>({
     if (wantCopy) {
       const attr = src.attrs.point.get(params.attribute);
       if (!attr) {
-        throw new Error(
-          `sampleNearestPoint: point attribute "${params.attribute}" not found on the source geometry; available: ${src.attrs.point.names().join(", ") || "(none)"}`,
-        );
+        throw attributeNotFound(src, "point", params.attribute, {
+          prefix: "sampleNearestPoint: ",
+          param: "attribute",
+          on: "the source geometry",
+          pin: "source",
+          reader: "sampleNearestPoint",
+        });
       }
       sourceAttr = attr;
     }

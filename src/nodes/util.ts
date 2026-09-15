@@ -4,6 +4,7 @@
  * gathering, and quaternion math. Not part of the public API.
  */
 import {
+  AttributeNotFoundError,
   Geometry,
   PRIMTYPE_ATTR,
   type AttrData,
@@ -239,7 +240,7 @@ export function resolveOn(
   nodeType: string,
   param: string,
 ): Column {
-  const col = resolveOnAllowingNonFinite(geo, domain, value, seed);
+  const col = resolveOnAllowingNonFinite(geo, domain, value, seed, nodeType, param);
   return isField(value) ? requireFiniteColumn(col, nodeType, param) : col;
 }
 
@@ -288,17 +289,33 @@ export function resolveOn(
  * decided. The fold is bit-exact by construction and returns the field
  * unchanged whenever there is nothing to fold, so this line changes what
  * a resolve COSTS and never what it produces — see `src/fields/fold.ts`.
+ *
+ * And it is where a field reader's {@link AttributeNotFoundError} learns
+ * which node and param it came from: the reader knows only the geometry
+ * and the name, so the error is re-thrown here opened by
+ * `<nodeType>: param "<param>": ` — the prefix {@link nonFiniteParamError}
+ * uses — with `param` on its record. Only that class is re-worded; every
+ * other error passes through exactly as thrown.
  */
 export function resolveOnAllowingNonFinite(
   geo: Geometry,
   domain: "point" | "vertex" | "primitive" | "detail",
   value: FieldLike,
   seed: number,
+  nodeType: string,
+  param: string,
 ): Column {
-  const field: Field = isField(value)
-    ? foldDomainConstants(value, seed, geo.attrs[domain].count)
-    : resolveField(value);
-  return evaluateField(field, { geo, domain, seed });
+  try {
+    const field: Field = isField(value)
+      ? foldDomainConstants(value, seed, geo.attrs[domain].count)
+      : resolveField(value);
+    return evaluateField(field, { geo, domain, seed });
+  } catch (err) {
+    if (err instanceof AttributeNotFoundError) {
+      throw err.withPrefix(`${nodeType}: param "${param}": `, param);
+    }
+    throw err;
+  }
 }
 
 /**

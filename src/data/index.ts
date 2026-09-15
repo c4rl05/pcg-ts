@@ -13,6 +13,11 @@ export {
   type Domain,
 } from "./types.js";
 export * from "./attribute.js";
+// The class only, so a caller can `instanceof` the fault and read its
+// facts. The helpers that build and throw it (`attributeNotFound`,
+// `requireAttributeOn`) and its wording options are the library's own
+// plumbing, imported by path.
+export { AttributeNotFoundError } from "./attributeNotFound.js";
 export * from "./geometry.js";
 export * from "./points.js";
 export * from "./promote.js";

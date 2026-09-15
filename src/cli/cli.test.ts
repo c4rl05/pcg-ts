@@ -488,7 +488,7 @@ describe("pcg cli — cook", () => {
     });
     expect(await runCli(["cook", "/bad-attr.json"], io.io)).toBe(EXIT_FAILURE);
     expect(io.stderr()).toContain(
-      'node "keep" failed: filterByAttribute: point attribute "nope" not found; available: ',
+      'node "keep" failed: filterByAttribute: point attribute "nope" not found; available point attributes: ',
     );
   });
 

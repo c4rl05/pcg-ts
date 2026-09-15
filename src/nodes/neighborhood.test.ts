@@ -423,7 +423,7 @@ describe("pointNeighborhood", () => {
     ).rejects.toThrow(/averageOutAttr is empty/);
     await expect(
       runNode(pointNeighborhood, { averageAttr: "nope" }, { in: one }),
-    ).rejects.toThrow(/"nope" not found; available: P, /);
+    ).rejects.toThrow(/"nope" not found; available point attributes: P, /);
     await expect(runNode(pointNeighborhood, {}, {})).rejects.toThrow(
       /input pin "in" has no geometry connected/,
     );
@@ -687,7 +687,7 @@ describe("sampleNearestPoint", () => {
     ).rejects.toThrow(/nothing to write/);
     await expect(
       runNode(sampleNearestPoint, { attribute: "nope" }, { in: one, source: one }),
-    ).rejects.toThrow(/"nope" not found on the source geometry; available: P, /);
+    ).rejects.toThrow(/"nope" not found on the source geometry; available point attributes: P, /);
     await expect(runNode(sampleNearestPoint, {}, { in: one })).rejects.toThrow(
       /input pin "source" has no geometry connected/,
     );
