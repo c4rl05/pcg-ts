@@ -75,6 +75,7 @@
  * type the rest of the grammar already raises, so one `catch` covers
  * reading a field from text and reading one from JSON.
  */
+import { closestNames } from "../diagnostics/suggest.js";
 import { FieldJsonError, type FieldFnInfo, listFieldFnInfos } from "./fieldJson.js";
 import { type FieldSpec, MAX_SPEC_DEPTH, specChildEntries } from "./spec.js";
 
@@ -266,32 +267,9 @@ function shapes(): Map<string, Shape> {
   return built;
 }
 
-/** Levenshtein distance, for "did you mean" on an unknown fn name. */
-function editDistance(a: string, b: string): number {
-  const prev = new Array<number>(b.length + 1);
-  const cur = new Array<number>(b.length + 1);
-  for (let j = 0; j <= b.length; j++) prev[j] = j;
-  for (let i = 1; i <= a.length; i++) {
-    cur[0] = i;
-    for (let j = 1; j <= b.length; j++) {
-      const sub = (prev[j - 1] as number) + (a[i - 1] === b[j - 1] ? 0 : 1);
-      cur[j] = Math.min((prev[j] as number) + 1, (cur[j - 1] as number) + 1, sub);
-    }
-    for (let j = 0; j <= b.length; j++) prev[j] = cur[j] as number;
-  }
-  return prev[b.length] as number;
-}
-
 /** The registered fn names closest to `name`, nearest first, at most three. */
 function closestFns(name: string): string[] {
-  const lower = name.toLowerCase();
-  const limit = Math.max(2, Math.floor(name.length / 3));
-  return [...shapes().keys()]
-    .map((fn) => ({ fn, d: editDistance(lower, fn.toLowerCase()) }))
-    .filter((s) => s.d <= limit)
-    .sort((a, b) => a.d - b.d || a.fn.localeCompare(b.fn))
-    .slice(0, 3)
-    .map((s) => s.fn);
+  return closestNames(name, shapes().keys(), 3);
 }
 
 /**

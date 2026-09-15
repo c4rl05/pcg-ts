@@ -188,12 +188,27 @@ import {
 // factories are built against, so `pcg fields perlinNoise` cannot print a
 // range the field does not have.
 import { MAX_SEED_VARIANT, NOISE_RAW_RANGES } from "../noise/util.js";
+import {
+  type Diagnostic,
+  type DiagnosticCode,
+  errorDiagnostics,
+} from "../diagnostics/index.js";
 
-/** Errors raised while converting fields to or from JSON specs. */
+/**
+ * Errors raised while converting fields to or from JSON specs.
+ *
+ * `diagnostics` holds the fault as records. The optional trailing argument
+ * is a code or the full list; without it the record's code is
+ * `invalid-field-spec`.
+ */
 export class FieldJsonError extends Error {
-  constructor(message: string) {
+  /** This fault as records; never empty. */
+  readonly diagnostics: readonly Diagnostic[];
+
+  constructor(message: string, diagnostics?: DiagnosticCode | readonly Diagnostic[]) {
     super(message);
     this.name = "FieldJsonError";
+    this.diagnostics = errorDiagnostics(message, diagnostics, "invalid-field-spec");
   }
 }
 

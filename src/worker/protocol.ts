@@ -9,9 +9,10 @@
  * - Cook outputs alias live memo caches (see `CookResult`), so the worker
  *   must never transfer the arrays it holds: `encodeOutputs` slices each
  *   column once (the one unavoidable copy) and transfers the slices.
- * - Errors cross as (name, message, nodeId) and are rehydrated into the
- *   library's own error classes, so `instanceof` checks and the
- *   node-naming message contract survive the boundary.
+ * - Errors cross as (name, message, nodeId, diagnostics) and are
+ *   rehydrated into the library's own error classes, so `instanceof`
+ *   checks, the node-naming message contract and the structured records
+ *   all survive the boundary.
  */
 import { Geometry, type AttrData, type AttrType, type AttributeSet } from "../data/index.js";
 import {
@@ -32,6 +33,7 @@ import {
 // from the same module so the pair reads as one import.
 import { instanceAttributesOf, makeInstanceBatch } from "../graph/data.js";
 import { GraphSerializationError, type SerializedGraph } from "../nodes/serialize.js";
+import { type Diagnostic, diagnosticsOf, sanitizeDiagnostics } from "../diagnostics/index.js";
 import type { CellOutputs, ParamPatch } from "../runtime/types.js";
 
 /** One encoded attribute column (length = count * tupleSize, exactly). */
@@ -111,6 +113,13 @@ export interface EncodedError {
   readonly message: string;
   /** Present when the source was a `NodeExecutionError`. */
   readonly nodeId?: string;
+  /**
+   * The source's records (`diagnosticsOf`). Optional on the wire type so a
+   * payload without them still decodes, and validated on decode: a
+   * malformed list is dropped and the rehydrated class falls back to its
+   * own default record.
+   */
+  readonly diagnostics?: readonly Diagnostic[];
 }
 
 /** Worker-side timing and cache counters for one cook. */
@@ -326,41 +335,53 @@ export function decodeOutputs(encoded: EncodedOutputs): CellOutputs {
   return outputs;
 }
 
-/** Flatten an error for the wire, keeping name, message, and node id. */
+/**
+ * Flatten an error for the wire, keeping name, message, node id, and the
+ * structured records. `diagnosticsOf` hands back only declared fields
+ * with `got` checked to be plain JSON, so the payload is clone-safe: a
+ * stray function-valued key on a foreign error cannot make the host's
+ * `postMessage` throw.
+ */
 export function encodeError(err: unknown): EncodedError {
+  const diagnostics = diagnosticsOf(err);
   if (err instanceof NodeExecutionError) {
-    return { name: err.name, message: err.message, nodeId: err.nodeId };
+    return { name: err.name, message: err.message, nodeId: err.nodeId, diagnostics };
   }
   if (err instanceof Error) {
-    return { name: err.name, message: err.message };
+    return { name: err.name, message: err.message, diagnostics };
   }
-  return { name: "Error", message: String(err) };
+  return { name: "Error", message: String(err), diagnostics };
 }
 
 /**
  * Rehydrate a wire error into the library class its name says it was, so
  * `instanceof CookCancelledError` (and friends) keep working across the
  * thread boundary. Messages cross verbatim — the node/pin/param naming
- * contract is carried by the message text. Unknown names become a plain
- * `Error` with the name restored.
+ * contract is carried by the message text — and so do the records, once
+ * validated; a payload whose `diagnostics` is missing or malformed gets
+ * the class's default record instead, never an exception. Unknown names
+ * become a plain `Error` with the name restored and, when valid, the
+ * records attached as `diagnostics` so `diagnosticsOf` still reads them.
  */
 export function decodeError(e: EncodedError): Error {
+  const diagnostics = sanitizeDiagnostics(e.diagnostics);
   switch (e.name) {
     case "NodeExecutionError":
-      return new NodeExecutionError(e.nodeId ?? "(unknown)", undefined, e.message);
+      return new NodeExecutionError(e.nodeId ?? "(unknown)", undefined, e.message, diagnostics);
     case "CookCancelledError":
-      return new CookCancelledError(e.message);
+      return new CookCancelledError(e.message, diagnostics);
     case "GraphValidationError":
-      return new GraphValidationError(e.message);
+      return new GraphValidationError(e.message, undefined, diagnostics);
     case "GraphCycleError":
-      return new GraphCycleError(e.message);
+      return new GraphCycleError(e.message, undefined, diagnostics);
     case "GraphSerializationError":
-      return new GraphSerializationError(e.message);
+      return new GraphSerializationError(e.message, diagnostics);
     case "GraphError":
-      return new GraphError(e.message);
+      return new GraphError(e.message, undefined, diagnostics);
     default: {
-      const err = new Error(e.message);
+      const err: Error & { diagnostics?: readonly Diagnostic[] } = new Error(e.message);
       err.name = e.name;
+      if (diagnostics !== undefined) err.diagnostics = diagnostics;
       return err;
     }
   }

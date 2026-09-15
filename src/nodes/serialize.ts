@@ -5,6 +5,11 @@
  * FieldSpecs (see fieldJson.ts). Every validation error names the node,
  * param, or pin at fault and states what would be valid.
  */
+import {
+  type Diagnostic,
+  type DiagnosticCode,
+  errorDiagnostics,
+} from "../diagnostics/index.js";
 import { isField } from "../fields/index.js";
 import {
   Graph,
@@ -54,11 +59,22 @@ import {
   unknownSubgraphMessage,
 } from "./subgraphRegistry.js";
 
-/** Errors raised while serializing or deserializing graphs. */
+/**
+ * Errors raised while serializing or deserializing graphs.
+ *
+ * `diagnostics` holds the fault as records. The optional trailing argument
+ * is a code or the full list; without it the record's code is `error`,
+ * because a load fault spans too many categories for the class alone to
+ * name one.
+ */
 export class GraphSerializationError extends Error {
-  constructor(message: string) {
+  /** This fault as records; never empty. */
+  readonly diagnostics: readonly Diagnostic[];
+
+  constructor(message: string, diagnostics?: DiagnosticCode | readonly Diagnostic[]) {
     super(message);
     this.name = "GraphSerializationError";
+    this.diagnostics = errorDiagnostics(message, diagnostics, "error");
   }
 }
 

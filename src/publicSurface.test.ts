@@ -38,6 +38,10 @@ import { surfaceDiff, surfaceOf } from "./publicSurface.testsupport.js";
 
 const ROOT_SURFACE = [
   "Attribute", "AttributeSet", "CookCancelledError", "DOMAINS",
+  // Every failure as records with a stable code: the code table (the
+  // single source the docs render from, additive-only) and the reader
+  // that recovers records from any thrown value. See src/diagnostics.
+  "DIAGNOSTIC_CODES", "diagnosticsOf",
   "FieldJsonError", "GRAPH_META_KEYS", "Geometry", "Graph",
   "GraphCycleError", "GraphError", "GraphSerializationError", "GraphValidationError",
   "NOISE_RAW_RANGES", "NodeExecutionError", "PRIMTYPE_ATTR", "Pcg32",

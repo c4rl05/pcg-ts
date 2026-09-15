@@ -1,14 +1,19 @@
 import { MessageChannel } from "node:worker_threads";
 import { describe, expect, it } from "vitest";
 import { createTriangleMesh, type Geometry } from "../data/index.js";
+import { type Diagnostic, diagnosticsOf } from "../diagnostics/index.js";
+import { FieldJsonError } from "../fields/fieldJson.js";
 import {
   CookCancelledError,
+  GraphCycleError,
+  GraphError,
   GraphValidationError,
   NodeExecutionError,
   makeGeometryItem,
   makeInstancesItem,
   makeValueItem,
 } from "../graph/index.js";
+import { GraphSerializationError } from "../nodes/serialize.js";
 import type { CellOutputs } from "../runtime/types.js";
 import { geometryDiff, outputsDiff } from "../runtime/runtime.testsupport.js";
 import {
@@ -16,6 +21,7 @@ import {
   decodeOutputs,
   encodeError,
   encodeOutputs,
+  type EncodedError,
   type EncodedOutputs,
 } from "./protocol.js";
 
@@ -200,5 +206,124 @@ describe("encodeError / decodeError", () => {
   it("stringifies non-Error throws", () => {
     const back = decodeError(encodeError("just a string"));
     expect(back.message).toBe("just a string");
+  });
+});
+
+describe("encodeError / decodeError: diagnostics", () => {
+  /** Through a real structured clone, as the worker boundary does it. */
+  function roundTrip(err: unknown): Error {
+    return decodeError(structuredClone(encodeError(err)) as EncodedError);
+  }
+
+  it("keeps a nested node execution's code and nodePath across the boundary", () => {
+    const err = new NodeExecutionError(
+      "wrapper",
+      new NodeExecutionError("leaf", new FieldJsonError("bad spec", "unknown-field-fn")),
+    );
+    const back = roundTrip(err);
+    expect(back).toBeInstanceOf(NodeExecutionError);
+    expect(diagnosticsOf(back)).toEqual(err.diagnostics);
+    expect(diagnosticsOf(back)[0]?.code).toBe("unknown-field-fn");
+    expect(diagnosticsOf(back)[0]?.nodePath).toEqual(["wrapper", "leaf"]);
+  });
+
+  it("keeps every record of every library class, fields included", () => {
+    const records: Diagnostic[] = [
+      {
+        code: "unknown-param",
+        severity: "error",
+        message: "one",
+        path: "/nodes/2/params/cout",
+        nodeId: "scatter",
+        param: "cout",
+        got: { cout: [1, 2, null] },
+        valid: ["count", "seed"],
+        didYouMean: ["count"],
+      },
+      { code: "node-unreachable", severity: "warning", message: "two", nodeId: "orphan" },
+    ];
+    const cases: readonly Error[] = [
+      new GraphSerializationError("one\ntwo", records),
+      new GraphValidationError("v", undefined, records),
+      new GraphCycleError("c"),
+      new GraphError("g", undefined, "unknown-node"),
+      new CookCancelledError(),
+    ];
+    for (const err of cases) {
+      const back = roundTrip(err);
+      expect(back.constructor).toBe(err.constructor);
+      expect(diagnosticsOf(back)).toEqual(diagnosticsOf(err));
+    }
+  });
+
+  it("attaches the records to an error of an unknown name", () => {
+    const err = new FieldJsonError("f", "field-arity");
+    const back = roundTrip(err);
+    expect(back.name).toBe("FieldJsonError");
+    expect(diagnosticsOf(back)).toEqual([{ code: "field-arity", severity: "error", message: "f" }]);
+  });
+
+  it("decodes a malformed diagnostics payload safely, to the class default", () => {
+    const malformed: readonly unknown[] = [
+      "not a list",
+      [],
+      [{ code: "made-up", severity: "error", message: "m" }],
+      [{ code: "error", severity: "error" }],
+      [{ code: "error", severity: "error", message: "m", nodePath: "a/b" }],
+      null,
+    ];
+    for (const diagnostics of malformed) {
+      const cycle = decodeError({ name: "GraphCycleError", message: "c", diagnostics } as unknown as EncodedError);
+      expect(cycle).toBeInstanceOf(GraphCycleError);
+      expect(diagnosticsOf(cycle)).toEqual([{ code: "cycle", severity: "error", message: "c" }]);
+
+      const node = decodeError({
+        name: "NodeExecutionError",
+        message: 'node "n" failed: x',
+        nodeId: "n",
+        diagnostics,
+      } as unknown as EncodedError);
+      expect(diagnosticsOf(node)).toEqual([
+        {
+          code: "node-execution-failed",
+          severity: "error",
+          message: 'node "n" failed: x',
+          nodeId: "n",
+          nodePath: ["n"],
+        },
+      ]);
+
+      const other = decodeError({ name: "OddError", message: "o", diagnostics } as unknown as EncodedError);
+      expect("diagnostics" in other).toBe(false);
+      expect(diagnosticsOf(other)).toEqual([{ code: "error", severity: "error", message: "o" }]);
+    }
+  });
+
+  it("strips undeclared keys, so a stray one never reaches the decoded error or the clone", () => {
+    const foreign = Object.assign(new Error("f"), {
+      name: "ForeignError",
+      diagnostics: [{ code: "usage", severity: "error", message: "f", callback: () => 1 }],
+    });
+    const encoded = encodeError(foreign);
+    // The host posts this: a function-valued key here would throw in postMessage.
+    expect(() => structuredClone(encoded)).not.toThrow();
+    const decoded = decodeError({
+      name: "GraphError",
+      message: "g",
+      diagnostics: [{ code: "unknown-node", severity: "error", message: "g", extra: "x" }],
+    } as unknown as EncodedError);
+    expect(diagnosticsOf(decoded)).toEqual([{ code: "unknown-node", severity: "error", message: "g" }]);
+  });
+
+  it("still decodes a payload that predates diagnostics", () => {
+    const back = decodeError({ name: "GraphValidationError", message: "old" });
+    expect(back).toBeInstanceOf(GraphValidationError);
+    expect(diagnosticsOf(back)).toEqual([{ code: "error", severity: "error", message: "old" }]);
+  });
+
+  it("encodes a non-Error throw with a fallback record", () => {
+    expect(encodeError("just a string").diagnostics).toEqual([
+      { code: "error", severity: "error", message: "just a string" },
+    ]);
   });
 });

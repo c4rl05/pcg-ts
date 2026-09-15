@@ -52,6 +52,11 @@ const ROOT_TYPE_SURFACE = [
   "DataValue", "DescribedConnection", "DescribedDrivenParam", "DescribedGraphParam",
   "DescribedGraphScopedParam", "DescribedNode", "DescribedNodeParam", "DescribedOutput",
   "DescribedParamBase", "DescribedSpawner", "DescribedSubgraphParam", "DescribedSubgraphPin",
+  // The structured failure record and its code union. `JsonValue`, the
+  // type of `Diagnostic.got`, is deliberately NOT named: it is reachable as
+  // `Diagnostic["got"]`, and a generic JSON type is not this library's to
+  // publish. See src/diagnostics.
+  "Diagnostic", "DiagnosticCode",
   // The device twin of the per-instance attribute channel: one channel
   // (`DeviceInstanceAttribute`), the element types one may carry
   // (`DeviceInstanceAttrType` — every AttrType but "string", whose table

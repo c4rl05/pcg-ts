@@ -12,6 +12,15 @@ export * from "./graph/index.js";
 export * from "./nodes/index.js";
 export * from "./spawn/index.js";
 export * from "./runtime/index.js";
+// Named rather than starred: the diagnostics barrel also carries the
+// suggester and the record validators, which are the library's plumbing
+// and not a promise to callers.
+export {
+  DIAGNOSTIC_CODES,
+  type Diagnostic,
+  type DiagnosticCode,
+  diagnosticsOf,
+} from "./diagnostics/index.js";
 // Named rather than starred through `./nodes/index.js`, because it is the
 // one node-layer module that reads BOTH sides of the spawner seam: the graph
 // walk lives with the other graph reports, and the question it answers is a
