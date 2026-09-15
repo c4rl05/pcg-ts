@@ -1,10 +1,9 @@
 /**
  * The poses: the extent ladder, the focal constant, the eye standing ON the
  * surface under it rather than on the bounding box's floor, the orientation
- * of the orthographic views, and the arithmetic allowlist that makes the
- * frames' bytes platform-independent.
+ * of the orthographic views. (The arithmetic allowlist that keeps the
+ * frames' bytes platform-independent is `arithmetic.test.ts`.)
  */
-import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { type DataCollection, createPointCloud, createTriangleMesh, makeGeometryItem } from "../../index.js";
@@ -103,7 +102,8 @@ describe("the ground pose on relief", () => {
     const rgb = decodeRgb(result.png, 160, 120);
     const background = [0xf4, 0xf6, 0xf9];
     const at = (px: number, py: number): number[] => [...rgb.subarray((py * 160 + px) * 3, (py * 160 + px) * 3 + 3)];
-    expect(at(80, 2)).toEqual(background);
+    // Top right: the top left carries the tile label.
+    expect(at(150, 2)).toEqual(background);
     expect(at(80, 117)).not.toEqual(background);
   });
 });
@@ -195,50 +195,6 @@ function decodeRgb(png: Uint8Array, w: number, h: number): Uint8Array {
   }
   return rgb;
 }
-
-// ---------------------------------------------------------------------------
-// The arithmetic allowlist
-// ---------------------------------------------------------------------------
-
-/**
- * `Math` members whose results IEEE 754 pins down on every platform: the
- * correctly rounded `sqrt` and the exact operations. Everything else —
- * `sin`, `cos`, `tan`, `pow`, `exp`, `log*`, `atan*`, `hypot`, `cbrt` — is
- * whatever the platform's libm does, and one differing bit in a pose moves
- * every pixel.
- */
-const ALLOWED_MATH = new Set(["sqrt", "floor", "ceil", "round", "trunc", "abs", "min", "max", "fround"]);
-
-/** The modules whose output is the PNG's bytes. */
-const SCANNED = [
-  "src/cli/raster/views.ts",
-  "src/cli/raster/raster.ts",
-  "src/cli/raster/scene.ts",
-  "src/cli/raster/deflate.ts",
-  "src/cli/raster/png.ts",
-  "src/cli/renderPng.ts",
-];
-
-/** `Math.<member>` uses in code, comments stripped (a header may name what it avoids). */
-function mathMembers(source: string): string[] {
-  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-  return [...code.matchAll(/\bMath\s*\.\s*([A-Za-z_$][\w$]*)/g)].map((m) => m[1]);
-}
-
-describe("arithmetic allowlist", () => {
-  it("can see a banned member, so a clean scan means something", () => {
-    expect(mathMembers("const a = Math.sqrt(2); /* Math.sin */ const b = Math . pow(2, 3);")).toEqual([
-      "sqrt",
-      "pow",
-    ]);
-  });
-
-  it.each(SCANNED)("%s uses no Math member outside the allowlist", (file) => {
-    const source = readFileSync(new URL(`../../../${file}`, import.meta.url), "utf8");
-    const banned = mathMembers(source).filter((m) => !ALLOWED_MATH.has(m));
-    expect(banned).toEqual([]);
-  });
-});
 
 describe("posesFor", () => {
   it("puts top above the content looking down with up -z, and side in front of it on +z", () => {

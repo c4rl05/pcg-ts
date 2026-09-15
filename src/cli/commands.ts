@@ -38,7 +38,7 @@ import {
   stringFlag,
 } from "./args.js";
 import { CliError } from "./errors.js";
-import { fmtMs, fmtStat, fmtTuple, plural, table } from "./format.js";
+import { fmtFixed, fmtMs, fmtStat, fmtTuple, plural, table } from "./format.js";
 import { type TargetOptions, cookTarget, loadGraph } from "./graphSource.js";
 import type { CliIo } from "./io.js";
 import {
@@ -1055,6 +1055,8 @@ async function runRenderPng(
     framing: result.framing,
     ...(comparable !== undefined ? { comparable } : {}),
     counts: c,
+    drawing: result.drawing,
+    ...(result.groundView !== undefined ? { groundView: result.groundView } : {}),
     legend: result.legend,
     ...(result.colorAttr !== undefined
       ? { colorAttr: result.colorAttr, colorDomains: result.colorDomains ?? [] }
@@ -1083,6 +1085,12 @@ async function runRenderPng(
     ...(f.bounds === undefined ? ["nothing drawable in this collection"] : []),
     `framing: extent ${fmtStat(f.extent)} ${f.pinned ? "(pinned by --extent)" : "(from the content)"}, centre ${fmtTuple(f.centre)}, ground y ${fmtStat(f.groundY)}, eye ${fmtStat(f.eye)}`,
     ...(comparable !== undefined ? [`not comparable as pinned: ${comparable.note}`] : []),
+    ...(result.groundView?.occluded === true
+      ? [
+          `ground view: occluded at ${result.groundView.medianDepth === null ? "?" : fmtFixed(result.groundView.medianDepth, 1)} m — ${Math.round(result.groundView.nearFraction * 100)}% of the frame is surface nearer than ${fmtFixed(result.groundView.nearDistance, 1)} m, so it shows what the eye stands against rather than the scene; raise --eye or pin a larger --extent`,
+        ]
+      : []),
+    `drawn as: ${result.drawing.instances}; ${result.drawing.points}; ${result.drawing.grid.views.length > 0 ? result.drawing.grid.note : "no ground grid"}; ${result.drawing.labels}`,
     "views:",
     ...table(
       result.views.map((v) => [
@@ -1144,7 +1152,7 @@ const renderCommand: Command = {
   spec: {
     name: "render",
     summary:
-      "Draw a cooked collection as a deterministic picture: a top-down SVG (points as circles, polylines as paths), or PNG frames when --out ends in .png (top, side, hero and ground views of flat-shaded surfaces and instance proxies, tiled as a sheet by default). Without --out the SVG goes to stdout; a PNG always needs --out.",
+      "Draw a cooked collection as a deterministic picture: a top-down SVG (points as circles, polylines as paths), or PNG frames when --out ends in .png (top, side, hero and ground views tiled as a labelled sheet by default). Without --out the SVG goes to stdout; a PNG always needs --out. In the PNG, faces are flat-shaded, instances are upright square-pyramid proxies (not the assets) with a cross on each apex in top, side and hero, points are small squares, and hero and ground add a ground grid under the content, drawn only where nothing else is.",
     positionals: [GRAPH_ARG],
     flags: {
       ...TARGET_FLAGS,

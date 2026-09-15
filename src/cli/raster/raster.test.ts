@@ -322,6 +322,29 @@ describe("Raster near clipping", () => {
   });
 });
 
+describe("Raster marks", () => {
+  it("draws an instance marker as a plus sign and a point as a square, so they read as different things", () => {
+    const cam = topCamera(64, 1);
+    const cross = new Raster(64, 64, BG);
+    cross.cross(cam, 0, 0, 0, 5, 255, 255, 255);
+    const square = new Raster(64, 64, BG);
+    square.point(cam, 0, 0, 0, 2, 255, 255, 255);
+    const c = coverage(cross);
+    const s = coverage(square);
+    const at = (mask: Uint8Array, x: number, y: number): number => mask[y * 64 + x];
+    // The plus: arms reach 5 samples out along both axes, the diagonal is empty.
+    expect(at(c, 32 + 5, 32)).toBe(1);
+    expect(at(c, 32, 32 - 5)).toBe(1);
+    expect(at(c, 32 - 5, 32)).toBe(1);
+    expect(at(c, 32 + 3, 32 + 3)).toBe(0);
+    expect(at(c, 32 - 3, 32 - 3)).toBe(0);
+    // The square: filled corner to corner, and no arms.
+    expect(s.reduce((n, v) => n + v, 0)).toBe(16);
+    expect(at(s, 32 + 5, 32)).toBe(0);
+    expect(c.reduce((n, v) => n + v, 0)).toBeGreaterThan(20);
+  });
+});
+
 describe("Raster downsample", () => {
   it("box-filters 2x2 with integer rounding", () => {
     const r = new Raster(4, 2, 0x000000);

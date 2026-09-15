@@ -16,9 +16,17 @@
  */
 import type { DataCollection } from "../index.js";
 import { CliError } from "./errors.js";
+import { drawLabel } from "./raster/font.js";
 import { encodePng, pixelHash } from "./raster/png.js";
 import { Raster, makeCamera } from "./raster/raster.js";
-import { type LegendEntry, type SceneCounts, buildScene, drawScene, surfaceYAt } from "./raster/scene.js";
+import {
+  type LegendEntry,
+  type SceneCounts,
+  buildScene,
+  drawScene,
+  gridHeight,
+  surfaceYAt,
+} from "./raster/scene.js";
 import {
   type Pose,
   type Vec3,
@@ -51,6 +59,20 @@ const BACKGROUND = 0xf4f6f9;
 const SEPARATOR = 0x9aa3ad;
 /** Sheet order, row-major: what reads as a place first, then the plans. */
 const SHEET: readonly ViewName[] = ["hero", "ground", "top", "side"];
+/** Views that mark instance apexes, and views that draw the ground grid. */
+const MARKER_VIEWS: readonly ViewName[] = ["top", "side", "hero"];
+const GRID_VIEWS: readonly ViewName[] = ["hero", "ground"];
+/** Tile labels: white on a dark box. */
+const LABEL_TEXT = 0xffffff;
+const LABEL_BOX = 0x2b3440;
+
+/** The drawing conventions, in the words every report uses. */
+export const INSTANCE_DRAWING =
+  "instances are upright square-pyramid proxies (base 0.4, height 1) through each instance's 4x4, not the assets; top, side and hero also mark each apex with a cross";
+export const POINT_DRAWING = "points are small squares, drawn only for geometry whose faces or lines drew nothing unless --points";
+export const GRID_DRAWING =
+  "hero and ground add a ground grid just under the content's lowest point, drawn only where nothing else is";
+export const LABEL_DRAWING = "each tile carries a corner label naming its view and axis directions";
 
 /** Knobs for {@link renderPng}; every one has a deterministic default. */
 export interface RenderPngOptions {
@@ -77,11 +99,19 @@ export interface RenderPngOptions {
    * colours are categorical by this name; without it every item is "item".
    */
   readonly outputs?: readonly string[];
+  /**
+   * The ground grid in the perspective views (default true). A switch for
+   * tests that compare a frame with and without it; the command line has
+   * no flag for it.
+   */
+  readonly grid?: boolean;
 }
 
 /** One drawn view, as the report states it. */
 export interface PngViewReport {
   readonly name: ViewName;
+  /** The label drawn in the tile's corner. */
+  readonly label: string;
   readonly projection: "orthographic" | "perspective";
   readonly position: Vec3;
   readonly target: Vec3;
@@ -116,8 +146,35 @@ export interface RenderPngResult {
   readonly legend: readonly LegendEntry[];
   readonly colorAttr?: string;
   readonly colorDomains?: readonly ColorDomain[];
+  /**
+   * What the marks in the picture ARE, stated rather than left to be
+   * guessed from pixels: the frames draw proxies and helpers that are not
+   * in the data, and a reader who does not know that reads them as data.
+   */
+  readonly drawing: {
+    readonly instances: string;
+    /** Views that mark each instance's apex with a cross. */
+    readonly markerViews: readonly ViewName[];
+    readonly points: string;
+    readonly grid: { readonly views: readonly ViewName[]; readonly y: number; readonly note: string };
+    readonly labels: string;
+  };
+  /** Present when the ground view was drawn. */
+  readonly groundView?: GroundViewReport;
   /** 16 hex over the pixels and size — equal hashes, equal pictures. */
   readonly pixelHash: string;
+}
+
+/** How much of the ground view is surface close to the eye; see `measureGroundView`. */
+export interface GroundViewReport {
+  /** The distance "near" means: four eye heights, at least 5% of the framing extent. */
+  readonly nearDistance: number;
+  /** Fraction of the frame (sampled) covered by something nearer than `nearDistance`. */
+  readonly nearFraction: number;
+  /** Median depth over the sampled frame; null when most of it is background. */
+  readonly medianDepth: number | null;
+  /** More than half the frame is nearer than `nearDistance`: it shows what the eye stands against. */
+  readonly occluded: boolean;
 }
 
 function checkOptions(opts: RenderPngOptions, sheet: boolean): void {
@@ -205,20 +262,32 @@ export function renderPng(collection: DataCollection, opts: RenderPngOptions = {
   }
 
   const reports: PngViewReport[] = [];
+  let groundView: GroundViewReport | undefined;
+  const gridOn = opts.grid !== false;
   for (const tile of tiles) {
     const pose: Pose = poses[tile.name];
     const raster = new Raster(tile.w * 2, tile.h * 2, BACKGROUND);
     const camera = makeCamera(pose, raster.width, raster.height, framing.extent);
     drawScene(raster, camera, scene, framing, {
-      grid: pose.projection === "perspective",
-      markers: pose.name !== "ground",
+      grid: gridOn && GRID_VIEWS.includes(pose.name),
+      markers: MARKER_VIEWS.includes(pose.name),
     });
+    if (pose.name === "ground") groundView = measureGroundView(raster, framing.extent, framing.eye);
     const pixels = raster.downsample();
     for (let y = 0; y < tile.h; y++) {
       image.set(pixels.subarray(y * tile.w * 3, (y + 1) * tile.w * 3), ((tile.y + y) * width + tile.x) * 3);
     }
+    const label = tileLabel(pose.name, framing.eye);
+    const scale = tile.h >= 360 && tile.w >= 360 ? 2 : 1;
+    drawLabel(image, width, label, tile.x + 2 * scale, tile.y + 2 * scale, scale, 2 * scale, {
+      x: tile.x,
+      y: tile.y,
+      width: tile.w,
+      height: tile.h,
+    }, LABEL_TEXT, LABEL_BOX);
     reports.push({
       name: pose.name,
+      label,
       projection: pose.projection,
       position: pose.position,
       target: pose.target,
@@ -264,6 +333,78 @@ export function renderPng(collection: DataCollection, opts: RenderPngOptions = {
     ...(scene.colorAttr !== undefined
       ? { colorAttr: scene.colorAttr, colorDomains: scene.colorDomains ?? [] }
       : {}),
+    drawing: {
+      instances: INSTANCE_DRAWING,
+      markerViews: MARKER_VIEWS.filter((v) => reports.some((r) => r.name === v)),
+      points: POINT_DRAWING,
+      grid: gridOn
+        ? {
+            views: GRID_VIEWS.filter((v) => reports.some((r) => r.name === v)),
+            y: gridHeight(scene, framing),
+            note: GRID_DRAWING,
+          }
+        : { views: [], y: gridHeight(scene, framing), note: "grid switched off" },
+      labels: LABEL_DRAWING,
+    },
+    ...(groundView !== undefined ? { groundView } : {}),
     pixelHash: pixelHash(image, width, height),
+  };
+}
+
+/** What each tile's corner label says: the view, and which way its axes run. */
+export function tileLabel(view: ViewName, eye: number): string {
+  switch (view) {
+    case "top":
+      return "TOP x→ z↓";
+    case "side":
+      return "SIDE x→ y↑";
+    case "hero":
+      return "HERO";
+    default:
+      return `GROUND eye ${fmtLabelNumber(eye)}`;
+  }
+}
+
+/** A short, deterministic decimal for a label: at most three decimals, trailing zeros trimmed. */
+function fmtLabelNumber(v: number): string {
+  const rounded = Math.round(v * 1000) / 1000;
+  return String(rounded);
+}
+
+/**
+ * How much of the ground view is surface standing close to the eye.
+ *
+ * Depth is sampled on a fixed grid of every 4th supersample. `nearDistance`
+ * is the eye's own neighbourhood — four eye heights, and never less than 5%
+ * of the extent, so a small scene's rock the eye stands on counts as near
+ * as surely as a large scene's hillside does. When more than half the frame
+ * is nearer than that,
+ * the frame shows what the eye stands against — a wall of terrain, the
+ * inside of a mesh — rather than the scene, and the report says so instead
+ * of letting it pass as a picture of the layout. `medianDepth` is the
+ * median over the same samples, background counted as infinitely far
+ * (reported as null then).
+ */
+function measureGroundView(raster: Raster, extent: number, eye: number): GroundViewReport {
+  const nearDistance = Math.max(extent * 0.05, eye * 4);
+  const depths = new Float64Array(Math.ceil(raster.height / 4) * Math.ceil(raster.width / 4));
+  let n = 0;
+  let near = 0;
+  for (let y = 0; y < raster.height; y += 4) {
+    for (let x = 0; x < raster.width; x += 4) {
+      const d = raster.depth[y * raster.width + x];
+      depths[n++] = d;
+      if (d < nearDistance) near++;
+    }
+  }
+  // A typed array sorts numerically, +Infinity last.
+  depths.sort();
+  const median = depths[depths.length >> 1];
+  const nearFraction = Math.round((near / depths.length) * 1000) / 1000;
+  return {
+    nearDistance,
+    nearFraction,
+    medianDepth: Number.isFinite(median) ? median : null,
+    occluded: near * 2 > depths.length,
   };
 }

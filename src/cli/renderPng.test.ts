@@ -13,7 +13,14 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import "../primitives/index.js";
-import { cook, createPointCloud, deserializeGraph, makeGeometryItem } from "../index.js";
+import {
+  cook,
+  createPointCloud,
+  createTriangleMesh,
+  deserializeGraph,
+  makeGeometryItem,
+  makeInstancesItem,
+} from "../index.js";
 import * as cliSurface from "./index.js";
 import { HOSTILE_OUTPUTS, hostileScene } from "./raster/hostileScene.testsupport.js";
 import { renderPng } from "./renderPng.js";
@@ -27,12 +34,17 @@ function pinnedRender(nudge = 0): ReturnType<typeof renderPng> {
 
 /**
  * Taken on Windows, Node 22. The bytes depend only on IEEE `+ − × ÷ sqrt`
- * and exact operations (see the allowlist scan in `raster/views.test.ts`),
+ * and exact operations (see the allowlist scan in `raster/arithmetic.test.ts`),
  * so the same digest must come out of the Linux CI matrix; if it does not,
  * that is a platform dependency to find, not a digest to re-pin.
+ *
+ * Re-pinned deliberately once, after review: tile labels, apex crosses,
+ * colours dealt in declared order, and the grid moved under the true floor
+ * and behind everything. The frame was looked at before the digest was
+ * taken.
  */
-const PINNED_PNG_SHA256 = "1c226a72b9ce5155518ba044f7d81d33d13fcd880614a9152a2db5970b5b11a3";
-const PINNED_PIXEL_HASH = "542b512853ed6de0";
+const PINNED_PNG_SHA256 = "276293b76ccdd7669f6015d173ac5291ad9a1226e84a4172743946d692d33c4e";
+const PINNED_PIXEL_HASH = "7165da8d78f5145c";
 
 describe("renderPng", () => {
   it("reports what it drew: counts, device-resident instances, legend, framing and poses", () => {
@@ -58,15 +70,22 @@ describe("renderPng", () => {
     expect(c.instances).toBe(4);
     expect(c.deviceInstances).toBe(12);
     expect(c.pointsSuppressed).toBe(4);
+    // Slot order: geometry outputs as declared, then asset ids sorted.
     expect(result.legend.map((l) => `${l.kind}:${l.name}`)).toEqual([
-      "output:blob",
-      "output:dots",
       "output:ground",
-      "output:road",
       "output:rock",
+      "output:blob",
+      "output:road",
+      "output:dots",
       "asset:fir",
       "asset:oak",
     ]);
+    expect(new Set(result.legend.map((l) => l.color)).size).toBe(7);
+    expect(result.views.map((v) => v.label)).toEqual(["HERO", "GROUND eye 1.7", "TOP x→ z↓", "SIDE x→ y↑"]);
+    expect(result.drawing.markerViews).toEqual(["top", "side", "hero"]);
+    expect(result.drawing.grid.views).toEqual(["hero", "ground"]);
+    expect(result.drawing.instances).toMatch(/pyramid proxies .* cross/);
+    expect(result.groundView).toBeDefined();
     expect(result.framing.pinned).toBe(false);
     expect(result.framing.extent).toBe(result.framing.autoExtent);
     expect(result.pixelHash).toMatch(/^[0-9a-f]{16}$/);
@@ -120,6 +139,57 @@ describe("renderPng", () => {
     expect(() => renderPng(empty, { extent: 0 })).toThrow(/"extent" must be a finite number > 0/);
     expect(() => renderPng(empty, { view: "front" as never })).toThrow(/one of top, side, hero, ground, sheet/);
     expect(() => renderPng(empty, { attrDomain: "point" })).toThrow(/pass "attr" as well/);
+  });
+
+  it("deals distinct colours to distinct outputs in declared order, 24 before any repeat", () => {
+    const one = (x: number): ReturnType<typeof makeGeometryItem> => {
+      const geo = createPointCloud(1);
+      geo.attrs.point.require("P").setTuple(0, [x, 0, 0]);
+      return makeGeometryItem(geo);
+    };
+    const collection = Array.from({ length: 24 }, (_, i) => one(i));
+    const outputs = Array.from({ length: 24 }, (_, i) => `out${String(i).padStart(2, "0")}`);
+    const result = renderPng(collection, { view: "top", width: 64, height: 64, outputs });
+    expect(result.legend.map((l) => l.name)).toEqual(outputs);
+    expect(new Set(result.legend.map((l) => l.color)).size).toBe(24);
+    // Ten outputs — the count that collided under the old name hash on a
+    // corpus graph — are ten colours, and the first eight are the palette.
+    const ten = renderPng(collection.slice(0, 10), { view: "top", width: 64, height: 64, outputs: outputs.slice(0, 10) });
+    expect(new Set(ten.legend.map((l) => l.color)).size).toBe(10);
+    expect(ten.legend[0].color).toBe("#4e79a7");
+    // Assets come after the outputs, so an asset never takes an output's colour.
+    const trees = makeInstancesItem([{ assetId: "tree", count: 1, transforms: Float32Array.of(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1) }]);
+    const mixed = renderPng([one(0), trees], { view: "top", width: 64, height: 64, outputs: ["cloud", "trees"] });
+    expect(mixed.legend).toEqual([
+      { kind: "output", name: "cloud", color: "#4e79a7" },
+      { kind: "asset", name: "tree", color: "#f28e2b" },
+    ]);
+  });
+
+  it("says when the ground view is standing against a wall rather than looking at the scene", () => {
+    const ground = createTriangleMesh(
+      Float32Array.of(-50, 0, -50, 50, 0, -50, 50, 0, 50, -50, 0, 50),
+      Uint32Array.of(0, 1, 2, 0, 2, 3),
+    );
+    const open = renderPng([makeGeometryItem(ground)], { view: "ground", width: 160, height: 120 });
+    expect(open.groundView?.occluded).toBe(false);
+    // extent 125: the ground eye stands at z = 27.5 looking toward -z; a wall
+    // two units in front of it fills the frame.
+    const wall = createTriangleMesh(
+      Float32Array.of(-50, 0, 25.5, 50, 0, 25.5, 50, 40, 25.5, -50, 40, 25.5),
+      Uint32Array.of(0, 1, 2, 0, 2, 3),
+    );
+    const blocked = renderPng([makeGeometryItem(ground), makeGeometryItem(wall)], {
+      view: "ground",
+      width: 160,
+      height: 120,
+    });
+    expect(blocked.framing.extent).toBe(125);
+    expect(blocked.groundView).toMatchObject({ occluded: true });
+    expect(blocked.groundView?.nearFraction).toBeGreaterThan(0.9);
+    expect(blocked.groundView?.medianDepth).toBeLessThan(3);
+    // Only the ground view is measured.
+    expect(renderPng([makeGeometryItem(ground)], { view: "top", width: 64, height: 64 }).groundView).toBeUndefined();
   });
 
   it("draws an empty collection as a valid background image", () => {

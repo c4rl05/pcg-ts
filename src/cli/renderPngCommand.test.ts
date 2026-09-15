@@ -170,12 +170,63 @@ describe("pcg render — PNG", () => {
     expect(io.stderr()).toContain("--out <file>.svg");
   });
 
-  it("documents the formats and the new flags in its help", async () => {
+  it("documents the formats, the new flags and what the frames draw in its help", async () => {
     const io = fakeIo();
     expect(await runCli(["render", "--help"], io.io)).toBe(EXIT_OK);
     const help = io.stdout();
-    for (const needle of ["--view", "--size", "--extent", "--eye", "--points", ".png", ".svg", "sheet"]) {
+    for (const needle of [
+      "--view",
+      "--size",
+      "--extent",
+      "--eye",
+      "--points",
+      ".png",
+      ".svg",
+      "sheet",
+      "square-pyramid proxies (not the assets)",
+      "a cross on each apex in top, side and hero",
+      "ground grid",
+    ]) {
       expect(help).toContain(needle);
     }
+  });
+
+  it("states in text and JSON what the marks are: proxies, apex crosses, the grid, the labels", async () => {
+    const text = fakeIo();
+    await runCli(["render", GRAPH, "--out", "/d.png", "--size", "200x150"], text.io);
+    expect(text.stdout()).toMatch(
+      /^drawn as: instances are upright square-pyramid proxies .*top, side and hero also mark each apex with a cross.*ground grid.*corner label/m,
+    );
+    const json = fakeIo();
+    await runCli(["render", GRAPH, "--out", "/d.png", "--size", "200x150", "--json"], json.io);
+    const report = JSON.parse(json.stdout());
+    expect(report.drawing.markerViews).toEqual(["top", "side", "hero"]);
+    expect(report.drawing.grid.views).toEqual(["hero", "ground"]);
+    expect(typeof report.drawing.grid.y).toBe("number");
+    expect(report.views.map((v: { label: string }) => v.label)).toEqual([
+      "HERO",
+      "GROUND eye 1.7",
+      "TOP x→ z↓",
+      "SIDE x→ y↑",
+    ]);
+    // The forest's ground view looks across open terrain: no occlusion line.
+    expect(report.groundView.occluded).toBe(false);
+    expect(text.stdout()).not.toContain("ground view: occluded");
+  });
+
+  it("reports an occluded ground view in text and JSON instead of passing it off as a picture of the scene", async () => {
+    const files: Record<string, string> = {
+      "/g/cave.json": readFileSync(new URL("../../graphs/basics-mesh-from-field.json", import.meta.url), "utf8"),
+    };
+    const io = fakeIo();
+    Object.assign(io.files, files);
+    expect(await runCli(["render", "/g/cave.json", "--out", "/c.png", "--view", "ground", "--size", "160x120"], io.io)).toBe(
+      EXIT_OK,
+    );
+    expect(io.stdout()).toMatch(/^ground view: occluded at [\d.]+ m — \d+% of the frame is surface nearer than [\d.]+ m/m);
+    const json = fakeIo();
+    Object.assign(json.files, files);
+    await runCli(["render", "/g/cave.json", "--out", "/c.png", "--view", "ground", "--size", "160x120", "--json"], json.io);
+    expect(JSON.parse(json.stdout()).groundView).toMatchObject({ occluded: true });
   });
 });

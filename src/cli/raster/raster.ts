@@ -36,6 +36,9 @@ const HALF_SUB = SUB / 2;
 /** Most vertices a triangle can have after clipping against five planes. */
 const MAX_CLIP = 8;
 
+/** How a line meets the depth buffer; see {@link Raster.line}. */
+export type LineMode = "biased" | "behind";
+
 /** A camera ready to project, for one raster size. */
 export interface Camera {
   readonly perspective: boolean;
@@ -156,6 +159,11 @@ export class Raster {
   /** Write one sample, fogged by its depth. The caller has done the depth test. */
   private write(cam: Camera, idx: number, z: number, r: number, g: number, b: number): void {
     this.depth[idx] = z;
+    this.paint(cam, idx, z, r, g, b);
+  }
+
+  /** Colour one sample, fogged by `z`, leaving its depth alone. */
+  private paint(cam: Camera, idx: number, z: number, r: number, g: number, b: number): void {
     let f = 0;
     if (cam.fogFar > cam.fogNear) {
       f = (z - cam.fogNear) / (cam.fogFar - cam.fogNear);
@@ -329,16 +337,19 @@ export class Raster {
   }
 
   /**
-   * A world-space segment, two samples thick, depth-tested with the
-   * camera's bias — or with none when `biased` is false, for a line that
-   * must lose to any surface it touches.
+   * A world-space segment, two samples thick. `"biased"` depth-tests it
+   * with the camera's bias, so a road lying on its terrain is not buried in
+   * it. `"behind"` draws it only on samples nothing else has written, and
+   * writes no depth: a line that must lose to everything — the ground grid —
+   * whatever the draw order and however steeply the surface in front of it
+   * recedes between neighbouring samples. Draw such lines last.
    */
   line(
     cam: Camera,
     ax: number, ay: number, az: number,
     bx: number, by: number, bz: number,
     r: number, g: number, b: number,
-    biased = true,
+    mode: LineMode = "biased",
   ): void {
     const poly = this.polyA;
     this.toView(cam, ax, ay, az, poly, 0);
@@ -381,7 +392,7 @@ export class Raster {
       const t = i / steps;
       const s = sz0 + (sz1 - sz0) * t;
       const z = cam.perspective ? 1 / s : s;
-      this.splat(cam, sx0 + dx * t, sy0 + dy * t, z, 1, r, g, b, biased);
+      this.splat(cam, sx0 + dx * t, sy0 + dy * t, z, 1, r, g, b, mode);
     }
   }
 
@@ -397,23 +408,61 @@ export class Raster {
     this.splat(cam, sx, sy, v[2], half, r, g, b);
   }
 
-  /** A depth-tested square of samples centred on (sx, sy). */
+  /**
+   * An instance marker: a plus sign `2·arm + 2` samples across and two
+   * samples thick — a different SHAPE from a point's square, so a cloud and
+   * a set of instances in similar colours still read as two things.
+   */
+  cross(cam: Camera, x: number, y: number, z: number, arm: number, r: number, g: number, b: number): void {
+    const v = this.polyA;
+    this.toView(cam, x, y, z, v, 0);
+    if (cam.perspective && v[2] < cam.near) return;
+    const w = cam.perspective ? v[2] : 1;
+    const sx = ((v[0] * cam.scaleX) / w * 0.5 + 0.5) * this.width;
+    const sy = (0.5 - (v[1] * cam.scaleY) / w * 0.5) * this.height;
+    const reach = arm + 2;
+    if (!(sx > -reach && sx < this.width + reach && sy > -reach && sy < this.height + reach)) return;
+    const cx = Math.floor(sx);
+    const cy = Math.floor(sy);
+    const depth = v[2];
+    const zt = cam.perspective ? depth - depth * cam.bias : depth - cam.bias;
+    const plot = (px: number, py: number): void => {
+      if (px < 0 || px >= this.width || py < 0 || py >= this.height) return;
+      const idx = py * this.width + px;
+      if (zt < this.depth[idx]) this.write(cam, idx, depth, r, g, b);
+    };
+    for (let d = -arm; d <= arm + 1; d++) {
+      plot(cx + d, cy);
+      plot(cx + d, cy + 1);
+      if (d !== 0 && d !== 1) {
+        plot(cx, cy + d);
+        plot(cx + 1, cy + d);
+      }
+    }
+  }
+
+  /** A square of samples centred on (sx, sy), meeting the depth buffer as `mode` says. */
   private splat(
     cam: Camera,
     sx: number, sy: number, z: number,
     half: number,
     r: number, g: number, b: number,
-    biased = true,
+    mode: LineMode = "biased",
   ): void {
     const x0 = Math.floor(sx - half + 0.5);
     const y0 = Math.floor(sy - half + 0.5);
-    const zt = !biased ? z : cam.perspective ? z - z * cam.bias : z - cam.bias;
+    const zt = cam.perspective ? z - z * cam.bias : z - cam.bias;
+    const behind = mode === "behind";
     for (let y = y0; y < y0 + 2 * half; y++) {
       if (y < 0 || y >= this.height) continue;
       for (let x = x0; x < x0 + 2 * half; x++) {
         if (x < 0 || x >= this.width) continue;
         const idx = y * this.width + x;
-        if (zt < this.depth[idx]) this.write(cam, idx, z, r, g, b);
+        if (behind) {
+          if (this.depth[idx] === Number.POSITIVE_INFINITY) this.paint(cam, idx, z, r, g, b);
+        } else if (zt < this.depth[idx]) {
+          this.write(cam, idx, z, r, g, b);
+        }
       }
     }
   }

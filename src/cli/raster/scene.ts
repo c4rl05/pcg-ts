@@ -17,18 +17,25 @@
  *   through their full 4×4, coloured by asset id: orientation and scale
  *   are visible, the asset's look deliberately is not. At true scale a
  *   tree is a pixel from 200 m up, so every view but `ground` also marks
- *   each instance's apex with a small splat — placement is what those
- *   views are for, and `ground` is the one where true size is the point.
- *   Device-resident batches have no CPU transforms; they are counted and
- *   reported.
- * - Default colours are categorical by OUTPUT NAME and never read from a
- *   `color` attribute, which is minted white on every cloud and so carries
- *   no intent. `attr` colours through the SVG's own colorizer.
+ *   each instance's apex with a small plus sign — a different shape from a
+ *   point's square — because placement is what those views are for, and
+ *   `ground` is the one where true size is the point. Device-resident
+ *   batches have no CPU transforms; they are counted and reported.
+ * - Default colours are categorical and never read from a `color`
+ *   attribute, which is minted white on every cloud and so carries no
+ *   intent. They are dealt out IN ORDER — geometry outputs as they first
+ *   appear, then asset ids sorted — through the palette, then through a
+ *   darker and a lighter pass of it, so up to 24 distinct names in one
+ *   picture never share a colour. (A hash of the name kept colours stable
+ *   across edits but put ten outputs on eight colours with collisions.)
+ *   `attr` colours through the SVG's own colorizer.
+ * - The ground grid in the perspective views lies just under the content's
+ *   TRUE lowest point and is drawn last, only on samples nothing else wrote,
+ *   so it frames the content without ever drawing over it.
  *
  * Arithmetic is restricted as in `raster.ts`; the same scan covers this file.
  */
 import type { Attribute, DataCollection, Geometry } from "../../index.js";
-import { hashString } from "../../index.js";
 import {
   COLOR_DOMAINS,
   type ColorDomain,
@@ -55,8 +62,8 @@ const AMBIENT = 0.38;
 const LINE_SHADE = 0.72;
 /** Half the side of a point splat, in supersampled pixels. */
 const POINT_HALF = 2;
-/** Half the side of an instance's apex marker, in supersampled pixels. */
-const MARKER_HALF = 2;
+/** Arm length of an instance's apex cross, in supersampled pixels. */
+const MARKER_ARM = 5;
 /** The ground grid's colour, and its cell count across twice the extent. */
 const GRID_COLOR = 0xc3ccd6;
 const GRID_CELLS = 40;
@@ -162,9 +169,19 @@ class Column {
   }
 }
 
-/** The categorical colour for a name: a hash of the name, never an index. */
-function categorical(name: string): number {
-  return PALETTE_RGB[hashString(name) % PALETTE_RGB.length];
+/**
+ * The `slot`-th categorical colour: the palette, then a darker pass of it,
+ * then a lighter one, then round again. 24 distinct colours before any
+ * repeats — three times the palette, so two passes' worth of names are
+ * always told apart even if a later pass is ever dropped.
+ */
+export function categoricalColor(slot: number): number {
+  const n = PALETTE_RGB.length;
+  const pass = Math.floor(slot / n) % 3;
+  const [r, g, b] = channels(PALETTE_RGB[slot % n]);
+  const tone = (c: number): number =>
+    pass === 0 ? c : pass === 1 ? Math.round(c * 0.58) : Math.round(c + (255 - c) * 0.5);
+  return (tone(r) << 16) | (tone(g) << 8) | tone(b);
 }
 
 /** Lambert intensity of a triangle's face, two-sided. */
@@ -224,16 +241,26 @@ export function buildScene(collection: DataCollection, opts: SceneOptions): Scen
   let primitivesTotal = 0;
   let instancesTotal = 0;
   let deviceInstances = 0;
-  for (const item of collection) {
+  // Colour slots: geometry outputs in the order they first appear (which is
+  // declared-output order), then the asset ids, sorted.
+  const outputOrder: string[] = [];
+  const assetIds = new Set<string>();
+  for (let index = 0; index < collection.length; index++) {
+    const item = collection[index];
     if (item.kind === "instances") {
       if (item.deviceBatches !== undefined) {
         for (const batch of item.deviceBatches) deviceInstances += batch.count;
       } else {
-        for (const batch of item.batches) instancesTotal += batch.count;
+        for (const batch of item.batches) {
+          instancesTotal += batch.count;
+          assetIds.add(batch.assetId);
+        }
       }
       continue;
     }
     if (item.kind !== "geometry" || positions(item.geo) === undefined) continue;
+    const output = opts.outputs?.[index] ?? "item";
+    if (!outputOrder.includes(output)) outputOrder.push(output);
     const geo = item.geo;
     const kind = primitiveKinds(geo);
     let drawsTopology = false;
@@ -249,6 +276,12 @@ export function buildScene(collection: DataCollection, opts: SceneOptions): Scen
   const primStride = strideFor(primitivesTotal, opts.maxPrimitives);
   const rangeDomains = opts.attrDomain === undefined ? COLOR_DOMAINS : [opts.attrDomain];
   const range = opts.attr === undefined ? undefined : scalarRange(collection, opts.attr, rangeDomains);
+  const slots = new Map<string, number>();
+  outputOrder.forEach((name) => slots.set(`output:${name}`, categoricalColor(slots.size)));
+  [...assetIds]
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    .forEach((id) => slots.set(`asset:${id}`, categoricalColor(slots.size)));
+  const colorOf = (key: string): number => slots.get(key) as number;
 
   const faces = new Column();
   const faceColors = new Column();
@@ -283,7 +316,6 @@ export function buildScene(collection: DataCollection, opts: SceneOptions): Scen
   let primIndex = 0;
   let colorAttr: string | undefined;
   const colorDomains = new Set<ColorDomain>();
-  const legend = new Map<string, LegendEntry>();
 
   // Pass 2 — build.
   for (let index = 0; index < collection.length; index++) {
@@ -291,8 +323,7 @@ export function buildScene(collection: DataCollection, opts: SceneOptions): Scen
     if (item.kind === "instances") {
       if (item.deviceBatches !== undefined) continue;
       for (const batch of item.batches) {
-        const rgb = categorical(batch.assetId);
-        legend.set(`asset:${batch.assetId}`, { kind: "asset", name: batch.assetId, color: hexOf(rgb) });
+        const rgb = colorOf(`asset:${batch.assetId}`);
         const [r, g, b] = channels(rgb);
         const m = batch.transforms;
         const world = new Float64Array(15);
@@ -353,8 +384,7 @@ export function buildScene(collection: DataCollection, opts: SceneOptions): Scen
       Number.isFinite(px(i)) && Number.isFinite(py(i)) && Number.isFinite(pz(i));
 
     const output = opts.outputs?.[index] ?? "item";
-    const baseRgb = categorical(output);
-    legend.set(`output:${output}`, { kind: "output", name: output, color: hexOf(baseRgb) });
+    const baseRgb = colorOf(`output:${output}`);
     let pointRgb: ((i: number) => number) | undefined;
     let primRgb: ((p: number) => number) | undefined;
     if (opts.attr !== undefined) {
@@ -476,10 +506,12 @@ export function buildScene(collection: DataCollection, opts: SceneOptions): Scen
   faceColors.append(proxyColors);
   const bounds: Bounds3 | undefined =
     min0 <= max0 ? { min: [min0, min1, min2], max: [max0, max1, max2] } : undefined;
-  // Legend in a fixed order: outputs, then assets, each by name.
-  const legendList = [...legend.values()].sort((a, b) =>
-    a.kind !== b.kind ? (a.kind === "output" ? -1 : 1) : a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
-  );
+  // Legend in slot order — outputs as declared, then assets by id — which
+  // is also the order the colours were dealt in.
+  const legendList: LegendEntry[] = [...slots.entries()].map(([key, rgb]) => {
+    const colon = key.indexOf(":");
+    return { kind: key.slice(0, colon) as LegendEntry["kind"], name: key.slice(colon + 1), color: hexOf(rgb) };
+  });
   return {
     faces: faces.view(),
     faceColors: faceColors.view(),
@@ -546,27 +578,24 @@ export function surfaceYAt(scene: Scene, x: number, z: number, fallback: number)
 
 /** What {@link drawScene} adds beyond the scene itself. */
 export interface DrawOptions {
-  /** The ground grid at `framing.groundY`, twice the extent across. */
+  /** The ground grid at {@link gridHeight}, twice the extent across. */
   readonly grid: boolean;
-  /** A splat on every instance's apex, so placement reads at any scale. */
+  /** A cross on every instance's apex, so placement reads at any scale. */
   readonly markers: boolean;
+}
+
+/**
+ * Where the ground grid lies: a thousandth of the extent under the content's
+ * TRUE lowest point. Not under `framing.groundY`, which is snapped to
+ * extent/128 and can sit above the real floor by up to half a step — the
+ * grid once floated 0.88 over a ground mesh that way.
+ */
+export function gridHeight(scene: Scene, framing: Framing): number {
+  return (scene.bounds?.min[1] ?? framing.groundY) - framing.extent * 0.001;
 }
 
 /** Draw a built scene through one camera. */
 export function drawScene(raster: Raster, cam: Camera, scene: Scene, framing: Framing, opts: DrawOptions): void {
-  if (opts.grid) {
-    const [gr, gg, gb] = channels(GRID_COLOR);
-    const [cx, , cz] = framing.centre;
-    const half = framing.extent;
-    // Just under the ground and unbiased, so it is a floor around the
-    // content and never a pattern drawn over a surface lying at groundY.
-    const y = framing.groundY - framing.extent * 0.001;
-    for (let i = 0; i <= GRID_CELLS; i++) {
-      const s = -half + (2 * half * i) / GRID_CELLS;
-      raster.line(cam, cx + s, y, cz - half, cx + s, y, cz + half, gr, gg, gb, false);
-      raster.line(cam, cx - half, y, cz + s, cx + half, y, cz + s, gr, gg, gb, false);
-    }
-  }
   const f = scene.faces;
   const fc = scene.faceColors;
   for (let t = 0; t < scene.faceCount; t++) {
@@ -598,7 +627,20 @@ export function drawScene(raster: Raster, cam: Camera, scene: Scene, framing: Fr
     const mc = scene.markerColors;
     for (let i = 0; i < scene.markerCount; i++) {
       const o = i * 3;
-      raster.point(cam, m[o], m[o + 1], m[o + 2], MARKER_HALF, mc[o], mc[o + 1], mc[o + 2]);
+      raster.cross(cam, m[o], m[o + 1], m[o + 2], MARKER_ARM, mc[o], mc[o + 1], mc[o + 2]);
+    }
+  }
+  // Last, and only where nothing else drew: the grid can never cover
+  // content, whatever the depth buffer's precision at a grazing angle.
+  if (opts.grid) {
+    const [gr, gg, gb] = channels(GRID_COLOR);
+    const [cx, , cz] = framing.centre;
+    const half = framing.extent;
+    const y = gridHeight(scene, framing);
+    for (let i = 0; i <= GRID_CELLS; i++) {
+      const s = -half + (2 * half * i) / GRID_CELLS;
+      raster.line(cam, cx + s, y, cz - half, cx + s, y, cz + half, gr, gg, gb, "behind");
+      raster.line(cam, cx - half, y, cz + s, cx + half, y, cz + s, gr, gg, gb, "behind");
     }
   }
 }
