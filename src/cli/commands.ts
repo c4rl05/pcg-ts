@@ -10,6 +10,8 @@ import {
   type DataItem,
   type DescribedGraphParam,
   type DescribedSpawner,
+  type DescribedSubgraphPin,
+  type RegisteredSubgraph,
   type FieldFnInfo,
   type StrandedGraphParamValue,
   type Domain,
@@ -22,23 +24,38 @@ import {
   describeGraphAssets,
   describeGraphParams,
   describeSubgraphParams,
+  describeSubgraphPins,
   deserializeGraph,
   strandedGraphParamValues,
   getNodeType,
   getRegisteredSubgraph,
+  inferWrapperKind,
   listFieldFnInfos,
   listNodeTypes,
+  listSubgraphs,
 } from "../index.js";
+import { closestNames } from "../diagnostics/suggest.js";
 import {
   type CommandSpec,
   CliUsageError,
   type ParsedArgs,
   boolFlag,
+  commandHelp,
   intFlag,
   listFlag,
   numberFlag,
   stringFlag,
 } from "./args.js";
+import {
+  type UsageSnippet,
+  exampleSection,
+  inlineJson,
+  kebab,
+  rankExamples,
+  readCorpusIndex,
+  readUsage,
+  usageLines,
+} from "./corpus.js";
 import { CliError } from "./errors.js";
 import {
   DEFAULT_BINS,
@@ -91,6 +108,14 @@ export interface CommandOutcome {
 export interface Command {
   readonly spec: CommandSpec;
   run(args: ParsedArgs, io: CliIo): Promise<CommandOutcome>;
+  /**
+   * `--help` text that depends on the arguments, e.g. `pcg run <name>
+   * --help` printing that primitive's params. Called only once the line
+   * has parsed; `undefined` falls back to the static help from the spec.
+   * May throw like `run` does — an unknown name is exit 1 under `--help`
+   * too, not a help page for something that does not exist.
+   */
+  help?(args: ParsedArgs, io: CliIo): string | undefined;
 }
 
 const GRAPH_ARG = {
@@ -253,23 +278,73 @@ function firstSentence(description: string): string {
   return description.split(". ")[0].replace(/\.$/, "");
 }
 
+/** The corpus half of a catalog entry: its text lines and its JSON keys. */
+interface CorpusSection {
+  readonly lines: readonly string[];
+  readonly json: {
+    /** Every corpus graph using the name, best first; `[]` when the index is out of reach. */
+    readonly examples: readonly { readonly path: string; readonly title: string }[];
+    /** Present only when the index could not be read, saying why. */
+    readonly examplesNote?: string;
+    /** The node's own JSON from the top example (node types only). */
+    readonly usage?: UsageSnippet;
+  };
+}
+
+/**
+ * The graphs that use a node type or reference a primitive, for
+ * `pcg nodes <type>` and `pcg run <name> --help`. Never fails the command:
+ * an unreadable index is one note line, because the pins and params above
+ * it are the answer to what was asked and the examples are the extra.
+ */
+function corpusFor(io: CliIo, name: string, kind: "node" | "primitive"): CorpusSection {
+  const index = readCorpusIndex(io);
+  if (!index.available) {
+    return { lines: exampleSection(index, [], "", ""), json: { examples: [], examplesNote: index.note } };
+  }
+  const ranked = rankExamples(
+    index.entries,
+    (e) => (kind === "node" ? e.nodeTypes : e.primitives).includes(name),
+    name,
+  );
+  const lines = [
+    ...exampleSection(
+      index,
+      ranked,
+      `pcg graphs --${kind} ${name}`,
+      kind === "node" ? `no corpus graph uses ${name}` : `no corpus graph references ${name}`,
+    ),
+  ];
+  const examples = ranked.map((e) => ({ path: index.pathOf(e), title: e.title }));
+  const top = ranked[0];
+  const usage = kind === "node" && top !== undefined ? readUsage(io, index, top, name) : undefined;
+  if (usage !== undefined) {
+    lines.push("", `usage (from ${usage.path}):`, ...usageLines(usage));
+  }
+  return { lines, json: { examples, ...(usage !== undefined ? { usage } : {}) } };
+}
+
 const nodesCommand: Command = {
   spec: {
     name: "nodes",
     summary:
-      "Print the node-type catalog from the registry (listNodeTypes()). With a type, print that type's pins and full param schema.",
+      "Print the node-type catalog from the registry (listNodeTypes()). With a type, print that type's pins, full param schema, the corpus graphs that use it and its JSON as one of them writes it.",
     positionals: [
       { name: "type", required: false, description: "a registered node type, e.g. pointScatterInBounds" },
     ],
     flags: {},
   },
-  run(args) {
+  run(args, io) {
     const wanted = args.positional[0];
     if (wanted !== undefined) {
       // Unknown types raise the registry's own error, which lists every
       // registered type — the CLI must not paraphrase it.
       const info = getNodeType(wanted).info;
-      return Promise.resolve({ text: nodeDetailText(info), json: info });
+      const corpus = corpusFor(io, wanted, "node");
+      return Promise.resolve({
+        text: nodeDetailText(info) + "\n" + corpus.lines.join("\n") + "\n",
+        json: { ...info, ...corpus.json },
+      });
     }
     const types = [...listNodeTypes()].sort((a, b) => (a.type < b.type ? -1 : a.type > b.type ? 1 : 0));
     const byCategory = new Map<string, NodeTypeInfo[]>();
@@ -290,7 +365,7 @@ const nodesCommand: Command = {
       );
       lines.push("");
     }
-    lines.push("pcg nodes <type> prints one type's pins and params.");
+    lines.push("pcg nodes <type> prints one type's pins, params and the corpus graphs that use it.");
     return Promise.resolve({ text: lines.join("\n") + "\n", json: types });
   },
 };
@@ -362,6 +437,126 @@ const fieldsCommand: Command = {
     lines.push("");
     lines.push("pcg fields <fn> prints one constructor's named arguments, usage and output range.");
     return Promise.resolve({ text: lines.join("\n") + "\n", json: infos });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// graphs
+// ---------------------------------------------------------------------------
+
+/** `"a"`, `"a" or "b"`, `"a", "b" or "c"` — the library's did-you-mean spelling. */
+function quotedAlternatives(names: readonly string[]): string {
+  const q = names.map((n) => JSON.stringify(n));
+  return q.length <= 1 ? (q[0] ?? "") : `${q.slice(0, -1).join(", ")} or ${q[q.length - 1]}`;
+}
+
+/**
+ * A registered primitive by name. A miss keeps the registry's own message
+ * — every registered name, or why there are none — and adds the nearest
+ * names as a last clause, because a list of forty slash-separated names is
+ * a poor place to spot a one-letter slip.
+ */
+function lookupPrimitive(name: string): RegisteredSubgraph {
+  try {
+    return getRegisteredSubgraph(name);
+  } catch (err) {
+    const near = closestNames(name, listSubgraphs().map((e) => e.name));
+    if (near.length === 0) throw err;
+    throw new CliError(
+      `${err instanceof Error ? err.message : String(err)}; did you mean ${quotedAlternatives(near)}?`,
+    );
+  }
+}
+
+const graphsCommand: Command = {
+  spec: {
+    name: "graphs",
+    summary:
+      "List the example graphs that ship with the package (docs/graphs.json), best example first: basics- graphs, then those built from the fewest node types. --node, --primitive and --tag narrow the list and combine with AND. Every path printed cooks as-is: pcg cook <path>.",
+    positionals: [],
+    flags: {
+      node: {
+        kind: "string",
+        value: "type",
+        description: "only graphs using this node type, at any nesting depth",
+      },
+      primitive: {
+        kind: "string",
+        value: "name",
+        description: "only graphs referencing this registered primitive",
+      },
+      tag: { kind: "string", value: "tag", description: "only graphs carrying this meta tag" },
+    },
+  },
+  run(args, io) {
+    const node = stringFlag(args, "node");
+    const primitive = stringFlag(args, "primitive");
+    const tag = stringFlag(args, "tag");
+    // Names first, index second: an unknown node type or primitive is the
+    // same mistake with or without a readable corpus, and it is reported
+    // by the registry that owns the name.
+    if (node !== undefined) getNodeType(node);
+    if (primitive !== undefined) lookupPrimitive(primitive);
+
+    const index = readCorpusIndex(io);
+    // Unlike `pcg nodes <type>`, the list IS this command's answer, so an
+    // unreadable index fails it.
+    if (!index.available) throw new CliError(`graphs: ${index.note}`);
+
+    if (tag !== undefined) {
+      const tags = [...new Set(index.entries.flatMap((e) => e.tags))].sort((a, b) =>
+        a < b ? -1 : a > b ? 1 : 0,
+      );
+      if (!tags.includes(tag)) {
+        const near = closestNames(tag, tags);
+        throw new CliError(
+          `graphs: unknown tag "${tag}"; tags in the corpus: ${tags.join(", ")}${near.length > 0 ? `; did you mean ${quotedAlternatives(near)}?` : ""}`,
+        );
+      }
+    }
+
+    const ranked = rankExamples(
+      index.entries,
+      (e) =>
+        (node === undefined || e.nodeTypes.includes(node)) &&
+        (primitive === undefined || e.primitives.includes(primitive)) &&
+        (tag === undefined || e.tags.includes(tag)),
+      // The same order `pcg nodes <type>` and `pcg run <name> --help` show.
+      node ?? primitive,
+    );
+    const json = ranked.map((e) => ({
+      file: e.file,
+      path: index.pathOf(e),
+      title: e.title,
+      tags: e.tags,
+      nodeTypes: e.nodeTypes,
+      primitives: e.primitives,
+      nodeCount: e.nodeCount,
+    }));
+
+    const filters = [
+      ...(node !== undefined ? [`--node ${node}`] : []),
+      ...(primitive !== undefined ? [`--primitive ${primitive}`] : []),
+      ...(tag !== undefined ? [`--tag ${tag}`] : []),
+    ];
+    const lines = [
+      filters.length === 0
+        ? `${plural(json.length, "graph")} in the corpus`
+        : `${plural(json.length, "graph")} matching ${filters.join(" ")}`,
+    ];
+    if (json.length > 0) {
+      lines.push("");
+      // `types` first because it is the order's key after the family: the
+      // column that reads out of order is the tie-break, not the sort.
+      lines.push(
+        ...table([
+          ["path", "title", "types", "nodes"],
+          ...json.map((e) => [e.path, e.title, String(e.nodeTypes.length), String(e.nodeCount)]),
+        ]),
+      );
+      lines.push("", "pcg cook <path> cooks one; pcg validate <path> checks it.");
+    }
+    return Promise.resolve({ text: lines.join("\n") + "\n", json });
   },
 };
 
@@ -1520,6 +1715,129 @@ function exposedParams(graph: Graph): readonly { name: string; schema: ParamSche
   return (describeSubgraphParams(state.def) ?? []).map((p) => ({ name: p.name, schema: p.schema }));
 }
 
+/**
+ * A default spelled the way `--param` reads it back (see
+ * `parseParamValue`), or `undefined` for a value that has no plain
+ * spelling — an item list, an empty list, text needing shell quotes.
+ */
+function paramSpelling(schema: ParamSchema): string | undefined {
+  const value: unknown = schema.default;
+  switch (schema.type) {
+    case "f32":
+    case "i32":
+    case "u32":
+      return typeof value === "number" && Number.isFinite(value) ? String(value) : undefined;
+    case "bool":
+      return typeof value === "boolean" ? String(value) : undefined;
+    case "enum":
+    case "string":
+      return typeof value === "string" && /^[\w./:-]+$/.test(value) ? value : undefined;
+    case "vec3":
+    case "vec4":
+    case "numberList":
+    case "stringList":
+      return Array.isArray(value) && value.length > 0 && value.every((v) => /^[\w.+-]+$/.test(String(v)))
+        ? value.join(",")
+        : undefined;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * What `pcg run <name> --help` adds under the static help: the primitive's
+ * pins and exposed params — read off a materialized wrapper, the same
+ * route `run` takes, because a subgraph's interface is per-instance and
+ * the registry holds only the authored half of each param schema — then
+ * one runnable `--param` line and the corpus graphs that reference it.
+ */
+function primitiveHelpText(name: string, io: CliIo): string {
+  const entry = lookupPrimitive(name);
+  const graph = deserializeGraph(
+    buildWrapperGraph({
+      name,
+      exposedInputs: entry.subgraph.inputs.map((p) => p.name),
+      boundInputs: [],
+      outputs: entry.subgraph.outputs.map((p) => p.name),
+      params: {},
+    }),
+  );
+  const state = graph._nodes.get(WRAPPER_NODE_ID);
+  const pins = state === undefined ? undefined : describeSubgraphPins(state.def);
+  const pinText = (list: readonly DescribedSubgraphPin[] | undefined): string =>
+    list === undefined || list.length === 0
+      ? "(none)"
+      : list.map((p) => `${p.name} (${p.kind}${p.synthesized === true ? ", wrapper" : ""})`).join(", ");
+  const params = exposedParams(graph);
+
+  const title = entry.meta?.title;
+  const lines = [
+    "",
+    `primitive ${name} #${entry.hash}${title !== undefined ? `  — ${title}` : ""}`,
+    "",
+    `inputs:  ${pinText(pins?.inputs)}`,
+    `outputs: ${pinText(pins?.outputs)}`,
+    "",
+  ];
+  if (params.length === 0) {
+    lines.push("params:  (none)");
+  } else {
+    lines.push("params:");
+    lines.push(
+      ...table([
+        ["name", "type", "default", "range", "enum", "field", "description"],
+        ...params.map((p) => paramRow(p.name, p.schema)),
+      ]),
+    );
+  }
+  lines.push("", ...primitiveExample(name, entry, pins?.inputs ?? [], params), "");
+  lines.push(...corpusFor(io, name, "primitive").lines);
+  return lines.join("\n") + "\n";
+}
+
+/**
+ * The help page's `example:` — one that actually runs. A primitive with no
+ * geometry input gets a `pcg run` line setting its first plain param to its
+ * default. One WITH a geometry input cannot be run that way at all (`--in`
+ * carries value items only; geometry has no JSON form), so it gets the node
+ * JSON that references it from a graph instead, plus the connection each
+ * geometry input needs — printing a `pcg run` line there would print a
+ * command that fails with "no geometry connected".
+ */
+function primitiveExample(
+  name: string,
+  entry: RegisteredSubgraph,
+  inputs: readonly DescribedSubgraphPin[],
+  params: readonly { name: string; schema: ParamSchema }[],
+): string[] {
+  const geometryInputs = inputs.filter((p) => p.kind === "geometry");
+  if (geometryInputs.length === 0) {
+    const example = params
+      .map((p) => ({ name: p.name, spelled: paramSpelling(p.schema) }))
+      .find((p) => p.spelled !== undefined);
+    return [
+      "example:",
+      `  pcg run ${name}${example !== undefined ? ` --param ${example.name}=${example.spelled}` : ""}`,
+    ];
+  }
+  const id = kebab(name);
+  const first = params.find((p) => p.schema.type !== "items");
+  const node = {
+    id,
+    type: inferWrapperKind(entry.subgraph),
+    ref: { name },
+    params: first !== undefined ? { [first.name]: first.schema.default } : {},
+  };
+  return [
+    `example — pcg run cannot bind its geometry ${geometryInputs.length === 1 ? "input" : "inputs"} (geometry has no JSON form), so reference it from a graph:`,
+    `  node:       ${inlineJson(node)}`,
+    ...geometryInputs.map(
+      (p) =>
+        `  connection: ${inlineJson({ from: ["<source node>", "out"], to: [id, p.name] })}`,
+    ),
+  ];
+}
+
 const runCommand: Command = {
   spec: {
     name: "run",
@@ -1553,6 +1871,12 @@ const runCommand: Command = {
       fingerprint: FINGERPRINT_FLAG,
     },
   },
+  help(args, io) {
+    // `pcg run --help` with no name is a question about the command, not
+    // about a primitive: the static help answers it.
+    const name = args.positional[0];
+    return name === undefined ? undefined : commandHelp(runCommand.spec) + primitiveHelpText(name, io);
+  },
   /**
    * Exit codes follow the CLI's documented split. A name that does not
    * exist — the primitive, or a param on it — is exit 1, the class the
@@ -1567,8 +1891,9 @@ const runCommand: Command = {
   async run(args, io) {
     const name = args.positional[0];
     // The registry's own message, verbatim: it lists every registered
-    // name, or explains that none are, and the CLI must not paraphrase it.
-    const entry = getRegisteredSubgraph(name);
+    // name, or explains that none are, and the CLI must not paraphrase it
+    // — only add the nearest names after it.
+    const entry = lookupPrimitive(name);
     const exposedInputs = entry.subgraph.inputs.map((p) => p.name);
     const exposedOutputs = entry.subgraph.outputs.map((p) => p.name);
 
@@ -1678,6 +2003,7 @@ const runCommand: Command = {
 export const COMMANDS: readonly Command[] = [
   nodesCommand,
   fieldsCommand,
+  graphsCommand,
   validateCommand,
   assetsCommand,
   cookCommand,

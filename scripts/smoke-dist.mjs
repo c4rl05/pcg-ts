@@ -208,6 +208,25 @@ const cliCases = [
       return undefined;
     },
   },
+  {
+    name: "CLI: pcg nodes pathShift finds the corpus from dist, run OUTSIDE the package",
+    // The corpus index is located by walking up from the built module's own
+    // URL to the package.json named pcg-ts — not from the working directory.
+    // Running from a temp dir is what proves it: a cwd-based lookup would
+    // find nothing there and print the "unavailable" note instead. Outside
+    // the package the path is printed absolute, and it must name a real file.
+    args: [join(root, "bin/pcg.mjs"), "nodes", "pathShift"],
+    cwd: "tmp",
+    check: (out) => {
+      if (/^examples: unavailable/m.test(out)) return "the corpus index was not found from dist";
+      const line = /^ {2}(\S+basics-shift-along-a-path\.json) — /m.exec(out);
+      if (line === null) return "no examples line naming graphs/basics-shift-along-a-path.json";
+      if (!existsSync(line[1])) return `the printed example path does not exist: ${line[1]}`;
+      if (!out.includes("all 1: pcg graphs --node pathShift")) return "no `all N: pcg graphs` line";
+      if (!out.includes('"type": "pathShift"')) return "no usage snippet quoting the node's JSON";
+      return undefined;
+    },
+  },
 ];
 
 function fail(name, detail, proc) {
@@ -297,7 +316,13 @@ try {
 
 for (const c of cliCases) {
   const t0 = Date.now();
-  const proc = spawnSync(process.execPath, c.args, { cwd: root, encoding: "utf8", timeout: 30_000 });
+  const cwd = c.cwd === "tmp" ? mkdtempSync(join(tmpdir(), "pcg-smoke-cwd-")) : root;
+  let proc;
+  try {
+    proc = spawnSync(process.execPath, c.args, { cwd, encoding: "utf8", timeout: 30_000 });
+  } finally {
+    if (cwd !== root) rmSync(cwd, { recursive: true, force: true });
+  }
   ran += 1;
   if (proc.status !== 0) {
     fail(c.name, proc.signal ? `killed by ${proc.signal} (timeout?)` : `exit ${proc.status}`, proc);

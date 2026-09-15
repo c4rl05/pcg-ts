@@ -21,6 +21,7 @@ import { VERSION } from "../index.js";
 import {
   type CommandSpec,
   CliUsageError,
+  type ParsedArgs,
   boolFlag,
   commandHelp,
   parseArgs,
@@ -72,6 +73,7 @@ function topLevelHelp(): string {
     "     flag value of the wrong shape or out of range",
     "",
     "The loop: pcg validate g.json && pcg cook g.json --stats && pcg inspect g.json --node <id>",
+    "Start from an example: pcg graphs --node <type> lists corpus graphs that cook as printed.",
     "",
     ...COMMANDS.map((c) => `  ${usageLine(c.spec)}`),
     "",
@@ -84,16 +86,19 @@ function topLevelHelp(): string {
  * positional arguments? Re-parses against the same spec with the
  * positionals made optional, so every other rule — unknown flags, missing
  * flag values, repeats — still decides, and only the arity is forgiven.
+ * Returns the relaxed parse when it did, so the command's own help hook
+ * sees the same arguments it would on a complete line.
  */
-function helpWithoutArguments(rest: readonly string[], spec: CommandSpec): boolean {
+function helpWithoutArguments(rest: readonly string[], spec: CommandSpec): ParsedArgs | undefined {
   try {
     const relaxed: CommandSpec = {
       ...spec,
       positionals: spec.positionals.map((p) => ({ ...p, required: false })),
     };
-    return boolFlag(parseArgs(rest, relaxed), "help");
+    const args = parseArgs(rest, relaxed);
+    return boolFlag(args, "help") ? args : undefined;
   } catch {
-    return false;
+    return undefined;
   }
 }
 
@@ -142,7 +147,7 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
     // value position (`--out --help`) is the misuse it is rather than a
     // command line that silently succeeds without running anything.
     if (boolFlag(args, "help")) {
-      io.out(commandHelp(command.spec));
+      io.out(command.help?.(args, io) ?? commandHelp(command.spec));
       return EXIT_OK;
     }
     const outcome = await command.run(args, io);
@@ -153,9 +158,17 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
       // `pcg inspect --help` is exactly what someone types when they do
       // not know which arguments it wants, so a line that is well-formed
       // except for its missing positionals still gets its help.
-      if (helpWithoutArguments(rest, command.spec)) {
-        io.out(commandHelp(command.spec));
-        return EXIT_OK;
+      const relaxed = helpWithoutArguments(rest, command.spec);
+      if (relaxed !== undefined) {
+        try {
+          io.out(command.help?.(relaxed, io) ?? commandHelp(command.spec));
+          return EXIT_OK;
+        } catch (helpErr) {
+          // A help hook fails the way `run` does — an unknown name is
+          // exit 1 — and its message reaches the user unchanged.
+          io.err(`${helpErr instanceof Error ? helpErr.message : String(helpErr)}\n`);
+          return EXIT_FAILURE;
+        }
       }
       io.err(`${err.message}\nrun "pcg ${command.spec.name} --help" for usage\n`);
       return EXIT_USAGE;

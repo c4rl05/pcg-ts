@@ -20,4 +20,25 @@ export interface CliIo {
    * is missing rather than mangling the bytes through `writeFile`.
    */
   writeBytes?(path: string, data: Uint8Array): void;
+  /**
+   * Where a file the package SHIPS lives — `rel` is package-relative, e.g.
+   * `docs/graphs.json` or `graphs/basics-scatter-in-bounds.json` — as a
+   * path {@link readFile} can open and a person can paste into the next
+   * `pcg` command run from the same directory.
+   *
+   * The Node binding answers relative to the working directory when the
+   * package sits inside it (`graphs/x.json` in this repository,
+   * `node_modules/pcg-ts/graphs/x.json` from a consumer's project root) and
+   * absolute otherwise, always with `/` separators, so the same install
+   * prints the same text on every platform. It does NOT check that the file
+   * exists: reading it is the caller's move, and a failed read is the
+   * caller's to explain.
+   *
+   * Optional, like {@link writeBytes}, so an io written before shipped
+   * files were read still type-checks. `undefined` — the member missing, or
+   * returning it because the package root could not be found — means "not
+   * available here", and every caller degrades to a note instead of failing
+   * the command.
+   */
+  packagePath?(rel: string): string | undefined;
 }
