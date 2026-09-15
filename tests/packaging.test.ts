@@ -67,6 +67,10 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { agentRulesData, renderAgentBlock, renderLlmsIndex } from "../src/cli/agentRules.js";
+import { COMMANDS } from "../src/cli/commands.js";
+import { VERSION } from "../src/index.js";
+import "../src/primitives/index.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const read = (path: string): string => readFileSync(join(ROOT, path), "utf8");
@@ -465,5 +469,66 @@ describe("the version agrees with itself", () => {
     expect(lock.packages?.[""]?.version, "the lockfile's root package entry disagrees too").toBe(
       manifestVersion,
     );
+  });
+});
+
+/**
+ * The agent-rules block (`pcg agents`) and the root llms.txt index point a
+ * consumer's agent at files by their path inside the INSTALLED package. A
+ * path that exists in this repository but is not in `files` reads fine here
+ * and is missing from every install, so each one is checked against both.
+ */
+describe("everything the agent entry points name reaches the tarball", () => {
+  const filesField = (JSON.parse(read("package.json")) as { files: string[] }).files;
+  /** Does an entry of `files` include this package-relative path, exactly or as its directory? */
+  // A leading `/` anchors an entry at the package root (`/llms.txt`, so the
+  // site copy `docs/llms.txt` is not matched too); it names the same path.
+  const shipped = (rel: string): boolean =>
+    filesField
+      .map((entry) => entry.replace(/^\//, "").replace(/\/$/, ""))
+      .some((entry) => rel === entry || rel.startsWith(`${entry}/`));
+
+  const data = agentRulesData({
+    version: VERSION,
+    commands: COMMANDS.map((c) => c.spec.name),
+    readShipped: (rel) => read(rel),
+  });
+
+  it("the ship check can say no", () => {
+    expect(shipped("docs/llms-full.txt")).toBe(true);
+    expect(shipped("skills/determinism/SKILL.md")).toBe(true);
+    expect(shipped("docs/roadmap.html")).toBe(false);
+    expect(shipped("graphsX/a.json")).toBe(false);
+  });
+
+  it("ships the root llms.txt index and not the site copy beside docs/", () => {
+    // npm reads an unanchored `llms.txt` entry like a gitignore pattern, at
+    // any depth, which packed docs/llms.txt (site URLs) into the tarball.
+    expect(filesField).toContain("/llms.txt");
+    expect(filesField).not.toContain("llms.txt");
+  });
+
+  it("every node_modules/pcg-ts/<path> in the block exists and is in files", () => {
+    const block = renderAgentBlock(data);
+    const named = [...block.matchAll(/node_modules\/pcg-ts\/([^`\s:]+)/g)].map((m) => m[1] as string);
+    expect(named.length).toBeGreaterThan(4);
+    for (const rel of named) {
+      expect(existsSync(join(ROOT, rel)), `the block names node_modules/pcg-ts/${rel}, which does not exist`).toBe(true);
+      expect(shipped(rel), `the block names node_modules/pcg-ts/${rel}, but package.json files does not ship it`).toBe(
+        true,
+      );
+    }
+  });
+
+  it("every link in the root llms.txt exists and is in files, and so is llms.txt", () => {
+    expect(shipped("llms.txt")).toBe(true);
+    const links = [...renderLlmsIndex(data, "package").matchAll(/\]\(([^)]+)\)/g)].map((m) =>
+      (m[1] as string).replace(/\/$/, ""),
+    );
+    expect(links.length).toBeGreaterThan(8);
+    for (const rel of links) {
+      expect(existsSync(join(ROOT, rel)), `llms.txt links ${rel}, which does not exist`).toBe(true);
+      expect(shipped(rel), `llms.txt links ${rel}, but package.json files does not ship it`).toBe(true);
+    }
   });
 });

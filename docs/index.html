@@ -7,6 +7,7 @@
 <title>pcg-ts — real-time PCG for TypeScript</title>
 <link rel="icon" href="./icon.svg" type="image/svg+xml" />
 <link rel="stylesheet" href="./site.css" />
+<link rel="alternate" type="text/plain" href="llms.txt" />
 </head>
 <body>
 
@@ -170,7 +171,7 @@
       <li><b>Stable JSON everywhere</b> — graphs, subgraphs, and field expressions serialize to a versioned format that round-trips to byte-identical cooks; serialized form is stable across cooks.</li>
       <li><b>Errors that state the fix</b> — validation names the offending node, pin, or param and lists the valid alternatives. Error messages are part of the API surface.</li>
       <li><b>Introspectable execution</b> — cook stats report what cooked, what was cached, and how long it took; determinism makes every run reproducible.</li>
-      <li><b>Agent entry points</b> — <code>llms.txt</code> capability map, generated <code>docs/nodes.md</code> / <code>primitives.md</code> / <code>graphs.md</code> with their <code>.json</code> twins, three skills that cite every enumerable thing by path rather than inlining it, an authoring guide with recipes, and the <a href="./manual.html">user manual</a>, whose second half is written for an agent driving the library programmatically.</li>
+      <li><b>Agent entry points</b> — an <a href="./llms.txt"><code>llms.txt</code></a> index pointing at the full hand-written guide (<a href="./llms-full.txt"><code>llms-full.txt</code></a>), <code>npx pcg agents --write</code> to put a pointer block into a project's <code>AGENTS.md</code>, generated <code>docs/nodes.md</code> / <code>primitives.md</code> / <code>graphs.md</code> with their <code>.json</code> twins, three skills that cite every enumerable thing by path rather than inlining it, an authoring guide with recipes, and the <a href="./manual.html">user manual</a>, whose second half is written for an agent driving the library programmatically.</li>
       <li><b>Independently audited</b> — each phase was reviewed by a separate agent before it landed, and the defects it found were fixed with regression tests before release.</li>
     </ul>
   </section>

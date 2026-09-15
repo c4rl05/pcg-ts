@@ -10,7 +10,7 @@ result is right. *What exists* lives in the generated references, and they
 are cited here rather than copied, because a pasted list goes stale and a
 stale list is worse than no list.
 
-- `llms.txt` — the mental model, the JSON field names, the invariants.
+- `docs/llms-full.txt` — the mental model, the JSON field names, the invariants, the CLI. (`llms.txt` at the package root is its short index.)
 - `docs/primitives.md` — the primitive catalog (`docs/primitives.json` for machine reading).
 - `docs/nodes.md` — every node type, its pins, params, defaults and ranges (`docs/nodes.json`).
 - `docs/authoring.md` — the graph JSON spec, the field-expression grammar, worked recipes.
@@ -28,7 +28,8 @@ what happens when one is skipped.
    one-line summary of every primitive. If one of those lines describes what
    you are about to build, you are done choosing.
 2. **Read one example graph** (`docs/graphs.md`) close to your goal. Copy
-   its shape. `docs/authoring.md`'s "Recipes" section carries longer,
+   its shape; `pcg graphs --node <type>` lists the shipped graphs using a
+   node type, and every path it prints cooks as it stands. `docs/authoring.md`'s "Recipes" section carries longer,
    annotated ones.
 3. **Look up the exact schema of anything you type by hand** — `pcg nodes
    <type>` for a node, `pcg fields <fn>` for a field expression, and the
@@ -78,7 +79,7 @@ pcg run shape/disc --param count=400 --param size=24,0,24
 `--param` is repeatable and typed by that param's own schema. This works for
 primitives with **no input pins** (the pins are listed per primitive in
 `docs/primitives.md`); one that takes geometry has nothing to feed it and
-will fail inside — write a graph instead.
+is refused before it cooks (exit `3`) — write a graph instead.
 
 ## Parameterize, don't hardcode
 
@@ -160,12 +161,18 @@ pcg validate g.json                          # structure, before anything cooks
 pcg assets g.json                            # every asset id it can spawn
 pcg cook g.json --stats                      # what came out, and what recooked
 pcg inspect g.json --node <id> --pin <pin>   # the numbers
-pcg render g.json --out g.svg                # the picture
+pcg render g.json --out g.png                # the picture: open it and look
 ```
 
 - **validate** deserializes and reports nodes, connections and outputs. It
-  catches unknown types, unknown params, bad pins and cycles before any work
-  happens. Run it after every edit; it is nearly free.
+  catches unknown types, unknown params, bad pins, unknown keys and cycles
+  before any work happens, and it COLLECTS: every fault in the file comes
+  back in one run, each with a JSON-pointer `path`, and a misspelled name
+  carries a did-you-mean (`unknown param "amout" … did you mean "amount"?`)
+  — so fix them all, then re-run. Then it checks structure: an unconnected
+  required pin is an error; a node no output reads and a graph with no
+  outputs are warnings, which exit `0` unless you pass `--strict`. Run it
+  after every edit; it is nearly free.
 - **assets** lists every asset id the graph can spawn, read from the graph
   rather than from a cook — so it covers branches one seed never reaches, and
   it reports an id set it CANNOT determine as open instead of guessing. Run it
@@ -180,13 +187,18 @@ pcg render g.json --out g.svg                # the picture
   non-finite count, and the first rows. When a graph is wrong, bisect it:
   inspect the first node, then the next, until the numbers stop being what
   you expect. That node is the bug.
-- **render** draws a deterministic top-down SVG. `--attr <name>` colors by an
+- **render** draws a deterministic picture. `--out g.png` is a sheet of four
+  views (hero, ground, top, side; `--view` picks one): faces flat-shaded,
+  instances as pyramid proxies rather than the assets, points as small
+  squares. `--out g.svg` is a top-down plan. Look at the image: a graph that
+  validates and cooks can still be the wrong shape, and this is the step
+  that shows it. `--attr <name>` colors by an
   attribute — a scalar ramp, a vec3+ as RGB, strings categorically — which is
   how you see whether a written attribute actually varies across space
   instead of trusting its mean. It reads **both** colorable domains and they
   color different marks, so there is no precedence question: a point column
-  colors the circles, a primitive column colors the paths, and a per-edge
-  value is therefore visible rather than unreachable. `--attr-domain
+  colors the points, a primitive column colors the paths, faces and lines,
+  and a per-edge value is therefore visible rather than unreachable. `--attr-domain
   point|primitive` narrows the lookup when one name lives on both — worth
   reaching for, since the ramp normalizes across every domain read. Every
   report says which domain the color came from.
@@ -195,19 +207,24 @@ Exit codes are scriptable: `0` did what was asked, `1` a named thing does not
 exist or the run failed, `2` the command line itself was wrong, `3` the graph
 document is invalid — not JSON, refused by the loader, or an unconnected
 required pin on the part of the graph the command cooks (`validate --strict`
-also fails on warnings). With `--json`, every failure prints one object on
-stdout, `{ "ok": false, "command", "exitCode", "errors", "warnings" }`; each
+also fails on warnings). A misspelled node type, param or field fn inside the
+file is a `3`; the same name given on the command line (`pcg nodes <type>`)
+is a `1`, and so is a misspelled attribute name, which no check sees before
+the cook reads it. Branch on the
+code first: a `2` is your invocation, never the graph. The text always goes
+to stderr; with `--json`, every failure also prints one object on stdout,
+`{ "ok": false, "command", "exitCode", "errors", "warnings" }`; each
 record has a stable `code`, a JSON-pointer `path` into the file where it has
 one, the `nodeId`/`pin`/`param` at fault and `didYouMean` for a misspelled
-name. `validate` reports every fault in the file in one run, so fix them all
-before re-running; `pcg schema diagnostic` prints the record's schema and
-every code.
+name. `docs/errors.md` lists every code; `pcg schema diagnostic` prints the
+record's schema.
 
 ## Failure modes
 
 **Authoring a param that does not exist.** The error names it and lists the
-alternatives — `unknown param "counts" for type "pointGrid"; valid params:
-countX, countY, countZ, spacing, origin`. Read the message rather than
+alternatives — `unknown param "counts" for type "pointGrid"; did you mean
+"countX", "countY" or "countZ"? valid params: countX, countY, countZ,
+spacing, origin`. Read the message rather than
 guessing again; the fix is in it. Prevent it with `pcg nodes <type>` before
 you type the param.
 

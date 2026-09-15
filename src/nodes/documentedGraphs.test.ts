@@ -1,7 +1,7 @@
 /**
  * Every graph JSON printed in the docs must still deserialize.
  *
- * The docs are part of the agent API: an agent reads `llms.txt` or
+ * The docs are part of the agent API: an agent reads `docs/llms-full.txt` or
  * `authoring.md`, copies the shape it finds, and expects it to load. So a
  * tightening of the format — phase 36 closed unknown keys at every object
  * position — can invalidate the documentation without touching a line of
@@ -26,7 +26,7 @@ const ROOT = new URL("../../", import.meta.url);
 /** Files that carry hand-authored graph JSON, with how many to expect. */
 const SOURCES: readonly { readonly file: string; readonly atLeast: number }[] = [
   { file: "README.md", atLeast: 1 },
-  { file: "llms.txt", atLeast: 1 },
+  { file: "docs/llms-full.txt", atLeast: 1 },
   { file: "docs/authoring.md", atLeast: 4 },
   { file: "docs/manual.html", atLeast: 2 },
 ];

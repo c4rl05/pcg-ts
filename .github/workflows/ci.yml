@@ -66,8 +66,19 @@ jobs:
       # Regenerating them must be a no-op on a clean checkout; if it is
       # not, someone changed a source of truth and did not regenerate, and
       # the repo is shipping a doc that disagrees with the code.
+      #
+      # `git status --porcelain`, not `git diff --exit-code`: a diff misses
+      # UNTRACKED files, so a generator that starts writing a new file (as
+      # docs/errors.md and docs/llms.txt once did) would pass while nobody
+      # committed it. And `llms.txt` is named because the root index is
+      # generated too and sits outside docs/.
       - name: Generated artifacts are up to date
         run: |
           npm run docs
-          git diff --exit-code -- docs \
-            || { echo "::error::Generated files are stale. Run 'npm run docs' and commit the result."; exit 1; }
+          stale="$(git status --porcelain -- docs llms.txt)"
+          if [ -n "$stale" ]; then
+            echo "$stale"
+            git diff -- docs llms.txt | head -200
+            echo "::error::Generated files are stale or uncommitted. Run 'npm run docs' and commit the result."
+            exit 1
+          fi

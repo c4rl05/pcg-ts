@@ -3,7 +3,7 @@
  *
  * `makeField` is the sanctioned door out of the field grammar: when what
  * you need is not an elementwise expression over the built-in fns, you
- * write the evaluator yourself. The docs (`llms.txt`, `docs/authoring.md`)
+ * write the evaluator yourself. The docs (`docs/llms-full.txt`, `docs/authoring.md`)
  * carry this example, and the trade it makes — a field the grammar cannot
  * describe cannot be serialized — so both halves are pinned here rather
  * than asserted in prose. Edit the doc and this test is what says whether
@@ -300,7 +300,7 @@ describe("the docs print what this file proves", () => {
   // the message for width, so the check joins their wrapped lines first.
   const REFUSAL = "It was built by makeField, whose evaluator is an arbitrary closure";
 
-  for (const file of ["docs/authoring.md", "llms.txt"]) {
+  for (const file of ["docs/authoring.md", "docs/llms-full.txt"]) {
     it(`${file} carries the worked example's key expression`, () => {
       expect(read(file)).toContain(KEY_LINE);
     });
@@ -312,8 +312,8 @@ describe("the docs print what this file proves", () => {
     expect(unwrapped).toContain(REFUSAL_ADD);
   });
 
-  it("llms.txt quotes the un-branded-literal refusal too", () => {
-    expect(read("llms.txt").replaceAll(/\s+/g, " ")).toContain(REFUSAL_ADD);
+  it("docs/llms-full.txt quotes the un-branded-literal refusal too", () => {
+    expect(read("docs/llms-full.txt").replaceAll(/\s+/g, " ")).toContain(REFUSAL_ADD);
   });
 
   it("the pinned key expression is the one the example builds", () => {

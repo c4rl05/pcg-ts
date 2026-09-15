@@ -8,7 +8,7 @@ description: "Doctrine for keeping pcg-ts output reproducible. Use when adding r
 Determinism is a hard invariant here: same graph, same seed, byte-identical
 output across runs, platforms, cook orders and streaming paths. It holds by
 construction, and it is easy to break by accident. Reference for the
-contracts is `llms.txt` ("Key invariants and contracts") and
+contracts is `docs/llms-full.txt` ("Key invariants and contracts") and
 `docs/authoring.md`; this is the doctrine for working inside them.
 
 ## The seed chain
@@ -262,30 +262,39 @@ never where it decides a branch, a count or a key.
 
 The test is always the same: produce it twice and compare bytes.
 
-At the CLI, `render` is the cleanest oracle because the SVG carries no
-timings:
+At the CLI the check is one command, run twice:
 
 ```
-pcg render g.json --out a.svg
-pcg render g.json --out b.svg
-cmp a.svg b.svg
+pcg cook g.json --no-timings --fingerprint > a.txt
+pcg cook g.json --no-timings --fingerprint > b.txt
+cmp a.txt b.txt
 ```
 
-The `--json` reports do carry `elapsedMs` (and `cook --out` echoes its own
-path), so strip the timings before diffing them:
+`--fingerprint` adds a 16-hex digest of the cooked data, overall and per
+output — every attribute column's bytes, topology array, instance transform
+and channel — and `--no-timings` leaves every `elapsedMs` out of the report,
+so nothing in it varies between identical runs. Same graph, same seed, same
+build: the two reports are byte-identical, `--json` or not. (`cook --out`
+echoes its own path into the file, so compare stdout, or two files written
+to the same name.) The digest compares a run against a run; a different
+library version may move it on purpose.
 
-```
-pcg inspect g.json --json | grep -v elapsedMs > a.json
-pcg inspect g.json --json | grep -v elapsedMs > b.json
-cmp a.json b.json
-```
-
-Both of those were run against a real graph and are byte-identical.
+The picture is a second oracle: `pcg render g.json --out a.png` twice gives
+byte-identical PNGs (the report prints a pixel hash), and the SVG form
+likewise. `pcg inspect g.json --json --no-timings` makes the numbers
+comparable byte for byte too. All of these were run against a real graph and
+are byte-identical.
 
 Then run the negative half, which is the one people skip: `pcg cook g.json
---seed <other>` must produce *different* output. If it does not, nothing in
-the graph is actually seeded and the "reproducible" result is reproducible
-for the wrong reason.
+--no-timings --fingerprint --seed <other>` should print a *different*
+fingerprint. If it does not, nothing in the graph reads the seed — correct
+for a graph that is unseeded by design, and otherwise a sign the
+"reproducible" result is reproducible for the wrong reason. A moved digest
+proves less than it seems: every scatter's per-point `seed` attribute
+follows the graph seed, so the digest moves even when a noise inside is
+frozen by a literal `opts.seed`. To check one noise, compare the attribute
+it writes at two seeds (`pcg inspect g.json --node <id> --dist <attr>
+--seed <n>`).
 
 In code, cook **two fresh graphs** built from the same builder and compare
 snapshots, rather than re-cooking one graph — a second cook of the same graph
@@ -293,7 +302,7 @@ can pass on cache alone and proves much less. Assert both: fresh-vs-fresh
 byte identity, and that a re-cook reports `stats.cooked === 0` with identical
 data. The reference implementation is the `whole-library determinism` suite
 in `src/nodes/integration.test.ts` (its `snapshotGeometry` helper lives in
-`src/nodes/testSupport.ts` and is internal, not public API).
+`src/nodes/nodes.testsupport.ts` and is internal, not public API).
 
 ## What legitimately varies
 

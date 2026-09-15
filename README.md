@@ -193,7 +193,10 @@ node type carries machine-readable metadata, graphs serialize to a stable
 JSON format, and an error names the offending node, pin, or param and
 states the valid alternatives or the fix. The entry points, all of which ship inside the npm package:
 
-- [llms.txt](./llms.txt) — start here.
+- [llms.txt](./llms.txt) — the short index; start here.
+- [docs/llms-full.txt](./docs/llms-full.txt) — the full agent guide the
+  index points at first: the mental model, the JSON format, the CLI, the
+  invariants.
 - [docs/nodes.md](./docs/nodes.md) — every node, its pins and its param
   schema (machine-readable: [docs/nodes.json](./docs/nodes.json)).
 - [docs/primitives.md](./docs/primitives.md) — the shipped primitive
@@ -208,6 +211,11 @@ states the valid alternatives or the fix. The entry points, all of which ship in
   `determinism` (the seed chain, and how to verify reproducibility rather
   than assume it) and `performance-and-budgets` (what a cook costs, the
   two different budgets, and reading `pcg cook --stats`).
+
+In a project that depends on pcg-ts, `npx pcg agents --write` puts a short,
+versioned pointer block to these files into `AGENTS.md` (`--claude` also
+imports it from `CLAUDE.md`); `npx pcg agents --check` fails when it is
+missing or stale.
 
 ---
 
@@ -403,7 +411,8 @@ nested payload or as a hash-pinned reference to a registered one, and
 deserialization validates node types, param schemas, bounds, enum
 membership, pins, connections and the key sets themselves at every object
 position — every error naming what is at fault and what would be valid.
-See [llms.txt](./llms.txt) for the compact agent guide,
+See [docs/llms-full.txt](./docs/llms-full.txt) for the agent guide
+([llms.txt](./llms.txt) is its index),
 [docs/authoring.md](./docs/authoring.md) for the format spec and field
 grammar, and [docs/nodes.md](./docs/nodes.md) for the full node reference
 (generated from the registry). [The editor](#the-editor) is this section

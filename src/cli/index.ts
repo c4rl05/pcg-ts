@@ -2,7 +2,8 @@
  * `pcg` — the graph CLI: the authoring feedback loop an agent (or a
  * human, or CI) runs against a graph JSON file without writing a bespoke
  * script. Catalogs (`nodes`, `fields`, `schema`), then validate → cook →
- * inspect → render.
+ * inspect → render; `agents` writes the pointer block a consumer project's
+ * AGENTS.md carries.
  *
  * Exit codes: 0 success; 1 a named thing that does not exist or a run that
  * failed (unreadable file, unknown node or output, a cook that threw); 2 a
@@ -81,8 +82,10 @@ function topLevelHelp(): string {
     "",
     "Exit codes:",
     "  0  the command did what it was asked",
-    "  1  a named thing does not exist, or the run failed: unknown node type,",
-    "     field fn, node id, output or primitive; unreadable file; a cook that threw",
+    "  1  a named thing does not exist, or the run failed: a node type, field fn,",
+    "     node id, output or primitive named ON THE COMMAND LINE; unreadable file;",
+    "     a cook that threw (a wrong node type, param or field fn inside the graph",
+    "     file is a 3; a wrong attribute name surfaces at cook, as a 1)",
     "  2  the command line itself is wrong: unknown command, unknown flag, or a",
     "     flag value of the wrong shape or out of range",
     "  3  the graph is invalid: the file is not JSON, the loader refuses it, or the part",
@@ -96,7 +99,9 @@ function topLevelHelp(): string {
     "  at fault (pcg schema diagnostic prints their JSON Schema and every code).",
     "",
     "The loop: pcg validate g.json && pcg cook g.json --stats && pcg inspect g.json --node <id>",
+    "Look at it: pcg render g.json --out g.png draws hero, ground, top and side views.",
     "Start from an example: pcg graphs --node <type> lists corpus graphs that cook as printed.",
+    "For coding agents: npx pcg agents --write puts this version's rules into AGENTS.md.",
     "",
     ...COMMANDS.map((c) => `  ${usageLine(c.spec)}`),
     "",

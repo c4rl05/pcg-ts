@@ -20,3 +20,7 @@ export * from "./graphGolden.js";
 export * from "./site.js";
 export * from "./llms.js";
 export * from "./paramTypes.js";
+export * from "./errors.js";
+// The agent-rules block and the llms.txt indexes, for scripts/gen-llms-index.mjs.
+export * from "../cli/agentRules.js";
+export * from "./cliCommands.js";

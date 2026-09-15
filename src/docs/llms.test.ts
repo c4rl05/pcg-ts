@@ -1,5 +1,5 @@
 /**
- * `llms.txt` names every node type, primitive and field function the
+ * `docs/llms-full.txt` names every node type, primitive and field function the
  * library ships — and nothing regenerates it, so the only thing keeping
  * that true is this file.
  *
@@ -71,7 +71,7 @@ const WRITE_IT = [
   "edge that makes it different from its neighbour.",
 ];
 
-describe("llms.txt covers the node registry", () => {
+describe("docs/llms-full.txt covers the node registry", () => {
   it(`has a "## ${NODE_SECTION}" section to read`, () => {
     expect(
       sectionOf(GUIDE, NODE_SECTION),
@@ -133,7 +133,7 @@ describe("llms.txt covers the node registry", () => {
   });
 });
 
-describe("llms.txt covers the field grammar", () => {
+describe("docs/llms-full.txt covers the field grammar", () => {
   it(`has a "## ${GRAMMAR_SECTION}" section to read`, () => {
     expect(sectionOf(GUIDE, GRAMMAR_SECTION), `${LLMS_TXT}: section missing`).toBeTypeOf("string");
   });
@@ -176,7 +176,7 @@ describe("llms.txt covers the field grammar", () => {
   });
 });
 
-describe("llms.txt covers the primitive library", () => {
+describe("docs/llms-full.txt covers the primitive library", () => {
   it(`has a "## ${PRIMITIVE_SECTION}" section to read`, () => {
     expect(sectionOf(GUIDE, PRIMITIVE_SECTION), `${LLMS_TXT}: section missing`).toBeTypeOf("string");
   });

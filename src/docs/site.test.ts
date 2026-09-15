@@ -90,7 +90,7 @@ function readPage(name: string): string {
  * Any committed file a count claim points at, normalized the same way
  * {@link readPage} normalizes the site pages and for the same reason.
  * Separate from `readPage` because a claim may live outside `docs/` —
- * `llms.txt` is at the repository root, and being unreachable from here
+ * `llms.txt` sat at the repository root (it is `docs/llms-full.txt` now), and being unreachable from here
  * is exactly why its count went a release out of date.
  */
 function readRepoFile(relative: string): string {
@@ -132,7 +132,7 @@ const FIELD_CAPABLE = PARAMS.filter((p) => p.schema.acceptsField);
 
 /**
  * "Source node" has three defensible readings and they give 5, 6 and 10
- * — see the sentence in llms.txt, which states the definition beside the
+ * — see the sentence in docs/llms-full.txt, which states the definition beside the
  * count for exactly that reason. This is the one it states: a node that
  * declares no inputs at all, less the two categories whose pins are
  * per-instance (`composite`) or injected (`io`).
@@ -149,7 +149,7 @@ const SOURCE_NODES = listNodeTypes().filter(
  * which are themselves pinned to the live registries by
  * primitives.test.ts and graphIndex.test.ts — so the chain still ends at
  * the code, and this file never counts anything by hand. The param
- * arithmetic llms.txt states is derived here for the same reason: a
+ * arithmetic docs/llms-full.txt states is derived here for the same reason: a
  * sentence that says which params accept a field is a claim about the
  * registry, so the registry answers it.
  */

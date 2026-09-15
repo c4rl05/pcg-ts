@@ -469,7 +469,7 @@ export interface CountClaim {
   /**
    * File the claim appears in, relative to the REPOSITORY ROOT — not to
    * `docs/`, which is what it used to mean and what kept the two
-   * root-level copies of these sentences out of the check. `llms.txt`
+   * root-level copies of these sentences out of the check. `llms.txt` (now `docs/llms-full.txt`)
    * and `docs/authoring.md` both state the field-fn count, both drifted
    * to 45 while the gated pages correctly said 46, and neither was
    * noticed until a fn was added.
@@ -488,7 +488,7 @@ export interface CountClaim {
 }
 
 /**
- * The closed set of primitive families, in the order llms.txt lists them.
+ * The closed set of primitive families, in the order docs/llms-full.txt lists them.
  *
  * Closed is the point: the guide calls it "a CLOSED set of seven
  * families, and the family is a promise about the pin shape", so a new
@@ -498,10 +498,10 @@ export interface CountClaim {
 export const CORPUS_FAMILIES = ["basics", "examples", "pipeline"] as const;
 
 /**
- * The corpus families llms.txt breaks its graph count down by.
+ * The corpus families docs/llms-full.txt breaks its graph count down by.
  *
  * Added after both root-level corpus counts were found stale on the same
- * day — llms.txt two behind and README.md thirteen — while the three
+ * day — llms.txt (now docs/llms-full.txt) two behind and README.md thirteen — while the three
  * HTML pages were correct, because only those were gated. The claim
  * patterns here are anchored in prose rather than in markup for exactly
  * that reason: an HTML-shaped pattern silently covers nothing in a text
@@ -643,7 +643,7 @@ export const COUNT_CLAIMS: readonly CountClaim[] = [
   // field-fn count in the agent-facing docs, both are hand-written, and
   // both were a full release behind the gated pages before anyone looked.
   {
-    page: "llms.txt",
+    page: "docs/llms-full.txt",
     label: "field fns (grammar section)",
     source: "listFieldFns().length",
     pattern: /All ([\d,]+) fns \(`listFieldFns\(\)`\):/g,
@@ -654,7 +654,7 @@ export const COUNT_CLAIMS: readonly CountClaim[] = [
     source: "listFieldFns().length",
     pattern: /`listFieldFns\(\)` returns all ([\d,]+) names at runtime/g,
   },
-  // The rest of llms.txt's registry arithmetic, added when the guide was
+  // The rest of llms-full.txt's registry arithmetic, added when the guide was
   // first checked against the library it describes. Every one of these was
   // wrong at that point — the field-capable sweep by more than half, the
   // primitive families by one each — because the guide has no generator
@@ -662,37 +662,37 @@ export const COUNT_CLAIMS: readonly CountClaim[] = [
   // They are all sentences an agent would act on: "which params take a
   // field" is a decision, not a decoration.
   {
-    page: "llms.txt",
+    page: "docs/llms-full.txt",
     label: "field-capable params (sweep headline)",
     source: "field-capable params",
     pattern: /WHICH PARAMS ACCEPT ONE — ([\d,]+) of the standard library's/g,
   },
   {
-    page: "llms.txt",
+    page: "docs/llms-full.txt",
     label: "declared params in the standard library",
     source: "standard-library declared params",
     pattern: /of the standard library's ([\d,]+), across/g,
   },
   {
-    page: "llms.txt",
+    page: "docs/llms-full.txt",
     label: "node types carrying a field-capable param",
     source: "node types with a field-capable param",
     pattern: /across ([\d,]+)\s+node types/g,
   },
   {
-    page: "llms.txt",
+    page: "docs/llms-full.txt",
     label: "field-capable params (f32/vec3 split)",
     source: "field-capable params",
     pattern: /all ([\d,]+) are `f32`/g,
   },
   {
-    page: "llms.txt",
+    page: "docs/llms-full.txt",
     label: "field-capable f32 params",
     source: "field-capable f32 params",
     pattern: /are `f32` \(([\d,]+)\)/g,
   },
   {
-    page: "llms.txt",
+    page: "docs/llms-full.txt",
     label: "field-capable vec3 params",
     source: "field-capable vec3 params",
     pattern: /or `vec3` \(([\d,]+)\)/g,
@@ -701,25 +701,25 @@ export const COUNT_CLAIMS: readonly CountClaim[] = [
   // readings of "source node" give three different numbers and only this
   // one makes the parenthetical that follows it complete.
   {
-    page: "llms.txt",
+    page: "docs/llms-full.txt",
     label: "source nodes (zero declared inputs, less io/composite)",
     source: "source nodes",
     pattern: /the ([\d,]+) source nodes/g,
   },
   {
-    page: "llms.txt",
+    page: "docs/llms-full.txt",
     label: "eager seed params",
     source: "seed params",
     pattern: /all ([\d,]+) `seed` params/g,
   },
   {
-    page: "llms.txt",
+    page: "docs/llms-full.txt",
     label: "named primitives",
     source: "docs/primitives.json entries",
     pattern: /([\d,]+) named subgraphs/g,
   },
   {
-    page: "llms.txt",
+    page: "docs/llms-full.txt",
     label: "corpus graphs (example corpus section)",
     source: "docs/graphs.json entries",
     pattern: /^([\d,]+) graphs under `graphs\/`/gm,
@@ -731,7 +731,7 @@ export const COUNT_CLAIMS: readonly CountClaim[] = [
     pattern: /one of the ([\d,]+) files in `graphs\/`/g,
   },
   ...CORPUS_FAMILIES.map((family) => ({
-    page: "llms.txt",
+    page: "docs/llms-full.txt",
     label: `corpus graphs in the ${family} family`,
     source: `corpus graphs in ${family}`,
     // One sentence states all three, so each count is located by the
@@ -746,7 +746,7 @@ export const COUNT_CLAIMS: readonly CountClaim[] = [
     pattern: new RegExp(String.raw`(\d[\d,]*)[^\x60]*\x60${family}-\*\.json\x60`, "g"),
   })),
   ...PRIMITIVE_FAMILIES.map((family) => ({
-    page: "llms.txt",
+    page: "docs/llms-full.txt",
     label: `primitives in the ${family} family`,
     source: `primitives in ${family}`,
     // Anchored at the bullet, so the family word cannot be matched in the

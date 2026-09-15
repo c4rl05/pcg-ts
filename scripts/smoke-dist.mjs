@@ -227,6 +227,26 @@ const cliCases = [
       return undefined;
     },
   },
+  {
+    name: "CLI: pcg agents prints the managed block, run OUTSIDE the package",
+    // The block quotes each shipped skill's frontmatter, read from the
+    // installed package located from the built module — so a cwd with no
+    // package in it is what proves the read does not lean on the working
+    // directory. The size ceiling is checked on the bytes a consumer gets.
+    args: [join(root, "bin/pcg.mjs"), "agents"],
+    cwd: "tmp",
+    stdoutOnly: true,
+    check: (out) => {
+      const lines = out.replace(/\n$/, "").split("\n");
+      if (lines[0] !== "<!-- BEGIN:pcg-ts-agent-rules -->") return "the first line is not the BEGIN marker";
+      if (lines.at(-1) !== "<!-- END:pcg-ts-agent-rules -->") return "the last line is not the END marker";
+      const bytes = Buffer.byteLength(out.replace(/\n$/, ""));
+      if (bytes > 8192) return `the block is ${bytes} bytes, over the 8192-byte ceiling`;
+      if (!out.includes("`node_modules/pcg-ts/skills/graph-authoring/SKILL.md`: ")) return "no skill trigger line";
+      if (/[A-Za-z]:[\\/]|\/tmp\/pcg-smoke/.test(out)) return "the block spells a machine-specific path";
+      return undefined;
+    },
+  },
 ];
 
 function fail(name, detail, proc) {
@@ -328,7 +348,7 @@ for (const c of cliCases) {
     fail(c.name, proc.signal ? `killed by ${proc.signal} (timeout?)` : `exit ${proc.status}`, proc);
     continue;
   }
-  const problem = c.check(`${proc.stdout ?? ""}${proc.stderr ?? ""}`);
+  const problem = c.check(c.stdoutOnly ? (proc.stdout ?? "") : `${proc.stdout ?? ""}${proc.stderr ?? ""}`);
   if (problem) {
     fail(c.name, problem, proc);
   } else {

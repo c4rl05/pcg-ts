@@ -1,9 +1,10 @@
 /**
- * Drift checks for `llms.txt`, the hand-written agent-facing guide.
+ * Drift checks for `docs/llms-full.txt`, the hand-written agent-facing
+ * guide. (The root `llms.txt` is its generated index: see `agentRules.ts`.)
  *
  * WHY THIS EXISTS, AND WHY IT IS NOT A GENERATOR. Every other catalog
  * under `docs/` is rendered from the registry by `npm run docs`, so it
- * cannot go stale without CI noticing. `llms.txt` is the exception: it is
+ * cannot go stale without CI noticing. `llms-full.txt` is the exception: it is
  * prose about mechanisms, and the one-line-per-node text is an
  * independent hand compression, not the registry `description` reworded.
  * `spawnInstances` runs over a thousand words here against the registry's
@@ -28,7 +29,7 @@
  *
  * Numbers are checked elsewhere. `COUNT_CLAIMS` in site.ts already reads
  * repo-relative pages (`page` is relative to the repository root for
- * exactly this reason) and the llms.txt count claims live there, beside
+ * exactly this reason) and the llms-full.txt count claims live there, beside
  * the site's, so there is one table and one failure style for "a
  * sentence states a number that moved".
  *
@@ -37,7 +38,7 @@
  */
 
 /** Repo-relative path of the guide, as `COUNT_CLAIMS.page` spells it. */
-export const LLMS_TXT = "llms.txt";
+export const LLMS_TXT = "docs/llms-full.txt";
 
 /**
  * The body of one `## ` section, from its heading to the next one.

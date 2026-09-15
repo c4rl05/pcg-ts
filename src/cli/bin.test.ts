@@ -87,6 +87,7 @@ describe("pcg bin", () => {
       "run",
       "inspect",
       "render",
+      "agents",
     ]);
     expect(new Set(names).size).toBe(names.length);
   });

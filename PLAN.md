@@ -18,8 +18,12 @@ same work more accurately — each phase landed as its own commit, so
 from what actually merged.
 
 The old "core type sketch" went with it. It was aligned to the v0.2 API
-and said so in its own heading; `dist/*.d.ts`, `docs/nodes.json` and
-`llms.txt` are generated from the code and are current by construction.
+and said so in its own heading. `dist/*.d.ts` is generated from the code,
+the node params interfaces and their JSDoc from the registry, and so are
+`docs/nodes.json` and the root `llms.txt` index: all current by
+construction. `docs/llms-full.txt`, the full guide the index points at, is
+hand-written by design; its names and counts are drift-checked by
+`src/docs/llms.test.ts` and `COUNT_CLAIMS`.
 
 To read the plan as it stood at any release, check out its tag (`v0.1.0`
 through `v0.14.0`), or follow this file back with

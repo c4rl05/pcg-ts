@@ -82,6 +82,7 @@ import {
 import type { CliIo } from "./io.js";
 import { type RunContext, diagnosticLine } from "./report.js";
 import { schemaCommand } from "./schemaCommand.js";
+import { makeAgentsCommand } from "./agentsCommand.js";
 import {
   WRAPPER_NODE_ID,
   buildWrapperGraph,
@@ -1638,7 +1639,7 @@ const renderCommand: Command = {
   spec: {
     name: "render",
     summary:
-      "Draw a cooked collection as a deterministic picture: a top-down SVG (points as circles, polylines as paths), or PNG frames when --out ends in .png (top, side, hero and ground views tiled as a labelled sheet by default). Without --out the SVG goes to stdout; a PNG always needs --out. In the PNG, faces are flat-shaded, instances are upright square-pyramid proxies (not the assets) with a cross on each apex in top, side and hero, points are small squares, and hero and ground add a ground grid under the content, drawn only where nothing else is.",
+      "Draw a cooked collection as a deterministic picture: a top-down SVG (points as circles, polylines as paths), or PNG frames when --out ends in .png (hero, ground, top and side views tiled as a labelled sheet by default). Without --out the SVG goes to stdout; a PNG always needs --out. In the PNG, faces are flat-shaded, instances are upright square-pyramid proxies (not the assets) with a cross on each apex in top, side and hero, points are small squares, and hero and ground add a ground grid under the content, drawn only where nothing else is.",
     positionals: [GRAPH_ARG],
     flags: {
       ...TARGET_FLAGS,
@@ -2173,6 +2174,13 @@ const runCommand: Command = {
   },
 };
 
+/**
+ * `pcg agents` lists only commands that exist, so it reads this array — of
+ * which it is itself an element; the thunk defers the read past its
+ * construction.
+ */
+const agentsCommand: Command = makeAgentsCommand(() => COMMANDS.map((c) => c.spec.name));
+
 /** Every subcommand, in help order. */
 export const COMMANDS: readonly Command[] = [
   nodesCommand,
@@ -2185,4 +2193,5 @@ export const COMMANDS: readonly Command[] = [
   runCommand,
   inspectCommand,
   renderCommand,
+  agentsCommand,
 ];
