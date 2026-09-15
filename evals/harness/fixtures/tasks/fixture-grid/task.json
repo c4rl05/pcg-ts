@@ -1,0 +1,13 @@
+{
+  "id": "fixture-grid",
+  "tier": "corpus-adjacent",
+  "title": "Harness fixture: a 5 x 5 square of points",
+  "outputs": [{ "name": "points", "kind": "geometry" }],
+  "seeds": [1, 2],
+  "budgets": { "turns": 20, "wallMinutes": 5 },
+  "checks": [
+    { "id": "count", "hard": true, "description": "exactly 25 points" },
+    { "id": "square", "hard": true, "description": "the points span an equal extent on X and Z" },
+    { "id": "unit-spacing", "hard": false, "description": "the extent is 4 units on each axis" }
+  ]
+}

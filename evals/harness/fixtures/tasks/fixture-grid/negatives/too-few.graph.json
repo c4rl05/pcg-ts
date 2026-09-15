@@ -1,0 +1,1 @@
+{ "formatVersion": 1, "seed": 1, "nodes": [ { "id": "grid", "type": "pointGrid", "params": { "countX": 4, "countZ": 4 } } ], "connections": [], "outputs": [ { "id": "grid", "pin": "out", "name": "points" } ] }
