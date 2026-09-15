@@ -1,0 +1,25 @@
+{
+  "formatVersion": 1,
+  "seed": 51007,
+  "meta": {
+    "title": "settlement-roads reference",
+    "description": "Settlements scattered over a 400 m square and thinned to 25 m apart; the road network joins them with the lune test (relativeNeighborhood), a subgraph of the Delaunay edges, so it is planar, and it contains a minimum spanning tree, so it is connected once the reach covers the whole square."
+  },
+  "nodes": [
+    {
+      "id": "candidates",
+      "type": "pointScatterInBounds",
+      "params": { "count": 56, "boundsMin": [-190, 0, -190], "boundsMax": [190, 0, 190] }
+    },
+    { "id": "settlements", "type": "selfPrune", "params": { "minDistance": 25 } },
+    { "id": "roads", "type": "connectPoints", "params": { "mode": "relativeNeighborhood", "radius": 600 } }
+  ],
+  "connections": [
+    { "from": ["candidates", "out"], "to": ["settlements", "in"] },
+    { "from": ["settlements", "out"], "to": ["roads", "in"] }
+  ],
+  "outputs": [
+    { "id": "settlements", "pin": "out", "name": "settlements" },
+    { "id": "roads", "pin": "out", "name": "roads" }
+  ]
+}

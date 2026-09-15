@@ -1,0 +1,29 @@
+{
+  "formatVersion": 1,
+  "seed": 20260915,
+  "meta": {
+    "title": "Even spacing (negative: a 5 m grid of 400 jittered up to 2.4 m to look natural, with no spacing rule)"
+  },
+  "nodes": [
+    {
+      "id": "grid",
+      "type": "pointGrid",
+      "params": { "countX": 20, "countY": 1, "countZ": 20, "spacing": [5, 1, 5], "origin": [-47.5, 0, -47.5] }
+    },
+    {
+      "id": "jitter",
+      "type": "jitterPoints",
+      "params": { "amount": [2.4, 0, 2.4] }
+    },
+    {
+      "id": "markers",
+      "type": "spawnInstances",
+      "params": { "assetId": "marker" }
+    }
+  ],
+  "connections": [
+    { "from": ["grid", "out"], "to": ["jitter", "in"] },
+    { "from": ["jitter", "out"], "to": ["markers", "in"] }
+  ],
+  "outputs": [{ "id": "markers", "pin": "instances", "name": "markers" }]
+}

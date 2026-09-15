@@ -12,11 +12,12 @@
   "seeds": [20260816, 1, 2],
   "budgets": { "turns": 90, "wallMinutes": 45 },
   "checks": [
-    { "id": "river-runs-through", "hard": true, "description": "The river output is a polyline that crosses at least 80% of the ground's extent along one axis." },
-    { "id": "tree-density-rises", "hard": true, "description": "Trees per unit area, over four equal-area bands of distance from the TRUE river polyline (the planted region: ground footprint clipped to the trees' extent, from the nearest tree's distance outward), rise away from the water: the nearest band is non-empty, the farthest holds at least 1.25x its density, and no band falls below 0.85x the band nearer the water." },
-    { "id": "tree-scale-rises", "hard": true, "description": "Mean tree scale over the same bands rises away from the water: farthest at least 1.3x nearest, no band below 0.95x the band nearer the water." },
-    { "id": "tree-clearance", "hard": true, "description": "No tree stands within 2 m of the river line (the water the contract states)." },
-    { "id": "driftwood-on-bank", "hard": true, "description": "At least 10 pieces of driftwood, and at least 90% of them lie 1-8 m from the river line." },
-    { "id": "driftwood-follows-course", "hard": true, "description": "Driftwood within 25 m of the river line reaches at least 8 of 10 equal stretches of the river's length over the ground." }
+    { "id": "river-runs-through", "hard": true, "description": "The river output is one or more open polylines (none ends at its own first point, by index or within 2 m) that, inside the ground's bounding rectangle, span at least 80% of its width or depth." },
+    { "id": "trees-thin-by-the-water", "hard": true, "description": "At least 100 trees; over ground within 10 m of some tree, the tree density 2-12 m from the river polyline is between 10% and 60% of the density more than 30 m from it." },
+    { "id": "trees-smaller-by-the-water", "hard": true, "description": "Trees 2-12 m from the river polyline average at most 70% of the size (mean instance scale) of trees more than 30 m from it." },
+    { "id": "tree-clearance", "hard": true, "description": "No tree stands within 2 m of the river polyline (the water)." },
+    { "id": "trees-on-ground", "hard": true, "description": "At least 99% of trees have their base within 0.5 m of the ground under them (the ground mesh, or the nearest ground point when it has no triangles)." },
+    { "id": "driftwood-on-bank", "hard": true, "description": "At least 10 pieces of driftwood, and at least 90% of them lie 2-8 m from the river polyline with their origin within 0.5 m of the ground under them." },
+    { "id": "driftwood-follows-course", "hard": true, "description": "The river's parts with ground within 4 m of them (the ground mesh, or its bounding rectangle when it has no triangles), joined in order, cut into 10 equal stretches: driftwood within 25 m of those parts, each assigned to its nearest stretch, reaches at least 8 of them." }
   ]
 }

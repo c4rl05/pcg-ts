@@ -1,0 +1,25 @@
+{
+  "formatVersion": 1,
+  "seed": 51007,
+  "meta": {
+    "title": "settlement-roads negative: every pair within reach",
+    "description": "The reference settlements, joined by a road between EVERY pair closer than 150 m. Connected and made of clean 2-point roads, but long links pass over one another: fails only 'no-crossings'."
+  },
+  "nodes": [
+    {
+      "id": "candidates",
+      "type": "pointScatterInBounds",
+      "params": { "count": 56, "boundsMin": [-190, 0, -190], "boundsMax": [190, 0, 190] }
+    },
+    { "id": "settlements", "type": "selfPrune", "params": { "minDistance": 25 } },
+    { "id": "roads", "type": "connectPoints", "params": { "mode": "radius", "radius": 150 } }
+  ],
+  "connections": [
+    { "from": ["candidates", "out"], "to": ["settlements", "in"] },
+    { "from": ["settlements", "out"], "to": ["roads", "in"] }
+  ],
+  "outputs": [
+    { "id": "settlements", "pin": "out", "name": "settlements" },
+    { "id": "roads", "pin": "out", "name": "roads" }
+  ]
+}

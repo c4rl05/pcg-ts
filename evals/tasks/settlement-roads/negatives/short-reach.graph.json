@@ -1,0 +1,25 @@
+{
+  "formatVersion": 1,
+  "seed": 51007,
+  "meta": {
+    "title": "settlement-roads negative: the reach is too short",
+    "description": "The reference, but the network's reach is left at 60 m, shorter than some of the links a spanning network over these settlements needs. Planar and made of clean 2-point roads, but outlying settlements are cut off: fails only 'connected'."
+  },
+  "nodes": [
+    {
+      "id": "candidates",
+      "type": "pointScatterInBounds",
+      "params": { "count": 56, "boundsMin": [-190, 0, -190], "boundsMax": [190, 0, 190] }
+    },
+    { "id": "settlements", "type": "selfPrune", "params": { "minDistance": 25 } },
+    { "id": "roads", "type": "connectPoints", "params": { "mode": "relativeNeighborhood", "radius": 60 } }
+  ],
+  "connections": [
+    { "from": ["candidates", "out"], "to": ["settlements", "in"] },
+    { "from": ["settlements", "out"], "to": ["roads", "in"] }
+  ],
+  "outputs": [
+    { "id": "settlements", "pin": "out", "name": "settlements" },
+    { "id": "roads", "pin": "out", "name": "roads" }
+  ]
+}

@@ -2,7 +2,8 @@
   "formatVersion": 1,
   "seed": 20260816,
   "meta": {
-    "title": "Riverbank (reference)"
+    "title": "Riverbank (reference)",
+    "description": "graphs/examples-riverbank.json with one edit: driftThin also keeps only river samples with |x| <= 73, because the river runs 3 m past the 150 m ground and the original laid driftwood over nothing there."
   },
   "nodes": [
     {
@@ -311,13 +312,38 @@
       "type": "filterByExpression",
       "params": {
         "predicate": {
-          "fn": "lt",
+          "fn": "mul",
           "args": [
             {
-              "fn": "randomField",
-              "key": "drift"
+              "fn": "lt",
+              "args": [
+                {
+                  "fn": "randomField",
+                  "key": "drift"
+                },
+                0.55
+              ]
             },
-            0.55
+            {
+              "fn": "le",
+              "args": [
+                {
+                  "fn": "abs",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "position"
+                        }
+                      ],
+                      "index": 0
+                    }
+                  ]
+                },
+                73
+              ]
+            }
           ]
         },
         "seed": 9

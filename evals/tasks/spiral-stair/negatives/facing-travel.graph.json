@@ -1,0 +1,200 @@
+{
+  "formatVersion": 1,
+  "seed": 20260916,
+  "meta": {
+    "title": "Spiral stair (negative: treads turned to face along the direction of travel)"
+  },
+  "nodes": [
+    {
+      "id": "stations",
+      "type": "pointLine",
+      "params": {
+        "mode": "endpoints",
+        "count": 24,
+        "start": [
+          0,
+          0,
+          0
+        ],
+        "end": [
+          1,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "helix",
+      "type": "setAttribute",
+      "params": {
+        "name": "P",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "mul",
+              "args": [
+                3,
+                {
+                  "fn": "cos",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "index"
+                        },
+                        0.2617993877991494
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "index"
+                },
+                0.2
+              ]
+            },
+            {
+              "fn": "mul",
+              "args": [
+                3,
+                {
+                  "fn": "sin",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "index"
+                        },
+                        0.2617993877991494
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "facing",
+      "type": "setAttribute",
+      "params": {
+        "name": "rot",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 4,
+        "value": {
+          "fn": "vec",
+          "args": [
+            0,
+            {
+              "fn": "mul",
+              "args": [
+                -1,
+                {
+                  "fn": "sin",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "index"
+                            },
+                            0.1308996938995747
+                          ]
+                        },
+                        0.7853981633974483
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            0,
+            {
+              "fn": "cos",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "index"
+                        },
+                        0.1308996938995747
+                      ]
+                    },
+                    0.7853981633974483
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "steps",
+      "type": "spawnInstances",
+      "params": {
+        "assetId": "tread"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": [
+        "stations",
+        "out"
+      ],
+      "to": [
+        "helix",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "helix",
+        "out"
+      ],
+      "to": [
+        "facing",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "facing",
+        "out"
+      ],
+      "to": [
+        "steps",
+        "in"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "id": "steps",
+      "pin": "instances",
+      "name": "steps"
+    }
+  ]
+}

@@ -94,6 +94,7 @@ export class PolylineIndex {
   constructor(lines, { planar = true } = {}) {
     this.planar = planar;
     const segs = [];
+    let firstDegenerate = null;
     let arcBase = 0;
     lines.forEach((line, lineIndex) => {
       const xyz = line.xyz ?? line;
@@ -106,11 +107,20 @@ export class PolylineIndex {
         const by = planar ? 0 : xyz[i + 1];
         const bz = xyz[i + 2];
         const len = Math.hypot(bx - ax, by - ay, bz - az);
-        segs.push({ ax, ay, az, bx, by, bz, len, arc, lineIndex, globalArc: arcBase + arc });
+        const seg = { ax, ay, az, bx, by, bz, len, arc, lineIndex, globalArc: arcBase + arc };
+        // A repeated vertex adds nothing to the line and has no tangent; a
+        // query tying on it would read side 0. Kept only if the whole index
+        // would otherwise be empty (every line collapsed to a point).
+        if (len <= EPS) {
+          if (firstDegenerate === null) firstDegenerate = seg;
+          continue;
+        }
+        segs.push(seg);
         arc += len;
       }
       arcBase += arc;
     });
+    if (segs.length === 0 && firstDegenerate !== null) segs.push(firstDegenerate);
     this.segments = segs;
     this.totalLength = arcBase;
   }
@@ -193,20 +203,62 @@ function hashGrid(xyz, cell, planar) {
 export function nearestNeighbourDistances(xyz, { planar = true } = {}) {
   const n = xyz.length / 3;
   const out = new Float64Array(n).fill(Infinity);
-  if (n < 2) return out;
-  const b = bounds(xyz);
+  // A point with a non-finite coordinate has no meaningful neighbour: it
+  // reports NaN, stays out of everyone else's search, and so makes
+  // minPairDistance NaN — which fails any `>=` threshold instead of
+  // passing it the way an Infinity would.
+  const finite = [];
+  for (let i = 0; i < n; i++) {
+    if (Number.isFinite(xyz[i * 3]) && Number.isFinite(xyz[i * 3 + 1]) && Number.isFinite(xyz[i * 3 + 2])) finite.push(i);
+    else out[i] = NaN;
+  }
+  if (finite.length < 2) return out;
+  const fxyz = new Float64Array(finite.length * 3);
+  finite.forEach((i, k) => {
+    fxyz[k * 3] = xyz[i * 3];
+    fxyz[k * 3 + 1] = xyz[i * 3 + 1];
+    fxyz[k * 3 + 2] = xyz[i * 3 + 2];
+  });
+  const nf = finite.length;
+  const b = bounds(fxyz);
   const spanX = b.max[0] - b.min[0];
   const spanZ = b.max[2] - b.min[2];
   const spanY = planar ? 0 : b.max[1] - b.min[1];
+  const maxSpan = Math.max(spanX, spanY, spanZ);
   const dims = [spanX, spanY, spanZ].filter((s) => s > EPS);
   const volume = dims.reduce((a, s) => a * s, 1);
-  const cell = Math.max(dims.length === 0 ? 1 : Math.pow(volume / n, 1 / Math.max(1, dims.length)), 1e-6);
-  const grid = hashGrid(xyz, cell, planar);
-  const maxRing = Math.ceil(Math.max(spanX, spanY, spanZ, cell) / cell) + 1;
-  for (let i = 0; i < n; i++) {
-    const x = xyz[i * 3];
-    const y = planar ? 0 : xyz[i * 3 + 1];
-    const z = xyz[i * 3 + 2];
+  // Size cells from the occupied volume, but never below the spacing the
+  // points would have strung along the longest axis: a thin row (a road of
+  // points with float-rounding jitter across it) otherwise gets cells far
+  // smaller than its spacing and the ring search walks millions of empties.
+  const cell = Math.max(
+    dims.length === 0 ? 1 : Math.pow(volume / nf, 1 / dims.length),
+    maxSpan / nf,
+    1e-9,
+  );
+  const grid = hashGrid(fxyz, cell, planar);
+  const dim = planar ? 2 : 3;
+  const maxRing = Math.ceil(Math.max(maxSpan, cell) / cell) + 1;
+  const brute = (k) => {
+    let best = Infinity;
+    const x = fxyz[k * 3];
+    const y = planar ? 0 : fxyz[k * 3 + 1];
+    const z = fxyz[k * 3 + 2];
+    for (let j = 0; j < nf; j++) {
+      if (j === k) continue;
+      const ex = fxyz[j * 3] - x;
+      const ey = planar ? 0 : fxyz[j * 3 + 1] - y;
+      const ez = fxyz[j * 3 + 2] - z;
+      const d2 = ex * ex + ey * ey + ez * ez;
+      if (d2 < best) best = d2;
+    }
+    return best;
+  };
+  for (let k = 0; k < nf; k++) {
+    const i = finite[k];
+    const x = fxyz[k * 3];
+    const y = planar ? 0 : fxyz[k * 3 + 1];
+    const z = fxyz[k * 3 + 2];
     const gx = Math.floor(x / cell);
     const gy = planar ? 0 : Math.floor(y / cell);
     const gz = Math.floor(z / cell);
@@ -214,6 +266,12 @@ export function nearestNeighbourDistances(xyz, { planar = true } = {}) {
     for (let r = 0; r <= maxRing; r++) {
       // Every point in ring r is at least (r - 1) * cell away.
       if (r > 0 && (r - 1) * cell > Math.sqrt(best)) break;
+      // A ring wider than the whole occupied grid costs more to walk than
+      // every point does: finish this point by brute force instead.
+      if (Math.pow(2 * r + 1, dim) > 4 * grid.size + 64) {
+        best = Math.min(best, brute(k));
+        break;
+      }
       const yr = planar ? 0 : r;
       for (let dx = -r; dx <= r; dx++) {
         for (let dy = -yr; dy <= yr; dy++) {
@@ -222,10 +280,10 @@ export function nearestNeighbourDistances(xyz, { planar = true } = {}) {
             const list = grid.get(`${gx + dx},${gy + dy},${gz + dz}`);
             if (list === undefined) continue;
             for (const j of list) {
-              if (j === i) continue;
-              const ex = xyz[j * 3] - x;
-              const ey = planar ? 0 : xyz[j * 3 + 1] - y;
-              const ez = xyz[j * 3 + 2] - z;
+              if (j === k) continue;
+              const ex = fxyz[j * 3] - x;
+              const ey = planar ? 0 : fxyz[j * 3 + 1] - y;
+              const ez = fxyz[j * 3 + 2] - z;
               const d2 = ex * ex + ey * ey + ez * ez;
               if (d2 < best) best = d2;
             }
@@ -238,10 +296,16 @@ export function nearestNeighbourDistances(xyz, { planar = true } = {}) {
   return out;
 }
 
-/** The smallest distance between any two points (Infinity for fewer than two). */
+/**
+ * The smallest distance between any two points (Infinity for fewer than
+ * two; NaN when any point has a non-finite coordinate).
+ */
 export function minPairDistance(xyz, opts) {
   let m = Infinity;
-  for (const d of nearestNeighbourDistances(xyz, opts)) if (d < m) m = d;
+  for (const d of nearestNeighbourDistances(xyz, opts)) {
+    if (Number.isNaN(d)) return NaN;
+    if (d < m) m = d;
+  }
   return m;
 }
 
@@ -292,67 +356,71 @@ function orient(ax, az, bx, bz, cx, cz) {
   return (bx - ax) * (cz - az) - (bz - az) * (cx - ax);
 }
 
-function onSegment(ax, az, bx, bz, px, pz, eps) {
-  return (
-    Math.min(ax, bx) - eps <= px &&
-    px <= Math.max(ax, bx) + eps &&
-    Math.min(az, bz) - eps <= pz &&
-    pz <= Math.max(az, bz) + eps
-  );
+/** Planar distance from point p to segment uv (all `[x, z]`). */
+function pointSegmentDistance(p, u, v) {
+  const ex = v[0] - u[0];
+  const ez = v[1] - u[1];
+  const l2 = ex * ex + ez * ez;
+  let t = l2 > 0 ? ((p[0] - u[0]) * ex + (p[1] - u[1]) * ez) / l2 : 0;
+  t = Math.min(1, Math.max(0, t));
+  return Math.hypot(p[0] - (u[0] + ex * t), p[1] - (u[1] + ez * t));
 }
 
 /**
  * Do segments AB and CD intersect anywhere other than at an endpoint they
  * SHARE? Coordinates are XZ pairs `[x, z]`. Two segments meeting at a
  * common endpoint do not cross; a T-junction (an endpoint on the other's
- * interior), a proper crossing and a collinear overlap all do.
- * `eps` is the distance under which two endpoints count as shared.
+ * interior), a proper crossing and a collinear overlap all do. `eps` is a
+ * DISTANCE: two endpoints closer than it are shared, and an endpoint closer
+ * than it to the other segment lies on it. A segment shorter than `eps` is
+ * a point: it crosses only by lying on the other segment's interior, so a
+ * duplicated vertex at a junction is not a crossing.
  */
 export function segmentsCross(a, b, c, d, eps = 1e-6) {
-  const same = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]) <= eps;
-  const shared = [
-    [a, c],
-    [a, d],
-    [b, c],
-    [b, d],
-  ].filter(([p, q]) => same(p, q)).length;
-  if (shared >= 2) return true; // the same segment twice overlaps itself
-  const lenAB = Math.hypot(b[0] - a[0], b[1] - a[1]);
-  const lenCD = Math.hypot(d[0] - c[0], d[1] - c[1]);
-  const tol = eps * Math.max(1, lenAB, lenCD);
-  const o1 = orient(a[0], a[1], b[0], b[1], c[0], c[1]);
-  const o2 = orient(a[0], a[1], b[0], b[1], d[0], d[1]);
-  const o3 = orient(c[0], c[1], d[0], d[1], a[0], a[1]);
-  const o4 = orient(c[0], c[1], d[0], d[1], b[0], b[1]);
-  const s = (v) => (Math.abs(v) <= tol ? 0 : Math.sign(v));
-  const s1 = s(o1);
-  const s2 = s(o2);
-  const s3 = s(o3);
-  const s4 = s(o4);
-  if (shared === 1) {
+  const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+  const same = (p, q) => dist(p, q) <= eps;
+  const lenAB = dist(a, b);
+  const lenCD = dist(c, d);
+  const onInterior = (p, u, v) => pointSegmentDistance(p, u, v) <= eps && !same(p, u) && !same(p, v);
+  if (lenAB <= eps && lenCD <= eps) return false;
+  if (lenAB <= eps) return onInterior(a, c, d);
+  if (lenCD <= eps) return onInterior(c, a, b);
+  if ((same(a, c) && same(b, d)) || (same(a, d) && same(b, c))) return true; // the same segment twice
+
+  // Signed distance of each endpoint from the other segment's line.
+  const s = (v, len) => (Math.abs(v / len) <= eps ? 0 : Math.sign(v));
+  const s1 = s(orient(a[0], a[1], b[0], b[1], c[0], c[1]), lenAB);
+  const s2 = s(orient(a[0], a[1], b[0], b[1], d[0], d[1]), lenAB);
+  const s3 = s(orient(c[0], c[1], d[0], d[1], a[0], a[1]), lenCD);
+  const s4 = s(orient(c[0], c[1], d[0], d[1], b[0], b[1]), lenCD);
+
+  const pairs = [
+    [a, c, b, d],
+    [a, d, b, c],
+    [b, c, a, d],
+    [b, d, a, c],
+  ];
+  const shared = pairs.find(([p, q]) => same(p, q));
+  if (shared !== undefined) {
     // Touching at the shared endpoint is fine; only a collinear overlap
     // running along both segments from that endpoint is a crossing.
-    if (s1 === 0 && s2 === 0) {
-      const [p, q1, q2] = same(a, c)
-        ? [a, b, d]
-        : same(a, d)
-          ? [a, b, c]
-          : same(b, c)
-            ? [b, a, d]
-            : [b, a, c];
-      const dot = (q1[0] - p[0]) * (q2[0] - p[0]) + (q1[1] - p[1]) * (q2[1] - p[1]);
-      return dot > 0;
+    // Collinear is judged from BOTH lines, so swapping the two segments
+    // cannot change the verdict inside the eps band.
+    if ((s1 === 0 && s2 === 0) || (s3 === 0 && s4 === 0)) {
+      const [p, , q1, q2] = shared;
+      return (q1[0] - p[0]) * (q2[0] - p[0]) + (q1[1] - p[1]) * (q2[1] - p[1]) > 0;
     }
     return false;
   }
   if (s1 * s2 < 0 && s3 * s4 < 0) return true;
-  // An endpoint lying on the other segment: a T-junction, or (all four
-  // zero) a collinear overlap, which one of these four also catches.
-  if (s1 === 0 && onSegment(a[0], a[1], b[0], b[1], c[0], c[1], eps)) return true;
-  if (s2 === 0 && onSegment(a[0], a[1], b[0], b[1], d[0], d[1], eps)) return true;
-  if (s3 === 0 && onSegment(c[0], c[1], d[0], d[1], a[0], a[1], eps)) return true;
-  if (s4 === 0 && onSegment(c[0], c[1], d[0], d[1], b[0], b[1], eps)) return true;
-  return false;
+  // An endpoint lying on the other segment: a T-junction, or a collinear
+  // overlap (some endpoint of one then lies on the other).
+  return (
+    pointSegmentDistance(c, a, b) <= eps ||
+    pointSegmentDistance(d, a, b) <= eps ||
+    pointSegmentDistance(a, c, d) <= eps ||
+    pointSegmentDistance(b, c, d) <= eps
+  );
 }
 
 /**
@@ -397,7 +465,7 @@ export function connectedComponents(n, edges) {
   };
   const degree = new Int32Array(n);
   for (const [a, b] of edges) {
-    if (a < 0 || b < 0 || a >= n || b >= n) continue;
+    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0 || a >= n || b >= n) continue;
     if (a !== b) {
       degree[a]++;
       degree[b]++;
@@ -546,7 +614,7 @@ export class Surface {
  * holds the eye's height within `maxDistance`. Returns
  * `{ fraction, blocked, rays, hitDistances }` (Infinity for a clear ray).
  */
-export function horizontalOcclusion(eye, cylinders, { maxDistance, rays = 360 } = {}) {
+export function horizontalOcclusion(eye, cylinders, { maxDistance = Infinity, rays = 360 } = {}) {
   const [ex, ey, ez] = eye;
   const relevant = cylinders.filter(
     (c) => c.yMin <= ey && ey <= c.yMax && Math.hypot(c.x - ex, c.z - ez) - c.radius <= maxDistance,

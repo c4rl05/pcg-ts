@@ -1,0 +1,15 @@
+{
+  "id": "even-spacing",
+  "tier": "corpus-adjacent",
+  "tierReason": "graphs/basics-even-spacing.json (scatter then a minimum-spacing prune) and the fill/scatter-even primitive both ship in the installed package and are near-solutions: only the square, the spacing and the candidate count have to change.",
+  "title": "About 400 markers spread evenly over a square, none closer than 4 m",
+  "outputs": [{ "name": "markers", "kind": "instances" }],
+  "seeds": [20260915, 1, 2],
+  "budgets": { "turns": 40, "wallMinutes": 20 },
+  "checks": [
+    { "id": "marker-count", "hard": true, "description": "The markers output holds between 340 and 460 instances inclusive (the brief's 'about 400'). Instances that cannot be read on the CPU (device residency) fail every check." },
+    { "id": "inside-square", "hard": true, "description": "Every marker's instance origin (transform translation) has max(|x|, |z|) <= 50 m and |y| <= 0 m, each with 0.01 m tolerance plus 1e-9 slack; a non-finite coordinate counts as outside or off the ground. Zero markers fails." },
+    { "id": "min-spacing", "hard": true, "description": "The closest pair of marker origins, measured across the ground (XZ), is at least 4 m apart, with 0.001 m tolerance plus 1e-9 slack. Fails with fewer than two markers, with non-finite positions (no finite closest pair), or with more than 50000 markers (not measured)." },
+    { "id": "no-holes", "hard": true, "description": "Cut the square into a 10 x 10 grid of 10 m cells with edges on multiples of 10 m; every cell holds at least one marker origin (markers outside the square's tolerance are ignored; a marker on the far edge counts in the last cell)." }
+  ]
+}

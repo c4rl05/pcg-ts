@@ -1,0 +1,78 @@
+{
+  "formatVersion": 1,
+  "seed": 20260915,
+  "meta": {
+    "title": "Trees on hills (reference)"
+  },
+  "nodes": [
+    {
+      "id": "ground",
+      "type": "meshPrimitive",
+      "params": {
+        "shape": "plane",
+        "orientation": "xz",
+        "size": [200, 0, 200],
+        "center": [0, 0, 0],
+        "subdivisions": [64, 1, 64]
+      }
+    },
+    {
+      "id": "terrain",
+      "type": "subgraph",
+      "ref": { "name": "transform/displace-by-noise" },
+      "params": { "amount": 30, "frequency": 0.02, "variant": 0 }
+    },
+    {
+      "id": "candidates",
+      "type": "surfaceSample",
+      "params": { "count": 5000 }
+    },
+    {
+      "id": "slope",
+      "type": "setAttribute",
+      "params": {
+        "name": "slope",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "sub",
+          "args": [1, { "fn": "component", "args": [{ "fn": "attribute", "name": "normal", "tupleSize": 3 }], "index": 1 }]
+        }
+      }
+    },
+    {
+      "id": "gentle",
+      "type": "filterByAttribute",
+      "params": { "attribute": "slope", "comparison": "le", "value": 0.1254 }
+    },
+    {
+      "id": "size",
+      "type": "setAttribute",
+      "params": {
+        "name": "scale",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": { "fn": "add", "args": [0.7, { "fn": "mul", "args": [{ "fn": "randomField", "key": "size" }, 0.6] }] }
+      }
+    },
+    {
+      "id": "trees",
+      "type": "spawnInstances",
+      "params": { "assetId": "tree" }
+    }
+  ],
+  "connections": [
+    { "from": ["ground", "out"], "to": ["terrain", "in"] },
+    { "from": ["terrain", "out"], "to": ["candidates", "in"] },
+    { "from": ["candidates", "out"], "to": ["slope", "in"] },
+    { "from": ["slope", "out"], "to": ["gentle", "in"] },
+    { "from": ["gentle", "out"], "to": ["size", "in"] },
+    { "from": ["size", "out"], "to": ["trees", "in"] }
+  ],
+  "outputs": [
+    { "id": "terrain", "pin": "out", "name": "terrain" },
+    { "id": "trees", "pin": "instances", "name": "trees" }
+  ]
+}

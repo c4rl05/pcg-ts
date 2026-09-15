@@ -1,0 +1,18 @@
+{
+  "id": "spiral-stair",
+  "tier": "corpus-adjacent",
+  "tierReason": "graphs/basics-spiral-stair.json, shipped inside the installed package, lays treads on a helix from the point index with a yaw quaternion that points local +X away from the axis; the task changes only the count, turn, radius and rise, and asks for instances instead of copied geometry.",
+  "title": "A spiral staircase of level, outward-pointing treads",
+  "reserve": true,
+  "outputs": [{ "name": "steps", "kind": "instances" }],
+  "seeds": [20260916, 1, 2],
+  "budgets": { "turns": 45, "wallMinutes": 25 },
+  "checks": [
+    { "id": "step-count", "hard": true, "description": "Exactly 24 step instances." },
+    { "id": "constant-radius", "hard": true, "description": "Step origins stand a mean 3 +/- 0.1 m from the vertical axis through x = 0, z = 0, with at most 0.05 m between the nearest and farthest." },
+    { "id": "fixed-rise", "hard": true, "description": "Sorted by height, every gap between consecutive steps is 0.2 +/- 0.005 m." },
+    { "id": "fixed-turn", "hard": true, "description": "Sorted by height, every consecutive step is turned 15 +/- 0.25 degrees about the axis from the one below, all in the same direction." },
+    { "id": "treads-point-outward", "hard": true, "description": "Every step's local +X, projected onto the ground plane, is within 3 degrees of the direction from the axis out through that step." },
+    { "id": "treads-level", "hard": true, "description": "Every step's local +Y is within 3 degrees of world up." }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "seed": 20260915,
+  "meta": {
+    "title": "Even spacing (negative: the fill runs to 52 m instead of 50 m, so markers stand past the square's edge)"
+  },
+  "nodes": [
+    {
+      "id": "spread",
+      "type": "subgraph",
+      "params": {
+        "boundsMin": [-52, 0, -52],
+        "boundsMax": [52, 0, 52],
+        "minDistance": 4,
+        "count": 10000
+      },
+      "ref": { "name": "fill/scatter-even" }
+    },
+    {
+      "id": "markers",
+      "type": "spawnInstances",
+      "params": { "assetId": "marker" }
+    }
+  ],
+  "connections": [{ "from": ["spread", "out"], "to": ["markers", "in"] }],
+  "outputs": [{ "id": "markers", "pin": "instances", "name": "markers" }]
+}

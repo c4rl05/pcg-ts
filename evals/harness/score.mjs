@@ -70,6 +70,13 @@ function loadTask(taskDir) {
   if (!Array.isArray(task.seeds) || task.seeds.length === 0) {
     throw new HarnessFault(`task "${task.id}": "seeds" must be a non-empty array`);
   }
+  if (!task.checks.some((c) => c.hard === true)) {
+    // Without one, `solved` would reduce to "it cooked", at any score.
+    throw new HarnessFault(`task "${task.id}" declares no hard check`);
+  }
+  const ids = task.checks.map((c) => c.id);
+  const dup = ids.find((id, i) => ids.indexOf(id) !== i);
+  if (dup !== undefined) throw new HarnessFault(`task "${task.id}" declares check "${dup}" twice`);
   for (const o of task.outputs) {
     if (!OUTPUT_KINDS.has(o.kind)) {
       throw new HarnessFault(
@@ -157,8 +164,13 @@ export async function scoreGraph({ taskDir, graphPath, pcgDir }) {
   }
 
   try {
-    const g = pcg.deserializeGraph(graphJson);
-    const declared = new Set(g.describe().outputs.map((o) => o.name));
+    pcg.deserializeGraph(graphJson);
+    // The declared names are read from the FILE, whose format (formatVersion
+    // 1) the deserialize above has just accepted, rather than from
+    // `Graph.describe()`, whose shape belongs to the arms being compared.
+    const declared = new Set(
+      (Array.isArray(graphJson.outputs) ? graphJson.outputs : []).map((o) => o?.name).filter((n) => typeof n === "string"),
+    );
     const missing = task.outputs.filter((o) => !declared.has(o.name)).map((o) => o.name);
     if (missing.length > 0) {
       note(
@@ -228,26 +240,38 @@ export async function scoreGraph({ taskDir, graphPath, pcgDir }) {
       continue;
     }
 
-    const digestA = digestOutputs(a.outputs);
+    // A digest that throws (an item the CPU cannot read, say) is the
+    // graph's failure, not the harness's: no equality can be established.
+    let digestA;
     try {
-      const b = await cookOnce(seed, {});
-      if (digestOutputs(b.outputs) !== digestA) {
-        deterministicAll = false;
-        note(`seed ${seed}: two identical cooks produced different outputs`);
-      }
+      digestA = digestOutputs(a.outputs);
     } catch (e) {
-      deterministicAll = false;
-      note(`seed ${seed}: second cook failed: ${message(e)}`);
+      note(`seed ${seed}: outputs could not be digested: ${message(e)}`);
     }
-    try {
-      const c = await cookOnce(seed, { budgetMs: 0 });
-      if (digestOutputs(c.outputs) !== digestA) {
-        partitionAll = false;
-        note(`seed ${seed}: the budgetMs 0 cook produced different outputs`);
-      }
-    } catch (e) {
+    if (digestA === undefined) {
+      deterministicAll = false;
       partitionAll = false;
-      note(`seed ${seed}: budgetMs 0 cook failed: ${message(e)}`);
+    } else {
+      try {
+        const b = await cookOnce(seed, {});
+        if (digestOutputs(b.outputs) !== digestA) {
+          deterministicAll = false;
+          note(`seed ${seed}: two identical cooks produced different outputs`);
+        }
+      } catch (e) {
+        deterministicAll = false;
+        note(`seed ${seed}: second cook failed: ${message(e)}`);
+      }
+      try {
+        const c = await cookOnce(seed, { budgetMs: 0 });
+        if (digestOutputs(c.outputs) !== digestA) {
+          partitionAll = false;
+          note(`seed ${seed}: the budgetMs 0 cook produced different outputs`);
+        }
+      } catch (e) {
+        partitionAll = false;
+        note(`seed ${seed}: budgetMs 0 cook failed: ${message(e)}`);
+      }
     }
 
     let results;

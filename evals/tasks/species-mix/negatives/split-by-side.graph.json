@@ -1,0 +1,53 @@
+{
+  "formatVersion": 1,
+  "seed": 20260916,
+  "meta": {
+    "title": "Species mix (negative: all oak on the -x side, birch-heavy on the +x side; right grove-wide shares, not mixed)"
+  },
+  "nodes": [
+    {
+      "id": "grove",
+      "type": "subgraph",
+      "params": {
+        "center": [0, 0, 0],
+        "size": [50, 50, 50],
+        "count": 1910
+      },
+      "ref": { "name": "shape/disc" }
+    },
+    {
+      "id": "species",
+      "type": "setAttribute",
+      "params": {
+        "name": "species",
+        "domain": "point",
+        "type": "string",
+        "values": ["oak", "birch", "pine"],
+        "value": {
+          "fn": "select",
+          "args": [
+            { "fn": "lt", "args": [{ "fn": "component", "args": [{ "fn": "position" }], "index": 0 }, 0] },
+            0,
+            {
+              "fn": "add",
+              "args": [
+                { "fn": "ge", "args": [{ "fn": "randomField", "key": "species" }, 0.2] },
+                { "fn": "ge", "args": [{ "fn": "randomField", "key": "species" }, 0.8] }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "trees",
+      "type": "spawnInstances",
+      "params": { "assetId": "oak", "assetAttr": "species" }
+    }
+  ],
+  "connections": [
+    { "from": ["grove", "out"], "to": ["species", "in"] },
+    { "from": ["species", "out"], "to": ["trees", "in"] }
+  ],
+  "outputs": [{ "id": "trees", "pin": "instances", "name": "grove" }]
+}

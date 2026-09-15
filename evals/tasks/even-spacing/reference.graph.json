@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "seed": 20260915,
+  "meta": {
+    "title": "Even spacing (reference)"
+  },
+  "nodes": [
+    {
+      "id": "spread",
+      "type": "subgraph",
+      "params": {
+        "boundsMin": [-50, 0, -50],
+        "boundsMax": [50, 0, 50],
+        "minDistance": 4,
+        "count": 16000
+      },
+      "ref": { "name": "fill/scatter-even" }
+    },
+    {
+      "id": "markers",
+      "type": "spawnInstances",
+      "params": { "assetId": "marker" }
+    }
+  ],
+  "connections": [{ "from": ["spread", "out"], "to": ["markers", "in"] }],
+  "outputs": [{ "id": "markers", "pin": "instances", "name": "markers" }]
+}

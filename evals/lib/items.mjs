@@ -21,8 +21,18 @@ export function instancesOf(itemOrCollection) {
   const batches = [];
   for (const item of asItems(itemOrCollection)) {
     if (item.kind !== "instances") continue;
-    if (item.residency === "device") throw new Error("device-resident instances cannot be read on the CPU");
-    for (const b of item.batches) batches.push(b);
+    // A device-resident item's `batches` getter throws by design; say so
+    // in terms a check's detail can carry.
+    let list;
+    try {
+      list = item.batches;
+    } catch (e) {
+      throw new Error(`instances are device-resident and cannot be read on the CPU: ${e instanceof Error ? e.message : e}`);
+    }
+    for (const b of list) {
+      if (b.residency === "device") throw new Error("a device-resident instance batch cannot be read on the CPU");
+      batches.push(b);
+    }
   }
   let count = 0;
   for (const b of batches) count += b.count;

@@ -1,0 +1,18 @@
+{
+  "id": "trees-on-hills",
+  "tier": "corpus-adjacent",
+  "tierReason": "graphs/examples-forest.json, shipped inside the installed package, plants a displaced hillside and thins it by slope, and the place/plantable and place/on-surface primitives package the same scatter-and-slope-filter recipe; the task differs only in its stated angle, extent and coverage.",
+  "title": "Trees on the gentle ground of rolling hills",
+  "outputs": [
+    { "name": "terrain", "kind": "geometry" },
+    { "name": "trees", "kind": "instances" }
+  ],
+  "seeds": [20260915, 1, 2],
+  "budgets": { "turns": 70, "wallMinutes": 35 },
+  "checks": [
+    { "id": "terrain-hilly", "hard": true, "description": "Measured on the terrain's GROUND: triangles (polygons fan-triangulated from their first vertex) that are the highest over their own centroid and are not walls (slope > 75 + 1e-6 degrees), so orientation about Y, a closed underside and near-vertical sides do not matter: at least 2 triangles; convex hull of the ground vertices in XZ has narrowest width 150-250 m and widest (diameter) at most 360 m; at least 95% of a grid of XZ points inside that hull (spacing narrowest width / 150) lie under any triangle; ground height range at least 10 m; 10-50% of the ground's projected area on triangles steeper than 30 degrees (> 30 + 1e-6)." },
+    { "id": "trees-on-surface", "hard": true, "description": "EVERY tree (strict, as the brief says) stands over the terrain (highest triangle under its XZ, walls included) with its instance origin within 0.25 m vertically of that surface." },
+    { "id": "trees-on-gentle-ground", "hard": true, "description": "At least 95% of the trees (stated in the brief as 95 in every 100) stand over a terrain triangle (the highest under their XZ, walls included and counted steep) whose slope is at most 30 degrees (+ 1e-6). Trees off the terrain count against." },
+    { "id": "gentle-ground-planted", "hard": true, "description": "World-aligned 10 m squares (edges at multiples of 10 m) spanning the terrain's bounds; a square is gentle when at least 19 of a 5x5 grid of points at its 2 m sub-square centres lie over terrain at most 30 degrees steep; at least two in three gentle squares hold at least one tree (by XZ). Tree outputs that cannot be read on the CPU fail the three tree checks with a detail; terrain-hilly is still measured." }
+  ]
+}

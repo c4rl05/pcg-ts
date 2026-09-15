@@ -78,6 +78,13 @@ test("polyline length and distance", () => {
   // MUST FAIL: a point 3 m away is not within 2.9 m.
   assert.ok(!(idx.distance(5, 0, 3) <= 2.9));
 
+  // A repeated vertex does not make a tie read side 0 (verifier repro).
+  const dup = new PolylineIndex([Float64Array.of(0, 0, 0, 0, 0, 0, 10, 0, 0)]);
+  assert.notEqual(dup.nearest(-1, 0, 1).side, 0);
+  close(dup.totalLength, 10);
+  // A line collapsed to one point still answers distance.
+  close(new PolylineIndex([Float64Array.of(2, 0, 0, 2, 0, 0)]).distance(2, 0, 3), 3);
+
   assert.equal(new PolylineIndex([]).nearest(0, 0, 0), null);
   assert.equal(new PolylineIndex([]).distance(0, 0, 0), Infinity);
 
@@ -119,6 +126,42 @@ test("nearest-neighbour distances match brute force", () => {
   assert.equal(minPairDistance(Float64Array.of(1, 2, 3)), Infinity);
   // MUST FAIL: points 1 m apart do not satisfy a 1.5 m minimum.
   assert.ok(!(minPairDistance(Float64Array.of(0, 0, 0, 1, 0, 0, 5, 0, 0)) >= 1.5));
+
+  // A non-finite coordinate must not turn a spacing check into a pass.
+  const inf = nearestNeighbourDistances(Float64Array.of(0, 0, 0, 0, 0, 0.5, Infinity, 0, 0));
+  close(inf[0], 0.5);
+  close(inf[1], 0.5);
+  assert.ok(Number.isNaN(inf[2]));
+  assert.ok(!(minPairDistance(Float64Array.of(0, 0, 0, 0, 0, 0.5, Infinity, 0, 0)) >= 0.1));
+});
+
+test("nearest-neighbour distances stay fast on thin and outlier layouts", () => {
+  // Verifier repro: a row of 400 points 0.25 m apart with float-rounding
+  // jitter across it took 5.8 s (and minutes at smaller jitter).
+  for (const jitter of [1e-5, 1e-6, 0]) {
+    const n = 400;
+    const xyz = new Float64Array(n * 3);
+    const r = rng(3);
+    for (let i = 0; i < n; i++) {
+      xyz[i * 3] = i * 0.25;
+      xyz[i * 3 + 2] = (r() - 0.5) * jitter;
+    }
+    const t0 = Date.now();
+    const d = nearestNeighbourDistances(xyz);
+    assert.ok(Date.now() - t0 < 500, `jitter ${jitter}: ${Date.now() - t0} ms`);
+    close(Math.min(...d), 0.25, 1e-4);
+  }
+  const out = new Float64Array(401 * 3);
+  const r = rng(5);
+  for (let i = 0; i < 400; i++) {
+    out[i * 3] = r() * 20;
+    out[i * 3 + 2] = r() * 20;
+  }
+  out[400 * 3] = 1e6; // one far outlier
+  const t0 = Date.now();
+  const d = nearestNeighbourDistances(out);
+  assert.ok(Date.now() - t0 < 1000, `outlier: ${Date.now() - t0} ms`);
+  assert.ok(d[400] > 9.99e5);
 });
 
 test("matchPoints", () => {
@@ -141,6 +184,30 @@ test("segment crossings", () => {
   assert.equal(X([0, 0], [10, 0], [2, 0], [8, 0]), true, "collinear, contained");
   assert.equal(X([0, 0], [10, 0], [0, 0], [10, 0]), true, "the same segment twice");
   assert.equal(X([0, 0], [10, 0], [5, 0.5], [5, 7]), false, "near miss above");
+
+  // Degenerate segments (verifier repro): a zero-length piece at a shared
+  // endpoint is a duplicated vertex, not a crossing...
+  assert.equal(X([0, 0], [10, 0], [10, 0], [10, 0]), false, "zero-length at the endpoint");
+  assert.equal(segmentsCross([0, 0], [10, 0], [10, 0], [10.00005, 0], 1e-4), false, "sub-eps piece at the endpoint");
+  assert.equal(findCrossings([[[0, 0], [10, 0]], [[10, 0], [10.00005, 0]], [[10.00005, 0], [20, 5]]], { eps: 1e-4 }).count, 0);
+  // ...but a point-like piece in the middle of another segment is a junction there.
+  assert.equal(X([0, 0], [10, 0], [5, 0], [5, 0]), true, "zero-length on the interior");
+  assert.equal(X([0, 0], [0, 0], [3, 3], [3, 3]), false, "two points");
+  // The tolerance is a distance whatever the segment lengths: a 3.5e-4 gap
+  // off a long segment is not touching at eps 1e-6.
+  assert.equal(X([0, 0], [1000, 0], [500, 0.00035], [500, 7]), false, "long segment, small gap");
+  assert.equal(segmentsCross([0, 0], [1000, 0], [500, 0.00035], [500, 7], 1e-3), true, "the same gap within eps");
+  // Symmetric inside the eps band (verifier repro: false one way, true swapped).
+  assert.equal(X([0, 0], [1, 0], [0, 0], [1000, 1e-4]), X([0, 0], [1000, 1e-4], [0, 0], [1, 0]), "swap symmetry");
+  {
+    const r = rng(17);
+    for (let k = 0; k < 20000; k++) {
+      const p = [r() * 2 - 1, r() * 2 - 1];
+      const q = [p[0] + (r() - 0.5) * 1e3, p[1] + (r() - 0.5) * 1e-5];
+      const s = [p[0] + (r() - 0.5) * 2, p[1] + (r() - 0.5) * 1e-5];
+      assert.equal(X(p, q, p, s), X(p, s, p, q), `swap symmetry, case ${k}`);
+    }
+  }
 
   // A lattice's edges meet only at shared corners: no crossings.
   const segs = [];

@@ -1,0 +1,17 @@
+{
+  "id": "species-mix",
+  "tier": "corpus-adjacent",
+  "tierReason": "graphs/basics-spawn-by-species.json (a string attribute chosen per point feeding the spawner's asset attribute) and graphs/basics-quota-rebalance.json (holding a population to a stated mix), plus the shape/disc and write/instances-by-species primitives, all ship in the installed package and together are a near-solution; the stated 60/30/10 mix is not reachable with the four-entry primitive as-is.",
+  "title": "A round grove of about 1500 trees, 60% oak, 30% birch, 10% pine, mixed through each other",
+  "outputs": [{ "name": "grove", "kind": "instances" }],
+  "seeds": [20260916, 1, 2],
+  "budgets": { "turns": 50, "wallMinutes": 25 },
+  "checks": [
+    { "id": "tree-count", "hard": true, "description": "The grove output holds between 1300 and 1700 instances inclusive (the brief's 'about 1500'). Instances that cannot be read on the CPU (device residency) fail every check." },
+    { "id": "species-ids", "hard": true, "description": "The instances carry exactly the asset ids oak, birch and pine: all three present, no other id." },
+    { "id": "species-shares", "hard": true, "description": "Shares are taken over the oak, birch and pine instances only (any other id is ignored here and fails species-ids instead); each named kind's share is within 5 percentage points of its target, inclusive with 1e-9 float slack: oak 60%, birch 30%, pine 10%. No named instance at all fails." },
+    { "id": "inside-grove", "hard": true, "description": "Every tree stands within 50 m of the origin measured across the ground (XZ), with 0.01 m tolerance (plus 1e-9 slack); a non-finite position counts as outside." },
+    { "id": "mixed-through", "hard": true, "description": "Over every unordered pair of trees standing within 5 m of each other across the ground (XZ), the percentage of same-kind pairs exceeds chance for the grove's own mix (the sum over ALL asset ids present of the squared share of all instances) by at most 4 percentage points, inclusive with 1e-9 slack. Fails when no such pair exists, when there are more than 200000 trees, or when more than 5000000 pairs are found (trees piled together). Non-finite positions are skipped." },
+    { "id": "fills-grove", "hard": true, "description": "The trees fill the whole 50 m circle: at least 44% of the trees (inclusive, 1e-9 slack) stand more than 35 m from the origin across the ground, AND every 10 m x 10 m square with edges on multiples of 10 m that lies wholly inside the circle (its farthest corner within 50 m) holds at least one tree." }
+  ]
+}

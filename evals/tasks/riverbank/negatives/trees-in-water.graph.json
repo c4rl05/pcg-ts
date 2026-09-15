@@ -3,7 +3,7 @@
   "seed": 20260816,
   "meta": {
     "title": "riverbank negative: trees-in-water",
-    "description": "The density ramp without its hard floor: trees thin toward the river but a few stand in the water itself."
+    "description": "The reference's thinning, plus one candidate in ten kept in the water itself (within 2 m of the river line)."
   },
   "nodes": [
     {
@@ -158,33 +158,78 @@
       "type": "filterByExpression",
       "params": {
         "predicate": {
-          "fn": "lt",
+          "fn": "max",
           "args": [
             {
-              "fn": "randomField",
-              "key": "thin"
-            },
-            {
-              "fn": "ramp",
+              "fn": "mul",
               "args": [
                 {
-                  "fn": "attribute",
-                  "name": "riverDist"
+                  "fn": "ge",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "riverDist"
+                    },
+                    4.5
+                  ]
+                },
+                {
+                  "fn": "lt",
+                  "args": [
+                    {
+                      "fn": "randomField",
+                      "key": "thin"
+                    },
+                    {
+                      "fn": "ramp",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "riverDist"
+                        }
+                      ],
+                      "stops": [
+                        [
+                          4.5,
+                          0.02
+                        ],
+                        [
+                          14,
+                          0.3
+                        ],
+                        [
+                          34,
+                          1
+                        ]
+                      ]
+                    }
+                  ]
                 }
-              ],
-              "stops": [
-                [
-                  0,
-                  0.12
-                ],
-                [
-                  14,
-                  0.3
-                ],
-                [
-                  34,
-                  1
-                ]
+              ]
+            },
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "lt",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "riverDist"
+                    },
+                    2
+                  ]
+                },
+                {
+                  "fn": "lt",
+                  "args": [
+                    {
+                      "fn": "randomField",
+                      "key": "water"
+                    },
+                    0.1
+                  ]
+                }
               ]
             }
           ]
@@ -297,13 +342,38 @@
       "type": "filterByExpression",
       "params": {
         "predicate": {
-          "fn": "lt",
+          "fn": "mul",
           "args": [
             {
-              "fn": "randomField",
-              "key": "drift"
+              "fn": "lt",
+              "args": [
+                {
+                  "fn": "randomField",
+                  "key": "drift"
+                },
+                0.55
+              ]
             },
-            0.55
+            {
+              "fn": "le",
+              "args": [
+                {
+                  "fn": "abs",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "position"
+                        }
+                      ],
+                      "index": 0
+                    }
+                  ]
+                },
+                73
+              ]
+            }
           ]
         },
         "seed": 9

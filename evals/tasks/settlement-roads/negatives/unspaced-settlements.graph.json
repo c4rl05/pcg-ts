@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "seed": 51007,
+  "meta": {
+    "title": "settlement-roads negative: settlements with no spacing rule",
+    "description": "40 settlements scattered over the square with nothing keeping them apart, joined by the reference's road network. The roads are fine; some settlements stand closer than 25 m: fails only 'settlements'."
+  },
+  "nodes": [
+    {
+      "id": "settlements",
+      "type": "pointScatterInBounds",
+      "params": { "count": 40, "boundsMin": [-190, 0, -190], "boundsMax": [190, 0, 190] }
+    },
+    { "id": "roads", "type": "connectPoints", "params": { "mode": "relativeNeighborhood", "radius": 600 } }
+  ],
+  "connections": [
+    { "from": ["settlements", "out"], "to": ["roads", "in"] }
+  ],
+  "outputs": [
+    { "id": "settlements", "pin": "out", "name": "settlements" },
+    { "id": "roads", "pin": "out", "name": "roads" }
+  ]
+}

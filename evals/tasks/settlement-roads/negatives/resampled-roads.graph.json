@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "seed": 51007,
+  "meta": {
+    "title": "settlement-roads negative: resampled roads",
+    "description": "The reference network, then every road resampled every 10 m into a many-point polyline along the same straight line. Same links, same layout, no crossings, still connected: fails only 'roads-are-segments' (each road must be ONE straight stretch of 2 points)."
+  },
+  "nodes": [
+    {
+      "id": "candidates",
+      "type": "pointScatterInBounds",
+      "params": { "count": 56, "boundsMin": [-190, 0, -190], "boundsMax": [190, 0, 190] }
+    },
+    { "id": "settlements", "type": "selfPrune", "params": { "minDistance": 25 } },
+    { "id": "network", "type": "connectPoints", "params": { "mode": "relativeNeighborhood", "radius": 600 } },
+    { "id": "roads", "type": "pathResample", "params": { "mode": "spacing", "spacing": 10 } }
+  ],
+  "connections": [
+    { "from": ["candidates", "out"], "to": ["settlements", "in"] },
+    { "from": ["settlements", "out"], "to": ["network", "in"] },
+    { "from": ["network", "out"], "to": ["roads", "in"] }
+  ],
+  "outputs": [
+    { "id": "settlements", "pin": "out", "name": "settlements" },
+    { "id": "roads", "pin": "out", "name": "roads" }
+  ]
+}

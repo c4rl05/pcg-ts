@@ -1,0 +1,41 @@
+{
+  "formatVersion": 1,
+  "seed": 20260916,
+  "meta": {
+    "title": "Species mix (negative: 1500 candidates asked of the round scatter, which keeps only about 78.5% of them)"
+  },
+  "nodes": [
+    {
+      "id": "grove",
+      "type": "subgraph",
+      "params": {
+        "center": [0, 0, 0],
+        "size": [50, 50, 50],
+        "count": 1500
+      },
+      "ref": { "name": "shape/disc" }
+    },
+    {
+      "id": "species",
+      "type": "setAttribute",
+      "params": {
+        "name": "species",
+        "domain": "point",
+        "type": "string",
+        "values": ["oak", "birch", "pine"],
+        "weights": [6, 3, 1],
+        "select": { "fn": "randomField", "key": "species" }
+      }
+    },
+    {
+      "id": "trees",
+      "type": "spawnInstances",
+      "params": { "assetId": "oak", "assetAttr": "species" }
+    }
+  ],
+  "connections": [
+    { "from": ["grove", "out"], "to": ["species", "in"] },
+    { "from": ["species", "out"], "to": ["trees", "in"] }
+  ],
+  "outputs": [{ "id": "trees", "pin": "instances", "name": "grove" }]
+}

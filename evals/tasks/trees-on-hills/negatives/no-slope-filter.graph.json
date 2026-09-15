@@ -1,0 +1,57 @@
+{
+  "formatVersion": 1,
+  "seed": 20260915,
+  "meta": {
+    "title": "Trees on hills (negative: trees everywhere, no slope test)"
+  },
+  "nodes": [
+    {
+      "id": "ground",
+      "type": "meshPrimitive",
+      "params": {
+        "shape": "plane",
+        "orientation": "xz",
+        "size": [200, 0, 200],
+        "center": [0, 0, 0],
+        "subdivisions": [64, 1, 64]
+      }
+    },
+    {
+      "id": "terrain",
+      "type": "subgraph",
+      "ref": { "name": "transform/displace-by-noise" },
+      "params": { "amount": 30, "frequency": 0.02, "variant": 0 }
+    },
+    {
+      "id": "candidates",
+      "type": "surfaceSample",
+      "params": { "count": 3400 }
+    },
+    {
+      "id": "size",
+      "type": "setAttribute",
+      "params": {
+        "name": "scale",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": { "fn": "add", "args": [0.7, { "fn": "mul", "args": [{ "fn": "randomField", "key": "size" }, 0.6] }] }
+      }
+    },
+    {
+      "id": "trees",
+      "type": "spawnInstances",
+      "params": { "assetId": "tree" }
+    }
+  ],
+  "connections": [
+    { "from": ["ground", "out"], "to": ["terrain", "in"] },
+    { "from": ["terrain", "out"], "to": ["candidates", "in"] },
+    { "from": ["candidates", "out"], "to": ["size", "in"] },
+    { "from": ["size", "out"], "to": ["trees", "in"] }
+  ],
+  "outputs": [
+    { "id": "terrain", "pin": "out", "name": "terrain" },
+    { "id": "trees", "pin": "instances", "name": "trees" }
+  ]
+}

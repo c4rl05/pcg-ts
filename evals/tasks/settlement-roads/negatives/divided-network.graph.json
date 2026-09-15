@@ -1,0 +1,41 @@
+{
+  "formatVersion": 1,
+  "seed": 51007,
+  "meta": {
+    "title": "settlement-roads negative: no road over the dividing line",
+    "description": "The reference network with every road that runs from the west half (x < 0) to the east half (x >= 0) removed, as a network built half by half would come out. Still planar and made of clean 2-point roads, but the halves cannot reach each other: fails only 'connected'. A settlement whose only roads crossed the line is left with none, so the soft 'every-settlement-has-a-road' may fail too."
+  },
+  "nodes": [
+    {
+      "id": "candidates",
+      "type": "pointScatterInBounds",
+      "params": { "count": 56, "boundsMin": [-190, 0, -190], "boundsMax": [190, 0, 190] }
+    },
+    { "id": "settlements", "type": "selfPrune", "params": { "minDistance": 25 } },
+    {
+      "id": "half",
+      "type": "setAttribute",
+      "params": {
+        "name": "east",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": { "fn": "ge", "args": [{ "fn": "component", "args": [{ "fn": "position" }], "index": 0 }, 0] }
+      }
+    },
+    { "id": "network", "type": "connectPoints", "params": { "mode": "relativeNeighborhood", "radius": 600 } },
+    { "id": "roadHalf", "type": "promoteAttribute", "params": { "name": "east", "from": "point", "to": "primitive", "mode": "average" } },
+    { "id": "roads", "type": "filterPrimitivesByAttribute", "params": { "attribute": "east", "comparison": "ne", "value": 0.5 } }
+  ],
+  "connections": [
+    { "from": ["candidates", "out"], "to": ["settlements", "in"] },
+    { "from": ["settlements", "out"], "to": ["half", "in"] },
+    { "from": ["half", "out"], "to": ["network", "in"] },
+    { "from": ["network", "out"], "to": ["roadHalf", "in"] },
+    { "from": ["roadHalf", "out"], "to": ["roads", "in"] }
+  ],
+  "outputs": [
+    { "id": "settlements", "pin": "out", "name": "settlements" },
+    { "id": "roads", "pin": "out", "name": "roads" }
+  ]
+}

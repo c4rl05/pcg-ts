@@ -1,0 +1,19 @@
+{
+  "id": "settlement-roads",
+  "tier": "corpus-adjacent",
+  "tierReason": "graphs/pipeline-5-roads.json joins district centres into a road network with the lune-test connection mode, and graphs/basics-gabriel-cells.json shows the same connection modes side by side; both ship inside the installed package, so the network half of this task has a near-solution an agent can find.",
+  "title": "Settlements joined by a planar, connected road network",
+  "outputs": [
+    { "name": "settlements", "kind": "geometry" },
+    { "name": "roads", "kind": "geometry" }
+  ],
+  "seeds": [51007, 1, 2],
+  "budgets": { "turns": 60, "wallMinutes": 30 },
+  "checks": [
+    { "id": "settlements", "hard": true, "description": "30-50 settlement points, all inside the 400 m square centred on the origin (+-0.01 m), level at height 0 (+-0.5 m), and no two closer than 25 m (-0.01 m of float slack), spacing measured on the ground plane (X and Z; height ignored)." },
+    { "id": "roads-are-segments", "hard": true, "description": "The roads output holds at least one polyline, and every polyline is exactly 2 points whose two ends each lie within 0.5 m (on the ground plane) of a settlement, and not the same settlement." },
+    { "id": "no-crossings", "hard": true, "description": "Measured on the ground plane (X and Z; height ignored): no two straight pieces of road intersect anywhere except at a settlement they share (road vertices within 0.5 m of a settlement are snapped onto it first); T-junctions, overlaps and the same road laid twice count as intersections, and the result separates duplicates from crossings." },
+    { "id": "connected", "hard": true, "description": "Taking each road as a link between the settlements its two ends lie on, the settlements form exactly one connected group." },
+    { "id": "every-settlement-has-a-road", "hard": false, "description": "Every settlement has at least one road ending at it. Soft: for 2 or more settlements it is implied by connected, so no negative can fail it without failing connected too." }
+  ]
+}

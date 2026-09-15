@@ -1,0 +1,40 @@
+{
+  "formatVersion": 1,
+  "seed": 20260916,
+  "meta": {
+    "title": "Species mix (negative: the three kinds in equal thirds instead of 60/30/10)"
+  },
+  "nodes": [
+    {
+      "id": "grove",
+      "type": "subgraph",
+      "params": {
+        "center": [0, 0, 0],
+        "size": [50, 50, 50],
+        "count": 1910
+      },
+      "ref": { "name": "shape/disc" }
+    },
+    {
+      "id": "species",
+      "type": "setAttribute",
+      "params": {
+        "name": "species",
+        "domain": "point",
+        "type": "string",
+        "values": ["oak", "birch", "pine"],
+        "select": { "fn": "randomField", "key": "species" }
+      }
+    },
+    {
+      "id": "trees",
+      "type": "spawnInstances",
+      "params": { "assetId": "oak", "assetAttr": "species" }
+    }
+  ],
+  "connections": [
+    { "from": ["grove", "out"], "to": ["species", "in"] },
+    { "from": ["species", "out"], "to": ["trees", "in"] }
+  ],
+  "outputs": [{ "id": "trees", "pin": "instances", "name": "grove" }]
+}
