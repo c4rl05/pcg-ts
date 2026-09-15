@@ -142,7 +142,7 @@ describe("cookTarget", () => {
     const graph = new Graph(0);
     graph.add(twoPinNode(), {}, "src");
     expect(() => resolvePin(graph, "src", "c")).toThrow(
-      'node "src" has no output pin "c"; its output pins: a, b',
+      'node "src" has no output pin "c"; did you mean "a" or "b"? its output pins: a, b',
     );
     expect(() => resolvePin(graph, "nope")).toThrow(
       'unknown node "nope"; nodes in this graph: src',

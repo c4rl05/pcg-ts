@@ -192,7 +192,16 @@ pcg render g.json --out g.svg                # the picture
   report says which domain the color came from.
 
 Exit codes are scriptable: `0` did what was asked, `1` a named thing does not
-exist or the run failed, `2` the command line itself was wrong.
+exist or the run failed, `2` the command line itself was wrong, `3` the graph
+document is invalid — not JSON, refused by the loader, or an unconnected
+required pin on the part of the graph the command cooks (`validate --strict`
+also fails on warnings). With `--json`, every failure prints one object on
+stdout, `{ "ok": false, "command", "exitCode", "errors", "warnings" }`; each
+record has a stable `code`, a JSON-pointer `path` into the file where it has
+one, the `nodeId`/`pin`/`param` at fault and `didYouMean` for a misspelled
+name. `validate` reports every fault in the file in one run, so fix them all
+before re-running; `pcg schema diagnostic` prints the record's schema and
+every code.
 
 ## Failure modes
 

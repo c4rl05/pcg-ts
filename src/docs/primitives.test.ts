@@ -257,7 +257,9 @@ describe("the drift check is load-bearing", () => {
     });
     expect(markdown).toContain("`amount` | vec3 |");
     expect(markdown).toContain("jit.amount");
-    expect(markdown).toContain("pcg run test/alpha");
+    // test/alpha's `pts` is a geometry input, so its section wires it
+    // rather than printing a `pcg run` that could not bind it.
+    expect(markdown).toContain('`{"id": "alpha", "type": "subgraph", "ref": {"name": "test/alpha"}');
   });
 
   it("still renders identically twice with entries in it", () => {
@@ -297,6 +299,8 @@ describe("a param with no targets", () => {
       },
     ],
     nodes: 1,
+    wrapper: "subgraph",
+    requiredGeometryInputs: [],
   };
 
   it("says where its value goes instead of leaving the cell blank", () => {
@@ -316,5 +320,115 @@ describe("a param with no targets", () => {
     const row = markdown.split("\n").find((line) => line.startsWith("| `amplitude`"));
     expect(row).toContain("lift.translate");
     expect(row).not.toContain("read it by name");
+  });
+});
+
+/**
+ * The usage line under each section — the markdown twin of
+ * `pcg run <name> --help`'s example.
+ *
+ * `pcg run` cannot bind a GEOMETRY input (`--in` carries value items only;
+ * geometry has no JSON form), so a `Run it: pcg run <name>` line under a
+ * primitive with one prints a command that fails with "no geometry
+ * connected". Hand-built records again, for the reason the block above
+ * gives: they pin the rendering rule, not whatever the registry holds.
+ */
+describe("the usage line", () => {
+  const source: PrimitiveInfo = {
+    name: "test/source",
+    hash: "1".repeat(16),
+    inputs: [{ name: "count", kind: "value" }],
+    outputs: [{ name: "out", kind: "geometry" }],
+    params: [],
+    nodes: 1,
+    wrapper: "subgraph",
+    requiredGeometryInputs: [],
+  };
+
+  const merge: PrimitiveInfo = {
+    name: "test/mergeTwo",
+    hash: "2".repeat(16),
+    // Two geometry inputs around a value one: only the geometry pins need
+    // a connection.
+    inputs: [
+      { name: "a", kind: "geometry" },
+      { name: "weights", kind: "value" },
+      { name: "b", kind: "geometry" },
+    ],
+    outputs: [{ name: "out", kind: "geometry" }],
+    // RECIPE order: `zeta` precedes `alpha`, and the catalog's table sorts
+    // them — the example must still pick `zeta`, as the CLI does, and must
+    // skip the `items` param, which has no inline default worth showing.
+    params: [
+      { name: "list", schema: { type: "items", default: [], description: "Items." }, targets: [] },
+      { name: "zeta", schema: { type: "f32", default: 2, description: "Z." }, targets: [] },
+      { name: "alpha", schema: { type: "f32", default: 1, description: "A." }, targets: [] },
+    ],
+    nodes: 2,
+    wrapper: "forEach",
+    requiredGeometryInputs: ["a", "b"],
+  };
+
+  const sectionOf = (markdown: string, name: string): string => {
+    const start = markdown.indexOf(`## ${name}\n`);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const next = markdown.indexOf("\n## ", start + 1);
+    return markdown.slice(start, next === -1 ? undefined : next);
+  };
+
+  it("keeps `pcg run <name>` for a primitive whose only geometry input is optional", () => {
+    const fill: PrimitiveInfo = {
+      ...source,
+      name: "test/fill",
+      inputs: [{ name: "in", kind: "geometry" }],
+      requiredGeometryInputs: [],
+    };
+    const section = sectionOf(renderPrimitiveCatalog([fill]).markdown, "test/fill");
+    expect(section).toContain("Run it: `pcg run test/fill`");
+    expect(section).not.toContain("Wire it:");
+  });
+
+  it("keeps `pcg run <name>` for a primitive with no geometry input", () => {
+    const section = sectionOf(renderPrimitiveCatalog([source, merge]).markdown, "test/source");
+    expect(section).toContain("Run it: `pcg run test/source`");
+    expect(section).not.toContain("Wire it:");
+  });
+
+  it("wires a geometry-input primitive from a graph instead of printing a failing `pcg run`", () => {
+    const section = sectionOf(renderPrimitiveCatalog([source, merge]).markdown, "test/mergeTwo");
+    expect(section).not.toContain("pcg run test/mergeTwo");
+    expect(section).not.toContain("Run it:");
+    expect(section).toContain(
+      "Wire it: `pcg run` cannot bind its geometry inputs (geometry has no JSON form), so reference it from a graph:",
+    );
+    expect(section).toContain(
+      '- node: `{"id": "merge-two", "type": "forEach", "ref": {"name": "test/mergeTwo"}, "params": {"zeta": 2}}`',
+    );
+    expect(section).toContain('- connection: `{"from": ["<source node>", "out"], "to": ["merge-two", "a"]}`');
+    expect(section).toContain('- connection: `{"from": ["<source node>", "out"], "to": ["merge-two", "b"]}`');
+    expect(section).not.toContain('"weights"]');
+  });
+
+  it("holds across the shipped registry: no required-geometry-input section prints a `pcg run` line", () => {
+    const { markdown } = renderPrimitiveCatalog(AT_LOAD);
+    let wired = 0;
+    for (const info of AT_LOAD) {
+      const section = sectionOf(markdown, info.name);
+      // Every required input is a geometry input the registry reports as such.
+      for (const pin of info.requiredGeometryInputs) {
+        expect(info.inputs.find((p) => p.name === pin)?.kind, `${info.name}.${pin}`).toBe("geometry");
+      }
+      if (info.requiredGeometryInputs.length > 0) {
+        wired++;
+        expect(section, info.name).not.toContain(`pcg run ${info.name}\``);
+        expect(section, info.name).toContain(`"ref": {"name": "${info.name}"}`);
+      } else {
+        expect(section, info.name).toContain(`Run it: \`pcg run ${info.name}\``);
+      }
+    }
+    // Both branches are exercised by what actually ships, not only by the
+    // hand-built records above.
+    expect(wired).toBeGreaterThan(0);
+    expect(wired).toBeLessThan(AT_LOAD.length);
   });
 });

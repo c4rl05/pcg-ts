@@ -46,6 +46,9 @@ const ROOT_SURFACE = [
   // unconnected required pins, unreachable nodes, no outputs, stranded
   // graph-param values. Runs beside the loader, never inside it.
   "diagnoseGraph",
+  // The load and those checks in one call that returns records instead of
+  // throwing: { graph?, errors, warnings }. What `pcg validate` runs.
+  "checkSerializedGraph",
   // A field read an attribute its domain does not carry. A class, not only
   // a code, so a caller can branch with instanceof and read the typed facts
   // (domain, available names, the domains that DO carry it) without parsing.

@@ -1051,6 +1051,14 @@
     font-size: var(--ed-t-body);
     line-height: 1.4;
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+    /* A refused load is one line per fault, newline-joined: keep the
+       breaks, and break a long unspaced token (a JSON pointer, a quoted
+       value) rather than let it run out of the box. `max-content` lets a
+       long line take the 70% above: without it an absolute box at
+       `left: 50%` shrinks to the half of the frame right of its anchor. */
+    width: max-content;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
   }
   /* The two toasts differ by BORDER BRIGHTNESS and by face, not by hue:
      an error is bordered white and set in monospace at a smaller size, an
@@ -1068,6 +1076,9 @@
     color: #ffffff;
     font-family: var(--ed-mono);
     font-size: var(--ed-t-meta);
+    /* Room for a capped list of load faults (five and an "and K more"),
+       which wrap to more than the 110px an acknowledgement needs. */
+    max-height: 35%;
   }
   /* Desktop: the drawer tabs do not exist. This rule must precede the media
      block so the narrow-screen rule wins the cascade at equal specificity. */

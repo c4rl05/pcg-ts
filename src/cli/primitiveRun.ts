@@ -34,6 +34,7 @@ import {
   makeValueItem,
 } from "../index.js";
 import { CliUsageError, parseNumberValue } from "./args.js";
+import { suggestNames } from "../diagnostics/didYouMean.js";
 import { CliError } from "./errors.js";
 import type { CliIo } from "./io.js";
 
@@ -311,8 +312,17 @@ export function parseParamAssignments(
     const value = assignment.slice(eq + 1);
     const schema = byName.get(name);
     if (schema === undefined) {
+      const exposed = schemas.map((p) => p.name);
+      const near = suggestNames(name, exposed);
       throw new CliError(
-        `unknown param "${name}" on primitive "${primitive}"; it exposes: ${paramList(schemas.map((p) => p.name))}`,
+        `unknown param "${name}" on primitive "${primitive}"; ${near.clause}it exposes: ${paramList(exposed)}`,
+        {
+          code: "unknown-param",
+          param: name,
+          got: name,
+          valid: exposed,
+          ...(near.names.length > 0 ? { didYouMean: near.names } : {}),
+        },
       );
     }
     if (name in params) {
@@ -411,6 +421,7 @@ export function readInputBindings(
   } catch (err) {
     throw new CliError(
       `cannot read --in file "${path}": ${err instanceof Error ? err.message : String(err)}`,
+      { code: "file-unreadable", got: path },
     );
   }
   let json: unknown;
@@ -419,6 +430,7 @@ export function readInputBindings(
   } catch (err) {
     throw new CliError(
       `--in "${path}" is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+      { code: "invalid-json" },
     );
   }
   if (!isPlainObject(json)) {

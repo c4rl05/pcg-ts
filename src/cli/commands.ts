@@ -9,6 +9,7 @@ import {
   type DataCollection,
   type DataItem,
   type DescribedGraphParam,
+  type Diagnostic,
   type DescribedSpawner,
   type DescribedSubgraphPin,
   type RegisteredSubgraph,
@@ -27,14 +28,16 @@ import {
   describeSubgraphPins,
   deserializeGraph,
   strandedGraphParamValues,
+  checkSerializedGraph,
   getNodeType,
   getRegisteredSubgraph,
+  hasNodeType,
   inferWrapperKind,
   listFieldFnInfos,
   listNodeTypes,
   listSubgraphs,
 } from "../index.js";
-import { closestNames } from "../diagnostics/suggest.js";
+import { suggestNames } from "../diagnostics/didYouMean.js";
 import {
   type CommandSpec,
   CliUsageError,
@@ -56,7 +59,7 @@ import {
   readUsage,
   usageLines,
 } from "./corpus.js";
-import { CliError } from "./errors.js";
+import { CliError, EXIT_INVALID_GRAPH } from "./errors.js";
 import {
   DEFAULT_BINS,
   type DistributionRequest,
@@ -67,8 +70,18 @@ import {
 } from "./distributions.js";
 import { cookFingerprint } from "./fingerprint.js";
 import { fmtFixed, fmtMs, fmtStat, fmtTuple, plural, table } from "./format.js";
-import { type TargetOptions, cookTarget, loadGraph } from "./graphSource.js";
+import {
+  type LoadedGraph,
+  type TargetOptions,
+  cookTarget,
+  invalidGraphError,
+  loadGraph,
+  readGraphDocument,
+  requireCookable,
+} from "./graphSource.js";
 import type { CliIo } from "./io.js";
+import { type RunContext, diagnosticLine } from "./report.js";
+import { schemaCommand } from "./schemaCommand.js";
 import {
   WRAPPER_NODE_ID,
   buildWrapperGraph,
@@ -107,7 +120,12 @@ export interface CommandOutcome {
 /** A subcommand: its declared surface plus its implementation. */
 export interface Command {
   readonly spec: CommandSpec;
-  run(args: ParsedArgs, io: CliIo): Promise<CommandOutcome>;
+  /**
+   * `ctx` receives the warnings the command's checks found, which `runCli`
+   * prints on stderr and adds to the JSON report. Optional so a test can
+   * call a command directly.
+   */
+  run(args: ParsedArgs, io: CliIo, ctx?: RunContext): Promise<CommandOutcome>;
   /**
    * `--help` text that depends on the arguments, e.g. `pcg run <name>
    * --help` printing that primitive's params. Called only once the line
@@ -141,6 +159,25 @@ const TARGET_FLAGS = {
   pin: { kind: "string", value: "name", description: "output pin on --node (default: its first output pin)" },
   output: { kind: "string", value: "name", description: "read one declared output (default: all of them)" },
 } as const;
+
+/**
+ * Load a graph file for a command that cooks it: every load fault refused
+ * at once (exit 3), then the structural errors on the part `target` will
+ * cook (exit 3), and the warnings handed to `ctx` to be reported beside
+ * whatever the command prints. An error on a node this cook never runs is
+ * left alone — nothing that cooks is refused for a fault it does not reach.
+ */
+function loadCookable(
+  io: CliIo,
+  path: string,
+  target: TargetOptions,
+  ctx: RunContext | undefined,
+): LoadedGraph {
+  const loaded = loadGraph(io, path);
+  requireCookable(loaded, target);
+  if (loaded.warnings.length > 0) ctx?.warn(loaded.warnings);
+  return loaded;
+}
 
 /**
  * Which data the shared `--node`/`--pin`/`--output` flags select.
@@ -189,6 +226,33 @@ function cookOptions(args: ParsedArgs, command: string): CookOptions {
     );
   }
   return budgetMs === undefined ? {} : { budgetMs };
+}
+
+/**
+ * Refuse a bad `--seed` or `--budget` BEFORE the graph file is read, so a
+ * malformed flag is exit 2 whatever state the file is in — the command line
+ * is judged first, and a caller branching on the exit code is never told
+ * "your file" about a mistake in "your flags".
+ */
+function checkCookFlags(args: ParsedArgs, command: string): void {
+  intFlag(args, "seed", command, { min: 0, max: 0xffffffff });
+  cookOptions(args, command);
+}
+
+/**
+ * Write what `--out` names, turning a filesystem refusal into a CLI error
+ * that names the flag and the path (exit 1: the place to write does not
+ * exist or cannot be written) rather than a bare `EEXIST ... mkdir`.
+ */
+function writeOut(outPath: string, write: () => void): void {
+  try {
+    write();
+  } catch (err) {
+    throw new CliError(
+      `cannot write --out "${outPath}": ${err instanceof Error ? err.message : String(err)}; pass a path whose parent directories exist or can be created, and that is not itself a directory`,
+      { got: outPath, key: "--out" },
+    );
+  }
 }
 
 /**
@@ -324,6 +388,31 @@ function corpusFor(io: CliIo, name: string, kind: "node" | "primitive"): CorpusS
   return { lines, json: { examples, ...(usage !== undefined ? { usage } : {}) } };
 }
 
+/** The did-you-mean fields for a record, set only when there is a suggestion. */
+function suggestionFields(names: readonly string[]): { didYouMean?: readonly string[] } {
+  return names.length > 0 ? { didYouMean: names } : {};
+}
+
+/**
+ * A registered node type by name. A miss is refused in the registry's own
+ * words — every registered type — with the nearest names before the list,
+ * because a one-letter slip is hard to spot in sixty names. Suggested,
+ * never substituted.
+ */
+function lookupNodeType(type: string): ReturnType<typeof getNodeType> {
+  if (hasNodeType(type)) return getNodeType(type);
+  const types = listNodeTypes()
+    .map((i) => i.type)
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const near = suggestNames(type, types);
+  throw new CliError(`unknown node type "${type}"; ${near.clause}registered types: ${types.join(", ")}`, {
+    code: "unknown-node-type",
+    got: type,
+    valid: types,
+    ...suggestionFields(near.names),
+  });
+}
+
 const nodesCommand: Command = {
   spec: {
     name: "nodes",
@@ -337,9 +426,7 @@ const nodesCommand: Command = {
   run(args, io) {
     const wanted = args.positional[0];
     if (wanted !== undefined) {
-      // Unknown types raise the registry's own error, which lists every
-      // registered type — the CLI must not paraphrase it.
-      const info = getNodeType(wanted).info;
+      const info = lookupNodeType(wanted).info;
       const corpus = corpusFor(io, wanted, "node");
       return Promise.resolve({
         text: nodeDetailText(info) + "\n" + corpus.lines.join("\n") + "\n",
@@ -421,9 +508,14 @@ const fieldsCommand: Command = {
     if (wanted !== undefined) {
       const info = infos.find((i) => i.fn === wanted);
       if (info === undefined) {
-        throw new CliError(
-          `unknown field fn "${wanted}"; valid fns: ${infos.map((i) => i.fn).join(", ")}`,
-        );
+        const fns = infos.map((i) => i.fn);
+        const near = suggestNames(wanted, fns);
+        throw new CliError(`unknown field fn "${wanted}"; ${near.clause}valid fns: ${fns.join(", ")}`, {
+          code: "unknown-field-fn",
+          got: wanted,
+          valid: fns,
+          ...suggestionFields(near.names),
+        });
       }
       return Promise.resolve({ text: fieldFnDetailText(info), json: info });
     }
@@ -444,28 +536,26 @@ const fieldsCommand: Command = {
 // graphs
 // ---------------------------------------------------------------------------
 
-/** `"a"`, `"a" or "b"`, `"a", "b" or "c"` — the library's did-you-mean spelling. */
-function quotedAlternatives(names: readonly string[]): string {
-  const q = names.map((n) => JSON.stringify(n));
-  return q.length <= 1 ? (q[0] ?? "") : `${q.slice(0, -1).join(", ")} or ${q[q.length - 1]}`;
-}
-
 /**
  * A registered primitive by name. A miss keeps the registry's own message
- * — every registered name, or why there are none — and adds the nearest
- * names as a clause, because a list of forty slash-separated names is a
- * poor place to spot a one-letter slip. The registry now puts its own
- * suggestion before the list; the clause is only added when it did not,
- * so an agent never reads the same suggestion twice.
+ * — every registered name, or why there are none, with the nearest names
+ * before the list, because forty slash-separated names are a poor place to
+ * spot a one-letter slip — and states the same as a record.
  */
 function lookupPrimitive(name: string): RegisteredSubgraph {
   try {
     return getRegisteredSubgraph(name);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const near = closestNames(name, listSubgraphs().map((e) => e.name));
-    if (near.length === 0 || message.includes("did you mean")) throw err;
-    throw new CliError(`${message}; did you mean ${quotedAlternatives(near)}?`);
+    const names = listSubgraphs()
+      .map((e) => e.name)
+      .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    const near = suggestNames(name, names);
+    throw new CliError(err instanceof Error ? err.message : String(err), {
+      code: "unknown-subgraph",
+      got: name,
+      valid: names,
+      ...suggestionFields(near.names),
+    });
   }
 }
 
@@ -496,7 +586,7 @@ const graphsCommand: Command = {
     // Names first, index second: an unknown node type or primitive is the
     // same mistake with or without a readable corpus, and it is reported
     // by the registry that owns the name.
-    if (node !== undefined) getNodeType(node);
+    if (node !== undefined) lookupNodeType(node);
     if (primitive !== undefined) lookupPrimitive(primitive);
 
     const index = readCorpusIndex(io);
@@ -509,10 +599,12 @@ const graphsCommand: Command = {
         a < b ? -1 : a > b ? 1 : 0,
       );
       if (!tags.includes(tag)) {
-        const near = closestNames(tag, tags);
-        throw new CliError(
-          `graphs: unknown tag "${tag}"; tags in the corpus: ${tags.join(", ")}${near.length > 0 ? `; did you mean ${quotedAlternatives(near)}?` : ""}`,
-        );
+        const near = suggestNames(tag, tags);
+        throw new CliError(`graphs: unknown tag "${tag}"; ${near.clause}tags in the corpus: ${tags.join(", ")}`, {
+          got: tag,
+          valid: tags,
+          ...suggestionFields(near.names),
+        });
       }
     }
 
@@ -620,17 +712,39 @@ const validateCommand: Command = {
   spec: {
     name: "validate",
     summary:
-      "Deserialize a graph file and report its structure. Exits nonzero with the library's own message when the graph is invalid. --params lists every addressable param, by the name a panel file or a shared link spells it with.",
+      "Load a graph file, check it, and report its structure. Every fault the loader finds comes back in one run, then the structural checks (unconnected required pins are errors; unreachable nodes, no outputs and stranded values are warnings), each with a JSON pointer into the file; any error exits 3. --strict fails on warnings too. --params lists every addressable param, by the name a panel file or a shared link spells it with.",
     positionals: [GRAPH_ARG],
     flags: {
       params: {
         kind: "boolean",
         description: "list every addressable param, its value and its range",
       },
+      strict: {
+        kind: "boolean",
+        description:
+          "treat every warning as an error: reported under errors with severity error, and the run exits 3",
+      },
     },
   },
   run(args, io) {
-    const { graph, path } = loadGraph(io, args.positional[0]);
+    const doc = readGraphDocument(io, args.positional[0]);
+    const path = doc.path;
+    const report = checkSerializedGraph(doc.json);
+    const strict = boolFlag(args, "strict");
+    if (report.errors.length > 0 || report.graph === undefined) {
+      throw invalidGraphError(path, report.errors, report.warnings);
+    }
+    if (strict && report.warnings.length > 0) {
+      const promoted = report.warnings.map((w) => ({ ...w, severity: "error" as const }));
+      throw invalidGraphError(
+        path,
+        promoted,
+        [],
+        `"${path}" fails --strict: ${plural(promoted.length, "warning")}, each reported as an error`,
+      );
+    }
+    const graph = report.graph;
+    const warnings = report.warnings;
     const description = graph.describe();
     const meta = graph.meta;
     // The DERIVED seed rides along, because it is the number that decides
@@ -644,7 +758,7 @@ const validateCommand: Command = {
       seed: n.seed,
     }));
     const lines = [
-      `ok  ${path}`,
+      `ok  ${path}${warnings.length > 0 ? `  (${plural(warnings.length, "warning")})` : ""}`,
       `seed ${graph.seed}  ${plural(nodes.length, "node")}  ${plural(
         description.connections.length,
         "connection",
@@ -716,12 +830,17 @@ const validateCommand: Command = {
         ),
       );
     }
+    if (warnings.length > 0) {
+      lines.push("", `warnings (${warnings.length}; --strict fails on any):`);
+      lines.push(...warnings.map((w) => `  ${diagnosticLine(w)}`));
+    }
     return Promise.resolve({
       text: lines.join("\n") + "\n",
       json: {
         ok: true,
         path,
         seed: graph.seed,
+        warnings,
         ...(stranded.length > 0 ? { stranded } : {}),
         ...(meta !== undefined ? { meta } : {}),
         nodes,
@@ -981,13 +1100,15 @@ const cookCommand: Command = {
       fingerprint: FINGERPRINT_FLAG,
     },
   },
-  async run(args, io) {
-    const { graph, path } = loadGraph(io, args.positional[0]);
+  async run(args, io, ctx) {
+    checkCookFlags(args, "cook");
+    const { graph, path } = loadCookable(io, args.positional[0], {}, ctx);
     const seed = applySeed(args, "cook", graph);
     const declared = graph.describe().outputs;
     if (declared.length === 0) {
       throw new CliError(
         `"${path}" declares no outputs, so cooking it produces nothing; declare one in the JSON ("outputs": [...]) or inspect a node directly with: pcg inspect ${path} --node <id>`,
+        { code: "no-outputs" },
       );
     }
     const perNode: NodeDoneInfo[] = [];
@@ -1029,7 +1150,7 @@ const cookCommand: Command = {
       lines.push(...perNodeTable(perNode, timings));
     }
     if (outPath !== undefined) {
-      io.writeFile(outPath, JSON.stringify(json, null, 2) + "\n");
+      writeOut(outPath, () => io.writeFile(outPath, JSON.stringify(json, null, 2) + "\n"));
       lines.push("", `wrote ${outPath}`);
     }
     return { text: lines.join("\n") + "\n", json };
@@ -1179,9 +1300,10 @@ const inspectCommand: Command = {
       },
     },
   },
-  async run(args, io) {
-    const { graph, path } = loadGraph(io, args.positional[0]);
-    applySeed(args, "inspect", graph);
+  async run(args, io, ctx) {
+    // Every flag judged before the file is read: a misuse is exit 2 whatever the file holds.
+    const targetOpts = targetOptions(args, "inspect");
+    checkCookFlags(args, "inspect");
     const rows = intFlag(args, "rows", "inspect", { min: 0 }) ?? 5;
     const domainName = stringFlag(args, "domain") ?? "point";
     if (!(DOMAINS as readonly string[]).includes(domainName)) {
@@ -1192,11 +1314,9 @@ const inspectCommand: Command = {
     const domain = domainName as Domain;
     const timings = !boolFlag(args, "no-timings");
     const request = distributionRequest(args);
-    const target = await cookTarget(
-      graph,
-      targetOptions(args, "inspect"),
-      cookOptions(args, "inspect"),
-    );
+    const { graph, path } = loadCookable(io, args.positional[0], targetOpts, ctx);
+    applySeed(args, "inspect", graph);
+    const target = await cookTarget(graph, targetOpts, cookOptions(args, "inspect"));
 
     const items = [...target.collection];
     const summaries = items.map(summarizeItem);
@@ -1312,6 +1432,7 @@ async function runRenderPng(
   io: CliIo,
   outPath: string,
   view: PngView | undefined,
+  ctx: RunContext | undefined,
 ): Promise<CommandOutcome> {
   if (numberFlag(args, "width") !== undefined) {
     throw new CliUsageError(
@@ -1377,9 +1498,10 @@ async function runRenderPng(
     );
   }
 
-  const { graph, path } = loadGraph(io, args.positional[0]);
-  applySeed(args, "render", graph);
   const targetOpts = targetOptions(args, "render");
+  checkCookFlags(args, "render");
+  const { graph, path } = loadCookable(io, args.positional[0], targetOpts, ctx);
+  applySeed(args, "render", graph);
   const target = await cookTarget(graph, targetOpts, cookOptions(args, "render"));
   // The name each item's default colour comes from: the declared output it
   // was read from, or the node a --node read targeted.
@@ -1402,7 +1524,7 @@ async function runRenderPng(
     ...(maxPrimitives !== undefined ? { maxPrimitives } : {}),
     outputs,
   });
-  writeBytes.call(io, outPath, result.png);
+  writeOut(outPath, () => writeBytes.call(io, outPath, result.png));
 
   const comparable = comparableNote(result);
   const c = result.counts;
@@ -1579,7 +1701,7 @@ const renderCommand: Command = {
       },
     },
   },
-  async run(args, io) {
+  async run(args, io, ctx) {
     const outPath = stringFlag(args, "out");
     const format: RenderFormat = outPath === undefined ? "svg" : renderFormat(outPath);
     const view = checkView(stringFlag(args, "view"));
@@ -1590,7 +1712,7 @@ const renderCommand: Command = {
         `render: ${asked.join(", ")} ${asked.length === 1 ? "asks" : "ask"} for PNG frames, and a PNG is binary, so it is never written to stdout; pass --out <file>.png (without --out, render writes the top-down SVG to stdout)`,
       );
     }
-    if (format === "png") return runRenderPng(args, io, outPath as string, view);
+    if (format === "png") return runRenderPng(args, io, outPath as string, view, ctx);
     if (view !== undefined && view !== "top") {
       throw new CliUsageError(
         `render: --view ${view} needs PNG output — the SVG is a flat plan of positions (x right, z down) with no camera or depth to hide what is behind, so the only view it draws is top; write --out <file>.png for side, hero, ground or sheet`,
@@ -1606,13 +1728,9 @@ const renderCommand: Command = {
         "render: --json needs --out <file.svg>, because without it the SVG itself is the output",
       );
     }
-    const { graph, path } = loadGraph(io, args.positional[0]);
-    applySeed(args, "render", graph);
-    const target = await cookTarget(
-      graph,
-      targetOptions(args, "render"),
-      cookOptions(args, "render"),
-    );
+    // Every flag judged before the file is read: a misuse is exit 2 whatever the file holds.
+    const targetOpts = targetOptions(args, "render");
+    checkCookFlags(args, "render");
     const width = intFlag(args, "width", "render", { min: 1 });
     const attr = stringFlag(args, "attr");
     const attrDomainName = stringFlag(args, "attr-domain");
@@ -1634,6 +1752,9 @@ const renderCommand: Command = {
     }
     const maxPoints = intFlag(args, "max-points", "render", { min: 1 });
     const maxPrimitives = intFlag(args, "max-primitives", "render", { min: 1 });
+    const { graph, path } = loadCookable(io, args.positional[0], targetOpts, ctx);
+    applySeed(args, "render", graph);
+    const target = await cookTarget(graph, targetOpts, cookOptions(args, "render"));
     const result = renderSvg(target.collection, {
       ...(width !== undefined ? { width } : {}),
       ...(attr !== undefined ? { attr } : {}),
@@ -1662,7 +1783,7 @@ const renderCommand: Command = {
       ...(result.bounds !== undefined ? { bounds: result.bounds } : {}),
     };
     if (outPath === undefined) return { text: result.svg, json };
-    io.writeFile(outPath, result.svg);
+    writeOut(outPath, () => io.writeFile(outPath, result.svg));
     const truncated =
       result.points < result.pointsTotal ||
       result.primitives < result.primitivesTotal ||
@@ -1791,15 +1912,15 @@ function primitiveHelpText(name: string, io: CliIo): string {
       ]),
     );
   }
-  lines.push("", ...primitiveExample(name, entry, pins?.inputs ?? [], params), "");
+  lines.push("", ...primitiveExample(name, entry, graph, params), "");
   lines.push(...corpusFor(io, name, "primitive").lines);
   return lines.join("\n") + "\n";
 }
 
 /**
  * The help page's `example:` — one that actually runs. A primitive with no
- * geometry input gets a `pcg run` line setting its first plain param to its
- * default. One WITH a geometry input cannot be run that way at all (`--in`
+ * required geometry input gets a `pcg run` line setting its first plain param
+ * to its default. One WITH a required geometry input cannot be run that way at all (`--in`
  * carries value items only; geometry has no JSON form), so it gets the node
  * JSON that references it from a graph instead, plus the connection each
  * geometry input needs — printing a `pcg run` line there would print a
@@ -1808,10 +1929,15 @@ function primitiveHelpText(name: string, io: CliIo): string {
 function primitiveExample(
   name: string,
   entry: RegisteredSubgraph,
-  inputs: readonly DescribedSubgraphPin[],
+  graph: Graph,
   params: readonly { name: string; schema: ParamSchema }[],
 ): string[] {
-  const geometryInputs = inputs.filter((p) => p.kind === "geometry");
+  const state = graph._nodes.get(WRAPPER_NODE_ID);
+  const inputs = state === undefined ? [] : (describeSubgraphPins(state.def)?.inputs ?? []);
+  // Only the geometry inputs a cook NEEDS: an optional one (a box to fill
+  // that defaults to its own bounds) leaves the primitive runnable as is.
+  const optional = new Set(state?.def.inputs.filter((p) => p.optional === true).map((p) => p.name) ?? []);
+  const geometryInputs = inputs.filter((p) => p.kind === "geometry" && !optional.has(p.name));
   if (geometryInputs.length === 0) {
     const example = params
       .map((p) => ({ name: p.name, spelled: paramSpelling(p.schema) }))
@@ -1837,6 +1963,42 @@ function primitiveExample(
         `  connection: ${inlineJson({ from: ["<source node>", "out"], to: [id, p.name] })}`,
     ),
   ];
+}
+
+/**
+ * The refusal for a primitive whose wrapper fails the structural checks —
+ * in practice, one with a required geometry input, which `--in` cannot
+ * bind. Exit 3 like any graph that would throw at cook, and said in the
+ * terms the caller used: the primitive and its pin, not the synthesized
+ * node, with the wiring `pcg run <name> --help` prints as the fix.
+ */
+function unrunnablePrimitive(
+  name: string,
+  entry: RegisteredSubgraph,
+  graph: Graph,
+  errors: readonly Diagnostic[],
+): CliError {
+  const open = errors.filter((e) => e.nodeId === WRAPPER_NODE_ID && e.pin !== undefined);
+  if (open.length === 0) return invalidGraphError(`pcg run ${name}`, errors, []);
+  const pins = open.map((e) => JSON.stringify(e.pin)).join(", ");
+  const example = primitiveExample(name, entry, graph, exposedParams(graph));
+  const fix = example.slice(1).map((l) => l.trim()).join("\n");
+  const message =
+    `run: primitive "${name}" cannot cook on its own — nothing is connected to its required input ${open.length === 1 ? "pin" : "pins"} ${pins}, ` +
+    `and pcg run cannot bind geometry (--in carries value items only; geometry has no JSON form). Reference it from a graph instead:\n` +
+    example.slice(1).join("\n");
+  return new CliError(message, {
+    exitCode: EXIT_INVALID_GRAPH,
+    diagnostics: open.map((e) => ({
+      code: e.code,
+      severity: "error" as const,
+      message,
+      nodeId: WRAPPER_NODE_ID,
+      pin: e.pin as string,
+      ...(e.expected !== undefined ? { expected: e.expected } : {}),
+      fix,
+    })),
+  });
 }
 
 const runCommand: Command = {
@@ -1889,8 +2051,9 @@ const runCommand: Command = {
    * the two wrapper graphs differ ONLY in the params object, so a failure
    * that the first one did not hit is a param failure by construction.
    */
-  async run(args, io) {
+  async run(args, io, ctx) {
     const name = args.positional[0];
+    checkCookFlags(args, "run");
     // The registry's own message, verbatim: it lists every registered
     // name, or explains that none are, and the CLI must not paraphrase it
     // — only add the nearest names after it.
@@ -1912,19 +2075,29 @@ const runCommand: Command = {
       params: {},
     };
     // Materialized once to read the schemas, then again only if there are
-    // values to type against them — so the common case pays for one.
-    let graph = deserializeGraph(buildWrapperGraph(shape));
+    // values to type against them — so the common case pays for one. Both go
+    // through the same checks a graph file does.
+    let report = checkSerializedGraph(buildWrapperGraph(shape));
+    if (report.graph === undefined) {
+      // Unreachable for a registered primitive: the wrapper is built from
+      // its own interface. Refused as the invalid document it would be.
+      throw invalidGraphError(`pcg run ${name}`, report.errors, report.warnings);
+    }
+    let graph = report.graph;
     const params = parseParamAssignments(io, name, exposedParams(graph), listFlag(args, "param"));
     const wrapper = buildWrapperGraph({ ...shape, params });
     if (Object.keys(params).length > 0) {
-      try {
-        graph = deserializeGraph(wrapper);
-      } catch (err) {
+      report = checkSerializedGraph(wrapper);
+      if (report.graph === undefined) {
         throw new CliUsageError(
-          `run: a --param value was rejected: ${err instanceof Error ? err.message : String(err)}`,
+          `run: a --param value was rejected: ${report.errors.map((e) => e.message).join("\n")}`,
+          { diagnostics: report.errors },
         );
       }
+      graph = report.graph;
     }
+    if (report.errors.length > 0) throw unrunnablePrimitive(name, entry, graph, report.errors);
+    if (report.warnings.length > 0) ctx?.warn(report.warnings);
     for (const binding of bindings) {
       graph.setParam<{ items: readonly DataItem[] }, "items">(
         { id: inputNodeId(binding.pin) },
@@ -1993,7 +2166,7 @@ const runCommand: Command = {
       lines.push(...perNodeTable(perNode, timings));
     }
     if (outPath !== undefined) {
-      io.writeFile(outPath, JSON.stringify(json, null, 2) + "\n");
+      writeOut(outPath, () => io.writeFile(outPath, JSON.stringify(json, null, 2) + "\n"));
       lines.push("", `wrote ${outPath}`);
     }
     return { text: lines.join("\n") + "\n", json };
@@ -2004,6 +2177,7 @@ const runCommand: Command = {
 export const COMMANDS: readonly Command[] = [
   nodesCommand,
   fieldsCommand,
+  schemaCommand,
   graphsCommand,
   validateCommand,
   assetsCommand,

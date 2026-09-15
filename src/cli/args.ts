@@ -5,11 +5,39 @@
  * alternatives (the library's house rule, applied to the command line).
  */
 
-/** A misuse of the command line: unknown command, unknown flag, missing value. */
+import { suggestNames } from "../diagnostics/didYouMean.js";
+import { type Diagnostic, type DiagnosticCode, errorDiagnostics } from "../diagnostics/index.js";
+import type { CliErrorFields } from "./errors.js";
+import { cliRecord } from "./errors.js";
+
+/** Options for {@link CliUsageError}: the record's code and fields. */
+export interface CliUsageErrorOptions extends CliErrorFields {
+  /** Default `usage`; `unknown-command` for a command the CLI does not have. */
+  readonly code?: DiagnosticCode;
+  /** The complete records, when a usage fault is several (a rejected --param value). */
+  readonly diagnostics?: readonly Diagnostic[];
+}
+
+/**
+ * A misuse of the command line: unknown command, unknown flag, missing
+ * value. Always exit 2, whatever its code.
+ */
 export class CliUsageError extends Error {
-  constructor(message: string) {
+  readonly code: DiagnosticCode;
+  /** Never empty. */
+  readonly diagnostics: readonly Diagnostic[];
+
+  constructor(message: string, opts: CliUsageErrorOptions = {}) {
     super(message);
     this.name = "CliUsageError";
+    this.diagnostics = errorDiagnostics(
+      message,
+      opts.diagnostics !== undefined && opts.diagnostics.length > 0
+        ? opts.diagnostics
+        : [cliRecord(opts.code ?? "usage", message, opts)],
+      "usage",
+    );
+    this.code = (this.diagnostics[0] as Diagnostic).code;
   }
 }
 
@@ -174,8 +202,18 @@ export function parseArgs(argv: readonly string[], spec: CommandSpec): ParsedArg
     }
     const flag = flags[name];
     if (flag === undefined) {
+      // Suggested, never applied: `--no-timing` is refused like any other
+      // unknown flag, with the one it most likely meant named first.
+      const names = Object.keys(flags).sort();
+      const near = suggestNames(name, names);
       throw new CliUsageError(
-        `${spec.name}: unknown flag "--${name}"; valid flags: ${flagList(spec)}`,
+        `${spec.name}: unknown flag "--${name}"; ${near.clause.replace(/"([^"]+)"/g, '"--$1"')}valid flags: ${flagList(spec)}`,
+        {
+          key: `--${name}`,
+          got: `--${name}`,
+          valid: names.map((n) => `--${n}`),
+          ...(near.names.length > 0 ? { didYouMean: near.names.map((n) => `--${n}`) } : {}),
+        },
       );
     }
     if (values.has(name) && flag.kind !== "strings") {

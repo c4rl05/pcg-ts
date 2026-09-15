@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { VERSION } from "../index.js";
-import { EXIT_FAILURE, EXIT_OK, EXIT_USAGE, runCli } from "./index.js";
+import { EXIT_FAILURE, EXIT_INVALID_GRAPH, EXIT_OK, EXIT_USAGE, runCli } from "./index.js";
 import type { CliIo } from "./io.js";
 
 interface FakeIo {
@@ -193,7 +193,7 @@ describe("pcg cli — catalogs", () => {
   it("an unknown node type fails with the registry's own message", async () => {
     const io = withGraph();
     expect(await runCli(["nodes", "scatterPoints"], io.io)).toBe(EXIT_FAILURE);
-    expect(io.stderr()).toContain('unknown node type "scatterPoints"; registered types: ');
+    expect(io.stderr()).toMatch(/unknown node type "scatterPoints"; (did you mean [^?]+\? )?registered types: /);
     expect(io.stderr()).toContain("pointScatterInBounds");
   });
 
@@ -387,7 +387,7 @@ describe("pcg cli — validate", () => {
         outputs: [],
       }),
     });
-    expect(await runCli(["validate", "/bad.json"], io.io)).toBe(EXIT_FAILURE);
+    expect(await runCli(["validate", "/bad.json"], io.io)).toBe(EXIT_INVALID_GRAPH);
     expect(io.stderr()).toContain(
       'node "a": unknown node type "scatterPoints"; did you mean "jitterPoints"? registered types: ',
     );
@@ -399,7 +399,7 @@ describe("pcg cli — validate", () => {
     expect(missing.stderr()).toContain('cannot read graph file "/nope.json"');
 
     const broken = fakeIo({ "/broken.json": "{ nope" });
-    expect(await runCli(["validate", "/broken.json"], broken.io)).toBe(EXIT_FAILURE);
+    expect(await runCli(["validate", "/broken.json"], broken.io)).toBe(EXIT_INVALID_GRAPH);
     expect(broken.stderr()).toContain('"/broken.json" is not valid JSON');
   });
 
@@ -651,7 +651,7 @@ describe("pcg cli — inspect", () => {
 
     const wrong = withGraph();
     expect(await runCli(["inspect", GRAPH, "--output", "point"], wrong.io)).toBe(EXIT_FAILURE);
-    expect(wrong.stderr()).toContain('unknown output "point"; declared outputs: points');
+    expect(wrong.stderr()).toContain('unknown output "point"; did you mean "points"? declared outputs: points');
   });
 
   it("an unknown domain is a misuse, and lists the valid ones", async () => {
@@ -859,13 +859,12 @@ describe("pcg cli — the command line itself", () => {
     const command = fakeIo();
     expect(await runCli(["bake", "x.json"], command.io)).toBe(EXIT_USAGE);
     expect(command.stderr()).toContain(
-      'unknown command "bake"; commands: nodes, fields, graphs, validate, assets, cook, run, inspect, render',
+      'unknown command "bake"; commands: nodes, fields, schema, graphs, validate, assets, cook, run, inspect, render',
     );
 
     const flag = withGraph();
     expect(await runCli(["cook", GRAPH, "--stat"], flag.io)).toBe(EXIT_USAGE);
-    expect(flag.stderr()).toContain('cook: unknown flag "--stat"; valid flags: ');
-    expect(flag.stderr()).toContain("--stats");
+    expect(flag.stderr()).toContain('cook: unknown flag "--stat"; did you mean "--stats"? valid flags: ');
   });
 
   it("a missing argument and a missing flag value are both misuses", async () => {

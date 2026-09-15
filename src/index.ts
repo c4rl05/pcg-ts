@@ -25,6 +25,9 @@ export {
 // here, beside the record types, rather than starred through
 // `./nodes/index.ts`: it is the graph-level half of the same promise.
 export { diagnoseGraph } from "./nodes/diagnose.js";
+// The load and those checks as one call that reports instead of throwing:
+// what `pcg validate` runs, and the question an agent asks of a file.
+export { type CheckedGraph, checkSerializedGraph } from "./nodes/checkGraph.js";
 // Named rather than starred through `./nodes/index.js`, because it is the
 // one node-layer module that reads BOTH sides of the spawner seam: the graph
 // walk lives with the other graph reports, and the question it answers is a

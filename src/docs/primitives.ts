@@ -35,6 +35,7 @@ import {
   type ParamValue,
   type PinKind,
   type RegisteredSubgraph,
+  type WrapperKind,
   describeSubgraphParams,
   describeSubgraphPins,
   deserializeGraph,
@@ -45,7 +46,7 @@ import {
 // library publishes), so `../index.js` cannot reach it. `node-reference.ts`
 // takes the same route into `../nodes/registry.js` for the same reason.
 import { stripProbeBreadcrumb } from "../nodes/subgraphRegistry.js";
-import type { CorpusEntry } from "../cli/corpus.js";
+import { type CorpusEntry, inlineJson, kebab } from "../cli/corpus.js";
 import { examplesLine } from "./node-reference.js";
 
 /** One rendered catalog: the bytes of each generated file. */
@@ -74,6 +75,20 @@ export interface PrimitiveInfo {
   readonly params: readonly PrimitiveParamInfo[];
   /** Node count of the recipe graph — the primitive's size at a glance. */
   readonly nodes: number;
+  /**
+   * The node type a graph references this primitive through — what
+   * `inferWrapperKind` reads off the recipe. The markdown's wiring example
+   * needs it; `primitives.json` does not carry it (it stays the registry's
+   * own records, and a wrapper kind is derived, not recorded).
+   */
+  readonly wrapper: WrapperKind;
+  /**
+   * The geometry input pins a cook needs connected — the ones `pcg run`
+   * cannot satisfy, since `--in` binds value items only. An OPTIONAL
+   * geometry input (a box to fill that defaults to its own bounds) is left
+   * out: the primitive still runs without it. Markdown only, like `wrapper`.
+   */
+  readonly requiredGeometryInputs: readonly string[];
 }
 
 /** The probe node's id; scaffolding, and stripped from every refusal. */
@@ -97,6 +112,7 @@ const PROBE_ID = "probe";
  * registry's own message rather than being described from the payload.
  */
 export function describePrimitive(entry: RegisteredSubgraph): PrimitiveInfo {
+  const wrapper = inferWrapperKind(entry.subgraph);
   let probe: Graph;
   try {
     probe = deserializeGraph({
@@ -114,7 +130,7 @@ export function describePrimitive(entry: RegisteredSubgraph): PrimitiveInfo {
       nodes: [
         {
           id: PROBE_ID,
-          type: inferWrapperKind(entry.subgraph),
+          type: wrapper,
           params: {},
           ref: { name: entry.name },
         },
@@ -159,6 +175,10 @@ export function describePrimitive(entry: RegisteredSubgraph): PrimitiveInfo {
       targets: p.targets,
     })),
     nodes: entry.subgraph.graph.nodes.length,
+    wrapper,
+    requiredGeometryInputs: state.def.inputs
+      .filter((pin) => pin.kind === "geometry" && pin.optional !== true)
+      .map((pin) => pin.name),
   };
 }
 
@@ -317,10 +337,50 @@ const EMPTY_NOTE = [
   "section here, and `pcg run <name>` is what cooks it.",
 ].join("\n");
 
+/** Inline code that survives a backtick in its content. */
+function code(text: string): string {
+  return text.includes("`") ? "`` " + text + " ``" : "`" + text + "`";
+}
+
+/**
+ * How to use one primitive — the markdown twin of `primitiveExample` in
+ * `src/cli/commands.ts` (`pcg run <name> --help`); keep the two saying the
+ * same thing. A primitive with no geometry input runs as `pcg run <name>`.
+ * One WITH a geometry input cannot (`--in` carries value items only;
+ * geometry has no JSON form), and printing that command would print one
+ * that fails with "no geometry connected" — so it gets the node JSON that
+ * references it from a graph, plus the connection each geometry input
+ * needs.
+ *
+ * `p.params` is read in RECIPE order, not the catalog's sorted order, so
+ * "the first plain param" is the same one the CLI's example picks.
+ */
+function usageLines(p: PrimitiveInfo): string[] {
+  const geometryInputs = p.inputs.filter((pin) => p.requiredGeometryInputs.includes(pin.name));
+  if (geometryInputs.length === 0) return [`Run it: \`pcg run ${p.name}\``];
+  const id = kebab(p.name);
+  const first = p.params.find((param) => param.schema.type !== "items");
+  const node = {
+    id,
+    type: p.wrapper,
+    ref: { name: p.name },
+    params: first !== undefined ? { [first.name]: first.schema.default } : {},
+  };
+  return [
+    `Wire it: \`pcg run\` cannot bind its geometry ${geometryInputs.length === 1 ? "input" : "inputs"} (geometry has no JSON form), so reference it from a graph:`,
+    "",
+    `- node: ${code(inlineJson(node))}`,
+    ...geometryInputs.map(
+      (pin) => `- connection: ${code(inlineJson({ from: ["<source node>", "out"], to: [id, pin.name] }))}`,
+    ),
+  ];
+}
+
 function renderMarkdown(
-  primitives: readonly CanonicalPrimitive[],
+  infos: readonly PrimitiveInfo[],
   corpus: readonly CorpusEntry[] | undefined,
 ): string {
+  const primitives = infos.map(canonicalPrimitive);
   const lines: string[] = [];
   lines.push("# Primitive reference");
   lines.push("");
@@ -339,7 +399,8 @@ function renderMarkdown(
     lines.push(`- [${p.name}](#${anchor(p.name)})${p.title !== undefined ? ` — ${cell(p.title)}` : ""}`);
   }
   lines.push("");
-  for (const p of primitives) {
+  for (const info of infos) {
+    const p = canonicalPrimitive(info);
     lines.push(`## ${p.name}`);
     lines.push("");
     if (p.title !== undefined) {
@@ -408,7 +469,9 @@ function renderMarkdown(
       );
       lines.push("");
     }
-    lines.push(`Run it: \`pcg run ${p.name}\``);
+    // From `info`, not `p`: the usage lines need the wrapper kind and the
+    // recipe's param order, which the canonical record does not keep.
+    lines.push(...usageLines(info));
     lines.push("");
   }
   return lines.join("\n");
@@ -448,10 +511,9 @@ export function renderPrimitiveCatalog(
 ): PrimitiveCatalog {
   const sorted = primitives
     .slice()
-    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
-    .map(canonicalPrimitive);
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   return {
-    json: JSON.stringify(sorted, null, 2) + "\n",
+    json: JSON.stringify(sorted.map(canonicalPrimitive), null, 2) + "\n",
     markdown: renderMarkdown(sorted, corpus),
   };
 }

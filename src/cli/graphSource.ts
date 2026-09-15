@@ -6,51 +6,164 @@
  * so pointing the CLI at an interior node costs nothing structural and
  * leaves the graph as it was found.
  */
+import { suggestNames } from "../diagnostics/didYouMean.js";
 import {
   type CookOptions,
   type CookResult,
   type DataCollection,
+  type Diagnostic,
   type Graph,
+  checkSerializedGraph,
   cook,
-  deserializeGraph,
 } from "../index.js";
-import { CliError } from "./errors.js";
+import { CliError, EXIT_INVALID_GRAPH } from "./errors.js";
 import type { CliIo } from "./io.js";
+import { diagnosticLine } from "./report.js";
 
 /** A graph read from disk, with the parsed JSON it came from. */
 export interface LoadedGraph {
   readonly graph: Graph;
   readonly json: Record<string, unknown>;
   readonly path: string;
+  /**
+   * The structural errors `diagnoseGraph` found — unconnected required pins
+   * on nodes an output reads. NOT yet a refusal: a command decides which of
+   * them concern the part of the graph it cooks (see {@link requireCookable}).
+   */
+  readonly errors: readonly Diagnostic[];
+  /** The warnings the checks found: reported, never a refusal. */
+  readonly warnings: readonly Diagnostic[];
+}
+
+/** A graph file read and parsed, not yet loaded. */
+export interface GraphDocument {
+  readonly json: unknown;
+  readonly path: string;
 }
 
 /**
- * Read and deserialize a graph file. File and JSON problems are named by
- * the CLI (it knows the path); everything the library rejects propagates
- * with the library's own message.
+ * Read a graph file and parse it as JSON. An unreadable file is
+ * `file-unreadable` (exit 1: the named thing is not there to read); text
+ * that is not JSON is `invalid-json` (exit 3: the document is invalid).
  */
-export function loadGraph(io: CliIo, path: string): LoadedGraph {
+export function readGraphDocument(io: CliIo, path: string): GraphDocument {
   let text: string;
   try {
     text = io.readFile(path);
   } catch (err) {
     throw new CliError(
       `cannot read graph file "${path}": ${err instanceof Error ? err.message : String(err)}`,
+      { code: "file-unreadable", got: path },
     );
   }
-  let json: unknown;
   try {
     // Editors and PowerShell redirection write UTF-8 with a BOM; JSON.parse
     // rejects it with a message about an invisible character, which is a
     // uselessly confusing way to fail on a file that is otherwise fine.
-    json = JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
+    return { json: JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text), path };
   } catch (err) {
     throw new CliError(
       `"${path}" is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+      { code: "invalid-json", exitCode: EXIT_INVALID_GRAPH },
     );
   }
-  const graph = deserializeGraph(json);
-  return { graph, json: json as Record<string, unknown>, path };
+}
+
+/** `3 errors`, `1 warning`. */
+function count(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
+}
+
+/**
+ * The refusal for a graph document with errors: one CliError, exit 3,
+ * carrying every record, whose message is a header naming the file and one
+ * line per record with its pointer into the document.
+ */
+export function invalidGraphError(
+  path: string,
+  errors: readonly Diagnostic[],
+  warnings: readonly Diagnostic[],
+  header?: string,
+): CliError {
+  const head =
+    header ??
+    `"${path}" is not a valid graph: ${count(errors.length, "error")}${
+      warnings.length > 0 ? `, ${count(warnings.length, "warning")}` : ""
+    }`;
+  return new CliError([head, ...[...errors, ...warnings].map((d) => `  ${diagnosticLine(d)}`)].join("\n"), {
+    exitCode: EXIT_INVALID_GRAPH,
+    diagnostics: errors,
+    warnings,
+  });
+}
+
+/**
+ * Read and load a graph file through `checkSerializedGraph`. File and JSON
+ * problems are named by the CLI (it knows the path); every fault the loader
+ * finds is refused at once, as records (exit 3). A graph that loads comes
+ * back with the structural errors and warnings the checks found, for the
+ * command to weigh against what it will cook.
+ */
+export function loadGraph(io: CliIo, path: string): LoadedGraph {
+  const doc = readGraphDocument(io, path);
+  const report = checkSerializedGraph(doc.json);
+  if (report.graph === undefined) throw invalidGraphError(path, report.errors, report.warnings);
+  return {
+    graph: report.graph,
+    json: doc.json as Record<string, unknown>,
+    path,
+    errors: report.errors,
+    warnings: report.warnings,
+  };
+}
+
+/** Top-level node ids upstream of `roots`, the roots included. */
+function upstreamOf(graph: Graph, roots: readonly string[]): Set<string> {
+  const seen = new Set<string>();
+  const stack: string[] = [];
+  for (const id of roots) {
+    if (graph._nodes.has(id) && !seen.has(id)) {
+      seen.add(id);
+      stack.push(id);
+    }
+  }
+  while (stack.length > 0) {
+    const id = stack.pop() as string;
+    for (const c of graph._inTo.get(id) ?? []) {
+      if (!seen.has(c.from)) {
+        seen.add(c.from);
+        stack.push(c.from);
+      }
+    }
+  }
+  return seen;
+}
+
+/**
+ * Refuse, with exit 3, when a structural error concerns the part of
+ * `loaded` a command will cook for `target` — upstream of `--node`, of one
+ * `--output`, or of every declared output. An error on a node the cook
+ * never runs is not this command's to refuse: `pcg inspect --node a` cooks
+ * `a` and its inputs, whatever else the file leaves unwired. A target that
+ * names nothing selects nothing here, so the command's own "unknown node"
+ * or "unknown output" error still speaks.
+ */
+export function requireCookable(loaded: LoadedGraph, target: TargetOptions = {}): void {
+  if (loaded.errors.length === 0) return;
+  const { graph } = loaded;
+  const declared = graph.describe().outputs;
+  const roots =
+    target.node !== undefined
+      ? [target.node]
+      : target.output !== undefined
+        ? declared.filter((o) => o.name === target.output).map((o) => o.id)
+        : declared.map((o) => o.id);
+  const cooked = upstreamOf(graph, roots);
+  const relevant = loaded.errors.filter((d) => {
+    const top = d.nodePath?.[0] ?? d.nodeId;
+    return top === undefined || cooked.has(top);
+  });
+  if (relevant.length > 0) throw invalidGraphError(loaded.path, relevant, loaded.warnings);
 }
 
 /** Where a command should read data from. */
@@ -71,6 +184,11 @@ export interface Target {
   readonly result: CookResult;
 }
 
+/** The did-you-mean fields for a record, set only when there is a suggestion. */
+function suggestionFields(names: readonly string[]): { didYouMean?: readonly string[] } {
+  return names.length > 0 ? { didYouMean: names } : {};
+}
+
 /**
  * Output pins of a node instance. Reads the live node state rather than
  * the registry because subgraph nodes derive their pins per instance from
@@ -80,8 +198,10 @@ function outputPins(graph: Graph, nodeId: string): readonly string[] {
   const state = graph._nodes.get(nodeId);
   if (state === undefined) {
     const ids = [...graph._nodes.keys()];
+    const near = suggestNames(nodeId, ids);
     throw new CliError(
-      `unknown node "${nodeId}"; nodes in this graph: ${ids.length === 0 ? "(none)" : ids.join(", ")}`,
+      `unknown node "${nodeId}"; ${near.clause}nodes in this graph: ${ids.length === 0 ? "(none)" : ids.join(", ")}`,
+      { code: "unknown-node", nodeId, got: nodeId, valid: ids, ...suggestionFields(near.names) },
     );
   }
   return state.def.outputs.map((pin) => pin.name);
@@ -91,12 +211,18 @@ function outputPins(graph: Graph, nodeId: string): readonly string[] {
 export function resolvePin(graph: Graph, nodeId: string, pin?: string): string {
   const pins = outputPins(graph, nodeId);
   if (pins.length === 0) {
-    throw new CliError(`node "${nodeId}" has no output pins, so there is nothing to read from it`);
+    throw new CliError(`node "${nodeId}" has no output pins, so there is nothing to read from it`, {
+      code: "unknown-pin",
+      nodeId,
+      valid: [],
+    });
   }
   if (pin === undefined) return pins[0];
   if (!pins.includes(pin)) {
+    const near = suggestNames(pin, pins);
     throw new CliError(
-      `node "${nodeId}" has no output pin "${pin}"; its output pins: ${pins.join(", ")}`,
+      `node "${nodeId}" has no output pin "${pin}"; ${near.clause}its output pins: ${pins.join(", ")}`,
+      { code: "unknown-pin", nodeId, pin, got: pin, valid: pins, ...suggestionFields(near.names) },
     );
   }
   return pin;
@@ -153,12 +279,16 @@ export async function cookTarget(
   if (declared.length === 0) {
     throw new CliError(
       'this graph declares no outputs; add one to the JSON ("outputs": [{ "id": ..., "pin": ..., "name": ... }]) or target a node directly with --node <id>',
+      { code: "no-outputs" },
     );
   }
   if (target.output !== undefined) {
     if (!declared.some((o) => o.name === target.output)) {
+      const names = declared.map((o) => o.name);
+      const near = suggestNames(target.output, names);
       throw new CliError(
-        `unknown output "${target.output}"; declared outputs: ${declared.map((o) => o.name).join(", ")}`,
+        `unknown output "${target.output}"; ${near.clause}declared outputs: ${names.join(", ")}`,
+        { code: "unknown-output", got: target.output, valid: names, ...suggestionFields(near.names) },
       );
     }
     const result = await cook(graph, { ...opts, outputs: [target.output] });

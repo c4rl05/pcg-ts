@@ -90,9 +90,7 @@ describe("pcg graphs", () => {
   it("an unknown --tag lists the valid tags and suggests, exit 1", async () => {
     const r = await run(["graphs", "--tag", "basic"]);
     expect(r.code).toBe(EXIT_FAILURE);
-    expect(r.err).toContain('unknown tag "basic"; tags in the corpus: ');
-    expect(r.err).toContain("basics");
-    expect(r.err).toContain('did you mean "basics"?');
+    expect(r.err).toContain('unknown tag "basic"; did you mean "basics"? tags in the corpus: ');
   });
 
   it("an unknown --primitive suggests the nearest registered name, exit 1", async () => {
@@ -206,17 +204,19 @@ describe("pcg run <primitive> --help", () => {
 
   it("every example runs as printed: a pcg run line cooks, a graph node loads wired as shown", async () => {
     // A help line that does not run is worse than none. A primitive with a
-    // geometry input cannot be run by `pcg run` (geometry has no JSON form),
-    // so its example is the node JSON that references it plus a connection
-    // per geometry input, which must load when wired exactly that way.
+    // REQUIRED geometry input cannot be run by `pcg run` (geometry has no
+    // JSON form), so its example is the node JSON that references it plus a
+    // connection per required geometry input, which must load when wired
+    // exactly that way. One whose geometry input is optional prints a
+    // `pcg run` line, and that line must cook — which is the whole claim.
     let commands = 0;
     let nodes = 0;
+    let optionalGeometry = 0;
     for (const name of names) {
       const help = await run(["run", name, "--help"]);
       const line = /^ {2}pcg run (.+)$/m.exec(help.out)?.[1];
-      const geometryInput = getRegisteredSubgraph(name).subgraph.inputs.length > 0;
       if (line !== undefined) {
-        expect(geometryInput, `${name} has a geometry input but prints a pcg run line`).toBe(false);
+        if (getRegisteredSubgraph(name).subgraph.inputs.length > 0) optionalGeometry++;
         const cooked = await run(["run", ...line.split(" ")]);
         expect(cooked.code, `${name}: pcg run ${line}\n${cooked.err}`).toBe(EXIT_OK);
         expect(cooked.out).toContain(`ran "${name}"`);
@@ -241,6 +241,8 @@ describe("pcg run <primitive> --help", () => {
     }
     expect(commands).toBeGreaterThan(0);
     expect(nodes).toBeGreaterThan(0);
+    // fill/volume-by-noise: its `in` box is optional, so it runs bare.
+    expect(optionalGeometry).toBeGreaterThan(0);
   });
 
   it("lists the corpus graphs that reference the primitive", async () => {
@@ -269,11 +271,11 @@ describe("pcg run <primitive> --help", () => {
     ]) {
       const r = await run(argv);
       expect(r.code).toBe(EXIT_FAILURE);
-      expect(r.err).toContain(`unknown subgraph "${typo}"; `);
-      expect(r.err).toContain("registered subgraphs: ");
-      expect(r.err).toMatch(new RegExp(`; did you mean [^?]*"${name.replace(/[/.]/g, "\\$&")}"`));
-      // One suggestion, not the registry's and the CLI's both.
-      expect(r.err.split("did you mean").length - 1).toBe(1);
+      // The suggestion comes BEFORE the long list, once.
+      expect(r.err).toMatch(
+        new RegExp(`unknown subgraph "${typo.replace(/[/.]/g, "\\$&")}"; did you mean [^?]*"${name.replace(/[/.]/g, "\\$&")}"\\? registered subgraphs: `),
+      );
+      expect(r.err.match(/did you mean/g)).toHaveLength(1);
     }
   });
 

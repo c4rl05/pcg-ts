@@ -79,6 +79,7 @@ describe("pcg bin", () => {
     expect(names).toEqual([
       "nodes",
       "fields",
+      "schema",
       "graphs",
       "validate",
       "assets",

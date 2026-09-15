@@ -56,6 +56,7 @@ import { PARTIAL_FUSION } from "../shared/gpu.js";
 import type { Knob, KnobPatch, KnobTarget } from "../shared/graphUi.js";
 import { makeRecooker } from "../shared/recook.js";
 import { autoLayout } from "../shared/graph/autoLayout.js";
+import { loadErrorLines } from "./loadErrors.js";
 import {
   WRAPPER_TYPES,
   nodeCategory,
@@ -739,7 +740,9 @@ export class EditorController {
     try {
       deserializeGraph(parsed);
     } catch (err) {
-      return { error: errorMessage(err) };
+      // One line per collected fault, capped and newline-joined: the whole
+      // message of a many-fault document is a wall no toast can hold.
+      return { error: loadErrorLines(err).join("\n") };
     }
     const json = parsed as SerializedGraph;
     const mirror = new Graph(json.seed >>> 0);

@@ -66,7 +66,11 @@ Concatenates two point clouds and stamps a string attribute on each side first, 
 
 **Examples:** [pipeline-3-lots.json](../graphs/pipeline-3-lots.json), [pipeline-3-lots-edits.json](../graphs/pipeline-3-lots-edits.json), [pipeline-4-detail.json](../graphs/pipeline-4-detail.json) — 6 total (`pcg graphs --primitive compose/merge-tagged`)
 
-Run it: `pcg run compose/merge-tagged`
+Wire it: `pcg run` cannot bind its geometry inputs (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "merge-tagged", "type": "subgraph", "ref": {"name": "compose/merge-tagged"}, "params": {"kindAttr": "kind"}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["merge-tagged", "a"]}`
+- connection: `{"from": ["<source node>", "out"], "to": ["merge-tagged", "b"]}`
 
 ## compose/scatter-copies
 
@@ -91,7 +95,11 @@ Copies the entire `source` cloud onto every point of `target`, composing the tra
 
 **Examples:** *(no corpus graph references it)*
 
-Run it: `pcg run compose/scatter-copies`
+Wire it: `pcg run` cannot bind its geometry inputs (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "scatter-copies", "type": "subgraph", "ref": {"name": "compose/scatter-copies"}, "params": {"jitter": [0.5, 0, 0.5]}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["scatter-copies", "source"]}`
+- connection: `{"from": ["<source node>", "out"], "to": ["scatter-copies", "target"]}`
 
 ## fill/scatter-by-density
 
@@ -233,7 +241,11 @@ Measures each point's distance to the nearest point of a second cloud and keeps 
 
 **Examples:** [pipeline-3-lots.json](../graphs/pipeline-3-lots.json), [pipeline-3-lots-edits.json](../graphs/pipeline-3-lots-edits.json), [pipeline-4-detail.json](../graphs/pipeline-4-detail.json) — 6 total (`pcg graphs --primitive filter/by-distance-to`)
 
-Run it: `pcg run filter/by-distance-to`
+Wire it: `pcg run` cannot bind its geometry inputs (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "by-distance-to", "type": "subgraph", "ref": {"name": "filter/by-distance-to"}, "params": {"distance": 5}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["by-distance-to", "in"]}`
+- connection: `{"from": ["<source node>", "out"], "to": ["by-distance-to", "features"]}`
 
 ## filter/by-distance-to-curve
 
@@ -259,7 +271,11 @@ Measures each point's distance to the supplied `curve` and keeps or drops it by 
 
 **Examples:** [pipeline-3-lots.json](../graphs/pipeline-3-lots.json), [pipeline-3-lots-edits.json](../graphs/pipeline-3-lots-edits.json), [pipeline-4-detail.json](../graphs/pipeline-4-detail.json) — 6 total (`pcg graphs --primitive filter/by-distance-to-curve`)
 
-Run it: `pcg run filter/by-distance-to-curve`
+Wire it: `pcg run` cannot bind its geometry inputs (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "by-distance-to-curve", "type": "subgraph", "ref": {"name": "filter/by-distance-to-curve"}, "params": {"distance": 5}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["by-distance-to-curve", "in"]}`
+- connection: `{"from": ["<source node>", "out"], "to": ["by-distance-to-curve", "curve"]}`
 
 ## filter/by-neighbor-count
 
@@ -285,7 +301,10 @@ Counts each point's neighbours within a radius and keeps or drops it by that cou
 
 **Examples:** *(no corpus graph references it)*
 
-Run it: `pcg run filter/by-neighbor-count`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "by-neighbor-count", "type": "subgraph", "ref": {"name": "filter/by-neighbor-count"}, "params": {"radius": 5}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["by-neighbor-count", "in"]}`
 
 ## filter/inside-radius
 
@@ -311,7 +330,10 @@ Keeps the points whose distance to a centre satisfies a comparison — 'le' for 
 
 **Examples:** *(no corpus graph references it)*
 
-Run it: `pcg run filter/inside-radius`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "inside-radius", "type": "subgraph", "ref": {"name": "filter/inside-radius"}, "params": {"center": [0, 0, 0]}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["inside-radius", "in"]}`
 
 ## filter/mask-by-noise
 
@@ -337,7 +359,10 @@ Keeps only the points where a normalized noise field rises above a threshold —
 
 **Examples:** [basics-compose-primitives.json](../graphs/basics-compose-primitives.json) — 1 total (`pcg graphs --primitive filter/mask-by-noise`)
 
-Run it: `pcg run filter/mask-by-noise`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "mask-by-noise", "type": "subgraph", "ref": {"name": "filter/mask-by-noise"}, "params": {"threshold": 0.5}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["mask-by-noise", "in"]}`
 
 ## filter/thin-by-density
 
@@ -363,7 +388,10 @@ Writes a normalized noise field into the standard `density` attribute and keeps 
 
 **Examples:** *(no corpus graph references it)*
 
-Run it: `pcg run filter/thin-by-density`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "thin-by-density", "type": "subgraph", "ref": {"name": "filter/thin-by-density"}, "params": {"frequency": 0.02}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["thin-by-density", "in"]}`
 
 ## place/align-to-surface
 
@@ -390,7 +418,11 @@ Casts a ray from every point onto a mesh, reads the surface `normal` where it la
 
 **Examples:** *(no corpus graph references it)*
 
-Run it: `pcg run place/align-to-surface`
+Wire it: `pcg run` cannot bind its geometry inputs (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "align-to-surface", "type": "subgraph", "ref": {"name": "place/align-to-surface"}, "params": {"axis": "+y"}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["align-to-surface", "points"]}`
+- connection: `{"from": ["<source node>", "out"], "to": ["align-to-surface", "surface"]}`
 
 ## place/along-curve
 
@@ -418,7 +450,10 @@ Places points at even arc-length steps along every path of the supplied `curve` 
 
 **Examples:** [basics-props-along-a-path.json](../graphs/basics-props-along-a-path.json), [basics-under-cover.json](../graphs/basics-under-cover.json), [pipeline-4-detail.json](../graphs/pipeline-4-detail.json) — 6 total (`pcg graphs --primitive place/along-curve`)
 
-Run it: `pcg run place/along-curve`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "along-curve", "type": "subgraph", "ref": {"name": "place/along-curve"}, "params": {"mode": "count"}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["along-curve", "curve"]}`
 
 ## place/drop-to-surface
 
@@ -443,7 +478,11 @@ Casts a ray from every point along a direction, moves each one to where it hits 
 
 **Examples:** [pipeline-2-districts.json](../graphs/pipeline-2-districts.json), [pipeline-3-lots.json](../graphs/pipeline-3-lots.json), [pipeline-3-lots-edits.json](../graphs/pipeline-3-lots-edits.json) — 7 total (`pcg graphs --primitive place/drop-to-surface`)
 
-Run it: `pcg run place/drop-to-surface`
+Wire it: `pcg run` cannot bind its geometry inputs (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "drop-to-surface", "type": "subgraph", "ref": {"name": "place/drop-to-surface"}, "params": {"direction": [0, -1, 0]}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["drop-to-surface", "points"]}`
+- connection: `{"from": ["<source node>", "out"], "to": ["drop-to-surface", "surface"]}`
 
 ## place/on-surface
 
@@ -469,7 +508,10 @@ Scatters points over a triangle mesh with probability proportional to triangle a
 
 **Examples:** *(no corpus graph references it)*
 
-Run it: `pcg run place/on-surface`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "on-surface", "type": "subgraph", "ref": {"name": "place/on-surface"}, "params": {"count": 1000}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["on-surface", "surface"]}`
 
 ## place/plantable
 
@@ -497,7 +539,10 @@ Scatters points on a mesh and keeps only the ones on gentle enough ground below 
 
 **Examples:** [pipeline-4-detail.json](../graphs/pipeline-4-detail.json), [pipeline-4-detail-edits.json](../graphs/pipeline-4-detail-edits.json), [pipeline-5-roads.json](../graphs/pipeline-5-roads.json) — 4 total (`pcg graphs --primitive place/plantable`)
 
-Run it: `pcg run place/plantable`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "plantable", "type": "subgraph", "ref": {"name": "place/plantable"}, "params": {"count": 1000}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["plantable", "surface"]}`
 
 ## place/radial-on-curve
 
@@ -522,7 +567,10 @@ Places points at even arc-length steps along every path of the supplied `curve`,
 
 **Examples:** [basics-radial-on-curve.json](../graphs/basics-radial-on-curve.json) — 1 total (`pcg graphs --primitive place/radial-on-curve`)
 
-Run it: `pcg run place/radial-on-curve`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "radial-on-curve", "type": "subgraph", "ref": {"name": "place/radial-on-curve"}, "params": {"count": 24}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["radial-on-curve", "curve"]}`
 
 ## shape/disc
 
@@ -718,7 +766,10 @@ Displaces every point along +Y by a noise field centred on zero, so a flat scatt
 
 **Examples:** [pipeline-1-boundary.json](../graphs/pipeline-1-boundary.json), [examples-forest.json](../graphs/examples-forest.json), [pipeline-2-districts.json](../graphs/pipeline-2-districts.json) — 9 total (`pcg graphs --primitive transform/displace-by-noise`)
 
-Run it: `pcg run transform/displace-by-noise`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "displace-by-noise", "type": "subgraph", "ref": {"name": "transform/displace-by-noise"}, "params": {"amount": 4}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["displace-by-noise", "in"]}`
 
 ## transform/gather-on-path
 
@@ -743,7 +794,10 @@ Slides every point of a path along the curve it already sits on, toward the cent
 
 **Examples:** [basics-gather-on-path.json](../graphs/basics-gather-on-path.json) — 1 total (`pcg graphs --primitive transform/gather-on-path`)
 
-Run it: `pcg run transform/gather-on-path`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "gather-on-path", "type": "subgraph", "ref": {"name": "transform/gather-on-path"}, "params": {"bins": 6}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["gather-on-path", "in"]}`
 
 ## transform/relax-spacing
 
@@ -768,7 +822,10 @@ Nudges every point away from the centroid of its neighbours, so crowded regions 
 
 **Examples:** *(no corpus graph references it)*
 
-Run it: `pcg run transform/relax-spacing`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "relax-spacing", "type": "subgraph", "ref": {"name": "transform/relax-spacing"}, "params": {"radius": 4}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["relax-spacing", "in"]}`
 
 ## transform/snap-to-grid
 
@@ -792,7 +849,10 @@ Snaps every point to the nearest corner of a regular 3D grid of the given pitch,
 
 **Examples:** *(no corpus graph references it)*
 
-Run it: `pcg run transform/snap-to-grid`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "snap-to-grid", "type": "subgraph", "ref": {"name": "transform/snap-to-grid"}, "params": {"cellSize": 4}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["snap-to-grid", "in"]}`
 
 ## write/color-from-attribute
 
@@ -816,7 +876,10 @@ Rescales any numeric point attribute to 0..1 over its OWN observed range, then m
 
 **Examples:** *(no corpus graph references it)*
 
-Run it: `pcg run write/color-from-attribute`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "color-from-attribute", "type": "subgraph", "ref": {"name": "write/color-from-attribute"}, "params": {"source": "density"}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["color-from-attribute", "in"]}`
 
 ## write/curve-frame
 
@@ -842,7 +905,10 @@ Writes a full orthonormal frame at every point of a path — `tangent`, `curveNo
 
 **Examples:** *(no corpus graph references it)*
 
-Run it: `pcg run write/curve-frame`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "curve-frame", "type": "subgraph", "ref": {"name": "write/curve-frame"}, "params": {"tangentName": "tangent"}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["curve-frame", "in"]}`
 
 ## write/density-from-noise
 
@@ -867,7 +933,10 @@ Writes `density` (f32, 0..1) from four octaves of normalized Perlin fBm — the 
 
 **Examples:** *(no corpus graph references it)*
 
-Run it: `pcg run write/density-from-noise`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "density-from-noise", "type": "subgraph", "ref": {"name": "write/density-from-noise"}, "params": {"frequency": 0.02}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["density-from-noise", "in"]}`
 
 ## write/height-slope
 
@@ -887,7 +956,10 @@ Writes the two standard terrain quantities onto points that already carry a surf
 
 **Examples:** *(no corpus graph references it)*
 
-Run it: `pcg run write/height-slope`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "height-slope", "type": "subgraph", "ref": {"name": "write/height-slope"}, "params": {}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["height-slope", "in"]}`
 
 ## write/instances-by-species
 
@@ -914,7 +986,10 @@ Chooses an asset id per point from a list and emits the instance batches — the
 
 **Examples:** [pipeline-4-detail.json](../graphs/pipeline-4-detail.json), [pipeline-4-detail-edits.json](../graphs/pipeline-4-detail-edits.json), [pipeline-5-roads.json](../graphs/pipeline-5-roads.json) — 4 total (`pcg graphs --primitive write/instances-by-species`)
 
-Run it: `pcg run write/instances-by-species`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "instances-by-species", "type": "subgraph", "ref": {"name": "write/instances-by-species"}, "params": {"assets": ["pine", "pine", "birch", "bush"]}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["instances-by-species", "in"]}`
 
 ## write/local-density
 
@@ -938,7 +1013,10 @@ Counts each point's neighbours within a radius and rescales the counts to 0..1 o
 
 **Examples:** *(no corpus graph references it)*
 
-Run it: `pcg run write/local-density`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "local-density", "type": "subgraph", "ref": {"name": "write/local-density"}, "params": {"radius": 5}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["local-density", "in"]}`
 
 ## write/orient-along-path
 
@@ -963,7 +1041,10 @@ Writes a unit `tangent` along the polyline at every point of a path, then sets `
 
 **Examples:** *(no corpus graph references it)*
 
-Run it: `pcg run write/orient-along-path`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "orient-along-path", "type": "subgraph", "ref": {"name": "write/orient-along-path"}, "params": {"axis": "+z"}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["orient-along-path", "in"]}`
 
 ## write/random-scale
 
@@ -989,7 +1070,10 @@ Writes the standard `scale` attribute (f32, tuple 3) as ONE random size per poin
 
 **Examples:** [basics-compose-primitives.json](../graphs/basics-compose-primitives.json), [pipeline-3-lots.json](../graphs/pipeline-3-lots.json), [pipeline-3-lots-edits.json](../graphs/pipeline-3-lots-edits.json) — 7 total (`pcg graphs --primitive write/random-scale`)
 
-Run it: `pcg run write/random-scale`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "random-scale", "type": "subgraph", "ref": {"name": "write/random-scale"}, "params": {"min": 0.7}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["random-scale", "in"]}`
 
 ## write/random-yaw
 
@@ -1014,4 +1098,7 @@ Writes the standard `rot` attribute so every point faces a uniformly random dire
 
 **Examples:** [basics-sightline-cull.json](../graphs/basics-sightline-cull.json), [pipeline-4-detail.json](../graphs/pipeline-4-detail.json), [pipeline-4-detail-edits.json](../graphs/pipeline-4-detail-edits.json) — 5 total (`pcg graphs --primitive write/random-yaw`)
 
-Run it: `pcg run write/random-yaw`
+Wire it: `pcg run` cannot bind its geometry input (geometry has no JSON form), so reference it from a graph:
+
+- node: `{"id": "random-yaw", "type": "subgraph", "ref": {"name": "write/random-yaw"}, "params": {"axis": "+z"}}`
+- connection: `{"from": ["<source node>", "out"], "to": ["random-yaw", "in"]}`
