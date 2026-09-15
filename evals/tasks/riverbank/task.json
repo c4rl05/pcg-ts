@@ -1,0 +1,22 @@
+{
+  "id": "riverbank",
+  "tier": "corpus-adjacent",
+  "tierReason": "Public regardless: the brief is quoted verbatim in PLAN-agent-authoring.md and its solution ships as graphs/examples-riverbank.json, inside the installed package. Kept for continuity with the 2026-08-17 blind-authoring log.",
+  "title": "Trees thin toward a river, driftwood on its bank",
+  "outputs": [
+    { "name": "trees", "kind": "instances" },
+    { "name": "driftwood", "kind": "instances" },
+    { "name": "river", "kind": "geometry" },
+    { "name": "ground", "kind": "geometry" }
+  ],
+  "seeds": [20260816, 1, 2],
+  "budgets": { "turns": 90, "wallMinutes": 45 },
+  "checks": [
+    { "id": "river-runs-through", "hard": true, "description": "The river output is a polyline that crosses at least 80% of the ground's extent along one axis." },
+    { "id": "tree-density-rises", "hard": true, "description": "Trees per unit area, over four equal-area bands of distance from the TRUE river polyline (the planted region: ground footprint clipped to the trees' extent, from the nearest tree's distance outward), rise away from the water: the nearest band is non-empty, the farthest holds at least 1.25x its density, and no band falls below 0.85x the band nearer the water." },
+    { "id": "tree-scale-rises", "hard": true, "description": "Mean tree scale over the same bands rises away from the water: farthest at least 1.3x nearest, no band below 0.95x the band nearer the water." },
+    { "id": "tree-clearance", "hard": true, "description": "No tree stands within 2 m of the river line (the water the contract states)." },
+    { "id": "driftwood-on-bank", "hard": true, "description": "At least 10 pieces of driftwood, and at least 90% of them lie 1-8 m from the river line." },
+    { "id": "driftwood-follows-course", "hard": true, "description": "Driftwood within 25 m of the river line reaches at least 8 of 10 equal stretches of the river's length over the ground." }
+  ]
+}
