@@ -29,7 +29,6 @@ import { type Column, isField } from "../fields/index.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { standardNode } from "./registry.js";
 import {
-  type FieldParam,
   type PolylineArcTable,
   carryPrimitiveAttributes,
   copyElements,
@@ -43,6 +42,10 @@ import {
   resolveOnMaybeGpu,
   rotateVec,
 } from "./util.js";
+import type { ExtrudePolygonParams, SweepProfileParams } from "./params.generated.js";
+
+// Generated from the param schemas below; see params.generated.ts.
+export type { ExtrudePolygonParams, SweepProfileParams } from "./params.generated.js";
 
 /** How often the emit loops check for cancellation. */
 const CANCEL_STRIDE = 1024;
@@ -254,20 +257,6 @@ interface SweepLayout {
 function rollApply(out: number[], a1: number, a2: number, c: number, s: number): void {
   out[0] = a1 * c - a2 * s;
   out[1] = a1 * s + a2 * c;
-}
-
-/** Params of {@link sweepProfile}. */
-export interface SweepProfileParams {
-  profile: string;
-  sides: number;
-  radius: FieldParam;
-  width: FieldParam;
-  frame: string;
-  up: FieldParam;
-  roll: FieldParam;
-  joint: string;
-  miterLimit: FieldParam;
-  caps: boolean;
 }
 
 /** A cross-section placed on every path point and stitched into a surface. */
@@ -892,15 +881,6 @@ interface ExtrudeLayout {
   readonly wallBase: number;
   readonly bottomBase: number;
   readonly topBase: number;
-}
-
-/** Params of {@link extrudePolygon}. */
-export interface ExtrudePolygonParams {
-  distance: FieldParam;
-  direction: string;
-  vector: FieldParam;
-  caps: string;
-  sides: boolean;
 }
 
 /** A closed footprint swept along a direction into a solid. */

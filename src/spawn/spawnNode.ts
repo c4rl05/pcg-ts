@@ -7,14 +7,10 @@ import { makeInstancesItem } from "../graph/index.js";
 import { standardNode } from "../nodes/registry.js";
 import { requireGeometryItem } from "../nodes/util.js";
 import { MAX_INSTANCES, buildInstanceBatches } from "./instances.js";
+import type { SpawnInstancesParams } from "../nodes/params.generated.js";
 
-/** Params of {@link spawnInstances}. */
-export interface SpawnInstancesParams {
-  assetId: string;
-  assetAttr: string;
-  colorAttr: string;
-  instanceAttrs: readonly string[];
-}
+// Generated from the param schemas below; see src/nodes/params.generated.ts.
+export type { SpawnInstancesParams } from "../nodes/params.generated.js";
 
 /** Spawner terminal: points → instance batches (plus point pass-through). */
 export const spawnInstances = standardNode<SpawnInstancesParams>({

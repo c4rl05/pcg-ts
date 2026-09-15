@@ -56,15 +56,10 @@ import {
   requireReportSlot,
   TRANSFER_BOOKKEEPING,
 } from "./util.js";
+import type { TransferAlongPathParams } from "./params.generated.js";
 
-
-/** Params of {@link transferAlongPath}. */
-export interface TransferAlongPathParams {
-  arcAttr: string;
-  attributes: string[];
-  wrap: boolean;
-  normalize: string[];
-}
+// Generated from the param schemas below; see params.generated.ts.
+export type { TransferAlongPathParams } from "./params.generated.js";
 
 /**
  * Refuse a list param holding an empty entry or a repeat, with the wording

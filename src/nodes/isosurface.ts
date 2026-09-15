@@ -61,7 +61,11 @@ import { resolveField } from "../fields/index.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { hashCombine } from "../random/index.js";
 import { standardNode } from "./registry.js";
-import { optionalGeometry, requireScalarColumn, resolveOn, type FieldParam } from "./util.js";
+import { optionalGeometry, requireScalarColumn, resolveOn } from "./util.js";
+import type { MeshFromFieldParams } from "./params.generated.js";
+
+// Generated from the param schemas below; see params.generated.ts.
+export type { MeshFromFieldParams } from "./params.generated.js";
 
 /**
  * Ceiling on the field samples one cook may take. The corner count grows
@@ -170,16 +174,6 @@ function requirePositionPure(spec: unknown, nodeType: string, path: string): voi
   for (const child of specChildEntries(node)) {
     requirePositionPure(child.value, nodeType, `${path}.${child.path}`);
   }
-}
-
-/** Params of {@link meshFromField}. */
-export interface MeshFromFieldParams {
-  field: FieldParam;
-  isoValue: number;
-  cellSize: number;
-  boundsMin: readonly number[];
-  boundsMax: readonly number[];
-  inside: string;
 }
 
 /** Contour a scalar field into a triangle mesh. */

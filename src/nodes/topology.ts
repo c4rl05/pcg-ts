@@ -46,8 +46,11 @@ import {
   requireReportSlot,
   requireScalarColumn,
   resolveOn,
-  type FieldParam,
 } from "./util.js";
+import type { ConnectByIndexParams, ConnectPointsParams } from "./params.generated.js";
+
+// Generated from the param schemas below; see params.generated.ts.
+export type { ConnectByIndexParams, ConnectPointsParams } from "./params.generated.js";
 
 /**
  * Ceiling on the edges one {@link connectPoints} may build. The radius is
@@ -75,14 +78,6 @@ const MAX_EDGES_HINT =
   "thin the cloud upstream with selfPrune or filterByDensity, or cook the region in cells. " +
   "Switching mode to 'relativeNeighborhood' or 'gabriel' does NOT help: they keep fewer edges, but " +
   "they SELECT them from the same radius neighbourhood, which is what this limit measures.";
-
-/** Params of {@link connectPoints}. */
-export interface ConnectPointsParams {
-  mode: string;
-  radius: FieldParam;
-  degreeAttr: string;
-  lengthAttr: string;
-}
 
 /** Build an edge network over a point cloud. */
 export const connectPoints = standardNode<ConnectPointsParams>({
@@ -527,16 +522,6 @@ function hasGabrielWitness(
     return true;
   }
   return false;
-}
-
-/** Params of {@link connectByIndex}. */
-export interface ConnectByIndexParams {
-  index: FieldParam;
-  rootValue: number;
-  outOfRange: string;
-  degreeAttr: string;
-  lengthAttr: string;
-  missCountAttr: string;
 }
 
 /** Build one edge per point from a parent-pointer column. */

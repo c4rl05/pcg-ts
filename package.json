@@ -101,6 +101,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
+    "prebuild": "vitest run src/docs/paramTypes.test.ts",
     "build": "tsup",
     "check": "tsc --noEmit && svelte-check --threshold error",
     "examples": "vite",
@@ -114,6 +115,7 @@
     "docs:graphs": "node scripts/gen-graphs.mjs",
     "docs:gallery": "node scripts/gen-gallery.mjs",
     "docs:site": "node scripts/gen-site.mjs",
+    "docs:types": "vitest run src/docs/paramTypes.test.ts -u",
     "graphs:golden": "node scripts/gen-graphs-golden.mjs",
     "prepublishOnly": "npm run build && npm run check && npm test && node scripts/smoke-dist.mjs"
   },

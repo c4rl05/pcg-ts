@@ -61,7 +61,6 @@ import { hashCombine, hashFloat } from "../random/index.js";
 import { standardNode } from "./registry.js";
 import {
   CANCEL_STRIDE,
-  type FieldParam,
   carryPrimitiveAttributes,
   locateOnArcLength,
   polylineArcTables,
@@ -71,6 +70,10 @@ import {
   requireScalarColumn,
   resolveOn,
 } from "./util.js";
+import type { PointScatterOnPathParams } from "./params.generated.js";
+
+// Generated from the param schemas below; see params.generated.ts.
+export type { PointScatterOnPathParams } from "./params.generated.js";
 
 /**
  * Ceiling on the points one `pointScatterOnPath` may emit, across the
@@ -88,13 +91,6 @@ import {
  * the expression instead.
  */
 const MAX_SCATTER_POINTS = 1_048_576;
-
-/** Params of {@link pointScatterOnPath}. */
-export interface PointScatterOnPathParams {
-  count: FieldParam;
-  arcAttr: string;
-  seed: number;
-}
 
 /** Uniform random points along every polyline of a path, hash-seeded. */
 export const pointScatterOnPath = standardNode<PointScatterOnPathParams>({

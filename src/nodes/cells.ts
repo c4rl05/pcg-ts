@@ -54,8 +54,11 @@ import {
   requireReportSlot,
   requireScalarColumn,
   resolveOn,
-  type FieldParam,
 } from "./util.js";
+import type { VoronoiCellsParams } from "./params.generated.js";
+
+// Generated from the param schemas below; see params.generated.ts.
+export type { VoronoiCellsParams } from "./params.generated.js";
 
 /**
  * Ceiling on the ring corners one {@link voronoiCells} may build, matching
@@ -80,14 +83,6 @@ const MAX_CELL_VERTICES_HINT =
   "corners for k gathered neighbours, so the two ceilings this node carries — one on the pairs " +
   "the scan finds, one on the corners it writes — move together in practice even though they " +
   "count different things.";
-
-/** Params of {@link voronoiCells}. */
-export interface VoronoiCellsParams {
-  radius: FieldParam;
-  onUncertified: string;
-  areaAttr: string;
-  uncertifiedAttr: string;
-}
 
 /** Build the Voronoi cell of every point, as a closed polyline. */
 export const voronoiCells = standardNode<VoronoiCellsParams>({

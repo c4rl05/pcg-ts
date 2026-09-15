@@ -73,6 +73,10 @@ import {
   requireScalarColumn,
   resolveOn,
 } from "./util.js";
+import type { ArcTileParams, RunFitParams } from "./params.generated.js";
+
+// Generated from the param schemas below; see params.generated.ts.
+export type { ArcTileParams, RunFitParams } from "./params.generated.js";
 
 /**
  * Resolve a param naming a scalar numeric POINT attribute, with a message
@@ -145,23 +149,6 @@ function perElement(
 
 // ---------------------------------------------------------------------------
 // runFit
-
-/** Params of {@link runFit}. */
-export interface RunFitParams {
-  arcAttr: string;
-  valueAttr: string;
-  gap: FieldParam;
-  period: FieldParam;
-  wrap: boolean;
-  slopeAttr: string;
-  residualAttr: string;
-  spanAttr: string;
-  idAttr: string;
-  indexAttr: string;
-  countAttr: string;
-  startAttr: string;
-  interceptAttr: string;
-}
 
 /** One column {@link runFit} may write, and what it is called. */
 interface RunFitSlot {
@@ -643,21 +630,6 @@ export const runFit = standardNode<RunFitParams>({
  * where the process simply dies.
  */
 const MAX_TILE_POINTS = 1_048_576;
-
-/** Params of {@link arcTile}. */
-export interface ArcTileParams {
-  startAttr: string;
-  lengthAttr: string;
-  pathAttr: string;
-  spacing: FieldParam;
-  flare: FieldParam;
-  taper: FieldParam;
-  axis: string;
-  flareAttr: string;
-  tileIndexAttr: string;
-  rangeIndexAttr: string;
-  rangeNames: string[];
-}
 
 /** A repeated piece laid over each of a path's arc ranges. */
 export const arcTile = standardNode<ArcTileParams>({

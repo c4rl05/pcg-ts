@@ -36,3 +36,8 @@ export {
   type OpenAssetSet,
   describeGraphAssets,
 } from "./nodes/graphAssets.js";
+// `repeatUntil`'s params, generated with every other node's from the registry
+// schemas. The only one named here rather than re-exported by its node's module:
+// the node registers in `serialize.ts`, where the same shape is still spelled
+// inline, and `./nodes/index.ts` publishes only the loop's factory.
+export type { RepeatUntilParams } from "./nodes/params.generated.js";

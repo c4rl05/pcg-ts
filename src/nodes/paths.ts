@@ -71,6 +71,28 @@ import {
   resolveOnMaybeGpu,
   writePolylineTangents,
 } from "./util.js";
+import type {
+  PathPointAtParams,
+  PathResampleParams,
+  PathRunsParams,
+  PathScanParams,
+  PathSegmentsParams,
+  PointsToPathParams,
+  WriteCurveFrameParams,
+  WriteTangentsParams,
+} from "./params.generated.js";
+
+// Generated from the param schemas below; see params.generated.ts.
+export type {
+  PathPointAtParams,
+  PathResampleParams,
+  PathRunsParams,
+  PathScanParams,
+  PathSegmentsParams,
+  PointsToPathParams,
+  WriteCurveFrameParams,
+  WriteTangentsParams,
+} from "./params.generated.js";
 
 /**
  * Resolve a param that names a scalar numeric point attribute, with an
@@ -127,14 +149,6 @@ function requireGroupPointAttr(
     );
   }
   return attr;
-}
-
-/** Params of {@link pointsToPath}. */
-export interface PointsToPathParams {
-  closed: boolean;
-  groupAttr: string;
-  orderAttr: string;
-  shortGroups: string;
 }
 
 /**
@@ -329,17 +343,6 @@ export const pointsToPath = standardNode<PointsToPathParams>({
     return { out: [makeGeometryItem(geo)] };
   },
 });
-
-/** Params of {@link pathResample}. */
-export interface PathResampleParams {
-  mode: string;
-  count: number;
-  spacing: FieldParam;
-  lengthAttr: string;
-  stepAttr: string;
-  resampledLengthAttr: string;
-  sampleArcAttr: string;
-}
 
 /**
  * The PER-PATH reports {@link pathResample} writes, in the order the
@@ -979,14 +982,6 @@ export const pathResample = standardNode<PathResampleParams>({
   },
 });
 
-/** Params of {@link pathSegments}. */
-export interface PathSegmentsParams {
-  axis: string;
-  radius: FieldParam;
-  extend: FieldParam;
-  segmentIndexAttr: string;
-}
-
 /** One oriented instance point per polyline segment. */
 export const pathSegments = standardNode<PathSegmentsParams>({
   type: "pathSegments",
@@ -1198,12 +1193,6 @@ export const pathSegments = standardNode<PathSegmentsParams>({
   },
 });
 
-/** Params of {@link pathPointAt}. */
-export interface PathPointAtParams {
-  mode: string;
-  parameter: FieldParam;
-}
-
 /** Move each point of a path to a chosen parameter along its own polyline. */
 export const pathPointAt = standardNode<PathPointAtParams>({
   type: "pathPointAt",
@@ -1333,16 +1322,6 @@ export const pathPointAt = standardNode<PathPointAtParams>({
     return { out: [makeGeometryItem(geo)] };
   },
 });
-
-/** Params of {@link pathScan}. */
-export interface PathScanParams {
-  name: string;
-  outName: string;
-  reduce: string;
-  mode: string;
-  normalize: boolean;
-  totalAttr: string;
-}
 
 /** A running fold along a path, in walk order. */
 export const pathScan = standardNode<PathScanParams>({
@@ -1578,17 +1557,6 @@ export const pathScan = standardNode<PathScanParams>({
     return { out: [makeGeometryItem(geo)] };
   },
 });
-
-/** Params of {@link pathRuns}. */
-export interface PathRunsParams {
-  name: string;
-  boundary: string;
-  outName: string;
-  reduce: string;
-  mode: string;
-  direction: string;
-  wrap: boolean;
-}
 
 /** A running total WITHIN each run of a path, reset at flagged points. */
 export const pathRuns = standardNode<PathRunsParams>({
@@ -1829,11 +1797,6 @@ export const pathRuns = standardNode<PathRunsParams>({
   },
 });
 
-/** Params of {@link writeTangents}. */
-export interface WriteTangentsParams {
-  name: string;
-}
-
 /** Per-point tangents at a path's own points, keeping the path intact. */
 export const writeTangents = standardNode<WriteTangentsParams>({
   type: "writeTangents",
@@ -1892,14 +1855,6 @@ export const writeTangents = standardNode<WriteTangentsParams>({
     return { out: [makeGeometryItem(geo)] };
   },
 });
-
-/** Params of {@link writeCurveFrame}. */
-export interface WriteCurveFrameParams {
-  tangentName: string;
-  normalName: string;
-  binormalName: string;
-  curvatureName: string;
-}
 
 /**
  * Where along an OPEN path the TANGENT at vertex `k` was actually

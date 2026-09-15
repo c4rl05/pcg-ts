@@ -93,7 +93,7 @@ const ROOT_TYPE_SURFACE = [
   "PointScatterInWorldParams", "PointScatterOnPathParams", "PointsToPathParams", "PrimType",
   "ProjectToPlaneParams", "PromoteAttributeParams", "PromoteMode", "QuotaRebalanceParams",
   "RegisteredNodeType", "RegisteredSubgraph", "RegistrationNodeRef", "RegistrationParam",
-  "RegistrationPin", "RemoveAttributeParams", "ResidentAttrDesc", "ResidentDesc",
+  "RegistrationPin", "RemoveAttributeParams", "RepeatUntilParams", "ResidentAttrDesc", "ResidentDesc",
   "ResidentMemberDesc", "ResidentRunContext", "ResidentRunInput", "ResidentRunResult",
   "RunFitParams", "SampleNearestPointParams", "SelfPruneParams", "SerializedConnection",
   "SerializedExposedParam", "SerializedExposedPin", "SerializedGraph", "SerializedGraphParam",

@@ -38,6 +38,10 @@ import {
   requireVec3Column,
   resolveOn,
 } from "./util.js";
+import type { OcclusionCullParams } from "./params.generated.js";
+
+// Generated from the param schemas below; see params.generated.ts.
+export type { OcclusionCullParams } from "./params.generated.js";
 
 /** Named once; every message in this file leads with it. */
 const NODE = "occlusionCull";
@@ -311,18 +315,6 @@ function sightChains(geo: Geometry, pd: ArrayLike<number>, ps: number): SightCha
   for (let i = 0; i < n; i++) points[i] = i;
   chains.push(measureChain(points, false, pd, ps));
   return chains;
-}
-
-/** Params of {@link occlusionCull}. */
-export interface OcclusionCullParams {
-  include: FieldParam;
-  lookAhead: FieldParam;
-  samples: number;
-  eyeOffset: FieldParam;
-  pushAxis: FieldParam;
-  pushMax: FieldParam;
-  pushStep: number;
-  pushClearance: FieldParam;
 }
 
 /** Move or drop points whose oriented box blocks a line of sight. */

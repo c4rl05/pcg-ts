@@ -35,6 +35,10 @@ import {
   requireScalarColumn,
   resolveOn,
 } from "./util.js";
+import type { QuotaRebalanceParams } from "./params.generated.js";
+
+// Generated from the param schemas below; see params.generated.ts.
+export type { QuotaRebalanceParams } from "./params.generated.js";
 
 /** Named once; every message in this file leads with it. */
 const NODE = "quotaRebalance";
@@ -51,18 +55,6 @@ const NODE = "quotaRebalance";
  * the whole of the test and it is right for both.
  */
 const STAYS = -1;
-
-/** Params of {@link quotaRebalance}. */
-export interface QuotaRebalanceParams {
-  category: FieldParam;
-  min: readonly number[];
-  max: readonly number[];
-  include: FieldParam;
-  eligible: FieldParam;
-  priority: FieldParam;
-  targetAttr: string;
-  unmetAttr: string;
-}
 
 /**
  * Resolve one field-capable scalar param to a per-point array.

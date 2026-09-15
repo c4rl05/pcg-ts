@@ -44,6 +44,28 @@ import {
   resolveOn,
   resolveOnAllowingNonFinite,
 } from "./util.js";
+import type {
+  FilterByAttributeParams,
+  FilterByBoundsParams,
+  FilterByDensityParams,
+  FilterByExpressionParams,
+  FilterPrimitivesByAttributeParams,
+  FilterPrimitivesByBoundsParams,
+  ProjectToPlaneParams,
+  SelfPruneParams,
+} from "./params.generated.js";
+
+// Generated from the param schemas below; see params.generated.ts.
+export type {
+  FilterByAttributeParams,
+  FilterByBoundsParams,
+  FilterByDensityParams,
+  FilterByExpressionParams,
+  FilterPrimitivesByAttributeParams,
+  FilterPrimitivesByBoundsParams,
+  ProjectToPlaneParams,
+  SelfPruneParams,
+} from "./params.generated.js";
 
 /**
  * Resolve one of this file's SCALAR field-capable params — a density
@@ -156,14 +178,6 @@ function rebuildFiltered(geo: Geometry, keep: ArrayLike<number>, keepTopology: b
     if (survives) prims.push(p);
   }
   return gatherPrimitives(geo, prims, keep);
-}
-
-/** Params of {@link filterByDensity}. */
-export interface FilterByDensityParams {
-  mode: string;
-  threshold: FieldParam;
-  seed: number;
-  topology: string;
 }
 
 /** Keep points by their `density` attribute. */
@@ -499,15 +513,6 @@ function boundsColumn(
   );
 }
 
-/** Params of {@link filterByBounds}. */
-export interface FilterByBoundsParams {
-  boundsMin: FieldParam;
-  boundsMax: FieldParam;
-  mode: string;
-  boundary: string;
-  topology: string;
-}
-
 /** Keep points inside (or outside) an axis-aligned box. */
 export const filterByBounds = standardNode<FilterByBoundsParams>({
   type: "filterByBounds",
@@ -584,16 +589,6 @@ export const filterByBounds = standardNode<FilterByBoundsParams>({
     return { out: [makeGeometryItem(rebuildFiltered(geo, keep, keepTopology))] };
   },
 });
-
-/** Params of {@link filterPrimitivesByBounds}. */
-export interface FilterPrimitivesByBoundsParams {
-  boundsMin: FieldParam;
-  boundsMax: FieldParam;
-  vertex: string;
-  mode: string;
-  boundary: string;
-  unreferencedPoints: string;
-}
 
 /** Keep or drop whole primitives by a bounds test, preserving topology. */
 export const filterPrimitivesByBounds = standardNode<FilterPrimitivesByBoundsParams>({
@@ -955,15 +950,6 @@ function comparisonRhs(
   );
 }
 
-/** Params of {@link filterByAttribute}. */
-export interface FilterByAttributeParams {
-  attribute: string;
-  comparison: string;
-  value: FieldParam;
-  stringValue: string;
-  topology: string;
-}
-
 /** Keep points by comparing a scalar or string point attribute. */
 export const filterByAttribute = standardNode<FilterByAttributeParams>({
   type: "filterByAttribute",
@@ -1018,15 +1004,6 @@ export const filterByAttribute = standardNode<FilterByAttributeParams>({
     return { out: [makeGeometryItem(rebuildFiltered(geo, keep, keepTopology))] };
   },
 });
-
-/** Params of {@link filterPrimitivesByAttribute}. */
-export interface FilterPrimitivesByAttributeParams {
-  attribute: string;
-  comparison: string;
-  value: FieldParam;
-  stringValue: string;
-  unreferencedPoints: string;
-}
 
 /** Keep whole primitives by comparing a primitive attribute, preserving topology. */
 export const filterPrimitivesByAttribute = standardNode<FilterPrimitivesByAttributeParams>({
@@ -1092,13 +1069,6 @@ export const filterPrimitivesByAttribute = standardNode<FilterPrimitivesByAttrib
   },
 });
 
-/** Params of {@link filterByExpression}. */
-export interface FilterByExpressionParams {
-  predicate: FieldParam;
-  seed: number;
-  topology: string;
-}
-
 /** Keep points where a boolean field predicate holds. */
 export const filterByExpression = standardNode<FilterByExpressionParams>({
   type: "filterByExpression",
@@ -1157,14 +1127,6 @@ export const filterByExpression = standardNode<FilterByExpressionParams>({
     return { out: [makeGeometryItem(rebuildFiltered(geo, keep, keepTopology))] };
   },
 });
-
-/** Params of {@link selfPrune}. */
-export interface SelfPruneParams {
-  mode: string;
-  minDistance: FieldParam;
-  priority: FieldParam;
-  topology: string;
-}
 
 /**
  * Resolve one of {@link selfPrune}'s field-capable params to exactly one
@@ -1532,13 +1494,6 @@ export const selfPrune = standardNode<SelfPruneParams>({
     return { out: [makeGeometryItem(rebuildFiltered(geo, keep, keepTopology))] };
   },
 });
-
-/** Params of {@link projectToPlane}. */
-export interface ProjectToPlaneParams {
-  origin: FieldParam;
-  normal: FieldParam;
-  keepOffset: boolean;
-}
 
 /** Orthogonally project points onto a plane. */
 export const projectToPlane = standardNode<ProjectToPlaneParams>({

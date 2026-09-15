@@ -19,7 +19,7 @@
  * Run after `npm run build`. Wired into `prepublishOnly`.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -250,6 +250,23 @@ for (const [subpath, target] of Object.entries(pkg.exports)) {
     if (!existsSync(join(root, t))) {
       fail(`exports["${subpath}"]`, `target ${t} does not exist in the build output`);
     }
+  }
+}
+
+// The typings must carry the registry's param descriptions: that is what
+// `src/nodes/params.generated.ts` exists for, and a d.ts bundler that drops
+// comments would lose it with every test still green, since nothing else
+// reads the emitted typings' prose. `pointGrid.countX` is the probe because
+// its description is one short sentence that no other param shares.
+const PARAM_DOC_PROBE = "Number of points along X. Minimum 1.";
+{
+  const name = "dist/*.d.ts carries the registry's param descriptions";
+  const typings = readdirSync(join(root, "dist")).filter((f) => f.endsWith(".d.ts"));
+  const carrying = typings.filter((f) => readFileSync(join(root, "dist", f), "utf8").includes(PARAM_DOC_PROBE));
+  if (carrying.length === 0) {
+    fail(name, `no dist/*.d.ts (of ${typings.length}) contains ${JSON.stringify(PARAM_DOC_PROBE)}, pointGrid.countX's description`);
+  } else {
+    console.log(`ok    ${name} (${carrying.join(", ")})`);
   }
 }
 

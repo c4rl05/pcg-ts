@@ -11,6 +11,10 @@
 import { createTriangleMesh } from "../data/index.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { standardNode } from "./registry.js";
+import type { MeshPrimitiveParams } from "./params.generated.js";
+
+// Generated from the param schemas below; see params.generated.ts.
+export type { MeshPrimitiveParams } from "./params.generated.js";
 
 /** Axis letters in world order, for error messages. */
 const AXIS_NAMES = ["x", "y", "z"] as const;
@@ -91,16 +95,6 @@ function appendQuad(
       }
     }
   }
-}
-
-/** Params of {@link meshPrimitive}. */
-export interface MeshPrimitiveParams {
-  shape: string;
-  size: readonly number[];
-  center: readonly number[];
-  orientation: string;
-  subdivisions: readonly number[];
-  flip: boolean;
 }
 
 /** Parametric triangle meshes: a subdivided plane or box. */

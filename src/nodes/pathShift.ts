@@ -81,6 +81,10 @@ import type { AttrData, AttrDefault, Attribute, Geometry } from "../data/index.j
 import { cloneGeometry, makeGeometryItem } from "../graph/index.js";
 import { standardNode } from "./registry.js";
 import { CANCEL_STRIDE, polylineWalks, requireGeometry, requireReportSlot } from "./util.js";
+import type { PathShiftParams } from "./params.generated.js";
+
+// Generated from the param schemas below; see params.generated.ts.
+export type { PathShiftParams } from "./params.generated.js";
 
 /**
  * The three readings of a position that ran off the end of a path, in
@@ -89,15 +93,6 @@ import { CANCEL_STRIDE, polylineWalks, requireGeometry, requireReportSlot } from
  * a ring than a table with ends.
  */
 const OUT_OF_RANGE = ["wrap", "clamp", "miss"] as const;
-
-/** Params of {@link pathShift}. */
-export interface PathShiftParams {
-  attributes: string[];
-  outNames: string[];
-  offset: number;
-  outOfRange: string;
-  hitAttr: string;
-}
 
 /**
  * Refuse a list param holding an empty entry or a repeat, with the wording

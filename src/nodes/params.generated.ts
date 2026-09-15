@@ -1,0 +1,4963 @@
+/**
+ * GENERATED FILE — do not edit it by hand. Rendered by
+ * `src/docs/paramTypes.ts` from the node registry's param schemas, and
+ * rewritten by `npm run docs:types`.
+ *
+ * The only generated TypeScript under `src/`, and generated for one
+ * reason: the registry schema is the one authored copy of each param's
+ * description, default, range and field capability, and this file carries
+ * that copy onto every standard node's `*Params` interface, where an editor
+ * hover and `dist/*.d.ts` can show it. To change a param's documentation,
+ * edit its schema in the node's module and run `npm run docs:types`.
+ *
+ * `src/docs/paramTypes.test.ts` fails when this file and the registry
+ * disagree, and `prebuild` runs that test first, so the first failure a
+ * stale file causes is the one that names the command — not a type error
+ * in whichever node's `execute` reads the new param.
+ */
+import type { DataItem } from "../graph/index.js";
+import type { FieldParam } from "./util.js";
+
+/**
+ * Params of the `arcTile` node type.
+ */
+export interface ArcTileParams {
+  /**
+   * POINT attribute on the RANGES input (tuple 1, numeric) holding where each range begins,
+   * as an arc length in WORLD UNITS along the path — the same coordinate pathResample steps
+   * and pathPointAt's 'distance' mode reads. Defaults to runFit's `startAttr` suggestion so
+   * a detected run tiles without renaming; note the one conversion that pairing needs, which
+   * is that runFit may have been run against a CUSTOM arc coordinate in other units (a lap
+   * measured in half-widths), and this node reads world units. On a CLOSED path the value
+   * wraps: any real number is legal and is taken modulo the path's length. On an OPEN path a
+   * range must lie inside the path, and one that does not is refused rather than clamped.
+   *
+   * @defaultValue `"runStart"`
+   */
+  startAttr: string;
+  /**
+   * POINT attribute on the RANGES input (tuple 1, numeric) holding how much arc each range
+   * covers, in world units. Must be > 0 on every range: a range with no length is a single
+   * placement rather than a tiling, and this node refuses one instead of emitting a lone
+   * tile that looks like a very short tunnel — drop it upstream (filterByAttribute on the
+   * length) or place it with pathPointAt. On a closed path it may not exceed the path's own
+   * length, since the tiles would lap the loop and cover the same arc twice. Must differ
+   * from `startAttr`: a start and a length are two values, and one column cannot hold both.
+   *
+   * @defaultValue `"runSpan"`
+   */
+  lengthAttr: string;
+  /**
+   * POINT attribute on the RANGES input (tuple 1, numeric) naming WHICH polyline each range
+   * belongs to, as an index into the path input's PRIMITIVE domain — the same numbering
+   * every error message here uses. Empty (the default) is legal only when the path input
+   * holds exactly ONE polyline, which is the ordinary case; with several, this is REQUIRED
+   * rather than defaulted to the first, because tiling the wrong road is a cook that looks
+   * entirely fine. An index that is not a polyline of the input is refused, listing the ones
+   * that are.
+   *
+   * @defaultValue `""`
+   */
+  pathAttr: string;
+  /**
+   * Ceiling on the distance between consecutive tiles, in world units. A range of length L
+   * takes max(1, ceil(L / spacing)) tiles at the centres of that many equal sub-intervals,
+   * so the PITCH is L / count and is at most this value — never more. Rounded up rather than
+   * to nearest so that pieces meant to abut do: a nearest-rounded pitch is wider than asked
+   * whenever the range is not a whole number of pieces long, and a gap in tiled cover is a
+   * hole rather than a near-miss. This node does not know how big your piece is, so overlap
+   * is spelled as a spacing SMALLER than the piece — about 5% under is enough to close the
+   * wedge two pieces leave on the outside of a bend. Must be > 0. AS A FIELD IT IS ONE
+   * SPACING PER RANGE, resolved on the RANGES input's POINT domain, which is what lets the
+   * pitch follow the piece: a range that chose a 5-unit strip and one that chose a 1-unit
+   * rib tile at their own pitches in ONE cook, reading the size the range itself carries. A
+   * field is not range-checked the way a plain value is, so bound the expression with
+   * max(<expr>, <the smallest pitch you meant>); a NaN or infinite spacing is refused,
+   * naming this param, and so is the whole cook when the resolved spacings would place more
+   * than 1048576 tiles.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  spacing: FieldParam;
+  /**
+   * Arc distance over which each MOUTH of a range opens, in world units; 0 (the default) is
+   * no flare. Every tile gets a ramp of 1 at the very mouth falling to 0 at this distance
+   * inside, taken from whichever end is nearer, and the ramp drives `taper` and `flareAttr`.
+   * It exists because a tiled cover that starts at full section is a wall with a hole in it:
+   * the eye reads an opening from the way the section grows, and the flare is also what
+   * keeps the view clear at the moment of entry, which is the moment it matters. A flare of
+   * at least half the range's length ramps every tile (the two mouths meet in the middle)
+   * and is legal — the ramps do not add, each tile taking the nearer mouth's. One value per
+   * RANGE as a field, resolved on the ranges' POINT domain exactly as `spacing` is, so a
+   * long tunnel and a short gantry can open over different distances in one cook.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  flare: FieldParam;
+  /**
+   * The `scale` a tile reaches AT the mouth, interpolated to 1 at `flare` inside; 1 (the
+   * default) is no taper, and with `flare` at 0 this is read nowhere. Applied to the two
+   * scale components that are NOT `axis` — the cross-section — so the mouth opens or pinches
+   * while the piece's length along the path is left alone; scaling all three would make the
+   * mouth pieces longer as well as wider and leave gaps between them. Above 1 opens the
+   * mouth (1.5 is a mouth half again as tall and wide), below 1 pinches it, which is what a
+   * run that should taper away to nothing at its ends wants. One value per RANGE as a field,
+   * on the ranges' POINT domain.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  taper: FieldParam;
+  /**
+   * Which local axis of the tiled asset points ALONG the path, and therefore which two
+   * `scale` components `taper` opens. Default '+z', matching orientAlongVector rather than
+   * pathSegments' '+y': this node points a piece at a heading and does not stretch it to
+   * span anything, where pathSegments puts the SEGMENT'S LENGTH on the chosen axis to draw a
+   * tube. Roll around the path is fixed by an up hint of [0, 1, 0] with the same
+   * deterministic fallbacks orientAlongVector uses ([0, 0, 1], then [1, 0, 0]) — never
+   * random, and never left to whatever a degenerate cross product produced.
+   *
+   * - Enum: `"+x"` | `"-x"` | `"+y"` | `"-y"` | `"+z"` | `"-z"`
+   *
+   * @defaultValue `"+z"`
+   */
+  axis: string;
+  /**
+   * OPT-IN: POINT attribute (f32) on the output receiving each tile's raw FLARE RAMP — 1 at
+   * the mouth, falling linearly to 0 at `flare` inside, and 0 everywhere on a range with no
+   * flare. Empty (the default) writes none and the output is byte-identical to a cook
+   * without it. It is here because WHAT a mouth does is the asset's business and not this
+   * node's: `taper` covers the common case of opening the section, and everything else —
+   * lifting the roof, tilting the pieces outward, swapping in a wider variant at the
+   * entrance, fading a material — is a field or a setAttribute reading this column. The ramp
+   * is per tile, taken from the NEARER mouth, so a range shorter than twice its flare has
+   * every tile ramped and none of them at zero.
+   *
+   * @defaultValue `""`
+   */
+  flareAttr: string;
+  /**
+   * OPT-IN: POINT attribute (i32) receiving each tile's 0-BASED INDEX WITHIN ITS OWN RANGE,
+   * restarting at 0 for every range. Empty (the default) writes none. It is the per-range
+   * coordinate nothing else can state: this node emits NEW points, so an index written
+   * upstream with setAttribute does not survive, and `curveU` is a fraction of the whole
+   * path rather than of the range. Without it, 'every other rib' has to be spelled on the
+   * GLOBAL point index, which agrees with the per-range one only while every range emits the
+   * same, EVEN, number of tiles and reports nothing when that stops being true. Index 0 is
+   * the tile nearest the range's start in the path's walk direction, including on a range
+   * that wraps a closed path's seam.
+   *
+   * @defaultValue `""`
+   */
+  tileIndexAttr: string;
+  /**
+   * OPT-IN: POINT attribute (i32) receiving the index of the RANGE a tile came from, in the
+   * ranges input's own point order. Empty (the default) writes none. This is the group key:
+   * partitionByAttribute splits one item per run, pointsToPath's `groupAttr` threads each
+   * run's tiles into a path of their own, and attributeReduce collapses per run — 'how long
+   * did this run actually come out' is a reduction over this. It also names the atomic unit
+   * for anything that must be decided once per run and is easier to write downstream than
+   * upstream.
+   *
+   * @defaultValue `""`
+   */
+  rangeIndexAttr: string;
+  /**
+   * Point attributes of the RANGES input to copy onto every tile of that range, in any
+   * order; empty (the default) carries nothing, which is not an error. THIS IS THE ATOMICITY
+   * MECHANISM. A tunnel is one piece repeated, so the piece is chosen ONCE — on the range
+   * point, where there is exactly one element per run to choose on, by whatever upstream
+   * node makes that kind of decision — and copied here, unchanged, onto every tile. A
+   * per-tile draw is uniform only by accident: the case this node comes from measured a
+   * planned 17-unit covered stretch back as 8 the moment poses were drawn per piece, because
+   * varying the shape along a run reopens the seams the overlap existed to close. Carry the
+   * asset id, the variant, the yaw, the width, the material — anything that must be the same
+   * all the way along. Each column arrives with the range's own type, tuple size and
+   * default. Three names are refused rather than resolved silently: one this node writes
+   * itself (P, rot, scale, density, boundsMin, boundsMax, color, seed, tangent, curveU, and
+   * whatever flareAttr/tileIndexAttr/rangeIndexAttr named) — copy it to another name on the
+   * ranges first with setAttribute and carry that; a name repeated in the list; and a name
+   * the ranges input does not have, which is an error listing what it does have.
+   *
+   * @defaultValue `[]`
+   */
+  rangeNames: readonly string[];
+}
+
+/**
+ * Params of the `attributeReduce` node type.
+ */
+export interface AttributeReduceParams {
+  /**
+   * Numeric attribute to reduce (tuple 1..4). Must exist on `domain`. Ignored by mode
+   * 'count', which counts elements and may leave this empty.
+   *
+   * @defaultValue `"density"`
+   */
+  name: string;
+  /**
+   * Domain to reduce over: point, vertex, primitive, or detail (one element).
+   *
+   * - Enum: `"point"` | `"vertex"` | `"primitive"` | `"detail"`
+   *
+   * @defaultValue `"point"`
+   */
+  domain: string;
+  /**
+   * How the elements collapse: sum, min, max, average (each componentwise over the tuple,
+   * NaN elements skipped), or count (how many elements the domain has, ignoring `name`).
+   *
+   * - Enum: `"sum"` | `"min"` | `"max"` | `"average"` | `"count"`
+   *
+   * @defaultValue `"max"`
+   */
+  mode: string;
+  /**
+   * Name of the detail attribute to write. Empty (the default) reuses `name`, which is what
+   * promoting would have produced; give distinct names to hold several reductions of one
+   * attribute at once. The shape is this node's to pick (f32 at the source's tuple size, or
+   * u32 for mode 'count'), so a name the DETAIL domain already holds under a different shape
+   * is REFUSED rather than deleted and re-added — writing it would destroy that column while
+   * the cook still looked fine. A same-shape column is reused and reset. The one exception
+   * is reducing a detail attribute into its own name: there the column replaced is the
+   * column read, so it converts in place.
+   *
+   * @defaultValue `""`
+   */
+  outName: string;
+}
+
+/**
+ * Params of the `attributeRemap` node type.
+ */
+export interface AttributeRemapParams {
+  /**
+   * Numeric attribute to rescale (tuple 1..4). Must exist on `domain`.
+   *
+   * @defaultValue `"density"`
+   */
+  name: string;
+  /**
+   * Name of the f32 attribute to write on the same domain. Empty (the default) rewrites
+   * `name` in place, which also converts an integer attribute to f32. Writing over a
+   * DIFFERENT attribute that already exists with another shape is REFUSED rather than
+   * deleted and re-added — remapping into an i32 `id` or into `P` would destroy that column
+   * while the cook still looked fine. A same-shape column is reused, and the in-place
+   * conversion above stays legal because there the column replaced is the one being read.
+   *
+   * @defaultValue `""`
+   */
+  outName: string;
+  /**
+   * Domain the attribute lives on: point, vertex, primitive, or detail.
+   *
+   * - Enum: `"point"` | `"vertex"` | `"primitive"` | `"detail"`
+   *
+   * @defaultValue `"point"`
+   */
+  domain: string;
+  /**
+   * 'range' takes the input range from inMin/inMax; 'fit' measures the attribute's actual
+   * minimum and maximum over the domain and ignores inMin/inMax — a FIELD in either of them
+   * is ignored the same way, and is not evaluated at all. Only the INPUT window is measured:
+   * outMin/outMax are read in both modes, fields included.
+   *
+   * - Enum: `"range"` | `"fit"`
+   *
+   * @defaultValue `"range"`
+   */
+  mode: string;
+  /**
+   * Value mapped to outMin, in mode 'range'. As a FIELD it is a PER-ELEMENT window end,
+   * evaluated on `domain`, so each element is rescaled against its OWN input range instead
+   * of one range shared by the whole domain: a per-point noise floor, or a threshold read
+   * from another attribute, turns the same source values into different results for
+   * different elements — which no single number can do. The window is per ELEMENT, not per
+   * component: a tuple attribute remaps all of its components against that element's one
+   * window, as it already does against the shared one. Mode 'fit' IGNORES this param and
+   * does not evaluate it at all — a field there is dead exactly as a plain number is,
+   * because fit measures the attribute's own minimum and maximum instead. A degenerate
+   * window is a per-element outcome, not a refusal: where inMin resolves equal to inMax that
+   * element maps to outMin (NaN sources stay NaN), the same rule the shared empty range
+   * follows. Non-finite is refused, naming this param, since an infinite span maps
+   * everything to 0 and a NaN one erases the attribute.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `-1`
+   */
+  inMin: FieldParam;
+  /**
+   * Value mapped to outMax, in mode 'range'. As a FIELD it is a PER-ELEMENT window end
+   * evaluated on `domain`, the upper counterpart of inMin: the two together give each
+   * element its own input range, so 'what counts as high here' can vary across the domain —
+   * the per-element version of the hand-tuned remap(x, -1, 1, 0, 1). Reversed per element is
+   * fine (inMin above inMax) and inverts that element only. Mode 'fit' IGNORES this param
+   * and does not evaluate it at all. Where it resolves equal to inMin the window is empty
+   * and that element maps to outMin, NaN sources excepted (they stay NaN). Non-finite is
+   * refused, naming this param.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  inMax: FieldParam;
+  /**
+   * Value inMin maps to. As a FIELD it is a PER-ELEMENT output floor, evaluated on `domain`,
+   * so each element lands in its own destination range — the way to remap a shared quantity
+   * into per-element bands (a scale whose floor follows the point's size, a colour ramp
+   * whose ends differ by region) in one node. Read per element in every mode, INCLUDING
+   * 'fit', which measures only the input window; and it is also the value an empty window
+   * (inMin == inMax, or a fit over nothing usable) maps that element to, so a fielded outMin
+   * decides the degenerate case too. With clamp on, the bounds are this element's own
+   * outMin/outMax, whichever is smaller and larger. Non-finite is refused, naming this
+   * param.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  outMin: FieldParam;
+  /**
+   * Value inMax maps to. As a FIELD it is a PER-ELEMENT output ceiling, evaluated on
+   * `domain`, the upper counterpart of outMin: with both fielded, every element gets its own
+   * output band, and reversing them per element (outMax below outMin) inverts that element
+   * alone. Read per element in every mode, INCLUDING 'fit'. Note that an empty input window
+   * maps to outMin, not to this param, so a per-element ceiling has no effect where the
+   * window collapsed. Non-finite is refused, naming this param.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  outMax: FieldParam;
+  /**
+   * Hold results inside the output range (whichever of outMin/outMax is smaller or larger).
+   * False (the default) extrapolates, matching the `remap` field function; true is the usual
+   * choice when the result feeds density or color. In mode 'fit' it only affects NaN-free
+   * data trivially, since fitted values already land inside the range.
+   *
+   * @defaultValue `false`
+   */
+  clamp: boolean;
+}
+
+/**
+ * Params of the `connectByIndex` node type.
+ */
+export interface ConnectByIndexParams {
+  /**
+   * Which point each point links to, as an ordinal counting from 0, resolved on the point
+   * domain. TRUNCATED TOWARD ZERO before it is read, on `transferByIndex`'s rule and for its
+   * reason, so 3.9 and 3.0 both name point 3. AS A FIELD THIS IS THE POINT OF THE NODE:
+   * `attribute("parent")` spends a column an earlier stage settled, which is how a growth
+   * loop's `targetIndexAttr` or a `sampleNearestPoint` `indexAttr` becomes an edge. As a
+   * plain number it is one parent shared by every point — a star, and mostly useful for a
+   * test — with one catch worth stating: the point it names then names ITSELF, which the
+   * default `outOfRange` refuses, so a plain index wants `outOfRange: "skip"` alongside it.
+   * Note also that the shipped defaults (`index` -1 against `rootValue` -1) make every point
+   * a root, so an unconfigured node emits no primitives at all rather than failing.
+   * PRECISION: a field resolves to an f32 column and f32 represents every integer only to
+   * 16,777,216, so a pointer computed beyond that lands on a neighbouring integer — the
+   * arithmetic that produced it is where the precision went, not this node, and a cloud that
+   * large wants an i32 attribute read straight through `attribute()`. NON-FINITE IS REFUSED
+   * before this node reads a thing, through two different doors: a FIELD is caught by the
+   * shared resolver guard, which names this param and the offending element and says how to
+   * guard the expression, while a PLAIN number is caught by the param schema wherever a
+   * graph is loaded, patched or exposed. `execute` itself has no check, because neither door
+   * can be walked past. NaN and the infinities are what a broken sub-expression produces,
+   * and none of them is a pointer under any reading. If a broken pointer should be a root
+   * rather than a failed cook, say so — map it to `rootValue` with a select() and it is data
+   * again.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `-1`
+   */
+  index: FieldParam;
+  /**
+   * The index value meaning THIS POINT HAS NO PARENT: it contributes no edge, and that is
+   * not a miss. -1 by default, matching the sentinel `copyToPoints`' `targetIndexAttr`
+   * writes and `quotaRebalance` uses for 'stays'. Compared AFTER the same truncation the
+   * index takes, so -1.5 and -1 are the same root. A rootValue that lands INSIDE [0,
+   * pointCount-1] is legal and silently drops every edge naming THAT POINT, counting no
+   * miss, because a root is not a miss — it is a sentinel, and one a real ordinal could
+   * equal is an ambiguous sentinel. -1 cannot collide with any ordinal, which is why it is
+   * the default. A forest of several trees, a growth loop's seed point, and a network still
+   * being built all need to say this, which is why it is separate from `outOfRange`: folding
+   * the two together would make 'no parent yet' indistinguishable from 'this pointer is
+   * broken', and the first is the ordinary state of the data while the second is a defect
+   * worth stopping for.
+   *
+   * @defaultValue `-1`
+   */
+  rootValue: number;
+  /**
+   * How a pointer that is neither usable nor `rootValue` is read: one outside [0,
+   * pointCount-1], or one naming the point ITSELF, which would be a 2-vertex polyline whose
+   * two vertices are the same point and is never what an author meant. 'error' (the default)
+   * refuses the cook naming the point and the value, which is right when the pointers were
+   * COMPUTED by the graph and a bad one is a defect upstream. 'skip' emits no edge for that
+   * point and counts it in `missCountAttr`, which is right when the pointers are DATA the
+   * graph does not control — read from a table, carried across a cell boundary, or produced
+   * by a stage that legitimately does not resolve every one. THERE IS NO 'clamp' OR 'wrap',
+   * and their absence is deliberate: `transferByIndex` can clamp because the nearest VALUE
+   * is a defensible answer, but the nearest EDGE is not — clamping would silently wire a
+   * whole subtree onto point 0 and the result would look like a real network.
+   *
+   * - Enum: `"error"` | `"skip"`
+   *
+   * @defaultValue `"error"`
+   */
+  outOfRange: string;
+  /**
+   * Name of a u32 point attribute receiving each point's DEGREE — how many emitted edges
+   * touch it, counting BOTH directions, so a fork with three children and one parent reads 4
+   * and a tip reads 1. Empty (the default) writes none. This is how a grown structure is
+   * read back: tips are degree 1, a root with no parent is degree 1 too, and anything above
+   * 2 is a fork. The shape is this node's to pick (u32, tuple 1), so a name the input
+   * already holds under a DIFFERENT shape is REFUSED rather than overwritten — writing it
+   * would delete that column outright and the cook would still look fine. A same-shape
+   * column IS reused and reset, so re-running this node over its own output is fine.
+   *
+   * @defaultValue `""`
+   */
+  degreeAttr: string;
+  /**
+   * Name of an f32 PRIMITIVE attribute receiving each edge's length in world units. Empty
+   * (the default) writes none. On a grown structure this is the segment length, which is
+   * what a taper or a cost driver wants. The shape is this node's to pick (f32, tuple 1), so
+   * a name already present on the output's primitive domain under a different shape is
+   * REFUSED — which in practice means `primtype`, the string attribute that marks these
+   * primitives as polylines and without which nothing downstream would recognise them.
+   *
+   * @defaultValue `""`
+   */
+  lengthAttr: string;
+  /**
+   * When non-empty, writes the number of points whose pointer was SKIPPED into a u32 DETAIL
+   * attribute of this name. Always 0 under `outOfRange` 'error', which cannot reach this.
+   * ROOTS ARE NOT COUNTED — a root is data, not a miss. Empty = don't record. A count is a
+   * cook statistic and cannot be filtered on; for WHICH points, read `degreeAttr` and
+   * compare against what you expected. This is a reporting slot whose shape this node picks
+   * (u32, tuple 1), so a name the detail domain already holds under a different shape is
+   * REFUSED rather than deleted and re-added — give it a name of its own (a "__" prefix
+   * marks it internal) or removeAttribute the clash first.
+   *
+   * @defaultValue `""`
+   */
+  missCountAttr: string;
+}
+
+/**
+ * Params of the `connectPoints` node type.
+ */
+export interface ConnectPointsParams {
+  /**
+   * Which pairs become edges. 'radius' connects every pair closer than `radius` — dense, and
+   * the count grows with the square of the point count. 'relativeNeighborhood' additionally
+   * requires that no third point is closer to BOTH endpoints than they are to each other
+   * (the lune test), which keeps a sparse, road-like net (it contains a minimum spanning
+   * tree, so it does not disconnect what the radius reached, and it keeps cycles, so it is a
+   * network rather than a tree). 'gabriel' requires instead that no third point lies inside
+   * the SPHERE having the pair as its diameter, which is a strictly weaker condition than
+   * the lune: every relativeNeighborhood edge is also a gabriel edge, so gabriel sits
+   * BETWEEN the two other modes in density and likewise contains a minimum spanning tree.
+   * Reach for it when relativeNeighborhood thins a layout too far — it keeps the short
+   * cross-links that close small cells, which is what makes it read as cracked ground, leaf
+   * venation or plot boundaries rather than as a road net. All three modes read the same
+   * radius neighbourhood and are bounded by the same edge limit, so neither test costs a
+   * wider search than 'radius'.
+   *
+   * - Enum: `"radius"` | `"relativeNeighborhood"` | `"gabriel"`
+   *
+   * @defaultValue `"radius"`
+   */
+  mode: string;
+  /**
+   * Largest distance that can become an edge, in world units, tested STRICTLY: a pair at
+   * exactly `radius` is NOT connected. That strictness is deliberate and is what makes a
+   * partitioned cook exact — a neighbour lying exactly on a cell's far face is excluded from
+   * the cell by the half-open ownership rule, and under a strict test it is not an edge of
+   * anything that cell owns either, so the two conventions cannot disagree. 0 builds no
+   * edges. As a FIELD it is a PER-POINT REACH, and a pair becomes an edge when it is closer
+   * than the LARGER of the two reaches — the same rule selfPrune's minDistance uses, and for
+   * the same reason: the SMALLER would let a big point be crowded by a small one, and the
+   * SUM would double the spacing of an evenly-sized cloud, so neither agrees with the same
+   * number passed plainly. That rule is what keeps the relation SYMMETRIC. Without one a
+   * per-point radius makes 'A is near B' and 'B is near A' two different tests and an edge
+   * depends on which endpoint asked, which is why a field here needs a stated pair rule and
+   * not merely a column. A per-point reach of 0 or less connects that point to nothing,
+   * though a bigger neighbour can still reach IT. A NON-FINITE reach is REFUSED rather than
+   * read as nothing: this param takes the guarded resolver, so a NaN or an Infinity stops
+   * the cook naming the offending element, unlike pointNeighborhood's radius, where both are
+   * documented values. The distinction is which mistake is likelier — a reach is arithmetic
+   * an author writes, and a NaN there is a broken expression rather than a request for no
+   * edges. TWO COSTS travel with a field, both cost and neither correctness. The candidate
+   * scan runs at the WIDEST reach in the cloud, since either endpoint may be the larger, so
+   * the edge ceiling is measured on those candidates rather than on the edges that survive.
+   * And under a partitioned cook the halo is no longer `radius` but the GLOBAL MAXIMUM this
+   * field can return anywhere in the world — a bound to be derived rather than measured,
+   * because the cloud a cell sees has already been clipped by the halo being sized. Take a
+   * constant times the range of whatever drives it (a noise is in [-1, 1], so `2 + 3 *
+   * noise` maxes at 5) and widen by that; underestimating does not throw, it drops the long
+   * edges at the seams only.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  radius: FieldParam;
+  /**
+   * Name of a u32 point attribute receiving each point's DEGREE — how many emitted edges
+   * touch it (0 for an isolated point). Empty (the default) writes none. Use it to size
+   * junctions, or to find the dead ends of a network with filterByAttribute. The shape is
+   * this node's to pick (u32, tuple 1), so a name the input already holds under a DIFFERENT
+   * shape is REFUSED, not overwritten: writing it would delete that column outright and the
+   * cook would still look fine (degreeAttr "P" would leave a cloud with no positions). A
+   * same-shape column IS reused and reset, so re-running this node over its own output is
+   * fine.
+   *
+   * @defaultValue `""`
+   */
+  degreeAttr: string;
+  /**
+   * Name of an f32 PRIMITIVE attribute receiving each edge's length in world units. Empty
+   * (the default) writes none. Handy as a width or cost driver, and as a filter key once the
+   * network is promoted. The shape is this node's to pick (f32, tuple 1), so a name already
+   * present on the output's primitive domain under a different shape is REFUSED — which in
+   * practice means `primtype`, the string attribute that marks these primitives as polylines
+   * and without which nothing downstream would recognise them. Note that the input's own
+   * primitive attributes are dropped by the topology replacement before this is written.
+   *
+   * @defaultValue `""`
+   */
+  lengthAttr: string;
+}
+
+/**
+ * Params of the `copyToPoints` node type.
+ */
+export interface CopyToPointsParams {
+  /**
+   * Target point attributes to carry onto the copies, in any order. Each copy in a target's
+   * block gets that target's value, and the column arrives with the target's type, tuple
+   * size and default. An empty list carries nothing, which is the default and not an error.
+   * Three kinds of name are refused rather than resolved silently: "P", "rot", "scale" and
+   * "seed", because they are composed per copy and already hold the target's contribution
+   * (copy one to another name on the target with setAttribute and carry that to get the raw
+   * value); a name repeated in the list; and a name the source also carries, because the two
+   * would write the same column. A name absent from the target is an error listing what the
+   * target does carry.
+   *
+   * @defaultValue `[]`
+   */
+  targetNames: readonly string[];
+  /**
+   * Name of an i32 point attribute to write the TARGET INDEX into — 0 for every copy that
+   * landed on the first target point, 1 for the second, and so on. Empty (the default)
+   * writes nothing. This is the key downstream nodes group by: pointsToPath's `groupAttr`
+   * turns "the copies of one target" into one path per target, and partitionByAttribute
+   * turns them into one item each. The node already computes this index to place the copies,
+   * so naming it here replaces the setAttribute writing `{"fn":"index"}` on the target
+   * purely so `targetNames` had something to carry. The column is i32, tuple size 1, default
+   * -1 (which no copy ever gets, so an element appended later reads as belonging to no
+   * target). That stays true under `sourceGroupAttr`/`targetGroupAttr` selection, and it is
+   * worth saying why, because selection is exactly what could have broken it: a target that
+   * matches no source group contributes ZERO copies rather than a copy carrying some
+   * placeholder, so its index is simply a value this column never holds — -1 still means "no
+   * target" and not "the target that took nothing". What selection does change is that a
+   * target index can be MISSING from the output entirely, so a downstream grouping on this
+   * column sees fewer groups than the target cloud has points (pointsToPath's `shortGroups
+   * "skip"` is the setting that expects exactly that). Refused for the same three reasons
+   * `targetNames` refuses a name: "P", "rot", "scale" and "seed" are composed per copy, a
+   * name the source already carries would have two writers, and so would a name
+   * `targetNames` is carrying.
+   *
+   * @defaultValue `""`
+   */
+  targetIndexAttr: string;
+  /**
+   * Name of a scalar SOURCE point attribute holding each source point's group key — the half
+   * of per-target source selection that says what each source point IS. Set it together with
+   * `targetGroupAttr` (the key each target ASKS FOR) and a target receives only the source
+   * points whose key equals its own; leave BOTH empty, the default, and every target
+   * receives every source point exactly as before. Setting one without the other is refused
+   * rather than half-applied, because the two lenient readings — ignore it, or match
+   * everything against nothing — differ by the entire output. A NUMERIC key must be a whole
+   * number, the rule `pointsToPath`'s `groupAttr` sets and for its reason: a key is an
+   * IDENTITY, two values a ULP apart would be two groups, and CPU/GPU parity is a tolerance
+   * rather than an equality — so write ids with setAttribute type 'i32' (which truncates),
+   * and a fractional value is an error naming the point. A STRING key names the group
+   * instead, which is the usual thing a group is (an asset id, a pose name, a species), and
+   * it compares BY VALUE and never by string-table index, so the same word selects the same
+   * points in every geometry and every cell. Both sides must be the same kind: a string
+   * column against a numeric one can never match and is refused rather than cooking to
+   * nothing. This column is an ordinary source attribute and rides onto the copies like any
+   * other; the key does not disappear because it was used.
+   *
+   * @defaultValue `""`
+   */
+  sourceGroupAttr: string;
+  /**
+   * Name of a scalar TARGET point attribute naming which source group that target takes —
+   * the half of per-target source selection that does the asking. Used only together with
+   * `sourceGroupAttr`, under the key rules stated there. What it buys is the case this node
+   * could not express: when each target wants a DIFFERENT subset of the source, the
+   * alternative is to stamp the whole source on every target and filter the wrong copies
+   * away, which costs sourcePoints * targetPoints intermediate points to keep a few thousand
+   * — the measured racetrack case stamped 776,000 copies to keep 1,900. With this set the
+   * node emits only the copies that survive, so the stage becomes linear in the answer.
+   * Everything else is unchanged: the copies still come out in contiguous per-target blocks,
+   * in ascending SOURCE INDEX within a block, and `targetNames`, `targetIndexAttr` and the
+   * composed transforms all behave as they do without selection — selection REMOVES copies
+   * from that layout, it never reorders what is left, and it never perturbs the seed of a
+   * copy that would have existed anyway (a copy's seed is hashCombine(sourceSeed,
+   * targetSeed), which names the pair and not the slot). A target whose key matches NO
+   * source group takes zero copies and that is legal, not an error, for the reason
+   * `pointsToPath`'s `shortGroups "skip"` gives: a selection key is normally DATA — resolved
+   * from a catalogue, drawn from a noise, chosen per placement — so which keys a cell's
+   * targets ask for is unknowable at graph-build time, and a cell asking for a pose this
+   * source does not carry must not fail the whole cook. If a missing key IS an authoring
+   * error in your graph, catch it upstream where the population is known rather than here
+   * where it is data.
+   *
+   * @defaultValue `""`
+   */
+  targetGroupAttr: string;
+  /**
+   * What happens to the SOURCE's topology — the vertices and primitives built over the
+   * source's points. 'drop' (the default) copies POINTS only: an array of a path comes out a
+   * bare cloud with the paths gone, which is why the copies have to be rebuilt downstream
+   * (targetIndexAttr, then a pointsToPath grouping on it). 'keep' re-emits source primitives
+   * onto the target blocks instead, which is the whole difference between an array of points
+   * and an array of paths. WITHOUT SELECTION (`sourceGroupAttr` and `targetGroupAttr` both
+   * empty) that is every source primitive once per TARGET, and the arithmetic is closed: the
+   * copies are laid out in contiguous blocks of nSource (copy s of target t is point t *
+   * nSource + s), so primitive p of block t walks exactly the points its original walked, t
+   * * nSource further on, and a source with N primitives always yields nTarget * N, in
+   * target-block order, nothing filtered and no primitive reshaped. That is what
+   * mergePrimitives produces from nTarget copies of the source. WITH SELECTION both of those
+   * identities are gone, and they have to be: a target holds only the source points its key
+   * asked for, so there is no fixed block stride, and a vertex referencing a point the block
+   * did not take has no point to renumber onto — it cannot be carried, and carrying it
+   * anyway would produce an index setTopology's bounds check accepts as some OTHER target's
+   * point. What replaces them is the POINT FILTERS' survival rule, quoted rather than
+   * invented: a primitive is re-emitted for a target only when ALL of its points are in that
+   * target's block. So a source primitive whose points carry two different keys belongs to
+   * no block and is re-emitted for none of them (put the key on whole primitives, not across
+   * them), and the primitive count is the sum over targets of what each target's key kept —
+   * not a product of anything. What does NOT change is the order: within a block the
+   * surviving primitives keep ascending source order and each keeps its own vertices in
+   * their own order, and the blocks still follow target order. One further difference is
+   * visible only on a source whose vertex array does not tile: an unselected block copies
+   * that array verbatim, gaps and out-of-order primitive ranges included, while a selected
+   * block is compacted to the surviving primitives' own vertices in primitive order — what
+   * gatherPrimitives produces. Everything setTopology and setPolylineTopology build already
+   * tiles in order, so for those the two are the same array. The source's VERTEX and
+   * PRIMITIVE attributes come along, each copy carrying the original's values (a
+   * per-primitive width, a per-vertex uv, and `primtype`, so the copies stay samplable as
+   * what they are). The TARGET's own topology is never read under either setting — the
+   * target contributes point transforms and, through targetNames/targetIndexAttr, point
+   * attributes, while its primitives describe points that are not in this output at all. The
+   * POINT domain is IDENTICAL under both settings — same points, same order, same
+   * attributes, same identities — so this param only ever ADDS information, and neither
+   * targetNames nor targetIndexAttr (which write point columns) can be disturbed by it, with
+   * or without selection. The DETAIL domain is carried under NEITHER setting, for the reason
+   * mergePrimitives gives for dropping it: there are two inputs, each has a detail domain,
+   * and choosing between them would be a guess. On IDENTITY, because it decides what
+   * per-copy randomness does: a primitive is named by the fold of its own points'
+   * identities, and a point's identity is its position bits plus its `seed` — both of which
+   * this node composes per copy (P from the target's transform, seed from
+   * hashCombine(sourceSeed, targetSeed)). So the copies of one source primitive are DISTINCT
+   * primitives, one per target that re-emitted it, and a randomField on the primitive domain
+   * draws a different value for each, which is what 'one variation per copy' needs. The
+   * exception is the one mergePrimitives documents: two targets sharing a position AND a
+   * seed produce copies that are the same points, hence ONE primitive to every
+   * identity-keyed decision — give coincident targets distinct seeds.
+   *
+   * - Enum: `"drop"` | `"keep"`
+   *
+   * @defaultValue `"drop"`
+   */
+  topology: string;
+}
+
+/**
+ * Params of the `dataInput` node type.
+ */
+export interface DataInputParams {
+  /**
+   * Data items to emit, bound at runtime via graph.setParam (the World binds parent-cell
+   * outputs here, per cell, at bind time). Live DataItems are runtime-injected and never
+   * serialized: a serialized graph carries an empty item list, and items must be re-bound
+   * after deserialization.
+   *
+   * @defaultValue `[]`
+   */
+  items: readonly DataItem[];
+}
+
+/**
+ * Params of the `extrudePolygon` node type.
+ */
+export interface ExtrudePolygonParams {
+  /**
+   * How far the boundary travels along the direction, in world units. Field-capable and
+   * resolved on the INPUT points — the footprint's own points — so a per-point value gives a
+   * sloped top rather than a flat one, and a per-lot height living on the primitive domain
+   * becomes a field once promoteAttribute has put it on the points. A negative distance
+   * builds the solid on the OTHER side of the footprint and still comes out facing outward —
+   * the winding flips with it. A footprint whose distances straddle zero is a bowtie and has
+   * no outward side; the sign of their sum decides, which is total rather than right.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `3`
+   */
+  distance: FieldParam;
+  /**
+   * Which way the boundary travels. '+y' is straight up, the answer for buildings and walls
+   * on a ground plane. 'vector' uses the `vector` param, normalized. 'polygonNormal'
+   * computes each polygon's OWN normal by Newell's method — a sum over the boundary edges,
+   * so it is exact for a planar polygon, deterministic, and defined for a non-planar one (it
+   * returns the best-fit plane's normal) — which is what extrudes a footprint that is not
+   * lying flat. A polygon whose Newell normal is zero (every point collinear, or zero area)
+   * is refused by primitive index.
+   *
+   * - Enum: `"+y"` | `"vector"` | `"polygonNormal"`
+   *
+   * @defaultValue `"+y"`
+   */
+  direction: string;
+  /**
+   * Direction for the 'vector' mode; need not be unit length, and is normalized before use.
+   * Ignored by the other modes. Field-capable on the PRIMITIVE domain — one direction per
+   * closed polyline, which is the element a whole extrusion belongs to — so two footprints
+   * in one input rise along two different vectors in a single cook: a per-lot
+   * `attribute('slope')`, a `byAttribute` over a per-lot string kind, or `randomField` all
+   * read there. It is NOT per point and cannot be: a per-point direction would shear the
+   * footprint rather than sweep it, and a per-point HEIGHT is what `distance` already is.
+   * Read the domain it resolves on before writing the expression — the primitive domain
+   * carries no P, so `position()` is not available there and a value the points know reaches
+   * it through promoteAttribute (point to primitive). A vector that resolves to [0, 0, 0]
+   * refuses THAT PRIMITIVE BY INDEX rather than flattening it into a sheet, exactly as
+   * direction 'polygonNormal' refuses a polygon whose Newell normal is zero — the same
+   * condition (this polygon names no direction) and the same answer; a plain [0, 0, 0] is
+   * still refused before the walk, by the param rather than by a primitive. Resolved on the
+   * CPU whether or not the cook carries a GPU device: the primitive domain holds one element
+   * per polygon, so a dispatch would cost more than the three multiplies it replaces.
+   * `distance` is the param that may resolve on the device.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,1,0]`
+   */
+  vector: FieldParam;
+  /**
+   * Which ends are closed. 'both' is a solid; 'bottom' or 'top' alone leaves an open shell
+   * (with `sides` false, 'top' is a floating lid — a roof with no building); 'none' with
+   * `sides` is a tube of wall. Each cap faces along its OWN plane's normal rather than along
+   * the direction, which is what makes a per-point `distance` shade as the sloped roof it
+   * actually builds, and what keeps a footprint lying in a tilted plane correct when it is
+   * extruded straight up.
+   *
+   * - Enum: `"none"` | `"top"` | `"bottom"` | `"both"`
+   *
+   * @defaultValue `"both"`
+   */
+  caps: string;
+  /**
+   * Build the wall between the two ends. False keeps only the caps the `caps` param asked
+   * for, which is how a flat slab (`caps: 'bottom'`) or a floating roof (`caps: 'top'`) is
+   * spelled without a second node. False with `caps: 'none'` has nothing to build and is
+   * refused.
+   *
+   * @defaultValue `true`
+   */
+  sides: boolean;
+}
+
+/**
+ * Params of the `filterByAttribute` node type.
+ */
+export interface FilterByAttributeParams {
+  /**
+   * Name of the POINT attribute to test. Must exist on the point domain with tuple size 1. A
+   * name that exists on the primitive domain instead is refused with the fix, since
+   * filtering a primitive column here means letting a sampler flatten it onto points first.
+   *
+   * @defaultValue `"density"`
+   */
+  attribute: string;
+  /**
+   * Comparison operator: eq (equal), ne (not equal), lt (<), le (<=), gt (>), ge (>=).
+   * String attributes allow only eq and ne.
+   *
+   * - Enum: `"eq"` | `"ne"` | `"lt"` | `"le"` | `"gt"` | `"ge"`
+   *
+   * @defaultValue `"ge"`
+   */
+  comparison: string;
+  /**
+   * Right-hand side for numeric attributes. Ignored for string attributes, and a field
+   * written here is not even evaluated for one — the param nothing reads costs nothing and
+   * refuses nothing. As a FIELD it is a PER-POINT right-hand side, evaluated on the input's
+   * points, so each point is compared against its own number: `attribute("minLevel")` with
+   * comparison 'ge' keeps every point that clears the bar it was given, and a noise or a
+   * position expression makes the bar vary across the world. The comparison itself is
+   * unchanged — the same six operators, the same meaning per point — so this is the
+   * two-column test (attribute against attribute) that otherwise needs a scratch column plus
+   * filterByExpression. A a constant field matches the plain number wherever that number is
+   * exactly representable in f32 — which is the honest form of the claim, because a field
+   * resolves into an f32 COLUMN while a plain param stays the f64 the author wrote.
+   * `constant(0.7)` is 0.699999988079071 and a datum sitting between the two lands on
+   * different sides of them. That is not a defect to be fixed here but clause 1 of the
+   * capability rule showing through, and it is why the equality tests use f32-exact values
+   * on purpose. Non-finite values are REFUSED rather than read: a field resolving to NaN or
+   * ±Infinity names this param and stops, because a right-hand side has no documented
+   * meaning for one. Note that this refusal is about the FIELD, never about the attribute —
+   * a NaN in the COLUMN being tested is still data and still passes only 'ne'.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  value: FieldParam;
+  /**
+   * Right-hand side for string attributes. Ignored for numeric attributes.
+   *
+   * @defaultValue `""`
+   */
+  stringValue: string;
+  /**
+   * What happens to the input's TOPOLOGY — the vertices and primitives built over these
+   * points. 'drop' (the default) outputs a point cloud: the survivors are rebuilt as points
+   * and EVERY primitive goes with them, whether or not the filter touched one of its points,
+   * which is why a filtered network has to be rebuilt downstream (pointsToPath over a
+   * grouping attribute, or connectPoints again). 'keep' preserves the primitives ALL of
+   * whose points survive, carrying their vertices, their vertex and primitive attributes,
+   * and the detail domain, renumbered onto the surviving points. A primitive that loses even
+   * ONE point is dropped whole: there is no truncation of a polyline or a poly that means
+   * anything — closing the gap invents a segment nobody authored and splitting the primitive
+   * in two invents a primitive, and neither is a filter's job. A primitive is never
+   * SHORTENED, so one that comes out with fewer than two vertices is one that went in that
+   * way — this node cannot manufacture a degenerate primitive, and it does not delete one
+   * either (setPolylineTopology already refuses a polyline under two vertices, so such a
+   * primitive can only have come from bare setTopology, deliberately). The POINT domain is
+   * IDENTICAL under both settings — same points, same order, same attributes, same
+   * identities — so this param only ever ADDS information and nothing reading a point can
+   * tell which was set; the one thing 'keep' carries beyond topology is the DETAIL
+   * attributes, which a point cloud has no room for. A predicate that keeps every point
+   * reproduces the input's topology, with one inherited caveat it shares with
+   * filterPrimitivesByBounds and filterPrimitivesByAttribute: surviving primitives are laid
+   * out into contiguous vertex runs, so a geometry whose primitive ranges do not TILE its
+   * vertex array (only bare setTopology can build one — nothing checks more than start +
+   * count <= vertexCount) loses the vertices no primitive references, and their vertex
+   * attribute values with them. This is the point-domain mirror of the primitive filters'
+   * `unreferencedPoints`, and it is what lets mergePrimitives find something to preserve
+   * downstream of a filter.
+   *
+   * - Enum: `"drop"` | `"keep"`
+   *
+   * @defaultValue `"drop"`
+   */
+  topology: string;
+}
+
+/**
+ * Params of the `filterByBounds` node type.
+ */
+export interface FilterByBoundsParams {
+  /**
+   * Minimum corner of the box, in world units. INCLUSIVE under both boundary rules: a point
+   * lying exactly on this face is inside. Use -Infinity on an axis that should not be
+   * bounded (an infinity does not survive JSON, so a graph that must serialize needs a
+   * finite bound wide enough to hold the world). As a FIELD it is a PER-POINT corner,
+   * evaluated on the input's points, so each point is tested against its OWN box rather than
+   * against one box shared by the cloud — which turns this node from 'keep what is in this
+   * region' into 'keep every point that is inside the box it carries', the test a per-point
+   * cell, plot or footprint written upstream asks for. Build the corner with vec(x, y, z); a
+   * scalar field broadcasts to all three axes exactly as a plain scalar would. NON-FINITE
+   * VALUES ARE READ, NOT REFUSED — this is one of the few field params where they are data:
+   * -Infinity on a component leaves that axis unbounded for that point, exactly as the plain
+   * value does, and a NaN component satisfies no comparison at all, so that point is never
+   * inside and lands in 'outside'. `inside` and `outside` stay exact complements point by
+   * point, since both read the same resolved value for a point — with one caveat a plain box
+   * does not have: two SEPARATE nodes resolve their own columns, so a bound built from
+   * randomField or nodeSeed differs between them and the pair no longer partitions. Give
+   * both nodes the same bounds field to keep it exact.
+   *
+   * - Accepts ±Infinity on a live graph (it never serializes: JSON has no infinity)
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  boundsMin: FieldParam;
+  /**
+   * Maximum corner of the box, in world units. EXCLUSIVE under the default 'halfOpen'
+   * boundary (a point exactly on this face belongs to the next box along), INCLUSIVE under
+   * 'inclusive'. Use +Infinity on an axis that should not be bounded. An axis with max <=
+   * min keeps nothing under 'halfOpen' — a zero-width box has no interior — while under
+   * 'inclusive' max === min still keeps the points lying exactly on that plane. As a FIELD
+   * it is a PER-POINT corner on the input's points, with the same reading boundsMin's
+   * description gives, and the two are independent: a field min with a plain max is legal
+   * and the plain one costs nothing per point. The max <= min rule above then applies PER
+   * POINT — a point whose own box is empty on any axis simply fails the test and lands in
+   * 'outside'. Non-finite components are read rather than refused (±Infinity unbounds an
+   * axis, NaN keeps nothing), and a scalar field broadcasts to all three axes.
+   *
+   * - Accepts ±Infinity on a live graph (it never serializes: JSON has no infinity)
+   * - Accepts a field.
+   *
+   * @defaultValue `[1,1,1]`
+   */
+  boundsMax: FieldParam;
+  /**
+   * 'inside' keeps points within the box, 'outside' keeps the rest. They are exact
+   * complements under whichever `boundary` rule is active, so running both over one input
+   * reproduces it exactly once.
+   *
+   * - Enum: `"inside"` | `"outside"`
+   *
+   * @defaultValue `"inside"`
+   */
+  mode: string;
+  /**
+   * Which faces belong to the box. 'halfOpen' (the default) keeps min <= p < max on every
+   * axis, matching the half-open windows of pointScatterInWorld and of a World cell: two
+   * abutting boxes then own a point on their shared face exactly once between them, which is
+   * what makes this node usable as the ownership rule of a partitioned cook. 'inclusive'
+   * keeps min <= p <= max, so BOTH such boxes emit that point — choose it when the box is a
+   * selection whose faces carry points deliberately (a pointGrid's last row, an authored
+   * extent) and nothing downstream requires one owner per point.
+   *
+   * - Enum: `"halfOpen"` | `"inclusive"`
+   *
+   * @defaultValue `"halfOpen"`
+   */
+  boundary: string;
+  /**
+   * What happens to the input's TOPOLOGY — the vertices and primitives built over these
+   * points. 'drop' (the default) outputs a point cloud: the survivors are rebuilt as points
+   * and EVERY primitive goes with them, whether or not the filter touched one of its points,
+   * which is why a filtered network has to be rebuilt downstream (pointsToPath over a
+   * grouping attribute, or connectPoints again). 'keep' preserves the primitives ALL of
+   * whose points survive, carrying their vertices, their vertex and primitive attributes,
+   * and the detail domain, renumbered onto the surviving points. A primitive that loses even
+   * ONE point is dropped whole: there is no truncation of a polyline or a poly that means
+   * anything — closing the gap invents a segment nobody authored and splitting the primitive
+   * in two invents a primitive, and neither is a filter's job. A primitive is never
+   * SHORTENED, so one that comes out with fewer than two vertices is one that went in that
+   * way — this node cannot manufacture a degenerate primitive, and it does not delete one
+   * either (setPolylineTopology already refuses a polyline under two vertices, so such a
+   * primitive can only have come from bare setTopology, deliberately). The POINT domain is
+   * IDENTICAL under both settings — same points, same order, same attributes, same
+   * identities — so this param only ever ADDS information and nothing reading a point can
+   * tell which was set; the one thing 'keep' carries beyond topology is the DETAIL
+   * attributes, which a point cloud has no room for. A predicate that keeps every point
+   * reproduces the input's topology, with one inherited caveat it shares with
+   * filterPrimitivesByBounds and filterPrimitivesByAttribute: surviving primitives are laid
+   * out into contiguous vertex runs, so a geometry whose primitive ranges do not TILE its
+   * vertex array (only bare setTopology can build one — nothing checks more than start +
+   * count <= vertexCount) loses the vertices no primitive references, and their vertex
+   * attribute values with them. This is the point-domain mirror of the primitive filters'
+   * `unreferencedPoints`, and it is what lets mergePrimitives find something to preserve
+   * downstream of a filter.
+   *
+   * - Enum: `"drop"` | `"keep"`
+   *
+   * @defaultValue `"drop"`
+   */
+  topology: string;
+}
+
+/**
+ * Params of the `filterByDensity` node type.
+ */
+export interface FilterByDensityParams {
+  /**
+   * 'threshold' keeps density >= threshold; 'probabilistic' keeps each point with
+   * probability equal to its density.
+   *
+   * - Enum: `"threshold"` | `"probabilistic"`
+   *
+   * @defaultValue `"threshold"`
+   */
+  mode: string;
+  /**
+   * Minimum density a point needs to survive in 'threshold' mode: a point is kept when its
+   * own `density` attribute is >= this. Ignored in 'probabilistic' mode, and a field written
+   * here is not even evaluated in that mode — the param nothing reads costs nothing and
+   * refuses nothing. As a FIELD it is a PER-POINT threshold, evaluated on the input's
+   * points, so each point is tested against the bar IT was given rather than against one
+   * number shared by the cloud: attribute("minDensity") lets a value written upstream set
+   * each point's own bar, and a noise or a position expression makes the bar vary across the
+   * world, which thins one region at 0.8 while another survives at 0.2 in a single cook. The
+   * comparison is unchanged and still `density >= threshold`, so a constant field matches
+   * the plain number wherever that number is exactly representable in f32 — which is the
+   * honest form of the claim, because a field resolves into an f32 COLUMN while a plain
+   * param stays the f64 the author wrote. `constant(0.7)` is 0.699999988079071 and a datum
+   * sitting between the two lands on different sides of them. That is not a defect to be
+   * fixed here but clause 1 of the capability rule showing through, and it is why the
+   * equality tests use f32-exact values on purpose. Non-finite values are REFUSED rather
+   * than read: a field resolving to NaN or ±Infinity here names this param and stops,
+   * because a threshold has no documented meaning for one — unlike selfPrune's radius, where
+   * NaN means 'claims no room'. Guard the expression itself (max(x, 1e-6) under a div) if it
+   * can produce one.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `0.5`
+   */
+  threshold: FieldParam;
+  /**
+   * Extra seed for 'probabilistic' mode; change it to re-roll which points survive.
+   *
+   * @defaultValue `0`
+   */
+  seed: number;
+  /**
+   * What happens to the input's TOPOLOGY — the vertices and primitives built over these
+   * points. 'drop' (the default) outputs a point cloud: the survivors are rebuilt as points
+   * and EVERY primitive goes with them, whether or not the filter touched one of its points,
+   * which is why a filtered network has to be rebuilt downstream (pointsToPath over a
+   * grouping attribute, or connectPoints again). 'keep' preserves the primitives ALL of
+   * whose points survive, carrying their vertices, their vertex and primitive attributes,
+   * and the detail domain, renumbered onto the surviving points. A primitive that loses even
+   * ONE point is dropped whole: there is no truncation of a polyline or a poly that means
+   * anything — closing the gap invents a segment nobody authored and splitting the primitive
+   * in two invents a primitive, and neither is a filter's job. A primitive is never
+   * SHORTENED, so one that comes out with fewer than two vertices is one that went in that
+   * way — this node cannot manufacture a degenerate primitive, and it does not delete one
+   * either (setPolylineTopology already refuses a polyline under two vertices, so such a
+   * primitive can only have come from bare setTopology, deliberately). The POINT domain is
+   * IDENTICAL under both settings — same points, same order, same attributes, same
+   * identities — so this param only ever ADDS information and nothing reading a point can
+   * tell which was set; the one thing 'keep' carries beyond topology is the DETAIL
+   * attributes, which a point cloud has no room for. A predicate that keeps every point
+   * reproduces the input's topology, with one inherited caveat it shares with
+   * filterPrimitivesByBounds and filterPrimitivesByAttribute: surviving primitives are laid
+   * out into contiguous vertex runs, so a geometry whose primitive ranges do not TILE its
+   * vertex array (only bare setTopology can build one — nothing checks more than start +
+   * count <= vertexCount) loses the vertices no primitive references, and their vertex
+   * attribute values with them. This is the point-domain mirror of the primitive filters'
+   * `unreferencedPoints`, and it is what lets mergePrimitives find something to preserve
+   * downstream of a filter.
+   *
+   * - Enum: `"drop"` | `"keep"`
+   *
+   * @defaultValue `"drop"`
+   */
+  topology: string;
+}
+
+/**
+ * Params of the `filterByExpression` node type.
+ */
+export interface FilterByExpressionParams {
+  /**
+   * Per-point test: non-zero keeps the point, 0 and NaN drop it. Field-capable and evaluated
+   * on the input's points. The default 1 keeps everything, so an unconfigured node passes
+   * its input through.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  predicate: FieldParam;
+  /**
+   * Extra seed for evaluating `predicate`: 0 (the default) uses the node's derived seed
+   * unchanged; any nonzero value folds in as hashCombine(nodeSeed, seed). This re-rolls
+   * randomness drawn from the evaluation context (randomField, the per-point seed attribute,
+   * and the `nodeSeed` field) but not a noise on its own, whose seed lives inside its own
+   * field spec — a noise moves with this only when its `opts.position` reads `nodeSeed`.
+   *
+   * @defaultValue `0`
+   */
+  seed: number;
+  /**
+   * What happens to the input's TOPOLOGY — the vertices and primitives built over these
+   * points. 'drop' (the default) outputs a point cloud: the survivors are rebuilt as points
+   * and EVERY primitive goes with them, whether or not the filter touched one of its points,
+   * which is why a filtered network has to be rebuilt downstream (pointsToPath over a
+   * grouping attribute, or connectPoints again). 'keep' preserves the primitives ALL of
+   * whose points survive, carrying their vertices, their vertex and primitive attributes,
+   * and the detail domain, renumbered onto the surviving points. A primitive that loses even
+   * ONE point is dropped whole: there is no truncation of a polyline or a poly that means
+   * anything — closing the gap invents a segment nobody authored and splitting the primitive
+   * in two invents a primitive, and neither is a filter's job. A primitive is never
+   * SHORTENED, so one that comes out with fewer than two vertices is one that went in that
+   * way — this node cannot manufacture a degenerate primitive, and it does not delete one
+   * either (setPolylineTopology already refuses a polyline under two vertices, so such a
+   * primitive can only have come from bare setTopology, deliberately). The POINT domain is
+   * IDENTICAL under both settings — same points, same order, same attributes, same
+   * identities — so this param only ever ADDS information and nothing reading a point can
+   * tell which was set; the one thing 'keep' carries beyond topology is the DETAIL
+   * attributes, which a point cloud has no room for. A predicate that keeps every point
+   * reproduces the input's topology, with one inherited caveat it shares with
+   * filterPrimitivesByBounds and filterPrimitivesByAttribute: surviving primitives are laid
+   * out into contiguous vertex runs, so a geometry whose primitive ranges do not TILE its
+   * vertex array (only bare setTopology can build one — nothing checks more than start +
+   * count <= vertexCount) loses the vertices no primitive references, and their vertex
+   * attribute values with them. This is the point-domain mirror of the primitive filters'
+   * `unreferencedPoints`, and it is what lets mergePrimitives find something to preserve
+   * downstream of a filter.
+   *
+   * - Enum: `"drop"` | `"keep"`
+   *
+   * @defaultValue `"drop"`
+   */
+  topology: string;
+}
+
+/**
+ * Params of the `filterPrimitivesByAttribute` node type.
+ */
+export interface FilterPrimitivesByAttributeParams {
+  /**
+   * Name of the PRIMITIVE attribute to test. Must exist on the primitive domain with tuple
+   * size 1. The default names connectPoints' own convention for its `lengthAttr`, which is
+   * the commonest key here; `primtype` is always present once a geometry has topology and is
+   * tested with 'eq'/'ne' against stringValue. A name that exists on the POINT domain
+   * instead is refused with the fix, since that is the shape of the idiom this node
+   * replaces.
+   *
+   * @defaultValue `"edgeLength"`
+   */
+  attribute: string;
+  /**
+   * Comparison operator: eq (equal), ne (not equal), lt (<), le (<=), gt (>), ge (>=).
+   * String attributes allow only eq and ne. Identical to filterByAttribute's, deliberately:
+   * moving a filter between the two domains must not change what it means.
+   *
+   * - Enum: `"eq"` | `"ne"` | `"lt"` | `"le"` | `"gt"` | `"ge"`
+   *
+   * @defaultValue `"ge"`
+   */
+  comparison: string;
+  /**
+   * Right-hand side for numeric attributes. Ignored for string attributes, and a field
+   * written here is not even evaluated for one. As a FIELD it is evaluated on the PRIMITIVE
+   * DOMAIN — one right-hand side per primitive, never per point — so each primitive is
+   * compared against its own number: `attribute("maxLength")` with comparison 'le' keeps
+   * every edge shorter than the limit IT carries, which is the per-primitive budget one
+   * shared number cannot express. Everything else is unchanged: the same six operators with
+   * the same meaning, the same scalar-only rule, and a a constant field matches the plain
+   * number wherever that number is exactly representable in f32 — which is the honest form
+   * of the claim, because a field resolves into an f32 COLUMN while a plain param stays the
+   * f64 the author wrote. `constant(0.7)` is 0.699999988079071 and a datum sitting between
+   * the two lands on different sides of them. That is not a defect to be fixed here but
+   * clause 1 of the capability rule showing through, and it is why the equality tests use
+   * f32-exact values on purpose. Because the value is read per primitive and nothing else —
+   * not its index, not its neighbours, not how many primitives there are — the determinism
+   * the node's description promises is unaffected, PROVIDED the field is too: a field
+   * reading position or a primitive attribute is partition-independent, while randomField
+   * and nodeSeed are per-node and per-cell like any other seeded draw. Non-finite values are
+   * REFUSED rather than read, naming this param: a right-hand side has no documented meaning
+   * for NaN or ±Infinity. That is about the FIELD only — a NaN in the primitive COLUMN being
+   * tested is still data, and still passes only 'ne'.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  value: FieldParam;
+  /**
+   * Right-hand side for string attributes. Ignored for numeric attributes.
+   *
+   * @defaultValue `""`
+   */
+  stringValue: string;
+  /**
+   * What happens to points no surviving primitive references, exactly as in
+   * filterPrimitivesByBounds. 'keep' (the default) leaves the point domain completely
+   * untouched: same points in the same order, so every point index, attribute and identity
+   * is still the input's. 'drop' removes them and renumbers the topology onto the points
+   * that remain, in ascending input order, which yields a clean network with nothing
+   * dangling; the cost is that point indices move. Note that 'drop' also drops points that
+   * had NO primitive to begin with, so a cloud carrying both a network and unrelated scatter
+   * loses the scatter.
+   *
+   * - Enum: `"keep"` | `"drop"`
+   *
+   * @defaultValue `"keep"`
+   */
+  unreferencedPoints: string;
+}
+
+/**
+ * Params of the `filterPrimitivesByBounds` node type.
+ */
+export interface FilterPrimitivesByBoundsParams {
+  /**
+   * Minimum corner of the box, in world units. INCLUSIVE under both boundary rules: a vertex
+   * lying exactly on this face is inside. Use -Infinity on an axis that should not be
+   * bounded (note that an infinity does not survive JSON, so a graph that must serialize
+   * needs a finite bound wide enough to hold the world). As a FIELD it is evaluated on the
+   * PRIMITIVE DOMAIN, not on the points — one corner per primitive, so each primitive is
+   * tested against the box IT carries, and every vertex the `vertex` rule consults is tested
+   * against that same box. Read a primitive column (attribute("cellMinX") and friends,
+   * promoteAttribute lifts a point column onto primitives) or build one with vec(x, y, z); a
+   * scalar field broadcasts to all three axes. The reading it enables is 'does this edge lie
+   * in ITS OWN cell', which one shared box cannot ask. TILING IS THEN THE AUTHOR'S TO
+   * PRESERVE: the ownership guarantee this node's description makes — abutting boxes claim
+   * each primitive exactly once — is a property of the BOXES, so per-primitive boxes tile
+   * only if they were built to, and boxes that overlap or leave a gap double-count or lose
+   * primitives with no error to say so. Non-finite components are read rather than refused:
+   * ±Infinity unbounds an axis exactly as the plain value does, and a NaN component
+   * satisfies no comparison, so a primitive whose box has one is never inside and lands in
+   * 'outside'.
+   *
+   * - Accepts ±Infinity on a live graph (it never serializes: JSON has no infinity)
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  boundsMin: FieldParam;
+  /**
+   * Maximum corner of the box, in world units. EXCLUSIVE under the default 'halfOpen'
+   * boundary (a vertex exactly on this face belongs to the next box along), INCLUSIVE under
+   * 'inclusive'. Use +Infinity on an axis that should not be bounded, subject to the
+   * serialization note on boundsMin. As a FIELD it is one corner PER PRIMITIVE, with the
+   * same reading boundsMin's description gives, and the two are independent: a field min
+   * with a plain max is legal and the plain one costs nothing per primitive. A primitive
+   * whose own box is empty on an axis (max <= min under 'halfOpen') keeps nothing and lands
+   * in 'outside'; non-finite components are read rather than refused; a scalar field
+   * broadcasts to all three axes.
+   *
+   * - Accepts ±Infinity on a live graph (it never serializes: JSON has no infinity)
+   * - Accepts a field.
+   *
+   * @defaultValue `[1,1,1]`
+   */
+  boundsMax: FieldParam;
+  /**
+   * Which of a primitive's vertices the box test reads. 'first' (the default) and 'last'
+   * read exactly ONE — the primitive's first or last vertex — which is what makes them
+   * ownership rules: every primitive has exactly one of each, so abutting boxes under the
+   * 'halfOpen' boundary claim it exactly once between them. Use 'first' with connectPoints,
+   * whose edges already lead with their lower-keyed endpoint, so the owner a cell computes
+   * matches the canonical edge order rather than merely correlating with it. 'all' keeps a
+   * primitive only when EVERY vertex is in the box, 'any' when at least one is; both are
+   * selections, and neither tiles — 'any' hands a straddling primitive to every box it
+   * reaches and 'all' to none of them, so a partitioned cook using either double-counts or
+   * loses edges at the seams. A primitive with no vertices is never inside, under all four
+   * rules.
+   *
+   * - Enum: `"first"` | `"last"` | `"all"` | `"any"`
+   *
+   * @defaultValue `"first"`
+   */
+  vertex: string;
+  /**
+   * 'inside' keeps the primitives the `vertex` rule places in the box, 'outside' keeps the
+   * rest. They are exact complements under whichever vertex rule and boundary are active, so
+   * running both over one input reproduces every primitive exactly once. Read the two params
+   * together: 'any' with 'outside' keeps primitives lying ENTIRELY outside the box (no
+   * vertex inside), which is the deletion 'all' with 'outside' does NOT perform — that one
+   * keeps everything not entirely within it, straddlers included.
+   *
+   * - Enum: `"inside"` | `"outside"`
+   *
+   * @defaultValue `"inside"`
+   */
+  mode: string;
+  /**
+   * Which faces belong to the box, exactly as in filterByBounds. 'halfOpen' (the default)
+   * keeps min <= p < max on every axis, so two boxes meeting at a face claim a vertex lying
+   * on it exactly once between them — pair it with vertex 'first' and it is an ownership
+   * rule a partitioned cook can tile with. 'inclusive' keeps min <= p <= max, so both boxes
+   * claim that vertex, and with vertex 'first' both would emit the same edge; choose it for
+   * a selection whose faces carry points on purpose, never for a cook that is split into
+   * cells.
+   *
+   * - Enum: `"halfOpen"` | `"inclusive"`
+   *
+   * @defaultValue `"halfOpen"`
+   */
+  boundary: string;
+  /**
+   * What happens to points no surviving primitive references. 'keep' (the default) leaves
+   * the point domain completely untouched: same points in the same order, so every point
+   * index, attribute and identity is still the input's and anything computed per point
+   * upstream still lines up — a partition cell keeps its halo points as isolated leftovers
+   * beside the network it owns. 'drop' removes them and renumbers the topology onto the
+   * points that remain, in ascending input order, which yields a clean network with nothing
+   * dangling; the cost is that point indices move, and that a point kept by one cell may
+   * also be kept by its neighbour, since an edge crossing a seam needs both of its endpoints
+   * wherever it is emitted. Note that 'drop' also drops points that had NO primitive to
+   * begin with, so a cloud carrying both a road network and unrelated scatter loses the
+   * scatter — filter such a cloud before the network is built, or keep the leftovers.
+   *
+   * - Enum: `"keep"` | `"drop"`
+   *
+   * @defaultValue `"keep"`
+   */
+  unreferencedPoints: string;
+}
+
+/**
+ * Params of the `jitterPoints` node type.
+ */
+export interface JitterPointsParams {
+  /**
+   * Maximum offset per axis, in world units. Field-capable (tuple 1 broadcasts).
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0.1,0.1,0.1]`
+   */
+  amount: FieldParam;
+  /**
+   * Extra seed folded into the node seed; change it to re-roll the jitter.
+   *
+   * @defaultValue `0`
+   */
+  seed: number;
+}
+
+/**
+ * Params of the `mergePoints` node type, which has none.
+ */
+export type MergePointsParams = Record<string, never>;
+
+/**
+ * Params of the `mergePrimitives` node type, which has none.
+ */
+export type MergePrimitivesParams = Record<string, never>;
+
+/**
+ * Params of the `meshFromField` node type.
+ */
+export interface MeshFromFieldParams {
+  /**
+   * The scalar field to contour. A plain number contours nothing — a constant never crosses
+   * anything — so this is a field param that only makes sense as a field. Any expression of
+   * position works: a noise for a cloud or a rock, `sub(length(position()), r)` for a
+   * sphere, the difference of two for a carve. IT MUST BE A FUNCTION OF POSITION AND THAT IS
+   * ENFORCED: `fraction`, `index` and `attribute` are refused by name, because the first two
+   * measure the population of this cook and the third can only reach the bookkeeping columns
+   * of the lattice this node builds. The refusal names the offending position inside the
+   * expression. A field composed with the CODE combinators carries no spec and so cannot be
+   * screened at all; that one is the author's promise, and breaking it does not throw, it
+   * makes a partitioned world disagree with itself at the seams. Resolved on the CPU over
+   * the lattice corners, in chunks — a partitioned world cooks under a deadline, and one
+   * resolve over every corner at once is a single uninterruptible call however small the
+   * budget. The chunking cannot move the answer precisely BECAUSE of the purity rule above:
+   * a field that reads only position cannot tell one split of the corners from another.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  field: FieldParam;
+  /**
+   * The value the surface sits at. Moving it grows or shrinks the solid without re-sampling
+   * anything conceptually — for a signed distance it is a plain offset, and for a noise it
+   * is a threshold, which is why an eroded rock and a cave are the same graph with two
+   * settings. The surface passes EXACTLY through this value: a vertex is placed by linear
+   * interpolation along the lattice edge that crosses it, so evaluating the field at any
+   * emitted vertex returns this number to within the interpolation's own error, which is
+   * what `isosurface.test.ts` measures.
+   *
+   * @defaultValue `0`
+   */
+  isoValue: number;
+  /**
+   * Lattice cube edge in world units, and unlike volumeSample's it is EXACT rather than a
+   * request. The lattice is anchored at the world origin, so cube (i, j, k) spans [i *
+   * cellSize, (i+1) * cellSize) whatever bounds asked for it, and the bounds are widened
+   * outward to whole cubes rather than divided into them. That is the whole partitioning
+   * story in one sentence: two windows that overlap sample the same corners at the same
+   * world positions, so they agree bit for bit, where a lattice fitted to its own bounds
+   * would put its corners somewhere different in every window. Cost grows with the CUBE of
+   * the bounds over this value, and every sample is a field evaluation, so halving it is
+   * eight times the work.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `1`
+   */
+  cellSize: number;
+  /**
+   * Low corner of the region to contour, in world units, and IGNORED when a geometry is
+   * connected — the input's own point extents replace both bounds then. Widened outward to
+   * the enclosing whole cube, so the surface is never clipped mid-cube by a bound that fell
+   * inside one. Under a partitioned world this is the cell's own rectangle: bind it per
+   * cell, and because the lattice is world-anchored rather than bounds-anchored the cells
+   * agree about every corner they share.
+   *
+   * @defaultValue `[-8,-8,-8]`
+   */
+  boundsMin: readonly number[];
+  /**
+   * High corner of the region to contour, in world units, and IGNORED when a geometry is
+   * connected. HALF-OPEN: the last cube walked is the one ending at or before this face, so
+   * two cells whose rectangles meet on a cell-size multiple tile the surface instead of both
+   * emitting the seam. The low face is widened OUTWARD to a whole cube, so the contoured
+   * region can reach up to one cube below `boundsMin` — a solid that leaves the box is left
+   * open there rather than capped, since this node emits the surface it found and never
+   * invents a lid. Note also that the FIELD is evaluated one cube further out again on every
+   * face, because the gradient that gives the normals is a central difference and needs a
+   * corner beyond the ones it reports on. A field with a pole just outside the box therefore
+   * still refuses the cook, and moving the box is the fix.
+   *
+   * @defaultValue `[8,8,8]`
+   */
+  boundsMax: readonly number[];
+  /**
+   * Which side of `isoValue` is solid, which decides only two things: which way the surface
+   * faces, and hence which way the winding runs. 'below' (the default) treats field <
+   * isoValue as inside, the convention a signed distance uses — negative within the shape.
+   * 'above' is the one a density or an occupancy noise wants, where more means more
+   * material. The surface geometry is identical either way; flipping this turns it inside
+   * out rather than moving it.
+   *
+   * - Enum: `"below"` | `"above"`
+   *
+   * @defaultValue `"below"`
+   */
+  inside: string;
+}
+
+/**
+ * Params of the `meshPrimitive` node type.
+ */
+export interface MeshPrimitiveParams {
+  /**
+   * 'plane' builds one rectangle in the world plane named by `orientation`; 'box' builds a
+   * closed six-sided box of the full `size` extents (and ignores `orientation`).
+   *
+   * - Enum: `"plane"` | `"box"`
+   *
+   * @defaultValue `"plane"`
+   */
+  shape: string;
+  /**
+   * Full extents along world x, y, z, in world units (not half-extents). For 'plane', the
+   * component along the plane's normal axis is ignored.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `[10,10,10]`
+   */
+  size: readonly number[];
+  /**
+   * World position of the shape's center.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  center: readonly number[];
+  /**
+   * Which world plane a 'plane' lies in, and so which axis is its normal: 'xz' is the ground
+   * plane (normal +y), 'xy' faces +z, 'yz' faces +x. Ignored for 'box'.
+   *
+   * - Enum: `"xz"` | `"xy"` | `"yz"`
+   *
+   * @defaultValue `"xz"`
+   */
+  orientation: string;
+  /**
+   * Quads along world x, y, z — whole numbers, minimum 1. A plane uses the two components of
+   * its own axes ([1,1,1] is a single quad, two triangles); a box uses all three, each face
+   * taking the two that span it. More subdivisions give finer sampling and a finer
+   * uv/raycast target.
+   *
+   * - Range: `>= 1`
+   *
+   * @defaultValue `[1,1,1]`
+   */
+  subdivisions: readonly number[];
+  /**
+   * Reverse every triangle's winding, which flips the surface normals — a plane becomes a
+   * ceiling, a box becomes an inward-facing room.
+   *
+   * @defaultValue `false`
+   */
+  flip: boolean;
+}
+
+/**
+ * Params of the `occlusionCull` node type.
+ */
+export interface OcclusionCullParams {
+  /**
+   * Nonzero (the default) puts the point IN the test: its box is checked against every chord
+   * it can reach, and it is pushed or dropped on the answer. Zero takes it out entirely — no
+   * chord is ever tested against it, and it is carried to the output UNMOVED AND IN ITS
+   * PLACE, between the same two neighbours it arrived between. THAT LAST PART IS WHY THIS IS
+   * A PARAM AND NOT SOMETHING A CALLER CAN SPELL WITH A FILTER. Holding a class of points
+   * out of this node by filtering them off and merging them back concatenates: the exempt
+   * ones arrive at the END of the cloud, every index after the first of them shifts, and a
+   * cloud that copyToPoints or spawnInstances reads in order becomes a different scene — so
+   * the only way to say 'do not test this point' without also saying 'and put it somewhere
+   * else' is here. IT IS NOT A SECOND SPELLING OF `pushMax` 0, and the two cannot compete
+   * because they answer different questions: `pushMax` 0 says 'drop this one rather than
+   * move it', which is a verdict on a point that WAS tested and did block, while this says
+   * the question is never asked — so for an excluded point `pushAxis` and `pushMax` are
+   * never read, and it can be neither pushed nor dropped no matter what they say. An
+   * excluded point is never a blocker, so nothing about how blockers are handled reaches it.
+   * It does still OCCUPY its position: `pushClearance` counts it among the points already
+   * settled, exactly as it counts a point that was tested and cleared, because a pushed
+   * point has to avoid what is there rather than what was tested. As a FIELD it is evaluated
+   * on the `in` points, one flag per point, which is the form this is really for —
+   * attribute("cover"), or a comparison against a class column, excludes a KIND of thing
+   * rather than a list of indices, and the expression goes on meaning the right thing after
+   * the cloud upstream changes length. A non-finite value is refused with the param named,
+   * as every field-capable param in this node is: a NaN gate is a broken expression rather
+   * than a decision, and it is deliberately not filterByExpression's reading, where NaN
+   * means drop. NOTHING IS REPORTED, which a reader has to know before relying on the
+   * output: this node writes no column saying which points it tested, so a point it never
+   * asked about and a point it asked and cleared are indistinguishable on the way out — both
+   * come out exactly where they started. The `include` expression IS the record of the
+   * difference, it is one the caller already has, and asking it again is cheaper than a
+   * column this node would have to write on every cook for the callers that do not care.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  include: FieldParam;
+  /**
+   * How far along the sight path, in world units of ARC LENGTH, must be visible from each
+   * eye. The fan's targets are spread evenly over that distance, so this and `samples`
+   * together fix the resolution of the test: `lookAhead / samples` is the gap between
+   * consecutive targets, and a box narrower than that gap can slip between two chords and be
+   * kept. Size them together — halving the gap doubles the cost. As a FIELD it is evaluated
+   * on the SIGHT input's points, one look-ahead per eye, which is how a rule that varies
+   * along the route is written: attribute("speed") scaled to a stopping distance asks for
+   * more sight where the observer is moving faster and less where a tight corner makes the
+   * demand impossible to satisfy anyway. A value of 0 leaves the fan with nowhere to go and
+   * collapses every chord to the eye position itself, which still asks one question — is the
+   * eye INSIDE the box — and nothing more; that is the honest reading of a zero-length line
+   * of sight, not an off switch. Negative values are read the same way as 0. A look-ahead
+   * longer than the path itself simply clamps at the far end on an open run and wraps on a
+   * closed one. This is also the HALO WIDTH a partitioned cook needs, plus `pushMax` and
+   * plus the widest box half-diagonal; as a field, use the bound the expression can reach
+   * ANYWHERE in the world rather than the largest value present in the cell, which is
+   * circular — the cell's cloud has already been clipped by the very halo you are sizing.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `12`
+   */
+  lookAhead: FieldParam;
+  /**
+   * How many chords make up one eye's fan. The targets sit at `lookAhead * i / samples` for
+   * i in 1..samples, so the far end of the run is always tested and the eye's own position
+   * never is. The count exists because the rule is about a STRETCH of path rather than a
+   * point on it: with samples 1 the test is a single chord to the far end, which a box
+   * standing squarely across the middle of the run does not touch — it leaves the far point
+   * visible while hiding everything before it, and the cull would keep it. Raise this until
+   * the gap between targets is smaller than the narrowest box you care about; lowering it is
+   * the cheapest way to make the node faster and the first thing to make it wrong. The
+   * ceiling of 1024 is a guard on cost rather than a semantic limit, and the total number of
+   * chords (eyes times samples) is bounded again at cook time.
+   *
+   * - Range: `1..1024`
+   *
+   * @defaultValue `8`
+   */
+  samples: number;
+  /**
+   * World-space offset added to each eye's position on the sight path, in world units. The
+   * default raises the eye 1.5 above the path, which is where an observer's eye is relative
+   * to the ground they stand on — the reason the param exists at all is that the path is
+   * almost always the surface and almost never the viewpoint, and testing from the surface
+   * would have every kerb and every rut block the view. The TARGETS are not offset: they
+   * stay on the path, because what must be visible is the path itself, and lifting both ends
+   * would let a low box hide under a chord that clears it. As a FIELD it is evaluated on the
+   * SIGHT input's points, one offset per eye, so a route that climbs into a vehicle and back
+   * out again can carry its own eye height; build it with vec(x, y, z), and note that a
+   * scalar FIELD broadcasts to all three axes (rarely what an eye height means) while a
+   * plain scalar is refused outright. An offset of [0, 0, 0] puts the eye exactly on the
+   * path.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,1.5,0]`
+   */
+  eyeOffset: FieldParam;
+  /**
+   * Direction along which a blocked point is moved before the node gives up and drops it, in
+   * world units. Normalized internally, so only its direction is read; the SIGN is chosen by
+   * the node, not by the author — a point is pushed in whichever of ±axis takes it FURTHER
+   * from the nearest eye, because 'out of the way' has no other meaning when the sight line
+   * is the only thing there is to be out of the way of. That is what lets one axis serve
+   * both sides of a route without an author writing a sign per point. As a FIELD it is
+   * evaluated on the `in` points, one direction per point, which is the form this param is
+   * really for: a lateral written upstream by pathSegments or promoted off the road
+   * primitive gives every point the outward direction of the stretch it stands on, and a
+   * straight world axis stops being an approximation the moment the route turns. A ZERO axis
+   * cannot be pushed along, so such a point is dropped the moment it blocks — which is a
+   * deliberate way to spell 'this one must never move' for a piece whose whole value is
+   * being in line with its neighbours (a row of markers with one shoved out of line reads as
+   * a mistake; the same row two markers shorter still reads as a row). `pushMax` 0 says the
+   * same thing for the whole cloud.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[1,0,0]`
+   */
+  pushAxis: FieldParam;
+  /**
+   * Furthest a blocked point may be moved along `pushAxis`, in world units. The default of 0
+   * means NEVER PUSH: every blocker is dropped, and the node is a pure cull. There is
+   * deliberately no generous default distance — 6 is a long way in a corridor and nothing at
+   * all on a motorway, so a default would either do nothing or silently relocate an authored
+   * point by an amount nobody chose, and of the two failures dropping the point is the one
+   * an author notices. Set it as soon as the population count matters: pushing keeps the
+   * point, keeps the asset, and keeps whatever budget upstream counted, where dropping
+   * spends all three. As a FIELD it is evaluated on the `in` points, one allowance per
+   * point, and 0 for a point is exactly the 'drop rather than move' exception —
+   * attribute("locked") driving it lets a class of props be immovable while everything
+   * around them shuffles aside. The search is a ladder of `pushStep` increments and stops at
+   * the FIRST distance that clears every chord, so the point moves the least it can rather
+   * than the most it may; a point still blocked at `pushMax` is dropped. Widening this
+   * widens the halo a partitioned cook needs by the same amount, since a point can be tested
+   * against eyes that far beyond where it started.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  pushMax: FieldParam;
+  /**
+   * Distance between successive push attempts, in world units. Must be greater than 0 — a
+   * step of 0 is a search that never advances, and it is refused rather than silently
+   * treated as 'do not push', which is what `pushMax` 0 already says. This is a RESOLUTION
+   * knob and not a distance the author cares about: it decides how close to the minimum the
+   * found position is, so a point that would clear at 1.2 is placed at 1.5 with the default
+   * step and at 1.25 with a step of 0.25. It is deliberately not field-capable — a per-point
+   * search resolution is a knob nobody needs and would make two points that started together
+   * end up on different ladders, which is a difference in the OUTPUT that no author asked
+   * for. Every attempt costs a full sweep of the point's eyes, so the ratio pushMax /
+   * pushStep is the per-point cost multiplier and is bounded: a ratio above 4096 is refused
+   * with both numbers named.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `0.5`
+   */
+  pushStep: number;
+  /**
+   * Room a PUSHED point needs at its new position, in world units, measured to the points
+   * already settled. It exists because pushing along a shared axis piles blockers up: a
+   * dozen props shoved aside from a dozen different eyes all come to rest at the same
+   * offset, interpenetrating, and the cull that was supposed to tidy the scene has made a
+   * heap in it. With a clearance set, a pushed point skips a rung of the ladder that would
+   * land it inside a neighbour and keeps climbing. THIS IS WHAT MAKES THE NODE GREEDY, and
+   * the trade is worth stating plainly: at 0 (the default) every point's verdict depends
+   * only on the sight input and on the point itself, so the node is embarrassingly parallel,
+   * exactly reproducible from a bounded halo, and completely indifferent to visit order.
+   * Above 0 a verdict depends on where other points settled, which depends on where THEIR
+   * neighbours settled, and no halo width covers that chain — a per-cell cook will disagree
+   * with a whole-region one at the seams. The visit order is fixed by point identity either
+   * way, so the answer is at least always the same answer. Only PUSHED points are tested: a
+   * point that never had to move stays exactly where the author put it and is never dropped
+   * for standing too close to something, which is selfPrune's job and not this node's. As a
+   * FIELD it is evaluated on the `in` points, so a large prop can demand more room than a
+   * small one; it is read on the point being PUSHED, not on the neighbour it is avoiding.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  pushClearance: FieldParam;
+}
+
+/**
+ * Params of the `orientAlongVector` node type.
+ */
+export interface OrientAlongVectorParams {
+  /**
+   * World-space direction the chosen local axis should point along; need not be unit length.
+   * Field-capable (resolved per point on the input, e.g. a tangent attribute; tuple 1
+   * broadcasts). Zero-length directions leave that point's rot unchanged (identity when the
+   * rot attribute did not exist before).
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,0,1]`
+   */
+  direction: FieldParam;
+  /**
+   * Up hint fixing the roll around the direction; need not be unit length. When
+   * parallel/antiparallel to the direction (or zero), deterministically falls back to [0, 0,
+   * 1], then [1, 0, 0]. Field-capable (resolved per point on the input; tuple 1 broadcasts).
+   * A per-point up is what a curve that turns over needs: a CONSTANT up flips the roll a
+   * half turn as the direction passes through it, and everything placed along the curve
+   * snaps round with it — feed writeCurveFrame's `curveNormal` here instead and the roll
+   * varies smoothly. A field `up` keeps this node OFF the device-resident path, because the
+   * apply kernel bakes the normalized up in as a constant; the cook reports that by name in
+   * its fallbacks rather than silently producing different bytes.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,1,0]`
+   */
+  up: FieldParam;
+  /**
+   * Which local axis maps onto the direction. Default '+z' — the forward axis assets face in
+   * the examples (a spline-fence style tangent yaw). For ±x/±z the local +Y follows the up
+   * hint; for ±y the local +Z follows it.
+   *
+   * - Enum: `"+x"` | `"-x"` | `"+y"` | `"-y"` | `"+z"` | `"-z"`
+   *
+   * @defaultValue `"+z"`
+   */
+  axis: string;
+}
+
+/**
+ * Params of the `partitionByAttribute` node type.
+ */
+export interface PartitionByAttributeParams {
+  /**
+   * Point attribute to partition by. Must be i32, u32, or string with tuple size 1.
+   *
+   * @defaultValue `"name"`
+   */
+  name: string;
+}
+
+/**
+ * Params of the `pathCoverage` node type.
+ */
+export interface PathCoverageParams {
+  /**
+   * World direction the rays are cast along, from each path point; need not be unit length.
+   * The default [0, 1, 0] asks the question this node was built for — what is ABOVE the path
+   * — but the axis is free: cast along -Y to ask what the path stands on, or along a
+   * horizontal axis to ask what walls it in. As a FIELD it is PER PATH POINT, resolved on
+   * the path's own point domain, which is how a banked or rolled path asks about its own
+   * local up rather than the world's: pass attribute("N") or a curve frame's normal and each
+   * point casts along the surface it belongs to. A zero-length direction is REFUSED, naming
+   * the point — unlike orientAlongVector, where a zero direction has the honest reading
+   * 'leave this point alone', a coverage query with no cast direction has no answer at all,
+   * and reporting 'not covered' for it would be exactly the plausible-looking cook this
+   * library refuses to produce.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,1,0]`
+   */
+  direction: FieldParam;
+  /**
+   * Where each ray STARTS, as a distance along `direction` from the path point. This is the
+   * floor of the test, and it is what stops the path's own surface — and anything lying on
+   * it — from counting as cover over it: on a road, set it above the tallest kerb and below
+   * the lowest thing that could ever be a roof. Negative values start the ray behind the
+   * point. As a FIELD it is per path point. Together with `far` and `spread` it fixes the
+   * ray reach hypot(spread, max(|near|, |far|)), which is the halo this node needs under a
+   * partitioned cook.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  near: FieldParam;
+  /**
+   * Where each ray ENDS, as a distance along `direction` from the path point. THE FAR PLANE
+   * IS LOAD-BEARING AND HAS NO 'UNLIMITED' SETTING: with an unbounded ray the sky is a
+   * tunnel and the answer is 100% everywhere, so this is a real distance chosen for the
+   * scene — the height above which something overhead has stopped being cover and started
+   * being scenery. A measurement whose value is that today's figure can be compared with
+   * yesterday's must not move when a placement rule is retuned, so prefer restating the
+   * number here to importing it from whatever placed the boxes. `far` less than `near`
+   * describes the same segment reversed and is legal; `far` equal to `near` collapses each
+   * ray to a point and asks pure containment. As a FIELD it is per path point.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `10`
+   */
+  far: FieldParam;
+  /**
+   * How many rays in the fan, spread evenly across -spread..+spread WITH BOTH EDGES
+   * INCLUDED. 1 casts a single ray straight through the point and ignores `spread`. A single
+   * centre ray is not enough for anything wider than a footpath: cover over a corridor is
+   * usually a shell with legs at the edges and a span in the middle, and one ray down the
+   * middle either sees the span and calls a bare gantry a tunnel, or sits in the gap between
+   * two panels and calls a tunnel bare. Six over three half-widths — the shipped default —
+   * puts rays at the corridor edges, where the legs are, without doubling up on the middle,
+   * where a single spanning panel already answers for everything. Cost is linear in this:
+   * each ray is one slab test per candidate box, minus the ones already hit.
+   *
+   * - Range: `>= 1`
+   *
+   * @defaultValue `6`
+   */
+  rayCount: number;
+  /**
+   * HALF the lateral span of the fan, in world units: rays are placed from -spread to
+   * +spread across the path, so the full corridor tested is 2*spread wide. 'Across' is
+   * perpendicular to both the path's own direction of travel and to `direction` (see
+   * acrossAttr for where that comes from). Set it to the width you are willing to call
+   * covered — wider than the path itself if a partial overhang counts, narrower if only
+   * cover directly overhead does. 0 collapses the fan onto the centre line whatever rayCount
+   * says, which makes every ray identical and the hit count either 0 or rayCount. As a FIELD
+   * it is per path point, so a path that changes width can carry its own corridor; the ray
+   * reach, and therefore the partitioned-cook halo, is then set by the LARGEST value the
+   * field can return anywhere in the world, which is a bound to derive rather than measure.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `1.5`
+   */
+  spread: FieldParam;
+  /**
+   * How many of the fan's rays must hit before the point counts as covered, AT LEAST this
+   * many (the test is >=, so 3 of 6 is covered). This is the knob that decides what 'under
+   * cover' means, and it is a threshold rather than a fraction so that it reads the same
+   * when rayCount changes: half the rays is the shipped default and says 'art spans the
+   * corridor', 1 says 'anything at all overhead', rayCount says 'cover edge to edge'.
+   * Refused when it exceeds rayCount, because that test can never pass and a run of
+   * all-false is not a useful way to learn so. hitsAttr writes the raw count, so a graph
+   * that wants a different threshold later can write the count once and compare it
+   * downstream instead of re-casting.
+   *
+   * - Range: `>= 1`
+   *
+   * @defaultValue `3`
+   */
+  minHits: number;
+  /**
+   * Name of a numeric point attribute (tuple 3) on the path giving the across direction
+   * directly, for paths that already carry their own frame. Empty (the default) derives it
+   * from the path's POLYLINE TOPOLOGY instead: the central-difference tangent at each point
+   * (the same one writeTangents and writeCurveFrame produce) crossed with `direction`. That
+   * derivation is why an empty acrossAttr requires real polyline primitives and refuses a
+   * bare point cloud. Prefer this param when the boxes were placed through a frame the path
+   * already stores: a second way of computing 'across' is a second chance to disagree with
+   * the geometry being measured, and the disagreement looks like a plausible number rather
+   * than like a bug. Whatever the source, the vector is made perpendicular to `direction`
+   * and normalized before use, so the fan stays a flat fan and the ray-reach bound stays
+   * exact. A point with no usable across direction — one no polyline visits, or one whose
+   * path neighbours all coincide, or a tangent parallel to `direction` — falls back to a
+   * deterministic axis perpendicular to `direction` (the same fallback orientAlongVector
+   * uses), so it is still measured and still reproducible, but its fan is not oriented by
+   * the path.
+   *
+   * @defaultValue `""`
+   */
+  acrossAttr: string;
+  /**
+   * Extent of one box along its own local X, Y and Z axes BEFORE the per-point `scale` is
+   * applied — the size of the asset the cloud stands for. The world half-extent is 0.5 *
+   * boxSize * scale componentwise, so the default [1, 1, 1] means 'the points carry unit
+   * cubes and `scale` IS the size', which is the common case. As a FIELD it is resolved ON
+   * THE BOXES CLOUD, not on the path, so attribute("...") inside it reads the boxes' own
+   * columns: a cloud carrying its extents in the standard bounds attributes is
+   * subtract(attribute("boundsMax"), attribute("boundsMin")). GETTING THIS WRONG IS SILENT
+   * IN BOTH DIRECTIONS: scaling twice inflates every box and reports a tunnel over the whole
+   * path, forgetting `scale` shrinks them and reports no cover anywhere, and each produces a
+   * run that finishes cleanly with a wrong number in it. Boxes are centred on their points;
+   * a negative size is read as its magnitude, since a box of size -2 is the same set of
+   * points as one of size 2.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[1,1,1]`
+   */
+  boxSize: FieldParam;
+  /**
+   * Name of the bool point attribute receiving the covered/not decision (hits >= minHits).
+   * Empty writes no flag (then hitsAttr must be set). The shape is this node's to pick
+   * (bool, tuple 1), so a name the path already holds under a DIFFERENT shape is REFUSED,
+   * not overwritten: writing it would delete that column outright and the cook would still
+   * look fine (coveredAttr "P" would leave a path with no positions). An existing bool
+   * tuple-1 column of the same name IS reused and reset, so re-running this node over its
+   * own output is fine. To write over something of another shape, removeAttribute it first,
+   * or pick another name.
+   *
+   * @defaultValue `"covered"`
+   */
+  coveredAttr: string;
+  /**
+   * Name of the u32 point attribute receiving how many of the fan's rays hit at least one
+   * box, 0..rayCount. Empty (the default) writes no count. Worth writing when the threshold
+   * is still being chosen, or when the interesting quantity is HOW enclosed a point is
+   * rather than whether it passed: the count is what distinguishes a bare gantry from a
+   * tunnel, and a graph can compare it against several thresholds downstream without casting
+   * again. Same rule as coveredAttr: the shape is this node's to pick (u32, tuple 1), so a
+   * name held under a different shape is refused, while a same-shape column is reused and
+   * reset.
+   *
+   * @defaultValue `""`
+   */
+  hitsAttr: string;
+}
+
+/**
+ * Params of the `pathPointAt` node type.
+ */
+export interface PathPointAtParams {
+  /**
+   * How the parameter is read: 'fraction' is 0..1 of the polyline's own arc length, so the
+   * same value means the same relative place on curves of different lengths; 'distance' is
+   * world units from the polyline's start. Both clamp to the ends.
+   *
+   * - Enum: `"fraction"` | `"distance"`
+   *
+   * @defaultValue `"fraction"`
+   */
+  mode: string;
+  /**
+   * Where along the polyline to place the point, read according to `mode`. Field-capable,
+   * resolved on the INPUT points before any of them move — so it can read `curveU` and
+   * express a move relative to where the point already is (for example
+   * lerp(attribute('curveU'), target, amount)), which is the usual way to use this node. A
+   * BARE attribute('curveU') is equally sound and is the re-seek: this node writes `tangent`
+   * and `curveU` afresh, and a resolved column that turns out to be the live storage of
+   * either is snapshotted before that write, so the parameter read is always the one this
+   * cook was HANDED and never a column this node has already reset. Values outside the range
+   * clamp.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `0.5`
+   */
+  parameter: FieldParam;
+}
+
+/**
+ * Params of the `pathResample` node type.
+ */
+export interface PathResampleParams {
+  /**
+   * How samples are placed: 'count' puts exactly `count` samples on each path; 'spacing'
+   * steps every `spacing` units along each path.
+   *
+   * - Enum: `"count"` | `"spacing"`
+   *
+   * @defaultValue `"count"`
+   */
+  mode: string;
+  /**
+   * Samples per path when mode is 'count'. Minimum 2 for an open path and 3 for a closed one
+   * — below that the result would not be a path. Ignored in 'spacing' mode.
+   *
+   * - Range: `>= 2`
+   *
+   * @defaultValue `10`
+   */
+  count: number;
+  /**
+   * Distance between samples in world units when mode is 'spacing'. The step is EXACT and is
+   * never stretched to make the samples come out even, so a CLOSED path ends on a REMAINDER:
+   * the last sample sits at floor(length / spacing) * spacing and the segment from it back
+   * to the start is SHORTER than `spacing` — a 43-unit loop at spacing 5 gets 9 samples and
+   * closes with a 3-unit segment at the seam. That remainder is whatever the loop's length
+   * leaves over, anywhere from a hair above 0 to just under `spacing`. To divide a loop
+   * EVENLY, switch mode to 'count': it splits the length into `count` equal steps and has no
+   * seam segment. An open path is the same story at its far end — it always lands on its
+   * true endpoint, so its last segment is short in the same way. Must be > 0, small enough
+   * to leave at least 2 samples on each open path (3 on a closed one), and large enough that
+   * the whole input stays under 1048576 samples. Ignored in 'count' mode. AS A FIELD IT IS
+   * ONE SPACING PER PATH, resolved on the INPUT's PRIMITIVE domain: a wide road and a
+   * footpath in one geometry take different steps in ONE COOK, each path's count following
+   * its own value against its own arc length. That is why this param can be a field where
+   * splineSample's spacing cannot — this node resamples every polyline ON ITS OWN ARC
+   * LENGTH, so there is a primitive element to read one value per, while splineSample
+   * concatenates every polyline into ONE curve and reads its spacing exactly once, against
+   * no element at all. The field sees the PRIMITIVE domain, so what it can read is what a
+   * path carries: a primitive attribute (written with setAttribute domain 'primitive', or
+   * carried up from the points with promoteAttribute point → primitive), index() and
+   * fraction() over the paths, randomField(), and nodeSeed(). A POINT attribute is not in
+   * scope there, and position() is not either — a path has no one position. Both limits
+   * stay, and they are enforced differently on purpose. The MINIMUM is PER PATH: a path
+   * whose own resolved spacing is too coarse to leave 2 samples (3 when closed) is REFUSED,
+   * naming that primitive and the spacing it resolved to — never quietly dropped from the
+   * output, since a path missing from an otherwise fine-looking cook is the plausible
+   * failure this library exists to refuse. The BUDGET is on the TOTAL: samples are counted
+   * as they are placed, across every path in primitive order, and the cook is refused as
+   * soon as they add up past 1048576 — a per-path cap would pass ten paths of 200 000
+   * samples each. A field is not range-checked the way a plain value is (a schema's min
+   * binds a number, not a recipe), so bound the expression itself — max(<expr>, <the
+   * smallest step you meant>) — and note that a NaN or infinite spacing is refused rather
+   * than read as a meaning.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  spacing: FieldParam;
+  /**
+   * Name of an f32 PRIMITIVE attribute receiving each path's TRUE ARC LENGTH in world units
+   * — the sum of its input polyline's segment lengths. Empty (the default) writes none. This
+   * is the number the graph cannot otherwise know: the straight-line span between a curve's
+   * endpoints is SHORTER than the curve, and no field can walk a polyline's vertices to find
+   * the difference, so a size derived from the length is authored today as a literal
+   * measured by hand elsewhere. It lands on the PRIMITIVE domain because a length is a fact
+   * about a PATH, one per path, exactly like `connectPoints.lengthAttr`; promote it
+   * (promoteAttribute, primitive to point) for a field to read per sample, or filter on it
+   * with filterPrimitivesByAttribute. The length reported is the INPUT polyline's, not the
+   * polyline through the new samples: a coarse resample of a curve cuts corners and comes
+   * back shorter, and reporting that would report the approximation rather than the curve —
+   * it is also what makes `stepAttr` times the divisions equal it exactly. The shape is this
+   * node's to pick (f32, tuple 1), so a name arriving on the output's primitive domain under
+   * a DIFFERENT shape is REFUSED rather than deleted and re-added; a same-shape column is
+   * RESET, which is what keeps resampling a resampled path under the same name ordinary.
+   *
+   * @defaultValue `""`
+   */
+  lengthAttr: string;
+  /**
+   * Name of an f32 PRIMITIVE attribute receiving the ARC-LENGTH STEP between consecutive
+   * samples on that path. Empty (the default) writes none. Per path and so on the PRIMITIVE
+   * domain for the same reason as `lengthAttr`: in 'count' mode the step is that path's OWN
+   * length divided by its divisions (length / (count - 1) on an open path, length / count on
+   * a closed one, the divisor that leaves no duplicate at the seam), so two paths of
+   * different lengths get different steps and neither varies from sample to sample. In
+   * 'spacing' mode it reports `spacing` itself, unchanged — or, when `spacing` is a field,
+   * that path's OWN resolved value, which is the same statement once the param is read per
+   * path — not a tautology but the point of reporting it at all: a downstream size written
+   * as a multiple of this attribute follows the sampling when the mode or the knob changes
+   * under it, instead of silently meaning something else. Note that in 'spacing' mode the
+   * LAST step is the remainder described under `spacing` and is SHORTER than the value
+   * reported here; this is the step the node takes, not what the path had left over. Same
+   * reporting-slot rule as `lengthAttr`, and no two of the per-path reports may name the
+   * same attribute — the second write would overwrite the first with no complaint, since the
+   * shapes agree.
+   *
+   * @defaultValue `""`
+   */
+  stepAttr: string;
+  /**
+   * Name of an f32 PRIMITIVE attribute receiving the length of the polyline this node EMITS
+   * for that path: the sum of the straight-line chords between consecutive samples, plus the
+   * closing chord from the last sample back to the first when the path is closed. Empty (the
+   * default) writes none. IT IS NOT `lengthAttr` AND THAT IS THE POINT. `lengthAttr` reports
+   * the INPUT curve, which is the right number to ask about the road and the wrong one to
+   * ask about this output: a resample CUTS CORNERS, so the polyline through the samples is
+   * always SHORTER than the curve it was cut from. On a closed lap of this scale the two
+   * read 3121.533 and 3121.366 — 0.0054% — which sounds ignorable until you notice it is NOT
+   * UNIFORM: every unit of it accrues over the bends and none of it over the straights, so
+   * no scale factor turns one into the other and a consumer that steps `lengthAttr` over
+   * these samples drifts, running off the end of the path or wrapping short of its own seam.
+   * Use `lengthAttr` when the question is about the CURVE (how long is this road, how many
+   * props does it deserve) and this one when the question is about THIS OUTPUT (how far can
+   * I walk on the polyline I am about to hand downstream). Measured from the f32 positions
+   * actually written, in the same order and with the same arithmetic `polylineArcTables`
+   * uses to re-measure them downstream, so the number a later pathResample, pathPointAt,
+   * arcTile or transferAlongPath computes for this path IS this number rather than a near
+   * miss — the column itself is f32 like every report here, so what a graph reads is that
+   * sum rounded to f32. Same reporting-slot rule as `lengthAttr` — a name on the output's
+   * primitive domain under a different shape is REFUSED rather than deleted and re-added, a
+   * same-shape one is RESET — and no two of the per-path reports may name the same
+   * attribute.
+   *
+   * @defaultValue `""`
+   */
+  resampledLengthAttr: string;
+  /**
+   * Name of an f32 POINT attribute (tuple 1) receiving each sample's ARC POSITION from the
+   * start of ITS OWN path, measured along the EMITTED polyline: sample 0 of every path is 0,
+   * and each later sample adds the straight-line chord from the sample before it. Empty (the
+   * default) writes none. THE UNITS ARE WORLD UNITS, NOT A 0..1 FRACTION, and that is what
+   * makes it more than `curveU` under another name: `pathPointAt`'s 'distance' mode,
+   * `pointScatterOnPath.arcAttr`, `transferAlongPath.arcAttr` and `arcTile.startAttr` are
+   * all world-unit chord coordinates, so this column plugs into any of them with no multiply
+   * and nothing for the graph to get wrong. The fraction is one divide away (by
+   * `resampledLengthAttr`) while going back the other way needs the length anyway, so the
+   * coordinate that composes is the one written. `curveU` is still written beside it and
+   * still measures the INPUT curve's fraction; the two disagree by exactly the
+   * corner-cutting `resampledLengthAttr` reports. It lands on the POINT domain because it is
+   * a fact about a SAMPLE — a different number for every point — which is what makes it
+   * unlike the three per-path reports and why it is checked against the output's point
+   * domain rather than its primitive one. THE CLOSING CHORD OF A CLOSED PATH IS NOT IN THIS
+   * COLUMN: it runs from the last sample back to the first, so no sample holds it — it is in
+   * `resampledLengthAttr`, and the last sample's value plus that chord is the emitted
+   * length. On an open path the last sample's value IS the emitted length. The shape is this
+   * node's to pick (f32, tuple 1), so a name already on the OUTPUT's point domain under a
+   * different shape is REFUSED rather than deleted and re-added — P, scale, boundsMin,
+   * boundsMax and `tangent` (f32x3), rot and color (f32x4) and seed (u32) all reach that
+   * refusal — while `density` and `curveU` ARE f32 tuple 1, so naming either passes the
+   * shape check and RESETS it, silently overwriting a standard column with an arc length —
+   * and `curveU` is then gone rather than merely shadowed, since the two columns become one
+   * buffer and the arc is what stays in it. Give it a name of its own. TWO MORE NAMES ARE
+   * REFUSED OUTRIGHT. A name that is also a PRIMITIVE attribute of the INPUT is refused
+   * before the cook starts, whatever its shape: every primitive attribute is carried onto
+   * these samples, so it would land on this very column, and the refusal names this param
+   * rather than the carried attribute because renaming the report is the fix and moving the
+   * author's own value is not. And "primtype" is refused because it is a type tag rather
+   * than a value — this node stamps it on every path it emits, and an f32 point column under
+   * that name is a second meaning for a name the library resolves as a type, one
+   * promoteAttribute away from replacing the tag and hiding every path from the nodes that
+   * read it.
+   *
+   * @defaultValue `""`
+   */
+  sampleArcAttr: string;
+}
+
+/**
+ * Params of the `pathRuns` node type.
+ */
+export interface PathRunsParams {
+  /**
+   * Numeric POINT attribute to accumulate (f32/i32/u32/bool, tuple 1..4). Must exist. Tuples
+   * accumulate componentwise, each component its own independent running total, and all of
+   * them reset together at a boundary. Scan a per-segment length here for distance, or an
+   * attribute set to a constant 1 for the count of points since the boundary.
+   *
+   * @defaultValue `"density"`
+   */
+  name: string;
+  /**
+   * POINT attribute (tuple 1) whose NON-ZERO values mark where a run begins, forward, or
+   * ends, backward. Must exist. Any numeric type: a bool column is the obvious one, and an
+   * i32 marker column or an f32 written by a field works the same way, because the test is
+   * only 'is this nonzero'. NaN is NOT a boundary, deliberately: a boundary column carrying
+   * an unmeasurable value would otherwise cut every run in the path, and silently. A tuple
+   * wider than 1 is refused rather than reduced — a flag is one column, and which component
+   * would have decided is not a question this node should answer for you.
+   *
+   * @defaultValue `"boundary"`
+   */
+  boundary: string;
+  /**
+   * POINT attribute receiving the running total (f32, at the source's tuple size). Must
+   * differ from `name`: scanning in place would read back values this node had already
+   * overwritten. 'P' is refused outright. Same reporting-slot rule as the rest of the
+   * library — a column of a different shape under this name is refused rather than deleted
+   * and re-added, and a same-shape one is reset. f32 whatever `reduce` is, and that is not a
+   * limitation for a min or a max: an extreme is one of the values that were handed in,
+   * never a combination of two, so it survives the trip at the same precision a sum's inputs
+   * did — and f32 carries the ±Infinity a run that has folded in nothing yet reads.
+   *
+   * @defaultValue `"run"`
+   */
+  outName: string;
+  /**
+   * WHAT THE ACCUMULATOR IS. 'sum' (the default, and everything this node did before this
+   * param existed) adds the values of a run; 'min' and 'max' keep the run's smallest or
+   * largest instead. Nothing else moves — `boundary`, `mode`, `direction`, `wrap` and
+   * componentwise tuple handling are the same walk, because a segmented minimum differs from
+   * a segmented sum only in the fold, and the fold was never the hard part: the rotation
+   * onto the first flagged point, the seam, and the reset are. IT IS A PARAM AND NOT A
+   * SECOND NODE because 'the tightest radius since this corner began' and 'the distance
+   * since this corner began' are ONE query asked twice, and the library could previously
+   * spell only the second — attributeReduce has min and max but collapses a WHOLE domain
+   * onto the detail domain and cannot group, so a grouped extreme had no expression at all
+   * and came out as a hand-written loop in whatever host needed it. EACH RUN OPENS ON ITS
+   * FOLD'S IDENTITY: 0 for a sum, +Infinity for a min, -Infinity for a max —
+   * attributeReduce's answer over an empty domain, and the same answer for the same reason.
+   * In 'exclusive' mode a run's FIRST point reads exactly that, since by definition its own
+   * value is not in its own total, so a min there reads +Infinity and a max -Infinity. That
+   * is the honest answer rather than a sentinel to remember: the minimum of no values IS
+   * +Infinity — it is the only x for which min(x, v) = v — the output column is f32 and
+   * represents both infinities exactly, and unlike a sum's 0 it can never be mistaken for a
+   * measurement, so `isFinite` on the column is a usable test for 'this run has folded in
+   * nothing yet' that a sum can never offer. Answering 0 instead would make an empty min
+   * compare TIGHTER than every real radius, which is precisely the false positive a
+   * threshold rule cannot survive. NaN IS SKIPPED, not propagated — the rule the sum already
+   * had, kept: both `<` and `>` are false against a NaN, so an unmeasurable value simply
+   * never becomes the record, and one bad sample costs its own point instead of the rest of
+   * its run. A RUN OF ONE POINT reads the identity in 'exclusive' and its own value in
+   * 'inclusive', which is the sum's 0-and-v said in the other monoid, since min(+Infinity,
+   * v) is v; a run of NO points is not observable, because a run is opened by a point. THE
+   * COMPARISON IS SIGNED, never a magnitude: a max over -5 and -1 is -1. WHAT `mode` COSTS
+   * DIFFERS BY FOLD: for a sum, 'inclusive' differs from 'exclusive' at EVERY point, by that
+   * point's own value; for a min or a max they differ only at the points that set a new
+   * record, because an extreme is idempotent and the running value therefore moves one way
+   * and then stays. `direction` IS UNAFFECTED — all three folds are commutative and
+   * associative, so over a FIXED set of points the order of traversal cannot change the
+   * answer, and what direction changes is which points form a run (half-open the other way)
+   * and where the run's answer lands, exactly as it always did.
+   *
+   * - Enum: `"sum"` | `"min"` | `"max"`
+   *
+   * @defaultValue `"sum"`
+   */
+  reduce: string;
+  /**
+   * Whether a point's own value is part of its own running total. 'exclusive' (the default
+   * here, where pathScan defaults to 'inclusive') starts every run on its boundary point at
+   * the `reduce` fold's identity — zero for a sum, which is what 'distance since the marker'
+   * means, the marker itself being at distance zero, and ±Infinity for a min or a max, which
+   * is what 'the tightest thing strictly behind me' means when there is nothing behind me
+   * yet. 'inclusive' ends each run's last point on the run's whole total instead. Neither is
+   * more correct; pick by which end of the run you need exact.
+   *
+   * - Enum: `"inclusive"` | `"exclusive"`
+   *
+   * @defaultValue `"exclusive"`
+   */
+  mode: string;
+  /**
+   * Which way the runs are oriented. 'forward' accumulates in the path's walk order, so a
+   * point reads what lies BEHIND it since the last boundary — the query a 'distance since
+   * the last corner' rule wants. 'backward' accumulates against the walk order, so a point
+   * reads what lies AHEAD of it up to the next boundary — the query a marker rule wants
+   * ('place an entry marker 3 to 6W before the corner'). The two are not each other's
+   * complement without the run's total, which is why both are built rather than one plus an
+   * instruction to reverse the path — and under `reduce` 'min' or 'max' not even WITH it,
+   * because an extreme discards everything that was not the record and no arithmetic
+   * recovers it. On a CLOSED path reversing also moves which side of the seam a run starts
+   * on, so 'reverse it yourself' is a trap exactly where wrapping matters. Note also that
+   * the two directions do not cut the path into the SAME runs: forward a flagged point opens
+   * its run and backward it closes one, so the partitions sit one point apart. That is true
+   * of every fold and is not something `reduce` changes.
+   *
+   * - Enum: `"forward"` | `"backward"`
+   *
+   * @defaultValue `"forward"`
+   */
+  direction: string;
+  /**
+   * Whether a run may cross a CLOSED path's seam. True (the default) starts the walk at the
+   * first flagged point instead of at vertex zero, so a run straddling the start/finish line
+   * stays one run — the case a closed lap always has and the one a prefix sum cannot answer.
+   * False treats the seam as a run boundary, which is what you want when the vertex order
+   * carries meaning of its own, such as a lap whose start line IS a marker. No effect on an
+   * open path, and no effect on a closed path with nothing flagged, where there is no cyclic
+   * starting point to rotate to.
+   *
+   * @defaultValue `true`
+   */
+  wrap: boolean;
+}
+
+/**
+ * Params of the `pathScan` node type.
+ */
+export interface PathScanParams {
+  /**
+   * Numeric POINT attribute to fold (f32/i32/u32/bool, tuple 1..4). Must exist. Tuples fold
+   * COMPONENTWISE, each component its own independent running value — which under `reduce`
+   * 'min' or 'max' means a per-component extreme and not the tuple that happened to hold the
+   * smallest component: comparing tuples would need an order on tuples, and there is none
+   * that is not an arbitrary choice made on the caller's behalf.
+   *
+   * @defaultValue `"density"`
+   */
+  name: string;
+  /**
+   * POINT attribute receiving the running value (f32, at the source's tuple size). Must
+   * differ from `name`: scanning in place would read back values this node had already
+   * overwritten, so every element after the first would fold in this node's own output
+   * instead of its input. 'P' is refused outright. Same reporting-slot rule as the rest of
+   * the library — a column of a different shape under this name is refused rather than
+   * deleted and re-added, and a same-shape one is reset. f32 whatever `reduce` is, and that
+   * is not a limitation for a min or a max: an extreme is one of the values that were handed
+   * in, never a combination of two, so it survives the trip at the same precision a sum's
+   * inputs did — and f32 carries the ±Infinity a path that has folded in nothing yet reads.
+   *
+   * @defaultValue `"scan"`
+   */
+  outName: string;
+  /**
+   * WHAT THE ACCUMULATOR IS. 'sum' (the default, and everything this node did before this
+   * param existed) adds the values along a path; 'min' and 'max' keep the smallest or
+   * largest seen so far instead. Nothing else moves — `mode`, `totalAttr`, the walk order,
+   * the seam rule and componentwise tuple handling are the same scan, because a running
+   * minimum differs from a prefix sum only in the fold, and the fold was never the hard
+   * part: the ORDER is, and a polyline is where this library keeps one. EACH PATH OPENS ON
+   * ITS FOLD'S IDENTITY: 0 for a sum, +Infinity for a min, -Infinity for a max —
+   * attributeReduce's answer over an empty domain, and the same answer for the same reason.
+   * In 'exclusive' mode a path's FIRST point reads exactly that, since by definition its own
+   * value is not in its own total, so a min there reads +Infinity and a max -Infinity. That
+   * is the honest answer rather than a sentinel to remember: the minimum of no values IS
+   * +Infinity — it is the only x for which min(x, v) = v — the output column is f32 and
+   * represents both infinities exactly, and unlike a sum's 0 it can never be mistaken for a
+   * measurement, so `isFinite` on the column is a usable test for 'nothing has been folded
+   * in here' — which covers a path's first point in 'exclusive' AND a point on no polyline
+   * at all, the two elements that have nothing behind them — that a sum can never offer.
+   * Answering 0 instead would make an empty min compare TIGHTER than every real value, which
+   * is precisely the false positive a threshold rule cannot survive. NaN IS SKIPPED, not
+   * propagated — the rule the sum already had, kept: both `<` and `>` are false against a
+   * NaN, so an unmeasurable value simply never becomes the record, and one bad sample costs
+   * its own point instead of the whole tail of the column. A PATH OF ONE POINT is degenerate
+   * rather than unreachable — a polyline needs two vertices, but a CLOSED one whose two
+   * vertices are the same point walks exactly one — and it reads the identity in 'exclusive'
+   * and its own value in 'inclusive', which is the sum's 0-and-v said in the other monoid,
+   * since min(+Infinity, v) is v. THE COMPARISON IS SIGNED, never a magnitude: a max over -5
+   * and -1 is -1. WHAT `mode` COSTS DIFFERS BY FOLD: for a sum the two modes differ at a
+   * point BY THAT POINT'S OWN VALUE, so they part company almost everywhere and agree only
+   * where the value is zero (or a NaN, which contributes zero); for a min or a max they
+   * differ only at the points that SET A NEW RECORD, because an extreme is idempotent and
+   * the running value therefore moves one way and then stays. IT IS A PARAM AND NOT A SECOND
+   * NODE for the reason pathRuns' `reduce` is one: 'the largest width so far along this lap'
+   * and 'the width so far along this lap' are one query asked twice, and this is that same
+   * param over a whole path where pathRuns spells it over segmented runs — one vocabulary,
+   * one identity, one NaN rule, so a graph that folds a minimum between markers and one that
+   * folds it along the whole path do not have to be read two different ways.
+   *
+   * - Enum: `"sum"` | `"min"` | `"max"`
+   *
+   * @defaultValue `"sum"`
+   */
+  reduce: string;
+  /**
+   * Whether a point's own value is part of its own running value. 'inclusive' ends the last
+   * point of a path on the path's whole fold; 'exclusive' starts the first point at the
+   * `reduce` fold's identity — zero for a sum, which is the one that makes a CDF whose first
+   * bucket is reachable, and ±Infinity for a min or a max, which is what 'the smallest thing
+   * strictly behind me' means when there is nothing behind me yet. Neither is more correct —
+   * pick by which end you need exact.
+   *
+   * - Enum: `"inclusive"` | `"exclusive"`
+   *
+   * @defaultValue `"inclusive"`
+   */
+  mode: string;
+  /**
+   * Divide every point's running value by its own path's TOTAL, so the column comes out as a
+   * 0..1 CUMULATIVE DISTRIBUTION rather than an accumulating quantity. That is what the sum
+   * exists for, and until this param it cost two more nodes and a hazard: `totalAttr` lands
+   * on the PRIMITIVE domain, so a graph had to promoteAttribute it back onto the points and
+   * then divide — and the promote had to be 'first' rather than the obvious 'average', which
+   * is correct only by the accident that a point usually belongs to one polyline. Both nodes
+   * and the accident go away here, because the total is already in hand at the moment the
+   * column is written. `reduce` MUST BE 'sum' when this is set, and the refusal is by name:
+   * a distribution is accumulated MASS, and a running extreme accumulates none — it opens at
+   * the first value rather than at zero and moves only where a record is set, so dividing by
+   * it produces a number with no meaning rather than a wrong CDF. A path whose total is 0,
+   * or not finite, writes 0 at every one of its points: there is no distribution to express,
+   * and 0 is the answer that stays inside the range this param promises rather than an
+   * infinity or a NaN travelling downstream. A total that is NEGATIVE is divided by as it
+   * stands, so a density that goes below zero does not give a CDF in 0..1 — that is a fact
+   * about the input rather than something to clamp away. `totalAttr` still reports the RAW
+   * total, never 1: the total is a fact about the path, and it would otherwise be the one
+   * thing normalizing destroys. With `mode` 'inclusive' the last point of each path reads
+   * exactly 1; with 'exclusive' the first reads exactly 0 and the last falls short of 1 by
+   * its own share, which is the end you want when the buckets have to be reachable.
+   *
+   * @defaultValue `false`
+   */
+  normalize: boolean;
+  /**
+   * OPT-IN REPORT: name of an f32 PRIMITIVE attribute receiving each path's WHOLE FOLD — its
+   * total under `reduce` 'sum', its minimum under 'min', its maximum under 'max' — the
+   * number both modes are heading for. Empty (the default) writes none and the output is
+   * byte-identical to a cook without it. On the PRIMITIVE domain because a fold is a fact
+   * about a PATH, exactly as pathResample's `lengthAttr` is; promote it (promoteAttribute,
+   * primitive to point) for a field to read it per sample, which is what normalizing a scan
+   * into a 0..1 CDF needs — and, with a `groupAttr` on the pointsToPath upstream, what makes
+   * this node the library's GROUPED REDUCTION: one path per group, that group's fold on its
+   * primitive, promoted back onto every point of it. Promote with 'first' rather than
+   * 'average' when the fold can be an infinity: with one path per point the two agree on the
+   * value, and where a point really does sit on two paths, averaging a +Infinity against a
+   * -Infinity gives NaN where 'first' still gives a number. REPORTED IN 'exclusive' MODE
+   * TOO, where a sum's total is otherwise unrecoverable from the column because no point
+   * holds it. Under a min or a max that sentence is nearly true, and the exception is the
+   * dangerous half: the last point's exclusive value IS the whole fold unless the last point
+   * is the one that set the record, and nothing in the column says which case you are in —
+   * so the report is the answer that is right every time rather than usually, which is a
+   * stronger reason to ask for it than the sum ever had. Primitives that are not polylines
+   * are left at the identity like any unwritten element, so a mesh in the same geometry
+   * reads the fold over no points rather than a zero that would beat every real minimum. May
+   * not name the same attribute as `outName` — a different domain, but one name, which is a
+   * coincidence worth refusing rather than explaining downstream.
+   *
+   * @defaultValue `""`
+   */
+  totalAttr: string;
+}
+
+/**
+ * Params of the `pathSegments` node type.
+ */
+export interface PathSegmentsParams {
+  /**
+   * Which local axis of the spawned asset runs along the segment, and therefore which
+   * `scale` component carries the segment length. Default '+y' — three.js CylinderGeometry
+   * and CapsuleGeometry are built along Y, and this node exists to feed them. The other two
+   * components carry `radius`.
+   *
+   * - Enum: `"+x"` | `"-x"` | `"+y"` | `"-y"` | `"+z"` | `"-z"`
+   *
+   * @defaultValue `"+y"`
+   */
+  axis: string;
+  /**
+   * Scale written to the two components that are not the axis; with a unit-radius asset this
+   * is the tube's radius in world units. Field-capable, but note WHERE it resolves: on the
+   * INPUT points (the path's own points), not on the segments this node emits — the output
+   * domain does not exist yet when the field runs. Each segment takes the AVERAGE of the
+   * values at its two endpoints, so a radius that tapers along a path tapers smoothly across
+   * the segments. That also means a field can only read attributes the input POINTS carry: a
+   * per-path radius living on the PRIMITIVE domain has to be promoted onto the points first
+   * (promoteAttribute, primitive to point) before a field can see it. Values below 0 are
+   * clamped to 0.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `0.05`
+   */
+  radius: FieldParam;
+  /**
+   * World units added to BOTH ends of every segment (the length on the axis becomes segment
+   * + 2 * extend; the midpoint does not move). This is the joint filler: consecutive
+   * segments meeting at a bend leave a wedge-shaped gap on the outside of the corner, and
+   * overlapping them closes it. About one radius is enough down to right-angle bends. Costs
+   * nothing but overlap, and with a capsule asset the rounded caps hide the seam entirely.
+   * Field-capable, and it resolves EXACTLY WHERE `radius` DOES — on the INPUT points (the
+   * path's own points, since the segments this node emits have no domain yet), then AVERAGED
+   * over the two points a segment runs between — so it is one filler PER SEGMENT and the two
+   * params take the same expression: a taper that thins the tube thins its joints with it,
+   * and 'about one radius' becomes a fill that follows the radius instead of a literal that
+   * stops matching the moment the radius moves. It follows that a field here reads what the
+   * input POINTS carry; a per-path extend living on the PRIMITIVE domain has to be promoted
+   * onto the points first (promoteAttribute, primitive to point), the same route `radius`
+   * documents. A PLAIN value must be finite and >= 0 and is refused otherwise. A FIELD's
+   * negative value is clamped to 0 per segment, exactly as `radius` is — a filler is a
+   * length, and a negative one would shorten the segment away from its own endpoints — while
+   * a NaN or infinite one is refused, naming this param.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  extend: FieldParam;
+  /**
+   * Name of an i32 POINT attribute receiving each segment's 0-BASED INDEX WITHIN ITS OWN
+   * PATH, restarting at 0 for every polyline. Empty (the default) writes none. It is the
+   * per-path coordinate this node otherwise has no way to state: `curveU` is a fraction, and
+   * turning one back into an index needs the segment count again, while an index written
+   * upstream with setAttribute does not survive — this node emits a NEW point per segment
+   * and carries no point attributes. Without it, 'every other link of THIS chain' has to be
+   * spelled on the GLOBAL point index, which agrees with the per-path one only while every
+   * path has the same, EVEN, number of segments, and nothing reports when that stops being
+   * true. It counts the segments this node EMITTED, so a skipped zero-length segment leaves
+   * NO GAP and an alternation over it (index - 2 * floor(index / 2)) keeps its parity
+   * through a degenerate path; an index into the input's segment list would not, and would
+   * also address elements that are not in this output. The shape is this node's to pick
+   * (i32, tuple 1), so a name already among the columns written here — P, rot, scale,
+   * density, boundsMin, boundsMax, color, seed, tangent, curveU — under a DIFFERENT shape is
+   * REFUSED rather than deleted and re-added, and a carried PRIMITIVE attribute of the same
+   * name is refused too, with the fix.
+   *
+   * @defaultValue `""`
+   */
+  segmentIndexAttr: string;
+}
+
+/**
+ * Params of the `pathShift` node type.
+ */
+export interface PathShiftParams {
+  /**
+   * POINT attributes of the path to read from the neighbour, in any order. Each must exist
+   * on the `in` input. AN EMPTY LIST IS AN ERROR rather than a default, which is where this
+   * param parts company with transferAlongPath's and transferByIndex's otherwise identical
+   * one: 'everything' cannot work here because every shifted value needs a DESTINATION NAME,
+   * and there is no rule that could invent one you would ever be able to grep for; and the
+   * one column every cloud carries is P, whose shift — 'the position of the next point' — is
+   * almost never what somebody reaching for this node meant. Say what you want: attributes
+   * ["station"], outNames ["nextStation"]. READING P IS ORDINARY and is the second-most
+   * common use after an arc coordinate: shift P into 'nextP' and subtract to get the vector
+   * to the next point along the path, which is the segment direction at every station
+   * without an arc table. Reading the standard bookkeeping columns is likewise allowed —
+   * there is no exclusion list here, because there is no 'everything' default for an
+   * exclusion list to trim. A name this node cannot find is refused with the input's point
+   * attributes listed, and an empty or repeated entry is refused too.
+   *
+   * @defaultValue `[]`
+   */
+  attributes: readonly string[];
+  /**
+   * Where each shifted value is written, PARALLEL to `attributes`: outNames[i] receives the
+   * neighbour's attributes[i]. Must be exactly as long as `attributes` — a mismatch is
+   * refused naming both lengths, because a shorter list is either a forgotten name or a name
+   * in the wrong slot and this node cannot tell which. EXPLICIT NAMES RATHER THAN A
+   * GENERATED PREFIX: a column called 'next_station' that no node in the graph mentions is a
+   * name nobody can grep for, and renaming the source silently renames a column three nodes
+   * downstream. AN ENTRY MAY NOT NAME A COLUMN `attributes` IS READING. Reading and writing
+   * one column in a single pass has two possible meanings — every point sees the values it
+   * arrived with, or every point sees whatever the walk has already overwritten — and they
+   * differ at the first point of every path, so it is refused rather than resolved. Shift
+   * into a new name and removeAttribute the original afterwards if the original is genuinely
+   * dead. EACH COLUMN TAKES THE SOURCE'S SHAPE — type, tuple size and default value — so
+   * this is a COPY TARGET and not a reporting slot: an existing column of another shape
+   * under one of these names is REPLACED rather than refused, exactly as transferAttribute
+   * replaces its destination, because overwriting is what a copy IS. 'P' IS THE ONE NAME
+   * REFUSED OUTRIGHT, same shape or not, and the reason is this node's miss rule rather than
+   * squeamishness: the destination column is RESET before the walk, so every point with no
+   * neighbour — a point on no polyline, or any point at all under outOfRange 'miss' — would
+   * be left at P's default and the cloud would collapse onto the origin while the cook still
+   * looked fine. Shift into a name of your own; if you really do want to move points onto
+   * their neighbours' positions, write that name into P deliberately with setAttribute,
+   * having decided first what the ends should do.
+   *
+   * @defaultValue `[]`
+   */
+  outNames: readonly string[];
+  /**
+   * How many positions along the path's walk order to look, counted in POINTS and not in
+   * distance — the neighbour, not the metre. +1 (the default) is the next point, +2 the one
+   * after it. NEGATIVE IS LEGAL and looks BACKWARDS: -1 is the previous point, which is the
+   * lag half of the pair and the thing that turns a column of forward gaps into a column of
+   * backward ones. 0 IS LEGAL AND COPIES the attribute into its new name unchanged; it is
+   * not refused, because a shift of nothing is a well-defined shift and a graph whose offset
+   * is computed should not fail the cook when the number comes out zero. Note that even at 0
+   * this is not a plain attribute copy: a point on no polyline still gets the default rather
+   * than its own value, because it has no walk to be at position 0 of. AN OFFSET LARGER THAN
+   * A PATH'S POINT COUNT is not an error — it is exactly what `outOfRange` is for, and under
+   * 'wrap' it comes back round in a single modulo however far out it is. Must be a whole
+   * number; a fractional or non-finite offset is refused naming this param, because a
+   * position along a walk is an ordinal and there is no point half way between two of them
+   * (the value half way between them is transferAlongPath's question, asked in arc length).
+   *
+   * @defaultValue `1`
+   */
+  offset: number;
+  /**
+   * How a position outside [0, pointsInThisPolyline-1] is read. Per POLYLINE, always: each
+   * path is its own sequence and nothing ever reaches out of one path into another, whatever
+   * this is set to. 'wrap' (the default) takes a EUCLIDEAN modulo over that polyline's point
+   * count — the remainder is made non-negative before use, so -1 from the FIRST point is the
+   * LAST point rather than the -1 that JavaScript's own % operator returns, and an offset
+   * many times the path's length comes back round in one step. On a CLOSED path this is
+   * simply the ring, and it is the default because a lap, a loop of stations and a cycle of
+   * archetypes are what paths in this library mostly are. ON AN OPEN PATH 'wrap' STILL
+   * WRAPS, and that is a deliberate divergence from pathRuns' `wrap`, whose description says
+   * 'no effect on an open path': the two share a word and not a question. pathRuns' wrap is
+   * about a SEAM — may a run cross the closing segment — and an open path has no seam to
+   * cross. This param is transferByIndex's `outOfRange`, a policy for an ORDINAL that ran
+   * off the end of a list, and the list is there whether or not a closing segment joins its
+   * ends. Reading it as 'clamp' on an open path would give one setting two answers depending
+   * on a flag the author may not control, and a clamped value is indistinguishable
+   * downstream from a real neighbour. If the ends of an open path should have NO neighbour,
+   * say that with 'miss', which is the setting that means it. 'clamp' pins the position to
+   * the polyline's first or last point, so the last point of an open path reads itself at +1
+   * and nothing misses; it IGNORES CLOSURE, so a closed path under 'clamp' does not come
+   * round to its start — pick it when the vertex order carries meaning of its own and the
+   * ends are ends. 'miss' leaves the destination column at its DEFAULT (the source
+   * attribute's own default value, since these columns are this node's to create) and flags
+   * the point 0 through hitAttr. Use it when running off the end means 'no answer' rather
+   * than 'the nearest answer': the other two both invent one. It ignores closure exactly as
+   * 'clamp' does. CLOSURE CHANGES THE COUNT, NEVER THE POLICY is the whole rule here: a
+   * closed path's repeated last vertex is not a place, so the ring it forms has one entry
+   * per point — and after that, only 'wrap' comes round it. A closed path under 'clamp' or
+   * 'miss' still has a first position and a last, which is what lets a lap be walked as a
+   * sequence when that is what you meant. A polyline of ONE point — a closed primitive whose
+   * two vertices are the same point — is a ring of one under 'wrap' and 'clamp' alike, so it
+   * reads itself at every offset; under 'miss' it hits only at offset 0. A GEOMETRY WITH NO
+   * POLYLINE AT ALL is untouched by this param: every point misses under all three settings,
+   * because a point with no walk is not at a position that could be inside or outside a
+   * range. That is the same answer a stranded point in a partly-pathed cloud gets, and
+   * deliberately so.
+   *
+   * - Enum: `"wrap"` | `"clamp"` | `"miss"`
+   *
+   * @defaultValue `"wrap"`
+   */
+  outOfRange: string;
+  /**
+   * When non-empty, writes a per-point flag of this name onto the OUTPUT'S POINT DOMAIN
+   * (bool, tuple 1). The polarity is the HIT: 1 means this point found a neighbour and
+   * received its values, 0 means it did not and its destination columns hold the source
+   * attribute's default. A 0 has exactly two causes, and telling them apart is what makes
+   * this worth writing: the point belongs to NO polyline (a geometry carrying no polyline at
+   * all makes every point that kind), or outOfRange is 'miss' and its neighbour ran off the
+   * end of its path. Under 'wrap' and 'clamp' the second cause cannot happen, so a 0 there
+   * means the point is on no path at all — which is the only per-point way to find such a
+   * point, since a default is a real value and looks like one. Every point is written, so
+   * the column never carries a stale value from an earlier cook. Feed it to
+   * filterByAttribute (comparison 'eq', value 1) to keep only the points that landed, then
+   * removeAttribute to clean it up. Three kinds of name are refused rather than written: any
+   * attribute named in `attributes`, which this node READS and the flag would destroy; any
+   * name in `outNames`, which the flag would overwrite with a bool after the shift had
+   * already written the value; and any point attribute the input already holds under a
+   * DIFFERENT shape — the flag's shape is this node's to pick, so writing it there would
+   * delete that column and everything in it while the cook still looked fine (hitAttr "P"
+   * would leave a point cloud with no positions). An existing bool tuple-1 column of the
+   * same name IS reused and reset, which is what keeps the flag describing THIS shift only.
+   * On a clash, give the flag a name of its own (a "__" prefix marks it internal, e.g.
+   * "__hit") or removeAttribute the existing column first. Empty = don't record.
+   *
+   * @defaultValue `""`
+   */
+  hitAttr: string;
+}
+
+/**
+ * Params of the `pointGrid` node type.
+ */
+export interface PointGridParams {
+  /**
+   * Number of points along X. Minimum 1.
+   *
+   * - Range: `>= 1`
+   *
+   * @defaultValue `10`
+   */
+  countX: number;
+  /**
+   * Number of points along Y. Minimum 1.
+   *
+   * - Range: `>= 1`
+   *
+   * @defaultValue `1`
+   */
+  countY: number;
+  /**
+   * Number of points along Z. Minimum 1.
+   *
+   * - Range: `>= 1`
+   *
+   * @defaultValue `10`
+   */
+  countZ: number;
+  /**
+   * Distance between neighboring points along each axis, in world units.
+   *
+   * @defaultValue `[1,1,1]`
+   */
+  spacing: readonly number[];
+  /**
+   * World position of the first point (index 0,0,0).
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  origin: readonly number[];
+}
+
+/**
+ * Params of the `pointLine` node type.
+ */
+export interface PointLineParams {
+  /**
+   * Which end of the line the author states: 'endpoints' places `count` points between start
+   * and end, deriving the step; 'spacing' places `count` points stepping `spacing` units
+   * from start toward end, deriving the far end. `count` is read in both.
+   *
+   * - Enum: `"endpoints"` | `"spacing"`
+   *
+   * @defaultValue `"endpoints"`
+   */
+  mode: string;
+  /**
+   * Number of points to place, in both modes — it is never the derived quantity here.
+   * Minimum 1.
+   *
+   * - Range: `>= 1`
+   *
+   * @defaultValue `10`
+   */
+  count: number;
+  /**
+   * World position of the first point, in both modes.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  start: readonly number[];
+  /**
+   * World position of the last point in 'endpoints' mode. In 'spacing' mode only the
+   * DIRECTION from start to end is read: the line runs that way and its far end is derived
+   * as start + spacing * (count - 1) along it, so the distance from start is not read and
+   * the last point generally does NOT sit on end — put end anywhere along the direction you
+   * want (one unit away is the clearest way to write it). Must not coincide with start in
+   * 'spacing' mode: two identical positions name no direction to step along.
+   *
+   * @defaultValue `[10,0,0]`
+   */
+  end: readonly number[];
+  /**
+   * Whether `end` is one of the emitted positions, in 'endpoints' mode. true (the default)
+   * samples the closed range [start, end]: `count` points stepping (end - start) / (count -
+   * 1), the first on start and the last exactly on end — use it for a run of points with
+   * both ends pinned, such as a fence between two posts. false samples the half-open range
+   * [start, end): `count` points stepping (end - start) / count, the last one step short of
+   * end — use it when the segment is a parameter that wraps, so a closed shape gets `count`
+   * distinct positions and no duplicate seam. count 1 emits a single point at start in both
+   * modes; count 0 emits nothing. 'spacing' mode has no authored endpoint to include or
+   * exclude — its derived far end IS the last point, and the same run is equally the
+   * half-open sampling of [start, start + count * spacing) — so the choice does not arise
+   * there and false is REFUSED rather than accepted as a setting that moves nothing.
+   *
+   * @defaultValue `true`
+   */
+  includeEnd: boolean;
+  /**
+   * Distance between consecutive points in world units when mode is 'spacing'. The step is
+   * EXACT and independent of the count: point i sits at start + i * spacing along the
+   * direction, a function of i alone, so raising `count` leaves every point already placed
+   * byte-identical and appends the new ones. That is the whole difference from 'endpoints'
+   * mode, where the count and the step are one number seen from two sides and one more point
+   * re-spaces the entire line. Must be > 0 and finite. Ignored in 'endpoints' mode.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `1`
+   */
+  spacing: number;
+}
+
+/**
+ * Params of the `pointNeighborhood` node type.
+ */
+export interface PointNeighborhoodParams {
+  /**
+   * Neighborhood radius in world units, boundary included. 0 searches nothing: every count
+   * is 0 and every average falls back to the point's own value, and a radius that is
+   * negative or NaN is read the same way. As a FIELD it is a PER-POINT radius, evaluated on
+   * the input's points, so each point measures the neighborhood it asks for — a count of
+   * what is within reach of THIS point rather than within one distance shared by the cloud.
+   * The reading it enables is 'how crowded am I, at my own scale': a radius read from an
+   * attribute lets a big point survey a big neighborhood and a small one a small
+   * neighborhood in the same cook. NEIGHBORHOOD IS THEN NOT SYMMETRIC, and that is the point
+   * rather than a defect — with a per-point radius, B lying inside A's radius does NOT put A
+   * inside B's, so `countAttr` counts what each point can see and two points can disagree
+   * about whether they are neighbors. That asymmetry is exactly what a per-point radius
+   * means, and it is why this param needs no pair rule where connectPoints' radius does: an
+   * EDGE is one thing shared by two points, so a per-point reach there has to say which of
+   * the two governs — it takes the LARGER — while a count is one point's own measurement and
+   * belongs to it alone. Cost, not correctness, is what a mixed set of radii affects: the
+   * grid is sized from the largest FINITE radius, and a query wider than that scans more
+   * cells rather than returning a different answer. An infinite radius is legal and means
+   * the whole cloud — the query falls back to a full scan, so it is O(n) per point. Under a
+   * partitioned cook the halo a cell needs is the GLOBAL MAXIMUM this field can return
+   * anywhere in the world, which is a bound to be derived and not measured: the cloud a cell
+   * sees has already been clipped by the halo being sized, so the far neighbor that would
+   * have set it is the one it cannot see. Take a constant times the range of whatever drives
+   * it (a noise field is in [-1, 1], so `2 + 3 * noise` maxes at 5) and pass that.
+   * Underestimating does not throw — it silently misses neighbors, at the seams only.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  radius: FieldParam;
+  /**
+   * Cap on how many neighbors each point keeps: the nearest maxCount of them, distance ties
+   * resolved toward the lower point IDENTITY (a hash of the neighbor's position bits and its
+   * `seed` attribute) so the kept set is a property of the points and not of the order they
+   * arrived in. 0 (the default) keeps every neighbor within the radius. Use it to bound the
+   * cost in dense clouds.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `0`
+   */
+  maxCount: number;
+  /**
+   * Count the point itself as one of its neighbors (and include its own value in the
+   * average). False (the default) measures the OTHER points, so an isolated point counts 0.
+   *
+   * @defaultValue `false`
+   */
+  includeSelf: boolean;
+  /**
+   * Name of the u32 point attribute receiving the neighbor count. Empty writes no count
+   * (then averageAttr must be set). The shape is this node's to pick (u32, tuple 1), so a
+   * name the input already holds under a DIFFERENT shape is REFUSED, not overwritten:
+   * writing it would delete that column outright and the cook would still look fine
+   * (countAttr "P" would leave a point cloud with no positions). An existing u32 tuple-1
+   * column of the same name IS reused and reset, so re-running this node over its own output
+   * is fine. To write over something of another shape, removeAttribute it first, or pick
+   * another name.
+   *
+   * @defaultValue `"nbrCount"`
+   */
+  countAttr: string;
+  /**
+   * Numeric point attribute (tuple 1..4) to average over each point's neighbors, for example
+   * "P". Empty (the default) computes no average.
+   *
+   * @defaultValue `""`
+   */
+  averageAttr: string;
+  /**
+   * Name of the f32 point attribute receiving the neighbor average; it takes averageAttr's
+   * tuple size. Required when averageAttr is set, ignored otherwise. Naming it the same as
+   * averageAttr overwrites in place — allowed whenever that attribute is ALREADY f32 at the
+   * same tuple size, which "P" is. Otherwise the shape is this node's to pick, and a name
+   * the input holds under a DIFFERENT shape is REFUSED rather than deleted and re-added:
+   * averaging an i32, u32 or bool attribute needs an output name of its own, since the
+   * average is always f32. An existing column of the matching f32 shape IS reused and reset.
+   *
+   * @defaultValue `"nbrAvg"`
+   */
+  averageOutAttr: string;
+}
+
+/**
+ * Params of the `pointScatterInBounds` node type.
+ */
+export interface PointScatterInBoundsParams {
+  /**
+   * Number of points to scatter. Minimum 0.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `100`
+   */
+  count: number;
+  /**
+   * Minimum corner of the box, in world units.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  boundsMin: readonly number[];
+  /**
+   * Maximum corner of the box, in world units. Should be >= boundsMin per component.
+   *
+   * @defaultValue `[1,1,1]`
+   */
+  boundsMax: readonly number[];
+  /**
+   * Extra seed folded into the node seed; change it to re-roll the scatter.
+   *
+   * @defaultValue `0`
+   */
+  seed: number;
+}
+
+/**
+ * Params of the `pointScatterInWorld` node type.
+ */
+export interface PointScatterInWorldParams {
+  /**
+   * Points per square world unit in "xz" mode, per cubic world unit in "xyz" mode. The
+   * expected number of points in a window is exactly density * area (or density * volume),
+   * for any window: a cell holds floor(lambda) points plus one more with probability
+   * frac(lambda), where lambda = density * cellSize^2 (or ^3). Raising density only ADDS
+   * points — the ones already there keep their positions and their per-point seeds — so it
+   * is safe to tune against a fixed layout. 0 emits nothing.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `0.01`
+   */
+  density: number;
+  /**
+   * Edge length, in world units, of this node's own lattice cell — the patch over which the
+   * point count is quantized. It controls clumping, not population: population is set by
+   * density alone, while cellSize decides how evenly the points are spread (small cells
+   * spread them out, large cells let counts vary more). Must be > 0. Set it from the
+   * content's scale and NEVER from a World level's cellSize: tying the two would make the
+   * generated content a function of the runtime's partitioning, so re-tuning a level's
+   * streaming, or cooking the same region at two levels, would change the world.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `10`
+   */
+  cellSize: number;
+  /**
+   * "xz" (default): a 2D lattice on the XZ plane, every point at Y = height, with the Y
+   * components of boundsMin/boundsMax IGNORED (they may be infinite, matching an "xz" World
+   * cell, which is unbounded in Y). "xyz": a 3D lattice, with Y coming from the lattice and
+   * the full box clipped. The two modes are independent point sets, not slices of one —
+   * switching modes re-rolls the layout.
+   *
+   * - Enum: `"xz"` | `"xyz"`
+   *
+   * @defaultValue `"xz"`
+   */
+  latticeMode: string;
+  /**
+   * World Y of every point in "xz" mode. Ignored in "xyz" mode. The 2D lattice is
+   * deliberately flat rather than spread over the query's Y range: deriving Y from the
+   * window is exactly what makes a source non-anchored. To put points on a surface, displace
+   * Y afterwards from a position-anchored field (e.g. setAttribute on P with a noise field)
+   * — that stays a function of world position, so it survives any query window.
+   *
+   * @defaultValue `0`
+   */
+  height: number;
+  /**
+   * Minimum corner of the query window, in world units — INCLUSIVE. Read only to choose
+   * which lattice cells to visit and to clip; it never moves a point. In "xz" mode the Y
+   * component is ignored, and -Infinity is the honest thing to write there: a World "xz"
+   * cell is a column with no vertical extent. An axis this mode DOES read must still be
+   * finite — the window chooses which cells to visit, so it has to be bounded — and an
+   * infinity never survives JSON, so a graph that must serialize needs a finite window.
+   *
+   * - Accepts ±Infinity on a live graph (it never serializes: JSON has no infinity)
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  boundsMin: readonly number[];
+  /**
+   * Maximum corner of the query window, in world units — EXCLUSIVE, so abutting windows
+   * neither drop nor duplicate a point on their shared face. Read only to choose which
+   * lattice cells to visit and to clip. In "xz" mode the Y component is ignored and may be
+   * +Infinity, subject to the notes on boundsMin. A window with max <= min on a read axis
+   * emits nothing.
+   *
+   * - Accepts ±Infinity on a live graph (it never serializes: JSON has no infinity)
+   *
+   * @defaultValue `[100,100,100]`
+   */
+  boundsMax: readonly number[];
+  /**
+   * THE seed of the world this node lays down, and its ONLY source of randomness: the graph
+   * seed does not reach it, which is unlike every other node in this library and is the
+   * point. Change THIS to re-roll the world; changing the graph seed, calling graph.setSeed
+   * inside a level's bind, passing a CLI seed override, or renaming the node all leave the
+   * lattice byte-identical, so anchoring cannot be lost by accident. It must be the SAME for
+   * every query that has to agree — in a World, bind it from the cell-INVARIANT
+   * `ctx.worldSeed` or `ctx.levelSeed`, never from the per-cell `ctx.seed`, which would make
+   * each cell an unrelated world and the guarantee empty. The cost of all this, which you
+   * have to plan for: two nodes of this type with identical params scatter IDENTICAL points,
+   * exactly as two noise fields with one spec are one field — so give each layer its own
+   * value here (e.g. hashCombine(ctx.worldSeed, 1) for trees and hashCombine(ctx.worldSeed,
+   * 2) for rocks) rather than relying on the node id to separate them.
+   *
+   * @defaultValue `0`
+   */
+  seed: number;
+}
+
+/**
+ * Params of the `pointScatterOnPath` node type.
+ */
+export interface PointScatterOnPathParams {
+  /**
+   * How many points to place on EACH polyline. AS A FIELD IT IS ONE COUNT PER PATH, resolved
+   * on the INPUT's PRIMITIVE domain, which is what this param exists for: a wide road and a
+   * footpath in one geometry take different counts in ONE COOK, each following its own
+   * value. mul(0.05, attribute("pathLength")) is the idiom — a fixed number of props per
+   * unit of arc — where "pathLength" is whatever pathResample's `resampledLengthAttr` wrote
+   * (or connectPoints' `lengthAttr`, per edge). On a resampled path it is
+   * `resampledLengthAttr` and not `lengthAttr`: the second measures the curve that was
+   * resampled and this node scatters on the chord length of the polyline it is handed, which
+   * is shorter wherever that polyline bends. The field sees the PRIMITIVE domain, so what it
+   * can read is what a PATH carries: a primitive attribute (setAttribute with domain
+   * 'primitive', or promoteAttribute point -> primitive), index() and fraction() over the
+   * paths, randomField(), and nodeSeed(). A POINT attribute is not in scope there, and
+   * position() is not either — a path has no one position. THE RESOLVED VALUE IS ROUNDED TO
+   * NEAREST with Math.round, which rounds a half UP (toward +Infinity), and then CLAMPED AT
+   * 0: 99.5 places 100 points, 99.4 places 99, and a negative places none rather than
+   * erroring, since "fewer than none" has exactly one reading. The rounding is DETERMINISTIC
+   * and deliberately not stochastic. A caller who wants 4.3 points to mean "four, and a
+   * fifth three times in ten" writes floor(add(<the count field>, randomField()))
+   * themselves, which states out loud which seed decides it — this node inventing that draw
+   * would hide a second source of randomness inside a param that reads like arithmetic. A
+   * NON-FINITE resolved value is REFUSED, naming this param: a field is not range-checked
+   * the way a plain number is (a schema's min binds a number, and a field is a recipe with
+   * no number to check until it lands on a domain), so a division by zero or an overflow
+   * arrives here as NaN and has no reading as a population. Bound the expression itself —
+   * max(<expr>, 0), or a guard under the div. THE CAP IS ON THE TOTAL, not per path: the
+   * resolved counts are summed across every polyline and the cook is refused past 1048576
+   * points, because a per-path cap would pass ten paths of a million each. 0 on a path
+   * places nothing on it and is not an error — a road with no trees is a road.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `100`
+   */
+  count: FieldParam;
+  /**
+   * Name of the f32 POINT attribute (tuple 1) each emitted point's ARC POSITION is written
+   * to, in WORLD UNITS along its own polyline — the same coordinate pathPointAt's 'distance'
+   * mode reads, arcTile's `startAttr` carries, and transferAlongPath's `arcAttr` gathers at,
+   * which is what makes this the column you hand straight to that node to read the path's
+   * other attributes here. Always written; there is no empty spelling, because a scattered
+   * point whose position along the path is unrecoverable is a point nothing downstream can
+   * ask a second question about, and recovering it from P would mean measuring the path a
+   * second time. THE UNITS ARE THE TRAP, not the name: a track measured in half-widths, a
+   * route in fractions of the whole and a scan in samples are all called a station by
+   * somebody, and this column is none of those — it is metres (or whatever unit the
+   * positions are in) from the start of that polyline. Divide by the path's own length with
+   * setAttribute for a fraction. The shape is this node's to pick (f32, tuple 1), so a name
+   * already on the OUTPUT's point domain under a different shape is REFUSED rather than
+   * deleted and re-added — SEVEN of the eight columns a standard cloud starts with reach
+   * that refusal, because their shapes differ from this one: P, scale, boundsMin and
+   * boundsMax (f32x3), rot and color (f32x4), and seed (u32). "density" is the eighth and
+   * the exception — it is f32 tuple 1, exactly this column's shape, so naming it passes the
+   * shape check and is RESET rather than refused, silently overwriting a standard column
+   * with an arc length. Give it a name of its own. Must be non-empty.
+   *
+   * @defaultValue `"station"`
+   */
+  arcAttr: string;
+  /**
+   * Extra seed folded into the node seed (hashCombine(nodeSeed, seed)); change it to re-roll
+   * the scatter without touching the graph seed or anything upstream. The folded value is
+   * what every per-point draw hashes from AND what a `count` field is resolved with, so a
+   * randomField() in the count re-rolls with it too — one knob for one node's randomness.
+   * Eager by the library's rule: a seed is folded in at cook start, when there is no element
+   * in hand to evaluate a field against.
+   *
+   * @defaultValue `0`
+   */
+  seed: number;
+}
+
+/**
+ * Params of the `pointsToPath` node type.
+ */
+export interface PointsToPathParams {
+  /**
+   * Close each path by appending a trailing vertex back to its first point (structural
+   * closure — no attribute is written). A closed path needs at least 3 points; 2 would fold
+   * the path back onto itself and is an error by default (`shortGroups "skip"` drops such a
+   * path instead). This param is therefore what decides which groups count as SHORT: the
+   * same 2-point group is a perfectly good open path and an impossible closed one.
+   *
+   * @defaultValue `false`
+   */
+  closed: boolean;
+  /**
+   * Name of a scalar point attribute holding a group key, splitting the cloud into one path
+   * per distinct key. A NUMERIC key must be a whole number (write one with setAttribute type
+   * 'i32', or have copyToPoints write the target index with `targetIndexAttr`) and paths are
+   * emitted in ascending key; a STRING key names the group instead — the usual thing a group
+   * is — and paths are emitted in ascending code-unit order of the word, never of its table
+   * index, so the same names produce the same paths in every geometry and every cell.
+   * Fractional numbers are refused rather than grouped: a key is an identity, two values a
+   * ULP apart would be two paths, and CPU/GPU parity is a tolerance rather than an equality.
+   * Leave empty to build a single path over every point.
+   *
+   * @defaultValue `""`
+   */
+  groupAttr: string;
+  /**
+   * Name of a scalar numeric point attribute to order each path by, ascending; ties break to
+   * the lower point index, so the result never depends on sort implementation. Values must
+   * be finite. Leave empty to use point index order.
+   *
+   * @defaultValue `""`
+   */
+  orderAttr: string;
+  /**
+   * What happens to a group that has too few points for the path being asked for — fewer
+   * than 2, or fewer than 3 when `closed` is true, so the SAME 2-point group is short only
+   * when it is being closed. 'error' (the default) refuses the cook and names the group,
+   * which is the right answer when the groups are AUTHORED: an id you wrote by hand belongs
+   * to a population you can predict, so a group of one is a mistake in the graph and a cook
+   * that quietly emitted one path fewer would hide it. 'skip' emits NO primitive for that
+   * group and leaves its points exactly where they are — same indices, every attribute
+   * intact, simply belonging to no path — which is the only workable answer when the groups
+   * are DATA: a key computed from a scatter, a grid cell, or a copyToPoints target index has
+   * a population nobody can know at graph-build time, so a sparse cell that drops a single
+   * point into one lane is not an authoring error and must not fail the whole cook. Nothing
+   * else moves under 'skip': the surviving groups are the same paths, over the same point
+   * indices, emitted in the same ascending-key order they would have had if the short group
+   * had never been in the input, so turning this on can only remove a path that could not be
+   * built — it can never change one that could. With `groupAttr` EMPTY the whole cloud is a
+   * single implicit group and this param still applies to it, because a group is a group
+   * however it was formed and a second rule for the unnamed one would be a trap: the only
+   * way to be short there is exactly 2 points with `closed` true, and under 'skip' such a
+   * cloud comes back with its points and no polyline instead of failing. What that case does
+   * NOT cover is a cloud of fewer than 2 points, which is refused under both settings by a
+   * different check — a node handed one point has nothing to do at all, and no grouping
+   * question was ever asked. Downstream, points belonging to no path are invisible to every
+   * path node (pathResample, splineSample, writeTangents, pathScan and pathSegments all walk
+   * primitives, not points), so a skipped group's points still filter, transfer and merge
+   * like any other points but never become a path on their own; if that is not what you
+   * want, fix the population upstream — scatter more points, widen the cell, or merge the
+   * sparse groups — rather than leaving them stranded.
+   *
+   * - Enum: `"error"` | `"skip"`
+   *
+   * @defaultValue `"error"`
+   */
+  shortGroups: string;
+}
+
+/**
+ * Params of the `projectToPlane` node type.
+ */
+export interface ProjectToPlaneParams {
+  /**
+   * A point on the plane, in world units. As a FIELD it is a PER-POINT origin, evaluated on
+   * the input's points, so each point is projected onto a plane sliding with it — with a
+   * constant normal that is a per-point OFFSET along that normal, which is how a stepped or
+   * terraced flattening is written (floor the height, feed it back as the origin) rather
+   * than one flat sheet. Build it with vec(x, y, z); a scalar field broadcasts to all three
+   * axes. Only the component along the normal can matter, since the projection subtracts (P
+   * - origin) . n: two origins differing by anything perpendicular to the normal name the
+   * same plane and move nothing. Non-finite values are REFUSED rather than read, naming this
+   * param — a plane through NaN has no meaning, and the resulting positions would draw
+   * nothing downstream.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  origin: FieldParam;
+  /**
+   * Plane normal; any non-zero vector (normalized internally). As a FIELD it is a PER-POINT
+   * normal, evaluated on the input's points, so each point is projected along the direction
+   * IT carries — attribute("N") flattens every point onto its own surface plane, and a
+   * varying normal collapses a cloud onto a fan of planes rather than one. A ZERO-LENGTH
+   * NORMAL IS THE ONE REFUSAL THAT CHANGES SHAPE HERE, and it changes only for a field: a
+   * plain zero vector is still refused outright, because one plane that does not exist is an
+   * authoring mistake with nothing to salvage, while a field's zero is a per-point answer —
+   * that point has no plane, so it is left exactly where it stands and its planeOffset is 0
+   * (it moved nothing). Nothing is invented for it and nothing is dropped; a point that did
+   * not move is visible as an offset of 0. Scale is free either way, since the vector is
+   * normalized before use, and a scalar field broadcasts to all three axes — note that
+   * vec(1,1,1) is a diagonal plane, not an axis one. Non-finite components are REFUSED
+   * rather than read, naming this param: a NaN normal would normalize to NaN and send every
+   * coordinate of that point to NaN.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,1,0]`
+   */
+  normal: FieldParam;
+  /**
+   * When true, store each point's signed pre-projection distance to the plane in a
+   * `planeOffset` point attribute (f32).
+   *
+   * @defaultValue `false`
+   */
+  keepOffset: boolean;
+}
+
+/**
+ * Params of the `promoteAttribute` node type.
+ */
+export interface PromoteAttributeParams {
+  /**
+   * Name of the attribute to promote. Must exist on the `from` domain.
+   *
+   * @defaultValue `"density"`
+   */
+  name: string;
+  /**
+   * Domain the attribute currently lives on.
+   *
+   * - Enum: `"point"` | `"vertex"` | `"primitive"` | `"detail"`
+   *
+   * @defaultValue `"point"`
+   */
+  from: string;
+  /**
+   * Domain to create the attribute on.
+   *
+   * - Enum: `"point"` | `"vertex"` | `"primitive"` | `"detail"`
+   *
+   * @defaultValue `"primitive"`
+   */
+  to: string;
+  /**
+   * How multiple contributions collapse: first (scan order), average, sum, min, or max.
+   * String attributes support only 'first'.
+   *
+   * - Enum: `"first"` | `"average"` | `"sum"` | `"min"` | `"max"`
+   *
+   * @defaultValue `"average"`
+   */
+  mode: string;
+}
+
+/**
+ * Params of the `quotaRebalance` node type.
+ */
+export interface QuotaRebalanceParams {
+  /**
+   * Which category each point is IN, as an index into `min`/`max`: 0 for the first entry, 1
+   * for the second, and so on. Read as floor(value), and a point whose index lands outside
+   * [0, min.length) is refused naming the point — not clamped, because a category the author
+   * did not list is a scheme the author did not state, and folding it into the first or last
+   * one would balance a mix nobody asked for. Field-capable and evaluated on the point
+   * domain, which is the usual way it arrives: a band decided from a position and a size is
+   * an expression, not a column somebody wrote. Only read for points `include` leaves in, so
+   * an element outside the scheme needs no category at all. Resolved against the INPUT
+   * geometry INCLUDING the column `targetAttr` names, which this node does not reset until
+   * all four of its field-capable params have resolved — so a category derived from the
+   * previous round's destination reads that round.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  category: FieldParam;
+  /**
+   * The FLOOR of each category's share, in order, as a fraction of the counted population:
+   * [0.1, 0.04, 0.23] says the first category must hold at least a tenth. Each entry is in
+   * [0, 1] and must not exceed the matching `max`. THE LIST'S LENGTH IS THE NUMBER OF
+   * CATEGORIES, and `max` must be the same length — a count param beside them would be a
+   * third thing to keep in agreement. A floor of 0 is a category with no lower requirement,
+   * which is how 'this kind may be absent' is written. The floors are refused if they sum
+   * above 1: no population can satisfy them, and finding that out as a cook that never
+   * settles is the failure this check exists to replace.
+   *
+   * @defaultValue `[]`
+   */
+  min: readonly number[];
+  /**
+   * The CEILING of each category's share, in order, on the same scale as `min` and with the
+   * same length. A ceiling of 1 is a category with no upper limit. The ceilings are refused
+   * if they sum below 1, for the mirror of `min`'s reason: the population has to go
+   * somewhere, so ceilings that leave less than the whole of it unallocated cannot all hold
+   * at once. A share landing EXACTLY on a floor or a ceiling is INSIDE the band — the
+   * comparisons are strict, so a category at exactly its ceiling is not over it, and a
+   * caller checking the same thing afterwards should use the same strictness or a slack
+   * coarser than the arithmetic (a share is a ratio of whole counts, so landing exactly on a
+   * two-decimal bound is the ordinary case rather than a coincidence).
+   *
+   * @defaultValue `[]`
+   */
+  max: readonly number[];
+  /**
+   * Nonzero (the default) puts the point IN the scheme: it is counted in its category's
+   * share and it may be chosen to move. Zero takes it out of both — not counted in any
+   * share, never moved, and its `category` never even read, so an element outside the scheme
+   * needs no category to be given one. This is the exclusion for elements that are STRUCTURE
+   * rather than population: a tunnel's ribs are all one category by geometry and a lap can
+   * carry forty of them, which would take that category from a tenth of the population to a
+   * quarter and make the stated mix unreachable on any track that has a tunnel. Compare
+   * `eligible`, which is the other exclusion and does the opposite thing to the denominator.
+   * Resolved on the same terms as the other three field-capable params: against the input,
+   * `targetAttr`'s column included, before this cook writes anything — so an exclusion
+   * decided by what the previous round did reads that round and not a column of -1.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  include: FieldParam;
+  /**
+   * Nonzero (the default) allows this point to be chosen to LEAVE its category. Zero pins
+   * it: it still counts toward its category's share — it is part of the population — but is
+   * never selected to move. This is the exclusion for elements a STRONGER RULE already
+   * placed, and the distinction from `include` is the whole reason there are two params.
+   * Switching `include` off would hide the element from the shares as well, so the mix would
+   * be balanced against a population that is not the one on screen; switching `eligible` off
+   * leaves the arithmetic honest and takes only the element off the table. A category whose
+   * members are all ineligible simply cannot give any up, and the rebalance stops when it
+   * runs out of donors rather than looping. IT MAY READ THE PREVIOUS ROUND'S DESTINATIONS,
+   * and that is the sharpest thing to put here inside the repeatUntil this node is written
+   * for: `lt(attribute("quotaTarget"), 0)` pins whatever the last round already redrew, so
+   * the changes spread over the population instead of falling on the same elements twice.
+   * The column `targetAttr` names is resolved against BEFORE it is reset, so a field here
+   * sees the round before and never the -1s this cook is about to write. ROUND ONE HAS TO
+   * SEED IT: attribute() refuses a column that is not there, naming it, rather than
+   * resolving to a silent -1, so a loop whose first pass reads the destination writes it
+   * once upstream (a setAttribute of -1) instead of relying on this node to have been round
+   * zero.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  eligible: FieldParam;
+  /**
+   * Which members of an over-full category leave FIRST: lowest value first, ties broken by
+   * point identity. The default of 0 makes every point tie, so the whole decision falls to
+   * identity — a stable, position-derived order that is the right answer when the choice
+   * genuinely does not matter. IT USUALLY DOES MATTER, and in a way that is invisible in the
+   * counts: priority by a position or arc coordinate takes the first k members along that
+   * axis, and since a category's members are spread over the whole population, 'the first k'
+   * is a CONTIGUOUS PATCH. Every change then lands in one stretch and the result reads as a
+   * repair rather than a mix, while every share is exactly right. randomField spreads them
+   * instead; a measure of how poorly each element suits its current category concentrates
+   * the changes where they were least deserved, which is usually what 'minimum change' was
+   * meant to mean. THE PREVIOUS ROUND is available to it on the same guarantee the other
+   * three field-capable params get — the column `targetAttr` names is resolved against
+   * before it is reset — so sending whatever moved last time to the back of the queue is an
+   * expression over attribute("quotaTarget"), not a second column the caller has to carry.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  priority: FieldParam;
+  /**
+   * Optional DETAIL attribute (u32) receiving how many categories are still outside their
+   * band when this node stops — 0 when every band was met. Empty (the default) writes
+   * nothing. IT EXISTS BECAUSE STOPPING EARLY IS LEGAL AND SILENT. A category whose members
+   * are all `eligible`-off cannot give any up, so the rebalance runs out of donors and
+   * returns; the geometry it returns looks exactly like the geometry it would have returned
+   * on success, and a caller looping until nothing moves would spin on the difference. Name
+   * a column here and that caller can tell 'the mix is right' from 'the mix is still wrong
+   * and I stopped trying'. It is a count of CATEGORIES rather than of points because that is
+   * the question the bands ask; the number of points that moved is already readable as how
+   * many of `targetAttr` are >= 0. Same family as transferByIndex's and transferAttribute's
+   * `missCountAttr`, and written on the detail domain for their reason: it is one fact about
+   * the whole geometry, not one per element.
+   *
+   * @defaultValue `""`
+   */
+  unmetAttr: string;
+  /**
+   * POINT attribute (i32) receiving the category each point should JOIN: an index into
+   * `min`/`max` for a point that must move, and -1 for every point that stays where it is,
+   * including every point `include` switched off. So the test for 'did this point move' is
+   * `>= 0` and needs no comparison against the category column — which matters, because a
+   * point outside the scheme has no category this node ever read. May not be empty: a
+   * quotaRebalance that writes nothing is a cook that looks like it worked. Same
+   * reporting-slot rule as the rest of the library — an existing column of a different shape
+   * under this name is refused rather than silently deleted and re-added, and a same-shape
+   * one is reset. THE COLUMN THIS NAMES IS ALSO AN INPUT, which matters exactly where this
+   * node is meant to sit. It is an ordinary point attribute, so the geometry handed in may
+   * already carry one, and inside a repeatUntil that one IS the previous round's decision.
+   * All four field-capable params — `category`, `include`, `eligible`, `priority` — are
+   * resolved against it BEFORE it is reset, so a field naming it reads the round that came
+   * before and never the -1s this cook is about to write. On the FIRST round no such column
+   * exists yet and a field naming it is REFUSED by name — see `eligible`, which is where
+   * that idiom is written down. The reset is still total: whatever the round before left is
+   * gone from the OUTPUT, which carries this cook's decision alone.
+   *
+   * @defaultValue `"quotaTarget"`
+   */
+  targetAttr: string;
+}
+
+/**
+ * Params of the `removeAttribute` node type.
+ */
+export interface RemoveAttributeParams {
+  /**
+   * Attribute names to delete, in any order. An empty list removes nothing (and is not an
+   * error, so a graph can leave the node in place with nothing to clean).
+   *
+   * @defaultValue `[]`
+   */
+  names: readonly string[];
+  /**
+   * Domain to delete from: point, vertex, primitive, or detail.
+   *
+   * - Enum: `"point"` | `"vertex"` | `"primitive"` | `"detail"`
+   *
+   * @defaultValue `"point"`
+   */
+  domain: string;
+  /**
+   * Error when a listed name does not exist on the domain, naming the available attributes.
+   * False makes removal best-effort and skips missing names.
+   *
+   * @defaultValue `true`
+   */
+  strict: boolean;
+}
+
+/**
+ * Params of the `repeatUntil` node type.
+ */
+export interface RepeatUntilParams {
+  /**
+   * Hard ceiling on how many times the body cooks. Reaching it WITHOUT the settle signal
+   * going to zero is not an error and is not silent: the loop stops, "rounds" reports this
+   * number and "converged" reports false, so a host or a downstream branch can tell a
+   * settled result from a truncated one. This is a budget, not a target — a body with a
+   * fixed point normally reaches it in a handful of rounds, and a body that reliably needs
+   * the whole ceiling is telling you it has no fixed point (the usual cause being a seed
+   * that varies per round, which this node deliberately does not do; see the node
+   * description). Raising it is the wrong first response to a false `converged`: find out
+   * whether the body is converging slowly or not at all, because those need opposite fixes.
+   * Minimum 1 — one round means cook the body exactly once and report whether that one round
+   * settled, which is a legitimate way to ASK the question without paying for the loop.
+   *
+   * - Range: `1..1024`
+   *
+   * @defaultValue `12`
+   */
+  maxRounds: number;
+  /**
+   * Name of the DETAIL-domain attribute the body writes to say whether anything still
+   * changed. Read after every round from every geometry item on the carry output: all zero
+   * means settled (stop, and that round counts), anything else means loop. The detail domain
+   * is used because it is the one domain that holds exactly one value per geometry, and
+   * because a subgraph wrapper has no non-geometry output pin a scalar could ride out on —
+   * attributeReduce is what normally writes it (mode 'count' over a filtered cloud, or 'sum'
+   * of a per-point moved flag). The attribute MUST exist on the carry geometry every round:
+   * an absent one is refused by name rather than treated as zero, because treating it as
+   * zero turns a typo here, or a body that never wired the reduction, into 'converged on
+   * round one' — a wrong answer that cooks cleanly and saves cleanly. A tuple attribute
+   * settles only when every component is zero, and NaN never settles (so unmeasurable data
+   * runs the budget out and reports converged false, instead of stopping on garbage).
+   *
+   * @defaultValue `"moves"`
+   */
+  settleAttr: string;
+}
+
+/**
+ * Params of the `runFit` node type.
+ */
+export interface RunFitParams {
+  /**
+   * POINT attribute (tuple 1, numeric) holding each point's ALONG-ARC coordinate — the axis
+   * runs are cut on and the fit is made against. EMPTY (the default) MEASURES IT: the path's
+   * own cumulative arc length, in world units, walked from its first vertex. Name a column
+   * instead when the coordinate is not the path's own geometry, which is the usual case for
+   * detection: props threaded into a path in station order are separated along the ROAD, and
+   * the 3D chord between two of them also carries their lateral offsets, so a row
+   * alternating between two sides measures gaps longer than the road ever had and a run is
+   * cut where there is no gap. The coordinate must not DECREASE along the walk — this node
+   * refuses a decrease rather than reading it as a huge gap, because a path walked against
+   * its own coordinate produces a fit through a sequence running backwards and every number
+   * it reports is then a plausible-looking lie. Equal values are fine (two props at the same
+   * station). NaN and ±Infinity are refused, naming the point.
+   *
+   * @defaultValue `""`
+   */
+  arcAttr: string;
+  /**
+   * POINT attribute (tuple 1, numeric) that is FITTED against the arc coordinate — the
+   * quantity whose drift the slope reports. Must exist. THE SIGN IS YOURS TO DECIDE, and it
+   * decides what the detector can see: a lateral offset fitted signed gives the two sides of
+   * a road opposite slopes for the same defect and halves the sensitivity of any threshold
+   * written for one of them, so fit the ABSOLUTE offset (setAttribute with an abs() field)
+   * when 'drifting away from the centre' is the question. A NaN value is EXCLUDED from the
+   * fit rather than poisoning it, and stays a member of its run — it still holds its place
+   * along the arc, and dropping it would merge the runs on either side of it. `countAttr`
+   * reports how many members survived into the fit, which is the number to filter on.
+   *
+   * @defaultValue `"density"`
+   */
+  valueAttr: string;
+  /**
+   * The along-arc distance that SEPARATES runs, in the units of the arc coordinate:
+   * consecutive members closer than this belong to the same run, and a gap GREATER THAN OR
+   * EQUAL to it starts a new one. Must be > 0. The comparison is closed on the break side
+   * deliberately — 'members closer than `gap` belong together' is the sentence the number is
+   * chosen from, so an exactly-`gap` spacing is a break rather than a coincidence to argue
+   * about. AS A FIELD IT IS ONE GAP PER PATH, resolved on the input's PRIMITIVE domain, for
+   * the same reason pathResample's spacing is: each polyline is cut on its OWN arc, so there
+   * is a primitive element to read one value per, and a motorway and a footpath in one
+   * geometry can take different gaps in ONE cook. The field sees the primitive domain, so it
+   * can read a primitive attribute (setAttribute domain 'primitive', or promoteAttribute
+   * point → primitive), index(), fraction(), randomField() and nodeSeed(); a POINT attribute
+   * is not in scope there and position() has no meaning for a path. A field is not
+   * range-checked the way a plain value is — a schema's min binds a number, and a field is a
+   * recipe with no number until it lands on a domain — so bound the expression itself with
+   * max(<expr>, <the smallest gap you meant>); a NaN or infinite gap is refused, naming this
+   * param.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  gap: FieldParam;
+  /**
+   * The value the arc coordinate WRAPS AT on a closed path — the lap length, in the arc
+   * coordinate's own units. 0 (the default) means the path's OWN MEASURED ARC LENGTH, which
+   * is correct whenever `arcAttr` is empty or holds a measured world-unit arc. IT IS READ
+   * ONLY WHERE IT MATTERS: a closed path with `wrap` on, where the gap across the seam is
+   * `arc(first) + period - arc(last)` and nothing else can supply it. THE MISTAKE IT EXISTS
+   * TO PREVENT: `arcAttr: "curveU"` is a 0..1 coordinate, so its period is 1, and leaving
+   * this at 0 hands it a period of a few hundred world units — the seam gap then dwarfs
+   * every real gap, no break is ever found there, and the lap silently becomes one run. A
+   * period SMALLER than the coordinate's own extent is caught (the seam gap goes negative
+   * and the cook is refused naming this param). A period LARGER than it cannot be caught by
+   * arithmetic — which is why the combination that produces one is REFUSED instead: a
+   * wrapping closed path that reads a non-empty `arcAttr` must state its period, because 0
+   * would hand it a world-unit length for a coordinate that is not in world units, and the
+   * run crossing the seam would split with nothing in the output to show it. Clear `arcAttr`
+   * to use the measured arc, or set `wrap` false, or say what the coordinate wraps at. One
+   * value per PATH as a field, resolved on the PRIMITIVE domain exactly as `gap` is.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  period: FieldParam;
+  /**
+   * Whether a run may cross a CLOSED path's seam. True (the default) rotates the walk onto
+   * the first REAL break — the first point whose gap-before is at least `gap`, measured the
+   * long way round through the seam — so a run straddling the start/finish line stays one
+   * run. This is pathRuns' rule and the same code shape, because a lap is the case that
+   * keeps arriving and a line of eight objects laid across the start line must not read as
+   * two lines of four, each too short to be anything. False treats the seam as a break,
+   * which is what you want when vertex order carries meaning of its own. A closed path with
+   * NO break anywhere is one cyclic run with no place to begin, so the seam stands in and
+   * the answer is identical under both settings. No effect on an open path.
+   *
+   * @defaultValue `true`
+   */
+  wrap: boolean;
+  /**
+   * POINT attribute (f32) receiving the fitted SLOPE of the run each point belongs to: the
+   * change in `valueAttr` per unit of arc, signed, and the same number on every member of a
+   * run. This is the divergence figure — 'this line drifts 0.03 units of lateral per unit of
+   * lap' — and it is what separates a line running PARALLEL to the path (slope ~0, ordinary
+   * dressing) from one converging on it (a false edge a driver would steer to). A run whose
+   * members all sit at one arc position has no slope to fit and reports 0, as does a run
+   * with fewer than two fittable members. May not be empty: a runFit that writes no fit is a
+   * cook that looks like it worked. Same reporting-slot rule as the rest of the library — a
+   * column of a different shape under this name is refused rather than deleted and re-added,
+   * and a same-shape one is reset.
+   *
+   * @defaultValue `"runSlope"`
+   */
+  slopeAttr: string;
+  /**
+   * POINT attribute (f32) receiving the run's WORST residual: the largest absolute distance
+   * from any fitted member to the fitted line, in the units of `valueAttr`, repeated on
+   * every member. Worst rather than RMS on purpose — the rule this serves is 'no member sits
+   * further than X off the line', and an RMS lets one outlier hide behind five good members,
+   * which is exactly the arrangement that reads as a straight line to the eye and as scatter
+   * to a mean. THE NUMBER TO DISTRUST IS A ZERO ON A SHORT RUN: two points define a line, so
+   * a two-member run always reports 0 — or the rounding noise left of it, which is why a
+   * threshold and not an equality is what to test — and always looks perfectly assembled.
+   * Filter on `countAttr` before believing a residual. May not be empty, and the
+   * reporting-slot rule applies.
+   *
+   * @defaultValue `"runResidual"`
+   */
+  residualAttr: string;
+  /**
+   * POINT attribute (f32) receiving the run's SPAN: the arc distance from its first member
+   * to its last, in the arc coordinate's units, repeated on every member. Zero for a
+   * single-member run. This is the length threshold every rule about runs eventually needs —
+   * a line has to be long enough to read as one — and, with `startAttr`, it is exactly the
+   * range arcTile tiles: the pair's default names (`runStart`, `runSpan`) are that node's
+   * default `startAttr` and `lengthAttr` so the two wire together without renaming. Note it
+   * is the span of the MEMBERS, not of the arc they were cut from: a run ends at its last
+   * member, not half a gap later. May not be empty, and the reporting-slot rule applies.
+   *
+   * @defaultValue `"runSpan"`
+   */
+  spanAttr: string;
+  /**
+   * OPT-IN: POINT attribute (i32) receiving a run's INDEX, numbered from 0 across the whole
+   * geometry in primitive order and then in walk order, with -1 left on every point no
+   * polyline reaches. Empty (the default) writes none and the output is byte-identical to a
+   * cook without it. It is the GROUP KEY the rest of the library takes: partitionByAttribute
+   * splits one item per run, pointsToPath's `groupAttr` builds one path per run, and
+   * attributeReduce collapses per run. Numbered across the geometry rather than per path so
+   * those nodes see distinct groups without having to combine two columns; the path a run
+   * came from is recoverable from any carried primitive attribute.
+   *
+   * @defaultValue `""`
+   */
+  idAttr: string;
+  /**
+   * OPT-IN: POINT attribute (i32) receiving each point's 0-BASED POSITION WITHIN ITS OWN
+   * RUN, restarting at 0 for every run, -1 on points no polyline reaches. Empty (the
+   * default) writes none. Two things need it. ALTERNATION along a run ('every other post a
+   * different asset') has no other spelling: the global point index agrees with the per-run
+   * one only while every run has the same, even, length, and nothing reports when that stops
+   * being true. And index 0 is the FIRST MEMBER, which is how a run becomes ONE element:
+   * filterByExpression on it leaves one point per run carrying that run's start, span and
+   * fit — a ranges cloud, which is what arcTile consumes. It counts in the WALK order the
+   * runs were cut in, so on a closed path with `wrap` on, index 0 of the seam-straddling run
+   * sits before the seam.
+   *
+   * @defaultValue `""`
+   */
+  indexAttr: string;
+  /**
+   * OPT-IN: POINT attribute (i32) receiving how many members of the run WERE FITTED —
+   * members whose `valueAttr` was finite — repeated on every member of the run, including
+   * any that were excluded. Empty (the default) writes none. FITTED rather than total
+   * because the only reason to ask is to distrust a fit made from too few points, and a run
+   * of eight whose values are six NaNs is a two-point fit however many members it has. Two
+   * is the number to watch: a line through two points is exact, so both the residual and any
+   * 'how straight is it' rule are meaningless below three, and this is the column that says
+   * so.
+   *
+   * @defaultValue `""`
+   */
+  countAttr: string;
+  /**
+   * OPT-IN: POINT attribute (f32) receiving the arc coordinate of the run's FIRST MEMBER,
+   * repeated on every member. Empty (the default) writes none. Reported in the path's OWN
+   * coordinate rather than the unwrapped one the fit used, so a run that began before a
+   * closed path's seam still starts where it starts — with `spanAttr` it is the range
+   * arcTile tiles, and a range that reported a start past the end of the lap would be a
+   * range no other node could read. It is also the origin `interceptAttr` is measured at: to
+   * evaluate the fitted line at an arbitrary arc a, take intercept + slope * ((a - start)
+   * wrapped into [0, period)) on a closed path, or intercept + slope * (a - start) on an
+   * open one.
+   *
+   * @defaultValue `""`
+   */
+  startAttr: string;
+  /**
+   * OPT-IN: POINT attribute (f32) receiving the fitted line's value AT THE RUN'S OWN START
+   * (arc offset zero, the position `startAttr` reports), repeated on every member. Empty
+   * (the default) writes none. This is the half of the fit that RECONSTRUCTS it: slope alone
+   * says how fast the line drifts and nothing about where it is, so anything that wants to
+   * place along the fitted line — snap a straggler onto it, continue it with fresh pieces,
+   * draw it for a debug overlay — needs this too. At the run's start rather than at the arc
+   * origin for the reason the node's description gives about cancellation: an intercept
+   * extrapolated back to lap arc zero is a number computed hundreds of units away from any
+   * data, and its error is the slope's error times that distance.
+   *
+   * @defaultValue `""`
+   */
+  interceptAttr: string;
+}
+
+/**
+ * Params of the `sampleNearestPoint` node type.
+ */
+export interface SampleNearestPointParams {
+  /**
+   * Name of the f32 point attribute receiving the distance to the nearest source point, in
+   * world units (Infinity on a miss). Empty writes no distance. The shape is this node's to
+   * pick (f32, tuple 1), so a name the input already holds under a DIFFERENT shape is
+   * REFUSED, not overwritten — writing it would delete that column and the cook would still
+   * look fine. A same-shape column IS reused and reset; to write over another shape,
+   * removeAttribute it first or pick another name.
+   *
+   * @defaultValue `"nearDist"`
+   */
+  distanceAttr: string;
+  /**
+   * Name of the i32 point attribute receiving the nearest source point's index, or -1 on a
+   * miss. Empty (the default) writes no index. Same rule as distanceAttr: the shape is this
+   * node's to pick (i32, tuple 1), so a name the input holds under a DIFFERENT shape is
+   * REFUSED rather than deleted and re-added, while a same-shape column is reused and reset.
+   * `attribute`/`outAttribute` are exempt — a copy takes its shape from the source and
+   * overwriting is the point.
+   *
+   * @defaultValue `""`
+   */
+  indexAttr: string;
+  /**
+   * Point attribute of the `source` geometry to copy from the nearest source point. Empty
+   * (the default) copies nothing. Any type, including string.
+   *
+   * @defaultValue `""`
+   */
+  attribute: string;
+  /**
+   * Name to store the copied attribute under on the output. Empty (the default) reuses
+   * `attribute`'s own name. Ignored when `attribute` is empty.
+   *
+   * @defaultValue `""`
+   */
+  outAttribute: string;
+  /**
+   * Largest distance that still counts as a find, in world units. 0 (the default) means
+   * unlimited; beyond it a point is a miss. As a FIELD it is PER POINT, evaluated on the
+   * points being sampled rather than on the source, so each point can accept a find at its
+   * own reach — a small prop giving up on a far road while a large one still finds it, in
+   * one cook. The unlimited sentinel is per point too, and it is 0 OR LESS: a field
+   * returning 0 — or a negative, which a subtraction easily produces — makes THOSE points
+   * unlimited rather than making them miss. So 'find nothing' is a small POSITIVE distance,
+   * never 0 and never a negative one, which would do the opposite of what it looks like.
+   * This param does not size the spatial index — cell size comes from the source cloud — so
+   * a mixed set of reaches costs nothing extra and changes no answer.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  maxDistance: FieldParam;
+}
+
+/**
+ * Params of the `selfPrune` node type.
+ */
+export interface SelfPruneParams {
+  /**
+   * Which rule picks the survivors — the two disagree by design, and what separates them is
+   * how far one decision reaches. 'greedy' (the default) considers the points in order and
+   * keeps one whenever every ALREADY-KEPT point is at least minDistance away. It packs
+   * points about as densely as the order allows, and it is the right rule for cooking a
+   * region in one piece. Its decisions chain, though: this point survives because that
+   * neighbour did not, which happened because ITS neighbour did, and so on with no bound —
+   * so a cell cannot reproduce it from any halo, however wide. MEASURED, not argued: over
+   * one 60x60 world of 2000 points at minDistance 3, where a whole-region cook keeps 238,
+   * cooking in cells of 10, 15, 20 and 30 (each with a full 3-unit halo) kept 4, 4, 2 and 1
+   * point the whole cook had pruned and dropped 7, 5, 2 and 3 it had kept — every cell size
+   * wrong in its own way, none agreeing with another — and three of the four left a
+   * surviving pair closer than the 3 that was asked for (1.41, 2.18 and 1.41; the worst of
+   * them under half of it). 'localMaximum' is the rule to reach for under partitioned or
+   * per-cell (World) cooking: a point survives only when it OUTRANKS EVERY point within
+   * minDistance of it, consulting nothing further. That is ONE hop, so a cell holding
+   * everything within minDistance of its own points computes exactly the whole-region answer
+   * — all four cell sizes above: identical survivors, and no pair under minDistance
+   * anywhere, seams included. The honest cost is density. A local-maximum survivor is always
+   * a greedy survivor too, never the reverse, so this rule keeps strictly FEWER points — 122
+   * against 238 on that same world, about half — and leaves gaps a greedy pass would have
+   * filled. It is not the better rule; it is the correct one where the greedy is wrong.
+   *
+   * - Enum: `"greedy"` | `"localMaximum"`
+   *
+   * @defaultValue `"greedy"`
+   */
+  mode: string;
+  /**
+   * Minimum allowed distance between two kept points, in world units. As a FIELD it is a
+   * per-point radius, evaluated on the input's points, and two points conflict when they are
+   * closer than the LARGER of their two radii (never the smaller, which would let a big
+   * point be crowded by a small one, and never the sum, which would double the spacing of an
+   * evenly-sized cloud and so disagree with the same number passed plainly). A per-point
+   * radius that is 0, negative or NaN claims no room of its own, but such a point can still
+   * be pruned by a bigger neighbour. A minDistance of 0 or less turns the node off: every
+   * point survives, topology included, and `priority` is not evaluated, whichever mode is
+   * set. That is a property of the VALUE, so both spellings of it get there — a plain 0 and
+   * a `constant` field of 0 are one graph literal written two ways, and they cook to the
+   * same geometry. A field that READS anything (an attribute, a position, a random) never
+   * takes that shortcut, even when every value it returns is 0: it always outputs a point
+   * cloud, so what the output IS depends on the graph and never on the numbers that come
+   * back. This is also the HALO WIDTH a cell needs under mode 'localMaximum', and as a field
+   * that width is the GLOBAL MAXIMUM the field can return anywhere in the world — not each
+   * point's own radius, since a big point reaches that far into its neighbours, and NOT the
+   * largest radius present in the cell's cloud, which is circular: the cloud a cell sees has
+   * already been clipped by the very halo you are trying to size, so the big neighbour that
+   * would have set the width is precisely the one it cannot see. Bound the field instead of
+   * measuring it — a constant times the range of whatever drives it (e.g. a noise field is
+   * in [-1, 1], so `2 + 3 * noise` maxes at 5; a radius read from an attribute maxes at that
+   * attribute's maximum over the WHOLE world, not over this cell) — and pass that bound as
+   * the halo. Overestimating costs a wider query; underestimating silently keeps pairs
+   * closer than the field asked for, at the seams only.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  minDistance: FieldParam;
+  /**
+   * Per-point survival priority: HIGHER WINS. Points are considered in descending priority,
+   * so a point at priority 1 survives against a neighbour at priority 0 whichever of them
+   * the tiebreak would have preferred — this is how authored points beat procedural ones by
+   * SAYING so, instead of by being merged onto an earlier pin. Field-capable and evaluated
+   * on the input's points: attribute("locked") ranks by a flag written upstream (merge the
+   * layers with mergePoints first — an attribute missing on one input fills with its default
+   * there), and randomField("key") re-rolls the thinning when the key changes. Equal
+   * priorities break to the LOWER point IDENTITY (position bits plus the `seed` attribute),
+   * and NaN ranks lowest. The default 0 ties every point, so identity alone picks the
+   * survivors — which is already unbiased, so a random priority is for re-rolling, not for
+   * undoing an ordering bias. This decides WHO survives, never the output order.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  priority: FieldParam;
+  /**
+   * What happens to the input's TOPOLOGY — the vertices and primitives built over these
+   * points. 'drop' (the default) outputs a point cloud: the survivors are rebuilt as points
+   * and EVERY primitive goes with them, whether or not the filter touched one of its points,
+   * which is why a filtered network has to be rebuilt downstream (pointsToPath over a
+   * grouping attribute, or connectPoints again). 'keep' preserves the primitives ALL of
+   * whose points survive, carrying their vertices, their vertex and primitive attributes,
+   * and the detail domain, renumbered onto the surviving points. A primitive that loses even
+   * ONE point is dropped whole: there is no truncation of a polyline or a poly that means
+   * anything — closing the gap invents a segment nobody authored and splitting the primitive
+   * in two invents a primitive, and neither is a filter's job. A primitive is never
+   * SHORTENED, so one that comes out with fewer than two vertices is one that went in that
+   * way — this node cannot manufacture a degenerate primitive, and it does not delete one
+   * either (setPolylineTopology already refuses a polyline under two vertices, so such a
+   * primitive can only have come from bare setTopology, deliberately). The POINT domain is
+   * IDENTICAL under both settings — same points, same order, same attributes, same
+   * identities — so this param only ever ADDS information and nothing reading a point can
+   * tell which was set; the one thing 'keep' carries beyond topology is the DETAIL
+   * attributes, which a point cloud has no room for. A predicate that keeps every point
+   * reproduces the input's topology, with one inherited caveat it shares with
+   * filterPrimitivesByBounds and filterPrimitivesByAttribute: surviving primitives are laid
+   * out into contiguous vertex runs, so a geometry whose primitive ranges do not TILE its
+   * vertex array (only bare setTopology can build one — nothing checks more than start +
+   * count <= vertexCount) loses the vertices no primitive references, and their vertex
+   * attribute values with them. This is the point-domain mirror of the primitive filters'
+   * `unreferencedPoints`, and it is what lets mergePrimitives find something to preserve
+   * downstream of a filter.
+   *
+   * - Enum: `"drop"` | `"keep"`
+   *
+   * @defaultValue `"drop"`
+   */
+  topology: string;
+}
+
+/**
+ * Params of the `setAttribute` node type.
+ */
+export interface SetAttributeParams {
+  /**
+   * Attribute name to create or overwrite (an existing attribute of any shape is replaced).
+   *
+   * @defaultValue `"value"`
+   */
+  name: string;
+  /**
+   * Domain the attribute lives on: point, vertex, primitive, or detail (one element).
+   *
+   * - Enum: `"point"` | `"vertex"` | `"primitive"` | `"detail"`
+   *
+   * @defaultValue `"point"`
+   */
+  domain: string;
+  /**
+   * Storage type. f32 keeps fractions; i32/u32 truncate toward zero; bool stores 0/1
+   * (nonzero field values become 1); string interns into the geometry's string table and
+   * writes via `values` plus one selector (`value` by index, or `select` by fraction with
+   * optional `weights`), or via `stringValue` (see those params).
+   *
+   * - Enum: `"f32"` | `"i32"` | `"u32"` | `"bool"` | `"string"`
+   *
+   * @defaultValue `"f32"`
+   */
+  type: string;
+  /**
+   * Components per element (1 = scalar, 3 = vector, 4 = color/quaternion). Range 1..4.
+   *
+   * - Range: `1..4`
+   *
+   * @defaultValue `1`
+   */
+  tupleSize: number;
+  /**
+   * Numeric value written to every element — or, for type 'string' with a non-empty `values`
+   * list, the per-element INDEX selector into it: floor(selector) clamped into [0,
+   * values.length - 1], NaN selects 0 (a total function; out-of-range never errors per
+   * element). Field-capable: evaluated on the target domain; scalar results broadcast across
+   * the tuple, otherwise the tuple size must match tupleSize. Ignored for type 'string' with
+   * `values` empty, and refused alongside `select`, which selects the same table by fraction
+   * instead.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  value: FieldParam;
+  /**
+   * The other selector for type 'string' with a non-empty `values` list: a FRACTION in [0,
+   * 1) spread across the table, weighted by `weights` when that is set and in equal shares
+   * otherwise. This is what randomField produces natively, so `select` = randomField('part')
+   * needs no scaling by the table's length — which is the whole reason it exists beside
+   * `value`, whose index convention makes the author restate values.length in the
+   * expression. Total, like `value`: the fractional part is what is read (an integer part is
+   * discarded, so a selector accidentally left scaled still draws the same PROPORTIONS), NaN
+   * and -Infinity land on the first entry with a nonzero weight and +Infinity on the last,
+   * and no element ever throws. Field-capable, evaluated on the target domain; a scalar
+   * result broadcasts across the tuple. 0 (the default) means UNSET — a selector that is
+   * constantly 0 is a constant string, which is what `stringValue` is for. Setting it with a
+   * numeric type, with an empty `values`, or alongside a nonzero `value` is an error.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  select: FieldParam;
+  /**
+   * String values to choose among when type is 'string': `value` selects per element by
+   * index (floor, then clamp into range), or `select` by fraction (optionally weighted by
+   * `weights`). Leave empty to write the constant `stringValue` instead. Setting this with a
+   * numeric type is an error. Note: when the attribute feeds spawnInstances via assetAttr,
+   * an empty-string entry never names an asset — the spawner falls back to its assetId param
+   * for those elements.
+   *
+   * @defaultValue `[]`
+   */
+  values: readonly string[];
+  /**
+   * How often each entry of `values` is drawn, one weight per value in the same order:
+   * values ['rod','bar','panel','clamp'] with weights [4, 2, 1, 2] is a 4:2:1:2 mix. Each
+   * weight is a non-negative whole number (it stands for the repeated table rows it
+   * replaces, and only the ratio matters, so [0.7, 0.3] is spelled [7, 3]); 0 switches one
+   * entry off without taking it out of the table, and an all-zero list is refused because
+   * nothing would be left to draw. Empty (the default) means equal shares. Requires the
+   * `select` selector — with `value`'s index convention a weight would silently change what
+   * the same number means, so the combination is refused rather than reinterpreted. Setting
+   * it with a numeric type or with an empty `values` is an error.
+   *
+   * @defaultValue `[]`
+   */
+  weights: readonly number[];
+  /**
+   * Constant written to every element when type is 'string' and `values` is empty. Must stay
+   * "" for numeric types.
+   *
+   * @defaultValue `""`
+   */
+  stringValue: string;
+  /**
+   * Extra seed for evaluating whichever selector is set, `value` or `select`: 0 (the
+   * default) uses the node's derived seed unchanged, so pre-existing graphs keep
+   * bit-identical output; any nonzero value folds in as hashCombine(nodeSeed, seed). This
+   * re-rolls randomness drawn from the EVALUATION CONTEXT — randomField, and the per-point
+   * seed attribute — but a noise only if it ASKS: a noise field carries its own seed inside
+   * its spec, so `valueNoise`, `perlinNoise`, `simplexNoise`, `worleyNoise` and `fbm` are
+   * unaffected here while that seed is a LITERAL. Two spellings ask. `opts.seed: {"from":
+   * "node", "variant": N}` is the one to write: the seed derives as hashCombine(the
+   * evaluation seed, variant), so this param moves the noise itself. The older spelling
+   * folds `nodeSeed` into `opts.position`, which moves WHERE the noise is sampled rather
+   * than which noise it is; no graph writes it any more, but a hand-written expression may.
+   * Bind a per-cell value (such as ctx.seed) here for per-cell variation in a World level —
+   * and note that a noise reached either way then differs in every cell, so it must not feed
+   * anything that has to agree across a seam.
+   *
+   * @defaultValue `0`
+   */
+  seed: number;
+}
+
+/**
+ * Params of the `setBounds` node type.
+ */
+export interface SetBoundsParams {
+  /**
+   * Minimum corner written to every point's boundsMin, in world units. As a FIELD it is PER
+   * POINT, which is the reading that makes this node worth more than a constant: an extent
+   * derived from the point's own `scale`, or from a species attribute, gives every instance
+   * the box it actually occupies rather than one box the whole cloud shares. Must evaluate
+   * to THREE numbers per point — a scalar is REFUSED rather than broadcast, because
+   * broadcasting would quietly hand every point a cube when a box was asked for. Both
+   * corners are resolved against the INPUT geometry before either is written, so a field
+   * here reading `boundsMax` sees the corner this cook was HANDED, never one this node
+   * produced.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  boundsMin: FieldParam;
+  /**
+   * Maximum corner written to every point's boundsMax, in world units. As a FIELD it is PER
+   * POINT, on the same terms as boundsMin, and refuses a scalar for the same reason. Nothing
+   * here checks that max exceeds min: the two are written independently, and a point whose
+   * corners cross is a point with an inside-out box, which is what the author asked for and
+   * what a downstream reader will see. Independently RESOLVED, too: a field here reading
+   * `boundsMin` sees the input's corner rather than the one this cook just wrote, so the two
+   * params cannot observe each other in either order. Both corners are standard point
+   * attributes, so a field naming one always finds it; a geometry with the column
+   * deliberately removed refuses here rather than resolving to a silent zero.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[1,1,1]`
+   */
+  boundsMax: FieldParam;
+}
+
+/**
+ * Params of the `spawnInstances` node type.
+ */
+export interface SpawnInstancesParams {
+  /**
+   * Asset id stamped on every instance not overridden per point via assetAttr. The renderer
+   * resolves it to an actual renderable (e.g. the three adapter's asset map). ANY STRING IS
+   * ACCEPTED and none is checked, because the set of real ids belongs to the host and the
+   * library has never met it — an invented id cooks perfectly and then renders as whatever
+   * that host does with a name it does not know, which for a viewer of arbitrary graphs is
+   * usually a stand-in shape rather than an error. So confirm the spelling against the
+   * renderer you are targeting. `pcg assets <graph.json>` lists every id a graph can emit,
+   * this param and the assetAttr tables together, which is the list to check against that
+   * host.
+   *
+   * @defaultValue `"asset"`
+   */
+  assetId: string;
+  /**
+   * Optional name of a string point attribute holding per-point asset ids; empty string
+   * disables the override. Points whose attribute value is empty use assetId instead. Errors
+   * when the named attribute is missing or not a string attribute. Device-resident spawning
+   * supports it: the grouping is planned on the CPU (the asset column is always
+   * host-resident) and the device composes one transform buffer per asset, in the same batch
+   * order the CPU path produces.
+   *
+   * @defaultValue `""`
+   */
+  assetAttr: string;
+  /**
+   * Optional name of an f32 point attribute (tupleSize 3 or more) whose components 0, 1 and
+   * 2 are carried to the renderer as each instance's RGB. ALPHA IS DROPPED — both three
+   * adapters take RGB, so a fourth component (the standard `color` attribute is f32x4) has
+   * nowhere to go and is not carried. Empty (the default) carries no colour at all, and the
+   * renderer then leaves its instance-colour channel untouched. Nothing is picked up
+   * automatically and nothing scans the values: every point cloud in this library already
+   * carries `color` at [1,1,1,1], so its presence says nothing about intent, and writing an
+   * all-white instance-colour buffer would recompile the renderer's shader for zero pixels
+   * changed. Naming it is what states the intent — which also means an attribute written
+   * upstream and never named here is silently NOT drawn. Any colour-shaped attribute works:
+   * `color`, or a `tint`/`speciesColor` written with setAttribute. Errors when the named
+   * attribute is missing or is not f32 with tupleSize >= 3, listing the attributes that
+   * would fit.
+   *
+   * @defaultValue `""`
+   */
+  colorAttr: string;
+  /**
+   * Point attributes to carry to the renderer as NAMED per-instance channels, in the order
+   * given: each becomes batch.attributes[<the attribute's own name>], a tightly packed
+   * column of count * tupleSize elements with instance k at k * tupleSize. This is the whole
+   * per-instance ABI between a graph and its host. The field grammar has no time input on
+   * purpose — a graph produces STRUCTURE and the host animates it — so anything the host
+   * must drive per instance at runtime (a phase offset, a stable id, a species index, an
+   * RGBA tint, a wind stiffness) has to leave the graph on this list; before it existed only
+   * transforms and RGB could cross, and a host had to re-derive the rest from a position,
+   * which stopped agreeing with the graph that authored it. DTYPE AND TUPLE SIZE ARE
+   * PRESERVED, not widened to f32: a u32 id past 2^24 does not survive f32, and
+   * THREE.InstancedBufferAttribute takes any typed array, so nothing downstream wants the
+   * widening. Item size is recovered by the consumer as column.length / count — it is not
+   * carried, so there is no second place for it to be wrong. The one exception to "in the
+   * order given" is the one JS imposes on every object: an integer-like channel name ("12")
+   * is hoisted ahead of the string ones in the record — deterministic either way, just not
+   * always the order written. Instance order is the invariant: attributes[name][k] and
+   * transforms[k] are the same instance, written in one loop from one source index. Empty
+   * (the default) carries nothing and allocates nothing. FIVE things error, each naming the
+   * way out — and all but the first the offending entry, since an empty name has none to
+   * give — in the order they are checked, per entry rather than as a ranking across the
+   * list: an EMPTY name (drop that entry, or clear instanceAttrs to carry nothing); the same
+   * name listed TWICE (a channel is named after its attribute, so a repeat would be one
+   * channel listed twice); the reserved name "color", which is checked BEFORE the lookup and
+   * so reports as reserved even when no such attribute exists (a renderer binds instance
+   * colour structurally, so colorAttr carries it instead; copy the attribute to another name
+   * upstream to carry RGBA, which colorAttr's alpha drop cannot); an attribute MISSING from
+   * the point domain (the message lists the point attributes that could become channels);
+   * and a STRING attribute (its column is indices into a string table that does not travel
+   * with it — use assetAttr for per-point asset ids). TWO MORE refusals live at the RENDERER
+   * seam rather than here, so they cook clean and throw later, in toInstancedMeshes: a
+   * channel named after something three already means (position, normal, uv, instanceMatrix
+   * and more), which would overwrite the asset's vertex data, and a channel wider than 4
+   * components, which a vertex attribute cannot carry — split it upstream into several
+   * narrower ones. Device production is OPT-IN: the GPU evaluator's `deviceInstanceAttrs`
+   * (which requires `deviceInstances`) gathers each channel into its own device buffer
+   * beside the transforms, for a host that binds them itself from
+   * batch.attributes[name].handle.resource. Default off, and off is what it always was: a
+   * spawn naming any channel falls back to the CPU spawner for the whole terminal, with the
+   * transforms it composes there.
+   *
+   * @defaultValue `[]`
+   */
+  instanceAttrs: readonly string[];
+}
+
+/**
+ * Params of the `splineSample` node type.
+ */
+export interface SplineSampleParams {
+  /**
+   * How samples are placed: 'count' distributes exactly `count` samples over the total arc
+   * length; 'spacing' steps every `spacing` units.
+   *
+   * - Enum: `"count"` | `"spacing"`
+   *
+   * @defaultValue `"count"`
+   */
+  mode: string;
+  /**
+   * Number of samples when mode is 'count'. Minimum 1. Ignored in 'spacing' mode.
+   *
+   * - Range: `>= 1`
+   *
+   * @defaultValue `10`
+   */
+  count: number;
+  /**
+   * Distance between samples in world units when mode is 'spacing'. Must be > 0 in that
+   * mode. Ignored in 'count' mode.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `1`
+   */
+  spacing: number;
+  /**
+   * Name of an f32 DETAIL attribute (tuple 1) receiving the length of the polyline this node
+   * EMITS: the sum of the straight-line chords between consecutive samples, plus the closing
+   * chord from the last sample back to the first when every input polyline is closed (the
+   * case in which the samples divide the curve without duplicating the start, so the emitted
+   * sequence is a ring). Empty (the default) writes none. IT IS NOT THE INPUT CURVE'S LENGTH
+   * AND THAT IS THE POINT: a sampling CUTS CORNERS, so the polyline through the samples is
+   * always SHORTER than the curve it was cut from, and the shortfall is NOT UNIFORM — every
+   * unit of it accrues over the bends and none of it over the straights, so no scale factor
+   * turns one into the other. A consumer that steps the curve's length over these samples
+   * drifts, running off the end or wrapping short of its own seam. This is the number to
+   * divide `sampleArcAttr` by for a fraction, and the number to multiply a fraction by to
+   * get back to world units; `curveU` times this length is the mistake the pair exists to
+   * remove, because that expression mixes the CURVE's parameterization with the CHORD's
+   * ruler and the two only agree where the curve is straight. Measured from the f32
+   * positions actually written, in the same order and with the same arithmetic
+   * `polylineArcTables` uses to re-measure a cloud downstream, so the number a later
+   * pathResample, pathPointAt, arcTile or transferAlongPath computes over these points IS
+   * this number rather than a near miss — the column itself is f32, so what a graph reads is
+   * that f64 sum rounded once on the way in. IT LANDS ON THE DETAIL DOMAIN, which is where
+   * this node's vocabulary differs from pathResample's: that node resamples every polyline
+   * ON ITS OWN ARC LENGTH and emits one output path per input path, so its equivalent report
+   * (`resampledLengthAttr`) is a fact about a PRIMITIVE, one per path. This node
+   * concatenates every polyline into ONE curve and emits a CLOUD with no primitives at all,
+   * so there is exactly ONE emitted length and no primitive to hang it on — the detail
+   * domain is the library's one-element domain and where attributeReduce already writes a
+   * whole-geometry number. Note that a detail attribute is NOT readable from a point-domain
+   * field (a field reads the domain it lands on); broadcast it with promoteAttribute (from
+   * 'detail', to 'point', mode 'first') when a field needs it per sample, or read it
+   * directly from a host. Same reporting-slot rule as every report in the library: the shape
+   * is this node's to pick (f32, tuple 1), so a name the output's detail domain already
+   * holds under a different shape is REFUSED rather than deleted and re-added, and a
+   * same-shape one is RESET. "primtype" is refused outright, from the param alone: it is a
+   * type tag rather than a value, and an f32 detail column under that name is one
+   * promoteAttribute detail → primitive away from replacing the tag with a float and hiding
+   * every path from the nodes that read it. The detail domain holds no `primtype` of its own
+   * for the shape check to catch, which is exactly why this name needs stating rather than
+   * leaving to the general rule.
+   *
+   * @defaultValue `""`
+   */
+  sampledLengthAttr: string;
+  /**
+   * Name of an f32 POINT attribute (tuple 1) receiving each sample's ARC POSITION from the
+   * FIRST sample, measured along the EMITTED polyline: sample 0 is 0, and each later sample
+   * adds the straight-line chord from the sample before it. Empty (the default) writes none.
+   * ONE RUNNING COORDINATE OVER THE WHOLE OUTPUT, not one per polyline, because that is what
+   * this node's model already is — every polyline is measured as one concatenated curve,
+   * `curveU` is a fraction of that whole, and a sample crossing from one polyline to the
+   * next adds the chord that joins them exactly as any other sample adds its own.
+   * (pathResample restarts its arc at 0 on every path because it never concatenates
+   * anything; if per-path arcs are what a graph wants, that is the node that produces them.)
+   * THE UNITS ARE WORLD UNITS, NOT A 0..1 FRACTION, and that is what makes it more than
+   * `curveU` under another name: `pathPointAt`'s 'distance' mode,
+   * `pointScatterOnPath.arcAttr`, `transferAlongPath.arcAttr` and `arcTile.startAttr` are
+   * all world-unit CHORD coordinates, so this column plugs into any of them with no multiply
+   * and nothing for the graph to get wrong. The fraction is one divide away (by
+   * `sampledLengthAttr`) while going back the other way needs the length anyway, so the
+   * coordinate that composes is the one written. `curveU` is still written beside it and
+   * still measures the INPUT curve's fraction; the two disagree by exactly the
+   * corner-cutting `sampledLengthAttr` reports, which is why `curveU` times a length is not
+   * this column and drifts against it over every bend. It lands on the POINT domain because
+   * it is a fact about a SAMPLE — a different number for every point — which is what makes
+   * it unlike `sampledLengthAttr` and why it is checked against the output's point domain
+   * rather than the detail one. THE CLOSING CHORD OF A FULLY CLOSED INPUT IS NOT IN THIS
+   * COLUMN: it runs from the last sample back to the first, so no sample holds it — it is in
+   * `sampledLengthAttr`, and the last sample's value plus that chord is the emitted length.
+   * Otherwise the last sample's value IS the emitted length. The shape is this node's to
+   * pick (f32, tuple 1), so a name already on the OUTPUT's point domain under a different
+   * shape is REFUSED rather than deleted and re-added — P, scale, boundsMin, boundsMax and
+   * `tangent` (f32x3), rot and color (f32x4) and seed (u32) all reach that refusal — while
+   * `density` and `curveU` ARE f32 tuple 1, so naming either passes the shape check and
+   * RESETS it, silently overwriting a standard column with an arc length — and `curveU` is
+   * then gone rather than merely shadowed, since the two columns become one buffer and the
+   * arc is what stays in it. Give it a name of its own. TWO MORE NAMES ARE REFUSED OUTRIGHT.
+   * A name that is also a PRIMITIVE attribute of the INPUT is refused before the cook
+   * starts, whatever its shape: every primitive attribute is carried onto these samples, so
+   * it would land on this very column, and the refusal names this param rather than the
+   * carried attribute because renaming the report is the fix and moving the author's own
+   * value is not. And "primtype" is refused because it is a type tag rather than a value —
+   * this node emits no topology, so nothing here stamps it and the collision is only latent,
+   * but the name is one the library resolves as a TYPE and one promoteAttribute point →
+   * primitive away from replacing that tag with a float and hiding every path from the nodes
+   * that read it. Naming this report the same as `sampledLengthAttr` is NOT refused: the two
+   * land on different domains, so they are different columns and nothing collides.
+   *
+   * @defaultValue `""`
+   */
+  sampleArcAttr: string;
+}
+
+/**
+ * Params of the `surfaceSample` node type.
+ */
+export interface SurfaceSampleParams {
+  /**
+   * Number of candidate samples to place before density acceptance. Minimum 0.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `100`
+   */
+  count: number;
+  /**
+   * Extra seed folded into the node seed; change it to re-roll the sampling.
+   *
+   * @defaultValue `0`
+   */
+  seed: number;
+  /**
+   * Acceptance probability in [0, 1] per candidate, evaluated on the candidate points after
+   * placement (so it can read P or noise). 1 keeps every candidate; 0 keeps none.
+   *
+   * - Range: `0..1`
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  densityField: FieldParam;
+}
+
+/**
+ * Params of the `sweepProfile` node type.
+ */
+export interface SweepProfileParams {
+  /**
+   * Cross-section shape. 'circle' and 'square' are CLOSED (a tube, and a square rod whose
+   * four faces stay flat because its corners carry per-face normals) and take `radius` and
+   * `caps`; 'ribbon' is OPEN — a flat two-point strip of `width`, centred on the path,
+   * facing the frame's up axis — and takes neither, because a strip has no inside. A profile
+   * from a second geometry pin (an I-beam, a kerb) is deliberately not here yet: it forces
+   * four decisions no consumer has asked for, and these enum values stay valid when it
+   * arrives.
+   *
+   * - Enum: `"circle"` | `"square"` | `"ribbon"`
+   *
+   * @defaultValue `"circle"`
+   */
+  profile: string;
+  /**
+   * Points around a 'circle' profile; ignored by the other two. Default 8 matches the
+   * shipped tube asset (a three.js CylinderGeometry with 8 radial segments), so a swept tube
+   * reads like the instanced tube it replaces. Cost is linear: the ring emits `sides + 1`
+   * points (the extra one duplicates the seam so the uv does not run backwards across one
+   * column of quads) and `sides * 2` triangles per band.
+   *
+   * - Range: `3..256`
+   *
+   * @defaultValue `8`
+   */
+  sides: number;
+  /**
+   * Distance from the path to the surface, in world units, for the 'circle' and 'square'
+   * profiles ('square' reads it as HALF-WIDTH, so the section fits a 2 x radius box). Same
+   * default as pathSegments' `radius`. Field-capable and resolved on the INPUT points — the
+   * path's own points, which is exactly where a ring sits — so a taper is exact rather than
+   * averaged. A per-path radius living on the primitive domain has to be promoted onto the
+   * points first (promoteAttribute, primitive to point) before a field can see it.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `0.05`
+   */
+  radius: FieldParam;
+  /**
+   * Full width of a 'ribbon' profile in world units (the strip runs from -width/2 to
+   * +width/2 across the path); ignored by the closed profiles. Field-capable on the INPUT
+   * points, so a road that widens at a junction is one promoted attribute away.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  width: FieldParam;
+  /**
+   * Where the ROLL inside the ring comes from. The ring's PLANE always comes from the path,
+   * so this never changes where the surface is, only how the profile is turned within it —
+   * which is invisible for a circle and decisive for a square or a ribbon. 'upHint' uses the
+   * `up` param through the same deterministic construction (and the same [0,0,1] then
+   * [1,0,0] fallbacks) orientAlongVector and pathSegments use: purely local, correct for a
+   * tube and for a flat road ribbon, wrong for a ribbon on a curve that turns over.
+   * 'curveFrame' reads the `curveNormal` point attribute writeCurveFrame writes — a
+   * rotation-minimizing frame carried ALONG the curve, which is what a ribbon on a twisting
+   * path needs; `curveBinormal` is not read, the second axis is derived so the ring stays
+   * right-handed. 'rot' reads the standard `rot` quaternion's local +X, so anything that
+   * writes `rot` (orientAlongVector, with its field-capable direction and up) drives the
+   * roll. Both attribute modes fall back to `up` at a point whose attribute is degenerate.
+   * This node TRANSPORTS nothing along the path: the ring plane reads only the two segments
+   * meeting at its own point (a one-neighbour rule, the same reach writeTangents has) and no
+   * mode carries a value forward, so the only non-locality in a swept surface is whatever
+   * the attribute it was handed already had — 'curveFrame' inherits the non-locality
+   * writeCurveFrame documents, and nothing more.
+   *
+   * - Enum: `"upHint"` | `"curveFrame"` | `"rot"`
+   *
+   * @defaultValue `"upHint"`
+   */
+  frame: string;
+  /**
+   * Up hint fixing the roll in 'upHint' mode, and the fallback in the other two; need not be
+   * unit length. When parallel or antiparallel to the path direction (or zero) it
+   * deterministically falls back to [0, 0, 1], then [1, 0, 0] — the same contract
+   * orientAlongVector and pathSegments state, through the same shared code, so a vertical
+   * path's roll is arbitrary but never random. Field-capable on the input points.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,1,0]`
+   */
+  up: FieldParam;
+  /**
+   * Turns of the profile about the path direction, applied inside the ring plane on top of
+   * `frame` — 0.25 is a quarter turn, 1 is a full one. Field-capable on the input points, so
+   * a value that ramps along the path twists the section. Invisible on a 'circle' (it is
+   * rotationally symmetric) and the reason a 'square' or 'ribbon' can be aimed without
+   * changing the frame.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  roll: FieldParam;
+  /**
+   * How the section meets a bend. Both modes put the ring in the plane that BISECTS the two
+   * segments meeting at the point; they differ in whether the section is corrected for the
+   * tilt. 'miter' stretches the ring by 1/cos(half the turn angle) along the bend direction,
+   * which is exactly the ellipse a cylinder cuts on that plane, so the tube keeps its radius
+   * through the corner. 'perpendicular' leaves it, so the section thins by cos(half the turn
+   * angle) — 33% at a 96-degree bend, which is visible. Miter self-intersects only when the
+   * mitered half-width exceeds half the shorter segment; `miterLimit` is what refuses that.
+   *
+   * - Enum: `"miter"` | `"perpendicular"`
+   *
+   * @defaultValue `"miter"`
+   */
+  joint: string;
+  /**
+   * Largest stretch 'miter' may apply. Past it the ring falls back to the unstretched
+   * 'perpendicular' section for that point ONLY, which pinches rather than shooting a spike
+   * out of the corner. A stretch of 4 is a 151-degree turn; the limit is never reached by a
+   * path that was resampled at anything like an even spacing, and exists for the
+   * pathological input that would otherwise self-intersect. Field-capable on the INPUT
+   * points — the limit is read at the RING, from the point the ring stands on, so one
+   * deliberate spike and a capped remainder are one cook rather than two: a corner attribute
+   * lets the one junction that should keep its radius through a hairpin do so while every
+   * other corner stays bounded. As a field a value BELOW 1 is not refused at the point the
+   * way a plain number is refused at the door; it is read for what it does, which is admit
+   * no miter at all (a stretch is always > 1 when there is a bend), so that ring takes the
+   * unstretched section — the same fallback the limit already names when it is exceeded.
+   * Non-finite is refused with the offending element named, so 'never limit' is spelled as a
+   * large finite number rather than as Infinity: a stretch of 64 already admits a 178-degree
+   * turn. Ignored by 'perpendicular', where a field is not evaluated at all — exactly as
+   * `radius` is left unresolved for a 'ribbon' — while a plain number still meets its >= 1
+   * check wherever the graph is loaded or patched.
+   *
+   * - Range: `>= 1`
+   * - Accepts a field.
+   *
+   * @defaultValue `4`
+   */
+  miterLimit: FieldParam;
+  /**
+   * Close the two ends of an OPEN path with a CLOSED profile, as a triangle fan from the
+   * path's endpoint. Ignored for a closed path (it has no ends) and for the 'ribbon' profile
+   * (it has no hole), so all four combinations are defined rather than merely unsurprising.
+   * Cap points are separate from the wall's, so the seam between a flat cap and a round wall
+   * stays a real crease instead of being smoothed away. Cap uv is a disc mapping — the unit
+   * section mapped into the 0..1 square — not a continuation of the wall's.
+   *
+   * @defaultValue `true`
+   */
+  caps: boolean;
+}
+
+/**
+ * Params of the `transferAlongPath` node type.
+ */
+export interface TransferAlongPathParams {
+  /**
+   * POINT attribute on the `at` input (tuple 1, numeric) holding each point's position along
+   * the path, as an arc length in WORLD UNITS — the same coordinate pathPointAt's 'distance'
+   * mode reads and arcTile's `startAttr` carries. Must exist; a string column and a column
+   * wider than one are both refused, the second because which component was meant is not a
+   * question this node answers for you (extract it first with setAttribute and a component()
+   * field). THE UNITS ARE THE TRAP, not the name. A track measured in half-widths, a route
+   * measured in fractions of the whole and a scan measured in samples are all called a
+   * station by somebody, and all three land somewhere wrong here without being obviously
+   * wrong anywhere: multiply by the half-width, by the path's length, or by the sample pitch
+   * with setAttribute first, and gather on the world-unit column. A NON-FINITE value is
+   * refused, naming the point — a station that could not be computed has nowhere to be, and
+   * writing the value at arc 0 onto it would hand a real position to a point whose position
+   * is unknown, which is the failure this refusal exists to prevent rather than to disguise.
+   * Drop such points upstream with filterByExpression, or give them a station with
+   * setAttribute.
+   *
+   * @defaultValue `"station"`
+   */
+  arcAttr: string;
+  /**
+   * Path POINT attributes to interpolate onto the cloud, in any order. AN EXPLICIT LIST IS
+   * WHAT TO WRITE WHEN THE ANSWER MATTERS: every name here is sampled, and naming one of the
+   * eight standard bookkeeping columns lifts the exclusion the empty list applies — they are
+   * skipped by that rule, never forbidden by it. EMPTY (the default) means every NUMERIC
+   * point attribute of the path EXCEPT P, rot, scale, density, boundsMin, boundsMax, color
+   * and seed. Those eight are excluded because they are the point domain's own bookkeeping —
+   * written on every cloud in the library before anyone has decided anything — and each of
+   * them describes the path's POINTS rather than the curve: blending seed produces an
+   * identity that is neither of its neighbours and then drives randomness as though it meant
+   * something; P moves the whole cloud; rot and scale overwrite the transform the cloud
+   * arrived with; boundsMin/boundsMax its extent. What is left is exactly what somebody
+   * wrote onto the path deliberately — tangent, up, across, curveU, a half-width, a banking
+   * angle, a lane count — which is what a station wants. STRING ATTRIBUTES are skipped by
+   * the empty-list rule and REFUSED when named, because there is no value between two
+   * strings; move one across with transferAttribute's 'nearest' mapping instead. NAMING P IS
+   * THE PLACEMENT IDIOM and the reason the eight are excluded rather than forbidden: sample
+   * P and every point of the cloud moves onto the curve at its own arc position, which is
+   * how a scattered set of stations becomes a set of positions on the road. P is written
+   * into the cloud's OWN P column, three components, and that column is never reshaped. THE
+   * OTHER SEVEN ARE STILL SUBJECT TO THE REPORTING-SLOT RULE, because a sample lands as f32
+   * and the column on the `at` cloud is the author's: `rot`, `scale`, `density`,
+   * `boundsMin`, `boundsMax` and `color` are f32 there too and land; `seed` is u32, so it is
+   * refused on any ordinary cloud rather than replacing an identity column with a blend of
+   * two identities. Sample it under another name if you really want the number — rename it
+   * on the PATH first with setAttribute — and read the refusal as the answer it is. A path
+   * with none of its attributes left after the exclusions is refused rather than cooking to
+   * a cloud with nothing added, which would look like success.
+   *
+   * @defaultValue `[]`
+   */
+  attributes: readonly string[];
+  /**
+   * Whether an arc position may run off the end of a CLOSED path and come back. True (the
+   * default) takes the position modulo the path's length and corrects a negative, so any
+   * real number is a legal station — a counter that has passed the start line four times, or
+   * a marker placed 3 units BEFORE it at -3, both land where they should. False treats the
+   * path's arc as an interval and CLAMPS to its ends. No effect on an OPEN path, which has
+   * no seam to cross and always clamps, so the default follows the path's own closed flag
+   * and nothing has to be set for the ordinary case. This is not about the closing segment,
+   * which exists on a closed path either way: a position between the last point and the
+   * first interpolates round to the first under both settings. It is only about what happens
+   * outside [0, length].
+   *
+   * @defaultValue `true`
+   */
+  wrap: boolean;
+  /**
+   * Sampled attributes to rescale to unit length after interpolation (l = the tuple's
+   * length, or 1 when that is zero, then divide). OPT-IN because it is a correction, not a
+   * default: INTERPOLATING A DIRECTION SHORTENS IT, by an amount that depends on the angle
+   * between the two path points' values, so it is worst exactly where the path turns hardest
+   * and the shortfall is invisible until something reads the length. A caller sampling
+   * `tangent`, `up` and `across` almost always wants all three back at unit length, and one
+   * that sampled a velocity or a gradient wants the length left exactly as it came out.
+   * NORMALISING THREE AXES INDEPENDENTLY DOES NOT RE-ORTHOGONALISE THEM: each comes back
+   * unit length and the angles between them are still the blended ones, which are not right
+   * angles wherever the frame twisted between the two path points. A frame that must be
+   * orthonormal has to be rebuilt from two of its axes with a cross product (setAttribute
+   * and a cross() field), and this param is not that. The same caveat covers `rot`: a
+   * componentwise blend of two quaternions normalised afterwards is a shortest-path
+   * interpolation of nearly-aligned ones and nothing useful for a pair that are far apart or
+   * opposite in sign. Every name must be one this node actually sampled — a name that is not
+   * in `attributes`, or that the empty-list rule left out, is refused rather than ignored,
+   * since a normalisation that silently did not happen is the failure this param exists to
+   * fix. A tuple size of 1 is refused (unit length on one component is the sign, which is
+   * what a sign() field is for) and so is P, whose unit length would put the whole cloud on
+   * a sphere around the origin.
+   *
+   * @defaultValue `[]`
+   */
+  normalize: readonly string[];
+}
+
+/**
+ * Params of the `transferAttribute` node type.
+ */
+export interface TransferAttributeParams {
+  /**
+   * Name of the attribute to transfer. Must exist on the source domain selected by
+   * attrDomain — point, vertex or primitive for mappings 'uv' and 'raycast', always the
+   * point domain for mapping 'nearest'.
+   *
+   * @defaultValue `"density"`
+   */
+  name: string;
+  /**
+   * How destination points find their source value: 'nearest' (closest source point in 3D),
+   * 'uv' (barycentric lookup of the destination UV in the source triangulation's UV space),
+   * or 'raycast' (nearest triangle hit along a ray from each destination point).
+   *
+   * - Enum: `"nearest"` | `"uv"` | `"raycast"`
+   *
+   * @defaultValue `"nearest"`
+   */
+  mapping: string;
+  /**
+   * Source domain the transferred attribute is read from (uv/raycast only): 'point' reads
+   * triangle corners through the topology, 'vertex' reads per-corner values (seam-accurate),
+   * 'primitive' reads one value for the whole triangle. Mapping 'nearest' supports only
+   * 'point'. The result always lands on the destination's point domain. What 'primitive'
+   * reaches, and what it does not: it reads a per-face value off a TRIANGLE MESH — the
+   * source still needs 3-vertex 'poly' primitives, so an edge or polyline network (a road
+   * built with connectPoints or pointsToPath, carrying a width promoted onto its edges) has
+   * no triangles for either mapping to find and is refused, naming the fix. To move a value
+   * off an edge network, promoteAttribute it from 'primitive' to 'point' on the source and
+   * transfer with mapping 'nearest'.
+   *
+   * - Enum: `"point"` | `"vertex"` | `"primitive"`
+   *
+   * @defaultValue `"point"`
+   */
+  attrDomain: string;
+  /**
+   * UV attribute name for mapping 'uv' (ignored otherwise). On the destination it must live
+   * on the point domain (f32, tupleSize >= 2; extra components ignored). On the source it is
+   * read from the vertex domain when present (per-corner UVs, supports seams), else from the
+   * point domain. Destination UVs with non-finite components miss.
+   *
+   * @defaultValue `"uv"`
+   */
+  uvAttr: string;
+  /**
+   * Ray direction for mapping 'raycast'. As a plain vector it is ONE direction shared by
+   * every destination point, normalized internally so maxDistance is world-space, and
+   * required to be non-zero and finite — a whole cloud casting nowhere is a mistake, not a
+   * result. As a FIELD it is a PER-POINT ray direction, evaluated on the destination points,
+   * so each point casts the ray it asks for: normalize(sub(attribute("target"), position()))
+   * aims every point at a moving target, and a noise-driven direction scatters the rays
+   * without a setAttribute node upstream to hold them. Each direction is normalized per
+   * point, so only its DIRECTION is read and its length never changes a hit distance. The
+   * non-zero refusal becomes a per-element policy: a point whose direction resolves to
+   * exactly zero MISSES — it keeps its prior value and is counted by missCountAttr and
+   * flagged 0 by hitAttr, exactly like a point whose ray hits nothing — rather than failing
+   * the cook for the whole cloud. Non-finite is still refused, naming this param: a NaN
+   * direction is a broken expression (a normalize of a zero-length vector, a division by
+   * zero upstream), not data. Ignored, and not even evaluated, when mapping is not 'raycast'
+   * or when directionAttr is set — directionAttr still wins, so a field here and an
+   * attribute there is the attribute, silently, as it already was for a plain vector.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,-1,0]`
+   */
+  direction: FieldParam;
+  /**
+   * Optional per-point ray direction attribute on the destination point domain (f32,
+   * tupleSize >= 3) for mapping 'raycast'; overrides `direction` when non-empty. Each
+   * direction is normalized per point; points with a zero or non-finite direction miss.
+   * Empty = use `direction`.
+   *
+   * @defaultValue `""`
+   */
+  directionAttr: string;
+  /**
+   * Maximum world-space hit distance for mapping 'raycast' (ignored otherwise). 0 (the
+   * default) means unlimited; a positive value ignores hits farther along the ray. Rays are
+   * forward-only regardless (hits need t >= 0). As a FIELD it is a PER-POINT cap, evaluated
+   * on the destination points, so each point gives up at its own reach — a small prop
+   * accepting only a nearby surface while a large one still finds a distant floor, in one
+   * cook. The unlimited sentinel is per point too, and it is 0 OR LESS: a field returning 0
+   * — or a negative, which a subtraction easily produces — makes THOSE rays unlimited rather
+   * than making them miss. So 'accept nothing' is a small POSITIVE distance, never 0 and
+   * never a negative one, which would do the opposite of what it looks like. A point capped
+   * short of every hit is an ordinary MISS — it keeps its prior value and is counted by
+   * missCountAttr and flagged 0 by hitAttr — not a failed cook. Non-finite is refused,
+   * naming this param, because a NaN cap is a broken expression rather than data. Ignored,
+   * and not evaluated, when mapping is not 'raycast'.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  maxDistance: FieldParam;
+  /**
+   * When non-empty, writes the number of missed destination points into a u32 detail
+   * attribute of this name on the output (mapping 'nearest' always writes 0 — every point is
+   * assigned). Empty = don't record. For which points those were, see hitAttr. This is a
+   * reporting slot whose shape this node picks (u32, tuple 1), so a name the input's DETAIL
+   * domain already holds under a different shape is REFUSED rather than deleted and re-added
+   * — give it a name of its own (a "__" prefix marks it internal, e.g. "__missed") or
+   * removeAttribute the clash first. A same-shape column is reused and reset.
+   *
+   * @defaultValue `""`
+   */
+  missCountAttr: string;
+  /**
+   * When non-empty, writes a per-point flag of this name onto the OUTPUT'S POINT DOMAIN
+   * (bool, tuple 1). The polarity is the HIT, not the miss — the inverse of missCountAttr,
+   * which counts the zeros: 1 means this point found a source and received a transferred
+   * value, 0 means it missed and kept its prior value (the attribute default when it had
+   * none). Every point is written, so the column never carries a stale value: mapping
+   * 'nearest' leaves it all 1 (every point is assigned), and a source with nothing to search
+   * — every triangle degenerate — leaves it all 0, since nothing was found. Feed it to
+   * filterByAttribute (comparison 'eq', value 1) to keep only the points that landed, then
+   * removeAttribute to clean it up. Two names are refused rather than written: `name`, which
+   * the flag would otherwise overwrite, and any point attribute the input ALREADY holds
+   * under a different shape — the flag's shape is this node's to pick, so writing it there
+   * would delete that column and everything in it while the cook still looked fine (hitAttr
+   * "P" would leave a point cloud with no positions). An existing bool tuple-1 column of the
+   * same name IS reused and reset, which is what keeps the flag describing THIS transfer
+   * only. On a clash, give the flag a name of its own (a "__" prefix marks it internal, e.g.
+   * "__hit") or removeAttribute the existing column first. Empty = don't record.
+   *
+   * @defaultValue `""`
+   */
+  hitAttr: string;
+}
+
+/**
+ * Params of the `transferByIndex` node type.
+ */
+export interface TransferByIndexParams {
+  /**
+   * Which SOURCE POINT each destination point reads, as an ordinal counting from 0. Resolved
+   * on the DESTINATION'S point domain, so a field here sees the `in` cloud's attributes and
+   * never the source's — the source is what is being read, not what the expression runs
+   * over. As a plain number it is one index shared by every destination point, which is the
+   * broadcast case (every point takes source entry 3) and is mostly useful for a table of
+   * one. AS A FIELD IT IS THE POINT OF THE NODE: floor(mul(randomField(k), n)) is the
+   * uniform pick over an n-entry source, attribute("slot") spends an index some earlier node
+   * settled, and an expression over position() gathers by where the destination point is
+   * without ever asking a spatial query to find it. TRUNCATED TOWARD ZERO (Math.trunc), not
+   * floored: 3.9 and 3.0 both name source point 3, and so do -0.5 and 0.5, because
+   * truncation collapses the whole open interval (-1, 1) onto 0. That matters only for a
+   * negative fraction, and it is why the uniform idiom is spelled with floor() — a random in
+   * [0, 1) scaled by n and floored covers every entry exactly once, while a value that can
+   * go negative needs to decide what it means before it arrives here. PRECISION: a field
+   * resolves to an f32 column, and f32 represents every integer only up to 16,777,216. An
+   * index computed beyond that lands on a neighbouring integer — the arithmetic that
+   * produced it is where the precision went, not this node, and a source that large wants an
+   * i32 attribute read straight through attribute() rather than a computed expression.
+   * NON-FINITE IS REFUSED, naming this param: NaN and ±Infinity are what a division by zero,
+   * an overflow or a floor() of a broken sub-expression produce, and they are not indices
+   * under any reading. This param does NOT take the finiteness opt-out that
+   * filterByExpression's predicate and pointNeighborhood's radius take, and the reason is
+   * the bar those meet: a stated meaning for NaN that a throw would delete. There is no such
+   * meaning here. NaN has none under 'clamp' (which end?) and none under 'wrap' (NaN modulo
+   * anything is NaN); +Infinity clamps sensibly but wraps to NaN, so even the three
+   * non-finite values disagree with each other within one setting; and any reading of NaN as
+   * a miss would have to be conditioned on `outOfRange`, making finiteness a property of a
+   * SIBLING PARAM'S VALUE rather than of this param, which is exactly the ambiguity the
+   * guard exists to prevent. If a broken index should miss rather than fail the cook, say so
+   * explicitly: map it to a sentinel outside the source — e.g. -1 — with a select() in the
+   * expression, and set outOfRange to 'miss'. That is a decision the graph states rather
+   * than one this node guesses.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  index: FieldParam;
+  /**
+   * Source POINT attributes to gather, in any order. AN EXPLICIT LIST IS WHAT TO WRITE WHEN
+   * THE ANSWER MATTERS: every name here is gathered, and naming one of the eight standard
+   * bookkeeping columns lifts the exclusion the empty list applies — they are skipped by
+   * that rule, never forbidden by it. EMPTY (the default) means every point attribute of the
+   * source EXCEPT P, rot, scale, density, boundsMin, boundsMax, color and seed. Those eight
+   * are excluded because they are the point domain's own bookkeeping — written on every
+   * cloud in the library before anyone has decided anything — and each describes the
+   * SOURCE'S POINTS rather than whatever the source is a table of: gathering seed hands two
+   * destination points the same identity and then drives randomness with it, P moves the
+   * destination cloud, rot and scale overwrite the transform it arrived with,
+   * boundsMin/boundsMax its extent. What is left is exactly what somebody wrote onto the
+   * source deliberately — an asset id, a lane, a width, a hue, a weight — which is what an
+   * index is asking for. STRING ATTRIBUTES ARE INCLUDED by the empty rule, unlike
+   * transferAlongPath's otherwise identical rule, and the difference is the operation: that
+   * node INTERPOLATES, and there is no value between two strings, while this one COPIES, and
+   * a copied string is just a string. Gathering an asset id out of a roster is the case this
+   * node was built for, so leaving it out of 'everything' would make the default useless
+   * exactly where the node is most used. NAMING P IS THE PLACEMENT IDIOM: gather P and every
+   * destination point moves to its chosen source point's position, which is how a scattered
+   * cloud becomes a set of picks from a settled list. The one reshape this node refuses is
+   * P's own: a source whose P is not the destination's shape is refused rather than
+   * replacing the position column with something every downstream node would misread. EVERY
+   * OTHER COLUMN IS A COPY TARGET and takes the source's shape outright — an existing
+   * destination column of another type or tuple size is REPLACED, not refused, because
+   * overwriting is what a copy is (this is transferAttribute's rule, not the reporting-slot
+   * rule that governs hitAttr and missCountAttr below). A same-shape column is written IN
+   * PLACE, which is what lets a miss keep its prior value. A source with no point attributes
+   * left after the exclusions is refused rather than cooking to a cloud with nothing added,
+   * which would look like success.
+   *
+   * @defaultValue `[]`
+   */
+  attributes: readonly string[];
+  /**
+   * How an index outside [0, sourceCount-1] is read, applied AFTER the truncation. 'clamp'
+   * (the default) pins it to the ends, so every negative index reads source point 0 and
+   * everything past the end reads the last point; nothing misses, and a source of one point
+   * answers every query with it. 'wrap' takes a EUCLIDEAN modulo — the remainder is made
+   * non-negative before it is used, so -1 reads the LAST source point and -n-1 reads the
+   * last again, not the truncated remainder JavaScript's own % operator returns (-1 % 5 is
+   * -1, which is not a point). This is the setting for a repeating table: a counter that has
+   * run off the end of a 5-entry palette comes back to entry 0, and one that ran off the
+   * start comes back to entry 4. 'miss' leaves the destination point's PRIOR VALUE untouched
+   * and flags it — the same miss transferAttribute's uv and raycast mappings produce,
+   * counted by missCountAttr and marked 0 by hitAttr. Use it when an out-of-range index
+   * means 'no answer' rather than 'the nearest answer': clamp and wrap both invent one, and
+   * a clamped index looks exactly like a real hit downstream. AN EMPTY SOURCE MISSES UNDER
+   * ALL THREE, this setting included: clamping needs an end to clamp to and wrapping needs a
+   * length to wrap by, and a source with no points has neither. Every destination point then
+   * keeps its prior value, missCountAttr counts them all and hitAttr is all zeros — the
+   * columns are still created, so the shape of the output does not depend on whether the
+   * source happened to be empty this cook.
+   *
+   * - Enum: `"clamp"` | `"wrap"` | `"miss"`
+   *
+   * @defaultValue `"clamp"`
+   */
+  outOfRange: string;
+  /**
+   * When non-empty, writes a per-point flag of this name onto the OUTPUT'S POINT DOMAIN
+   * (bool, tuple 1). The polarity is the HIT, not the miss — the inverse of missCountAttr,
+   * which counts the zeros: 1 means this point read a source point and received its values,
+   * 0 means it missed and kept its prior value (the source attribute's default where the
+   * column had to be created). Every point is written, so the column never carries a stale
+   * value: with outOfRange 'clamp' or 'wrap' and a non-empty source it is all 1 by
+   * construction, since neither setting can fail to land, and an EMPTY source leaves it all
+   * 0 whatever outOfRange says. Feed it to filterByAttribute (comparison 'eq', value 1) to
+   * keep only the points that landed, then removeAttribute to clean it up. A miss cannot
+   * report itself through the gathered value — the prior value is a real value and looks
+   * like one — so this is the only per-point way to find one. Two kinds of name are refused
+   * rather than written: any attribute this node is GATHERING (whether named in `attributes`
+   * or selected by its empty default), which the flag would otherwise overwrite with a bool,
+   * and any point attribute the input ALREADY holds under a different shape — the flag's
+   * shape is this node's to pick, so writing it there would delete that column and
+   * everything in it while the cook still looked fine (hitAttr "P" would leave a point cloud
+   * with no positions). An existing bool tuple-1 column of the same name IS reused and
+   * reset, which is what keeps the flag describing THIS gather only. On a clash, give the
+   * flag a name of its own (a "__" prefix marks it internal, e.g. "__hit") or
+   * removeAttribute the existing column first. Empty = don't record.
+   *
+   * @defaultValue `""`
+   */
+  hitAttr: string;
+  /**
+   * When non-empty, writes the number of missed destination points into a u32 detail
+   * attribute of this name on the output. With outOfRange 'clamp' or 'wrap' and a non-empty
+   * source this is always 0 — every point lands — so a non-zero count there means the source
+   * was empty. Empty = don't record. For WHICH points those were, see hitAttr; a count is a
+   * cook statistic and cannot be filtered on. This is a reporting slot whose shape this node
+   * picks (u32, tuple 1), so a name the input's DETAIL domain already holds under a
+   * different shape is REFUSED rather than deleted and re-added — give it a name of its own
+   * (a "__" prefix marks it internal, e.g. "__missed") or removeAttribute the clash first. A
+   * same-shape column is reused and reset.
+   *
+   * @defaultValue `""`
+   */
+  missCountAttr: string;
+}
+
+/**
+ * Params of the `transformPoints` node type.
+ */
+export interface TransformPointsParams {
+  /**
+   * Translation added after rotation and scale, in world units. Field-capable (tuple 1
+   * broadcasts).
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  translate: FieldParam;
+  /**
+   * Rotation about the world origin in degrees per axis, applied extrinsically in XYZ order:
+   * world X first, then world Y, then world Z (equivalent to intrinsic ZYX; three.js Euler
+   * order 'ZYX'). Field-capable (tuple 1 broadcasts).
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  rotateEuler: FieldParam;
+  /**
+   * Componentwise scale about the world origin, applied before rotation. Field-capable
+   * (tuple 1 broadcasts).
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[1,1,1]`
+   */
+  scale: FieldParam;
+}
+
+/**
+ * Params of the `valueConstant` node type.
+ */
+export interface ValueConstantParams {
+  /**
+   * The number to emit.
+   *
+   * @defaultValue `0`
+   */
+  value: number;
+}
+
+/**
+ * Params of the `volumeSample` node type.
+ */
+export interface VolumeSampleParams {
+  /**
+   * Minimum corner of the box, in world units. Ignored when a geometry is connected.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  boundsMin: readonly number[];
+  /**
+   * Maximum corner of the box, in world units. Ignored when a geometry is connected.
+   *
+   * @defaultValue `[1,1,1]`
+   */
+  boundsMax: readonly number[];
+  /**
+   * Requested grid cell edge length in world units — a REQUEST, not the cell you get. Each
+   * axis is divided into max(1, floor(extent / cellSize)) whole cells, so the actual cell is
+   * extent / that count. When the extent is not a multiple you get a LARGER cell (extent 20,
+   * cellSize 12 -> one 20-wide cell); when the extent is smaller than cellSize you get a
+   * SMALLER one (extent 20, cellSize 25 -> one 20-wide cell, since an axis always has at
+   * least one cell). It equals cellSize exactly when the extent divides evenly by it. Must
+   * be > 0.
+   *
+   * @defaultValue `1`
+   */
+  cellSize: number;
+  /**
+   * Per-cell jitter amount in [0, 1]: fraction of the cell size each point may move from its
+   * cell center, per axis. Field-capable (evaluated on the grid centers).
+   *
+   * - Range: `0..1`
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  jitter: FieldParam;
+  /**
+   * Extra seed folded into the node seed; change it to re-roll the jitter.
+   *
+   * @defaultValue `0`
+   */
+  seed: number;
+}
+
+/**
+ * Params of the `voronoiCells` node type.
+ */
+export interface VoronoiCellsParams {
+  /**
+   * How far to look for the sites that bound a cell, in world units, tested STRICTLY: a site
+   * at exactly `radius` is not gathered. IT IS NOT A CELL SIZE. It is the reach of the
+   * search, and the cell it produces is either the true global cell or nothing at all.
+   * Raising it makes more cells CERTIFIABLE, at a cost that grows with its square; it never
+   * changes a cell that was already certified, which is what makes this param safe to tune.
+   * About three times the mean spacing of the cloud is a useful starting value. 0 builds
+   * nothing. As a FIELD it is a PER-SITE reach, and unlike connectPoints' radius it needs no
+   * pair rule, because a cell is decided by ONE site rather than by two: site i gathers
+   * within its own reach and certifies against half of it. A per-site reach of 0, negative
+   * or NaN builds no cell for that site. Under a partitioned cook the halo is 1.5 times this
+   * radius — or 1.5 times the GLOBAL MAXIMUM the field can return anywhere in the world, a
+   * bound to be derived rather than measured. The half is the gap between the ownership rule
+   * a graph can express (which window holds the ring's FIRST CORNER) and the one the
+   * certificate is stated in (which holds the SITE); see the node description. THAT IS A
+   * FLOOR AND NOT A HINT. Underestimating does not merely cost the seam some cells: the
+   * certificate asks whether the cell fits inside `radius / 2` and ASSUMES it was handed
+   * every site within `radius`, so a halo that withheld one breaks the premise somewhere the
+   * node cannot look, and the cell it then certifies is WRONG rather than absent. The error
+   * is bounded by how much was withheld, which makes it small, plausible and silent — the
+   * worst of the three.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  radius: FieldParam;
+  /**
+   * What to do with a site whose cell cannot be proved global. 'drop' emits no cell for it
+   * and carries on, which is the default because a site on the OUTER BOUNDARY of any finite
+   * cloud has an unbounded true cell that no radius certifies — refusing there would make
+   * the node unusable on a plain scatter. 'refuse' stops the cook naming the site's
+   * position, the reach its cell actually needed and the radius that would cover it; reach
+   * for it when the cook must produce a cell for every site, such as a partitioned world
+   * whose seam cells matter or a plot layout that downstream code will index, so that a
+   * missing cell is an error rather than a hole discovered later. Neither setting changes a
+   * cell that IS certified: the two differ only in what becomes of the ones that are not.
+   *
+   * - Enum: `"drop"` | `"refuse"`
+   *
+   * @defaultValue `"drop"`
+   */
+  onUncertified: string;
+  /**
+   * Name of an f32 PRIMITIVE attribute receiving each cell's area in square world units,
+   * measured in the XZ plane on the exact corners the certificate accepted. Empty (the
+   * default) writes none. It is the natural key for a plot layout —
+   * filterPrimitivesByAttribute drops the slivers, and a promoted area drives a per-lot
+   * height — and it is the cheapest way to see a diagram going wrong, since a cell far
+   * larger than its neighbours is a site whose competitors were out of reach. The shape is
+   * this node's to pick (f32, tuple 1), so the only name it can collide with is `primtype`,
+   * which is refused by name.
+   *
+   * @defaultValue `""`
+   */
+  areaAttr: string;
+  /**
+   * Name of a u32 DETAIL attribute receiving how many sites got no cell — because they
+   * failed the certificate, because their reach was not positive, or because the polygon
+   * collapsed below three distinct corners. `radius: 0` reports every site rather than none,
+   * which is the reading that tells you nothing was built. Empty (the default) writes none.
+   * Meaningful under `onUncertified: 'drop'`, where it is the difference between a diagram
+   * that lost its outer ring — expected, and roughly the hull of the cloud — and one that
+   * lost most of its cells because the radius is too small. Read it against the input's
+   * point count rather than alone.
+   *
+   * @defaultValue `""`
+   */
+  uncertifiedAttr: string;
+}
+
+/**
+ * Params of the `writeCurveFrame` node type.
+ */
+export interface WriteCurveFrameParams {
+  /**
+   * Attribute for the unit tangent (created, or reset when it already exists as f32 tuple
+   * 3). The default matches what pathResample and splineSample emit, so a path that already
+   * carries tangents has them rewritten to identical values.
+   *
+   * @defaultValue `"tangent"`
+   */
+  tangentName: string;
+  /**
+   * Attribute for the transported normal. NOT called 'normal' deliberately: surfaceSample
+   * writes a surface `normal` of the same shape (f32 tuple 3), and an identical shape is
+   * exactly the case a reporting slot ACCEPTS — so that name would be quietly reset in
+   * place, and a graph that samples a surface and frames a curve would have one silently
+   * overwrite the other.
+   *
+   * @defaultValue `"curveNormal"`
+   */
+  normalName: string;
+  /**
+   * Attribute for the binormal, tangent cross normal — the third axis of the frame. Written
+   * here rather than left to the consumer because recomputing it downstream from two f32
+   * columns is where a frame stops being exactly orthonormal.
+   *
+   * @defaultValue `"curveBinormal"`
+   */
+  binormalName: string;
+  /**
+   * OPT-IN REPORT: name of an f32 tuple-3 point attribute receiving the CURVATURE VECTOR
+   * dT/ds — the rate the unit tangent turns per unit of arc length, pointing toward the
+   * centre of curvature. Empty (the default) writes none and the output is byte-identical to
+   * a cook without it. A VECTOR rather than a scalar because in 3D the scalar is the
+   * incomplete answer: the magnitude is |dT/ds| = 1/R (`length(attribute("curvature"))`, and
+   * the local radius is its reciprocal), while the SIGN of a turn only exists relative to
+   * some reference axis, which no curve carries on its own — take it against whichever axis
+   * you actually mean with `dot`, most often a level right vector built from the tangent and
+   * world up. Computed from the SAME neighbours the tangent's own central difference used,
+   * so the two columns describe one discrete curve rather than two slightly different ones,
+   * and a closed path wraps exactly as the tangent does. The divisor is the arc length
+   * between the two tangents being differenced — the two segments meeting at the point, and
+   * at an open path's END a HALF segment, because the tangent there is that segment's chord
+   * direction and so belongs to its midpoint rather than to its far end. Zero where it
+   * cannot be measured: at a point whose own tangent or either neighbour's is zero (a
+   * degenerate point), at an unreferenced point, and at every point of a closed loop of two
+   * distinct points, whose two neighbours are the same point. Zero on a straight too — but
+   * that is the measurement rather than the absence of one. SAMPLE THE PATH FOR THE
+   * CURVATURE YOU WANT TO READ, because more samples is not better here: this is a SECOND
+   * difference of f32 positions, so halving the step halves the signal while leaving the
+   * position quantization where it was, and past a point the noise wins. Measured against an
+   * analytic parabola, the error falls to about half a percent and then climbs back — 1.4%
+   * at 100 samples, 0.5% at 200-500, 2.9% at 1000, 12% at 2000. The useful rule is to keep
+   * the sample step somewhere near a hundredth of the smallest radius you care about and no
+   * finer; resampling a curve to a step far below that makes its curvature worse, not
+   * sharper. NOTE THAT normalize(curvature) IS THE FRENET NORMAL, which is NOT what
+   * `normalName` writes — the Frenet normal is undefined on a straight and flips a half turn
+   * through an inflection, which is exactly why the frame here is transported instead. Same
+   * reporting-slot rule as the three axis names: a column of a different shape under this
+   * name is refused rather than deleted and re-added, and it may not repeat one of the axis
+   * names.
+   *
+   * @defaultValue `""`
+   */
+  curvatureName: string;
+}
+
+/**
+ * Params of the `writeTangents` node type.
+ */
+export interface WriteTangentsParams {
+  /**
+   * Attribute to write (created, or reset when it already exists as f32 tuple 3). The
+   * default 'tangent' is the name splineSample emits and the one an orientAlongVector
+   * direction field usually reads. The shape is this node's to pick, so a name the input's
+   * point domain already holds under a DIFFERENT shape is REFUSED rather than deleted and
+   * re-added — writing it would destroy that column and everything in it while the cook
+   * still looked fine. Give the tangents a name of their own, or removeAttribute the clash
+   * first. 'P' is refused outright, same shape or not: it is what the tangents are computed
+   * from.
+   *
+   * @defaultValue `"tangent"`
+   */
+  name: string;
+}

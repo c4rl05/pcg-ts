@@ -30,22 +30,28 @@ import {
   resolveOnAllowingNonFinite,
   tryResolveOnGpu,
 } from "./util.js";
+import type {
+  AttributeReduceParams,
+  AttributeRemapParams,
+  PartitionByAttributeParams,
+  PromoteAttributeParams,
+  RemoveAttributeParams,
+  SetAttributeParams,
+  TransferAttributeParams,
+} from "./params.generated.js";
+
+// Generated from the param schemas below; see params.generated.ts.
+export type {
+  AttributeReduceParams,
+  AttributeRemapParams,
+  PartitionByAttributeParams,
+  PromoteAttributeParams,
+  RemoveAttributeParams,
+  SetAttributeParams,
+  TransferAttributeParams,
+} from "./params.generated.js";
 
 const DOMAIN_ENUM = ["point", "vertex", "primitive", "detail"] as const;
-
-/** Params of {@link setAttribute}. */
-export interface SetAttributeParams {
-  name: string;
-  domain: string;
-  type: string;
-  tupleSize: number;
-  value: FieldParam;
-  select: FieldParam;
-  values: readonly string[];
-  weights: readonly number[];
-  stringValue: string;
-  seed: number;
-}
 
 /**
  * Is this a legal weight — whole, non-negative, finite?
@@ -472,14 +478,6 @@ export const setAttribute = standardNode<SetAttributeParams>({
   },
 });
 
-/** Params of {@link promoteAttribute}. */
-export interface PromoteAttributeParams {
-  name: string;
-  from: string;
-  to: string;
-  mode: string;
-}
-
 /** Promote an attribute between domains (wraps data promote). */
 export const promoteAttribute = standardNode<PromoteAttributeParams>({
   type: "promoteAttribute",
@@ -600,19 +598,6 @@ function rayScratchAttr(
   const attr = set.replace(name, "f32", spec.tupleSize);
   attr.data.set(col.data.subarray(0, set.count * spec.tupleSize));
   return name;
-}
-
-/** Params of {@link transferAttribute}. */
-export interface TransferAttributeParams {
-  name: string;
-  mapping: string;
-  attrDomain: string;
-  uvAttr: string;
-  direction: FieldParam;
-  directionAttr: string;
-  maxDistance: FieldParam;
-  missCountAttr: string;
-  hitAttr: string;
 }
 
 /** Transfer an attribute from a source geometry (nearest / uv / raycast). */
@@ -806,14 +791,6 @@ export const transferAttribute = standardNode<TransferAttributeParams>({
   },
 });
 
-/** Params of {@link attributeReduce}. */
-export interface AttributeReduceParams {
-  name: string;
-  domain: string;
-  mode: string;
-  outName: string;
-}
-
 /** Reduce an attribute across a domain into one detail-domain value. */
 export const attributeReduce = standardNode<AttributeReduceParams>({
   type: "attributeReduce",
@@ -968,19 +945,6 @@ function remapWindow(
     );
   }
   return col;
-}
-
-/** Params of {@link attributeRemap}. */
-export interface AttributeRemapParams {
-  name: string;
-  outName: string;
-  domain: string;
-  mode: string;
-  inMin: FieldParam;
-  inMax: FieldParam;
-  outMin: FieldParam;
-  outMax: FieldParam;
-  clamp: boolean;
 }
 
 /** Rescale an attribute from one numeric range to another. */
@@ -1212,13 +1176,6 @@ export const attributeRemap = standardNode<AttributeRemapParams>({
   },
 });
 
-/** Params of {@link removeAttribute}. */
-export interface RemoveAttributeParams {
-  names: readonly string[];
-  domain: string;
-  strict: boolean;
-}
-
 /** Delete attributes from a domain. */
 export const removeAttribute = standardNode<RemoveAttributeParams>({
   type: "removeAttribute",
@@ -1266,11 +1223,6 @@ export const removeAttribute = standardNode<RemoveAttributeParams>({
     return { out: [makeGeometryItem(geo)] };
   },
 });
-
-/** Params of {@link partitionByAttribute}. */
-export interface PartitionByAttributeParams {
-  name: string;
-}
 
 /** Split one geometry into per-value point clouds, tagged. */
 export const partitionByAttribute = standardNode<PartitionByAttributeParams>({

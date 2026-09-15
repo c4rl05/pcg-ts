@@ -33,7 +33,6 @@ import {
   PARALLEL_FRACTION,
   segmentHitsBox,
   ORIENT_PARALLEL_EPS,
-  type FieldParam,
   polylineArcTables,
   positionView,
   readComp,
@@ -45,8 +44,10 @@ import {
   rotateVec,
   writePolylineTangents,
 } from "./util.js";
+import type { PathCoverageParams } from "./params.generated.js";
 
-
+// Generated from the param schemas below; see params.generated.ts.
+export type { PathCoverageParams } from "./params.generated.js";
 
 /**
  * The box cloud in the only form the ray test wants: SoA world centres,
@@ -257,20 +258,6 @@ function tangentsOf(geo: Geometry): Float32Array {
   const out = new Float32Array(geo.pointCount * 3);
   writePolylineTangents(polylineArcTables(geo, "pathCoverage"), P.data, P.tupleSize, out);
   return out;
-}
-
-/** Params of {@link pathCoverage}. */
-export interface PathCoverageParams {
-  direction: FieldParam;
-  near: FieldParam;
-  far: FieldParam;
-  rayCount: number;
-  spread: FieldParam;
-  minHits: number;
-  acrossAttr: string;
-  boxSize: FieldParam;
-  coveredAttr: string;
-  hitsAttr: string;
 }
 
 /** Per-point cover from a cloud of oriented boxes, by ray cast. */

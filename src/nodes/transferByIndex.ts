@@ -47,7 +47,6 @@ import { cloneGeometry, makeGeometryItem } from "../graph/index.js";
 import { standardNode } from "./registry.js";
 import {
   CANCEL_STRIDE,
-  type FieldParam,
   requireGeometry,
   requireReportSlot,
   requireScalarColumn,
@@ -55,19 +54,13 @@ import {
   resolveOn,
   TRANSFER_BOOKKEEPING,
 } from "./util.js";
+import type { TransferByIndexParams } from "./params.generated.js";
 
+// Generated from the param schemas below; see params.generated.ts.
+export type { TransferByIndexParams } from "./params.generated.js";
 
 /** The three readings of an index that is not a source point. */
 const OUT_OF_RANGE = ["clamp", "wrap", "miss"] as const;
-
-/** Params of {@link transferByIndex}. */
-export interface TransferByIndexParams {
-  index: FieldParam;
-  attributes: string[];
-  outOfRange: string;
-  hitAttr: string;
-  missCountAttr: string;
-}
 
 /**
  * Refuse an `attributes` list holding an empty entry or a repeat, with

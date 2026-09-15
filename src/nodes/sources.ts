@@ -7,15 +7,20 @@ import { createPointCloud } from "../data/index.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { hashCombine, hashFloat } from "../random/index.js";
 import { standardNode } from "./registry.js";
+import type {
+  PointGridParams,
+  PointLineParams,
+  PointScatterInBoundsParams,
+  PointScatterInWorldParams,
+} from "./params.generated.js";
 
-/** Params of {@link pointGrid}. */
-export interface PointGridParams {
-  countX: number;
-  countY: number;
-  countZ: number;
-  spacing: readonly number[];
-  origin: readonly number[];
-}
+// Generated from the param schemas below; see params.generated.ts.
+export type {
+  PointGridParams,
+  PointLineParams,
+  PointScatterInBoundsParams,
+  PointScatterInWorldParams,
+} from "./params.generated.js";
 
 /**
  * Regular grid of points: `countX * countY * countZ` points starting at
@@ -66,16 +71,6 @@ export const pointGrid = standardNode<PointGridParams>({
     return { out: [makeGeometryItem(geo)] };
   },
 });
-
-/** Params of {@link pointLine}. */
-export interface PointLineParams {
-  mode: string;
-  count: number;
-  start: readonly number[];
-  end: readonly number[];
-  includeEnd: boolean;
-  spacing: number;
-}
 
 /**
  * Evenly spaced points on the line through `start` and `end`.
@@ -222,14 +217,6 @@ export const pointLine = standardNode<PointLineParams>({
   },
 });
 
-/** Params of {@link pointScatterInBounds}. */
-export interface PointScatterInBoundsParams {
-  count: number;
-  boundsMin: readonly number[];
-  boundsMax: readonly number[];
-  seed: number;
-}
-
 /** Uniform random points inside an axis-aligned box, hash-seeded. */
 export const pointScatterInBounds = standardNode<PointScatterInBoundsParams>({
   type: "pointScatterInBounds",
@@ -289,17 +276,6 @@ const MAX_LATTICE_CELLS = 1 << 22;
  * on the model.
  */
 const MAX_LATTICE_POINTS = 1 << 22;
-
-/** Params of {@link pointScatterInWorld}. */
-export interface PointScatterInWorldParams {
-  density: number;
-  cellSize: number;
-  latticeMode: string;
-  height: number;
-  boundsMin: readonly number[];
-  boundsMax: readonly number[];
-  seed: number;
-}
 
 /** Lowest lattice cell index whose slab can hold a point at or above `v`. */
 function latticeLo(v: number, size: number): number {

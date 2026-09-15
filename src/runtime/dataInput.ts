@@ -5,12 +5,10 @@
  */
 import type { DataItem } from "../graph/index.js";
 import { standardNode } from "../nodes/registry.js";
+import type { DataInputParams } from "../nodes/params.generated.js";
 
-/** Params of {@link dataInput}. */
-export interface DataInputParams {
-  /** Data items to emit, set programmatically via `graph.setParam`. */
-  items: readonly DataItem[];
-}
+// Generated from the param schemas below; see src/nodes/params.generated.ts.
+export type { DataInputParams } from "../nodes/params.generated.js";
 
 function isDataItem(v: unknown): v is DataItem {
   if (typeof v !== "object" || v === null) return false;

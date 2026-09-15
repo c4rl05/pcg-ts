@@ -7,7 +7,6 @@ import { makeGeometryItem } from "../graph/index.js";
 import { hashCombine, hashFloat } from "../random/index.js";
 import { standardNode } from "./registry.js";
 import {
-  type FieldParam,
   carryPrimitiveAttributes,
   gatherPoints,
   locateOnArcLength,
@@ -18,13 +17,18 @@ import {
   requireTuple,
   resolveOnMaybeGpu,
 } from "./util.js";
+import type {
+  SplineSampleParams,
+  SurfaceSampleParams,
+  VolumeSampleParams,
+} from "./params.generated.js";
 
-/** Params of {@link surfaceSample}. */
-export interface SurfaceSampleParams {
-  count: number;
-  seed: number;
-  densityField: FieldParam;
-}
+// Generated from the param schemas below; see params.generated.ts.
+export type {
+  SplineSampleParams,
+  SurfaceSampleParams,
+  VolumeSampleParams,
+} from "./params.generated.js";
 
 /**
  * Area-weighted triangle-mesh surface sampling with optional density
@@ -210,15 +214,6 @@ export const surfaceSample = standardNode<SurfaceSampleParams>({
     return { out: [makeGeometryItem(gatherPoints(candidates, accepted))] };
   },
 });
-
-/** Params of {@link splineSample}. */
-export interface SplineSampleParams {
-  mode: string;
-  count: number;
-  spacing: number;
-  sampledLengthAttr: string;
-  sampleArcAttr: string;
-}
 
 /**
  * The two refusals {@link splineSample}'s `sampleArcAttr` owes that
@@ -550,15 +545,6 @@ export const splineSample = standardNode<SplineSampleParams>({
     return { out: [makeGeometryItem(out)] };
   },
 });
-
-/** Params of {@link volumeSample}. */
-export interface VolumeSampleParams {
-  boundsMin: readonly number[];
-  boundsMax: readonly number[];
-  cellSize: number;
-  jitter: FieldParam;
-  seed: number;
-}
 
 const MAX_VOLUME_POINTS = 16_777_216;
 

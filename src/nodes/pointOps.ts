@@ -31,13 +31,26 @@ import {
   resolveOnMaybeGpu,
   rotateVec,
 } from "./util.js";
+import type {
+  CopyToPointsParams,
+  JitterPointsParams,
+  MergePointsParams,
+  MergePrimitivesParams,
+  OrientAlongVectorParams,
+  SetBoundsParams,
+  TransformPointsParams,
+} from "./params.generated.js";
 
-/** Params of {@link transformPoints}. */
-export interface TransformPointsParams {
-  translate: FieldParam;
-  rotateEuler: FieldParam;
-  scale: FieldParam;
-}
+// Generated from the param schemas below; see params.generated.ts.
+export type {
+  CopyToPointsParams,
+  JitterPointsParams,
+  MergePointsParams,
+  MergePrimitivesParams,
+  OrientAlongVectorParams,
+  SetBoundsParams,
+  TransformPointsParams,
+} from "./params.generated.js";
 
 /** Per-point SRT transform that composes with existing rot/scale attrs. */
 export const transformPoints = standardNode<TransformPointsParams>({
@@ -122,12 +135,6 @@ export const transformPoints = standardNode<TransformPointsParams>({
   },
 });
 
-/** Params of {@link jitterPoints}. */
-export interface JitterPointsParams {
-  amount: FieldParam;
-  seed: number;
-}
-
 /** Deterministic random offset per point. */
 export const jitterPoints = standardNode<JitterPointsParams>({
   type: "jitterPoints",
@@ -194,15 +201,6 @@ const COPY_STANDARD: ReadonlyArray<{
   { name: "scale", type: "f32", tupleSize: 3, defaultValue: [1, 1, 1] },
   { name: "seed", type: "u32", tupleSize: 1, defaultValue: 0 },
 ];
-
-/** Params of {@link copyToPoints}. */
-export interface CopyToPointsParams {
-  targetNames: readonly string[];
-  targetIndexAttr: string;
-  sourceGroupAttr: string;
-  targetGroupAttr: string;
-  topology: string;
-}
 
 /**
  * Returns whether the source's topology is KEPT.
@@ -1147,9 +1145,6 @@ function unionColumns(
   }
 }
 
-/** Params of {@link mergePoints} (none). */
-export type MergePointsParams = Record<string, never>;
-
 /** Concatenate the point clouds of every connected input. */
 export const mergePoints = standardNode<MergePointsParams>({
   type: "mergePoints",
@@ -1191,9 +1186,6 @@ export const mergePoints = standardNode<MergePointsParams>({
     return { out: [makeGeometryItem(out, tags)] };
   },
 });
-
-/** Params of {@link mergePrimitives} (none). */
-export type MergePrimitivesParams = Record<string, never>;
 
 /** Concatenate whole geometries — points, vertices and primitives. */
 export const mergePrimitives = standardNode<MergePrimitivesParams>({
@@ -1306,18 +1298,6 @@ export const mergePrimitives = standardNode<MergePrimitivesParams>({
   },
 });
 
-/** Params of {@link orientAlongVector}. */
-export interface OrientAlongVectorParams {
-  direction: FieldParam;
-  /**
-   * Widened from `readonly number[]` when `up` became field-capable. The
-   * runtime keeps the two apart deliberately — see the execute body for
-   * why a plain array must not be routed through a field column.
-   */
-  up: FieldParam;
-  axis: string;
-}
-
 /** Build rot quaternions pointing a chosen local axis along a direction. */
 export const orientAlongVector = standardNode<OrientAlongVectorParams>({
   type: "orientAlongVector",
@@ -1334,6 +1314,10 @@ export const orientAlongVector = standardNode<OrientAlongVectorParams>({
       description:
         "World-space direction the chosen local axis should point along; need not be unit length. Field-capable (resolved per point on the input, e.g. a tangent attribute; tuple 1 broadcasts). Zero-length directions leave that point's rot unchanged (identity when the rot attribute did not exist before).",
     },
+    // Widened from a plain vec3 when `up` became field-capable (its params
+    // type followed, from `readonly number[]` to `FieldParam`). The runtime
+    // keeps the two apart deliberately — see the execute body for why a
+    // plain array must not be routed through a field column.
     up: {
       type: "vec3",
       default: [0, 1, 0],
@@ -1453,12 +1437,6 @@ export const orientAlongVector = standardNode<OrientAlongVectorParams>({
     return { out: [makeGeometryItem(geo)] };
   },
 });
-
-/** Params of {@link setBounds}. */
-export interface SetBoundsParams {
-  boundsMin: FieldParam;
-  boundsMax: FieldParam;
-}
 
 /**
  * One corner of {@link setBounds}, as three numbers per point.
