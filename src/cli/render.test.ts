@@ -5,6 +5,7 @@
  * hundred-megabyte file.
  */
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -548,6 +549,72 @@ describe("renderSvg", () => {
     );
     expect(() => renderSvg(data, { maxPoints: 2.5 })).toThrow('renderSvg: option "maxPoints"');
     expect(() => renderSvg(data, { width: 1, radius: 0.5, maxPoints: 1 })).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pinned bytes
+// ---------------------------------------------------------------------------
+
+/**
+ * The colorizer was refactored to hand out RGB bytes, so the PNG frames can
+ * share it, and the SVG turns those bytes back into hex. These digests were
+ * taken BEFORE that refactor: every colour path the SVG has — the default
+ * marks, the scalar ramp on both domains, vec3 as RGB, strings by hash, the
+ * per-batch instance palette — has to come out of it byte for byte.
+ */
+describe("renderSvg pinned bytes", () => {
+  const scene = (): DataCollection => {
+    const geo = createPointCloud(24);
+    const P = geo.attrs.point.require("P");
+    const h = geo.attrs.point.add("h", "f32", 1);
+    const rgb = geo.attrs.point.add("rgb", "f32", 3);
+    const tag = geo.attrs.point.add("tag", "string", 1);
+    const odd = [0, -0, 0.5, 0.125, 0.1, 1 / 3, 1e-7, 5e-4, 7, -3.5];
+    for (let i = 0; i < 24; i++) {
+      P.setTuple(i, [odd[i % odd.length], 0, odd[(i * 7 + 3) % odd.length]]);
+      h.set(i, odd[(i * 3) % odd.length]);
+      rgb.setTuple(i, [odd[i % 10], odd[(i + 3) % 10], -odd[(i + 5) % 10]]);
+      tag.setString(i, ["oak", "pine", "fir", "elm", "ash"][i % 5]);
+    }
+    const mesh = createTriangleMesh(
+      Float32Array.of(0, 0, 0, 1, 0, 1, 2, 0, 0, 3, 0, 4),
+      Uint32Array.of(0, 1, 2, 1, 2, 3),
+    );
+    const line = createPolyline(Float32Array.of(0, 0, 0, 1, 0, 1, 2, 0, 0, 5, 0, -2));
+    for (const g of [mesh, line]) {
+      const ph = g.attrs.primitive.add("h", "f32", 1);
+      for (let p = 0; p < g.primitiveCount; p++) ph.set(p, p * 2.5 - 1);
+      const column = g.attrs.point.add("tag", "string", 1);
+      for (let i = 0; i < g.pointCount; i++) column.setString(i, ["fir", "oak", "pine"][i % 3]);
+      const prgb = g.attrs.point.add("rgb", "f32", 3);
+      for (let i = 0; i < g.pointCount; i++) prgb.setTuple(i, [0.2, 0.9, i / 4]);
+    }
+    const t = (x: number, z: number): Float32Array => {
+      const m = new Float32Array(16);
+      m[12] = x;
+      m[14] = z;
+      return m;
+    };
+    return [
+      makeGeometryItem(geo),
+      makeGeometryItem(mesh),
+      makeGeometryItem(line),
+      makeInstancesItem([
+        { assetId: "tree", count: 1, transforms: t(9, -9) },
+        { assetId: "rock", count: 1, transforms: t(-9, 9) },
+      ]),
+    ];
+  };
+  const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
+
+  it.each([
+    ["default colours", {}, "5652abad0687488788ef9d85b9d1d53a2a62a8b1d07b9b1bb0b63b1899b53544"],
+    ["scalar ramp on both domains", { attr: "h" }, "b06303410db88a29686e990a2f75be80799d7ac00a7ae381046705f2d63f8c96"],
+    ["vec3 as RGB", { attr: "rgb", attrDomain: "point" as const }, "2e6c4432ae9db6fa1e0d81273d81cd28ee0e265896d945924ee191f6dbc2cba6"],
+    ["strings by hash", { attr: "tag", width: 640, radius: 2 }, "6acf0834f2e3f59cfa287978465284a128978d267b57fccf5514a4500a3e4765"],
+  ])("%s", (_name, opts, digest) => {
+    expect(sha(renderSvg(scene(), opts).svg)).toBe(digest);
   });
 });
 

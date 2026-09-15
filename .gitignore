@@ -17,10 +17,11 @@ coverage/
 # into the same folder, because `--out` defaults to the page's own name.
 # Ignoring `/preview/` wholesale would silently swallow the page; listing
 # extensions would let the next kind of scratch file through. So: ignore
-# everything under it and re-admit exactly the two files that are source.
+# everything under it and re-admit exactly the files that are source.
 /preview/*
 !/preview/index.html
 !/preview/main.ts
+!/preview/poses.ts
 
 # Scratch git worktrees used to isolate concurrent agents. These are real
 # repositories, so an unqualified `git add -A` commits one as a gitlink and

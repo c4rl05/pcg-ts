@@ -13,4 +13,11 @@ export interface CliIo {
   readFile(path: string): string;
   /** Write a UTF-8 text file, creating parent directories. */
   writeFile(path: string, data: string): void;
+  /**
+   * Write a binary file, creating parent directories. Optional so an io
+   * written before binary output existed still type-checks; a command that
+   * needs it (`render --out frame.png`) refuses with a named error when it
+   * is missing rather than mangling the bytes through `writeFile`.
+   */
+  writeBytes?(path: string, data: Uint8Array): void;
 }

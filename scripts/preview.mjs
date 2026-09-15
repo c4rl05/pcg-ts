@@ -16,6 +16,14 @@
  * everyone but the maintainer. A shipped restriction outlives the release
  * that introduced it, so it stays a repo script.
  *
+ * The shipped CLI now draws frames of its own: `pcg render --out g.png`
+ * rasterizes top, side, hero and ground views in plain JavaScript, with no
+ * browser. Those frames answer placement and shape — flat-shaded surfaces
+ * and unlit pyramid proxies for instances, from the same hero and ground
+ * poses as this page (`preview/poses.ts`, held to `src/cli/raster/views.ts`
+ * by a parity test). The look — lighting, materials, shadows, the assets
+ * themselves — stays here.
+ *
  * ---------------------------------------------------------------------------
  * WHAT THIS IS FOR
  *

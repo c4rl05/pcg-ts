@@ -7,6 +7,11 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { CliIo } from "./io.js";
 
+function ensureParent(path: string): void {
+  const dir = dirname(path);
+  if (dir !== "" && dir !== ".") mkdirSync(dir, { recursive: true });
+}
+
 /** Real stdout/stderr and real files. */
 export function makeNodeIo(): CliIo {
   return {
@@ -14,8 +19,11 @@ export function makeNodeIo(): CliIo {
     err: (text) => void process.stderr.write(text),
     readFile: (path) => readFileSync(path, "utf8"),
     writeFile: (path, data) => {
-      const dir = dirname(path);
-      if (dir !== "" && dir !== ".") mkdirSync(dir, { recursive: true });
+      ensureParent(path);
+      writeFileSync(path, data);
+    },
+    writeBytes: (path, data) => {
+      ensureParent(path);
       writeFileSync(path, data);
     },
   };

@@ -61,7 +61,7 @@ const BACKGROUND = "#ffffff";
 export type ColorDomain = "point" | "primitive";
 
 /** Canonical order, so reports and lookups never depend on a Set's order. */
-const COLOR_DOMAINS = ["point", "primitive"] as const;
+export const COLOR_DOMAINS = ["point", "primitive"] as const;
 
 /** Stroke width for primitive paths, in pixels. */
 const STROKE_WIDTH = "1.2";
@@ -156,11 +156,28 @@ function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : Number.isFinite(v) ? v : 0;
 }
 
-function hex2(v: number): string {
-  return Math.round(clamp01(v) * 255)
-    .toString(16)
-    .padStart(2, "0");
+/** A unit float as a byte, clamped; non-finite reads as 0. */
+function byte01(v: number): number {
+  return Math.round(clamp01(v) * 255);
 }
+
+/** A packed `0xRRGGBB` colour as the lower-case `#rrggbb` the SVG writes. */
+export function hexOf(rgb: number): string {
+  return `#${rgb.toString(16).padStart(6, "0")}`;
+}
+
+/** A `#rrggbb` literal as a packed `0xRRGGBB`. */
+function rgbOf(hex: string): number {
+  return Number.parseInt(hex.slice(1), 16);
+}
+
+/**
+ * The palettes as packed `0xRRGGBB`, for the PNG frames — the same colours
+ * the SVG writes as hex, derived from those literals so the two can never
+ * drift apart.
+ */
+export const RAMP_RGB: readonly number[] = RAMP.map(rgbOf);
+export const PALETTE_RGB: readonly number[] = PALETTE.map(rgbOf);
 
 /**
  * Reject option values that would produce a corrupt document. `renderSvg`
@@ -206,7 +223,7 @@ function checkOptions(opts: RenderOptions): void {
  * one value in the picture — including across the two domains, so a road
  * and the junction it ends at are comparable by eye.
  */
-function scalarRange(
+export function scalarRange(
   collection: DataCollection,
   attrName: string,
   domains: readonly ColorDomain[],
@@ -242,7 +259,7 @@ function attrNames(geo: Geometry, domain: ColorDomain): string {
  * and both domains' attributes so the caller can see what it could have
  * asked for instead.
  */
-function resolveColorColumns(
+export function resolveColorColumns(
   geo: Geometry,
   attrName: string,
   itemIndex: number,
@@ -272,40 +289,44 @@ function resolveColorColumns(
 }
 
 /**
- * Color for element `i` of one column: scalars through the ramp, tuple-3
- * and wider as RGB, strings categorically. Domain-agnostic — the index is
- * a point index or a primitive index depending on where the column lives.
+ * Color for element `i` of one column, as a packed `0xRRGGBB`: scalars
+ * through the ramp, tuple-3 and wider as RGB, strings categorically.
+ * Domain-agnostic — the index is a point index or a primitive index
+ * depending on where the column lives. The SVG writes it as hex; the PNG
+ * frames write the bytes.
  */
-function columnColorizer(
+export function columnColorizer(
   column: Attribute,
   range: { readonly lo: number; readonly hi: number } | undefined,
-): (i: number) => string {
+): (i: number) => number {
   const ts = column.tupleSize;
   if (column.type === "string") {
     // The color comes from a hash of the string VALUE, never from its
     // string-table index: interning order is an accident of the cook, and
     // keying on it recolors every category the moment one value first
     // appears somewhere else.
-    const byIndex = column.stringTable.map((s) => PALETTE[hashString(s) % PALETTE.length]);
-    return (i) => byIndex[column.data[i * ts]] ?? PALETTE[0];
+    const byIndex = column.stringTable.map((s) => PALETTE_RGB[hashString(s) % PALETTE_RGB.length]);
+    return (i) => byIndex[column.data[i * ts]] ?? PALETTE_RGB[0];
   }
   if (ts >= 3) {
     return (i) =>
-      `#${hex2(column.data[i * ts])}${hex2(column.data[i * ts + 1])}${hex2(column.data[i * ts + 2])}`;
+      (byte01(column.data[i * ts]) << 16) |
+      (byte01(column.data[i * ts + 1]) << 8) |
+      byte01(column.data[i * ts + 2]);
   }
   const lo = range?.lo ?? 0;
   const hi = range?.hi ?? 0;
   const span = hi - lo;
   return (i) => {
     const v = column.data[i * ts];
-    if (!Number.isFinite(v) || span <= 0) return RAMP[0];
-    const bucket = Math.floor(((v - lo) / span) * RAMP.length);
-    return RAMP[bucket < 0 ? 0 : bucket >= RAMP.length ? RAMP.length - 1 : bucket];
+    if (!Number.isFinite(v) || span <= 0) return RAMP_RGB[0];
+    const bucket = Math.floor(((v - lo) / span) * RAMP_RGB.length);
+    return RAMP_RGB[bucket < 0 ? 0 : bucket >= RAMP_RGB.length ? RAMP_RGB.length - 1 : bucket];
   };
 }
 
 /** Stride that keeps at most `max` of `total` elements. */
-function strideFor(total: number, max: number): number {
+export function strideFor(total: number, max: number): number {
   return total > max && max > 0 ? Math.ceil(total / max) : 1;
 }
 
@@ -438,12 +459,14 @@ export function renderSvg(collection: DataCollection, opts: RenderOptions = {}):
     if (opts.attr !== undefined) {
       const found = resolveColorColumns(geo, opts.attr, index, opts.attrDomain);
       if (found.point !== undefined) {
-        pointColor = columnColorizer(found.point, range);
+        const rgb = columnColorizer(found.point, range);
+        pointColor = (i) => hexOf(rgb(i));
         colorAttr = found.point.name;
         colorDomains.add("point");
       }
       if (found.primitive !== undefined) {
-        primColor = columnColorizer(found.primitive, range);
+        const rgb = columnColorizer(found.primitive, range);
+        primColor = (p) => hexOf(rgb(p));
         colorAttr = found.primitive.name;
         colorDomains.add("primitive");
       }

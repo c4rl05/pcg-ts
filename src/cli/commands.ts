@@ -38,7 +38,7 @@ import {
   stringFlag,
 } from "./args.js";
 import { CliError } from "./errors.js";
-import { fmtMs, fmtStat, plural, table } from "./format.js";
+import { fmtMs, fmtStat, fmtTuple, plural, table } from "./format.js";
 import { type TargetOptions, cookTarget, loadGraph } from "./graphSource.js";
 import type { CliIo } from "./io.js";
 import {
@@ -49,6 +49,17 @@ import {
   readInputBindings,
 } from "./primitiveRun.js";
 import { type ColorDomain, renderSvg } from "./render.js";
+import {
+  MAX_SHEET_EDGE,
+  MAX_SINGLE_EDGE,
+  MIN_EDGE,
+  PNG_VIEWS,
+  type PngView,
+  type RenderPngResult,
+  SHEET_SIZE,
+  SINGLE_SIZE,
+  renderPng,
+} from "./renderPng.js";
 import {
   type AttrStats,
   type ItemSummary,
@@ -901,44 +912,323 @@ function colorSourceText(domains: readonly ColorDomain[]): string {
   return parts.length === 0 ? "nothing colored" : parts.join(", ");
 }
 
+/** The PNG twin of {@link colorSourceText}: the frames' marks are not the SVG's. */
+function pngColorSourceText(domains: readonly ColorDomain[]): string {
+  const parts = domains.map((d) =>
+    d === "point" ? "point values on the points" : "primitive values on the faces and lines",
+  );
+  return parts.length === 0 ? "nothing colored" : parts.join(", ");
+}
+
+/**
+ * A pinned `--extent` holds the camera still, and that is only worth
+ * something if the reader is told when the content no longer agrees with
+ * it: overflowing the pinned framing crops the frames, and the centre and
+ * ground still follow the content either way.
+ */
+function comparableNote(
+  result: RenderPngResult,
+): { readonly extent: number; readonly autoExtent: number; readonly note: string } | undefined {
+  const { extent, autoExtent, pinned } = result.framing;
+  if (!pinned || autoExtent === extent) return undefined;
+  const why =
+    autoExtent > extent
+      ? `the content alone frames at ${fmtStat(autoExtent)}, so it overflows the pinned extent ${fmtStat(extent)} and part of it is outside the frames`
+      : `the content alone frames at ${fmtStat(autoExtent)}, tighter than the pinned extent ${fmtStat(extent)}`;
+  return {
+    extent,
+    autoExtent,
+    note: `${why}; the pin holds the scale, while centre and ground y still follow the content, so frames compare with another run pinned at ${fmtStat(extent)} only when those match too`,
+  };
+}
+
+/** `render --out <file>.png`. The SVG-only flags are refused by name. */
+async function runRenderPng(
+  args: ParsedArgs,
+  io: CliIo,
+  outPath: string,
+  view: PngView | undefined,
+): Promise<CommandOutcome> {
+  if (numberFlag(args, "width") !== undefined) {
+    throw new CliUsageError(
+      `render: --width sizes the SVG; --out ${outPath} writes a PNG, which takes --size WxH (default ${SHEET_SIZE.width}x${SHEET_SIZE.height} for a sheet, ${SINGLE_SIZE.width}x${SINGLE_SIZE.height} for one view)`,
+    );
+  }
+  if (numberFlag(args, "radius") !== undefined) {
+    throw new CliUsageError(
+      `render: --radius sizes the SVG's circles; --out ${outPath} writes a PNG, whose points are fixed two-pixel squares — drop --radius`,
+    );
+  }
+  const sheet = (view ?? "sheet") === "sheet";
+  let width: number | undefined;
+  let height: number | undefined;
+  const sizeRaw = stringFlag(args, "size");
+  if (sizeRaw !== undefined) {
+    const m = /^(\d+)x(\d+)$/.exec(sizeRaw);
+    const maxEdge = sheet ? MAX_SHEET_EDGE : MAX_SINGLE_EDGE;
+    const minEdge = sheet ? MIN_EDGE * 2 : MIN_EDGE;
+    if (m === null) {
+      throw new CliUsageError(
+        `render: flag "--size" expects WxH in pixels, e.g. ${SINGLE_SIZE.width}x${SINGLE_SIZE.height}; got "${sizeRaw}"`,
+      );
+    }
+    width = Number(m[1]);
+    height = Number(m[2]);
+    for (const [edge, value] of [["width", width], ["height", height]] as const) {
+      if (!(value >= minEdge && value <= maxEdge)) {
+        throw new CliUsageError(
+          `render: flag "--size" ${edge} ${value} is out of range for ${sheet ? "a sheet" : `--view ${view}`}: each edge must be ${minEdge}..${maxEdge} pixels${sheet ? ` (a sheet tiles four views and is capped at ${MAX_SHEET_EDGE}; pass --view top|side|hero|ground for one view up to ${MAX_SINGLE_EDGE})` : ""}`,
+        );
+      }
+    }
+  }
+  const extent = numberFlag(args, "extent");
+  if (extent !== undefined && !(extent > 0)) {
+    throw new CliUsageError(`render: flag "--extent" expects a number greater than 0 (world units), got ${extent}`);
+  }
+  const eye = numberFlag(args, "eye");
+  if (eye !== undefined && !(eye > 0)) {
+    throw new CliUsageError(`render: flag "--eye" expects a number greater than 0 (world units above the ground), got ${eye}`);
+  }
+  const attr = stringFlag(args, "attr");
+  const attrDomainName = stringFlag(args, "attr-domain");
+  if (attrDomainName !== undefined && !(COLOR_DOMAINS as readonly string[]).includes(attrDomainName)) {
+    throw new CliUsageError(
+      `render: flag "--attr-domain" got "${attrDomainName}"; valid domains: ${COLOR_DOMAINS.join(", ")} — points are colored from the point domain and faces and lines from the primitive domain, so vertex and detail have no mark to color`,
+    );
+  }
+  if (attrDomainName !== undefined && attr === undefined) {
+    throw new CliUsageError(
+      'render: --attr-domain narrows which domain --attr is read from, so it needs --attr <name>; drop it to color from both domains',
+    );
+  }
+  const maxPoints = intFlag(args, "max-points", "render", { min: 1 });
+  const maxPrimitives = intFlag(args, "max-primitives", "render", { min: 1 });
+  // Checked before the cook: a host that cannot write bytes should hear so
+  // before paying for a cook whose picture has nowhere to go.
+  const writeBytes = io.writeBytes;
+  if (writeBytes === undefined) {
+    throw new CliError(
+      `render: this CliIo has no writeBytes, so the PNG for --out ${outPath} cannot be written — give the io a writeBytes(path, data: Uint8Array) (makeNodeIo has one), or write the top-down SVG with --out <file>.svg`,
+    );
+  }
+
+  const { graph, path } = loadGraph(io, args.positional[0]);
+  applySeed(args, "render", graph);
+  const targetOpts = targetOptions(args, "render");
+  const target = await cookTarget(graph, targetOpts, cookOptions(args, "render"));
+  // The name each item's default colour comes from: the declared output it
+  // was read from, or the node a --node read targeted.
+  const outputs =
+    targetOpts.node !== undefined
+      ? target.collection.map(() => targetOpts.node as string)
+      : targetOpts.output !== undefined
+        ? target.collection.map(() => targetOpts.output as string)
+        : graph.describe().outputs.flatMap((o) => (target.result.outputs[o.name] ?? []).map(() => o.name));
+  const result = renderPng(target.collection, {
+    ...(view !== undefined ? { view } : {}),
+    ...(width !== undefined ? { width } : {}),
+    ...(height !== undefined ? { height } : {}),
+    ...(extent !== undefined ? { extent } : {}),
+    ...(eye !== undefined ? { eye } : {}),
+    ...(boolFlag(args, "points") ? { points: true } : {}),
+    ...(attr !== undefined ? { attr } : {}),
+    ...(attrDomainName !== undefined ? { attrDomain: attrDomainName as ColorDomain } : {}),
+    ...(maxPoints !== undefined ? { maxPoints } : {}),
+    ...(maxPrimitives !== undefined ? { maxPrimitives } : {}),
+    outputs,
+  });
+  writeBytes.call(io, outPath, result.png);
+
+  const comparable = comparableNote(result);
+  const c = result.counts;
+  const json = {
+    path,
+    target: target.label,
+    out: outPath,
+    format: "png",
+    width: result.width,
+    height: result.height,
+    bytes: result.png.length,
+    view: result.view,
+    views: result.views,
+    framing: result.framing,
+    ...(comparable !== undefined ? { comparable } : {}),
+    counts: c,
+    legend: result.legend,
+    ...(result.colorAttr !== undefined
+      ? { colorAttr: result.colorAttr, colorDomains: result.colorDomains ?? [] }
+      : {}),
+    pixelHash: result.pixelHash,
+  };
+  const truncated = c.points < c.pointsTotal || c.primitives < c.primitivesTotal || c.instances < c.instancesTotal;
+  const f = result.framing;
+  const text = [
+    `wrote ${outPath}  ${result.width}x${result.height}  ${result.view === "sheet" ? `sheet: ${result.views.map((v) => v.name).join(", ")}` : `view ${result.view}`}`,
+    `${path} — ${target.label}`,
+    `${c.points} of ${c.pointsTotal} points, ${c.primitives} of ${c.primitivesTotal} primitives (${plural(c.triangles, "triangle")}, ${plural(c.segments, "segment")}), ${c.instances} of ${c.instancesTotal} instances as pyramid proxies${
+      c.skipped > 0 ? `, ${c.skipped} skipped (non-finite)` : ""
+    }${truncated ? " — capped, raise --max-points/--max-primitives to draw the rest" : ""}`,
+    ...(c.pointsSuppressed > 0
+      ? [`points of ${plural(c.pointsSuppressed, "geometry", "geometries")} not drawn because their faces or lines were; pass --points to add them`]
+      : []),
+    ...(c.deviceInstances > 0
+      ? [
+          `${plural(c.deviceInstances, "instance")} not drawn: device-resident (transforms live in GPU buffers, never composed on the CPU)`,
+        ]
+      : []),
+    ...(result.colorAttr !== undefined
+      ? [`colored by "${result.colorAttr}" — ${pngColorSourceText(result.colorDomains ?? [])}`]
+      : []),
+    ...(f.bounds === undefined ? ["nothing drawable in this collection"] : []),
+    `framing: extent ${fmtStat(f.extent)} ${f.pinned ? "(pinned by --extent)" : "(from the content)"}, centre ${fmtTuple(f.centre)}, ground y ${fmtStat(f.groundY)}, eye ${fmtStat(f.eye)}`,
+    ...(comparable !== undefined ? [`not comparable as pinned: ${comparable.note}`] : []),
+    "views:",
+    ...table(
+      result.views.map((v) => [
+        v.name,
+        v.projection,
+        `position ${fmtTuple(v.position)}`,
+        `target ${fmtTuple(v.target)}`,
+        `up ${fmtTuple(v.up)}`,
+      ]),
+    ),
+    ...(result.legend.length > 0
+      ? [`colors: ${result.legend.map((l) => `${l.kind} "${l.name}" ${l.color}`).join(", ")}`]
+      : []),
+    `pixel hash ${result.pixelHash}`,
+  ].join("\n");
+  return { text: text + "\n", json };
+}
+
+/** The formats `render` writes, by `--out` extension. */
+type RenderFormat = "svg" | "png";
+
+/**
+ * The format an `--out` path asks for. The extension is the whole
+ * decision — there is no `--format` to disagree with it — so anything but
+ * `.svg` or `.png` is refused rather than guessed.
+ */
+function renderFormat(outPath: string): RenderFormat {
+  const slash = Math.max(outPath.lastIndexOf("/"), outPath.lastIndexOf("\\"));
+  const dot = outPath.lastIndexOf(".");
+  const ext = dot > slash ? outPath.slice(dot).toLowerCase() : "";
+  if (ext === ".svg") return "svg";
+  if (ext === ".png") return "png";
+  throw new CliUsageError(
+    `render: --out "${outPath}" ${ext === "" ? "has no extension" : `has extension "${ext}"`}, and the format follows the extension: .svg (a top-down vector plan) or .png (raster frames: top, side, hero, ground, or all four as a sheet)`,
+  );
+}
+
+/** The flags only PNG frames read, as the command line spelled them. */
+function pngOnlyFlags(args: ParsedArgs): string[] {
+  const given: string[] = [];
+  if (stringFlag(args, "size") !== undefined) given.push("--size");
+  if (numberFlag(args, "extent") !== undefined) given.push("--extent");
+  if (numberFlag(args, "eye") !== undefined) given.push("--eye");
+  if (boolFlag(args, "points")) given.push("--points");
+  return given;
+}
+
+function checkView(name: string | undefined): PngView | undefined {
+  if (name === undefined) return undefined;
+  if (!(PNG_VIEWS as readonly string[]).includes(name)) {
+    throw new CliUsageError(
+      `render: flag "--view" got "${name}"; valid views: ${PNG_VIEWS.join(", ")} (sheet tiles hero, ground, top and side)`,
+    );
+  }
+  return name as PngView;
+}
+
 const renderCommand: Command = {
   spec: {
     name: "render",
     summary:
-      "Draw a cooked collection as a deterministic top-down SVG (points as circles, polylines as paths). Without --out the SVG goes to stdout.",
+      "Draw a cooked collection as a deterministic picture: a top-down SVG (points as circles, polylines as paths), or PNG frames when --out ends in .png (top, side, hero and ground views of flat-shaded surfaces and instance proxies, tiled as a sheet by default). Without --out the SVG goes to stdout; a PNG always needs --out.",
     positionals: [GRAPH_ARG],
     flags: {
       ...TARGET_FLAGS,
       seed: SEED_FLAG,
       budget: BUDGET_FLAG,
-      out: { kind: "string", value: "file.svg", description: "write the SVG to a file" },
-      width: { kind: "number", value: "px", description: "image width in pixels (default 800)" },
+      out: {
+        kind: "string",
+        value: "file.svg|file.png",
+        description: "write to a file; the extension picks the format: .svg (top-down plan) or .png (frames)",
+      },
+      view: {
+        kind: "string",
+        value: "top|side|hero|ground|sheet",
+        description:
+          "which frame: top (x right, z down) and side (x right, y up) are orthographic, hero and ground perspective, sheet tiles all four (PNG default sheet; SVG draws only top)",
+      },
+      size: {
+        kind: "string",
+        value: "WxH",
+        description: `PNG size in pixels (default ${SHEET_SIZE.width}x${SHEET_SIZE.height} for a sheet, at most ${MAX_SHEET_EDGE} on the long edge; ${SINGLE_SIZE.width}x${SINGLE_SIZE.height} for one view, at most ${MAX_SINGLE_EDGE})`,
+      },
+      extent: {
+        kind: "number",
+        value: "units",
+        description:
+          "PNG: pin the framing extent in world units instead of deriving it from the content, so frames of different runs stay comparable",
+      },
+      eye: {
+        kind: "number",
+        value: "units",
+        description: "PNG: ground-camera eye height above the surface under it (default 1.7)",
+      },
+      points: {
+        kind: "boolean",
+        description: "PNG: draw points even for geometry whose faces or lines drew",
+      },
+      width: { kind: "number", value: "px", description: "SVG image width in pixels (default 800); PNG uses --size" },
       attr: {
         kind: "string",
         value: "name",
         description:
-          "attribute to color by: scalar ramp, vec3+ as RGB, strings categorical. Point attributes color the circles, primitive attributes color the paths; a name on both colors both",
+          "attribute to color by: scalar ramp, vec3+ as RGB, strings categorical. Point attributes color the circles (PNG: points), primitive attributes color the paths (PNG: faces and lines); a name on both colors both",
       },
       "attr-domain": {
         kind: "string",
         value: "point|primitive",
         description: "read --attr from one domain only, instead of from both",
       },
-      radius: { kind: "number", value: "px", description: "point radius in pixels (default 1.5)" },
+      radius: { kind: "number", value: "px", description: "SVG point radius in pixels (default 1.5)" },
       "max-points": {
         kind: "number",
         value: "n",
-        description: "drawn-circle cap across the whole collection, points and instances (default 50000)",
+        description:
+          "drawn-mark cap across the whole collection, points and instances (default 50000 SVG, 200000 PNG)",
       },
       "max-primitives": {
         kind: "number",
         value: "n",
-        description: "drawn-primitive cap across the whole collection (default 20000)",
+        description: "drawn-primitive cap across the whole collection (default 20000 SVG, 2000000 PNG)",
       },
     },
   },
   async run(args, io) {
     const outPath = stringFlag(args, "out");
+    const format: RenderFormat = outPath === undefined ? "svg" : renderFormat(outPath);
+    const view = checkView(stringFlag(args, "view"));
+    const pngOnly = pngOnlyFlags(args);
+    if (outPath === undefined && (pngOnly.length > 0 || (view !== undefined && view !== "top"))) {
+      const asked = [...(view !== undefined && view !== "top" ? [`--view ${view}`] : []), ...pngOnly];
+      throw new CliUsageError(
+        `render: ${asked.join(", ")} ${asked.length === 1 ? "asks" : "ask"} for PNG frames, and a PNG is binary, so it is never written to stdout; pass --out <file>.png (without --out, render writes the top-down SVG to stdout)`,
+      );
+    }
+    if (format === "png") return runRenderPng(args, io, outPath as string, view);
+    if (view !== undefined && view !== "top") {
+      throw new CliUsageError(
+        `render: --view ${view} needs PNG output — the SVG is a flat plan of positions (x right, z down) with no camera or depth to hide what is behind, so the only view it draws is top; write --out <file>.png for side, hero, ground or sheet`,
+      );
+    }
+    if (pngOnly.length > 0) {
+      throw new CliUsageError(
+        `render: ${pngOnly.join(", ")} ${pngOnly.length === 1 ? "applies" : "apply"} only to PNG frames, and --out ${outPath} writes an SVG; use --out <file>.png, or drop ${pngOnly.length === 1 ? "the flag" : "the flags"}`,
+      );
+    }
     if (outPath === undefined && boolFlag(args, "json")) {
       throw new CliUsageError(
         "render: --json needs --out <file.svg>, because without it the SVG itself is the output",
