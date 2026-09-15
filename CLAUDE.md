@@ -53,9 +53,15 @@ Core (reachable from `import "pcg-ts"`):
   `src/noise` imports can reach back into it. Keep it that way
 - `src/graph` — nodes, pins, data collections, scheduler, caching, subgraphs
 - `src/runtime` — grid levels, partitioned cooking, streaming, invalidation
-- `src/nodes` — standard node library (samplers, point ops, attribute ops)
+- `src/nodes` — standard node library (samplers, point ops, attribute ops).
+  `params.generated.ts` is GENERATED from the registry schemas — every
+  `*Params` interface and its JSDoc — by `npm run docs:types`; never edit it
+  by hand. `prebuild` fails first, naming that command, when it is stale
 - `src/spawn` — spawner protocol: render-agnostic instance batches and the
   `spawnInstances` terminal
+- `src/diagnostics` — the structured error record (`Diagnostic`), the
+  additive-only `DIAGNOSTIC_CODES`, and the did-you-mean suggester. A leaf:
+  it imports nothing from the rest of the library, so every layer can use it
 
 Internal to the core (deliberately NOT re-exported from `src/index.ts`;
 see the comment there before adding one):
@@ -96,6 +102,12 @@ Not public API:
 - `scripts/` — doc/catalog generators, demo capture, preview, dist smoke,
   and `clean-pages.mjs`, which removes the previous browser-page build from
   `docs/` (the site build cannot empty its own output directory)
+- `evals/` — the agent eval (PLAN-agent-readiness.md, U7): a fresh headless
+  agent gets only an installed tarball and a brief, and a separate process
+  scores the graph it writes. Not in `files`, not in vitest, not in CI; runs
+  unattended on the owner's subscription allowance and refuses to start with
+  an API key set. `evals/tarballs/` and `evals/runs/` are git-ignored;
+  held-out tasks live in `pcg-ts-private/evals/tasks/`. See `evals/README.md`
 
 The browser pages. One vite app rooted at the repository root
 (`vite.config.ts`, `index.html`), because what it serves no longer shares
@@ -139,7 +151,10 @@ a parent — these are three different kinds of thing and the old single
   presentation spec the editor reads for a graph
 - `preview/` — the page `scripts/preview.mjs` drives. It shares its
   directory with that script's output, which is why `.gitignore` re-admits
-  its two source files by name
+  its three source files by name. `poses.ts` is the pose math, and
+  `src/cli/raster/views.ts` carries a copy for `pcg render --out x.png`
+  (the CLI entry pulls `node:fs`, so the page cannot import it); a parity
+  test holds the two together
 - `shared/` — chrome and helpers common to all of the above.
   `shared/graph/` is the node-graph drawing kit: the box component, the
   layout, the lens (pan/zoom), the wire geometry, the design tokens, and a
