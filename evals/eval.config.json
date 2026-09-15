@@ -7,7 +7,8 @@
   "publicTasksDir": "evals/tasks",
   "privateTasksDir": "D:/Projects/JS/pcg-ts-private/evals/tasks",
   "graphFile": "graph.json",
-  "prompt": "You are working in a Node.js project in the current directory, where the npm package pcg-ts is installed. Read brief.md in this directory and do what it asks. Work only inside this directory. When you finish, the graph must be saved as graph.json in this directory.",
+  "sandboxRoot": "C:/pcg-eval/sandboxes",
+  "prompt": "You are working in a Node.js project at {{cwd}} (in Git Bash: {{cwdBash}}), where the npm package pcg-ts is installed. That is your working directory. Read brief.md in this directory and do what it asks. Work only inside this directory. When you finish, the graph must be saved as graph.json in this directory.",
   "concurrency": 1,
   "window": "always",
   "keepSandboxes": false,
@@ -21,7 +22,9 @@
   "limits": {
     "wakeAfterBlockedHours": 48,
     "wakeAfterInfraHours": 12,
-    "maxContaminatedReschedules": 1
+    "maxContaminatedReschedules": 1,
+    "contaminationRateWindow": 6,
+    "contaminationRateMax": 0.5
   },
   "selftest": {
     "isolationProbe": { "leakCwd": null, "turns": 2, "wallMinutes": 5 }

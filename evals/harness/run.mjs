@@ -44,7 +44,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { billingEnvViolations } from "./agents/claude-code.mjs";
@@ -70,10 +70,15 @@ import {
   REPO_ROOT,
   copyAgentFiles,
   createSandbox,
+  defaultSandboxRoot,
+  findEnclosingRepo,
+  isInside,
+  toBashPath,
   harnessGitState,
   listAgentFiles,
   readJson,
   readJsonOr,
+  removeClaudeProjectDir,
   removeDir,
   sha256,
   sha256File,
@@ -211,6 +216,7 @@ function identityParts(m) {
     harness: m.harnessCode.sha256,
     prompt: m.promptSha256,
     budgets: m.caps,
+    sandboxRoot: m.sandboxRoot ?? null,
   };
 }
 
@@ -297,6 +303,40 @@ function killStaleChild(lock, log) {
   log(`killed a stale agent process ${pid} left by a previous runner`);
 }
 
+/**
+ * Fill the prompt template's working-directory placeholders: `{{cwd}}` (the
+ * native absolute path) and `{{cwdBash}}` (its Git Bash spelling). An agent
+ * that does not know where it is guesses (`cd /tmp`), and a guess outside the
+ * sandbox reads as contamination.
+ */
+export function renderPrompt(template, dir) {
+  return String(template).replaceAll("{{cwd}}", resolve(dir)).replaceAll("{{cwdBash}}", toBashPath(dir));
+}
+
+/** The contamination guard: over the last `window` finished attempts, more than `max` contaminated trips it. */
+export function contaminationRate(records, limits = {}) {
+  const window = limits.contaminationRateWindow ?? 6;
+  const max = limits.contaminationRateMax ?? 0.5;
+  const recent = records.filter((r) => r.outcome !== undefined || r.contaminated !== undefined).slice(-window);
+  const hits = recent.filter((r) => r.contaminated);
+  return { window, max, contaminated: hits.length, tripped: recent.length >= window && hits.length / window > max, slots: hits.map((r) => `${r.slotId}#${r.attempt}`) };
+}
+
+/**
+ * The sandbox root must be a dedicated directory: not inside the OS temp dir
+ * (the orchestrator's scratchpad lives there), the home directory, or a git
+ * repository. Tests may opt out of the first two with
+ * PCG_EVAL_ALLOW_SHARED_SANDBOX_ROOT=1.
+ */
+export function checkSandboxRoot(root) {
+  const repo = findEnclosingRepo(root);
+  if (repo) throw new ConfigError(`sandboxRoot ${root} is inside the git repository ${repo}; point it at a dedicated directory such as ${defaultSandboxRoot()}`);
+  if (process.env.PCG_EVAL_ALLOW_SHARED_SANDBOX_ROOT === "1") return;
+  for (const [what, dir] of [["the OS temp dir", tmpdir()], ["the home directory", homedir()]]) {
+    if (isInside(root, dir)) throw new ConfigError(`sandboxRoot ${root} is inside ${what} (${dir}), which holds files an agent must not find; use a dedicated directory such as ${defaultSandboxRoot()}`);
+  }
+}
+
 export async function runCampaign(argv, { log = (m) => console.error(`[run ${new Date().toISOString()}] ${m}`) } = {}) {
   const args = parseArgs(argv);
   if (!args.campaign) {
@@ -354,6 +394,8 @@ export async function runCampaign(argv, { log = (m) => console.error(`[run ${new
     const runsPerTask = config.runsPerTask;
     if (!Number.isInteger(runsPerTask) || runsPerTask < 1) throw new ConfigError(`runsPerTask must be a positive integer; got ${runsPerTask}`);
     const schedule = buildSchedule({ tasks: tasks.map((t) => t.id), arms: arms.map((a) => a.label), runsPerTask, seed: config.scheduleSeed });
+    const sandboxRoot = resolveFromRepo(config.sandboxRoot ?? defaultSandboxRoot());
+    checkSandboxRoot(sandboxRoot);
     const prompt = config.prompt;
     if (typeof prompt !== "string" || !prompt.trim()) throw new ConfigError(`${config.configPath}: "prompt" must be a non-empty string`);
     const graphFile = config.graphFile ?? "graph.json";
@@ -406,6 +448,7 @@ export async function runCampaign(argv, { log = (m) => console.error(`[run ${new
       prompt,
       promptSha256: sha256(prompt),
       graphFile,
+      sandboxRoot: sandboxRoot.replace(/\\/g, "/"),
       harnessGit: harnessGitState(),
       harnessCode: harnessCodeHash({ scorer, adapterPath }),
       configPath: relative(REPO_ROOT, config.configPath).replace(/\\/g, "/"),
@@ -485,7 +528,7 @@ export async function runCampaign(argv, { log = (m) => console.error(`[run ${new
       await sleep(plan.sleepMs, { state: "sleeping-limit", lastLimit: classification });
       // Without a reported reset time, a one-turn probe decides when to spend a real run again.
       if (plan.probe) {
-        const jail = join(tmpdir(), `pcg-eval-limitprobe-${process.pid}`);
+        const jail = join(sandboxRoot, `pcg-eval-limitprobe-${process.pid}`);
         mkdirSync(join(jail, "project"), { recursive: true });
         let pr;
         try {
@@ -495,6 +538,7 @@ export async function runCampaign(argv, { log = (m) => console.error(`[run ${new
           pr = { classification: { kind: "cli-error", evidence: `limit probe launch: ${err.message}` } };
         } finally {
           removeDir(jail);
+          removeClaudeProjectDir(join(jail, "project"));
         }
         const kind = pr.classification?.kind;
         if (RETRY_KINDS.has(kind)) await sleepThrough(pr.classification, "limit probe");
@@ -507,7 +551,7 @@ export async function runCampaign(argv, { log = (m) => console.error(`[run ${new
       infraAttempt = 0;
       writeStatus({ blockedSince: null, infraSince: null });
     };
-    const probeOpts = { ...probeOptions(config, arms), adapter, runsDir: runsRoot, log };
+    const probeOpts = { ...probeOptions(config, arms), sandboxRoot, adapter, runsDir: runsRoot, log };
 
     // Selftest gates the start: tasks, scoring and lint once, then the
     // isolation probe, which a limit or an outage may have to wait for.
@@ -610,7 +654,7 @@ export async function runCampaign(argv, { log = (m) => console.error(`[run ${new
       // A sandbox that cannot be built is the machine's problem: discard, back off, retry the slot.
       let sb;
       try {
-        sb = createSandbox({ tarball: arm.tarball, taskDir: task.dir, installTimeoutMs: (config.caps?.installMinutes ?? 10) * 60_000 });
+        sb = createSandbox({ tarball: arm.tarball, taskDir: task.dir, baseDir: sandboxRoot, installTimeoutMs: (config.caps?.installMinutes ?? 10) * 60_000 });
       } catch (err) {
         discard({ outcome: "sandbox-error", evidence: err.message });
         await sleepThrough({ kind: "cli-error", evidence: `sandbox: ${err.message}` }, slot.slotId);
@@ -622,7 +666,7 @@ export async function runCampaign(argv, { log = (m) => console.error(`[run ${new
       try {
         result = await adapter.launch({
           cwd: sb.dir,
-          prompt,
+          prompt: renderPrompt(prompt, sb.dir),
           model: config.model,
           effort: config.effort ?? undefined,
           budgets,
@@ -703,6 +747,7 @@ export async function runCampaign(argv, { log = (m) => console.error(`[run ${new
           contaminated,
           outsideContaminating: rp.contaminating ?? [],
           outsideBenign: (rp.outsideSandbox ?? []).filter((p) => !(rp.contaminating ?? []).includes(p)),
+          outsideWrites: result.outsideWrites ?? [],
           readCounts: { llms: rp.llms?.length ?? 0, docs: rp.docs?.length ?? 0, skills: rp.skills?.length ?? 0, graphs: rp.graphs?.length ?? 0, pkg: rp.pkg?.length ?? 0 },
           readPaths: { llms: rp.llms ?? [], docs: rp.docs ?? [], skills: rp.skills ?? [], graphs: rp.graphs ?? [], pkg: rp.pkg ?? [] },
           networkAttempts: result.networkAttempts ?? [],
@@ -722,6 +767,11 @@ export async function runCampaign(argv, { log = (m) => console.error(`[run ${new
           scorerError: scored.ok ? undefined : `${scored.error} ${String(scored.stderr ?? "").slice(-300)}`,
         };
         appendFileSync(runsPath, JSON.stringify(record) + "\n");
+        // Stop before a broken classifier (or a sandbox that invites escapes) burns the allowance.
+        const rate = contaminationRate(readRecords(), config.limits);
+        if (rate.tripped) {
+          throw new Wake(["contamination-rate"], `${rate.contaminated} of the last ${rate.window} finished attempts were contaminated (limit ${rate.max * 100}%): ${rate.slots.join(", ")}`);
+        }
         slotsRun++;
         log(`${slot.slotId}: ${record.outcome}, solved=${record.solved}${contaminated ? `, CONTAMINATED (${reschedule ? "re-running once" : "final"})` : ""}${record.scorerError ? `, scorer error: ${record.scorerError.slice(0, 120)}` : ""}`);
         writeStatus({ state: "running", completed: completedCount(), lastSlot: slot.slotId });

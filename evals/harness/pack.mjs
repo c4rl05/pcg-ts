@@ -165,7 +165,7 @@ export function readManifest(tgzPath) {
 export function verifyTarball(tgzPath) {
   let sb;
   try {
-    sb = createSandbox({ tarball: tgzPath, copyBrief: false });
+    sb = createSandbox({ tarball: tgzPath, copyBrief: false, baseDir: join(tmpdir(), "pcg-pack-verify") });
     const bin = join(sb.pcgDir, "bin", "pcg.mjs");
     const help = spawnSync(process.execPath, [bin, "--help"], { cwd: sb.dir, encoding: "utf8", windowsHide: true });
     if (help.status !== 0 || !/usage: pcg/.test(help.stdout)) {

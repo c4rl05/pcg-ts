@@ -40,6 +40,7 @@ import {
   createSandbox,
   readJson,
   readJsonOr,
+  removeClaudeProjectDir,
   removeDir,
   sha256,
   sha256File,
@@ -550,6 +551,7 @@ export function probeOptions(config, arms) {
     model: config.model,
     leakCwd: p.leakCwd ? resolveFromRepo(p.leakCwd) : undefined,
     tarball: arms?.[0]?.tarball,
+    sandboxRoot: config.sandboxRoot ? resolveFromRepo(config.sandboxRoot) : undefined,
     budgets: { turns: p.turns ?? 2, wallMinutes: p.wallMinutes ?? 5 },
   };
 }
@@ -558,14 +560,15 @@ export function probeOptions(config, arms) {
  * Run (or read from cache) the isolation probe pair.
  * Returns `{ ok, cached, key, clean, control, problems }`.
  */
-export async function isolationProbe({ adapter, model, runsDir, leakCwd, tarball, force = false, budgets = { turns: 2, wallMinutes: 5 }, log = () => {} }) {
+export async function isolationProbe({ adapter, model, runsDir, leakCwd, tarball, sandboxRoot, force = false, budgets = { turns: 2, wallMinutes: 5 }, log = () => {} }) {
   const version = adapter.cliVersion();
   // The machine's own configuration is part of the key (user instructions,
   // rules, skills, agents, plugins, MCP servers): a newly installed plugin is
   // exactly what the probe exists to catch. The repo CLAUDE.md and memory are
   // not, because they churn and the flags that exclude them do not change.
   const machine = collectCanaries({});
-  const key = sha256(JSON.stringify({ version, adapter: adapter.adapterHash(), prompt: PROBE_PROMPT, model, id: adapter.id ?? null, machine: sha256(JSON.stringify([machine.phrases.sort(), machine.names.sort()])) }));
+  const adapterKey = typeof adapter.isolationFingerprint === "function" ? adapter.isolationFingerprint() : adapter.adapterHash();
+  const key = sha256(JSON.stringify({ version, adapter: adapterKey, prompt: PROBE_PROMPT, model, id: adapter.id ?? null, sandboxRoot: sandboxRoot ?? null, machine: sha256(JSON.stringify([machine.phrases.sort(), machine.names.sort()])) }));
   const cacheFile = join(runsDir, ".isolation-probe-cache.json");
   const cache = readJsonOr(cacheFile, {});
   if (!force && cache[key]?.ok) return { ...cache[key], cached: true, key };
@@ -579,14 +582,17 @@ export async function isolationProbe({ adapter, model, runsDir, leakCwd, tarball
   let cleanDir;
   let cleanup;
   if (tarball) {
-    const sb = createSandbox({ tarball, copyBrief: false });
+    const sb = createSandbox({ tarball, copyBrief: false, ...(sandboxRoot ? { baseDir: sandboxRoot } : {}) });
     cleanDir = sb.dir;
     cleanup = sb.cleanup;
   } else {
-    const jail = mkdtempSync(join(tmpdir(), "pcg-eval-"));
+    const jail = mkdtempSync(join(sandboxRoot ?? tmpdir(), "pcg-eval-"));
     cleanDir = join(jail, "project");
     mkdirSync(cleanDir);
-    cleanup = () => removeDir(jail);
+    cleanup = () => {
+      removeDir(jail);
+      removeClaudeProjectDir(cleanDir);
+    };
   }
   let clean;
   let control;
@@ -671,7 +677,7 @@ export async function runSelftest({ config, scorer, adapterPath, runsDir, forceP
       details.arms[arm.label] = armDetail;
       let sb;
       try {
-        sb = createSandbox({ tarball: arm.tarball, copyBrief: false });
+        sb = createSandbox({ tarball: arm.tarball, copyBrief: false, baseDir: join(tmpdir(), "pcg-selftest") });
         let fallback = null;
         if (arm.manifest?.derivedFrom?.file) {
           const beside = join(dirname(arm.tarball), arm.manifest.derivedFrom.file);

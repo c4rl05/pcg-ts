@@ -9,6 +9,7 @@ import {
   billingEnvViolations,
   buildArgs,
   buildEnv,
+  claudeConfigDir,
   classifyOutsidePath,
   extractCommandPaths,
   extractNetworkAttempts,
@@ -135,7 +136,8 @@ test("outside paths: harness jail and self-made Temp entries are benign; the res
   const atStart = new Set(["claude", "pcg-eval-x", "other-project"]);
   const opts = { tmpEntriesAtStart: atStart, benign: [jail] };
   assert.equal(classifyOutsidePath(jail, opts), "benign");
-  assert.equal(classifyOutsidePath(tmpdir(), opts), "benign", "a bare Temp listing shows names only");
+  assert.equal(classifyOutsidePath(tmpdir(), opts), "contaminating", "a foreign directory's listing, unless it is this sandbox's own root");
+  assert.equal(classifyOutsidePath(tmpdir(), { ...opts, sandbox: join(jail, "project") }), "benign", "the sandbox root listed: names of sandboxes only");
   assert.equal(classifyOutsidePath(join(tmpdir(), "my-scratch-made-during-run", "a.json"), opts), "benign");
   assert.equal(classifyOutsidePath(join(tmpdir(), "claude", "x", "notes.md"), opts), "contaminating");
   assert.equal(classifyOutsidePath(join(homedir(), ".claude", "CLAUDE.md"), opts), "contaminating");
@@ -143,6 +145,170 @@ test("outside paths: harness jail and self-made Temp entries are benign; the res
   assert.equal(classifyOutsidePath("/dev/null", opts), "benign");
   assert.deepEqual(jailOf(join(jail, "project")), [jail]);
   assert.deepEqual(jailOf(join(tmpdir(), "elsewhere", "project")), []);
+});
+
+/** A transcript of just these tool calls, as a session in `cwd` with `sessionId` would have produced. */
+function syntheticTranscript(cwd, sessionId, toolUses) {
+  return [
+    { type: "system", subtype: "init", cwd, session_id: sessionId },
+    ...toolUses.map((u, i) => ({ type: "assistant", message: { id: `m${i}`, content: [{ type: "tool_use", id: `t${i}`, name: u.name, input: u.input }] } })),
+  ];
+}
+
+test("REAL pilot-aborted-1 excerpts: only the disk-wide find stays contaminated", () => {
+  const fixture = JSON.parse(readFileSync(new URL("fixtures/transcripts/pilot-aborted-1-excerpts.json", HERE), "utf8"));
+  const fill = (v) =>
+    JSON.parse(
+      JSON.stringify(v)
+        .replaceAll("{{CLAUDE}}", JSON.stringify(join(homedir(), ".claude")).slice(1, -1))
+        .replaceAll("{{TEMP}}", JSON.stringify(tmpdir()).slice(1, -1))
+        .replaceAll("{{HOME}}", JSON.stringify(homedir()).slice(1, -1)),
+    );
+  const verdicts = {};
+  const saved = process.env.CLAUDE_CONFIG_DIR;
+  delete process.env.CLAUDE_CONFIG_DIR;
+  try {
+    for (const raw of fixture.cases) {
+      const c = fill(raw);
+      assert.ok(c.toolUses.length > 0, `${c.attempt} has tool calls`);
+      // The runs' Temp snapshots were not recorded: every Temp entry counts as pre-existing (strict).
+      const p = parseTranscript(syntheticTranscript(c.cwd, c.sessionId, c.toolUses), { cwd: c.cwd, tmpEntriesAtStart: null, benignRoots: jailOf(c.cwd) });
+      verdicts[c.attempt] = p.readPaths.contaminating.length ? "contaminated" : "clean";
+      assert.equal(verdicts[c.attempt], c.expect, `${c.attempt}: ${JSON.stringify(p.readPaths.contaminating)}`);
+      if (c.attempt.endsWith("stripped-a2")) assert.ok(p.outsideWrites.some((w) => w.endsWith("nodes.json")), "the agent's own /tmp write is recorded as an outside write");
+    }
+  } finally {
+    if (saved !== undefined) process.env.CLAUDE_CONFIG_DIR = saved;
+  }
+  assert.deepEqual(verdicts, {
+    "r0.trees-on-hills.A-prime-a1": "contaminated",
+    "r0.trees-on-hills.A-prime-a2": "clean",
+    "r0.trees-on-hills.stripped-a1": "clean",
+    "r0.trees-on-hills.stripped-a2": "clean",
+    "r0.trees-on-hills.A-a1": "clean",
+  });
+});
+
+test("new layout: dedicated sandbox root; Temp scratchpad, foreign dirs, other sandboxes, repo files and another session's results contaminate", () => {
+  const root = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes" : "/var/tmp/pcg-eval/sandboxes";
+  const cwd = join(root, "pcg-eval-Q1w2E3", "project");
+  const sid = "11111111-2222-3333-4444-555555555555";
+  const bashCwd = process.platform === "win32" ? "/c/pcg-eval/sandboxes/pcg-eval-Q1w2E3/project" : cwd;
+  const verdict = (uses) => parseTranscript(syntheticTranscript(cwd, sid, uses), { cwd, tmpEntriesAtStart: new Set(["claude"]), benignRoots: jailOf(cwd) }).readPaths.contaminating;
+  const bash = (command) => verdict([{ name: "Bash", input: { command } }]);
+  // benign
+  assert.deepEqual(bash(`cd ${bashCwd} && node node_modules/pcg-ts/bin/pcg.mjs nodes`), []);
+  assert.deepEqual(bash("ls .."), [], "the jail");
+  assert.deepEqual(bash("ls ../.."), [], "the sandbox root: sandbox names only");
+  assert.deepEqual(bash("cd ../.. && echo hi"), [], "a cd to an ancestor that reads nothing");
+  const toolResults = join(claudeConfigDir(), "projects", cwd.replace(/[^A-Za-z0-9]/g, "-"), sid, "tool-results", "b1.txt");
+  assert.deepEqual(verdict([{ name: "Read", input: { file_path: toolResults } }]), [], "this session's own offloaded tool output");
+  assert.deepEqual(bash("node x.mjs > /tmp/out.json; cat /tmp/out.json"), [], "reading back the agent's own outside write");
+  assert.deepEqual(verdict([{ name: "Write", input: { file_path: join(tmpdir(), "mine.mjs"), content: "x" } }, { name: "Read", input: { file_path: join(tmpdir(), "mine.mjs") } }]), []);
+  // contaminating
+  assert.equal(verdict([{ name: "Read", input: { file_path: toolResults.replace(sid, "99999999-2222-3333-4444-555555555555") } }]).length, 1, "another session's tool output");
+  assert.equal(bash("cat /tmp/claude/D--Projects/plan.md").length, 1, "the orchestrator's scratchpad under Temp");
+  assert.equal(bash("ls /tmp").length, 1, "a foreign directory listed");
+  assert.equal(bash("ls ../../pcg-eval-Other9/project").length, 1, "another sandbox");
+  assert.equal(bash("grep -r pcg ../..").length, 1, "the sandbox root searched");
+  assert.equal(bash("find / -name CLAUDE.md").length, 1);
+  assert.equal(bash("cat /d/Projects/JS/pcg-ts/CLAUDE.md").length, process.platform === "win32" ? 1 : 0);
+  assert.equal(bash("cd /d/Projects/JS/pcg-ts && git log --oneline").length, process.platform === "win32" ? 1 : 0, "a command run from a foreign directory");
+  assert.equal(bash("cd ~ && cat .claude/CLAUDE.md").length, 1);
+  assert.equal(verdict([{ name: "Edit", input: { file_path: "D:\\Projects\\JS\\pcg-ts\\README.md", old_string: "a", new_string: "b" } }]).length, process.platform === "win32" ? 1 : 0, "an Edit reads the file it changes");
+});
+
+test("laundering review repros: writes whitelist only what they created; globs, relative reads and heredoc shells after cd are judged", () => {
+  const root = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes" : "/var/tmp/pcg-eval/sandboxes";
+  const cwd = join(root, "pcg-eval-Q1w2E3", "project");
+  const verdict = (uses) => parseTranscript(syntheticTranscript(cwd, "sid", uses), { cwd, tmpEntriesAtStart: new Set(["claude"]), benignRoots: jailOf(cwd) }).readPaths.contaminating;
+  const bash = (command) => verdict([{ name: "Bash", input: { command } }]);
+  const win = process.platform === "win32";
+  // 1. a write grants nothing it did not create, and never a subtree
+  assert.equal(bash("mkdir -p ~/.claude && cat ~/.claude/CLAUDE.md").length, 1);
+  if (win) {
+    assert.equal(bash("touch /d/Projects/JS/pcg-ts/CLAUDE.md; cat /d/Projects/JS/pcg-ts/CLAUDE.md").length, 1);
+    assert.equal(bash("echo x >> /d/Projects/JS/pcg-ts/README.md; cat /d/Projects/JS/pcg-ts/README.md").length, 1);
+    assert.equal(bash("echo x | tee -a /d/Projects/JS/pcg-ts/README.md; cat /d/Projects/JS/pcg-ts/README.md").length, 1);
+    assert.equal(verdict([{ name: "Bash", input: { command: "mkdir -p /d/Projects/JS/pcg-ts" } }, { name: "Bash", input: { command: "grep -r seed /d/Projects/JS/pcg-ts" } }]).length, 1);
+    assert.equal(bash("cp brief.md /c/ && find /c/Users -name CLAUDE.md").length, 1);
+  }
+  assert.equal(bash("cp graph.json /tmp/ && ls /tmp/claude").length, 1);
+  assert.equal(bash("cp graph.json ~/ && cat ~/.claude/CLAUDE.md").length, 1);
+  assert.deepEqual(bash("cp graph.json /tmp/ && cat /tmp/graph.json"), [], "the copy itself is the agent's own");
+  assert.deepEqual(bash("mkdir -p /tmp/work && ls /tmp/work"), [], "listing a directory it made");
+  // 2. an absolute glob into the sandbox root reads under it
+  if (win) assert.equal(bash("cat /c/pcg-eval/sandboxes/pcg-eval-*/project/graph.json").length, 1);
+  assert.equal(verdict([{ name: "Glob", input: { pattern: `${root.replace(/\\/g, "/")}/*/project/*.json` } }]).length, 1);
+  assert.equal(verdict([{ name: "Glob", input: { path: "../..", pattern: "*/project/graph.json" } }]).length, 1);
+  assert.deepEqual(verdict([{ name: "Glob", input: { path: "../..", pattern: "*" } }]), [], "a flat listing of the sandbox root");
+  // 3. relative globs in Temp after cd
+  assert.equal(bash("cd /tmp && cat */*/*/scratchpad/*.md").length > 0, true);
+  assert.equal(bash("cd /tmp && cat cl?ude/D--Projects-JS-pcg-ts/x/scratchpad/plan.md").length > 0, true);
+  // 4. any verb's path-like arguments after cd to an ancestor
+  if (win) {
+    assert.ok(bash("cd /c && echo Users/someone/.claude/CLAUDE.md | xargs cat").length > 0);
+    assert.ok(bash("cd /c && python -c \"print(open('Users/someone/.claude/CLAUDE.md').read())\"").length > 0);
+    assert.ok(bash("cd /c && diff Users/someone/.claude/CLAUDE.md /dev/null").length > 0);
+    // 5. command substitution in echo/printf/export from a foreign directory
+    assert.ok(bash('cd /d/Projects/JS/pcg-ts && echo "$(cat README.md)"').length > 0);
+    assert.ok(bash('cd /d/Projects/JS/pcg-ts && printf %s "$(<CLAUDE.md)"').length > 0);
+    assert.ok(bash("cd /d/Projects/JS/pcg-ts && export X=$(cat CLAUDE.md) && echo $X").length > 0);
+  }
+  // 6. a heredoc fed to a shell follows cd; a here-string is not a heredoc
+  assert.ok(bash("bash <<'EOF'\ncd ../..\ncat pcg-eval-Other/project/graph.json\nEOF").length > 0);
+  assert.ok(bash('cat <<<"EOF"\ncat /tmp/claude/x/plan.md').length > 0, "the line after a here-string is still a command");
+  // 7. ancestor node_modules is only the agent's own package, never a listing
+  if (win) {
+    assert.equal(bash("ls /c/pcg-eval/node_modules").length, 1);
+    assert.equal(bash("cat C:/node_modules/x/index.js").length, 1);
+  }
+});
+
+test("review round 5: normal work stays clean; the remaining plausible escapes are caught", () => {
+  const root = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes" : "/var/tmp/pcg-eval/sandboxes";
+  const cwd = join(root, "pcg-eval-Q1w2E3", "project");
+  const win = process.platform === "win32";
+  const parse = (uses) => parseTranscript(syntheticTranscript(cwd, "sid", uses), { cwd, tmpEntriesAtStart: new Set(["claude"]), benignRoots: jailOf(cwd) });
+  const verdict = (uses) => parse(uses).readPaths.contaminating;
+  const bash = (command) => verdict([{ name: "Bash", input: { command } }]);
+  // false positives from normal work
+  for (const cmd of [
+    "sed -n '/^## scatter/,/^## /p' node_modules/pcg-ts/docs/nodes.md",
+    `sed -n '/"id": "a"/,/}/p' graph.json`,
+    "echo $HOME",
+    "echo ~",
+    'node -e "console.log(a /b)"',
+    "mkdir -p scratch/deep && cd scratch/deep && cat > s.mjs <<'EOF'\nimport g from '../../graph.json' with { type: 'json' };\nEOF",
+  ]) {
+    assert.deepEqual(bash(cmd), [], cmd);
+  }
+  assert.deepEqual(verdict([{ name: "Write", input: { file_path: join(cwd, "scratch", "deep", "s.mjs"), content: "const g = readFileSync('../../graph.json'); import('../../node_modules/pcg-ts/dist/index.js');" } }]), []);
+  assert.deepEqual(verdict([{ name: "Write", input: { file_path: join(cwd, "scratch", "deep", "s.sh"), content: "npx pcg validate ../../graph.json" } }]), []);
+  // escapes
+  assert.equal(bash("mkdir -p /tmp/claude/D--Projects-JS-pcg-ts && ls /tmp/claude/D--Projects-JS-pcg-ts").length, 1, "mkdir -p on an existing dir grants nothing");
+  if (win) {
+    const failedWrite = [
+      { type: "system", subtype: "init", cwd, session_id: "sid" },
+      { type: "assistant", message: { id: "m1", content: [{ type: "tool_use", id: "w1", name: "Write", input: { file_path: "D:/Projects/JS/pcg-ts/CLAUDE.md", content: "x" } }] } },
+      { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "w1", is_error: true, content: "File has not been read yet" }] } },
+      { type: "assistant", message: { id: "m2", content: [{ type: "tool_use", id: "b1", name: "Bash", input: { command: "cat /d/Projects/JS/pcg-ts/CLAUDE.md" } }] } },
+    ];
+    assert.equal(parseTranscript(failedWrite, { cwd, tmpEntriesAtStart: new Set(), benignRoots: jailOf(cwd) }).readPaths.contaminating.length, 1, "a failed Write created nothing");
+    assert.equal(bash("grep -n seed /d/Projects/JS/pcg-ts/CLAUDE.md 2>>/d/Projects/JS/pcg-ts/CLAUDE.md").length, 1);
+    assert.equal(bash("cp -t scratch /d/Projects/JS/pcg-ts/CLAUDE.md").length, 1, "cp -t: the source is read");
+    assert.equal(bash("cat /c/pcg-eval/sandboxes/[p]cg-eval-Other/project/graph.json").length, 1);
+    assert.equal(bash("cat /c/node_modules/pcg-ts/docs/x.md").length, 1, "an ancestor's node_modules/pcg-ts read, not run");
+  }
+  assert.equal(bash("cat ../../[p]cg-eval-Other/project/graph.json").length, 1);
+  assert.equal(bash("cat ../../{pcg-eval-Other,zz}/project/graph.json").length, 1);
+  assert.equal(bash("cat /tmp/cl[a]ude/proj/sess/scratchpad/plan.md").length, 1);
+  assert.equal(bash("ln -s ../.. up && cat up/pcg-eval-Other/project/graph.json").length, 1);
+  assert.equal(bash("cp -a ../../ copy").length, 1);
+  assert.equal(bash("D=../..; cat $D/pcg-eval-Other/project/graph.json").length, 1);
+  assert.equal(bash("node -e \"process.chdir('../..'); console.log(require('fs').readdirSync('.'))\"").length, 1);
+  assert.equal(bash("bash -c 'cd ../.. && cat pcg-eval-Other/project/graph.json'").length > 0, true);
+  assert.equal(bash("eval 'cd ../..'; cat pcg-eval-Other/project/graph.json").length > 0, true);
 });
 
 test("OBSERVED 2.1.272 transcript parses into turns, tools, usage and reads", () => {

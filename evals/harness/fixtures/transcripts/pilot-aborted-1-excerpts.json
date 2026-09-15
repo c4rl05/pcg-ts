@@ -1,0 +1,239 @@
+{
+ "source": "evals/results/pilot-aborted-1 (2026-09-15), minimal excerpts: only the tool calls the classifier judged",
+ "cases": [
+  {
+   "attempt": "r0.trees-on-hills.A-prime-a1",
+   "expect": "contaminated",
+   "cwd": "{{TEMP}}\\pcg-eval-RHiMX9\\project",
+   "sessionId": "d0fadd9a-fae0-4e4e-8311-55866e94303c",
+   "toolUses": [
+    {
+     "name": "Bash",
+     "input": {
+      "command": "find / -path /proc -prune -o -type d -name \"pcg-ts\" -print 2>/dev/null | grep -v node_modules; echo done",
+      "description": "Search for pcg-ts source outside node_modules"
+     }
+    }
+   ]
+  },
+  {
+   "attempt": "r0.trees-on-hills.A-prime-a2",
+   "expect": "clean",
+   "cwd": "{{TEMP}}\\pcg-eval-VtMsX7\\project",
+   "sessionId": "38de7056-85a2-4ec2-8ce7-77899b00c48f",
+   "toolUses": [
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd /tmp 2>/dev/null; node node_modules/pcg-ts/bin/pcg.mjs nodes filterByAttribute 2>&1; echo ===; node node_modules/pcg-ts/bin/pcg.mjs nodes spawnInstances 2>&1; echo ===; node node_modules/pcg-ts/bin/pcg.mjs nodes setAttribute 2>&1",
+      "description": "Show docs for filterByAttribute, spawnInstances, setAttribute"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd /tmp/pcg-eval-VtMsX7/project && node node_modules/pcg-ts/bin/pcg.mjs nodes filterByAttribute 2>&1; echo ===; node node_modules/pcg-ts/bin/pcg.mjs nodes spawnInstances 2>&1; echo ===; node node_modules/pcg-ts/bin/pcg.mjs nodes setAttribute 2>&1",
+      "description": "Show docs for filterByAttribute, spawnInstances, setAttribute"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd /tmp/pcg-eval-VtMsX7/project && sed -n '1,50p' node_modules/pcg-ts/docs/authoring.md | head -80; echo ...; wc -l node_modules/pcg-ts/docs/authoring.md",
+      "description": "Preview authoring.md doc"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd /tmp/pcg-eval-VtMsX7/project && grep -n \"^#\\|class Geometry\\|getTopology\\|setTopology\\|\\.array\\b\\|readTuple\\|AttributeSet\\|interface Geometry\" node_modules/pcg-ts/README.md | head -100",
+      "description": "Search README for Geometry API"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd /tmp/pcg-eval-VtMsX7/project && sed -n '118,220p' node_modules/pcg-ts/README.md",
+      "description": "Show quickstart and foundations sections of README"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd /tmp/pcg-eval-VtMsX7/project && grep -n \"getTopology\\|primitiveVertexRange\\|vertexToPoint\\|class Topology\\|interface Topology\\|primStarts\\|primCounts\\|vertexPoints\" node_modules/pcg-ts/dist/*.d.ts | head -60",
+      "description": "Search type declarations for topology accessor API"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd /tmp/pcg-eval-VtMsX7/project && sed -n '100,260p' node_modules/pcg-ts/dist/gpuResolver-BfExY2zc.d.ts",
+      "description": "Show Geometry/Topology type declarations"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd /tmp/pcg-eval-VtMsX7/project && grep -n \"InstancesItem\\|interface.*Batch\\|instances:\\|transforms\\|makeInstancesItem\\|firstGeometry\\|firstInstances\\|export declare\" node_modules/pcg-ts/dist/index.d.ts | head -80",
+      "description": "Search index.d.ts for instances item shape and exported helpers"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd /tmp/pcg-eval-VtMsX7/project && grep -n \"InstancesItem\\|InstanceBatch\\|transforms\\|assetId\\|interface.*Item\" node_modules/pcg-ts/dist/data-BS7HvQMN.d.ts | head -60",
+      "description": "Search data module type declarations for InstancesItem shape"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd /tmp/pcg-eval-VtMsX7/project && node node_modules/pcg-ts/bin/pcg.mjs validate graph.json 2>&1",
+      "description": "Validate graph.json structure"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd /tmp/pcg-eval-VtMsX7/project && node verify.mjs graph.json 1 2 2>&1 | tail -100",
+      "description": "Run verification script on graph.json for seeds 1,2"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd /tmp/pcg-eval-VtMsX7/project && node verify.mjs graph.json 1 2 2>&1 | tail -120",
+      "description": "Run verification script on graph.json for seeds 1,2"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd /tmp/pcg-eval-VtMsX7/project && node -e '\nimport(\"pcg-ts/primitives\").then(async () => {\n  const { getRegisteredSubgraph } = await import(\"pcg-ts\");\n  const sub = getRegisteredSubgraph(\"transform/displace-by-noise\");\n  console.log(JSON.stringify(sub.subgraph, null, 1));\n});\n' 2>&1 | head -150",
+      "description": "Dump the displace-by-noise subgraph definition"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd /tmp/pcg-eval-VtMsX7/project && node verify.mjs graph.json 3 4 5 42 999 123456 7 2>&1 | grep -E \"seed\\\"|PASS|FAIL|Fraction|treeCount\"",
+      "description": "Run verify across more seeds"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd /tmp/pcg-eval-VtMsX7/project && node -e '\nimport(\"pcg-ts/primitives\").then(async () => {\n  const { deserializeGraph, cook, firstGeometry } = await import(\"pcg-ts\");\n  const fs = await import(\"node:fs\");\n  const json = JSON.parse(fs.readFileSync(\"graph.json\", \"utf8\"));\n\n  async function hashOutputs(seed, outputsOrder) {\n    const g = JSON.parse(JSON.stringify(json));\n    g.seed = seed;\n    const graph = deserializeGraph(g);\n    const r1 = await cook(graph, { outputs: outputsOrder });\n    const terrain = firstGeometry(r1.outputs.terrain);\n    const P = terrain.attrs.point.require(\"P\").data;\n    let sum = 0;\n    for (let i=0;i<P.length;i++) sum += P[i]*(i+1);\n    const trees = r1.outputs.trees[0];\n    let tsum = 0, tcount=0;\n    for (const b of trees.batches) { tcount += b.transforms.length/16; for (let i=0;i<b.transforms.length;i++) tsum += b.transforms[i]*(i+1); }\n    return { sum, tsum, tcount };\n  }\n\n  console.log(\"together\", await hashOutputs(1, [\"terrain\",\"trees\"]));\n  console.log(\"reversed\", await hashOutputs(1, [\"trees\",\"terrain\"]));\n\n  // split cook: cook terrain only then trees only on same graph instance\n  const g2 = JSON.parse(JSON.stringify(json)); g2.seed = 1;\n  const graph2 = deserializeGraph(g2);\n  const rA = await cook(graph2, { outputs: [\"terrain\"] });\n  const rB = await cook(graph2, { outputs: [\"trees\"] });\n  const terrainA = firstGeometry(rA.outputs.terrain);\n  const PA = terrainA.attrs.point.require(\"P\").data;\n  let sumA=0; for (let i=0;i<PA.length;i++) sumA += PA[i]*(i+1);\n  let tsumB=0, tcountB=0;\n  for (const b of rB.outputs.trees[0].batches) { tcountB += b.transforms.length/16; for (let i=0;i<b.transforms.length;i++) tsumB += b.transforms[i]*(i+1); }\n  console.log(\"split\", { sumA, tsumB, tcountB });\n});\n' 2>&1",
+      "description": "Check determinism across output order and split cooking"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd /tmp/pcg-eval-VtMsX7/project && node node_modules/pcg-ts/bin/pcg.mjs cook graph.json --stats 2>&1 | tail -40",
+      "description": "Cook graph.json via CLI and show stats"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd /tmp/pcg-eval-VtMsX7/project && rm verify.mjs && node node_modules/pcg-ts/bin/pcg.mjs validate graph.json 2>&1 && ls",
+      "description": "Remove temp script and re-validate graph.json"
+     }
+    }
+   ]
+  },
+  {
+   "attempt": "r0.trees-on-hills.stripped-a1",
+   "expect": "clean",
+   "cwd": "{{TEMP}}\\pcg-eval-S11GLh\\project",
+   "sessionId": "5260f18c-aaa9-4b58-8632-c7c34c3c456c",
+   "toolUses": [
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd \"{{TEMP}}\\pcg-eval-S11GLh\\project\" && node node_modules/pcg-ts/bin/pcg.mjs nodes --json > /tmp/nodes.json 2>&1; wc -l /tmp/nodes.json; node -e \"const n=require('/tmp/nodes.json'); console.log(Object.keys(n))\" 2>&1 | head -20",
+      "description": "Dump node catalog as JSON"
+     }
+    },
+    {
+     "name": "Read",
+     "input": {
+      "file_path": "{{CLAUDE}}\\projects\\C--Users-someone-AppData-Local-Temp-pcg-eval-S11GLh-project\\5260f18c-aaa9-4b58-8632-c7c34c3c456c\\tool-results\\bqelygrnt.txt"
+     }
+    }
+   ]
+  },
+  {
+   "attempt": "r0.trees-on-hills.stripped-a2",
+   "expect": "clean",
+   "cwd": "{{TEMP}}\\pcg-eval-9wI4Ww\\project",
+   "sessionId": "3cd235ed-f413-4bb0-a005-a5f06b930830",
+   "toolUses": [
+    {
+     "name": "Read",
+     "input": {
+      "file_path": "{{CLAUDE}}\\projects\\C--Users-someone-AppData-Local-Temp-pcg-eval-9wI4Ww-project\\3cd235ed-f413-4bb0-a005-a5f06b930830\\tool-results\\b6sf7s021.txt"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cd node_modules/pcg-ts && node bin/pcg.mjs nodes --json > /tmp/nodes.json 2>&1; wc -l /tmp/nodes.json; node -e \"\nconst d = require('/tmp/nodes.json');\nconsole.log(Object.keys(d));\n\"\n",
+      "description": "Dump node catalog to JSON"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "grep -o '\"name\": *\"[a-zA-Z]*\"' /tmp/nodes.json | sort -u | head -200",
+      "description": "List unique node type names from catalog"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "head -c 2000 /tmp/nodes.json",
+      "description": "Peek at start of node catalog JSON"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "grep -o '\"type\": *\"[a-zA-Z0-9]*\"' /tmp/nodes.json | sed 's/\"type\": *\"//;s/\"$//' | sort -u",
+      "description": "List all node type names"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cat > /tmp/split_check.mjs << 'EOF'\nimport { deserializeGraph, cook, firstGeometry } from \"pcg-ts\";\nimport fs from \"node:fs\";\nconst raw = JSON.parse(fs.readFileSync(\"./graph.json\", \"utf8\"));\nconst graph = deserializeGraph(raw);\n\nconst full = await cook(graph);\nconst g2 = deserializeGraph(raw);\nconst terrainOnly = await cook(g2, { outputs: [\"terrain\"] });\nconst treesOnly = await cook(g2, { outputs: [\"trees\"] });\n\nconst P1 = firstGeometry(full.outputs.terrain).attrs.point.require(\"P\").data;\nconst P2 = firstGeometry(terrainOnly.outputs.terrain).attrs.point.require(\"P\").data;\nconsole.log(\"terrain P identical across split cook:\", Buffer.from(P1.buffer).equals(Buffer.from(P2.buffer)));\n\nconst b1 = full.outputs.trees.find(i=>i.kind===\"instances\").batches[0].transforms;\nconst b2 = treesOnly.outputs.trees.find(i=>i.kind===\"instances\").batches[0].transforms;\nconsole.log(\"trees transforms identical across split cook:\", Buffer.from(b1.buffer).equals(Buffer.from(b2.buffer)));\nEOF\nnode /tmp/split_check.mjs",
+      "description": "Verify graph cooks identically whether split by output or not"
+     }
+    },
+    {
+     "name": "Bash",
+     "input": {
+      "command": "cp /tmp/split_check.mjs ./split_check.mjs && node split_check.mjs",
+      "description": "Run split-cook determinism check from project directory"
+     }
+    }
+   ]
+  },
+  {
+   "attempt": "r0.trees-on-hills.A-a1",
+   "expect": "clean",
+   "cwd": "{{TEMP}}\\pcg-eval-ZmycJ3\\project",
+   "sessionId": "cc6ee8a6-de93-4d47-afab-913bd40ed8a3",
+   "toolUses": [
+    {
+     "name": "Write",
+     "input": {
+      "file_path": "{{TEMP}}\\pcg-eval-ZmycJ3\\project\\graph.json",
+      "content": "{\n  \"formatVersion\": 1,\n  \"seed\": 1,\n  \"meta\": {\n    \"title\": \"Trees on hills\",\n    \"description\": \"A 200x200m rolling-hill terrain (noise-displaced plane, triangle mesh) with trees scattered on ground no steeper than 30 degrees.\",\n    \"tags\": [\"terrain\", \"trees\", \"hills\"]\n  },\n  \"nodes\": [\n    {\n      \"id\": \"ground\",\n      \"type\": \"meshPrimitive\",\n      \"params\": {\n        \"shape\": \"plane\",\n        \"size\": [200, 0, 200],\n        \"center\": [0, 0, 0],\n        \"orientation\": \"xz\",\n        \"subdivisions\": [100, 1, 100]\n      }\n    },\n    {\n      \"id\": \"terrain\",\n      \"type\": \"transformPoints\",\n      \"params\": {\n        \"translate\": {\n          \"fn\": \"vec\",\n          \"args\": [\n            { \"fn\": \"constant\", \"value\": 0 },\n            {\n              \"fn\": \"mul\",\n              \"args\": [\n                { \"fn\": \"constant\", \"value\": 30 },\n                {\n                  \"fn\": \"remap\",\n                  \"args\": [\n                    {\n                      \"fn\": \"fbm\",\n                      \"base\": \"perlinNoise\",\n                      \"opts\": {\n                        \"normalized\": true,\n                        \"octaves\": 4,\n                        \"position\": {\n                          \"fn\": \"add\",\n                          \"args\": [\n                            { \"fn\": \"mul\", \"args\": [{ \"fn\": \"position\" }, 0.02] },\n                            [0, 0, 0]\n                          ]\n                        }\n                      }\n                    },\n                    0,\n                    1,\n                    -1,\n                    1\n                  ]\n                }\n              ]\n            },\n            { \"fn\": \"constant\", \"value\": 0 }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"scatter\",\n      \"type\": \"surfaceSample\",\n      \"params\": { \"count\": 6000 }\n    },\n    {\n      \"id\": \"slopeGate\",\n      \"type\": \"setAttribute\",\n      \"params\": {\n        \"name\": \"slopeGate\",\n        \"tupleSize\": 1,\n        \"value\": {\n          \"fn\": \"component\",\n          \"args\": [{ \"fn\": \"attribute\", \"name\": \"normal\", \"tupleSize\": 3 }],\n          \"index\": 1\n        }\n      }\n    },\n    {\n      \"id\": \"gentle\",\n      \"type\": \"filterByAttribute\",\n      \"params\": {\n        \"attribute\": \"slopeGate\",\n        \"comparison\": \"ge\",\n        \"value\": 0.8660254037844387\n      }\n    },\n    {\n      \"id\": \"spawn\",\n      \"type\": \"spawnInstances\",\n      \"params\": { \"assetId\": \"tree\" }\n    }\n  ],\n  \"connections\": [\n    { \"from\": [\"ground\", \"out\"], \"to\": [\"terrain\", \"in\"] },\n    { \"from\": [\"terrain\", \"out\"], \"to\": [\"scatter\", \"in\"] },\n    { \"from\": [\"scatter\", \"out\"], \"to\": [\"slopeGate\", \"in\"] },\n    { \"from\": [\"slopeGate\", \"out\"], \"to\": [\"gentle\", \"in\"] },\n    { \"from\": [\"gentle\", \"out\"], \"to\": [\"spawn\", \"in\"] }\n  ],\n  \"outputs\": [\n    { \"id\": \"terrain\", \"pin\": \"out\", \"name\": \"terrain\" },\n    { \"id\": \"spawn\", \"pin\": \"instances\", \"name\": \"trees\" }\n  ]\n}\n"
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -23,7 +23,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, parse, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -131,6 +131,71 @@ export function findAncestorInstructionFiles(dir) {
   }
 }
 
+/**
+ * Where agent sandboxes live: a dedicated directory holding nothing but
+ * sandboxes. Not the OS temp dir, which also holds the orchestrator's
+ * scratchpad (plans and reports that name held-out tasks), and not under the
+ * home directory (`.claude`, `.npm`). On Windows `C:/pcg-eval/sandboxes`:
+ * short (MAX_PATH), outside every profile and repo, one mapping in Git Bash
+ * (`/c/pcg-eval/sandboxes`).
+ */
+export function defaultSandboxRoot() {
+  return process.platform === "win32" ? "C:/pcg-eval/sandboxes" : "/var/tmp/pcg-eval/sandboxes";
+}
+
+/**
+ * Create the root if needed, refuse one that holds anything but sandboxes,
+ * and remove sandboxes a crashed run left behind (older than `staleHours`),
+ * so an agent's `ls ../..` finds nothing of another run's.
+ */
+export function prepareSandboxRoot(root, { staleHours = 6 } = {}) {
+  mkdirSync(root, { recursive: true });
+  const repo = findEnclosingRepo(root);
+  if (repo) throw new Error(`sandbox: the sandbox root ${root} is inside the git repository ${repo}`);
+  const entries = readdirSync(root);
+  const foreign = entries.filter((n) => !n.startsWith(SANDBOX_PREFIX));
+  if (foreign.length) {
+    throw new Error(`sandbox: the sandbox root ${root} must hold only ${SANDBOX_PREFIX}* directories; it also holds ${foreign.slice(0, 10).join(", ")}. Move them, or point sandboxRoot at an empty directory.`);
+  }
+  const cutoff = Date.now() - staleHours * 3_600_000;
+  for (const n of entries) {
+    const full = join(root, n);
+    try {
+      if (statSync(full).mtimeMs < cutoff) removeDir(full);
+    } catch {
+      /* gone already */
+    }
+  }
+}
+
+/** Claude Code's config dir (where it keeps per-project session data). */
+export function claudeConfigDir() {
+  return process.env.CLAUDE_CONFIG_DIR ? resolve(process.env.CLAUDE_CONFIG_DIR) : join(homedir(), ".claude");
+}
+
+/** The per-project directory Claude Code creates for a working directory. */
+export function claudeProjectDirFor(dir) {
+  return join(claudeConfigDir(), "projects", resolve(dir).replace(/[^A-Za-z0-9]/g, "-"));
+}
+
+/**
+ * Remove the per-project directory a sandbox session left in the owner's
+ * Claude config (offloaded tool results persist even without session
+ * persistence). Only ever a directory named for a harness sandbox.
+ */
+export function removeClaudeProjectDir(dir) {
+  const p = claudeProjectDirFor(dir);
+  if (!basename(p).includes(SANDBOX_PREFIX)) return false;
+  return removeDir(p);
+}
+
+/** Git Bash spelling of a Windows path (`C:\x\y` → `/c/x/y`); POSIX paths pass through. */
+export function toBashPath(p) {
+  const r = resolve(p);
+  const m = /^([A-Za-z]):[\\/]?(.*)$/.exec(r);
+  return m ? `/${m[1].toLowerCase()}/${m[2].replace(/\\/g, "/")}`.replace(/\/$/, "") : r;
+}
+
 /** True when `child` is `parent` or lies inside it (case-insensitive on Windows). */
 export function isInside(child, parent) {
   const norm = (p) => {
@@ -149,22 +214,26 @@ export function isInside(child, parent) {
 export function createSandbox({
   tarball,
   taskDir,
-  baseDir = tmpdir(),
+  baseDir = defaultSandboxRoot(),
   installTimeoutMs = 10 * 60_000,
   copyBrief = true,
+  staleHours = 6,
 } = {}) {
   if (!tarball || !existsSync(tarball)) throw new Error(`sandbox: tarball not found: ${tarball}`);
   if (copyBrief && (!taskDir || !existsSync(join(taskDir, "brief.md")))) {
     throw new Error(`sandbox: ${taskDir}/brief.md not found; a task dir must hold brief.md`);
   }
-  mkdirSync(baseDir, { recursive: true });
+  prepareSandboxRoot(baseDir, { staleHours });
   // The project sits one level inside a harness-owned jail directory, so the
-  // agent's first `ls ..` lands somewhere empty instead of in the OS Temp dir
-  // (observed: the shell tool is not confined to the working directory).
+  // agent's first `ls ..` lands somewhere empty (observed: the shell tool is
+  // not confined to the working directory).
   const jail = mkdtempSync(join(baseDir, SANDBOX_PREFIX));
   const dir = join(jail, "project");
   mkdirSync(dir);
-  const cleanup = () => removeDir(jail);
+  const cleanup = () => {
+    removeDir(jail);
+    removeClaudeProjectDir(dir);
+  };
   try {
     const repo = findEnclosingRepo(dir);
     if (repo) throw new Error(`sandbox: ${dir} is inside the git repository ${repo}; use a base dir outside any repo`);

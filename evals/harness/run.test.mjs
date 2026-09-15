@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { buildSchedule, finishedSlots, firstUnfinished, makeRng, msUntilWindow } from "./run.mjs";
+import { buildSchedule, checkSandboxRoot, contaminationRate, finishedSlots, firstUnfinished, makeRng, msUntilWindow, renderPrompt } from "./run.mjs";
 
 const HARNESS = fileURLToPath(new URL(".", import.meta.url));
 
@@ -77,7 +77,8 @@ function setup(name, outcomes, { probeOutcomes, auditOutcomes } = {}) {
   mkdirSync(dir, { recursive: true });
   const config = {
     model: "claude-sonnet-5",
-    prompt: "Read brief.md and do what it asks.",
+    prompt: "You are in {{cwd}} ({{cwdBash}}). Read brief.md and do what it asks.",
+    sandboxRoot: join(dir, "sandboxes"),
     concurrency: 1,
     window: "always",
     caps: { turns: 10, wallMinutes: 2 },
@@ -112,7 +113,7 @@ function run(dir, extra = [], env = {}, runsDir = sharedRuns) {
   const r = spawnSync(
     process.execPath,
     [join(HARNESS, "run.mjs"), "--campaign", "e2e", "--config", join(dir, "config.json"), "--agent", join(HARNESS, "fixtures", "stub-agent.mjs"), "--scorer", join(HARNESS, "fixtures", "stub-score.mjs"), "--results-dir", join(dir, "results"), "--runs-dir", runsDir, "--sleep-cap-ms", "5", ...extra],
-    { encoding: "utf8", env: { ...process.env, STUB_AGENT_SCRIPT: join(dir, "script.json"), ...env }, timeout: 300_000 },
+    { encoding: "utf8", env: { ...process.env, PCG_EVAL_ALLOW_SHARED_SANDBOX_ROOT: "1", STUB_AGENT_SCRIPT: join(dir, "script.json"), ...env }, timeout: 300_000 },
   );
   const cdir = join(dir, "results", "e2e");
   const jsonl = (f) => (existsSync(join(cdir, f)) ? readFileSync(join(cdir, f), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
@@ -244,6 +245,45 @@ test("e2e: torn STATUS.json and .lock.json from a crash do not block a restart",
   assert.equal(b.status, 0, b.stderr);
   assert.equal(b.runs.length, 2);
   assert.equal(b.status_.state, "done");
+});
+
+test("contamination guard: more than half of the last six finished attempts", () => {
+  const rec = (i, contaminated) => ({ slotId: `s${i}`, attempt: 1, outcome: "ok", contaminated });
+  assert.equal(contaminationRate([1, 2, 3, 4, 5].map((i) => rec(i, true))).tripped, false, "fewer than six attempts never trips");
+  assert.equal(contaminationRate([rec(1, true), rec(2, true), rec(3, true), rec(4, false), rec(5, false), rec(6, false)]).tripped, false, "exactly half does not trip");
+  const r = contaminationRate([rec(0, false), rec(1, true), rec(2, true), rec(3, true), rec(4, true), rec(5, false), rec(6, false)]);
+  assert.equal(r.tripped, true);
+  assert.equal(r.contaminated, 4);
+  assert.equal(contaminationRate([rec(1, true), rec(2, true), rec(3, false)], { contaminationRateWindow: 3, contaminationRateMax: 0.5 }).tripped, true);
+});
+
+test("prompt placeholders and the sandbox root check", () => {
+  const dir = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes\\pcg-eval-AB12\\project" : "/var/tmp/pcg-eval/sandboxes/pcg-eval-AB12/project";
+  const text = renderPrompt("at {{cwd}} (in Git Bash: {{cwdBash}})", dir);
+  assert.ok(text.includes(dir));
+  if (process.platform === "win32") assert.ok(text.includes("/c/pcg-eval/sandboxes/pcg-eval-AB12/project"));
+  const saved = process.env.PCG_EVAL_ALLOW_SHARED_SANDBOX_ROOT;
+  delete process.env.PCG_EVAL_ALLOW_SHARED_SANDBOX_ROOT;
+  try {
+    assert.throws(() => checkSandboxRoot(join(tmpdir(), "sandboxes")), /inside the OS temp dir/);
+    assert.throws(() => checkSandboxRoot(fileURLToPath(new URL("../", import.meta.url))), /inside the git repository/);
+  } finally {
+    if (saved !== undefined) process.env.PCG_EVAL_ALLOW_SHARED_SANDBOX_ROOT = saved;
+  }
+});
+
+test("e2e: a contamination rate above the limit stops the runner with contamination-rate", { skip, timeout: 300_000 }, () => {
+  const dir = setup("contamrate", ["contaminated"]);
+  const cfg = JSON.parse(readFileSync(join(dir, "config.json"), "utf8"));
+  cfg.campaigns.e2e.runsPerTask = 3;
+  writeFileSync(join(dir, "config.json"), JSON.stringify(cfg));
+  const r = run(dir);
+  assert.equal(r.status, 10, r.stderr);
+  assert.deepEqual(r.status_.wakeReasons, ["contamination-rate"]);
+  assert.equal(r.runs.length, 6, "stopped at the sixth contaminated attempt, not after the whole schedule");
+  const state = JSON.parse(readFileSync(join(dir, "stub-state.json"), "utf8"));
+  assert.ok(state.calls.some((c) => c.kind === "task"));
+  assert.deepEqual(readdirSync(join(dir, "sandboxes")).filter((n) => !n.startsWith("pcg-eval-limitprobe")), [], "every sandbox under the dedicated root was cleaned up");
 });
 
 test("e2e: an isolation leak in a run wakes the owner with exit 10", { skip, timeout: 300_000 }, () => {

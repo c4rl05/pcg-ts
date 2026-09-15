@@ -81,7 +81,7 @@ STUB_AGENT_SCRIPT=<script.json> node evals/harness/run.mjs --campaign fixture \
 
 ## A run
 
-1. `sandbox.mjs` makes `<os temp>/pcg-eval-XXXX/project/`, refuses if any
+1. `sandbox.mjs` makes `<sandboxRoot>/pcg-eval-XXXX/project/`, refuses if any
    ancestor is a git repo or holds a `CLAUDE.md`/`AGENTS.md`, copies the arm's
    tarball into the jail as `pcg-ts.tgz`, runs `npm init -y` and
    `npm install ../pcg-ts.tgz --no-audit --no-fund` (offline first, online if
@@ -93,9 +93,25 @@ STUB_AGENT_SCRIPT=<script.json> node evals/harness/run.mjs --campaign fixture \
    lockfile (observed), which named the arm to the agent and the repository's
    location. The sandbox now refuses to start if any npm metadata file holds
    the tarball's name or directory.
-2. The adapter launches `claude -p` with the campaign prompt on stdin (the
-   prompt is in the config, hashed into the manifest, and names neither
-   docs nor the CLI).
+
+   **The sandbox root** (`sandboxRoot`, default `C:/pcg-eval/sandboxes` on
+   Windows, `/var/tmp/pcg-eval/sandboxes` elsewhere) is a directory that holds
+   nothing but sandboxes. The first pilot put them in the OS temp dir, which
+   also holds the orchestrator's scratchpad — plans and task reports that name
+   held-out tasks — one `ls ../..` away. The runner refuses a root inside the
+   temp dir, the home directory or a repository; the sandbox refuses a root
+   holding anything but `pcg-eval-*` entries and removes sandboxes older than
+   six hours that a crash left behind. `C:/pcg-eval` is short (MAX_PATH),
+   outside every profile and repo, and has one Git Bash spelling
+   (`/c/pcg-eval/sandboxes`), which the classifier maps. Cleanup also removes
+   the per-project directory Claude Code leaves under
+   `<claude config>/projects/` for the sandbox (offloaded tool results persist
+   even without session persistence), and only a directory named for a sandbox.
+2. The adapter launches `claude -p` with the campaign prompt on stdin. The
+   prompt is in the config and hashed into the manifest; it names neither docs
+   nor the CLI, and it states the absolute working directory in both spellings
+   (`{{cwd}}` and `{{cwdBash}}`, filled per run): an agent that did not know
+   where it was typed `cd /tmp` in the first pilot.
 3. The transcript is parsed and the session classified (`limits.mjs`).
 4. The graph and the agent's files are copied to `evals/runs/`, the scorer
    runs in its own process, one line is appended to `runs.jsonl`, and the
@@ -144,11 +160,13 @@ Observed on 2.1.272 (2026-09-15), three real sessions:
   output style in `init`, and the repo CLAUDE.md headings quoted in the reply.
   The check can fail.
 
-The probe's clean session runs in a sandbox with the first arm's package
-installed, as a real run does (the recorded evidence above predates that
-and ran in an empty jail; the adapter changed since, so the pilot's first
-start re-probes). It re-runs whenever the CLI version, the adapter file, the
-probe prompt, the model, or this machine's own configuration (user
+The probe's clean session runs in a sandbox under the sandbox root with the
+first arm's package installed, as a real run does (the recorded evidence
+above predates that and ran in an empty jail under Temp). It re-runs whenever
+the CLI version, the adapter's isolation fingerprint (the launch arguments,
+environment and launcher code — not the transcript parser, so a classifier
+fix costs no probe sessions), the probe prompt, the model, the sandbox root,
+or this machine's own configuration (user
 instructions and rules, skills, agents, plugins, MCP servers) changes (cache:
 `evals/runs/.isolation-probe-cache.json`), and every real run re-checks its
 own `init` for MCP servers, plugins, skills, slash commands, a non-default
@@ -163,34 +181,82 @@ the selftest, before every slot, and against every session's
 
 **Contamination.** Every Read/Write/Edit/Glob/Grep path, every path-shaped
 token of a shell command, and every path-shaped token in the content of a
-script the agent writes (`.sh .ps1 .js .mjs .cjs .ts .py ...`) is resolved.
-Tokens are taken quote-aware (so `"C:/Program Files/x"` stays whole) and
-fine-grained (so `readFileSync('../../x')` inside `node -e "..."` surfaces).
-Path-shaped means: absolute (Windows, Git Bash `/c/`, POSIX, the root `/`),
-`~` at the start of a token, an environment variable at the start of a token
-(`$HOME`, `${USERPROFILE}`, `$LOCALAPPDATA`, `%APPDATA%`, `$env:TEMP`, ...),
-a `..` segment anywhere, or a reference into `node_modules`. Paths outside
-the project are classified: benign (devices, OS and toolchain dirs, the node
-binary's dir, the harness jail, Temp entries the session created itself, a
-bare listing of the Temp root) or contaminating (everything else:
-repositories, the home directory, the npm cache that holds unstripped copies
-of the package, other sandboxes). Commands that fetch from outside the machine
-or read the npm cache are contaminating too: `curl`/`wget`/`Invoke-WebRequest`,
-`git clone/fetch`, `npm view/info/pack/cache/config get`, `npm install <pkg>`,
-`npx <anything but pcg>`, and so on; a bare `npm install` (which reinstalls
-`file:../pcg-ts.tgz`) is not. Shell commands are judged clause by clause (split at `&&`, `||`, `;`, `|`,
-newlines). A listing of the Temp root is benign; a clause that reads contents
-or moves the shell (`grep -r`, `find`, `ls -R`, `rg`, `tree`, `cd`, the Grep
-tool, a Glob with `**`, any path a written script names) aimed at it is not,
-and a bare `cd` counts as reaching the home directory. In code files
+script the agent writes (a Write of `.sh .ps1 .js .mjs .cjs .ts .py ...`, or a
+heredoc) is resolved. Tokens are taken quote-aware (so `"C:/Program Files/x"`
+stays whole) and fine-grained (so `readFileSync('../../x')` inside
+`node -e "..."` surfaces). Path-shaped means: absolute (Windows, Git Bash
+`/c/`, POSIX, the root `/` as an argument of a filesystem command), `~` at the
+start of a token, an environment variable at the start of a token (`$HOME`,
+`${USERPROFILE}`, `$LOCALAPPDATA`, `%APPDATA%`, `$env:TEMP`, ...), a `..`
+segment anywhere, or a reference into `node_modules`. In code files
 (`.js .mjs .cjs .ts .py`) only string literals are scanned, so comments,
 regex literals and division are not paths; in shell scripts comment lines are
-dropped. A token starting with `/` is a path only when it names a known root
-(`/tmp`, `/usr`, `/home`, `/c/`, ...) or is the root itself, never `//`. A
-contaminating run is recorded `contaminated: true, final: false` and the slot
-re-runs once. The heuristic
-cannot follow a `cd` into a relative path (the `cd` target itself is caught),
-nor a path assembled at runtime from pieces.
+dropped.
+
+Shell commands are judged clause by clause (split at `&&`, `||`, `;`, `|`,
+newlines; heredoc bodies are lifted out first and scanned as the script they
+are), and the parser follows `cd`: after `cd X`, a reading command's plain
+relative arguments (`cat notes.md`, `ls`, `grep -r x`) name things in X, so
+does any path-like token of any other command (`xargs cat a/b`,
+`python -c "open('a/b.md')"`, `echo "$(cat README.md)"`), and any other command
+run from a directory that is neither inside the sandbox nor one of its
+ancestors (`git log`, `npm run`, a script) counts as reading that directory.
+A heredoc fed to `bash`/`sh` and a `bash -c '...'` string are scanned as
+shell, `cd` and all; `eval '...'` runs in the same shell, so a `cd` inside it
+moves the tracked directory. Inline code (`node -e`, `python -c`, ...) can
+chdir and build paths, so its outside paths read like a written script's. A
+written script's relative path counts as outside only when it is outside both
+against the script's own folder and against the working directory. Writes:
+a successful truncating create (the Write tool when it did not error, `>`, a
+heredoc `>`, `tee`, a `cp`/`mv` destination file, `cp -t` included) makes that
+exact file the agent's own to read back; `mkdir` (which succeeds on a
+directory that already existed), `>>`, `tee -a`, `touch` and the Edit tool
+grant nothing. No write ever whitelists a subtree, and a path cut back at a
+wildcard (`*`, `?`, `[...]`, `{...}`; a Glob pattern with a separator after its
+wildcard) reads what lies under it. `ln`, `rsync`, `cp -a`/`-r` and a shell
+variable assigned a path (`D=../..`) count as recursive.
+
+Outside paths are classified:
+
+- **benign** — devices; OS, toolchain and node install dirs; the harness jail
+  around this sandbox (it holds only `pcg-ts.tgz`); anything the agent itself
+  created outside the sandbox earlier in the same session, as defined above
+  (every outside write is recorded per run as `outsideWrites`, never as
+  contamination); this session's own Claude Code
+  directory `<claude config>/projects/<slug>/<session_id>/`, where large tool
+  output is offloaded and read back (observed in the aborted pilot); a `cd` by
+  itself (it reads nothing; what runs after it is judged); a non-recursive
+  listing of the sandbox root (sandbox names only); `node_modules/pcg-ts/...`
+  under an ancestor of the sandbox as the script a `node` call runs (the
+  agent's own package reached through a relative path after a `cd` up; any
+  other read of such a path contaminates); a Temp entry that
+  did not exist when the session started (a wildcard is never such an entry);
+- **contaminating** — everything else: repositories, the home directory, the
+  npm cache (unstripped copies of the package), other sandboxes, pre-existing
+  Temp entries such as the orchestrator's scratchpad under `Temp\claude`,
+  another session's tool results, a foreign directory listed or searched, the
+  sandbox root searched recursively, the filesystem root. Commands that fetch
+  from outside the machine or read the npm cache are contaminating too:
+  `curl`/`wget`/`Invoke-WebRequest`, `git clone/fetch`,
+  `npm view/info/pack/cache/config get`, `npm install <pkg>`,
+  `npx <anything but pcg>`, and so on; a bare `npm install` (which reinstalls
+  `file:../pcg-ts.tgz`) is not.
+
+A contaminating run is recorded `contaminated: true, final: false` and the
+slot re-runs once. If more than half of the last six finished attempts
+(`limits.contaminationRateWindow`, `limits.contaminationRateMax`) are
+contaminated, the runner stops with wake reason `contamination-rate`: that
+pattern means the classifier or the sandbox is wrong, and every re-run spends
+allowance. The heuristic cannot see a path assembled at runtime from pieces.
+
+`node evals/harness/reclassify.mjs --results evals/results/<campaign> [--runs evals/runs/<campaign>]`
+re-runs the current classifier over a campaign's finished records without
+changing them, and prints before/after verdicts. On the aborted first pilot
+(`pilot-aborted-1`, 5 records, 4 flagged) it keeps exactly one contaminated:
+the agent's disk-wide `find /`. The other three were the session's own
+offloaded tool output, a file the agent wrote to `/tmp` and read back, and a
+mistyped `cd /tmp` followed by a failed relative command. Excerpts of those
+transcripts are the fixture `fixtures/transcripts/pilot-aborted-1-excerpts.json`.
 
 Network access is not blocked (the CLI has no such switch on Windows); bare
 URLs are logged per run in `networkAttempts`.
@@ -263,6 +329,7 @@ When the first real limit arrives, add its transcript to
   list is one entry long.
 - Exit 10 means wake the owner, with reasons in `STATUS.json`: isolation leak
   detected, API key present, usage limit blocking > 48 h, selftest failure,
+  `contamination-rate` (more than half of the last six attempts contaminated),
   infrastructure failing > 12 h (added: an outage the plan's list did not
   cover, which would otherwise burn the schedule or loop forever), and pilot
   gate failed twice after task replacement (a campaign whose config names

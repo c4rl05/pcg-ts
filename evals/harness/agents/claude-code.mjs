@@ -57,7 +57,9 @@ import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { classifySession } from "../limits.mjs";
-import { SANDBOX_PREFIX, isInside, sha256File } from "../sandbox.mjs";
+import { SANDBOX_PREFIX, claudeConfigDir, isInside, sha256, sha256File } from "../sandbox.mjs";
+
+export { claudeConfigDir };
 
 export const id = "claude-code";
 export const ADAPTER_FILE = fileURLToPath(import.meta.url);
@@ -143,6 +145,27 @@ export function cliVersion(command = "claude") {
 
 export function adapterHash() {
   return sha256File(ADAPTER_FILE);
+}
+
+/**
+ * What the isolation probe actually validates: the arguments and environment
+ * a session is launched with, and the launcher itself — not the transcript
+ * parser, which changes far more often and cannot affect what a session
+ * loads. The probe cache is keyed on this, so a classifier fix does not cost
+ * two probe sessions.
+ */
+export function isolationFingerprint() {
+  return sha256(
+    JSON.stringify({
+      isolated: buildArgs({ model: "<model>", budgets: { turns: 1, wallMinutes: 1, outputTokens: 1 }, mcpConfigPath: "<mcp>" }),
+      control: buildArgs({ model: "<model>", budgets: { turns: 1 }, isolation: false, tools: [] }),
+      isolationEnv: ISOLATION_ENV,
+      sessionEnvVars: SESSION_ENV_VARS,
+      billingEnvVars: BILLING_ENV_VARS,
+      tools: DEFAULT_TOOLS,
+      code: [buildArgs, buildEnv, launch].map((f) => f.toString()),
+    }),
+  );
 }
 
 /** Build the child env: copy, remove session plumbing, add isolation vars. */
@@ -267,7 +290,7 @@ export function commandTokens(command) {
     .replace(/\$\{(\w+)\}/g, (_, name) => `$${name}`);
   const quoted = [];
   for (const m of text.matchAll(/"([^"\n]*)"|'([^'\n]*)'/g)) quoted.push(m[1] ?? m[2]);
-  const fine = text.split(/[\s"'`;&|()<>{}\[\],=]+|\$\(/).filter(Boolean);
+  const fine = text.split(/[\s"'`;&|()<>,=]+|\$\(/).filter(Boolean);
   const coarse = quoted.filter((q) => /\s/.test(q) && !/[\n;|&]/.test(q));
   return { fine: fine.filter((t) => !coarse.some((q) => q.startsWith(`${t} `) && q !== t)), coarse };
 }
@@ -282,7 +305,7 @@ export function commandTokens(command) {
 export function tokenPath(token, cwd, { bareRoot = true } = {}) {
   let t = token.replace(/[,;:]+$/, "");
   if (!t || t.startsWith("-") || /^\d+$/.test(t)) return null;
-  const glob = t.search(/[*?]/);
+  const glob = t.search(/[*?[{]/);
   if (glob === 0) return null;
   if (glob > 0) t = t.slice(0, glob).replace(/[^\\/]*$/, "") || ".";
   const env = /^(?:\$\{(\w+)\}|\$env:(\w+)|%(\w+)%|\$(\w+))(.*)$/i.exec(t);
@@ -297,7 +320,8 @@ export function tokenPath(token, cwd, { bareRoot = true } = {}) {
   if (t.startsWith("/")) {
     if (t.startsWith("//")) return null; // a comment or a URL remnant, never a path here
     if (t === "/") return bareRoot ? (win ? "msys:/" : "/") : null;
-    if (win && /^\/[a-zA-Z](?:\/|$)/.test(t)) return resolve(msysToWin(t));
+    if (win && /^\/[a-zA-Z]\//.test(t)) return resolve(msysToWin(t));
+    if (win && /^\/[a-zA-Z]$/.test(t)) return bareRoot ? resolve(msysToWin(t)) : null; // `sed '/x/,/y/p'` ends in `/p`
     if (!POSIX_ROOTS.test(t)) return null;
     if (!win) return resolve(t);
     if (t === "/tmp" || t.startsWith("/tmp/")) return resolve(tmpdir(), t.slice(5) || ".");
@@ -313,13 +337,27 @@ export function tokenPath(token, cwd, { bareRoot = true } = {}) {
  * relative path, but the `cd` target itself is caught.
  */
 export function extractCommandPaths(command, cwd, { bareRoot = true } = {}) {
-  const out = new Set();
+  return [...new Set(extractCommandPathEntries(command, cwd, { bareRoot }).map((e) => e.path))];
+}
+
+/** Like extractCommandPaths, with `glob: true` for a path cut back at a wildcard (it reads what lies under the cut). */
+export function extractCommandPathEntries(command, cwd, { bareRoot = true } = {}) {
+  const out = new Map();
   const { fine, coarse } = commandTokens(command);
   for (const t of [...coarse, ...fine]) {
     const p = tokenPath(t, cwd, { bareRoot });
-    if (p) out.add(p);
+    if (!p) continue;
+    const glob = /[*?[{]/.test(t);
+    out.set(p, { path: p, token: t, glob: glob || out.get(p)?.glob === true });
   }
-  return [...out];
+  return [...out.values()];
+}
+
+/** A token that names a file or directory relative to wherever the shell is: has a separator, starts with a dot, or has an extension. */
+function pathLike(token) {
+  const t = String(token);
+  if (!t || t.startsWith("-") || /^\d+(?:\.\d+)?$/.test(t) || /^[=:]+$/.test(t)) return false;
+  return /[\\/]/.test(t) || /^\.[\w.-]/.test(t) || /^[\w@+-][\w.@+-]*\.[A-Za-z][A-Za-z0-9]{0,7}$/.test(t);
 }
 
 /** Shell segments: a command line split at separators, so each clause is judged on its own. */
@@ -328,12 +366,15 @@ export function commandSegments(command) {
 }
 
 /**
- * Clauses that read a directory's CONTENTS rather than list its names, or
- * that move the shell somewhere (after a `cd`, relative paths name things
- * the parser cannot see). A bare listing of the Temp root is benign; one of
- * these aimed at it is not.
+ * Clauses that read a directory's CONTENTS rather than list its names. A bare
+ * listing of the sandbox root is benign; one of these aimed at it is not.
  */
-const RECURSIVE_SEGMENT = /^(?:\S*[\\/])?(?:cd|pushd|Set-Location|sl|find|tree|du|rg|ag|fd|fdfind)\b|^(?:\S*[\\/])?(?:e|f)?grep\b[^\n]*\s-[a-zA-Z]*[rRd]|^(?:\S*[\\/])?ls\b[^\n]*\s-[a-zA-Z]*R|Get-ChildItem\b[^\n]*-Recurse|^dir\b[^\n]*\/s\b|\bcp\b[^\n]*\s-[a-zA-Z]*[rR]|\btar\b|\bzip\b|\b7z\b/i;
+const RECURSIVE_SEGMENT = /^(?:\S*[\\/])?(?:find|tree|du|rg|ag|fd|fdfind)\b|^(?:\S*[\\/])?(?:e|f)?grep\b[^\n]*\s-[a-zA-Z]*[rRd]|^(?:\S*[\\/])?ls\b[^\n]*\s-[a-zA-Z]*R|Get-ChildItem\b[^\n]*-Recurse|^dir\b[^\n]*\/s\b|\bcp\b[^\n]*\s-[a-zA-Z]*[rR]|\btar\b|\bzip\b|\b7z\b|^(?:\S*[\\/])?(?:ln|rsync|robocopy|xcopy)\b|\bcp\b[^\n]*\s-[a-zA-Z]*a|^\s*\w+=\S/i;
+
+/** Commands whose arguments are files or directories they read (patterns first where noted). */
+const READ_VERBS = new Set(["cat", "head", "tail", "less", "more", "type", "ls", "dir", "grep", "egrep", "fgrep", "rg", "find", "tree", "sed", "awk", "wc", "file", "stat", "cp", "du", "od", "xxd", "strings", "jq", "get-content", "gc", "get-childitem", "gci", "tar", "node"]);
+const PATTERN_FIRST = new Set(["grep", "egrep", "fgrep", "rg", "sed", "awk", "jq"]);
+const RECURSIVE_VERBS = new Set(["find", "tree", "du", "rg"]);
 
 /** The body of a script the agent wrote, reduced to what can name a path. */
 export function scriptPathText(file, body) {
@@ -357,31 +398,121 @@ export function extractNetworkAttempts(command) {
 /** File extensions whose written content is scanned like a shell command. */
 const SCRIPT_EXT = /\.(?:sh|bash|zsh|ps1|psm1|bat|cmd|js|mjs|cjs|ts|mts|py)$/i;
 
+/**
+ * Heredocs out of a shell command: the command without their bodies, and each
+ * body with the file it was redirected into (a heredoc body is a script the
+ * agent wrote, not a sequence of shell clauses).
+ */
+export function splitHeredocs(command) {
+  const heredocs = [];
+  const lines = String(command).split("\n");
+  const kept = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const m = /(?<!<)<<(?!<)-?\s*(['"]?)([A-Za-z_][\w-]*)\1/.exec(line);
+    if (!m) {
+      kept.push(line);
+      continue;
+    }
+    const redir = /(?:^|[^<>&0-9])(>>?)\s*("[^"]*"|'[^']*'|[^\s;&|<>]+)/.exec(line.replace(m[0], " "));
+    const target = redir?.[2];
+    const shell = /^\s*(?:\S*[\\/])?(?:bash|sh|zsh|dash|ksh|pwsh|powershell)(?:\.exe)?\b/i.test(line);
+    const body = [];
+    let j = i + 1;
+    for (; j < lines.length && lines[j].trim() !== m[2]; j++) body.push(lines[j]);
+    heredocs.push({ target: target ? unquote(target) : null, append: redir?.[1] === ">>", shell, body: body.join("\n") });
+    kept.push(line.replace(m[0], ` __PCGHEREDOC${heredocs.length - 1}__ `));
+    i = j;
+  }
+  return { command: kept.join("\n"), heredocs };
+}
+
+function unquote(s) {
+  const t = String(s).trim();
+  return /^(["']).*\1$/.test(t) ? t.slice(1, -1) : t;
+}
+
+/** Quote-aware words of one clause. */
+function shellWords(clause) {
+  return (String(clause).match(/"[^"]*"|'[^']*'|[^\s]+/g) ?? []).map(unquote);
+}
+
+/** A clause's output redirections: the clause without them, and their targets. */
+export function stripRedirects(clause) {
+  const targets = [];
+  const appends = [];
+  const text = String(clause).replace(/(?:^|(?<=[^<>&0-9]))(\d?>>?|&>>?)\s*("[^"]*"|'[^']*'|[^\s;&|<>]+)/g, (_, op, target) => {
+    const t = unquote(target);
+    if (!/^&\d*$|^\/dev\/null$|^NUL$|^\$null$/i.test(t)) (op.endsWith(">>") ? appends : targets).push(t);
+    return " ";
+  });
+  return { text, targets, appends };
+}
+
 const BENIGN_PREFIXES_WIN = ["C:\\Windows\\", "C:\\Program Files\\Git\\", "C:\\Program Files\\nodejs\\"];
 const BENIGN_EXACT = new Set(["/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr", "NUL"]);
 
+/** Claude Code's config dir, where it offloads a session's large tool results. */
+
+/** The harness jail around a sandbox project (`<root>/pcg-eval-XXXX`), or null. */
+function jailDir(sandbox) {
+  const parent = dirname(resolve(sandbox));
+  return basename(parent).startsWith(SANDBOX_PREFIX) ? parent : null;
+}
+
 /**
- * Classify an outside-sandbox path. Contaminating paths are the ones that can
- * carry information the arm does not have: this machine's repositories and
- * home directory, the npm cache (which holds unstripped copies of the
- * package), other sandboxes, the Temp directory's pre-existing entries.
- * Benign: devices, OS and toolchain install dirs, the node binary's own
- * directory, Temp entries the session itself created, and a bare listing of
- * the Temp root (names only).
+ * Classify an outside-sandbox path.
+ *
+ * Benign: devices; OS, toolchain and node install dirs; the harness jail
+ * around this sandbox (it holds only the neutral tarball); a file or dir the
+ * agent itself created during this session (`created`); this session's own
+ * Claude Code directory (`sessionId`: large tool results are offloaded to
+ * `<claude config>/projects/<slug>/<session>/tool-results/` and read back);
+ * a `cd` to an ancestor of the sandbox, which reads nothing by itself; a
+ * non-recursive listing of the dedicated sandbox root (names only); a
+ * `node_modules` path under an ancestor of the sandbox (module resolution,
+ * or a relative command run after such a `cd`); a Temp entry that did not
+ * exist when the session started.
+ *
+ * Contaminating: everything else — repositories, the home directory, the
+ * npm cache (unstripped copies of the package), other sandboxes, pre-existing
+ * Temp entries such as the orchestrator's scratchpad, foreign directories
+ * listed or searched, the filesystem root.
  */
-export function classifyOutsidePath(p, { tmpEntriesAtStart = null, benign = [], recursive = false } = {}) {
+export function classifyOutsidePath(p, { sandbox = null, tmpEntriesAtStart = null, benign = [], recursive = false, cd = false, created = [], createdDirs = [], sessionId = null, nodeEntry = false } = {}) {
   if (BENIGN_EXACT.has(p) || /^msys:\/dev\//.test(p)) return "benign";
-  if (p.startsWith("msys:")) return /^msys:\/(?:usr|bin|etc\/profile|mingw64)/.test(p) ? "benign" : "contaminating";
+  // A `cd` by itself reads nothing; what runs after it is judged in that directory.
+  if (cd) return "benign";
+  if (p.startsWith("msys:")) return /^msys:\/(?:usr|bin|etc\/profile|mingw64)(?:\/|$)/.test(p) ? "benign" : "contaminating";
+  // Only what the agent itself created, exactly: a file it wrote, or a listing of a directory it made.
+  const same = (a, b) => isInside(a, b) && isInside(b, a);
+  // A created FILE is the agent's own however it is read (inline code counts as recursive; a file has no subtree).
+  if (created.some((c) => same(p, c))) return "benign";
+  if (!recursive && createdDirs.some((c) => same(p, c))) return "benign";
+  if (sessionId) {
+    const projects = join(claudeConfigDir(), "projects");
+    if (isInside(p, projects)) {
+      const parts = relative(projects, p).split(/[\\/]/);
+      if (parts.length >= 2 && parts[1] === sessionId) return "benign";
+    }
+  }
   const nodeDir = dirname(process.execPath);
   const benignRoots = [nodeDir, ...benign, ...(process.platform === "win32" ? BENIGN_PREFIXES_WIN : ["/usr/bin/", "/usr/lib/", "/bin/", "/lib/", "/proc/self/"])];
   if (benignRoots.some((b) => isInside(p, b.replace(/[\\/]$/, "")))) return "benign";
+  if (sandbox) {
+    const jail = jailDir(sandbox);
+    if (jail && isInside(p, jail)) return "benign";
+    const ancestor = isInside(sandbox, p);
+    if (ancestor && !recursive && jail && isInside(p, dirname(jail)) && isInside(dirname(jail), p)) return "benign";
+    // The agent's own package reached from an ancestor (a relative `node node_modules/pcg-ts/...` after a `cd` up).
+    const segs = resolve(p).split(/[\\/]/);
+    const nm = segs.findIndex((s) => s.toLowerCase() === "node_modules");
+    if (nodeEntry && !recursive && nm > 0 && segs[nm + 1]?.toLowerCase() === "pcg-ts" && isInside(sandbox, segs.slice(0, nm).join(sep) + (nm === 1 ? sep : ""))) return "benign";
+  }
   const tmp = tmpdir();
-  if (isInside(p, tmp)) {
-    const rel = relative(tmp, p);
-    if (rel === "") return recursive ? "contaminating" : "benign";
-    const first = rel.split(/[\\/]/)[0];
-    if (tmpEntriesAtStart && !tmpEntriesAtStart.has(first.toLowerCase())) return "benign";
-    return "contaminating";
+  if (isInside(p, tmp) && resolve(p) !== resolve(tmp)) {
+    const first = relative(tmp, p).split(/[\\/]/)[0];
+    if (tmpEntriesAtStart && !/[*?[{]/.test(first) && !tmpEntriesAtStart.has(first.toLowerCase())) return "benign";
   }
   return "contaminating";
 }
@@ -406,12 +537,16 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
   const pcgDir = join(sandbox, "node_modules", "pcg-ts");
   const init = events.find((e) => e?.type === "system" && e?.subtype === "init") ?? null;
   const result = [...events].reverse().find((e) => e?.type === "result") ?? null;
+  const sessionId = init?.session_id ?? null;
   const messageIds = new Set();
   const usageById = new Map();
   const toolUses = new Map();
   const toolCallsByName = {};
   const readSets = { docs: new Set(), graphs: new Set(), skills: new Set(), llms: new Set(), pkg: new Set() };
   const outside = new Set();
+  const outsideWrites = new Set();
+  const created = [];
+  const createdDirs = [];
   const contaminating = new Set();
   const network = [];
   const writes = new Set();
@@ -420,12 +555,36 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
   const rateLimitEvents = [];
   let finalText = "";
 
-  const touch = (p, { write = false, recursive = false } = {}) => {
+  const toolErrors = new Map();
+  for (const e of events) {
+    if (e?.type !== "user" || !e.message) continue;
+    for (const b of e.message.content ?? []) if (b?.type === "tool_result") toolErrors.set(b.tool_use_id, b.is_error === true);
+  }
+
+  const resolveArg = (arg, base) => {
+    const a = unquote(arg);
+    return tokenPath(a, base) ?? resolve(base, a);
+  };
+
+  /** Record a path the agent read (or, with `write`, wrote). */
+  /**
+   * `write`: false (a read), "create" (a truncating create: that exact file is
+   * then the agent's own), "mkdir" (that exact directory may then be listed),
+   * "append" (recorded, grants nothing: the file may have held anything).
+   */
+  const touch = (p, { write = false, recursive = false, cd = false, base = sandbox, nodeEntry = false } = {}) => {
     if (!p || typeof p !== "string") return;
-    const abs = p.startsWith("msys:") ? p : (tokenPath(p, sandbox) ?? resolve(sandbox, p));
+    const abs = p.startsWith("msys:") ? p : resolveArg(p, base);
     if (abs.startsWith("msys:") || !isInside(abs, sandbox)) {
+      if (write && !abs.startsWith("msys:")) {
+        // Writing outside is recorded, not contamination.
+        outsideWrites.add(abs);
+        if (write === "create" && !/[*?]/.test(abs)) created.push(abs);
+        // `mkdir -p` succeeds on a directory that already existed, so it grants nothing.
+        return;
+      }
       outside.add(abs);
-      if (classifyOutsidePath(abs, { tmpEntriesAtStart, benign: benignRoots, recursive }) === "contaminating") contaminating.add(abs);
+      if (classifyOutsidePath(abs, { sandbox, tmpEntriesAtStart, benign: benignRoots, recursive, cd, created, createdDirs, sessionId, nodeEntry }) === "contaminating") contaminating.add(abs);
       return;
     }
     if (isInside(abs, pcgDir)) {
@@ -433,6 +592,114 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
       readSets[packageArea(rel)].add(rel.replace(/\\/g, "/") || ".");
     } else if (write) {
       writes.add(relative(sandbox, abs).replace(/\\/g, "/"));
+    }
+  };
+
+  /** Scan a script body the agent wrote (a Write tool call, a heredoc). */
+  const scanScript = (file, body, cwd = sandbox) => {
+    const { text, bareRoot } = scriptPathText(file, body);
+    const scriptDir = typeof file === "string" ? dirname(resolveArg(file, cwd)) : cwd;
+    // A script can do anything to what it names, so its outside paths count as recursive reads.
+    // A relative path may be meant against the script's folder (imports, URLs) or the cwd (fs calls):
+    // it counts as outside only when both readings are.
+    const inCwd = new Map(extractCommandPathEntries(text, cwd, { bareRoot }).map((e) => [e.token, e.path]));
+    for (const e of extractCommandPathEntries(text, scriptDir, { bareRoot })) {
+      const other = inCwd.get(e.token);
+      const inside = [e.path, other].find((x) => x && !String(x).startsWith("msys:") && isInside(x, sandbox));
+      touch(inside ?? other ?? e.path, { recursive: true });
+    }
+    const net = extractNetworkAttempts(body);
+    network.push(...net.commands);
+    for (const c of net.commands) contaminating.add(`net:${c}`);
+  };
+
+  /** One shell tool call, clause by clause, following `cd`. */
+  const scanShell = (raw, depth = 0, startCwd = sandbox) => {
+    const split = splitHeredocs(raw);
+    const heredocs = split.heredocs;
+    // `eval '...'` runs its string in THIS shell (a `cd` inside it moves the shell); `bash -c '...'`
+    // runs it in a subshell. Both are lifted out whole before the command is split at separators,
+    // which would otherwise cut through their quotes.
+    const subshells = [];
+    const command = split.command
+      .replace(/\beval\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)")/g, (_, a, b) => a ?? b)
+      .replace(/\b(?:bash|sh|zsh|dash)(?:\.exe)?\s+-c\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)")/g, (_, a, b) => {
+        subshells.push(a ?? b);
+        return ` __PCGSUBSHELL${subshells.length - 1}__ `;
+      });
+    let vcwd = startCwd;
+    for (const rawSeg of commandSegments(command)) {
+      const markers = [...rawSeg.matchAll(/__PCGHEREDOC(\d+)__/g)].map((m) => heredocs[Number(m[1])]).filter(Boolean);
+      for (const m of rawSeg.matchAll(/__PCGSUBSHELL(\d+)__/g)) if (depth < 3) scanShell(subshells[Number(m[1])] ?? "", depth + 1, vcwd);
+      const seg = rawSeg.replace(/__PCGHEREDOC\d+__|__PCGSUBSHELL\d+__/g, " ");
+      const { text, targets, appends } = stripRedirects(seg);
+      const words = shellWords(text);
+      const verb = (words[0] ?? "").replace(/^.*[\\/]/, "").replace(/\.exe$/i, "").toLowerCase();
+      if (["cd", "pushd", "chdir", "set-location", "sl"].includes(verb)) {
+        const arg = words.slice(1).find((w) => !w.startsWith("-"));
+        const target = !arg || arg === "~" ? homedir() : arg === "-" ? vcwd : resolveArg(arg, vcwd);
+        touch(target, { cd: true });
+        vcwd = target;
+        continue;
+      }
+      for (const h of markers) {
+        if (h.target) touch(h.target, { write: h.append ? "append" : "create", base: vcwd });
+        // A body fed to a shell is a script of shell clauses, cd and all; any other body is a file's content.
+        if (h.shell && !h.target && depth < 3) scanShell(h.body, depth + 1, vcwd);
+        else scanScript(h.target ?? "heredoc.sh", h.body, vcwd);
+      }
+      const flagless = words.slice(1).filter((x) => !x.startsWith("-"));
+      for (const t of targets) touch(t, { write: "create", base: vcwd });
+      for (const t of appends) touch(t, { write: "append", base: vcwd });
+      if (["mkdir", "md", "new-item", "ni"].includes(verb)) for (const w of flagless) touch(w, { write: "mkdir", base: vcwd });
+      if (verb === "touch") for (const w of flagless) touch(w, { write: "append", base: vcwd });
+      if (verb === "tee") for (const w of flagless) touch(w, { write: words.some((x) => /^-(?:a|-append)$/.test(x)) ? "append" : "create", base: vcwd });
+      const tflag = words.findIndex((w) => w === "-t" || w.startsWith("--target-directory"));
+      const targetDir = tflag < 0 ? null : words[tflag].includes("=") ? words[tflag].split("=")[1] : words[tflag + 1];
+      const copyArgs = tflag < 0 ? flagless : words.slice(1).filter((x, i) => !x.startsWith("-") && i + 1 !== tflag + 1);
+      if (["cp", "mv", "copy", "move", "copy-item", "move-item"].includes(verb) && (targetDir ? copyArgs.length >= 1 : copyArgs.length >= 2)) {
+        const dest = targetDir ? `${targetDir}/` : copyArgs[copyArgs.length - 1];
+        const sources = targetDir ? copyArgs.filter((x) => x !== targetDir) : copyArgs.slice(0, -1);
+        const intoDir = /[\\/]$/.test(dest) || sources.length > 1 || !/\.[A-Za-z0-9]{1,8}$/.test(dest);
+        for (const src of sources) touch(intoDir ? join(resolveArg(dest, vcwd), basename(unquote(src))) : dest, { write: "create", base: vcwd });
+      }
+      // A glob over an outside dir reads everything under it, like a recursive listing.
+      // Inline code (`node -e`, `python -c`) can chdir and build paths: its outside paths read like a script's.
+      const inlineCode = /^(?:node|deno|bun|python3?|py|perl|ruby|php)$/.test(verb) && words.some((w) => /^-(?:e|c|p|-eval|-print)$/.test(w));
+      const recursive = inlineCode || RECURSIVE_SEGMENT.test(text) || /\.\.[\\/]\S*[*?[{]|--recursive|\brecursive\s*:\s*true/.test(text);
+      // A bare `/` is the root only as an argument of a filesystem command; elsewhere it divides or splits.
+      const bareRoot = /^(?:sudo\s+)?(?:\S*[\\/])?(?:find|ls|dir|tree|du|rg|ag|fd|e?grep|fgrep|Get-ChildItem|gci|cat|cp|tar|zip|stat)\b/i.test(text);
+      // Only a truncating redirect hides its target from the clause's reads; `2>> F` beside `grep x F` still reads F.
+      const writtenHere = new Set(targets.map((t) => resolveArg(t, vcwd).toLowerCase()));
+      const destHere = ["cp", "mv", "copy", "move", "copy-item", "move-item", "mkdir", "md", "touch", "tee"].includes(verb) ? new Set((verb === "cp" || verb === "mv" || verb.startsWith("co") || verb.startsWith("mo") ? (targetDir ? [targetDir] : flagless.slice(-1)) : flagless).map((w) => resolveArg(w, vcwd).toLowerCase())) : new Set();
+      for (const { path, token, glob } of extractCommandPathEntries(text, vcwd, { bareRoot })) {
+        const key = String(path).toLowerCase();
+        // `echo $HOME`, `echo ~` print a name; they read nothing.
+        if (["echo", "printf"].includes(verb) && /^(?:~|\$\{?\w+\}?|%\w+%|\$env:\w+)$/i.test(token)) continue;
+        if (!writtenHere.has(key) && !destHere.has(key)) touch(path, { recursive: recursive || glob, nodeEntry: verb === "node" && token === flagless[0] });
+      }
+      if (!isInside(vcwd, sandbox)) {
+        // Outside the sandbox, anything that names a file relative to where the shell is names it THERE,
+        // whatever the command (xargs, python, diff, base64, a `$(cat ...)` inside echo).
+        for (const t of commandTokens(text).fine.slice(1)) {
+          if (!pathLike(t) || tokenPath(t, vcwd) || (verb === "node" && t === flagless[0])) continue;
+          const key = resolveArg(t, vcwd).toLowerCase();
+          if (writtenHere.has(key) || destHere.has(key)) continue;
+          touch(t, { recursive: recursive || /[*?]/.test(t), base: vcwd });
+        }
+        if (READ_VERBS.has(verb)) {
+          let args = words.slice(1).filter((w) => !w.startsWith("-") && !/^\d+$/.test(w));
+          if (verb === "find") args = words.slice(1, (words.slice(1).findIndex((w) => /^[-(!]/.test(w)) + 1 || words.length));
+          if (PATTERN_FIRST.has(verb)) args = args.slice(1);
+          if (verb === "node") args = args.slice(0, 1);
+          if (verb === "cp") args = args.slice(0, -1);
+          if (!args.length && verb !== "node") touch(vcwd, { recursive: RECURSIVE_VERBS.has(verb) || recursive });
+          for (const a of args) touch(a, { recursive: RECURSIVE_VERBS.has(verb) || recursive || /[*?[{]/.test(a), base: vcwd, nodeEntry: verb === "node" });
+        } else if (!isInside(sandbox, vcwd) && verb && !["echo", "printf", "true", "false", "exit", "pwd", "export", "set"].includes(verb)) {
+          // Any other command run from a foreign directory (git, npm, a script) may read it.
+          touch(vcwd, { recursive: true });
+        }
+      }
     }
   };
 
@@ -461,40 +728,34 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
         case "MultiEdit":
         case "NotebookEdit": {
           const file = input.file_path ?? input.notebook_path;
-          touch(file, { write: true });
-          // A script the agent writes and then runs reads what it names.
+          // An Edit reads the file it changes; only a Write can create one.
+          if (block.name !== "Write") touch(file);
+          touch(file, { write: block.name === "Write" && !toolErrors.get(block.id) ? "create" : "append" });
           if (typeof file === "string" && SCRIPT_EXT.test(file)) {
             const body = [input.content, input.new_string, ...(input.edits ?? []).map((x) => x?.new_string)].filter((x) => typeof x === "string").join("\n");
-            const { text, bareRoot } = scriptPathText(file, body);
-            // A script can do anything to what it names, so its outside paths count as recursive reads.
-            for (const p of extractCommandPaths(text, sandbox, { bareRoot })) touch(p, { recursive: true });
-            const net = extractNetworkAttempts(body);
-            network.push(...net.commands);
-            for (const c of net.commands) contaminating.add(`net:${c}`);
+            scanScript(file, body);
           }
           break;
         }
         case "Glob":
         case "Grep":
         case "LS":
-          touch(input.path ?? ".", { recursive: block.name === "Grep" || (block.name === "Glob" && String(input.pattern ?? "").includes("**")) });
-          if (block.name === "Glob" && typeof input.pattern === "string") {
-            const prefix = input.pattern.split(/[*?{[]/)[0].replace(/[^\\/]*$/, "");
-            if (prefix) touch(input.path ? join(tokenPath(input.path, sandbox) ?? resolve(sandbox, input.path), prefix) : prefix, { recursive: String(input.pattern).includes("**") });
+          {
+            // A Glob whose pattern descends (a separator after a wildcard, or **) reads the tree under its base.
+            const pattern = String(input.pattern ?? "");
+            const wild = pattern.search(/[*?{[]/);
+            const descends = pattern.includes("**") || (wild >= 0 && /[\\/]/.test(pattern.slice(wild)));
+            touch(input.path ?? ".", { recursive: block.name === "Grep" || (block.name === "Glob" && descends) });
+            if (block.name === "Glob" && pattern) {
+              const prefix = (wild >= 0 ? pattern.slice(0, wild) : pattern).replace(/[^\\/]*$/, "");
+              if (prefix) touch(input.path ? join(tokenPath(input.path, sandbox) ?? resolve(sandbox, input.path), prefix) : prefix, { recursive: descends || wild >= 0 });
+            }
           }
           break;
         case "Bash":
         case "PowerShell": {
           const cmd = String(input.command ?? "");
-          for (const seg of commandSegments(cmd)) {
-            // A glob over an outside dir reads everything under it, like a recursive listing.
-            const recursive = RECURSIVE_SEGMENT.test(seg) || /\.\.[\\/]\S*[*?]|--recursive|\brecursive\s*:\s*true/.test(seg);
-            // A bare `/` is the root only as an argument of a filesystem command; elsewhere it divides or splits.
-            const bareRoot = /^(?:sudo\s+)?(?:\S*[\\/])?(?:find|ls|dir|tree|du|rg|ag|fd|e?grep|fgrep|cd|pushd|Get-ChildItem|gci|cat|cp|tar|zip|stat)\b/i.test(seg);
-            for (const p of extractCommandPaths(seg, sandbox, { bareRoot })) touch(p, { recursive });
-            // A bare `cd` goes home.
-            if (/^(?:cd|pushd|Set-Location|sl)\s*$/i.test(seg)) touch(homedir(), { recursive: true });
-          }
+          scanShell(cmd);
           const net = extractNetworkAttempts(cmd);
           network.push(...net.commands, ...net.urls);
           for (const c of net.commands) contaminating.add(`net:${c}`);
@@ -503,8 +764,6 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
             pcgCommands[sub] = (pcgCommands[sub] ?? 0) + 1;
             pcgCommandResults.push({ toolUseId: block.id, sub });
           }
-          const redirect = /(?:^|[^>0-9&])>{1,2}\s*("?)([^\s"|;&]+)\1/g;
-          for (const r of cmd.matchAll(redirect)) if (!/^&|^\/dev\/null$|^NUL$|^\$null$/i.test(r[2])) touch(r[2], { write: true });
           break;
         }
         default:
@@ -570,6 +829,7 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
       contaminating: sorted(contaminating),
     },
     writes: sorted(writes),
+    outsideWrites: sorted(outsideWrites),
     networkAttempts: [...new Set(network)],
     pcgCommands,
     pcgFailures,
@@ -737,6 +997,7 @@ export async function launch({
     capsHit,
     readPaths: parsed.readPaths,
     writes: parsed.writes,
+    outsideWrites: parsed.outsideWrites,
     networkAttempts: parsed.networkAttempts,
     pcgCommands: parsed.pcgCommands,
     pcgFailures: parsed.pcgFailures,
