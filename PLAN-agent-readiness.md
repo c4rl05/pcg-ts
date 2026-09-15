@@ -646,9 +646,8 @@ a key would silently move the eval onto pay-per-token billing.
 
 **Unattended by design.** Not in CI (nondeterministic, and it spends the
 owner's allowance), but no step needs a human to press go:
-- **Scheduling.** Runs happen inside a configured window (decision E1;
-  default the night shift, leaving daytime allowance to the unattended
-  build) with concurrency 1. The schedule and every finished run are
+- **Scheduling.** Runs happen inside a configured window (decision E1:
+  around the clock) with concurrency 1. The schedule and every finished run are
   persisted in `runs.jsonl`, so the runner is resumable: killed, rebooted
   or out of window, it restarts at the first unfinished slot.
 - **Usage limits.** A session that ends on a usage-limit error is NOT a
@@ -743,7 +742,15 @@ record, and an independent verification agent for every nontrivial unit.
 
 ## Decisions
 
-**Needed before starting:**
+**Decided by the owner, 2026-09-15:** E1 — Sonnet 5, around the clock,
+pausing at the usage limit and resuming automatically. E2 — held-out
+questions locked in `pcg-ts-private`. E3 — practice round (pilot) first.
+Run unattended as far as possible, with agents for parallel work and
+verification. U0 is captured: `baseline-0.17.0-0ad6998.tgz`, sha256
+`ee39df38…24bc`, source as of `a67e9ec`, in `evals/tarballs/` and
+`pcg-ts-private/evals/tarballs/`.
+
+**As they were posed:**
 
 - **E1 — model, and when the eval may use the allowance.** Runs cost
   subscription allowance, not money (see U7). Recommended: Sonnet 5 as the

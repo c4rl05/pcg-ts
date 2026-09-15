@@ -37,3 +37,7 @@ coverage/
 # tests/support/kits.ts. Absent for almost everyone, which is why every
 # suite that needs one skips.
 /road-kits.local.json
+
+# Agent eval: baseline tarballs and run transcripts/frames stay local (see PLAN-agent-readiness.md U0/U7)
+/evals/tarballs/
+/evals/runs/
