@@ -46,7 +46,7 @@ const ROOT_TYPE_SURFACE = [
   "Attribute", "AttributeNotFoundError", "AttributeReduceParams", "AttributeRemapParams", "AttributeSet", "BindPatches",
   "BuildInstanceBatchesOptions", "CellContext", "CellContextBase", "CellContextPath",
   "CellContextXYZ", "CellContextXZ", "CellCookRequest", "CellCoord", "CellCoord1", "CellCoord2",
-  "CellCoord3", "CellId", "CellMode", "CellOutputs", "CellSnapshot", "Column", "ColumnData",
+  "CellCoord3", "CellId", "CellMode", "CellOutputs", "CellSnapshot", "CheckedGraph", "Column", "ColumnData",
   "ConnectByIndexParams", "ConnectPointsParams", "CookBackend", "CookCancelledError", "CookOptions", "CookResult",
   "CookStats", "CopyToPointsParams", "DataCollection", "DataInputParams", "DataItem",
   "DataValue", "DescribedConnection", "DescribedDrivenParam", "DescribedGraphParam",
