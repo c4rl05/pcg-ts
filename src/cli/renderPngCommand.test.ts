@@ -223,7 +223,9 @@ describe("pcg render — PNG", () => {
     expect(await runCli(["render", "/g/cave.json", "--out", "/c.png", "--view", "ground", "--size", "160x120"], io.io)).toBe(
       EXIT_OK,
     );
-    expect(io.stdout()).toMatch(/^ground view: occluded at [\d.]+ m — \d+% of the frame is surface nearer than [\d.]+ m/m);
+    expect(io.stdout()).toMatch(
+      /^ground view: occluded at [\d.]+ m — \d+% of the view that flat ground would leave open past [\d.]+ m is blocked/m,
+    );
     const json = fakeIo();
     Object.assign(json.files, files);
     await runCli(["render", "/g/cave.json", "--out", "/c.png", "--view", "ground", "--size", "160x120", "--json"], json.io);

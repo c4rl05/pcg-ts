@@ -1087,7 +1087,7 @@ async function runRenderPng(
     ...(comparable !== undefined ? [`not comparable as pinned: ${comparable.note}`] : []),
     ...(result.groundView?.occluded === true
       ? [
-          `ground view: occluded at ${result.groundView.medianDepth === null ? "?" : fmtFixed(result.groundView.medianDepth, 1)} m — ${Math.round(result.groundView.nearFraction * 100)}% of the frame is surface nearer than ${fmtFixed(result.groundView.nearDistance, 1)} m, so it shows what the eye stands against rather than the scene; raise --eye or pin a larger --extent`,
+          `ground view: occluded at ${result.groundView.medianDepth === null ? "?" : fmtFixed(result.groundView.medianDepth, 1)} m — ${Math.round(result.groundView.blockedFraction * 100)}% of the view that flat ground would leave open past ${fmtFixed(result.groundView.nearDistance, 1)} m is blocked nearer than that, so the frame shows what the eye stands against rather than the scene; raise --eye or pin a larger --extent`,
         ]
       : []),
     `drawn as: ${result.drawing.instances}; ${result.drawing.points}; ${result.drawing.grid.views.length > 0 ? result.drawing.grid.note : "no ground grid"}; ${result.drawing.labels}`,

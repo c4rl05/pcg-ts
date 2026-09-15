@@ -18,7 +18,7 @@ import type { DataCollection } from "../index.js";
 import { CliError } from "./errors.js";
 import { drawLabel } from "./raster/font.js";
 import { encodePng, pixelHash } from "./raster/png.js";
-import { Raster, makeCamera } from "./raster/raster.js";
+import { type Camera, Raster, makeCamera } from "./raster/raster.js";
 import {
   type LegendEntry,
   type SceneCounts,
@@ -169,11 +169,17 @@ export interface RenderPngResult {
 export interface GroundViewReport {
   /** The distance "near" means: four eye heights, at least 5% of the framing extent. */
   readonly nearDistance: number;
-  /** Fraction of the frame (sampled) covered by something nearer than `nearDistance`. */
+  /** Fraction of the frame (sampled) covered by something nearer than `nearDistance`, flat ground included. */
   readonly nearFraction: number;
+  /**
+   * Of the samples flat ground at the eye's feet would leave open past
+   * `nearDistance` (plus any within one eye height), the fraction something
+   * nearer blocks. 0 for a flat plane at any extent.
+   */
+  readonly blockedFraction: number;
   /** Median depth over the sampled frame; null when most of it is background. */
   readonly medianDepth: number | null;
-  /** More than half the frame is nearer than `nearDistance`: it shows what the eye stands against. */
+  /** `blockedFraction` above 0.2: the frame shows what the eye stands against, not the scene. */
   readonly occluded: boolean;
 }
 
@@ -237,7 +243,12 @@ export function renderPng(collection: DataCollection, opts: RenderPngOptions = {
     ...(opts.extent !== undefined ? { extent: opts.extent } : {}),
     ...(opts.eye !== undefined ? { eye: opts.eye } : {}),
   });
-  const poses = posesFor(framing, (x, z) => surfaceYAt(scene, x, z, framing.groundY));
+  // Where no face is under the eye — or there are no faces at all — it
+  // stands on the content's TRUE lowest point. Not on groundY: that is
+  // snapped to extent/128, and at extent 1000 a snap of 7.8 put the eye of
+  // a lines-only scene below both the content and the grid.
+  const floorY = scene.bounds?.min[1] ?? framing.groundY;
+  const poses = posesFor(framing, (x, z) => surfaceYAt(scene, x, z, floorY));
 
   const image = new Uint8Array(width * height * 3);
   const tiles: { name: ViewName; x: number; y: number; w: number; h: number }[] = [];
@@ -272,7 +283,7 @@ export function renderPng(collection: DataCollection, opts: RenderPngOptions = {
       grid: gridOn && GRID_VIEWS.includes(pose.name),
       markers: MARKER_VIEWS.includes(pose.name),
     });
-    if (pose.name === "ground") groundView = measureGroundView(raster, framing.extent, framing.eye);
+    if (pose.name === "ground") groundView = measureGroundView(raster, camera, framing.extent, framing.eye);
     const pixels = raster.downsample();
     for (let y = 0; y < tile.h; y++) {
       image.set(pixels.subarray(y * tile.w * 3, (y + 1) * tile.w * 3), ((tile.y + y) * width + tile.x) * 3);
@@ -371,40 +382,77 @@ function fmtLabelNumber(v: number): string {
   return String(rounded);
 }
 
+/** Blocked fraction above which the ground view is reported occluded. */
+const OCCLUDED_ABOVE = 0.2;
+
 /**
- * How much of the ground view is surface standing close to the eye.
+ * How much of the ground view is blocked by surface standing close to the
+ * eye.
  *
  * Depth is sampled on a fixed grid of every 4th supersample. `nearDistance`
  * is the eye's own neighbourhood — four eye heights, and never less than 5%
  * of the extent, so a small scene's rock the eye stands on counts as near
- * as surely as a large scene's hillside does. When more than half the frame
- * is nearer than that,
- * the frame shows what the eye stands against — a wall of terrain, the
- * inside of a mesh — rather than the scene, and the report says so instead
- * of letting it pass as a picture of the layout. `medianDepth` is the
- * median over the same samples, background counted as infinitely far
- * (reported as null then).
+ * as surely as a large scene's hillside does.
+ *
+ * NEAR ALONE IS NOT BLOCKED. Every ray below the horizon meets the ground
+ * the eye stands on, and at a large extent nearly all of them meet it
+ * within `nearDistance`: a perfectly flat plane at extent 3200 has 48% of
+ * its samples nearer than 160 m, and gentle hills tipped the old
+ * "more than half is near" rule over while the frame showed an open
+ * horizon. So each sample is judged against the flat ground at the eye's
+ * feet: a sample is BLOCKED when it is near although that flat ground would
+ * have left it open (the ray is at or above the horizon, or meets the
+ * plane beyond `nearDistance`), or when it is nearer than one eye height,
+ * which flat ground never is. `blockedFraction` is blocked samples over the
+ * samples that flat ground would leave open or that are that close; above
+ * {@link OCCLUDED_ABOVE} the frame shows what the eye stands against — a
+ * ridge, a wall, the inside of a mesh — and the report says so.
+ *
+ * Measured with this rule: flat planes and 5 m / 600 m or 1 m / 60 m hills
+ * at any phase 0 .. 0.11; pipeline-5-roads' ridge 0.27; a wall two units
+ * ahead and the inside of basics-mesh-from-field 1.
+ *
+ * `nearFraction` is kept for the record — the raw share of samples nearer
+ * than `nearDistance` — and `medianDepth` is the median over the same
+ * samples, background counted as infinitely far (null then).
  */
-function measureGroundView(raster: Raster, extent: number, eye: number): GroundViewReport {
+function measureGroundView(raster: Raster, cam: Camera, extent: number, eye: number): GroundViewReport {
   const nearDistance = Math.max(extent * 0.05, eye * 4);
   const depths = new Float64Array(Math.ceil(raster.height / 4) * Math.ceil(raster.width / 4));
   let n = 0;
   let near = 0;
+  let open = 0;
+  let blocked = 0;
   for (let y = 0; y < raster.height; y += 4) {
+    // View-space y of this row at unit depth, and so the world-y rise of
+    // the ray per unit of depth.
+    const vy = (0.5 - (y + 0.5) / raster.height) * 2 / cam.scaleY;
     for (let x = 0; x < raster.width; x += 4) {
+      const vx = ((x + 0.5) / raster.width - 0.5) * 2 / cam.scaleX;
+      const rise = cam.forward[1] + cam.up[1] * vy + cam.right[1] * vx;
       const d = raster.depth[y * raster.width + x];
       depths[n++] = d;
-      if (d < nearDistance) near++;
+      const isNear = d < nearDistance;
+      if (isNear) near++;
+      // Depth at which this ray meets flat ground one eye height down.
+      const flatDepth = rise < 0 ? eye / -rise : Number.POSITIVE_INFINITY;
+      const flatLeavesOpen = !(flatDepth < nearDistance);
+      const withinReach = d < eye;
+      if (flatLeavesOpen || withinReach) {
+        open++;
+        if (isNear) blocked++;
+      }
     }
   }
   // A typed array sorts numerically, +Infinity last.
   depths.sort();
   const median = depths[depths.length >> 1];
-  const nearFraction = Math.round((near / depths.length) * 1000) / 1000;
+  const blockedFraction = open === 0 ? 0 : Math.round((blocked / open) * 1000) / 1000;
   return {
     nearDistance,
-    nearFraction,
+    nearFraction: Math.round((near / depths.length) * 1000) / 1000,
+    blockedFraction,
     medianDepth: Number.isFinite(median) ? median : null,
-    occluded: near * 2 > depths.length,
+    occluded: open > 0 && blocked > open * OCCLUDED_ABOVE,
   };
 }

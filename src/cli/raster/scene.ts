@@ -24,9 +24,9 @@
  * - Default colours are categorical and never read from a `color`
  *   attribute, which is minted white on every cloud and so carries no
  *   intent. They are dealt out IN ORDER — geometry outputs as they first
- *   appear, then asset ids sorted — through the palette, then through a
- *   darker and a lighter pass of it, so up to 24 distinct names in one
- *   picture never share a colour. (A hash of the name kept colours stable
+ *   appear, then asset ids sorted — through the palette, then through two
+ *   channel rotations of it, so up to 24 distinct names in one picture
+ *   never share a colour, drawn or as swatches (see `categoricalColor`). (A hash of the name kept colours stable
  *   across edits but put ten outputs on eight colours with collisions.)
  *   `attr` colours through the SVG's own colorizer.
  * - The ground grid in the perspective views lies just under the content's
@@ -57,9 +57,9 @@ const LIGHT = ((): readonly [number, number, number] => {
   const len = Math.sqrt(x * x + y * y + z * z);
   return [x / len, y / len, z / len];
 })();
-const AMBIENT = 0.38;
+export const AMBIENT = 0.38;
 /** Lines are drawn unlit, a shade darker than the faces of the same output. */
-const LINE_SHADE = 0.72;
+export const LINE_SHADE = 0.72;
 /** Half the side of a point splat, in supersampled pixels. */
 const POINT_HALF = 2;
 /** Arm length of an instance's apex cross, in supersampled pixels. */
@@ -170,18 +170,24 @@ class Column {
 }
 
 /**
- * The `slot`-th categorical colour: the palette, then a darker pass of it,
- * then a lighter one, then round again. 24 distinct colours before any
- * repeats — three times the palette, so two passes' worth of names are
- * always told apart even if a later pass is ever dropped.
+ * The `slot`-th categorical colour: the palette, then the palette with its
+ * channels rotated once (r g b → g b r), then rotated twice (→ b r g), then
+ * round again. 24 distinct colours before any repeat.
+ *
+ * Rotations, not darker or lighter passes, because the picture shades:
+ * Lambert scales all three channels of a face by one factor, so a darker
+ * copy of a palette colour IS that colour on a face turned from the light,
+ * and a proxy in it reads as part of the surface. A rotation changes the
+ * ratio between the channels, which no uniform shading can produce; the
+ * test checks every pair of slots against every shading factor.
  */
 export function categoricalColor(slot: number): number {
   const n = PALETTE_RGB.length;
   const pass = Math.floor(slot / n) % 3;
   const [r, g, b] = channels(PALETTE_RGB[slot % n]);
-  const tone = (c: number): number =>
-    pass === 0 ? c : pass === 1 ? Math.round(c * 0.58) : Math.round(c + (255 - c) * 0.5);
-  return (tone(r) << 16) | (tone(g) << 8) | tone(b);
+  if (pass === 0) return (r << 16) | (g << 8) | b;
+  if (pass === 1) return (g << 16) | (b << 8) | r;
+  return (b << 16) | (r << 8) | g;
 }
 
 /** Lambert intensity of a triangle's face, two-sided. */

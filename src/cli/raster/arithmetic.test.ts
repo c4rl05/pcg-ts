@@ -38,6 +38,19 @@ describe("the scanner catches every evasion it is meant to", () => {
     ["after a division that looks like a regex start", "const r = a / b / Math.atan2(1, 2);", /Math\.atan2/],
     ["after a regex literal containing a quote", "const re = /\"/; Math.hypot(1, 2);", /Math\.hypot/],
     ["after a string with an escaped quote", 'const s = "a\\"b"; Math.cbrt(8);', /Math\.cbrt/],
+    ["through Node's global", "global.Math.pow(2, 3);", /global \(/],
+    ["through window", "window.Math.sin(1);", /window/],
+    ["through self", "self.Math.cos(1);", /self/],
+    ["through a bracketed globalThis", 'globalThis["Math"]["pow"](2, 3);', /globalThis/],
+    ["through eval", 'eval("Math.pow(2, 3)");', /eval/],
+    ["through new Function", 'new Function("return Math.pow(2, 3)")();', /Function/],
+    ["** with a variable base", "const a = x ** 2;", /exponentiation/],
+    ["** with a fractional exponent", "const a = 2 ** 0.5;", /exponentiation/],
+    ["** with a variable exponent", "const a = 2 ** n;", /exponentiation/],
+    ["** with a base other than 2", "const a = 10 ** 3;", /exponentiation/],
+    ["**=", "let a = 2; a **= 3;", /exponentiation/],
+    ["a chained **", "const a = 2 ** 3 ** 2;", /exponentiation/],
+    ["** after a call", "const a = f(2) ** 3;", /exponentiation/],
   ];
   it.each(cases)("%s", (_name, snippet, expected) => {
     const found = mathViolations(snippet);
@@ -53,6 +66,9 @@ describe("the scanner catches every evasion it is meant to", () => {
     ["a banned name inside a block comment", "/* Math.sin */ const a = 1;"],
     ["a banned name inside a regex literal", "const re = /Math\\.pow/g;"],
     ["another object's Math property", "const a = lib.Math;"],
+    ["the literal 2 ** integer", "const a = 2 ** 16; const b = 2 ** -3; const c = x * 2 ** 10;"],
+    ["a property that happens to be named like a hatch", "const a = event.window + node.self;"],
+    ["multiplication", "const a = x * y * 2;"],
   ];
   it.each(clean)("passes %s", (_name, snippet) => {
     expect(mathViolations(snippet)).toEqual([]);

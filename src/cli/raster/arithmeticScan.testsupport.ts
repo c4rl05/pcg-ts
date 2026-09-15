@@ -164,15 +164,53 @@ export const ALLOWED_MATH: ReadonlySet<string> = new Set([
   "sqrt", "floor", "ceil", "round", "trunc", "abs", "min", "max", "fround", "imul",
 ]);
 
-/** Every use of `Math` in code that is not `Math.<allowed>`, described. */
+/**
+ * Names that reach `Math` (or run code) without spelling `Math.<member>`:
+ * the global object under each of its names, reflection, and the two ways
+ * to evaluate a string.
+ */
+const ESCAPE_HATCHES: ReadonlySet<string> = new Set([
+  "globalThis", "global", "window", "self", "Reflect", "eval", "Function",
+]);
+
+/**
+ * Every use of `Math` in code that is not `Math.<allowed>`, every escape
+ * hatch to it, and every `**` that is not the literal `2 ** <integer>`,
+ * described.
+ *
+ * `**` gets one exception because a power of two with an integer exponent
+ * is exactly representable and every engine computes it exactly; anything
+ * else — a variable base, a fractional exponent, `**=` — is `Math.pow` under
+ * another spelling.
+ */
 export function mathViolations(src: string): string[] {
   const out: string[] = [];
   const walk = (tokens: readonly Token[]): void => {
     tokens.forEach((t, k) => {
       if (t.kind === "template" && t.inner !== undefined) walk(t.inner);
+      if (t.kind === "punct" && t.value === "*" && tokens[k + 1]?.kind === "punct" && tokens[k + 1]?.value === "*") {
+        const left = tokens[k - 1];
+        let r = k + 2;
+        if (tokens[r]?.kind === "punct" && tokens[r]?.value === "-") r++;
+        const right = tokens[r];
+        const after = tokens[r + 1];
+        const literalPowerOfTwo =
+          left?.kind === "number" &&
+          left.value === "2" &&
+          right?.kind === "number" &&
+          /^\d+$/.test(right.value) &&
+          !(after?.kind === "punct" && after.value === "*" && tokens[r + 2]?.value === "*");
+        const compound = tokens[k + 2]?.kind === "punct" && tokens[k + 2]?.value === "=";
+        if (compound || !literalPowerOfTwo) {
+          out.push(`** (exponentiation other than the literal 2 ** <integer>)`);
+        }
+        return;
+      }
       if (t.kind !== "ident") return;
-      if (t.value === "globalThis" || t.value === "Reflect") {
-        out.push(`${t.value} (can reach Math without naming it)`);
+      const prior = tokens[k - 1];
+      const isProperty = prior !== undefined && prior.kind === "punct" && (prior.value === "." || prior.value === "?.");
+      if (ESCAPE_HATCHES.has(t.value) && !isProperty) {
+        out.push(`${t.value} (can reach Math or run code without naming Math.<member>)`);
         return;
       }
       if (t.value !== "Math") return;
