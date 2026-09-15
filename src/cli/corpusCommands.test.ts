@@ -269,8 +269,11 @@ describe("pcg run <primitive> --help", () => {
     ]) {
       const r = await run(argv);
       expect(r.code).toBe(EXIT_FAILURE);
-      expect(r.err).toContain(`unknown subgraph "${typo}"; registered subgraphs: `);
+      expect(r.err).toContain(`unknown subgraph "${typo}"; `);
+      expect(r.err).toContain("registered subgraphs: ");
       expect(r.err).toMatch(new RegExp(`; did you mean [^?]*"${name.replace(/[/.]/g, "\\$&")}"`));
+      // One suggestion, not the registry's and the CLI's both.
+      expect(r.err.split("did you mean").length - 1).toBe(1);
     }
   });
 

@@ -453,18 +453,19 @@ function quotedAlternatives(names: readonly string[]): string {
 /**
  * A registered primitive by name. A miss keeps the registry's own message
  * — every registered name, or why there are none — and adds the nearest
- * names as a last clause, because a list of forty slash-separated names is
- * a poor place to spot a one-letter slip.
+ * names as a clause, because a list of forty slash-separated names is a
+ * poor place to spot a one-letter slip. The registry now puts its own
+ * suggestion before the list; the clause is only added when it did not,
+ * so an agent never reads the same suggestion twice.
  */
 function lookupPrimitive(name: string): RegisteredSubgraph {
   try {
     return getRegisteredSubgraph(name);
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     const near = closestNames(name, listSubgraphs().map((e) => e.name));
-    if (near.length === 0) throw err;
-    throw new CliError(
-      `${err instanceof Error ? err.message : String(err)}; did you mean ${quotedAlternatives(near)}?`,
-    );
+    if (near.length === 0 || message.includes("did you mean")) throw err;
+    throw new CliError(`${message}; did you mean ${quotedAlternatives(near)}?`);
   }
 }
 
