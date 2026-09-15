@@ -4,13 +4,21 @@
  */
 import { makeValueItem } from "../graph/index.js";
 import { standardNode } from "./registry.js";
-import type { ValueConstantParams } from "./params.generated.js";
+import type {
+  ValueConstantInputs,
+  ValueConstantOutputs,
+  ValueConstantParams,
+} from "./params.generated.js";
 
 // Generated from the param schemas below; see params.generated.ts.
 export type { ValueConstantParams } from "./params.generated.js";
 
 /** Emit a constant number as a value item. */
-export const valueConstant = standardNode<ValueConstantParams>({
+export const valueConstant = standardNode<
+  ValueConstantParams,
+  ValueConstantInputs,
+  ValueConstantOutputs
+>({
   type: "valueConstant",
   category: "value",
   description:

@@ -462,11 +462,13 @@ describe("pointsToPath", () => {
   it("refuses an unrecognised shortGroups, before it looks at the geometry", async () => {
     expect(
       await rejection(
+        // @ts-expect-error — the types refuse it too; the runtime refusal is the point
         runNode(pointsToPath, { shortGroups: "ignore" }, { in: [makeGeometryItem(row(4))] }),
       ),
     ).toMatch(/shortGroups must be "error" or "skip", got "ignore"/);
     // Ahead of the input check, so an author reads about their typo rather
     // than about a pin they did wire in a real graph.
+    // @ts-expect-error — misspelled on purpose, as above
     expect(await rejection(runNode(pointsToPath, { shortGroups: "ignore" }, {}))).toMatch(
       /shortGroups must be "error" or "skip"/,
     );
@@ -924,6 +926,7 @@ describe("pathResample", () => {
     // win, or an agent is sent to debug topology instead of its params.
     const cloud = row(4);
     await expect(
+      // @ts-expect-error — the types refuse it too; the runtime refusal is the point
       runNode(pathResample, { mode: "sideways" }, { in: [makeGeometryItem(cloud)] }),
     ).rejects.toThrow(/unknown mode "sideways"; valid modes: count, spacing/);
     await expect(
@@ -957,6 +960,7 @@ describe("pathResample", () => {
       runNode(pathResample, {}, { in: [makeGeometryItem(row(4))] }),
     ).rejects.toThrow(/no polyline primitives — the input is a plain point cloud \(4 points, 0 primitives\)/);
     await expect(
+      // @ts-expect-error — the types refuse it too; the runtime refusal is the point
       runNode(pathResample, { mode: "sideways" }, { in: [makeGeometryItem(line)] }),
     ).rejects.toThrow(/unknown mode "sideways"; valid modes: count, spacing/);
   });
@@ -1935,6 +1939,7 @@ describe("pathSegments", () => {
 
   it("reports a bad axis or extend before it looks at the geometry", async () => {
     const empty = { in: [makeGeometryItem(createPointCloud(0))] };
+    // @ts-expect-error — the types refuse it too; the runtime refusal is the point
     const axisMsg = await rejection(runNode(pathSegments, { axis: "up" }, empty));
     expect(axisMsg).toContain('pathSegments: param "axis"');
     expect(axisMsg).toContain("+x, -x, +y, -y, +z, -z");
@@ -2336,6 +2341,7 @@ describe("pathPointAt", () => {
 
   it("reports a bad mode before it looks at the geometry", async () => {
     const msg = await rejection(
+      // @ts-expect-error — the types refuse it too; the runtime refusal is the point
       runNode(pathPointAt, { mode: "along" }, { in: [makeGeometryItem(createPointCloud(0))] }),
     );
     expect(msg).toContain('pathPointAt: unknown mode "along"');

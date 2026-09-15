@@ -9,7 +9,13 @@ import {
 } from "../data/index.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { hashCombine } from "../random/index.js";
-import { fieldFromJson, splineSample, surfaceSample, volumeSample } from "./index.js";
+import {
+  fieldFromJson,
+  splineSample,
+  type SplineSampleParams,
+  surfaceSample,
+  volumeSample,
+} from "./index.js";
 import { firstGeo, positionsOf, runNode, snapshotGeometry } from "./nodes.testsupport.js";
 
 /** Unit square in the XY plane at z = 0, two CCW triangles. */
@@ -462,7 +468,7 @@ describe("splineSample arc-length extraction", () => {
     ["open + closed", pair(IRRATIONAL, [0, 0, 0, 2, 0, 0, 2, 2, 0], true)],
     ["repeated points", createPolyline([0, 0, 0, 0, 0, 0, 5, 0, 0, 5, 0, 0, 5, 9, 0])],
   ];
-  const PARAMS: Array<{ mode: string; count: number; spacing: number }> = [
+  const PARAMS: Array<Pick<SplineSampleParams, "mode" | "count" | "spacing">> = [
     { mode: "count", count: 1, spacing: 1 },
     { mode: "count", count: 2, spacing: 1 },
     { mode: "count", count: 5, spacing: 1 },

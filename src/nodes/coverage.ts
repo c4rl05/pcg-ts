@@ -44,7 +44,11 @@ import {
   rotateVec,
   writePolylineTangents,
 } from "./util.js";
-import type { PathCoverageParams } from "./params.generated.js";
+import type {
+  PathCoverageInputs,
+  PathCoverageOutputs,
+  PathCoverageParams,
+} from "./params.generated.js";
 
 // Generated from the param schemas below; see params.generated.ts.
 export type { PathCoverageParams } from "./params.generated.js";
@@ -261,7 +265,11 @@ function tangentsOf(geo: Geometry): Float32Array {
 }
 
 /** Per-point cover from a cloud of oriented boxes, by ray cast. */
-export const pathCoverage = standardNode<PathCoverageParams>({
+export const pathCoverage = standardNode<
+  PathCoverageParams,
+  PathCoverageInputs,
+  PathCoverageOutputs
+>({
   type: "pathCoverage",
   category: "attribute",
   description:

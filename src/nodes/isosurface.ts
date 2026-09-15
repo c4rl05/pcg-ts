@@ -62,7 +62,11 @@ import { makeGeometryItem } from "../graph/index.js";
 import { hashCombine } from "../random/index.js";
 import { standardNode } from "./registry.js";
 import { optionalGeometry, requireScalarColumn, resolveOn } from "./util.js";
-import type { MeshFromFieldParams } from "./params.generated.js";
+import type {
+  MeshFromFieldInputs,
+  MeshFromFieldOutputs,
+  MeshFromFieldParams,
+} from "./params.generated.js";
 
 // Generated from the param schemas below; see params.generated.ts.
 export type { MeshFromFieldParams } from "./params.generated.js";
@@ -177,7 +181,11 @@ function requirePositionPure(spec: unknown, nodeType: string, path: string): voi
 }
 
 /** Contour a scalar field into a triangle mesh. */
-export const meshFromField = standardNode<MeshFromFieldParams>({
+export const meshFromField = standardNode<
+  MeshFromFieldParams,
+  MeshFromFieldInputs,
+  MeshFromFieldOutputs
+>({
   type: "meshFromField",
   category: "source",
   description:

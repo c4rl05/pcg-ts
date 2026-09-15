@@ -37,7 +37,14 @@ import {
   resolveOnAllowingNonFinite,
   type FieldParam,
 } from "./util.js";
-import type { PointNeighborhoodParams, SampleNearestPointParams } from "./params.generated.js";
+import type {
+  PointNeighborhoodInputs,
+  PointNeighborhoodOutputs,
+  PointNeighborhoodParams,
+  SampleNearestPointInputs,
+  SampleNearestPointOutputs,
+  SampleNearestPointParams,
+} from "./params.generated.js";
 
 // Generated from the param schemas below; see params.generated.ts.
 export type { PointNeighborhoodParams, SampleNearestPointParams } from "./params.generated.js";
@@ -106,7 +113,11 @@ function neighborhoodRadiusColumn(geo: Geometry, value: FieldParam, seed: number
 }
 
 /** Per-point neighbor count and neighbor attribute average. */
-export const pointNeighborhood = standardNode<PointNeighborhoodParams>({
+export const pointNeighborhood = standardNode<
+  PointNeighborhoodParams,
+  PointNeighborhoodInputs,
+  PointNeighborhoodOutputs
+>({
   type: "pointNeighborhood",
   category: "attribute",
   description:
@@ -396,7 +407,11 @@ export const pointNeighborhood = standardNode<PointNeighborhoodParams>({
 });
 
 /** Nearest point of a second cloud: its distance, index, and attributes. */
-export const sampleNearestPoint = standardNode<SampleNearestPointParams>({
+export const sampleNearestPoint = standardNode<
+  SampleNearestPointParams,
+  SampleNearestPointInputs,
+  SampleNearestPointOutputs
+>({
   type: "sampleNearestPoint",
   category: "attribute",
   description:

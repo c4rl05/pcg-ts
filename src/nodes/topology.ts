@@ -47,7 +47,14 @@ import {
   requireScalarColumn,
   resolveOn,
 } from "./util.js";
-import type { ConnectByIndexParams, ConnectPointsParams } from "./params.generated.js";
+import type {
+  ConnectByIndexInputs,
+  ConnectByIndexOutputs,
+  ConnectByIndexParams,
+  ConnectPointsInputs,
+  ConnectPointsOutputs,
+  ConnectPointsParams,
+} from "./params.generated.js";
 
 // Generated from the param schemas below; see params.generated.ts.
 export type { ConnectByIndexParams, ConnectPointsParams } from "./params.generated.js";
@@ -80,7 +87,11 @@ const MAX_EDGES_HINT =
   "they SELECT them from the same radius neighbourhood, which is what this limit measures.";
 
 /** Build an edge network over a point cloud. */
-export const connectPoints = standardNode<ConnectPointsParams>({
+export const connectPoints = standardNode<
+  ConnectPointsParams,
+  ConnectPointsInputs,
+  ConnectPointsOutputs
+>({
   type: "connectPoints",
   category: "point op",
   description:
@@ -525,7 +536,11 @@ function hasGabrielWitness(
 }
 
 /** Build one edge per point from a parent-pointer column. */
-export const connectByIndex = standardNode<ConnectByIndexParams>({
+export const connectByIndex = standardNode<
+  ConnectByIndexParams,
+  ConnectByIndexInputs,
+  ConnectByIndexOutputs
+>({
   type: "connectByIndex",
   category: "point op",
   description:

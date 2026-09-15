@@ -46,13 +46,29 @@ import {
   resolveOnAllowingNonFinite,
 } from "./util.js";
 import type {
+  FilterByAttributeInputs,
+  FilterByAttributeOutputs,
   FilterByAttributeParams,
+  FilterByBoundsInputs,
+  FilterByBoundsOutputs,
   FilterByBoundsParams,
+  FilterByDensityInputs,
+  FilterByDensityOutputs,
   FilterByDensityParams,
+  FilterByExpressionInputs,
+  FilterByExpressionOutputs,
   FilterByExpressionParams,
+  FilterPrimitivesByAttributeInputs,
+  FilterPrimitivesByAttributeOutputs,
   FilterPrimitivesByAttributeParams,
+  FilterPrimitivesByBoundsInputs,
+  FilterPrimitivesByBoundsOutputs,
   FilterPrimitivesByBoundsParams,
+  ProjectToPlaneInputs,
+  ProjectToPlaneOutputs,
   ProjectToPlaneParams,
+  SelfPruneInputs,
+  SelfPruneOutputs,
   SelfPruneParams,
 } from "./params.generated.js";
 
@@ -182,7 +198,11 @@ function rebuildFiltered(geo: Geometry, keep: ArrayLike<number>, keepTopology: b
 }
 
 /** Keep points by their `density` attribute. */
-export const filterByDensity = standardNode<FilterByDensityParams>({
+export const filterByDensity = standardNode<
+  FilterByDensityParams,
+  FilterByDensityInputs,
+  FilterByDensityOutputs
+>({
   type: "filterByDensity",
   category: "filter",
   description:
@@ -515,7 +535,11 @@ function boundsColumn(
 }
 
 /** Keep points inside (or outside) an axis-aligned box. */
-export const filterByBounds = standardNode<FilterByBoundsParams>({
+export const filterByBounds = standardNode<
+  FilterByBoundsParams,
+  FilterByBoundsInputs,
+  FilterByBoundsOutputs
+>({
   type: "filterByBounds",
   category: "filter",
   description:
@@ -592,7 +616,11 @@ export const filterByBounds = standardNode<FilterByBoundsParams>({
 });
 
 /** Keep or drop whole primitives by a bounds test, preserving topology. */
-export const filterPrimitivesByBounds = standardNode<FilterPrimitivesByBoundsParams>({
+export const filterPrimitivesByBounds = standardNode<
+  FilterPrimitivesByBoundsParams,
+  FilterPrimitivesByBoundsInputs,
+  FilterPrimitivesByBoundsOutputs
+>({
   type: "filterPrimitivesByBounds",
   category: "filter",
   description:
@@ -956,7 +984,11 @@ function comparisonRhs(
 }
 
 /** Keep points by comparing a scalar or string point attribute. */
-export const filterByAttribute = standardNode<FilterByAttributeParams>({
+export const filterByAttribute = standardNode<
+  FilterByAttributeParams,
+  FilterByAttributeInputs,
+  FilterByAttributeOutputs
+>({
   type: "filterByAttribute",
   category: "filter",
   description:
@@ -1011,7 +1043,11 @@ export const filterByAttribute = standardNode<FilterByAttributeParams>({
 });
 
 /** Keep whole primitives by comparing a primitive attribute, preserving topology. */
-export const filterPrimitivesByAttribute = standardNode<FilterPrimitivesByAttributeParams>({
+export const filterPrimitivesByAttribute = standardNode<
+  FilterPrimitivesByAttributeParams,
+  FilterPrimitivesByAttributeInputs,
+  FilterPrimitivesByAttributeOutputs
+>({
   type: "filterPrimitivesByAttribute",
   category: "filter",
   description:
@@ -1075,7 +1111,11 @@ export const filterPrimitivesByAttribute = standardNode<FilterPrimitivesByAttrib
 });
 
 /** Keep points where a boolean field predicate holds. */
-export const filterByExpression = standardNode<FilterByExpressionParams>({
+export const filterByExpression = standardNode<
+  FilterByExpressionParams,
+  FilterByExpressionInputs,
+  FilterByExpressionOutputs
+>({
   type: "filterByExpression",
   category: "filter",
   description:
@@ -1362,7 +1402,7 @@ function staticScalar(value: FieldParam): number | undefined {
 }
 
 /** Minimum-distance pruning: greedy, or the partition-safe local maximum. */
-export const selfPrune = standardNode<SelfPruneParams>({
+export const selfPrune = standardNode<SelfPruneParams, SelfPruneInputs, SelfPruneOutputs>({
   type: "selfPrune",
   category: "filter",
   description:
@@ -1508,7 +1548,11 @@ export const selfPrune = standardNode<SelfPruneParams>({
 });
 
 /** Orthogonally project points onto a plane. */
-export const projectToPlane = standardNode<ProjectToPlaneParams>({
+export const projectToPlane = standardNode<
+  ProjectToPlaneParams,
+  ProjectToPlaneInputs,
+  ProjectToPlaneOutputs
+>({
   type: "projectToPlane",
   category: "filter",
   description:

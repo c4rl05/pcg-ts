@@ -232,7 +232,7 @@ describe("filterByBounds", () => {
     ]);
     const all = pointRecords(cloud).sort();
     const insideCounts: number[] = [];
-    for (const boundary of ["halfOpen", "inclusive"]) {
+    for (const boundary of ["halfOpen", "inclusive"] as const) {
       const box = { boundsMin: [2, 2, 2], boundsMax: [6, 6, 6], boundary };
       const inside = firstGeo(
         (
@@ -384,10 +384,14 @@ describe("filterByBounds", () => {
 
   it("names the param and the valid values on an unknown mode or boundary", async () => {
     const cloud = cloudAt(positions);
+    // The types refuse both values too; the RUNTIME refusal is what this pins,
+    // for a caller whose params arrive untyped (JSON, a UI).
     await expect(
+      // @ts-expect-error — not a boundary, on purpose
       runNode(filterByBounds, { boundary: "closed" }, { in: [makeGeometryItem(cloud)] }),
     ).rejects.toThrow(/boundary must be "halfOpen" or "inclusive", got "closed"/);
     await expect(
+      // @ts-expect-error — not a mode, on purpose
       runNode(filterByBounds, { mode: "Inside" }, { in: [makeGeometryItem(cloud)] }),
     ).rejects.toThrow(/mode must be "inside" or "outside", got "Inside"/);
     // A 2D bound is the mistake a World "xz" level invites, and every
@@ -504,8 +508,10 @@ describe("filterPrimitivesByBounds", () => {
 
   it("spans the four quantifiers across `vertex` and `mode`", async () => {
     const geo = networkAt(line, roads);
-    const answer = async (vertex: string, mode: string) =>
-      kindsOf(await keptPrims(geo, { ...box, vertex, mode }));
+    const answer = async (
+      vertex: FilterPrimitivesByBoundsParams["vertex"],
+      mode: FilterPrimitivesByBoundsParams["mode"],
+    ) => kindsOf(await keptPrims(geo, { ...box, vertex, mode }));
     // One vertex decides: the ownership rules.
     expect(await answer("first", "inside")).toEqual(["road2", "road3", "road4"]);
     expect(await answer("last", "inside")).toEqual(["road1", "road2"]);
@@ -516,7 +522,7 @@ describe("filterPrimitivesByBounds", () => {
     // spells as any + outside rather than as all + outside.
     expect(await answer("any", "outside")).toEqual(["road0"]);
     expect(await answer("all", "outside")).toEqual(["road0", "road1", "road3", "road4"]);
-    for (const vertex of ["first", "last", "all", "any"]) {
+    for (const vertex of ["first", "last", "all", "any"] as const) {
       const both = [...(await answer(vertex, "inside")), ...(await answer(vertex, "outside"))];
       expect(both.sort()).toEqual(["road0", "road1", "road2", "road3", "road4"]);
     }
@@ -597,15 +603,21 @@ describe("filterPrimitivesByBounds", () => {
     const geo = networkAt(line, roads);
     const run = (params: Partial<FilterPrimitivesByBoundsParams>) =>
       runNode(filterPrimitivesByBounds, params, { in: [makeGeometryItem(geo)] });
+    // Each value is refused by the types as well; these pin the runtime
+    // refusal an untyped caller (JSON, a UI) meets.
+    // @ts-expect-error — not a vertex quantifier, on purpose
     await expect(run({ vertex: "middle" })).rejects.toThrow(
       /filterPrimitivesByBounds: vertex must be "first", "last", "all" or "any", got "middle";.*neither tiles/s,
     );
+    // @ts-expect-error — not an unreferencedPoints value, on purpose
     await expect(run({ unreferencedPoints: "maybe" })).rejects.toThrow(
       /filterPrimitivesByBounds: unreferencedPoints must be "keep" or "drop", got "maybe"/,
     );
+    // @ts-expect-error — not a mode, on purpose
     await expect(run({ mode: "Inside" })).rejects.toThrow(
       /filterPrimitivesByBounds: mode must be "inside" or "outside", got "Inside"/,
     );
+    // @ts-expect-error — not a boundary, on purpose
     await expect(run({ boundary: "closed" })).rejects.toThrow(
       /filterPrimitivesByBounds: boundary must be "halfOpen" or "inclusive", got "closed"/,
     );
@@ -643,7 +655,7 @@ describe("filterByAttribute", () => {
     attr.set(1, 0);
     attr.set(2, 3);
     const item = makeGeometryItem(cloud);
-    const xsFor = async (comparison: string, value: number) =>
+    const xsFor = async (comparison: FilterByAttributeParams["comparison"], value: number) =>
       positionsOf(
         firstGeo(
           (
@@ -737,7 +749,7 @@ describe("filterPrimitivesByAttribute", () => {
 
   it("compares a numeric primitive attribute with every operator", async () => {
     const geo = networkWithEdgeLengths(line, roads, lengths);
-    const answer = async (comparison: string, value: number) =>
+    const answer = async (comparison: FilterPrimitivesByAttributeParams["comparison"], value: number) =>
       kindsOf(await kept(geo, { attribute: "edgeLength", comparison, value }));
     expect(await answer("eq", 3)).toEqual(["road2"]);
     expect(await answer("ne", 3)).toEqual(["road0", "road1", "road3", "road4"]);
@@ -753,7 +765,7 @@ describe("filterPrimitivesByAttribute", () => {
     // for road. Anything else means moving a filter between domains
     // silently changes what a graph means.
     const geo = networkWithEdgeLengths(line, roads, lengths);
-    for (const comparison of ["eq", "ne", "lt", "le", "gt", "ge"]) {
+    for (const comparison of ["eq", "ne", "lt", "le", "gt", "ge"] as const) {
       const prims = kindsOf(await kept(geo, { attribute: "edgeLength", comparison, value: 3 }));
       const asPoints: string[] = [];
       const edge = geo.attrs.primitive.require("edgeLength");
@@ -832,7 +844,7 @@ describe("filterPrimitivesByAttribute", () => {
     // A NaN satisfies no comparison, so it survives 'ne' alone — the same
     // rule filterByExpression states for a predicate that fails to compute.
     const withNaN = networkWithEdgeLengths(line, roads, [1, Number.NaN, 3, 4, 5]);
-    for (const comparison of ["eq", "lt", "le", "gt", "ge"]) {
+    for (const comparison of ["eq", "lt", "le", "gt", "ge"] as const) {
       expect(kindsOf(await kept(withNaN, { attribute: "edgeLength", comparison, value: 2 })))
         .not.toContain("road1");
     }
@@ -894,7 +906,11 @@ describe("filterPrimitivesByAttribute", () => {
     // The cost the param description names: a cloud carrying both a
     // network and unrelated scatter loses the scatter.
     const withScatter = networkWithEdgeLengths([...line, [9, 0, 9]], roads, lengths);
-    const pick = { attribute: "edgeLength", comparison: "ge", value: 0 };
+    const pick: Partial<FilterPrimitivesByAttributeParams> = {
+      attribute: "edgeLength",
+      comparison: "ge",
+      value: 0,
+    };
     const keepAll = await kept(withScatter, pick);
     expect(positionsOf(keepAll)).toContainEqual([9, 0, 9]);
     const dropped = await kept(withScatter, { ...pick, unreferencedPoints: "drop" });
@@ -911,7 +927,11 @@ describe("filterPrimitivesByAttribute", () => {
     // polyline whose points span two cells is emitted whole by the one
     // cell owning its start, so it is compared exactly once.
     const geo = networkWithEdgeLengths(line, roads, lengths);
-    const pick = { attribute: "edgeLength", comparison: "gt", value: 1 };
+    const pick: Partial<FilterPrimitivesByAttributeParams> = {
+      attribute: "edgeLength",
+      comparison: "gt",
+      value: 1,
+    };
     const whole = await kept(geo, pick);
 
     const cellOf = async (min: number, max: number) => {
@@ -950,7 +970,11 @@ describe("filterPrimitivesByAttribute", () => {
       roads.map((pr) => pr.map((p) => order.indexOf(p))),
       lengths,
     );
-    const pick = { attribute: "edgeLength", comparison: "ge", value: 3 };
+    const pick: Partial<FilterPrimitivesByAttributeParams> = {
+      attribute: "edgeLength",
+      comparison: "ge",
+      value: 3,
+    };
     expect(kindsOf(await kept(permuted, pick))).toEqual(kindsOf(await kept(geo, pick)));
   });
 
@@ -987,10 +1011,14 @@ describe("filterPrimitivesByAttribute", () => {
     await expect(kept(geo, { attribute: "nowhere" })).rejects.toThrow(
       /filterPrimitivesByAttribute: primitive attribute "nowhere" not found; available primitive attributes: primtype, roadKind, edgeLength$/,
     );
+    // The two bad enum values are refused by the types as well; the runtime
+    // refusal is what an untyped caller (JSON, a UI) meets.
+    // @ts-expect-error — not a comparison, on purpose
     await expect(kept(geo, { attribute: "edgeLength", comparison: "GT" })).rejects.toThrow(
       /filterPrimitivesByAttribute: comparison must be one of eq, ne, lt, le, gt, ge, got "GT"/,
     );
     await expect(
+      // @ts-expect-error — not an unreferencedPoints value, on purpose
       kept(geo, { attribute: "edgeLength", unreferencedPoints: "maybe" }),
     ).rejects.toThrow(
       /filterPrimitivesByAttribute: unreferencedPoints must be "keep" or "drop", got "maybe"/,
@@ -1018,6 +1046,7 @@ describe("filterPrimitivesByAttribute", () => {
     await expect(
       runNode(
         filterByAttribute,
+        // @ts-expect-error — the types refuse it too; the runtime refusal is the point
         { attribute: "level", comparison: "greaterThan" },
         { in: [makeGeometryItem(cloud)] },
       ),
@@ -2519,7 +2548,10 @@ function xNetwork(): Geometry {
 /** The box that keeps x <= 3: points 0, 1, 2, 3 and the loose 7. */
 const HALF_BOX = { boundsMin: [-1, -1, -1], boundsMax: [3.5, 1, 1] } as const;
 
-async function boundsFiltered(geo: Geometry, topology: string): Promise<Geometry> {
+async function boundsFiltered(
+  geo: Geometry,
+  topology: FilterByBoundsParams["topology"],
+): Promise<Geometry> {
   return firstGeo(
     (await runNode(filterByBounds, { ...HALF_BOX, topology }, { in: [makeGeometryItem(geo)] })).out,
   );
@@ -2527,7 +2559,7 @@ async function boundsFiltered(geo: Geometry, topology: string): Promise<Geometry
 
 describe('point filters: topology "keep"', () => {
   it('drops every primitive by default, and "drop" says the same thing explicitly', async () => {
-    for (const params of [{ ...HALF_BOX }, { ...HALF_BOX, topology: "drop" }]) {
+    for (const params of [{ ...HALF_BOX }, { ...HALF_BOX, topology: "drop" as const }]) {
       const out = firstGeo(
         (await runNode(filterByBounds, params, { in: [makeGeometryItem(xNetwork())] })).out,
       );
@@ -2673,13 +2705,20 @@ describe('point filters: topology "keep"', () => {
   });
 
   it("refuses a misspelled value on every one of the five, naming the node", async () => {
+    // The types refuse "Keep" on all five as well; each line says so, and the
+    // runtime refusal an untyped caller (JSON, a UI) meets is what this pins.
     const cases: [string, Promise<unknown>][] = [
+      // @ts-expect-error — misspelled on purpose
       ["filterByBounds", runNode(filterByBounds, { topology: "Keep" }, item())],
+      // @ts-expect-error — misspelled on purpose
       ["filterByDensity", runNode(filterByDensity, { topology: "Keep" }, item())],
+      // @ts-expect-error — misspelled on purpose
       ["filterByAttribute", runNode(filterByAttribute, { topology: "Keep" }, item())],
+      // @ts-expect-error — misspelled on purpose
       ["filterByExpression", runNode(filterByExpression, { topology: "Keep" }, item())],
       // selfPrune checks ABOVE its own off-switch, so a typo is still an
       // error at a minDistance that would have passed the input through.
+      // @ts-expect-error — misspelled on purpose
       ["selfPrune", runNode(selfPrune, { minDistance: 0, topology: "Keep" }, item())],
     ];
     for (const [who, ran] of cases) {

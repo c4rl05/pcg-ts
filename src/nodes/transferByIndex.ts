@@ -54,7 +54,11 @@ import {
   resolveOn,
   TRANSFER_BOOKKEEPING,
 } from "./util.js";
-import type { TransferByIndexParams } from "./params.generated.js";
+import type {
+  TransferByIndexInputs,
+  TransferByIndexOutputs,
+  TransferByIndexParams,
+} from "./params.generated.js";
 
 // Generated from the param schemas below; see params.generated.ts.
 export type { TransferByIndexParams } from "./params.generated.js";
@@ -126,7 +130,11 @@ interface Gathered {
 }
 
 /** Gather a source geometry's point attributes at a per-point index. */
-export const transferByIndex = standardNode<TransferByIndexParams>({
+export const transferByIndex = standardNode<
+  TransferByIndexParams,
+  TransferByIndexInputs,
+  TransferByIndexOutputs
+>({
   type: "transferByIndex",
   category: "attribute",
   description:

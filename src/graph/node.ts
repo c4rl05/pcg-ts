@@ -4,9 +4,16 @@ import type { DataCollection } from "./data.js";
 /** What a pin carries; `any` is a wildcard compatible with every other kind. */
 export type PinKind = "geometry" | "value" | "instances" | "any";
 
-/** One input or output pin of a node definition. */
-export interface PinDef {
-  readonly name: string;
+/**
+ * One input or output pin of a node definition.
+ *
+ * `N` is the pin's name as a type. It defaults to `string`, which is what a
+ * def typed `NodeDef<P>`, a subgraph def and anything built from runtime
+ * data carry; the standard nodes narrow it to their generated pin-name unions so
+ * `Graph.connect` can refuse a misspelled pin at compile time.
+ */
+export interface PinDef<N extends string = string> {
+  readonly name: N;
   readonly kind: PinKind;
   /**
    * Input pins only: accept multiple connections; their collections are
@@ -151,12 +158,23 @@ export interface ResidentDesc<P = Record<string, unknown>> {
  * Purity contract: execute must treat its inputs as immutable and derive
  * all randomness from `seed`. Same (params, seed, inputs) must produce the
  * same outputs — the executor memoizes on exactly that.
+ *
+ * `I` and `O` are the input and output pin names as types, both defaulting
+ * to `string`. They exist only for the compiler: `Graph.add` carries them
+ * onto the {@link NodeHandle} it returns, and `Graph.connect`,
+ * `Graph.disconnect` and `Graph.output` then accept exactly those names.
+ * A def whose pins are decided at runtime — a subgraph, a def read from
+ * data — keeps the defaults and accepts any string, checked at the call.
  */
-export interface NodeDef<P = Record<string, unknown>> {
+export interface NodeDef<
+  P = Record<string, unknown>,
+  I extends string = string,
+  O extends string = string,
+> {
   /** Node type name (also the auto-id prefix for instances). */
   readonly type: string;
-  readonly inputs: readonly PinDef[];
-  readonly outputs: readonly PinDef[];
+  readonly inputs: readonly PinDef<I>[];
+  readonly outputs: readonly PinDef<O>[];
   /** Params a fresh instance starts with (shallow-merged with overrides). */
   readonly defaultParams: P;
   /** Produce one collection per output pin; may be async. */
@@ -231,7 +249,11 @@ export interface NodeDef<P = Record<string, unknown>> {
   memoKey?(): string;
 }
 
-/** Identity helper that preserves the param type `P` of a node definition. */
+/**
+ * Identity helper that preserves the param type `P` of a node definition.
+ * Its pin names stay `string` on purpose: a third-party def is connected
+ * by names the compiler is not asked to check.
+ */
 export function defineNode<P>(def: NodeDef<P>): NodeDef<P> {
   return def;
 }

@@ -73,13 +73,29 @@ import {
   writePolylineTangents,
 } from "./util.js";
 import type {
+  PathPointAtInputs,
+  PathPointAtOutputs,
   PathPointAtParams,
+  PathResampleInputs,
+  PathResampleOutputs,
   PathResampleParams,
+  PathRunsInputs,
+  PathRunsOutputs,
   PathRunsParams,
+  PathScanInputs,
+  PathScanOutputs,
   PathScanParams,
+  PathSegmentsInputs,
+  PathSegmentsOutputs,
   PathSegmentsParams,
+  PointsToPathInputs,
+  PointsToPathOutputs,
   PointsToPathParams,
+  WriteCurveFrameInputs,
+  WriteCurveFrameOutputs,
   WriteCurveFrameParams,
+  WriteTangentsInputs,
+  WriteTangentsOutputs,
   WriteTangentsParams,
 } from "./params.generated.js";
 
@@ -177,7 +193,11 @@ function requireShortGroupsRule(value: string): boolean {
 }
 
 /** Build polyline primitives over an existing point cloud. */
-export const pointsToPath = standardNode<PointsToPathParams>({
+export const pointsToPath = standardNode<
+  PointsToPathParams,
+  PointsToPathInputs,
+  PointsToPathOutputs
+>({
   type: "pointsToPath",
   category: "point op",
   description:
@@ -577,7 +597,11 @@ function resampleBudgetError(
 }
 
 /** Even arc-length resampling of each polyline primitive. */
-export const pathResample = standardNode<PathResampleParams>({
+export const pathResample = standardNode<
+  PathResampleParams,
+  PathResampleInputs,
+  PathResampleOutputs
+>({
   type: "pathResample",
   category: "sampler",
   description:
@@ -984,7 +1008,11 @@ export const pathResample = standardNode<PathResampleParams>({
 });
 
 /** One oriented instance point per polyline segment. */
-export const pathSegments = standardNode<PathSegmentsParams>({
+export const pathSegments = standardNode<
+  PathSegmentsParams,
+  PathSegmentsInputs,
+  PathSegmentsOutputs
+>({
   type: "pathSegments",
   category: "sampler",
   description:
@@ -1195,7 +1223,7 @@ export const pathSegments = standardNode<PathSegmentsParams>({
 });
 
 /** Move each point of a path to a chosen parameter along its own polyline. */
-export const pathPointAt = standardNode<PathPointAtParams>({
+export const pathPointAt = standardNode<PathPointAtParams, PathPointAtInputs, PathPointAtOutputs>({
   type: "pathPointAt",
   category: "point op",
   description:
@@ -1325,7 +1353,7 @@ export const pathPointAt = standardNode<PathPointAtParams>({
 });
 
 /** A running fold along a path, in walk order. */
-export const pathScan = standardNode<PathScanParams>({
+export const pathScan = standardNode<PathScanParams, PathScanInputs, PathScanOutputs>({
   type: "pathScan",
   category: "attribute",
   description:
@@ -1562,7 +1590,7 @@ export const pathScan = standardNode<PathScanParams>({
 });
 
 /** A running total WITHIN each run of a path, reset at flagged points. */
-export const pathRuns = standardNode<PathRunsParams>({
+export const pathRuns = standardNode<PathRunsParams, PathRunsInputs, PathRunsOutputs>({
   type: "pathRuns",
   category: "attribute",
   description:
@@ -1805,7 +1833,11 @@ export const pathRuns = standardNode<PathRunsParams>({
 });
 
 /** Per-point tangents at a path's own points, keeping the path intact. */
-export const writeTangents = standardNode<WriteTangentsParams>({
+export const writeTangents = standardNode<
+  WriteTangentsParams,
+  WriteTangentsInputs,
+  WriteTangentsOutputs
+>({
   type: "writeTangents",
   category: "attribute",
   description:
@@ -1931,7 +1963,11 @@ function seedNormal(out: number[], tx: number, ty: number, tz: number): number[]
 }
 
 /** A rotation-minimizing frame at every point of a path. */
-export const writeCurveFrame = standardNode<WriteCurveFrameParams>({
+export const writeCurveFrame = standardNode<
+  WriteCurveFrameParams,
+  WriteCurveFrameInputs,
+  WriteCurveFrameOutputs
+>({
   type: "writeCurveFrame",
   category: "attribute",
   description:

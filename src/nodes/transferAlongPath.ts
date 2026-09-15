@@ -56,7 +56,11 @@ import {
   requireReportSlot,
   TRANSFER_BOOKKEEPING,
 } from "./util.js";
-import type { TransferAlongPathParams } from "./params.generated.js";
+import type {
+  TransferAlongPathInputs,
+  TransferAlongPathOutputs,
+  TransferAlongPathParams,
+} from "./params.generated.js";
 
 // Generated from the param schemas below; see params.generated.ts.
 export type { TransferAlongPathParams } from "./params.generated.js";
@@ -102,7 +106,11 @@ interface Sampled {
 }
 
 /** Interpolate a path's attributes onto a cloud of arc positions. */
-export const transferAlongPath = standardNode<TransferAlongPathParams>({
+export const transferAlongPath = standardNode<
+  TransferAlongPathParams,
+  TransferAlongPathInputs,
+  TransferAlongPathOutputs
+>({
   type: "transferAlongPath",
   category: "attribute",
   description:

@@ -8,9 +8,17 @@ import { makeGeometryItem } from "../graph/index.js";
 import { hashCombine, hashFloat } from "../random/index.js";
 import { standardNode } from "./registry.js";
 import type {
+  PointGridInputs,
+  PointGridOutputs,
   PointGridParams,
+  PointLineInputs,
+  PointLineOutputs,
   PointLineParams,
+  PointScatterInBoundsInputs,
+  PointScatterInBoundsOutputs,
   PointScatterInBoundsParams,
+  PointScatterInWorldInputs,
+  PointScatterInWorldOutputs,
   PointScatterInWorldParams,
 } from "./params.generated.js";
 
@@ -26,7 +34,7 @@ export type {
  * Regular grid of points: `countX * countY * countZ` points starting at
  * `origin`, stepped by `spacing`. X varies fastest, then Y, then Z.
  */
-export const pointGrid = standardNode<PointGridParams>({
+export const pointGrid = standardNode<PointGridParams, PointGridInputs, PointGridOutputs>({
   type: "pointGrid",
   category: "source",
   description:
@@ -87,7 +95,7 @@ export const pointGrid = standardNode<PointGridParams>({
  * is never ignored, which is the one reading a `pathResample` author
  * would carry over and the one that is false.
  */
-export const pointLine = standardNode<PointLineParams>({
+export const pointLine = standardNode<PointLineParams, PointLineInputs, PointLineOutputs>({
   type: "pointLine",
   category: "source",
   description:
@@ -218,7 +226,11 @@ export const pointLine = standardNode<PointLineParams>({
 });
 
 /** Uniform random points inside an axis-aligned box, hash-seeded. */
-export const pointScatterInBounds = standardNode<PointScatterInBoundsParams>({
+export const pointScatterInBounds = standardNode<
+  PointScatterInBoundsParams,
+  PointScatterInBoundsInputs,
+  PointScatterInBoundsOutputs
+>({
   type: "pointScatterInBounds",
   category: "source",
   description:
@@ -329,7 +341,11 @@ function f32ClipMargin(lo: number, hi: number): number {
  * Points as a pure function of world position, queried through a window:
  * the world-anchored counterpart of {@link pointScatterInBounds}.
  */
-export const pointScatterInWorld = standardNode<PointScatterInWorldParams>({
+export const pointScatterInWorld = standardNode<
+  PointScatterInWorldParams,
+  PointScatterInWorldInputs,
+  PointScatterInWorldOutputs
+>({
   type: "pointScatterInWorld",
   category: "source",
   description:

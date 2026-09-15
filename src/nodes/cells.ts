@@ -55,7 +55,11 @@ import {
   requireScalarColumn,
   resolveOn,
 } from "./util.js";
-import type { VoronoiCellsParams } from "./params.generated.js";
+import type {
+  VoronoiCellsInputs,
+  VoronoiCellsOutputs,
+  VoronoiCellsParams,
+} from "./params.generated.js";
 
 // Generated from the param schemas below; see params.generated.ts.
 export type { VoronoiCellsParams } from "./params.generated.js";
@@ -85,7 +89,11 @@ const MAX_CELL_VERTICES_HINT =
   "count different things.";
 
 /** Build the Voronoi cell of every point, as a closed polyline. */
-export const voronoiCells = standardNode<VoronoiCellsParams>({
+export const voronoiCells = standardNode<
+  VoronoiCellsParams,
+  VoronoiCellsInputs,
+  VoronoiCellsOutputs
+>({
   type: "voronoiCells",
   category: "point op",
   description:

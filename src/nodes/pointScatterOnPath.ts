@@ -70,7 +70,11 @@ import {
   requireScalarColumn,
   resolveOn,
 } from "./util.js";
-import type { PointScatterOnPathParams } from "./params.generated.js";
+import type {
+  PointScatterOnPathInputs,
+  PointScatterOnPathOutputs,
+  PointScatterOnPathParams,
+} from "./params.generated.js";
 
 // Generated from the param schemas below; see params.generated.ts.
 export type { PointScatterOnPathParams } from "./params.generated.js";
@@ -93,7 +97,11 @@ export type { PointScatterOnPathParams } from "./params.generated.js";
 const MAX_SCATTER_POINTS = 1_048_576;
 
 /** Uniform random points along every polyline of a path, hash-seeded. */
-export const pointScatterOnPath = standardNode<PointScatterOnPathParams>({
+export const pointScatterOnPath = standardNode<
+  PointScatterOnPathParams,
+  PointScatterOnPathInputs,
+  PointScatterOnPathOutputs
+>({
   type: "pointScatterOnPath",
   category: "sampler",
   description:

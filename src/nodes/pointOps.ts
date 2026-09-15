@@ -32,12 +32,26 @@ import {
   rotateVec,
 } from "./util.js";
 import type {
+  CopyToPointsInputs,
+  CopyToPointsOutputs,
   CopyToPointsParams,
+  JitterPointsInputs,
+  JitterPointsOutputs,
   JitterPointsParams,
+  MergePointsInputs,
+  MergePointsOutputs,
   MergePointsParams,
+  MergePrimitivesInputs,
+  MergePrimitivesOutputs,
   MergePrimitivesParams,
+  OrientAlongVectorInputs,
+  OrientAlongVectorOutputs,
   OrientAlongVectorParams,
+  SetBoundsInputs,
+  SetBoundsOutputs,
   SetBoundsParams,
+  TransformPointsInputs,
+  TransformPointsOutputs,
   TransformPointsParams,
 } from "./params.generated.js";
 
@@ -53,7 +67,11 @@ export type {
 } from "./params.generated.js";
 
 /** Per-point SRT transform that composes with existing rot/scale attrs. */
-export const transformPoints = standardNode<TransformPointsParams>({
+export const transformPoints = standardNode<
+  TransformPointsParams,
+  TransformPointsInputs,
+  TransformPointsOutputs
+>({
   type: "transformPoints",
   category: "point op",
   description:
@@ -136,7 +154,11 @@ export const transformPoints = standardNode<TransformPointsParams>({
 });
 
 /** Deterministic random offset per point. */
-export const jitterPoints = standardNode<JitterPointsParams>({
+export const jitterPoints = standardNode<
+  JitterPointsParams,
+  JitterPointsInputs,
+  JitterPointsOutputs
+>({
   type: "jitterPoints",
   category: "point op",
   description:
@@ -684,7 +706,11 @@ function buildKeepPlan(src: Geometry, indices: Uint32Array, nS: number): KeepPla
 }
 
 /** Copy a source cloud onto every target point, composing transforms. */
-export const copyToPoints = standardNode<CopyToPointsParams>({
+export const copyToPoints = standardNode<
+  CopyToPointsParams,
+  CopyToPointsInputs,
+  CopyToPointsOutputs
+>({
   type: "copyToPoints",
   category: "point op",
   description:
@@ -1146,7 +1172,7 @@ function unionColumns(
 }
 
 /** Concatenate the point clouds of every connected input. */
-export const mergePoints = standardNode<MergePointsParams>({
+export const mergePoints = standardNode<MergePointsParams, MergePointsInputs, MergePointsOutputs>({
   type: "mergePoints",
   category: "point op",
   description:
@@ -1188,7 +1214,11 @@ export const mergePoints = standardNode<MergePointsParams>({
 });
 
 /** Concatenate whole geometries — points, vertices and primitives. */
-export const mergePrimitives = standardNode<MergePrimitivesParams>({
+export const mergePrimitives = standardNode<
+  MergePrimitivesParams,
+  MergePrimitivesInputs,
+  MergePrimitivesOutputs
+>({
   type: "mergePrimitives",
   category: "point op",
   description:
@@ -1299,7 +1329,11 @@ export const mergePrimitives = standardNode<MergePrimitivesParams>({
 });
 
 /** Build rot quaternions pointing a chosen local axis along a direction. */
-export const orientAlongVector = standardNode<OrientAlongVectorParams>({
+export const orientAlongVector = standardNode<
+  OrientAlongVectorParams,
+  OrientAlongVectorInputs,
+  OrientAlongVectorOutputs
+>({
   type: "orientAlongVector",
   category: "point op",
   description:
@@ -1461,7 +1495,7 @@ function boundsCorner(
 }
 
 /** Stamp the standard boundsMin/boundsMax point attributes. */
-export const setBounds = standardNode<SetBoundsParams>({
+export const setBounds = standardNode<SetBoundsParams, SetBoundsInputs, SetBoundsOutputs>({
   type: "setBounds",
   category: "point op",
   description:

@@ -32,12 +32,26 @@ import {
   tryResolveOnGpu,
 } from "./util.js";
 import type {
+  AttributeReduceInputs,
+  AttributeReduceOutputs,
   AttributeReduceParams,
+  AttributeRemapInputs,
+  AttributeRemapOutputs,
   AttributeRemapParams,
+  PartitionByAttributeInputs,
+  PartitionByAttributeOutputs,
   PartitionByAttributeParams,
+  PromoteAttributeInputs,
+  PromoteAttributeOutputs,
   PromoteAttributeParams,
+  RemoveAttributeInputs,
+  RemoveAttributeOutputs,
   RemoveAttributeParams,
+  SetAttributeInputs,
+  SetAttributeOutputs,
   SetAttributeParams,
+  TransferAttributeInputs,
+  TransferAttributeOutputs,
   TransferAttributeParams,
 } from "./params.generated.js";
 
@@ -234,7 +248,11 @@ function writeWeightedSelection(
 }
 
 /** Create or overwrite an attribute from a field. */
-export const setAttribute = standardNode<SetAttributeParams>({
+export const setAttribute = standardNode<
+  SetAttributeParams,
+  SetAttributeInputs,
+  SetAttributeOutputs
+>({
   type: "setAttribute",
   category: "attribute",
   description:
@@ -480,7 +498,11 @@ export const setAttribute = standardNode<SetAttributeParams>({
 });
 
 /** Promote an attribute between domains (wraps data promote). */
-export const promoteAttribute = standardNode<PromoteAttributeParams>({
+export const promoteAttribute = standardNode<
+  PromoteAttributeParams,
+  PromoteAttributeInputs,
+  PromoteAttributeOutputs
+>({
   type: "promoteAttribute",
   category: "attribute",
   description:
@@ -602,7 +624,11 @@ function rayScratchAttr(
 }
 
 /** Transfer an attribute from a source geometry (nearest / uv / raycast). */
-export const transferAttribute = standardNode<TransferAttributeParams>({
+export const transferAttribute = standardNode<
+  TransferAttributeParams,
+  TransferAttributeInputs,
+  TransferAttributeOutputs
+>({
   type: "transferAttribute",
   category: "attribute",
   description:
@@ -793,7 +819,11 @@ export const transferAttribute = standardNode<TransferAttributeParams>({
 });
 
 /** Reduce an attribute across a domain into one detail-domain value. */
-export const attributeReduce = standardNode<AttributeReduceParams>({
+export const attributeReduce = standardNode<
+  AttributeReduceParams,
+  AttributeReduceInputs,
+  AttributeReduceOutputs
+>({
   type: "attributeReduce",
   category: "attribute",
   description:
@@ -951,7 +981,11 @@ function remapWindow(
 }
 
 /** Rescale an attribute from one numeric range to another. */
-export const attributeRemap = standardNode<AttributeRemapParams>({
+export const attributeRemap = standardNode<
+  AttributeRemapParams,
+  AttributeRemapInputs,
+  AttributeRemapOutputs
+>({
   type: "attributeRemap",
   category: "attribute",
   description:
@@ -1182,7 +1216,11 @@ export const attributeRemap = standardNode<AttributeRemapParams>({
 });
 
 /** Delete attributes from a domain. */
-export const removeAttribute = standardNode<RemoveAttributeParams>({
+export const removeAttribute = standardNode<
+  RemoveAttributeParams,
+  RemoveAttributeInputs,
+  RemoveAttributeOutputs
+>({
   type: "removeAttribute",
   category: "attribute",
   description:
@@ -1239,7 +1277,11 @@ export const removeAttribute = standardNode<RemoveAttributeParams>({
 });
 
 /** Split one geometry into per-value point clouds, tagged. */
-export const partitionByAttribute = standardNode<PartitionByAttributeParams>({
+export const partitionByAttribute = standardNode<
+  PartitionByAttributeParams,
+  PartitionByAttributeInputs,
+  PartitionByAttributeOutputs
+>({
   type: "partitionByAttribute",
   category: "attribute",
   description:

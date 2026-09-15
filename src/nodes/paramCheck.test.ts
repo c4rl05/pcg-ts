@@ -41,6 +41,7 @@ describe("setParam checks the declared schema", () => {
       /param "count": expected an integer, got 1.5/,
     );
     const f = g.add(filterByBounds, {}, "clip");
+    // @ts-expect-error — the types refuse it too; this pins the runtime refusal
     expect(() => g.setParam(f, "mode", "sideways")).toThrow(
       /param "mode": expected one of "inside", "outside", got "sideways"/,
     );

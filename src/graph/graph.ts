@@ -26,13 +26,59 @@ import { subgraphSpecs, wrappedGraphOf } from "./subgraphLink.js";
 
 /**
  * Reference to a node instance in a graph. Carries the param type of its
- * definition so `setParam` stays typed.
+ * definition so `setParam` stays typed, and its input (`I`) and output
+ * (`O`) pin names so `connect`, `disconnect` and `output` refuse a
+ * misspelled pin at compile time.
+ *
+ * A handle from `Graph.add` on a standard node knows its pins, and so does
+ * one from a def whose type TypeScript inferred from an object literal with
+ * literal pin names. Every other handle — a def typed `NodeDef<P>` (which
+ * `defineNode<P>` and `standardNode<P>` return), a subgraph def, a
+ * registry lookup's def, a deserialized graph's node, one rebuilt from an
+ * id — has `string` pins and accepts any name, checked when the call runs,
+ * exactly as before the pins were typed.
+ *
+ * THE ESCAPE HATCH, for a pin name that is only known at runtime (read from
+ * data, looped over, chosen by a UI): declare the handle as a plain
+ * `NodeHandle` — `const h: NodeHandle = graph.add(scatter)` — or widen the
+ * pin names at the call with `graph.connect<string, string>(a, pin, b, pin2)`.
+ * Both are checked widenings, not casts; the runtime check still names the
+ * node, the pin and the valid alternatives.
  */
-export interface NodeHandle<P = unknown> {
+export interface NodeHandle<P = unknown, I extends string = string, O extends string = string> {
   readonly id: string;
   /** @internal Phantom marker preserving the param type; never set. */
   readonly _params?: P;
+  /** @internal Phantom marker preserving the input pin names; never set. */
+  readonly _inputs?: I;
+  /** @internal Phantom marker preserving the output pin names; never set. */
+  readonly _outputs?: O;
 }
+
+/**
+ * A pin-name position that TypeScript may check against but never infer
+ * from: `connect`, `disconnect` and `output` infer a handle's pin names from
+ * the HANDLE argument only, and this makes the pin argument a non-inference
+ * site.
+ *
+ * Why the pin must not be an inference site: a literal `"outt"` would itself
+ * become a candidate and widen the union until it accepted the typo. Why not
+ * `NoInfer`, which says the same thing: it needs TypeScript 5.4 in the
+ * CONSUMER's compiler. This is the older spelling of it — a conditional type
+ * TypeScript defers while inferring, then resolves to `T` — which any
+ * TypeScript that reads the rest of these typings understands.
+ *
+ * Why the pin names are inferred from the handle through a type parameter,
+ * and not read off it by a conditional over the handle's own type: inside a
+ * generic helper `<H extends NodeHandle>(h: H)`, a conditional over `H`
+ * stays unresolved and refuses every string, where a type parameter
+ * inferred from `h` falls to `H`'s constraint — `string` — and accepts it,
+ * as that helper did before pins were typed.
+ *
+ * Not exported: a caller never names it, and a published name would be one
+ * more to keep.
+ */
+type PinName<T extends string> = [T][T extends unknown ? 0 : never];
 
 /** @internal One connection between two node pins. */
 export interface Connection {
@@ -554,7 +600,11 @@ export class Graph {
    * validated them at registration. Nothing is inserted when one is
    * refused, and the auto-id counter does not advance.
    */
-  add<P>(def: NodeDef<P>, params?: Partial<P>, id?: string): NodeHandle<P> {
+  add<P, I extends string = string, O extends string = string>(
+    def: NodeDef<P, I, O>,
+    params?: Partial<P>,
+    id?: string,
+  ): NodeHandle<P, I, O> {
     checkNoWrapCycle(this, def as unknown as object, id);
     let nodeId: string;
     let advanceTo: number | undefined;
@@ -597,8 +647,17 @@ export class Graph {
    * Connect an output pin to an input pin. Validates that both pins exist,
    * kinds are compatible (`any` matches either), the input pin is free
    * unless `multi`, and no cycle is created. Dirties the target node.
+   *
+   * `fromPin` and `toPin` are typed from the handles: a standard node's
+   * handle accepts only its own pin names, an untyped handle any string
+   * (see {@link NodeHandle} for widening one whose pin is a runtime value).
    */
-  connect(from: NodeHandle, fromPin: string, to: NodeHandle, toPin: string): void {
+  connect<O extends string, I extends string>(
+    from: NodeHandle<unknown, string, O>,
+    fromPin: PinName<O>,
+    to: NodeHandle<unknown, I, string>,
+    toPin: PinName<I>,
+  ): void {
     const src = this.require(from.id);
     const dst = this.require(to.id);
     const out = findPin(src.def.outputs, fromPin);
@@ -655,7 +714,12 @@ export class Graph {
    * revs, so it (and anything downstream of it) recooks on the next
    * cook; untouched branches keep serving their caches.
    */
-  disconnect(from: NodeHandle, fromPin: string, to: NodeHandle, toPin: string): boolean {
+  disconnect<O extends string, I extends string>(
+    from: NodeHandle<unknown, string, O>,
+    fromPin: PinName<O>,
+    to: NodeHandle<unknown, I, string>,
+    toPin: PinName<I>,
+  ): boolean {
     const src = this.require(from.id);
     const dst = this.require(to.id);
     if (!findPin(src.def.outputs, fromPin)) {
@@ -811,7 +875,11 @@ export class Graph {
    * what they reach). `name` defaults to `"<nodeId>.<pin>"` and keys the
    * collection in the cook result.
    */
-  output(handle: NodeHandle, pin: string, name?: string): void {
+  output<O extends string>(
+    handle: NodeHandle<unknown, string, O>,
+    pin: PinName<O>,
+    name?: string,
+  ): void {
     const node = this.require(handle.id);
     if (!findPin(node.def.outputs, pin)) {
       throw new GraphValidationError(`node "${node.id}" has no output pin "${pin}"`);

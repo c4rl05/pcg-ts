@@ -320,7 +320,7 @@ describe("pointLine", () => {
     // so a point that moves re-keys and re-seeds everything hanging off
     // it. 16 -> 17 wraps, both modes, same line.
     const carrier = { start: [0, 0, 0], end: [15, 0, 0] };
-    const spaced = { ...carrier, mode: "spacing", spacing: 1 };
+    const spaced = { ...carrier, mode: "spacing" as const, spacing: 1 };
     const stepped16 = positionsOf(firstGeo((await runNode(pointLine, { ...spaced, count: 16 })).out));
     const stepped17 = positionsOf(firstGeo((await runNode(pointLine, { ...spaced, count: 17 })).out));
     expect(stepped17).toHaveLength(17);
@@ -389,6 +389,7 @@ describe("pointLine", () => {
 
   it("refuses the settings that name no line, stating the fix", async () => {
     const line = { count: 5, start: [0, 0, 0], end: [4, 0, 0] };
+    // @ts-expect-error — the types refuse it too; the runtime refusal is the point
     await expect(runNode(pointLine, { ...line, mode: "step" })).rejects.toThrow(
       /unknown mode "step"; valid modes: endpoints, spacing/,
     );
@@ -696,7 +697,7 @@ describe("pointScatterInWorld", () => {
   });
 
   it("xyz mode clips Y from the lattice and is an independent point set", async () => {
-    const params = {
+    const params: Partial<PointScatterInWorldParams> = {
       ...WORLD,
       latticeMode: "xyz",
       density: 0.01,
@@ -786,6 +787,7 @@ describe("pointScatterInWorld", () => {
     await expect(scatterWorld({ ...WORLD, density: -1 })).rejects.toThrow(
       /density must be a finite number >= 0, got -1/,
     );
+    // @ts-expect-error — the types refuse it too; the runtime refusal is the point
     await expect(scatterWorld({ ...WORLD, latticeMode: "yz" })).rejects.toThrow(
       /latticeMode must be "xz" or "xyz", got "yz"/,
     );

@@ -18,8 +18,14 @@ import {
   resolveOnMaybeGpu,
 } from "./util.js";
 import type {
+  SplineSampleInputs,
+  SplineSampleOutputs,
   SplineSampleParams,
+  SurfaceSampleInputs,
+  SurfaceSampleOutputs,
   SurfaceSampleParams,
+  VolumeSampleInputs,
+  VolumeSampleOutputs,
   VolumeSampleParams,
 } from "./params.generated.js";
 
@@ -34,7 +40,11 @@ export type {
  * Area-weighted triangle-mesh surface sampling with optional density
  * acceptance.
  */
-export const surfaceSample = standardNode<SurfaceSampleParams>({
+export const surfaceSample = standardNode<
+  SurfaceSampleParams,
+  SurfaceSampleInputs,
+  SurfaceSampleOutputs
+>({
   type: "surfaceSample",
   category: "sampler",
   description:
@@ -286,7 +296,11 @@ function requireSplineReportsNotPrimtype(params: SplineSampleParams): void {
 }
 
 /** Arc-length spline sampling over polyline primitives. */
-export const splineSample = standardNode<SplineSampleParams>({
+export const splineSample = standardNode<
+  SplineSampleParams,
+  SplineSampleInputs,
+  SplineSampleOutputs
+>({
   type: "splineSample",
   category: "sampler",
   description:
@@ -549,7 +563,11 @@ export const splineSample = standardNode<SplineSampleParams>({
 const MAX_VOLUME_POINTS = 16_777_216;
 
 /** Regular jittered grid inside an axis-aligned box. */
-export const volumeSample = standardNode<VolumeSampleParams>({
+export const volumeSample = standardNode<
+  VolumeSampleParams,
+  VolumeSampleInputs,
+  VolumeSampleOutputs
+>({
   type: "volumeSample",
   category: "sampler",
   description:

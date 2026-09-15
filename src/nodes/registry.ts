@@ -27,8 +27,15 @@ import { defParamSchemas } from "../graph/paramSchemaLink.js";
  * A node definition plus registry metadata, passed to {@link standardNode}.
  * `defaultParams` is derived from the schemas' `default` values, so the
  * schema is the single source of truth.
+ *
+ * `I` and `O` are the input and output pin names, `string` by default. The
+ * standard nodes pass their generated unions from `params.generated.ts`,
+ * which is what types a `Graph.add` handle's pins; a third-party spec that
+ * names `P` keeps `string` pins and connects exactly as before. (A call
+ * naming no type argument at all has TypeScript infer `P`, `I` and `O`
+ * together, so its literal pin names become the types.)
  */
-export interface NodeSpec<P> {
+export interface NodeSpec<P, I extends string = string, O extends string = string> {
   /** Node type name; must be unique across the registry. */
   readonly type: string;
   /** What the node does — agent-facing documentation. */
@@ -46,8 +53,8 @@ export interface NodeSpec<P> {
    * back to their own grouping).
    */
   readonly category?: string;
-  readonly inputs: readonly PinDef[];
-  readonly outputs: readonly PinDef[];
+  readonly inputs: readonly PinDef<I>[];
+  readonly outputs: readonly PinDef<O>[];
   /** One schema per param; keys must exactly match `P`. */
   readonly params: { readonly [K in keyof P]-?: ParamSchema };
   execute(args: NodeExecuteArgs<P>): NodeOutputs | Promise<NodeOutputs>;
@@ -173,7 +180,9 @@ function copyPins(pins: readonly PinInfo[]): PinInfo[] {
  * and return its executable {@link NodeDef}. `defaultParams` is built
  * from the schemas. Duplicate type names throw.
  */
-export function standardNode<P>(spec: NodeSpec<P>): NodeDef<P> {
+export function standardNode<P, I extends string = string, O extends string = string>(
+  spec: NodeSpec<P, I, O>,
+): NodeDef<P, I, O> {
   if (typeof spec.type !== "string" || spec.type.trim() === "") {
     throw new Error("standardNode: spec.type must be a non-empty string");
   }
@@ -213,7 +222,7 @@ export function standardNode<P>(spec: NodeSpec<P>): NodeDef<P> {
     defaultParams[name] = copyParamValue(schema.default);
   }
 
-  const def: NodeDef<P> = {
+  const def: NodeDef<P, I, O> = {
     type: spec.type,
     inputs: spec.inputs,
     outputs: spec.outputs,

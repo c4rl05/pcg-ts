@@ -6,11 +6,13 @@ import { Graph, cook, makeGeometryItem, type NodeHandle } from "../graph/index.j
 import { dataInput, type DataInputParams } from "../runtime/index.js";
 import {
   connectByIndex,
+  type ConnectByIndexParams,
   connectPoints,
   deserializeGraph,
   pointsToPath,
   filterByBounds,
   filterPrimitivesByBounds,
+  type FilterPrimitivesByBoundsParams,
   serializeGraph,
 } from "./index.js";
 import {
@@ -839,7 +841,7 @@ describe("the partitioned network cook is expressible entirely in nodes", () => 
     geo: Geometry,
     w: Window,
     radius: number,
-    unreferencedPoints = "keep",
+    unreferencedPoints: FilterPrimitivesByBoundsParams["unreferencedPoints"] = "keep",
   ): Promise<Geometry> {
     const FAR = 1e6;
     const graph = new Graph(4242);
@@ -1153,7 +1155,7 @@ async function link(
   params: Partial<{
     index: FieldLike;
     rootValue: number;
-    outOfRange: string;
+    outOfRange: ConnectByIndexParams["outOfRange"];
     degreeAttr: string;
     lengthAttr: string;
     missCountAttr: string;

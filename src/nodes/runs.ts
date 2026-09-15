@@ -73,7 +73,14 @@ import {
   requireScalarColumn,
   resolveOn,
 } from "./util.js";
-import type { ArcTileParams, RunFitParams } from "./params.generated.js";
+import type {
+  ArcTileInputs,
+  ArcTileOutputs,
+  ArcTileParams,
+  RunFitInputs,
+  RunFitOutputs,
+  RunFitParams,
+} from "./params.generated.js";
 
 // Generated from the param schemas below; see params.generated.ts.
 export type { ArcTileParams, RunFitParams } from "./params.generated.js";
@@ -232,7 +239,7 @@ function runFitSlots(p: RunFitParams): RunFitSlot[] {
 }
 
 /** Least-squares fit of a run, per point, along a path. */
-export const runFit = standardNode<RunFitParams>({
+export const runFit = standardNode<RunFitParams, RunFitInputs, RunFitOutputs>({
   type: "runFit",
   category: "attribute",
   description:
@@ -632,7 +639,7 @@ export const runFit = standardNode<RunFitParams>({
 const MAX_TILE_POINTS = 1_048_576;
 
 /** A repeated piece laid over each of a path's arc ranges. */
-export const arcTile = standardNode<ArcTileParams>({
+export const arcTile = standardNode<ArcTileParams, ArcTileInputs, ArcTileOutputs>({
   type: "arcTile",
   category: "sampler",
   description:

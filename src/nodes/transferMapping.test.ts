@@ -463,7 +463,7 @@ describe("transferAttribute hitAttr (per-point miss flag)", () => {
       { p: [1, 7, 1], uv: [0, 0] },
       { p: [-9, 7, 4], uv: [0, 0] },
     ];
-    const params = { name: "val", mapping: "raycast", hitAttr: "__hit" };
+    const params: Partial<TransferAttributeParams> = { name: "val", mapping: "raycast", hitAttr: "__hit" };
     const forward = flags(await run(dstCloud(rows), params));
     const reversed = flags(await run(dstCloud([...rows].reverse()), params));
     expect(reversed).toEqual([...forward].reverse());
@@ -493,6 +493,7 @@ describe("transferAttribute errors", () => {
 
   it("rejects unknown mappings actionably", async () => {
     await expect(
+      // @ts-expect-error — the types refuse it too; the runtime refusal is the point
       runNode(transferAttribute, { name: "val", mapping: "warp" }, geoms()),
     ).rejects.toThrow(/unknown mapping "warp"; valid mappings: nearest, uv, raycast/);
   });

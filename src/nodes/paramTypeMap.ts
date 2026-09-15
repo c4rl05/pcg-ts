@@ -66,8 +66,10 @@ export interface ParamTypeSpelling {
 const FIELD_PARAM_IMPORT = { FieldParam: "./util.js" } as const;
 
 /**
- * The table. Enums spell `string` because the vocabulary's literal unions
- * are a separate, stricter step; integers and floats are all `number`
+ * The table. An enum's `plain` spelling is `string` only as the column's
+ * fallback: {@link paramTypeScript} spells a declared enum as the literal
+ * union of its values, which the table cannot hold because the values are
+ * per param, not per type. Integers and floats are all `number`
  * because JavaScript has one number. JSON Schema can say more than
  * TypeScript here, so it does: `integer`, a u32's floor, a vec's width.
  */
@@ -120,6 +122,12 @@ export function paramTypeScript(schema: ParamSchema): {
       );
     }
     return { type: spelling.field, imports: FIELD_PARAM_IMPORT };
+  }
+  if (schema.type === "enum" && schema.enum !== undefined && schema.enum.length > 0) {
+    // The literal union of the declared values, in schema order. The table's
+    // `plain` spelling stays `string` for an enum with no values to spell,
+    // which `paramSchemaError` refuses at registration anyway.
+    return { type: schema.enum.map((v) => JSON.stringify(v)).join(" | "), imports: {} };
   }
   return { type: spelling.plain, imports: spelling.imports ?? {} };
 }

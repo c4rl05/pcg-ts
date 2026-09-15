@@ -5,7 +5,11 @@
  */
 import type { DataItem } from "../graph/index.js";
 import { standardNode } from "../nodes/registry.js";
-import type { DataInputParams } from "../nodes/params.generated.js";
+import type {
+  DataInputInputs,
+  DataInputOutputs,
+  DataInputParams,
+} from "../nodes/params.generated.js";
 
 // Generated from the param schemas below; see src/nodes/params.generated.ts.
 export type { DataInputParams } from "../nodes/params.generated.js";
@@ -32,7 +36,7 @@ function isDataItem(v: unknown): v is DataItem {
  * (`NODE_ENV !== "production"`), execute freezes the array so an in-place
  * mutation throws instead of silently diverging.
  */
-export const dataInput = standardNode<DataInputParams>({
+export const dataInput = standardNode<DataInputParams, DataInputInputs, DataInputOutputs>({
   type: "dataInput",
   category: "io",
   description:

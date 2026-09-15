@@ -21,6 +21,18 @@
  * whatever state the types are in: `npm run docs:types` runs it with `-u`
  * to write the file, and a plain run (CI, and `prebuild`) fails on drift.
  *
+ * THE PIN-NAME UNIONS ride in the same file for the same reason: the
+ * registry's pins are the authored copy of a node's interface, and a
+ * compile-time copy has to be regenerated from it rather than kept in step
+ * by hand. A node module passes them explicitly
+ * (`standardNode<XParams, XInputs, XOutputs>`) rather than letting
+ * TypeScript infer them from its literal `pins` arrays, because naming `P`
+ * already switches inference off (TypeScript has no partial inference), and
+ * the alternative — hoisting every pin array into an `as const` and typing
+ * the call with `(typeof pins)[number]["name"]` — is 59 extra declarations
+ * that print worse in a hover than a named union does. A pin added to a
+ * spec and not regenerated fails `tsc` at that spec, the way a param does.
+ *
  * The type spellings come from `src/nodes/paramTypeMap.ts`, the table the
  * JSON Schema generator shares; this module owns only the layout and the
  * prose.
@@ -45,9 +57,40 @@ export const PARAM_TYPES_COMMAND = "npm run docs:types";
  */
 export const ZERO_PARAM_ALIASES: readonly string[] = ["mergePoints", "mergePrimitives"];
 
+/**
+ * Registered types whose pins are PER INSTANCE, which get no pin-name
+ * unions: the three composite wrappers, whose registry entries are
+ * metadata-only and declare no pins because every instance's pins come
+ * from the graph it wraps. A union of their registered pins would be
+ * `never` on both sides — a claim that no instance has a pin, which is
+ * false. Their defs (`subgraphNode` and the rest) keep `string` pins.
+ * A list, like {@link ZERO_PARAM_ALIASES}, so `paramTypes.test.ts` can name
+ * a new pinless type instead of silently typing it `never`.
+ */
+export const PER_INSTANCE_PIN_TYPES: readonly string[] = ["forEach", "repeatUntil", "subgraph"];
+
+function pascal(type: string): string {
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
 /** The interface name for a node type: `pointGrid` → `PointGridParams`. */
 export function paramTypesName(type: string): string {
-  return type.charAt(0).toUpperCase() + type.slice(1) + "Params";
+  return pascal(type) + "Params";
+}
+
+/**
+ * The pin-name union names for a node type: `pointGrid` →
+ * `PointGridInputs` / `PointGridOutputs`. INTERNAL names: the node modules
+ * pass them to `standardNode` and never re-export them, so they type a
+ * handle's pins without becoming names the package root publishes.
+ */
+export function pinTypesName(type: string, side: "input" | "output"): string {
+  return pascal(type) + (side === "input" ? "Inputs" : "Outputs");
+}
+
+/** A union of pin names in declaration order, or `never` for no pins. */
+function pinUnion(pins: NodeTypeInfo["inputs"]): string {
+  return pins.length === 0 ? "never" : pins.map((p) => JSON.stringify(p.name)).join(" | ");
 }
 
 /**
@@ -155,6 +198,12 @@ const HEADER = `/**
  * that copy onto every standard node's \`*Params\` interface, where an editor
  * hover and \`dist/*.d.ts\` can show it. To change a param's documentation,
  * edit its schema in the node's module and run \`${PARAM_TYPES_COMMAND}\`.
+ * Enum params are typed as the literal union of their values.
+ *
+ * It also carries each node type's pin names as \`<Type>Inputs\` and
+ * \`<Type>Outputs\` unions, which the node module passes to \`standardNode\`
+ * so a \`Graph.add\` handle knows its pins. Those two are internal: no module
+ * re-exports them, so they never become names the package root publishes.
  *
  * \`src/docs/paramTypes.test.ts\` fails when this file and the registry
  * disagree, and \`prebuild\` runs that test first, so the first failure a
@@ -167,8 +216,10 @@ const HEADER = `/**
  *
  * Deterministic: types sort by name, so a change in registration order is
  * not a change in the file; params keep their schema order, which is the
- * order a node's author wrote them in. Zero-param types appear only when
- * {@link ZERO_PARAM_ALIASES} names them.
+ * order a node's author wrote them in, and pins their declaration order.
+ * Zero-param types get a params alias only when {@link ZERO_PARAM_ALIASES}
+ * names them; every type but the {@link PER_INSTANCE_PIN_TYPES} gets its
+ * two pin-name unions.
  */
 export function renderParamTypes(types: readonly NodeTypeInfo[]): string {
   const sorted = [...types].sort((a, b) => (a.type < b.type ? -1 : a.type > b.type ? 1 : 0));
@@ -178,26 +229,39 @@ export function renderParamTypes(types: readonly NodeTypeInfo[]): string {
     const name = paramTypesName(info.type);
     const entries = Object.entries(info.params);
     if (entries.length === 0) {
-      if (!ZERO_PARAM_ALIASES.includes(info.type)) continue;
-      blocks.push(
-        `${comment([escapeJsDocLine(`Params of the \`${info.type}\` node type, which has none.`)], "")}\n` +
-          `export type ${name} = Record<string, never>;`,
-      );
-      continue;
-    }
-    const fields = entries.map(([param, schema]) => {
-      const ts = paramTypeScript(schema);
-      for (const [importName, from] of Object.entries(ts.imports)) {
-        const names = imports.get(from) ?? new Set<string>();
-        names.add(importName);
-        imports.set(from, names);
+      if (ZERO_PARAM_ALIASES.includes(info.type)) {
+        blocks.push(
+          `${comment([escapeJsDocLine(`Params of the \`${info.type}\` node type, which has none.`)], "")}\n` +
+            `export type ${name} = Record<string, never>;`,
+        );
       }
-      return `${comment(paramDocLines(schema), "  ")}\n  ${param}: ${ts.type};`;
-    });
-    blocks.push(
-      `${comment([escapeJsDocLine(`Params of the \`${info.type}\` node type.`)], "")}\n` +
-        `export interface ${name} {\n${fields.join("\n")}\n}`,
-    );
+    } else {
+      const fields = entries.map(([param, schema]) => {
+        const ts = paramTypeScript(schema);
+        for (const [importName, from] of Object.entries(ts.imports)) {
+          const names = imports.get(from) ?? new Set<string>();
+          names.add(importName);
+          imports.set(from, names);
+        }
+        return `${comment(paramDocLines(schema), "  ")}\n  ${param}: ${ts.type};`;
+      });
+      blocks.push(
+        `${comment([escapeJsDocLine(`Params of the \`${info.type}\` node type.`)], "")}\n` +
+          `export interface ${name} {\n${fields.join("\n")}\n}`,
+      );
+    }
+    if (PER_INSTANCE_PIN_TYPES.includes(info.type)) continue;
+    for (const side of ["input", "output"] as const) {
+      const pins = side === "input" ? info.inputs : info.outputs;
+      const what =
+        pins.length === 0
+          ? `The \`${info.type}\` node type has no ${side} pins.`
+          : `The ${side} pin names of the \`${info.type}\` node type.`;
+      blocks.push(
+        `${comment([escapeJsDocLine(what)], "")}\n` +
+          `export type ${pinTypesName(info.type, side)} = ${pinUnion(pins)};`,
+      );
+    }
   }
   const importLines = [...imports.keys()]
     .sort()

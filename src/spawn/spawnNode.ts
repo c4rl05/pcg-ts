@@ -7,13 +7,21 @@ import { makeInstancesItem } from "../graph/index.js";
 import { standardNode } from "../nodes/registry.js";
 import { requireGeometryItem } from "../nodes/util.js";
 import { MAX_INSTANCES, buildInstanceBatches } from "./instances.js";
-import type { SpawnInstancesParams } from "../nodes/params.generated.js";
+import type {
+  SpawnInstancesInputs,
+  SpawnInstancesOutputs,
+  SpawnInstancesParams,
+} from "../nodes/params.generated.js";
 
 // Generated from the param schemas below; see src/nodes/params.generated.ts.
 export type { SpawnInstancesParams } from "../nodes/params.generated.js";
 
 /** Spawner terminal: points → instance batches (plus point pass-through). */
-export const spawnInstances = standardNode<SpawnInstancesParams>({
+export const spawnInstances = standardNode<
+  SpawnInstancesParams,
+  SpawnInstancesInputs,
+  SpawnInstancesOutputs
+>({
   type: "spawnInstances",
   category: "spawn",
   description:

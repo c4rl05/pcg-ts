@@ -623,14 +623,20 @@ describe("neither node touches its input", () => {
 describe("param validation names the offender and the valid set", () => {
   it("refuses bad enums and out-of-range numbers", async () => {
     const path = straight(3);
+    // The types refuse the four bad enum values as well; these pin the
+    // runtime refusal an untyped caller (JSON, a UI) meets.
+    // @ts-expect-error — not a profile, on purpose
     await expect(sweep(path, { profile: "hexagon" })).rejects.toThrow(
       /param "profile" must be one of circle, square, ribbon/,
     );
+    // @ts-expect-error — not a joint, on purpose
     await expect(sweep(path, { joint: "round" })).rejects.toThrow(/param "joint" must be one of/);
+    // @ts-expect-error — not a frame, on purpose
     await expect(sweep(path, { frame: "frenet" })).rejects.toThrow(/param "frame" must be one of/);
     await expect(sweep(path, { sides: 2 })).rejects.toThrow(/whole number in \[3, 256\]/);
     await expect(sweep(path, { sides: 8.5 })).rejects.toThrow(/whole number in \[3, 256\]/);
     await expect(sweep(path, { miterLimit: 0.5 })).rejects.toThrow(/miterLimit.*>= 1/s);
+    // @ts-expect-error — not a direction, on purpose
     await expect(extrude(unitSquare(), { direction: "up" })).rejects.toThrow(
       /param "direction" must be one of/,
     );

@@ -81,7 +81,7 @@ import type { AttrData, AttrDefault, Attribute, Geometry } from "../data/index.j
 import { cloneGeometry, makeGeometryItem } from "../graph/index.js";
 import { standardNode } from "./registry.js";
 import { CANCEL_STRIDE, polylineWalks, requireGeometry, requireReportSlot } from "./util.js";
-import type { PathShiftParams } from "./params.generated.js";
+import type { PathShiftInputs, PathShiftOutputs, PathShiftParams } from "./params.generated.js";
 
 // Generated from the param schemas below; see params.generated.ts.
 export type { PathShiftParams } from "./params.generated.js";
@@ -132,7 +132,7 @@ interface Shifted {
 }
 
 /** Read a path's own attributes from the point `offset` positions along. */
-export const pathShift = standardNode<PathShiftParams>({
+export const pathShift = standardNode<PathShiftParams, PathShiftInputs, PathShiftOutputs>({
   type: "pathShift",
   category: "attribute",
   description:

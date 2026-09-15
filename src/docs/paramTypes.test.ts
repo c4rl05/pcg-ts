@@ -19,9 +19,11 @@ import type { NodeTypeInfo } from "../nodes/registry.js";
 import { listNodeTypes } from "../index.js";
 import {
   PARAM_TYPES_COMMAND,
+  PER_INSTANCE_PIN_TYPES,
   ZERO_PARAM_ALIASES,
   escapeJsDocLine,
   paramTypesName,
+  pinTypesName,
   renderParamTypes,
 } from "./paramTypes.js";
 
@@ -32,8 +34,17 @@ import {
  */
 const ZERO_PARAM_UNALIASED: readonly string[] = ["subgraph", "forEach"];
 
+/** One declaration of a rendered file: its members' docs and type text. */
+interface Declared {
+  readonly alias: boolean;
+  /** An alias's type text, as written; empty for an interface. */
+  readonly type: string;
+  readonly members: Map<string, string>;
+  readonly memberTypes: Map<string, string>;
+}
+
 /** Each declaration in a rendered file, by name, with its members' docs. */
-function declarations(source: string): Map<string, { alias: boolean; members: Map<string, string> }> {
+function declarations(source: string): Map<string, Declared> {
   const file = ts.createSourceFile("params.generated.ts", source, ts.ScriptTarget.Latest, true);
   const syntax = (file as unknown as { parseDiagnostics: readonly ts.Diagnostic[] }).parseDiagnostics;
   if (syntax.length > 0) {
@@ -41,18 +52,28 @@ function declarations(source: string): Map<string, { alias: boolean; members: Ma
       `rendered params file does not parse: ${syntax.map((d) => ts.flattenDiagnosticMessageText(d.messageText, " ")).join("; ")}`,
     );
   }
-  const out = new Map<string, { alias: boolean; members: Map<string, string> }>();
+  const out = new Map<string, Declared>();
   for (const statement of file.statements) {
     if (ts.isTypeAliasDeclaration(statement)) {
-      out.set(statement.name.text, { alias: true, members: new Map() });
+      out.set(statement.name.text, {
+        alias: true,
+        type: statement.type.getText(file),
+        members: new Map(),
+        memberTypes: new Map(),
+      });
     } else if (ts.isInterfaceDeclaration(statement)) {
       const members = new Map<string, string>();
+      const memberTypes = new Map<string, string>();
       for (const member of statement.members) {
         const docs = ts.getJSDocCommentsAndTags(member).filter(ts.isJSDoc);
         const text = docs.map((doc) => ts.getTextOfJSDocComment(doc.comment) ?? "").join("\n");
-        members.set(member.name!.getText(file), text);
+        const name = member.name!.getText(file);
+        members.set(name, text);
+        if (ts.isPropertySignature(member) && member.type !== undefined) {
+          memberTypes.set(name, member.type.getText(file));
+        }
       }
-      out.set(statement.name.text, { alias: false, members });
+      out.set(statement.name.text, { alias: false, type: "", members, memberTypes });
     }
   }
   return out;
@@ -65,8 +86,8 @@ describe("param types (src/nodes/params.generated.ts)", () => {
   it("matches the live node registry", async () => {
     await expect(
       rendered,
-      `src/nodes/params.generated.ts is stale: a param schema changed but the generated interfaces ` +
-        `were not regenerated. Run \`${PARAM_TYPES_COMMAND}\` and commit the result`,
+      `src/nodes/params.generated.ts is stale: a param schema or a pin list changed but the generated ` +
+        `types were not regenerated. Run \`${PARAM_TYPES_COMMAND}\` and commit the result`,
     ).toMatchFileSnapshot("../nodes/params.generated.ts");
   });
 
@@ -111,6 +132,57 @@ describe("param types (src/nodes/params.generated.ts)", () => {
       expect(declared.get(paramTypesName(t))?.alias, `${paramTypesName(t)} alias`).toBe(true);
     }
     for (const t of ZERO_PARAM_UNALIASED) expect(declared.has(paramTypesName(t))).toBe(false);
+  });
+
+  it("types every enum param as the literal union of its values, in schema order", () => {
+    const declared = declarations(rendered);
+    let enums = 0;
+    for (const info of types) {
+      for (const [param, schema] of Object.entries(info.params)) {
+        if (schema.type !== "enum") continue;
+        const expected = schema.enum!.map((v) => JSON.stringify(v)).join(" | ");
+        const name = paramTypesName(info.type);
+        expect(declared.get(name)?.memberTypes.get(param), `${name}.${param}`).toBe(expected);
+        enums += 1;
+      }
+    }
+    // Measured at 56 when the unions landed; the guard must have something to guard.
+    expect(enums).toBeGreaterThan(40);
+  });
+
+  it("gives every type with fixed pins its input and output pin-name unions", () => {
+    const declared = declarations(rendered);
+    const union = (names: readonly string[]) =>
+      names.length === 0 ? "never" : names.map((n) => JSON.stringify(n)).join(" | ");
+    for (const info of types) {
+      for (const side of ["input", "output"] as const) {
+        const name = pinTypesName(info.type, side);
+        if (PER_INSTANCE_PIN_TYPES.includes(info.type)) {
+          expect(declared.has(name), `${name} must not exist: ${info.type}'s pins are per instance`).toBe(false);
+          continue;
+        }
+        const pins = (side === "input" ? info.inputs : info.outputs).map((p) => p.name);
+        expect(declared.get(name)?.alias, `${name} alias`).toBe(true);
+        expect(declared.get(name)!.type, name).toBe(union(pins));
+      }
+    }
+  });
+
+  it("decides every pinless type: per-instance pins, or none of its own", () => {
+    // A registered type with no output pin can produce nothing, so a standard
+    // node never has one; the three wrappers have none only because their
+    // pins come from the graph each instance wraps. A new pinless type is a
+    // decision, not a `never` union to be generated silently.
+    const pinless = types.filter((t) => t.outputs.length === 0).map((t) => t.type).sort();
+    expect(
+      pinless,
+      "a registered node type declares no output pins: if its pins are per instance, add it to " +
+        "PER_INSTANCE_PIN_TYPES in src/docs/paramTypes.ts; otherwise give it its output pins",
+    ).toEqual([...PER_INSTANCE_PIN_TYPES].sort());
+    for (const t of PER_INSTANCE_PIN_TYPES) {
+      const info = types.find((i) => i.type === t);
+      expect(info?.inputs, `${t} is registered with no input pins`).toEqual([]);
+    }
   });
 
   describe("escaping", () => {

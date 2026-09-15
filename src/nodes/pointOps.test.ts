@@ -20,6 +20,7 @@ import {
 import { Graph, makeGeometryItem } from "../graph/index.js";
 import {
   copyToPoints,
+  type CopyToPointsParams,
   deserializeGraph,
   fieldFromJson,
   getNodeType,
@@ -479,7 +480,7 @@ describe("copyToPoints", () => {
 
   describe("topology", () => {
     interface TopologyParams {
-      topology?: string;
+      topology?: CopyToPointsParams["topology"];
       targetNames?: string[];
       targetIndexAttr?: string;
     }
@@ -666,6 +667,7 @@ describe("copyToPoints", () => {
     });
 
     it("refuses a misspelled value, and a source resized behind its own topology", async () => {
+      // @ts-expect-error — the types refuse it too; the runtime refusal is the point
       await expect(copy(forkedSource(), { topology: "Keep" })).rejects.toThrow(
         /copyToPoints: topology must be "drop" or "keep", got "Keep"; "drop" copies/,
       );
@@ -1847,6 +1849,7 @@ describe("orientAlongVector", () => {
   it("rejects a bad axis or up actionably", async () => {
     const input = cloudAt([[0, 0, 0]]);
     await expect(
+      // @ts-expect-error — the types refuse it too; the runtime refusal is the point
       runNode(orientAlongVector, { axis: "z" }, { in: [makeGeometryItem(input)] }),
     ).rejects.toThrow(/"axis" must be one of \+x, -x, \+y, -y, \+z, -z/);
     await expect(

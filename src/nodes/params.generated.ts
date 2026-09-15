@@ -9,6 +9,12 @@
  * that copy onto every standard node's `*Params` interface, where an editor
  * hover and `dist/*.d.ts` can show it. To change a param's documentation,
  * edit its schema in the node's module and run `npm run docs:types`.
+ * Enum params are typed as the literal union of their values.
+ *
+ * It also carries each node type's pin names as `<Type>Inputs` and
+ * `<Type>Outputs` unions, which the node module passes to `standardNode`
+ * so a `Graph.add` handle knows its pins. Those two are internal: no module
+ * re-exports them, so they never become names the package root publishes.
  *
  * `src/docs/paramTypes.test.ts` fails when this file and the registry
  * disagree, and `prebuild` runs that test first, so the first failure a
@@ -129,7 +135,7 @@ export interface ArcTileParams {
    *
    * @defaultValue `"+z"`
    */
-  axis: string;
+  axis: "+x" | "-x" | "+y" | "-y" | "+z" | "-z";
   /**
    * OPT-IN: POINT attribute (f32) on the output receiving each tile's raw FLARE RAMP — 1 at
    * the mouth, falling linearly to 0 at `flare` inside, and 0 everywhere on a range with no
@@ -193,6 +199,16 @@ export interface ArcTileParams {
 }
 
 /**
+ * The input pin names of the `arcTile` node type.
+ */
+export type ArcTileInputs = "path" | "ranges";
+
+/**
+ * The output pin names of the `arcTile` node type.
+ */
+export type ArcTileOutputs = "out";
+
+/**
  * Params of the `attributeReduce` node type.
  */
 export interface AttributeReduceParams {
@@ -210,7 +226,7 @@ export interface AttributeReduceParams {
    *
    * @defaultValue `"point"`
    */
-  domain: string;
+  domain: "point" | "vertex" | "primitive" | "detail";
   /**
    * How the elements collapse: sum, min, max, average (each componentwise over the tuple,
    * NaN elements skipped), or count (how many elements the domain has, ignoring `name`).
@@ -219,7 +235,7 @@ export interface AttributeReduceParams {
    *
    * @defaultValue `"max"`
    */
-  mode: string;
+  mode: "sum" | "min" | "max" | "average" | "count";
   /**
    * Name of the detail attribute to write. Empty (the default) reuses `name`, which is what
    * promoting would have produced; give distinct names to hold several reductions of one
@@ -234,6 +250,16 @@ export interface AttributeReduceParams {
    */
   outName: string;
 }
+
+/**
+ * The input pin names of the `attributeReduce` node type.
+ */
+export type AttributeReduceInputs = "in";
+
+/**
+ * The output pin names of the `attributeReduce` node type.
+ */
+export type AttributeReduceOutputs = "out";
 
 /**
  * Params of the `attributeRemap` node type.
@@ -263,7 +289,7 @@ export interface AttributeRemapParams {
    *
    * @defaultValue `"point"`
    */
-  domain: string;
+  domain: "point" | "vertex" | "primitive" | "detail";
   /**
    * 'range' takes the input range from inMin/inMax; 'fit' measures the attribute's actual
    * minimum and maximum over the domain and ignores inMin/inMax — a FIELD in either of them
@@ -274,7 +300,7 @@ export interface AttributeRemapParams {
    *
    * @defaultValue `"range"`
    */
-  mode: string;
+  mode: "range" | "fit";
   /**
    * Value mapped to outMin, in mode 'range'. As a FIELD it is a PER-ELEMENT window end,
    * evaluated on `domain`, so each element is rescaled against its OWN input range instead
@@ -351,6 +377,16 @@ export interface AttributeRemapParams {
 }
 
 /**
+ * The input pin names of the `attributeRemap` node type.
+ */
+export type AttributeRemapInputs = "in";
+
+/**
+ * The output pin names of the `attributeRemap` node type.
+ */
+export type AttributeRemapOutputs = "out";
+
+/**
  * Params of the `connectByIndex` node type.
  */
 export interface ConnectByIndexParams {
@@ -417,7 +453,7 @@ export interface ConnectByIndexParams {
    *
    * @defaultValue `"error"`
    */
-  outOfRange: string;
+  outOfRange: "error" | "skip";
   /**
    * Name of a u32 point attribute receiving each point's DEGREE — how many emitted edges
    * touch it, counting BOTH directions, so a fork with three children and one parent reads 4
@@ -458,6 +494,16 @@ export interface ConnectByIndexParams {
 }
 
 /**
+ * The input pin names of the `connectByIndex` node type.
+ */
+export type ConnectByIndexInputs = "in";
+
+/**
+ * The output pin names of the `connectByIndex` node type.
+ */
+export type ConnectByIndexOutputs = "out";
+
+/**
  * Params of the `connectPoints` node type.
  */
 export interface ConnectPointsParams {
@@ -481,7 +527,7 @@ export interface ConnectPointsParams {
    *
    * @defaultValue `"radius"`
    */
-  mode: string;
+  mode: "radius" | "relativeNeighborhood" | "gabriel";
   /**
    * Largest distance that can become an edge, in world units, tested STRICTLY: a pair at
    * exactly `radius` is NOT connected. That strictness is deliberate and is what makes a
@@ -543,6 +589,16 @@ export interface ConnectPointsParams {
    */
   lengthAttr: string;
 }
+
+/**
+ * The input pin names of the `connectPoints` node type.
+ */
+export type ConnectPointsInputs = "in";
+
+/**
+ * The output pin names of the `connectPoints` node type.
+ */
+export type ConnectPointsOutputs = "out";
 
 /**
  * Params of the `copyToPoints` node type.
@@ -689,8 +745,18 @@ export interface CopyToPointsParams {
    *
    * @defaultValue `"drop"`
    */
-  topology: string;
+  topology: "drop" | "keep";
 }
+
+/**
+ * The input pin names of the `copyToPoints` node type.
+ */
+export type CopyToPointsInputs = "source" | "target";
+
+/**
+ * The output pin names of the `copyToPoints` node type.
+ */
+export type CopyToPointsOutputs = "out";
 
 /**
  * Params of the `dataInput` node type.
@@ -706,6 +772,16 @@ export interface DataInputParams {
    */
   items: readonly DataItem[];
 }
+
+/**
+ * The `dataInput` node type has no input pins.
+ */
+export type DataInputInputs = never;
+
+/**
+ * The output pin names of the `dataInput` node type.
+ */
+export type DataInputOutputs = "out";
 
 /**
  * Params of the `extrudePolygon` node type.
@@ -738,7 +814,7 @@ export interface ExtrudePolygonParams {
    *
    * @defaultValue `"+y"`
    */
-  direction: string;
+  direction: "+y" | "vector" | "polygonNormal";
   /**
    * Direction for the 'vector' mode; need not be unit length, and is normalized before use.
    * Ignored by the other modes. Field-capable on the PRIMITIVE domain — one direction per
@@ -775,7 +851,7 @@ export interface ExtrudePolygonParams {
    *
    * @defaultValue `"both"`
    */
-  caps: string;
+  caps: "none" | "top" | "bottom" | "both";
   /**
    * Build the wall between the two ends. False keeps only the caps the `caps` param asked
    * for, which is how a flat slab (`caps: 'bottom'`) or a floating roof (`caps: 'top'`) is
@@ -786,6 +862,16 @@ export interface ExtrudePolygonParams {
    */
   sides: boolean;
 }
+
+/**
+ * The input pin names of the `extrudePolygon` node type.
+ */
+export type ExtrudePolygonInputs = "in";
+
+/**
+ * The output pin names of the `extrudePolygon` node type.
+ */
+export type ExtrudePolygonOutputs = "out";
 
 /**
  * Params of the `filterByAttribute` node type.
@@ -807,7 +893,7 @@ export interface FilterByAttributeParams {
    *
    * @defaultValue `"ge"`
    */
-  comparison: string;
+  comparison: "eq" | "ne" | "lt" | "le" | "gt" | "ge";
   /**
    * Right-hand side for numeric attributes. Ignored for string attributes, and a field
    * written here is not even evaluated for one — the param nothing reads costs nothing and
@@ -871,8 +957,18 @@ export interface FilterByAttributeParams {
    *
    * @defaultValue `"drop"`
    */
-  topology: string;
+  topology: "drop" | "keep";
 }
+
+/**
+ * The input pin names of the `filterByAttribute` node type.
+ */
+export type FilterByAttributeInputs = "in";
+
+/**
+ * The output pin names of the `filterByAttribute` node type.
+ */
+export type FilterByAttributeOutputs = "out";
 
 /**
  * Params of the `filterByBounds` node type.
@@ -931,7 +1027,7 @@ export interface FilterByBoundsParams {
    *
    * @defaultValue `"inside"`
    */
-  mode: string;
+  mode: "inside" | "outside";
   /**
    * Which faces belong to the box. 'halfOpen' (the default) keeps min <= p < max on every
    * axis, matching the half-open windows of pointScatterInWorld and of a World cell: two
@@ -945,7 +1041,7 @@ export interface FilterByBoundsParams {
    *
    * @defaultValue `"halfOpen"`
    */
-  boundary: string;
+  boundary: "halfOpen" | "inclusive";
   /**
    * What happens to the input's TOPOLOGY — the vertices and primitives built over these
    * points. 'drop' (the default) outputs a point cloud: the survivors are rebuilt as points
@@ -978,8 +1074,18 @@ export interface FilterByBoundsParams {
    *
    * @defaultValue `"drop"`
    */
-  topology: string;
+  topology: "drop" | "keep";
 }
+
+/**
+ * The input pin names of the `filterByBounds` node type.
+ */
+export type FilterByBoundsInputs = "in";
+
+/**
+ * The output pin names of the `filterByBounds` node type.
+ */
+export type FilterByBoundsOutputs = "out";
 
 /**
  * Params of the `filterByDensity` node type.
@@ -993,7 +1099,7 @@ export interface FilterByDensityParams {
    *
    * @defaultValue `"threshold"`
    */
-  mode: string;
+  mode: "threshold" | "probabilistic";
   /**
    * Minimum density a point needs to survive in 'threshold' mode: a point is kept when its
    * own `density` attribute is >= this. Ignored in 'probabilistic' mode, and a field written
@@ -1058,8 +1164,18 @@ export interface FilterByDensityParams {
    *
    * @defaultValue `"drop"`
    */
-  topology: string;
+  topology: "drop" | "keep";
 }
+
+/**
+ * The input pin names of the `filterByDensity` node type.
+ */
+export type FilterByDensityInputs = "in";
+
+/**
+ * The output pin names of the `filterByDensity` node type.
+ */
+export type FilterByDensityOutputs = "out";
 
 /**
  * Params of the `filterByExpression` node type.
@@ -1117,8 +1233,18 @@ export interface FilterByExpressionParams {
    *
    * @defaultValue `"drop"`
    */
-  topology: string;
+  topology: "drop" | "keep";
 }
+
+/**
+ * The input pin names of the `filterByExpression` node type.
+ */
+export type FilterByExpressionInputs = "in";
+
+/**
+ * The output pin names of the `filterByExpression` node type.
+ */
+export type FilterByExpressionOutputs = "out";
 
 /**
  * Params of the `filterPrimitivesByAttribute` node type.
@@ -1144,7 +1270,7 @@ export interface FilterPrimitivesByAttributeParams {
    *
    * @defaultValue `"ge"`
    */
-  comparison: string;
+  comparison: "eq" | "ne" | "lt" | "le" | "gt" | "ge";
   /**
    * Right-hand side for numeric attributes. Ignored for string attributes, and a field
    * written here is not even evaluated for one. As a FIELD it is evaluated on the PRIMITIVE
@@ -1192,8 +1318,18 @@ export interface FilterPrimitivesByAttributeParams {
    *
    * @defaultValue `"keep"`
    */
-  unreferencedPoints: string;
+  unreferencedPoints: "keep" | "drop";
 }
+
+/**
+ * The input pin names of the `filterPrimitivesByAttribute` node type.
+ */
+export type FilterPrimitivesByAttributeInputs = "in";
+
+/**
+ * The output pin names of the `filterPrimitivesByAttribute` node type.
+ */
+export type FilterPrimitivesByAttributeOutputs = "out";
 
 /**
  * Params of the `filterPrimitivesByBounds` node type.
@@ -1258,7 +1394,7 @@ export interface FilterPrimitivesByBoundsParams {
    *
    * @defaultValue `"first"`
    */
-  vertex: string;
+  vertex: "first" | "last" | "all" | "any";
   /**
    * 'inside' keeps the primitives the `vertex` rule places in the box, 'outside' keeps the
    * rest. They are exact complements under whichever vertex rule and boundary are active, so
@@ -1271,7 +1407,7 @@ export interface FilterPrimitivesByBoundsParams {
    *
    * @defaultValue `"inside"`
    */
-  mode: string;
+  mode: "inside" | "outside";
   /**
    * Which faces belong to the box, exactly as in filterByBounds. 'halfOpen' (the default)
    * keeps min <= p < max on every axis, so two boxes meeting at a face claim a vertex lying
@@ -1285,7 +1421,7 @@ export interface FilterPrimitivesByBoundsParams {
    *
    * @defaultValue `"halfOpen"`
    */
-  boundary: string;
+  boundary: "halfOpen" | "inclusive";
   /**
    * What happens to points no surviving primitive references. 'keep' (the default) leaves
    * the point domain completely untouched: same points in the same order, so every point
@@ -1303,8 +1439,18 @@ export interface FilterPrimitivesByBoundsParams {
    *
    * @defaultValue `"keep"`
    */
-  unreferencedPoints: string;
+  unreferencedPoints: "keep" | "drop";
 }
+
+/**
+ * The input pin names of the `filterPrimitivesByBounds` node type.
+ */
+export type FilterPrimitivesByBoundsInputs = "in";
+
+/**
+ * The output pin names of the `filterPrimitivesByBounds` node type.
+ */
+export type FilterPrimitivesByBoundsOutputs = "out";
 
 /**
  * Params of the `jitterPoints` node type.
@@ -1327,14 +1473,44 @@ export interface JitterPointsParams {
 }
 
 /**
+ * The input pin names of the `jitterPoints` node type.
+ */
+export type JitterPointsInputs = "in";
+
+/**
+ * The output pin names of the `jitterPoints` node type.
+ */
+export type JitterPointsOutputs = "out";
+
+/**
  * Params of the `mergePoints` node type, which has none.
  */
 export type MergePointsParams = Record<string, never>;
 
 /**
+ * The input pin names of the `mergePoints` node type.
+ */
+export type MergePointsInputs = "in";
+
+/**
+ * The output pin names of the `mergePoints` node type.
+ */
+export type MergePointsOutputs = "out";
+
+/**
  * Params of the `mergePrimitives` node type, which has none.
  */
 export type MergePrimitivesParams = Record<string, never>;
+
+/**
+ * The input pin names of the `mergePrimitives` node type.
+ */
+export type MergePrimitivesInputs = "in";
+
+/**
+ * The output pin names of the `mergePrimitives` node type.
+ */
+export type MergePrimitivesOutputs = "out";
 
 /**
  * Params of the `meshFromField` node type.
@@ -1427,8 +1603,18 @@ export interface MeshFromFieldParams {
    *
    * @defaultValue `"below"`
    */
-  inside: string;
+  inside: "below" | "above";
 }
+
+/**
+ * The input pin names of the `meshFromField` node type.
+ */
+export type MeshFromFieldInputs = "in";
+
+/**
+ * The output pin names of the `meshFromField` node type.
+ */
+export type MeshFromFieldOutputs = "out";
 
 /**
  * Params of the `meshPrimitive` node type.
@@ -1442,7 +1628,7 @@ export interface MeshPrimitiveParams {
    *
    * @defaultValue `"plane"`
    */
-  shape: string;
+  shape: "plane" | "box";
   /**
    * Full extents along world x, y, z, in world units (not half-extents). For 'plane', the
    * component along the plane's normal axis is ignored.
@@ -1466,7 +1652,7 @@ export interface MeshPrimitiveParams {
    *
    * @defaultValue `"xz"`
    */
-  orientation: string;
+  orientation: "xz" | "xy" | "yz";
   /**
    * Quads along world x, y, z — whole numbers, minimum 1. A plane uses the two components of
    * its own axes ([1,1,1] is a single quad, two triangles); a box uses all three, each face
@@ -1486,6 +1672,16 @@ export interface MeshPrimitiveParams {
    */
   flip: boolean;
 }
+
+/**
+ * The `meshPrimitive` node type has no input pins.
+ */
+export type MeshPrimitiveInputs = never;
+
+/**
+ * The output pin names of the `meshPrimitive` node type.
+ */
+export type MeshPrimitiveOutputs = "out";
 
 /**
  * Params of the `occlusionCull` node type.
@@ -1680,6 +1876,16 @@ export interface OcclusionCullParams {
 }
 
 /**
+ * The input pin names of the `occlusionCull` node type.
+ */
+export type OcclusionCullInputs = "in" | "sight";
+
+/**
+ * The output pin names of the `occlusionCull` node type.
+ */
+export type OcclusionCullOutputs = "out";
+
+/**
  * Params of the `orientAlongVector` node type.
  */
 export interface OrientAlongVectorParams {
@@ -1719,8 +1925,18 @@ export interface OrientAlongVectorParams {
    *
    * @defaultValue `"+z"`
    */
-  axis: string;
+  axis: "+x" | "-x" | "+y" | "-y" | "+z" | "-z";
 }
+
+/**
+ * The input pin names of the `orientAlongVector` node type.
+ */
+export type OrientAlongVectorInputs = "in";
+
+/**
+ * The output pin names of the `orientAlongVector` node type.
+ */
+export type OrientAlongVectorOutputs = "out";
 
 /**
  * Params of the `partitionByAttribute` node type.
@@ -1733,6 +1949,16 @@ export interface PartitionByAttributeParams {
    */
   name: string;
 }
+
+/**
+ * The input pin names of the `partitionByAttribute` node type.
+ */
+export type PartitionByAttributeInputs = "in";
+
+/**
+ * The output pin names of the `partitionByAttribute` node type.
+ */
+export type PartitionByAttributeOutputs = "out";
 
 /**
  * Params of the `pathCoverage` node type.
@@ -1904,6 +2130,16 @@ export interface PathCoverageParams {
 }
 
 /**
+ * The input pin names of the `pathCoverage` node type.
+ */
+export type PathCoverageInputs = "path" | "boxes";
+
+/**
+ * The output pin names of the `pathCoverage` node type.
+ */
+export type PathCoverageOutputs = "out";
+
+/**
  * Params of the `pathPointAt` node type.
  */
 export interface PathPointAtParams {
@@ -1916,7 +2152,7 @@ export interface PathPointAtParams {
    *
    * @defaultValue `"fraction"`
    */
-  mode: string;
+  mode: "fraction" | "distance";
   /**
    * Where along the polyline to place the point, read according to `mode`. Field-capable,
    * resolved on the INPUT points before any of them move — so it can read `curveU` and
@@ -1936,6 +2172,16 @@ export interface PathPointAtParams {
 }
 
 /**
+ * The input pin names of the `pathPointAt` node type.
+ */
+export type PathPointAtInputs = "in";
+
+/**
+ * The output pin names of the `pathPointAt` node type.
+ */
+export type PathPointAtOutputs = "out";
+
+/**
  * Params of the `pathResample` node type.
  */
 export interface PathResampleParams {
@@ -1947,7 +2193,7 @@ export interface PathResampleParams {
    *
    * @defaultValue `"count"`
    */
-  mode: string;
+  mode: "count" | "spacing";
   /**
    * Samples per path when mode is 'count'. Minimum 2 for an open path and 3 for a closed one
    * — below that the result would not be a path. Ignored in 'spacing' mode.
@@ -2108,6 +2354,16 @@ export interface PathResampleParams {
 }
 
 /**
+ * The input pin names of the `pathResample` node type.
+ */
+export type PathResampleInputs = "in";
+
+/**
+ * The output pin names of the `pathResample` node type.
+ */
+export type PathResampleOutputs = "out";
+
+/**
  * Params of the `pathRuns` node type.
  */
 export interface PathRunsParams {
@@ -2186,7 +2442,7 @@ export interface PathRunsParams {
    *
    * @defaultValue `"sum"`
    */
-  reduce: string;
+  reduce: "sum" | "min" | "max";
   /**
    * Whether a point's own value is part of its own running total. 'exclusive' (the default
    * here, where pathScan defaults to 'inclusive') starts every run on its boundary point at
@@ -2200,7 +2456,7 @@ export interface PathRunsParams {
    *
    * @defaultValue `"exclusive"`
    */
-  mode: string;
+  mode: "inclusive" | "exclusive";
   /**
    * Which way the runs are oriented. 'forward' accumulates in the path's walk order, so a
    * point reads what lies BEHIND it since the last boundary — the query a 'distance since
@@ -2220,7 +2476,7 @@ export interface PathRunsParams {
    *
    * @defaultValue `"forward"`
    */
-  direction: string;
+  direction: "forward" | "backward";
   /**
    * Whether a run may cross a CLOSED path's seam. True (the default) starts the walk at the
    * first flagged point instead of at vertex zero, so a run straddling the start/finish line
@@ -2234,6 +2490,16 @@ export interface PathRunsParams {
    */
   wrap: boolean;
 }
+
+/**
+ * The input pin names of the `pathRuns` node type.
+ */
+export type PathRunsInputs = "in";
+
+/**
+ * The output pin names of the `pathRuns` node type.
+ */
+export type PathRunsOutputs = "out";
 
 /**
  * Params of the `pathScan` node type.
@@ -2304,7 +2570,7 @@ export interface PathScanParams {
    *
    * @defaultValue `"sum"`
    */
-  reduce: string;
+  reduce: "sum" | "min" | "max";
   /**
    * Whether a point's own value is part of its own running value. 'inclusive' ends the last
    * point of a path on the path's whole fold; 'exclusive' starts the first point at the
@@ -2317,7 +2583,7 @@ export interface PathScanParams {
    *
    * @defaultValue `"inclusive"`
    */
-  mode: string;
+  mode: "inclusive" | "exclusive";
   /**
    * Divide every point's running value by its own path's TOTAL, so the column comes out as a
    * 0..1 CUMULATIVE DISTRIBUTION rather than an accumulating quantity. That is what the sum
@@ -2373,6 +2639,16 @@ export interface PathScanParams {
 }
 
 /**
+ * The input pin names of the `pathScan` node type.
+ */
+export type PathScanInputs = "in";
+
+/**
+ * The output pin names of the `pathScan` node type.
+ */
+export type PathScanOutputs = "out";
+
+/**
  * Params of the `pathSegments` node type.
  */
 export interface PathSegmentsParams {
@@ -2386,7 +2662,7 @@ export interface PathSegmentsParams {
    *
    * @defaultValue `"+y"`
    */
-  axis: string;
+  axis: "+x" | "-x" | "+y" | "-y" | "+z" | "-z";
   /**
    * Scale written to the two components that are not the axis; with a unit-radius asset this
    * is the tube's radius in world units. Field-capable, but note WHERE it resolves: on the
@@ -2451,6 +2727,16 @@ export interface PathSegmentsParams {
    */
   segmentIndexAttr: string;
 }
+
+/**
+ * The input pin names of the `pathSegments` node type.
+ */
+export type PathSegmentsInputs = "in";
+
+/**
+ * The output pin names of the `pathSegments` node type.
+ */
+export type PathSegmentsOutputs = "out";
 
 /**
  * Params of the `pathShift` node type.
@@ -2562,7 +2848,7 @@ export interface PathShiftParams {
    *
    * @defaultValue `"wrap"`
    */
-  outOfRange: string;
+  outOfRange: "wrap" | "clamp" | "miss";
   /**
    * When non-empty, writes a per-point flag of this name onto the OUTPUT'S POINT DOMAIN
    * (bool, tuple 1). The polarity is the HIT: 1 means this point found a neighbour and
@@ -2590,6 +2876,16 @@ export interface PathShiftParams {
    */
   hitAttr: string;
 }
+
+/**
+ * The input pin names of the `pathShift` node type.
+ */
+export type PathShiftInputs = "in";
+
+/**
+ * The output pin names of the `pathShift` node type.
+ */
+export type PathShiftOutputs = "out";
 
 /**
  * Params of the `pointGrid` node type.
@@ -2634,6 +2930,16 @@ export interface PointGridParams {
 }
 
 /**
+ * The `pointGrid` node type has no input pins.
+ */
+export type PointGridInputs = never;
+
+/**
+ * The output pin names of the `pointGrid` node type.
+ */
+export type PointGridOutputs = "out";
+
+/**
  * Params of the `pointLine` node type.
  */
 export interface PointLineParams {
@@ -2646,7 +2952,7 @@ export interface PointLineParams {
    *
    * @defaultValue `"endpoints"`
    */
-  mode: string;
+  mode: "endpoints" | "spacing";
   /**
    * Number of points to place, in both modes — it is never the derived quantity here.
    * Minimum 1.
@@ -2703,6 +3009,16 @@ export interface PointLineParams {
    */
   spacing: number;
 }
+
+/**
+ * The `pointLine` node type has no input pins.
+ */
+export type PointLineInputs = never;
+
+/**
+ * The output pin names of the `pointLine` node type.
+ */
+export type PointLineOutputs = "out";
 
 /**
  * Params of the `pointNeighborhood` node type.
@@ -2794,6 +3110,16 @@ export interface PointNeighborhoodParams {
 }
 
 /**
+ * The input pin names of the `pointNeighborhood` node type.
+ */
+export type PointNeighborhoodInputs = "in";
+
+/**
+ * The output pin names of the `pointNeighborhood` node type.
+ */
+export type PointNeighborhoodOutputs = "out";
+
+/**
  * Params of the `pointScatterInBounds` node type.
  */
 export interface PointScatterInBoundsParams {
@@ -2824,6 +3150,16 @@ export interface PointScatterInBoundsParams {
    */
   seed: number;
 }
+
+/**
+ * The `pointScatterInBounds` node type has no input pins.
+ */
+export type PointScatterInBoundsInputs = never;
+
+/**
+ * The output pin names of the `pointScatterInBounds` node type.
+ */
+export type PointScatterInBoundsOutputs = "out";
 
 /**
  * Params of the `pointScatterInWorld` node type.
@@ -2867,7 +3203,7 @@ export interface PointScatterInWorldParams {
    *
    * @defaultValue `"xz"`
    */
-  latticeMode: string;
+  latticeMode: "xz" | "xyz";
   /**
    * World Y of every point in "xz" mode. Ignored in "xyz" mode. The 2D lattice is
    * deliberately flat rather than spread over the query's Y range: deriving Y from the
@@ -2921,6 +3257,16 @@ export interface PointScatterInWorldParams {
    */
   seed: number;
 }
+
+/**
+ * The `pointScatterInWorld` node type has no input pins.
+ */
+export type PointScatterInWorldInputs = never;
+
+/**
+ * The output pin names of the `pointScatterInWorld` node type.
+ */
+export type PointScatterInWorldOutputs = "out";
 
 /**
  * Params of the `pointScatterOnPath` node type.
@@ -3000,6 +3346,16 @@ export interface PointScatterOnPathParams {
 }
 
 /**
+ * The input pin names of the `pointScatterOnPath` node type.
+ */
+export type PointScatterOnPathInputs = "path";
+
+/**
+ * The output pin names of the `pointScatterOnPath` node type.
+ */
+export type PointScatterOnPathOutputs = "out";
+
+/**
  * Params of the `pointsToPath` node type.
  */
 export interface PointsToPathParams {
@@ -3068,8 +3424,18 @@ export interface PointsToPathParams {
    *
    * @defaultValue `"error"`
    */
-  shortGroups: string;
+  shortGroups: "error" | "skip";
 }
+
+/**
+ * The input pin names of the `pointsToPath` node type.
+ */
+export type PointsToPathInputs = "in";
+
+/**
+ * The output pin names of the `pointsToPath` node type.
+ */
+export type PointsToPathOutputs = "out";
 
 /**
  * Params of the `projectToPlane` node type.
@@ -3123,6 +3489,16 @@ export interface ProjectToPlaneParams {
 }
 
 /**
+ * The input pin names of the `projectToPlane` node type.
+ */
+export type ProjectToPlaneInputs = "in";
+
+/**
+ * The output pin names of the `projectToPlane` node type.
+ */
+export type ProjectToPlaneOutputs = "out";
+
+/**
  * Params of the `promoteAttribute` node type.
  */
 export interface PromoteAttributeParams {
@@ -3139,7 +3515,7 @@ export interface PromoteAttributeParams {
    *
    * @defaultValue `"point"`
    */
-  from: string;
+  from: "point" | "vertex" | "primitive" | "detail";
   /**
    * Domain to create the attribute on.
    *
@@ -3147,7 +3523,7 @@ export interface PromoteAttributeParams {
    *
    * @defaultValue `"primitive"`
    */
-  to: string;
+  to: "point" | "vertex" | "primitive" | "detail";
   /**
    * How multiple contributions collapse: first (scan order), average, sum, min, or max.
    * String attributes support only 'first'.
@@ -3156,8 +3532,18 @@ export interface PromoteAttributeParams {
    *
    * @defaultValue `"average"`
    */
-  mode: string;
+  mode: "first" | "average" | "sum" | "min" | "max";
 }
+
+/**
+ * The input pin names of the `promoteAttribute` node type.
+ */
+export type PromoteAttributeInputs = "in";
+
+/**
+ * The output pin names of the `promoteAttribute` node type.
+ */
+export type PromoteAttributeOutputs = "out";
 
 /**
  * Params of the `quotaRebalance` node type.
@@ -3314,6 +3700,16 @@ export interface QuotaRebalanceParams {
 }
 
 /**
+ * The input pin names of the `quotaRebalance` node type.
+ */
+export type QuotaRebalanceInputs = "in";
+
+/**
+ * The output pin names of the `quotaRebalance` node type.
+ */
+export type QuotaRebalanceOutputs = "out";
+
+/**
  * Params of the `removeAttribute` node type.
  */
 export interface RemoveAttributeParams {
@@ -3331,7 +3727,7 @@ export interface RemoveAttributeParams {
    *
    * @defaultValue `"point"`
    */
-  domain: string;
+  domain: "point" | "vertex" | "primitive" | "detail";
   /**
    * Error when a listed name does not exist on the domain, naming the available attributes.
    * False makes removal best-effort and skips missing names.
@@ -3340,6 +3736,16 @@ export interface RemoveAttributeParams {
    */
   strict: boolean;
 }
+
+/**
+ * The input pin names of the `removeAttribute` node type.
+ */
+export type RemoveAttributeInputs = "in";
+
+/**
+ * The output pin names of the `removeAttribute` node type.
+ */
+export type RemoveAttributeOutputs = "out";
 
 /**
  * Params of the `repeatUntil` node type.
@@ -3594,6 +4000,16 @@ export interface RunFitParams {
 }
 
 /**
+ * The input pin names of the `runFit` node type.
+ */
+export type RunFitInputs = "in";
+
+/**
+ * The output pin names of the `runFit` node type.
+ */
+export type RunFitOutputs = "out";
+
+/**
  * Params of the `sampleNearestPoint` node type.
  */
 export interface SampleNearestPointParams {
@@ -3654,6 +4070,16 @@ export interface SampleNearestPointParams {
 }
 
 /**
+ * The input pin names of the `sampleNearestPoint` node type.
+ */
+export type SampleNearestPointInputs = "in" | "source";
+
+/**
+ * The output pin names of the `sampleNearestPoint` node type.
+ */
+export type SampleNearestPointOutputs = "out";
+
+/**
  * Params of the `selfPrune` node type.
  */
 export interface SelfPruneParams {
@@ -3684,7 +4110,7 @@ export interface SelfPruneParams {
    *
    * @defaultValue `"greedy"`
    */
-  mode: string;
+  mode: "greedy" | "localMaximum";
   /**
    * Minimum allowed distance between two kept points, in world units. As a FIELD it is a
    * per-point radius, evaluated on the input's points, and two points conflict when they are
@@ -3767,8 +4193,18 @@ export interface SelfPruneParams {
    *
    * @defaultValue `"drop"`
    */
-  topology: string;
+  topology: "drop" | "keep";
 }
+
+/**
+ * The input pin names of the `selfPrune` node type.
+ */
+export type SelfPruneInputs = "in";
+
+/**
+ * The output pin names of the `selfPrune` node type.
+ */
+export type SelfPruneOutputs = "out";
 
 /**
  * Params of the `setAttribute` node type.
@@ -3787,7 +4223,7 @@ export interface SetAttributeParams {
    *
    * @defaultValue `"point"`
    */
-  domain: string;
+  domain: "point" | "vertex" | "primitive" | "detail";
   /**
    * Storage type. f32 keeps fractions; i32/u32 truncate toward zero; bool stores 0/1
    * (nonzero field values become 1); string interns into the geometry's string table and
@@ -3798,7 +4234,7 @@ export interface SetAttributeParams {
    *
    * @defaultValue `"f32"`
    */
-  type: string;
+  type: "f32" | "i32" | "u32" | "bool" | "string";
   /**
    * Components per element (1 = scalar, 3 = vector, 4 = color/quaternion). Range 1..4.
    *
@@ -3894,6 +4330,16 @@ export interface SetAttributeParams {
 }
 
 /**
+ * The input pin names of the `setAttribute` node type.
+ */
+export type SetAttributeInputs = "in";
+
+/**
+ * The output pin names of the `setAttribute` node type.
+ */
+export type SetAttributeOutputs = "out";
+
+/**
  * Params of the `setBounds` node type.
  */
 export interface SetBoundsParams {
@@ -3930,6 +4376,16 @@ export interface SetBoundsParams {
    */
   boundsMax: FieldParam;
 }
+
+/**
+ * The input pin names of the `setBounds` node type.
+ */
+export type SetBoundsInputs = "in";
+
+/**
+ * The output pin names of the `setBounds` node type.
+ */
+export type SetBoundsOutputs = "out";
 
 /**
  * Params of the `spawnInstances` node type.
@@ -4025,6 +4481,16 @@ export interface SpawnInstancesParams {
 }
 
 /**
+ * The input pin names of the `spawnInstances` node type.
+ */
+export type SpawnInstancesInputs = "in";
+
+/**
+ * The output pin names of the `spawnInstances` node type.
+ */
+export type SpawnInstancesOutputs = "instances" | "points";
+
+/**
  * Params of the `splineSample` node type.
  */
 export interface SplineSampleParams {
@@ -4036,7 +4502,7 @@ export interface SplineSampleParams {
    *
    * @defaultValue `"count"`
    */
-  mode: string;
+  mode: "count" | "spacing";
   /**
    * Number of samples when mode is 'count'. Minimum 1. Ignored in 'spacing' mode.
    *
@@ -4146,6 +4612,16 @@ export interface SplineSampleParams {
 }
 
 /**
+ * The input pin names of the `splineSample` node type.
+ */
+export type SplineSampleInputs = "in";
+
+/**
+ * The output pin names of the `splineSample` node type.
+ */
+export type SplineSampleOutputs = "out";
+
+/**
  * Params of the `surfaceSample` node type.
  */
 export interface SurfaceSampleParams {
@@ -4176,6 +4652,16 @@ export interface SurfaceSampleParams {
 }
 
 /**
+ * The input pin names of the `surfaceSample` node type.
+ */
+export type SurfaceSampleInputs = "in";
+
+/**
+ * The output pin names of the `surfaceSample` node type.
+ */
+export type SurfaceSampleOutputs = "out";
+
+/**
  * Params of the `sweepProfile` node type.
  */
 export interface SweepProfileParams {
@@ -4192,7 +4678,7 @@ export interface SweepProfileParams {
    *
    * @defaultValue `"circle"`
    */
-  profile: string;
+  profile: "circle" | "square" | "ribbon";
   /**
    * Points around a 'circle' profile; ignored by the other two. Default 8 matches the
    * shipped tube asset (a three.js CylinderGeometry with 8 radial segments), so a swept tube
@@ -4253,7 +4739,7 @@ export interface SweepProfileParams {
    *
    * @defaultValue `"upHint"`
    */
-  frame: string;
+  frame: "upHint" | "curveFrame" | "rot";
   /**
    * Up hint fixing the roll in 'upHint' mode, and the fallback in the other two; need not be
    * unit length. When parallel or antiparallel to the path direction (or zero) it
@@ -4291,7 +4777,7 @@ export interface SweepProfileParams {
    *
    * @defaultValue `"miter"`
    */
-  joint: string;
+  joint: "miter" | "perpendicular";
   /**
    * Largest stretch 'miter' may apply. Past it the ring falls back to the unstretched
    * 'perpendicular' section for that point ONLY, which pinches rather than shooting a spike
@@ -4329,6 +4815,16 @@ export interface SweepProfileParams {
    */
   caps: boolean;
 }
+
+/**
+ * The input pin names of the `sweepProfile` node type.
+ */
+export type SweepProfileInputs = "in";
+
+/**
+ * The output pin names of the `sweepProfile` node type.
+ */
+export type SweepProfileOutputs = "out";
 
 /**
  * Params of the `transferAlongPath` node type.
@@ -4429,6 +4925,16 @@ export interface TransferAlongPathParams {
 }
 
 /**
+ * The input pin names of the `transferAlongPath` node type.
+ */
+export type TransferAlongPathInputs = "path" | "at";
+
+/**
+ * The output pin names of the `transferAlongPath` node type.
+ */
+export type TransferAlongPathOutputs = "out";
+
+/**
  * Params of the `transferAttribute` node type.
  */
 export interface TransferAttributeParams {
@@ -4449,7 +4955,7 @@ export interface TransferAttributeParams {
    *
    * @defaultValue `"nearest"`
    */
-  mapping: string;
+  mapping: "nearest" | "uv" | "raycast";
   /**
    * Source domain the transferred attribute is read from (uv/raycast only): 'point' reads
    * triangle corners through the topology, 'vertex' reads per-corner values (seam-accurate),
@@ -4466,7 +4972,7 @@ export interface TransferAttributeParams {
    *
    * @defaultValue `"point"`
    */
-  attrDomain: string;
+  attrDomain: "point" | "vertex" | "primitive";
   /**
    * UV attribute name for mapping 'uv' (ignored otherwise). On the destination it must live
    * on the point domain (f32, tupleSize >= 2; extra components ignored). On the source it is
@@ -4563,6 +5069,16 @@ export interface TransferAttributeParams {
    */
   hitAttr: string;
 }
+
+/**
+ * The input pin names of the `transferAttribute` node type.
+ */
+export type TransferAttributeInputs = "in" | "source";
+
+/**
+ * The output pin names of the `transferAttribute` node type.
+ */
+export type TransferAttributeOutputs = "out";
 
 /**
  * Params of the `transferByIndex` node type.
@@ -4665,7 +5181,7 @@ export interface TransferByIndexParams {
    *
    * @defaultValue `"clamp"`
    */
-  outOfRange: string;
+  outOfRange: "clamp" | "wrap" | "miss";
   /**
    * When non-empty, writes a per-point flag of this name onto the OUTPUT'S POINT DOMAIN
    * (bool, tuple 1). The polarity is the HIT, not the miss — the inverse of missCountAttr,
@@ -4708,6 +5224,16 @@ export interface TransferByIndexParams {
 }
 
 /**
+ * The input pin names of the `transferByIndex` node type.
+ */
+export type TransferByIndexInputs = "in" | "source";
+
+/**
+ * The output pin names of the `transferByIndex` node type.
+ */
+export type TransferByIndexOutputs = "out";
+
+/**
  * Params of the `transformPoints` node type.
  */
 export interface TransformPointsParams {
@@ -4742,6 +5268,16 @@ export interface TransformPointsParams {
 }
 
 /**
+ * The input pin names of the `transformPoints` node type.
+ */
+export type TransformPointsInputs = "in";
+
+/**
+ * The output pin names of the `transformPoints` node type.
+ */
+export type TransformPointsOutputs = "out";
+
+/**
  * Params of the `valueConstant` node type.
  */
 export interface ValueConstantParams {
@@ -4752,6 +5288,16 @@ export interface ValueConstantParams {
    */
   value: number;
 }
+
+/**
+ * The `valueConstant` node type has no input pins.
+ */
+export type ValueConstantInputs = never;
+
+/**
+ * The output pin names of the `valueConstant` node type.
+ */
+export type ValueConstantOutputs = "out";
 
 /**
  * Params of the `volumeSample` node type.
@@ -4800,6 +5346,16 @@ export interface VolumeSampleParams {
 }
 
 /**
+ * The input pin names of the `volumeSample` node type.
+ */
+export type VolumeSampleInputs = "in";
+
+/**
+ * The output pin names of the `volumeSample` node type.
+ */
+export type VolumeSampleOutputs = "out";
+
+/**
  * Params of the `voronoiCells` node type.
  */
 export interface VoronoiCellsParams {
@@ -4846,7 +5402,7 @@ export interface VoronoiCellsParams {
    *
    * @defaultValue `"drop"`
    */
-  onUncertified: string;
+  onUncertified: "drop" | "refuse";
   /**
    * Name of an f32 PRIMITIVE attribute receiving each cell's area in square world units,
    * measured in the XZ plane on the exact corners the certificate accepted. Empty (the
@@ -4874,6 +5430,16 @@ export interface VoronoiCellsParams {
    */
   uncertifiedAttr: string;
 }
+
+/**
+ * The input pin names of the `voronoiCells` node type.
+ */
+export type VoronoiCellsInputs = "in";
+
+/**
+ * The output pin names of the `voronoiCells` node type.
+ */
+export type VoronoiCellsOutputs = "out";
 
 /**
  * Params of the `writeCurveFrame` node type.
@@ -4944,6 +5510,16 @@ export interface WriteCurveFrameParams {
 }
 
 /**
+ * The input pin names of the `writeCurveFrame` node type.
+ */
+export type WriteCurveFrameInputs = "in";
+
+/**
+ * The output pin names of the `writeCurveFrame` node type.
+ */
+export type WriteCurveFrameOutputs = "out";
+
+/**
  * Params of the `writeTangents` node type.
  */
 export interface WriteTangentsParams {
@@ -4961,3 +5537,13 @@ export interface WriteTangentsParams {
    */
   name: string;
 }
+
+/**
+ * The input pin names of the `writeTangents` node type.
+ */
+export type WriteTangentsInputs = "in";
+
+/**
+ * The output pin names of the `writeTangents` node type.
+ */
+export type WriteTangentsOutputs = "out";

@@ -38,7 +38,11 @@ import {
   requireVec3Column,
   resolveOn,
 } from "./util.js";
-import type { OcclusionCullParams } from "./params.generated.js";
+import type {
+  OcclusionCullInputs,
+  OcclusionCullOutputs,
+  OcclusionCullParams,
+} from "./params.generated.js";
 
 // Generated from the param schemas below; see params.generated.ts.
 export type { OcclusionCullParams } from "./params.generated.js";
@@ -318,7 +322,11 @@ function sightChains(geo: Geometry, pd: ArrayLike<number>, ps: number): SightCha
 }
 
 /** Move or drop points whose oriented box blocks a line of sight. */
-export const occlusionCull = standardNode<OcclusionCullParams>({
+export const occlusionCull = standardNode<
+  OcclusionCullParams,
+  OcclusionCullInputs,
+  OcclusionCullOutputs
+>({
   type: NODE,
   category: "filter",
   description:

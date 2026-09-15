@@ -42,7 +42,14 @@ import {
   resolveOnMaybeGpu,
   rotateVec,
 } from "./util.js";
-import type { ExtrudePolygonParams, SweepProfileParams } from "./params.generated.js";
+import type {
+  ExtrudePolygonInputs,
+  ExtrudePolygonOutputs,
+  ExtrudePolygonParams,
+  SweepProfileInputs,
+  SweepProfileOutputs,
+  SweepProfileParams,
+} from "./params.generated.js";
 
 // Generated from the param schemas below; see params.generated.ts.
 export type { ExtrudePolygonParams, SweepProfileParams } from "./params.generated.js";
@@ -260,7 +267,11 @@ function rollApply(out: number[], a1: number, a2: number, c: number, s: number):
 }
 
 /** A cross-section placed on every path point and stitched into a surface. */
-export const sweepProfile = standardNode<SweepProfileParams>({
+export const sweepProfile = standardNode<
+  SweepProfileParams,
+  SweepProfileInputs,
+  SweepProfileOutputs
+>({
   type: "sweepProfile",
   category: "surface",
   description:
@@ -884,7 +895,11 @@ interface ExtrudeLayout {
 }
 
 /** A closed footprint swept along a direction into a solid. */
-export const extrudePolygon = standardNode<ExtrudePolygonParams>({
+export const extrudePolygon = standardNode<
+  ExtrudePolygonParams,
+  ExtrudePolygonInputs,
+  ExtrudePolygonOutputs
+>({
   type: "extrudePolygon",
   category: "surface",
   description:

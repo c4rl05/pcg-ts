@@ -35,7 +35,11 @@ import {
   requireScalarColumn,
   resolveOn,
 } from "./util.js";
-import type { QuotaRebalanceParams } from "./params.generated.js";
+import type {
+  QuotaRebalanceInputs,
+  QuotaRebalanceOutputs,
+  QuotaRebalanceParams,
+} from "./params.generated.js";
 
 // Generated from the param schemas below; see params.generated.ts.
 export type { QuotaRebalanceParams } from "./params.generated.js";
@@ -113,7 +117,11 @@ function scalarPerPoint(
  * the population to land inside its stated band, and names the category
  * each should join.
  */
-export const quotaRebalance = standardNode<QuotaRebalanceParams>({
+export const quotaRebalance = standardNode<
+  QuotaRebalanceParams,
+  QuotaRebalanceInputs,
+  QuotaRebalanceOutputs
+>({
   type: NODE,
   category: "attribute",
   description:
