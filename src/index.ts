@@ -36,6 +36,10 @@ export {
   type OpenAssetSet,
   describeGraphAssets,
 } from "./nodes/graphAssets.js";
+// Named rather than re-exported by `./nodes/index.ts`: the module also
+// carries the field-key table its completeness test reads, which describes
+// how the schema is made and is no promise to a consumer.
+export { type GraphJsonSchemaOptions, graphJsonSchema } from "./nodes/graphSchema.js";
 // `repeatUntil`'s params, generated with every other node's from the registry
 // schemas. The only one named here rather than re-exported by its node's module:
 // the node registers in `serialize.ts`, where the same shape is still spelled

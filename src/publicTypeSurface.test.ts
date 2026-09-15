@@ -73,7 +73,11 @@ const ROOT_TYPE_SURFACE = [
   "FilterByAttributeParams", "FilterByBoundsParams", "FilterByDensityParams",
   "FilterByExpressionParams", "FilterPrimitivesByAttributeParams",
   "FilterPrimitivesByBoundsParams", "Geometry", "GeometryItem", "GpuCookStats",
-  "GpuFieldResolver", "Graph", "GraphCycleError", "GraphDescription", "GraphError", "GraphMeta",
+  "GpuFieldResolver", "Graph", "GraphCycleError", "GraphDescription", "GraphError",
+  // `graphJsonSchema`'s options. Its return type is deliberately not named,
+  // for the reason `JsonValue` is not: a generic JSON type is not this
+  // library's to publish.
+  "GraphJsonSchemaOptions", "GraphMeta",
   "GraphParam", "GraphSerializationError", "GraphValidationError", "InlineParamMeta",
   // Named per-instance columns on a CPU batch — the whole graph→host ABI
   // for anything the host must drive per instance. Published with

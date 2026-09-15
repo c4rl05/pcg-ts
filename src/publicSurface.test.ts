@@ -86,6 +86,9 @@ const ROOT_SURFACE = [
   "ge",
   "getFieldSpec",
   "getNodeType", "getRegisteredSubgraph", "graphParamBindings", "getSubgraphSpec", "gt",
+  // The serialized format's JSON Schema, generated from the registries; the
+  // published copy is docs/graph.schema.json.
+  "graphJsonSchema",
   "hasNodeType", "hasRegisteredSubgraph", "hashCombine", "hashFloat", "hashString",
   "index",
   // Which wrapper a registered recipe was written for, read off its
