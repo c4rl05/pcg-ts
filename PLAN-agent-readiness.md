@@ -611,8 +611,8 @@ road, alternating sides, facing it; (4) trees on hills avoiding steep
 ground; (5) a three-species mix in a disc within ±5%; (6) settlement roads
 — no crossings, one component; (7) a spiral stair; (8) an extruded L
 footprint with a window grid; (9) a forest clearing at eye level — blocked
-sight directions from 1.7 m within a band, frames reviewed by a human on
-every run. Each is tiered by whether shipped `graphs/` holds a
+sight directions from 1.7 m within a band, with frames saved on every run
+for a human to look at later. Each is tiered by whether shipped `graphs/` holds a
 near-solution; transcripts record reads of `node_modules/pcg-ts/*`.
 
 **Controls.** One model and CLI version per campaign; a fresh sandbox per
@@ -620,7 +620,9 @@ run; warm npm cache for every arm. **A/A arm** — the same tarball under two
 labels — gives the noise floor. **Stripped arm**, once per harness version
 — the baseline with `llms.txt`, `docs/` and `skills/` removed — must score
 worse, or the eval cannot see documentation. Human "looks right" review on
-a sample of passing runs fixes the rubric, never the docs. n is fixed
+a sample of passing runs fixes the rubric, never the docs — and it is
+asynchronous: frames accumulate in a gallery, and no run, gate or unit
+waits on a review. n is fixed
 before running, no early stopping; ~50 runs per arm detects only large
 effects, and the report says so. Hitting a cap is a failure class, never
 retried silently. A task a doc change quotes is retired.
@@ -628,12 +630,51 @@ retried silently. A task a doc change quotes is retired.
 **Records.** `evals/results/<campaign>/manifest.json` (arms, tarball
 manifests, task hashes, harness sha, CLI version, model, schedule seed,
 budgets) and `runs.jsonl`, one line per run, both committed. Transcripts
-and frames go to git-ignored `evals/runs/`, referenced by hash. Cost is
-derived from recorded usage.
+and frames go to git-ignored `evals/runs/`, referenced by hash. Usage per
+run is recorded, so the pilot measures what a run draws.
 
-**Runs** manually at milestones, not in CI: it costs money, needs keys and
-is nondeterministic. Pilot: 6 tasks × 3 runs × 3 arms (A, A′, stripped) =
-54 runs.
+**What a run costs is allowance, not money** (checked 2026-09-15). Headless
+`claude -p` sessions draw from the owner's Claude subscription usage
+limits, the same allowance interactive sessions and the unattended build
+use; they are billed per token only when `ANTHROPIC_API_KEY` is set, which
+it is not on this machine.
+<https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan>
+Anthropic announced these runs would stop counting against subscription
+limits and paused that change on 2026-06-15, so re-check before each
+campaign. `run.mjs` **refuses to start when `ANTHROPIC_API_KEY` is set**:
+a key would silently move the eval onto pay-per-token billing.
+
+**Unattended by design.** Not in CI (nondeterministic, and it spends the
+owner's allowance), but no step needs a human to press go:
+- **Scheduling.** Runs happen inside a configured window (decision E1;
+  default the night shift, leaving daytime allowance to the unattended
+  build) with concurrency 1. The schedule and every finished run are
+  persisted in `runs.jsonl`, so the runner is resumable: killed, rebooted
+  or out of window, it restarts at the first unfinished slot.
+- **Usage limits.** A session that ends on a usage-limit error is NOT a
+  failed run: its slot is discarded unscored and rescheduled, and the
+  runner sleeps until the reset time the error reports (or backs off and
+  re-probes) before continuing. This is distinct from a run hitting its
+  own turn, wall or token cap, which stays a failure class.
+- **Triggers.** The pilot starts when the harness selftest passes. Each
+  comparison of record starts itself when a unit's candidate tarball is
+  packed.
+- **Automatic go/stop gate after the pilot.** Go when: the stripped arm
+  scores below the baseline arms beyond the A/A gap; the A/A gap is within
+  a threshold fixed before the pilot; no task sits at 0% or 100% across
+  all arms (such tasks are replaced from the reserve without asking). On
+  go, the agent re-ranks U1–U6 from the pilot's friction logs, records the
+  ranking and its reasons in the commit, and continues. Stop only on the
+  wake-up conditions below.
+- **Wake the owner only for:** the gate failing twice after task
+  replacement (the eval cannot see documentation, or noise swamps it); the
+  isolation probe detecting a leak; an API key present; usage limits
+  blocking every window for more than 48 hours; a selftest failure the
+  harness cannot attribute to a changed node. Everything else is logged
+  and the queue moves on.
+
+Pilot: 6 tasks × 3 runs × 3 arms (A, A′, stripped) = 54 runs; each later
+comparison is about 100 (≈50 per arm).
 
 ---
 
@@ -704,13 +745,19 @@ record, and an independent verification agent for every nontrivial unit.
 
 **Needed before starting:**
 
-- **E1 — eval budget, agent CLI and model(s).** The pilot is 54 runs; each
-  later comparison is roughly 50 per arm.
+- **E1 — model, and when the eval may use the allowance.** Runs cost
+  subscription allowance, not money (see U7). Recommended: Sonnet 5 as the
+  single model, on a night-shift window with automatic resume, so daytime
+  allowance goes to the unattended build. Alternative: around the clock,
+  pausing at the limit — faster, but it competes with everything else
+  drawing on the same allowance. The pilot is 54 runs; each later
+  comparison about 100.
 - **E2 — where briefs live.** Recommended: harness and corpus-adjacent tasks
   in public `evals/`, held-out briefs in `pcg-ts-private`. Briefs in a
   public repo end up in future training data.
 - **E3 — pilot before U1–U5, or only the U0 tarball.** Recommended: pilot
-  first; U0 is mandatory either way.
+  first, with the automatic go/stop gate in U7 deciding whether to
+  continue, so choosing it adds no human step; U0 is mandatory either way.
 
 **Proceeding with the recommendation unless overridden:**
 
