@@ -42,7 +42,14 @@ import {
   registerSubgraph,
   transformPoints,
 } from "../index.js";
+import { describeExample, loadGraphs } from "./graphIndex.js";
 import { type PrimitiveInfo, describePrimitive, renderPrimitiveCatalog } from "./primitives.js";
+
+/**
+ * The corpus the Examples lines are rendered from, rebuilt from `graphs/`
+ * exactly as `scripts/gen-primitives.mjs` rebuilds it.
+ */
+const CORPUS = loadGraphs(fileURLToPath(new URL("../..", import.meta.url))).map(describeExample);
 
 /**
  * The registry as it stood when this module was evaluated: the state the
@@ -115,8 +122,9 @@ function drift(
   from: readonly PrimitiveInfo[],
 ): string {
   return [
-    `docs/${file} is stale: the subgraph registry changed but the generated`,
-    "catalog was not regenerated. Run:",
+    `docs/${file} is stale: the subgraph registry (or, for primitives.md, the`,
+    "graph corpus under graphs/) changed but the generated catalog was not",
+    "regenerated. Run:",
     "",
     "  npm run build && npm run docs:primitives",
     "",
@@ -127,7 +135,7 @@ function drift(
 }
 
 describe("primitive catalog docs", () => {
-  const { json, markdown } = renderPrimitiveCatalog(AT_LOAD);
+  const { json, markdown } = renderPrimitiveCatalog(AT_LOAD, CORPUS);
 
   it("docs/primitives.json matches the subgraph registry", () => {
     const committed = readDoc("primitives.json");
@@ -140,7 +148,7 @@ describe("primitive catalog docs", () => {
   });
 
   it("renders identically twice (deterministic output)", () => {
-    const again = renderPrimitiveCatalog(AT_LOAD);
+    const again = renderPrimitiveCatalog(AT_LOAD, CORPUS.slice().reverse());
     expect(again.json).toBe(json);
     expect(again.markdown).toBe(markdown);
   });

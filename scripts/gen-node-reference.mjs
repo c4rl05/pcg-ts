@@ -52,6 +52,12 @@ if (typeof lib.listNodeTypes !== "function") {
   );
   process.exit(1);
 }
+if (typeof docs.loadGraphs !== "function" || typeof docs.describeExample !== "function") {
+  console.error(
+    "gen-node-reference: dist/docs/index.js does not export loadGraphs() and describeExample(); rebuild with `npm run build`.",
+  );
+  process.exit(1);
+}
 if (typeof docs.renderNodeReference !== "function") {
   console.error(
     "gen-node-reference: dist/docs/index.js does not export renderNodeReference(); rebuild with `npm run build`.",
@@ -59,8 +65,14 @@ if (typeof docs.renderNodeReference !== "function") {
   process.exit(1);
 }
 
+// The corpus index is rebuilt from `graphs/` here rather than read from
+// docs/graphs.json: `npm run docs` runs this generator BEFORE docs:graphs,
+// so the committed index can be one graph edit behind, and an Examples line
+// generated from it would be stale in the very run that was meant to fix it.
+// Both drift tests (graphIndex, node-reference) render from the same files.
+const corpus = docs.loadGraphs(root).map(docs.describeExample);
 const types = lib.listNodeTypes();
-const { json, markdown } = docs.renderNodeReference(types);
+const { json, markdown } = docs.renderNodeReference(types, corpus);
 
 const docsDir = join(root, "docs");
 mkdirSync(docsDir, { recursive: true });

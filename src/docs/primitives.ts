@@ -45,6 +45,8 @@ import {
 // library publishes), so `../index.js` cannot reach it. `node-reference.ts`
 // takes the same route into `../nodes/registry.js` for the same reason.
 import { stripProbeBreadcrumb } from "../nodes/subgraphRegistry.js";
+import type { CorpusEntry } from "../cli/corpus.js";
+import { examplesLine } from "./node-reference.js";
 
 /** One rendered catalog: the bytes of each generated file. */
 export interface PrimitiveCatalog {
@@ -315,7 +317,10 @@ const EMPTY_NOTE = [
   "section here, and `pcg run <name>` is what cooks it.",
 ].join("\n");
 
-function renderMarkdown(primitives: readonly CanonicalPrimitive[]): string {
+function renderMarkdown(
+  primitives: readonly CanonicalPrimitive[],
+  corpus: readonly CorpusEntry[] | undefined,
+): string {
   const lines: string[] = [];
   lines.push("# Primitive reference");
   lines.push("");
@@ -391,6 +396,18 @@ function renderMarkdown(primitives: readonly CanonicalPrimitive[]): string {
       }
     }
     lines.push("");
+    if (corpus !== undefined) {
+      lines.push(
+        examplesLine(
+          corpus,
+          p.name,
+          (e) => e.primitives.includes(p.name),
+          `pcg graphs --primitive ${p.name}`,
+          "no corpus graph references it",
+        ),
+      );
+      lines.push("");
+    }
     lines.push(`Run it: \`pcg run ${p.name}\``);
     lines.push("");
   }
@@ -399,6 +416,10 @@ function renderMarkdown(primitives: readonly CanonicalPrimitive[]): string {
 
 /**
  * Render the primitive catalog from resolved registry records.
+ *
+ * `corpus` is the example index's entries; given, every section gains an
+ * `Examples:` line (see `examplesLine` in node-reference.ts). Markdown only
+ * — `primitives.json` stays the registry's own records.
  *
  * Deterministic by four mechanisms, each guarding a different way a
  * generated file drifts between two runs that saw the same registry:
@@ -421,13 +442,16 @@ function renderMarkdown(primitives: readonly CanonicalPrimitive[]): string {
  *    a file path. A generated file that embeds the clock can never be
  *    compared against a committed one.
  */
-export function renderPrimitiveCatalog(primitives: readonly PrimitiveInfo[]): PrimitiveCatalog {
+export function renderPrimitiveCatalog(
+  primitives: readonly PrimitiveInfo[],
+  corpus?: readonly CorpusEntry[],
+): PrimitiveCatalog {
   const sorted = primitives
     .slice()
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
     .map(canonicalPrimitive);
   return {
     json: JSON.stringify(sorted, null, 2) + "\n",
-    markdown: renderMarkdown(sorted),
+    markdown: renderMarkdown(sorted, corpus),
   };
 }

@@ -105,6 +105,8 @@ Lays a REPEATED PIECE over arc ranges of a path: one oriented instance point eve
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-tile-an-arc.json](../graphs/basics-tile-an-arc.json), [basics-colonnade.json](../graphs/basics-colonnade.json) — 2 total (`pcg graphs --node arcTile`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -131,6 +133,8 @@ Collapses a numeric attribute over a whole domain into a single value on the det
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-repeat-until-settled.json](../graphs/basics-repeat-until-settled.json), [basics-report-to-the-host.json](../graphs/basics-report-to-the-host.json), [examples-coral.json](../graphs/examples-coral.json) — 6 total (`pcg graphs --node attributeReduce`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -149,6 +153,8 @@ Rescales a numeric attribute linearly from an input range to an output range, wr
 **Inputs:** `in` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-attribute-remap.json](../graphs/basics-attribute-remap.json) — 1 total (`pcg graphs --node attributeRemap`)
 
 **Params:**
 
@@ -174,6 +180,8 @@ Builds one 2-vertex `polyline` per point, from that point to the point its `inde
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [examples-coral.json](../graphs/examples-coral.json) — 1 total (`pcg graphs --node connectByIndex`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -195,6 +203,8 @@ Connects a point cloud into a NETWORK: one 2-vertex `polyline` primitive per edg
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-filter-primitives-by-attribute.json](../graphs/basics-filter-primitives-by-attribute.json), [basics-connect-by-reach.json](../graphs/basics-connect-by-reach.json), [basics-merge-primitives.json](../graphs/basics-merge-primitives.json) — 9 total (`pcg graphs --node connectPoints`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -213,6 +223,8 @@ Copies the source point cloud onto every target point (output count = source poi
 **Inputs:** `source` (geometry), `target` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-copy-to-points.json](../graphs/basics-copy-to-points.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 16 total (`pcg graphs --node copyToPoints`)
 
 **Params:**
 
@@ -234,6 +246,8 @@ Emits exactly the data items in its `items` param, unchanged — the bridge for 
 
 **Outputs:** `out` (any)
 
+**Examples:** *(no corpus graph uses it)*
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -249,6 +263,8 @@ Treats every CLOSED polyline primitive as a polygon boundary and sweeps it along
 **Inputs:** `in` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-extrude-polygon.json](../graphs/basics-extrude-polygon.json), [basics-voronoi-plots.json](../graphs/basics-voronoi-plots.json) — 2 total (`pcg graphs --node extrudePolygon`)
 
 **Params:**
 
@@ -270,6 +286,8 @@ Keeps points whose named point attribute satisfies a comparison. Numeric attribu
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-filter-by-attribute.json](../graphs/basics-filter-by-attribute.json), [basics-runs-along-a-path.json](../graphs/basics-runs-along-a-path.json), [examples-headless-scatter.json](../graphs/examples-headless-scatter.json) — 8 total (`pcg graphs --node filterByAttribute`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -289,6 +307,8 @@ Keeps points by position against the axis-aligned box [boundsMin, boundsMax]. Wh
 **Inputs:** `in` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [examples-streamed-terrain.json](../graphs/examples-streamed-terrain.json) — 1 total (`pcg graphs --node filterByBounds`)
 
 **Params:**
 
@@ -310,6 +330,8 @@ Filters points by their `density` point attribute (f32, tuple 1). mode 'threshol
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-filter-by-density.json](../graphs/basics-filter-by-density.json), [basics-volume-scatter.json](../graphs/basics-volume-scatter.json), [examples-streamed-terrain.json](../graphs/examples-streamed-terrain.json) — 4 total (`pcg graphs --node filterByDensity`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -329,6 +351,8 @@ Keeps points where a field-capable `predicate` evaluates to a non-zero number. T
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-filter-by-expression.json](../graphs/basics-filter-by-expression.json), [basics-worley-cells.json](../graphs/basics-worley-cells.json), [basics-suspension-bridge.json](../graphs/basics-suspension-bridge.json) — 15 total (`pcg graphs --node filterByExpression`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -346,6 +370,8 @@ Keeps WHOLE PRIMITIVES whose named PRIMITIVE attribute satisfies a comparison, a
 **Inputs:** `in` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-filter-primitives-by-attribute.json](../graphs/basics-filter-primitives-by-attribute.json), [examples-rig.json](../graphs/examples-rig.json) — 2 total (`pcg graphs --node filterPrimitivesByAttribute`)
 
 **Params:**
 
@@ -366,6 +392,8 @@ Keeps or drops WHOLE PRIMITIVES by testing their vertices against the axis-align
 **Inputs:** `in` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-two-kinds-of-bounds.json](../graphs/basics-two-kinds-of-bounds.json) — 1 total (`pcg graphs --node filterPrimitivesByBounds`)
 
 **Params:**
 
@@ -390,6 +418,8 @@ Composite node that cooks an inner graph ONCE PER ELEMENT instead of once. Exact
 
 **Outputs:** *(none)*
 
+**Examples:** [basics-foreach-per-group.json](../graphs/basics-foreach-per-group.json), [examples-rig.json](../graphs/examples-rig.json) — 2 total (`pcg graphs --node forEach`)
+
 **Params:** *(none)*
 
 ## jitterPoints
@@ -401,6 +431,8 @@ Offsets each point by a deterministic random vector: each axis moves by a unifor
 **Inputs:** `in` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-jitter-points.json](../graphs/basics-jitter-points.json), [basics-foreach-per-group.json](../graphs/basics-foreach-per-group.json), [examples-headless-scatter.json](../graphs/examples-headless-scatter.json) — 5 total (`pcg graphs --node jitterPoints`)
 
 **Params:**
 
@@ -419,6 +451,8 @@ Concatenates the points of every connected geometry, in connection order, into o
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-merge-points.json](../graphs/basics-merge-points.json), [basics-curve-shaping.json](../graphs/basics-curve-shaping.json), [basics-field-shaping.json](../graphs/basics-field-shaping.json) — 17 total (`pcg graphs --node mergePoints`)
+
 **Params:** *(none)*
 
 ## mergePrimitives
@@ -431,6 +465,8 @@ Concatenates every connected geometry, in connection order, KEEPING TOPOLOGY: po
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-merge-primitives.json](../graphs/basics-merge-primitives.json), [basics-gabriel-cells.json](../graphs/basics-gabriel-cells.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json) — 10 total (`pcg graphs --node mergePrimitives`)
+
 **Params:** *(none)*
 
 ## meshFromField
@@ -442,6 +478,8 @@ Turns a scalar FIELD into a triangle mesh: the surface where the field crosses `
 **Inputs:** `in` (geometry, optional)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-mesh-from-field.json](../graphs/basics-mesh-from-field.json) — 1 total (`pcg graphs --node meshFromField`)
 
 **Params:**
 
@@ -464,6 +502,8 @@ Builds a parametric triangle mesh with no input: shape 'plane' is one axis-align
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-mesh-primitive.json](../graphs/basics-mesh-primitive.json), [basics-surface-sample.json](../graphs/basics-surface-sample.json), [basics-promote-attribute.json](../graphs/basics-promote-attribute.json) — 17 total (`pcg graphs --node meshPrimitive`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -484,6 +524,8 @@ Removes points whose ORIENTED BOX stands in a line of sight, after first trying 
 **Inputs:** `in` (geometry), `sight` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-sightline-cull.json](../graphs/basics-sightline-cull.json) — 1 total (`pcg graphs --node occlusionCull`)
 
 **Params:**
 
@@ -508,6 +550,8 @@ Sets the standard rot point attribute (f32 tuple 4 quaternion, [x, y, z, w]) so 
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-orient-along-vector.json](../graphs/basics-orient-along-vector.json), [basics-orient-along-path.json](../graphs/basics-orient-along-path.json), [basics-stations-on-a-path.json](../graphs/basics-stations-on-a-path.json) — 12 total (`pcg graphs --node orientAlongVector`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -526,6 +570,8 @@ Splits the input into one point cloud per distinct value of an i32, u32, or stri
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-partition-by-attribute.json](../graphs/basics-partition-by-attribute.json), [basics-foreach-per-group.json](../graphs/basics-foreach-per-group.json), [examples-rig.json](../graphs/examples-rig.json) — 3 total (`pcg graphs --node partitionByAttribute`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -541,6 +587,8 @@ Measures, at every point of the `path` input, whether that point is COVERED from
 **Inputs:** `path` (geometry), `boxes` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-under-cover.json](../graphs/basics-under-cover.json) — 1 total (`pcg graphs --node pathCoverage`)
 
 **Params:**
 
@@ -567,6 +615,8 @@ Moves every point of every polyline to the position at a given parameter ALONG I
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [examples-rig.json](../graphs/examples-rig.json) — 1 total (`pcg graphs --node pathPointAt`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -583,6 +633,8 @@ Resamples every polyline primitive at even arc-length steps and emits a PATH, no
 **Inputs:** `in` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-path-resample.json](../graphs/basics-path-resample.json), [basics-scatter-along-a-path.json](../graphs/basics-scatter-along-a-path.json), [basics-runs-along-a-path.json](../graphs/basics-runs-along-a-path.json) — 9 total (`pcg graphs --node pathResample`)
 
 **Params:**
 
@@ -606,6 +658,8 @@ Writes a SEGMENTED running total of a numeric point attribute along every polyli
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-runs-along-a-path.json](../graphs/basics-runs-along-a-path.json) — 1 total (`pcg graphs --node pathRuns`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -628,6 +682,8 @@ Writes a RUNNING FOLD of a numeric point attribute along every polyline, in the 
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-density-along-a-path.json](../graphs/basics-density-along-a-path.json) — 1 total (`pcg graphs --node pathScan`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -649,6 +705,8 @@ Emits ONE POINT PER SEGMENT of every polyline primitive, placed and oriented so 
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-path-segments.json](../graphs/basics-path-segments.json), [examples-rig.json](../graphs/examples-rig.json) — 2 total (`pcg graphs --node pathSegments`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -667,6 +725,8 @@ Reads one or more of a path's OWN point attributes from the point `offset` posit
 **Inputs:** `in` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-shift-along-a-path.json](../graphs/basics-shift-along-a-path.json) — 1 total (`pcg graphs --node pathShift`)
 
 **Params:**
 
@@ -688,6 +748,8 @@ Creates a regular grid of points: countX * countY * countZ points starting at or
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-point-grid.json](../graphs/basics-point-grid.json), [basics-inline-field-params.json](../graphs/basics-inline-field-params.json), [basics-jitter-points.json](../graphs/basics-jitter-points.json) — 26 total (`pcg graphs --node pointGrid`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -707,6 +769,8 @@ Creates `count` evenly spaced points on a straight line. mode 'endpoints' (the d
 **Inputs:** *(none)*
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-phyllotaxis.json](../graphs/basics-phyllotaxis.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 18 total (`pcg graphs --node pointLine`)
 
 **Params:**
 
@@ -729,6 +793,8 @@ Measures each point's neighborhood inside the same cloud and writes the result a
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-neighborhood-count.json](../graphs/basics-neighborhood-count.json), [basics-neighborhood-varying-radius.json](../graphs/basics-neighborhood-varying-radius.json), [examples-streamed-terrain.json](../graphs/examples-streamed-terrain.json) — 3 total (`pcg graphs --node pointNeighborhood`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -750,6 +816,8 @@ Scatters `count` points uniformly inside the axis-aligned box [boundsMin, bounds
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-scatter-in-bounds.json](../graphs/basics-scatter-in-bounds.json), [basics-attribute-from-noise.json](../graphs/basics-attribute-from-noise.json), [basics-even-spacing.json](../graphs/basics-even-spacing.json) — 41 total (`pcg graphs --node pointScatterInBounds`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -768,6 +836,8 @@ Scatters points over an INFINITE lattice anchored to world coordinates, then ret
 **Inputs:** *(none)*
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-scatter-in-world.json](../graphs/basics-scatter-in-world.json), [examples-streamed-terrain.json](../graphs/examples-streamed-terrain.json) — 2 total (`pcg graphs --node pointScatterInWorld`)
 
 **Params:**
 
@@ -791,6 +861,8 @@ Scatters `count` points at UNIFORMLY RANDOM ARC POSITIONS along EVERY polyline p
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-scatter-along-a-path.json](../graphs/basics-scatter-along-a-path.json), [basics-shift-along-a-path.json](../graphs/basics-shift-along-a-path.json) — 2 total (`pcg graphs --node pointScatterOnPath`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -808,6 +880,8 @@ Turns a point cloud into one or more paths by building `polyline` primitives ove
 **Inputs:** `in` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-points-to-path.json](../graphs/basics-points-to-path.json), [basics-path-resample.json](../graphs/basics-path-resample.json), [basics-paths-by-group.json](../graphs/basics-paths-by-group.json) — 25 total (`pcg graphs --node pointsToPath`)
 
 **Params:**
 
@@ -828,6 +902,8 @@ Projects every point orthogonally onto the plane through `origin` with normal `n
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-flatten-and-remember.json](../graphs/basics-flatten-and-remember.json) — 1 total (`pcg graphs --node projectToPlane`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -845,6 +921,8 @@ Moves an attribute between domains using the geometry's topology, creating or ov
 **Inputs:** `in` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-promote-attribute.json](../graphs/basics-promote-attribute.json), [basics-runs-along-a-path.json](../graphs/basics-runs-along-a-path.json), [basics-density-along-a-path.json](../graphs/basics-density-along-a-path.json) — 7 total (`pcg graphs --node promoteAttribute`)
 
 **Params:**
 
@@ -864,6 +942,8 @@ Reads a CATEGORY per point and a stated SHARE BAND per category, and writes down
 **Inputs:** `in` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-quota-rebalance.json](../graphs/basics-quota-rebalance.json) — 1 total (`pcg graphs --node quotaRebalance`)
 
 **Params:**
 
@@ -888,6 +968,8 @@ Deletes named attributes from one domain. Every idiom that carries a value betwe
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-report-to-the-host.json](../graphs/basics-report-to-the-host.json) — 1 total (`pcg graphs --node removeAttribute`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -908,6 +990,8 @@ Composite node that cooks an inner graph REPEATEDLY, feeding each round's output
 
 **Outputs:** *(none)*
 
+**Examples:** [basics-repeat-until-settled.json](../graphs/basics-repeat-until-settled.json), [examples-coral.json](../graphs/examples-coral.json), [examples-facade.json](../graphs/examples-facade.json) — 5 total (`pcg graphs --node repeatUntil`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -924,6 +1008,8 @@ Cuts every polyline into RUNS at along-arc GAPS, least-squares fits a numeric po
 **Inputs:** `in` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-fit-runs.json](../graphs/basics-fit-runs.json) — 1 total (`pcg graphs --node runFit`)
 
 **Params:**
 
@@ -953,6 +1039,8 @@ For every point of `in`, finds the nearest point of the `source` cloud in 3D (po
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-density-along-a-path.json](../graphs/basics-density-along-a-path.json), [examples-coral.json](../graphs/examples-coral.json), [pipeline-2-districts.json](../graphs/pipeline-2-districts.json) — 10 total (`pcg graphs --node sampleNearestPoint`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -973,6 +1061,8 @@ Enforces a minimum distance between points, under one of two rules chosen by `mo
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-even-spacing.json](../graphs/basics-even-spacing.json), [basics-subgraph-exposed-params.json](../graphs/basics-subgraph-exposed-params.json), [pipeline-2-districts.json](../graphs/pipeline-2-districts.json) — 10 total (`pcg graphs --node selfPrune`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -991,6 +1081,8 @@ Creates or overwrites an attribute on the chosen domain. Numeric types fill from
 **Inputs:** `in` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-attribute-from-noise.json](../graphs/basics-attribute-from-noise.json), [basics-mask-by-species.json](../graphs/basics-mask-by-species.json), [basics-attribute-remap.json](../graphs/basics-attribute-remap.json) — 61 total (`pcg graphs --node setAttribute`)
 
 **Params:**
 
@@ -1017,6 +1109,8 @@ Sets the standard per-point bounds attributes: writes boundsMin and boundsMax (f
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-two-kinds-of-bounds.json](../graphs/basics-two-kinds-of-bounds.json), [examples-facade.json](../graphs/examples-facade.json), [examples-floorplan.json](../graphs/examples-floorplan.json) — 3 total (`pcg graphs --node setBounds`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -1033,6 +1127,8 @@ Spawner terminal: converts the input point cloud into render-agnostic instance b
 **Inputs:** `in` (geometry)
 
 **Outputs:** `instances` (instances), `points` (geometry)
+
+**Examples:** [basics-spawn-instances.json](../graphs/basics-spawn-instances.json), [basics-props-along-a-path.json](../graphs/basics-props-along-a-path.json), [basics-radial-on-curve.json](../graphs/basics-radial-on-curve.json) — 25 total (`pcg graphs --node spawnInstances`)
 
 **Params:**
 
@@ -1052,6 +1148,8 @@ Samples points along polyline primitives by arc length, treating all polylines o
 **Inputs:** `in` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [examples-riverbank.json](../graphs/examples-riverbank.json), [pipeline-3-lots.json](../graphs/pipeline-3-lots.json), [pipeline-3-lots-edits.json](../graphs/pipeline-3-lots-edits.json) — 7 total (`pcg graphs --node splineSample`)
 
 **Params:**
 
@@ -1075,6 +1173,8 @@ Composite node wrapping an inner graph as a single node. Pins and params are per
 
 **Outputs:** *(none)*
 
+**Examples:** [basics-subgraph-exposed-params.json](../graphs/basics-subgraph-exposed-params.json), [basics-primitive-ref.json](../graphs/basics-primitive-ref.json), [basics-gather-on-path.json](../graphs/basics-gather-on-path.json) — 33 total (`pcg graphs --node subgraph`)
+
 **Params:** *(none)*
 
 ## surfaceSample
@@ -1086,6 +1186,8 @@ Scatters points on a triangle mesh: each of `count` candidates picks a triangle 
 **Inputs:** `in` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-surface-sample.json](../graphs/basics-surface-sample.json), [examples-forest.json](../graphs/examples-forest.json) — 2 total (`pcg graphs --node surfaceSample`)
 
 **Params:**
 
@@ -1104,6 +1206,8 @@ Places a cross-section on EVERY POINT of every polyline primitive and stitches c
 **Inputs:** `in` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-sweep-profile.json](../graphs/basics-sweep-profile.json), [basics-colonnade.json](../graphs/basics-colonnade.json), [examples-rig.json](../graphs/examples-rig.json) — 3 total (`pcg graphs --node sweepProfile`)
 
 **Params:**
 
@@ -1130,6 +1234,8 @@ Reads a path's point attributes AT ARBITRARY ARC POSITIONS and writes them onto 
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-stations-on-a-path.json](../graphs/basics-stations-on-a-path.json) — 1 total (`pcg graphs --node transferAlongPath`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -1148,6 +1254,8 @@ Transfers an attribute from the `source` geometry onto the main input's points, 
 **Inputs:** `in` (geometry), `source` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-transfer-attribute.json](../graphs/basics-transfer-attribute.json), [examples-rig.json](../graphs/examples-rig.json) — 2 total (`pcg graphs --node transferAttribute`)
 
 **Params:**
 
@@ -1173,6 +1281,8 @@ Reads the `source` geometry's point attributes AT A PER-POINT COMPUTED INDEX and
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-gather-by-index.json](../graphs/basics-gather-by-index.json) — 1 total (`pcg graphs --node transferByIndex`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -1193,6 +1303,8 @@ Transforms every point: P' = R * (scale * P) + translate, with R from rotateEule
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-transform-points.json](../graphs/basics-transform-points.json), [basics-inline-field-params.json](../graphs/basics-inline-field-params.json), [basics-reseed-a-noise.json](../graphs/basics-reseed-a-noise.json) — 34 total (`pcg graphs --node transformPoints`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -1211,6 +1323,8 @@ Emits a single constant number as a value item, for feeding value pins or taggin
 
 **Outputs:** `out` (value)
 
+**Examples:** [basics-report-to-the-host.json](../graphs/basics-report-to-the-host.json) — 1 total (`pcg graphs --node valueConstant`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -1226,6 +1340,8 @@ Fills an axis-aligned box with a regular grid of points: each axis is divided in
 **Inputs:** `in` (geometry, optional)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-volume-scatter.json](../graphs/basics-volume-scatter.json) — 1 total (`pcg graphs --node volumeSample`)
 
 **Params:**
 
@@ -1247,6 +1363,8 @@ Turns a point cloud into its VORONOI DIAGRAM: one closed `polyline` primitive pe
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-voronoi-plots.json](../graphs/basics-voronoi-plots.json) — 1 total (`pcg graphs --node voronoiCells`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -1266,6 +1384,8 @@ Writes a full orthonormal frame — `tangent`, `curveNormal` and `curveBinormal`
 
 **Outputs:** `out` (geometry)
 
+**Examples:** [basics-stations-on-a-path.json](../graphs/basics-stations-on-a-path.json), [examples-rig.json](../graphs/examples-rig.json) — 2 total (`pcg graphs --node writeCurveFrame`)
+
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
@@ -1284,6 +1404,8 @@ Writes a unit `tangent` (f32 tuple 3) onto the points of every polyline primitiv
 **Inputs:** `in` (geometry)
 
 **Outputs:** `out` (geometry)
+
+**Examples:** [basics-orient-along-path.json](../graphs/basics-orient-along-path.json), [pipeline-1-boundary.json](../graphs/pipeline-1-boundary.json), [pipeline-2-districts.json](../graphs/pipeline-2-districts.json) — 9 total (`pcg graphs --node writeTangents`)
 
 **Params:**
 

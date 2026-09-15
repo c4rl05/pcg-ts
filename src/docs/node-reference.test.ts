@@ -16,7 +16,15 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { listNodeTypes } from "../index.js";
+import { describeExample, loadGraphs } from "./graphIndex.js";
 import { renderNodeReference } from "./node-reference.js";
+
+/**
+ * The corpus the Examples lines are rendered from — rebuilt from
+ * `graphs/` exactly as `scripts/gen-node-reference.mjs` rebuilds it, so a
+ * graph edit makes `nodes.md` stale here too.
+ */
+const CORPUS = loadGraphs(fileURLToPath(new URL("../..", import.meta.url))).map(describeExample);
 
 /**
  * Committed docs are read through git, and a Windows checkout with
@@ -53,8 +61,9 @@ function firstDifference(actual: string, expected: string): string {
 
 function drift(file: string, committed: string, generated: string): string {
   return [
-    `docs/${file} is stale: the node registry changed but the generated`,
-    "reference was not regenerated. Run:",
+    `docs/${file} is stale: the node registry (or, for nodes.md, the graph`,
+    "corpus under graphs/) changed but the generated reference was not",
+    "regenerated. Run:",
     "",
     "  npm run build && npm run docs:nodes",
     "",
@@ -63,7 +72,7 @@ function drift(file: string, committed: string, generated: string): string {
 }
 
 describe("node reference docs", () => {
-  const { json, markdown } = renderNodeReference(listNodeTypes());
+  const { json, markdown } = renderNodeReference(listNodeTypes(), CORPUS);
 
   it("docs/nodes.json matches the live node registry", () => {
     const committed = readDoc("nodes.json");
@@ -76,7 +85,7 @@ describe("node reference docs", () => {
   });
 
   it("renders identically twice (deterministic output)", () => {
-    const again = renderNodeReference(listNodeTypes());
+    const again = renderNodeReference(listNodeTypes(), CORPUS.slice().reverse());
     expect(again.json).toBe(json);
     expect(again.markdown).toBe(markdown);
   });

@@ -64,6 +64,8 @@ Concatenates two point clouds and stamps a string attribute on each side first, 
 | `nameA` | string | `"a"` |  |  |  | tagA.stringValue | Label written on every point arriving at `a`. |
 | `nameB` | string | `"b"` |  |  |  | tagB.stringValue | Label written on every point arriving at `b`. |
 
+**Examples:** [pipeline-3-lots.json](../graphs/pipeline-3-lots.json), [pipeline-3-lots-edits.json](../graphs/pipeline-3-lots-edits.json), [pipeline-4-detail.json](../graphs/pipeline-4-detail.json) — 6 total (`pcg graphs --primitive compose/merge-tagged`)
+
 Run it: `pcg run compose/merge-tagged`
 
 ## compose/scatter-copies
@@ -86,6 +88,8 @@ Copies the entire `source` cloud onto every point of `target`, composing the tra
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `jitter` | vec3 | `[0.5,0,0.5]` |  |  | yes | jit.amount | Random offset per axis, in world units, uniform and SYMMETRIC: each copy moves somewhere in -jitter..+jitter on each axis independently, so the spread is 2 * jitter wide, not jitter, and the measured extremes sit on the bound exactly. What makes copied clusters look placed rather than stamped. The default [0.5,0,0.5] jitters in the ground plane only — the zero on Y is what keeps copies from sinking through a surface. Set it to [0,0,0] for exact copies. |
 | `seed` | u32 | `0` |  |  |  | jit.seed | Re-rolls the jitter. Two instances already differ without it. |
+
+**Examples:** *(no corpus graph references it)*
 
 Run it: `pcg run compose/scatter-copies`
 
@@ -114,6 +118,8 @@ Scatters candidates through a box and keeps each one with a probability read fro
 | `seed` | u32 | `0` |  |  |  | scatter.seed, thin.seed | Re-rolls both the candidate positions and which of them survive. It does NOT move the clumps; `variant` does that. |
 | `variant` | f32 | `0` |  |  | yes | thin.variant | Offset added to the noise sample position — the only way to give two instances different CLUMPS rather than different points in the same clumps. |
 
+**Examples:** *(no corpus graph references it)*
+
 Run it: `pcg run fill/scatter-by-density`
 
 ## fill/scatter-clustered
@@ -141,6 +147,8 @@ Scatters a few cluster centres through a box, then copies a small local cloud on
 | `seed` | u32 | `0` |  |  |  | centres.seed, local.seed | Re-rolls both the group positions and the shape of the group. Two instances already differ without it. |
 | `spread` | vec3 | `[4,0,4]` |  |  | yes | spread.scale | Half-extent of one group, per axis, in world units: its points land uniformly in a BOX running -spread to +spread around the centre, so a group measures 2 * spread across and the reach is exactly linear in the value. The peak sits just under `spread` because it is `perCluster` uniform draws deep, not because the bound is different: measured 0.88 to 0.96 of it at the default 12 points per group, 0.995 at 300. All three axes are live, Y included. It DEFAULTS to [4, 0, 4] — a flat ground patch, where every point of a group shares its centre's Y exactly — because the common group stands on the ground; [4, 4, 4] gives a cube-shaped group instead, and [4, 12, 4] a column. The box bounds the POINTS while `boundsMin`/`boundsMax` bound only the CENTRES, so the result overhangs the box by up to `spread` on each side, on Y as well once the group has height. Nothing clamps that, on purpose — inset the bounds by `spread` when the points must stay inside a region. A bare number is not accepted: pass [4, 0, 4], or {"fn":"constant","value":4} for equal reach on all three axes. |
 
+**Examples:** *(no corpus graph references it)*
+
 Run it: `pcg run fill/scatter-clustered`
 
 ## fill/scatter-even
@@ -166,6 +174,8 @@ Scatters candidates through a box and then removes any that fall closer than a m
 | `count` | i32 | `4000` | >= 0 |  |  | scatter.count | Candidates scattered before pruning. Over-scatter, and expect to over-scatter HARD: the survivor count climbs slowly toward saturation instead of reaching it, so this knob still moves the result long after it looks like it should not. Saturation is about 0.7 * area / minDistance^2 — roughly 440 points in the default 50x50 box at minDistance 2 — and it takes on the order of 150 candidates per surviving point to get within a few percent of it. Measured in that box at minDistance 2: 4000 candidates give 374 (84% of saturation), 16000 give 416, 64000 give 436, 200000 give 444. Each 4x costs the next ~5%. Nothing here ever produces MORE than saturation, so a target count above it is unreachable at any `count`. |
 | `minDistance` | f32 | `2` | >= 0 |  | yes | prune.minDistance | Closest two kept points may be, in world units — and it is exact, not approximate: the measured nearest pair sits at minDistance to within a rounding error. This is the real knob, because the count follows it as an inverse square: the achievable maximum is about 0.7 * area / minDistance^2, so halving it makes room for four times as many points (and needs four times the `count` to find them). |
 | `seed` | u32 | `0` |  |  |  | scatter.seed | Re-rolls the scatter. Two instances already differ without it. |
+
+**Examples:** [basics-primitive-ref.json](../graphs/basics-primitive-ref.json), [basics-compose-primitives.json](../graphs/basics-compose-primitives.json) — 2 total (`pcg graphs --primitive fill/scatter-even`)
 
 Run it: `pcg run fill/scatter-even`
 
@@ -196,6 +206,8 @@ Fills a box with a jittered grid of points and keeps only the cells where a 3D n
 | `threshold` | f32 | `0.5` | 0..1 |  | yes | *(nothing — the body's field expressions read it by name)* | Where the cut falls on the 0..1 noise. Higher leaves less material, but the noise only reaches the MIDDLE of that range, so the whole knob lives between about 0.35 (solid) and 0.68 (empty) — four octaves of normalized fBm are bell-shaped around 0.5 and never near the ends. Measured on the default 32-unit box at cellSize 2: 0.3 keeps 100% of the grid, 0.45 keeps 85%, 0.5 keeps 65%, 0.55 keeps 41%, 0.6 keeps 18%, 0.65 keeps 3.6%, 0.7 keeps nothing. The centre of that band is NOT fixed at 0.5 the way the flat filters' is: the box times `frequency` decides how much of the field is sampled, and a small window sits wherever its own patch of noise happens to sit (the same box read as a 2D spread has 0.5 keeping half rather than two thirds). Sweep in steps of 0.02, not 0.1. |
 | `variant` | f32 | `0` |  |  | yes | *(nothing — the body's field expressions read it by name)* | Offset added to the noise sample position — the per-instance re-roll of the carve pattern. |
 
+**Examples:** *(no corpus graph references it)*
+
 Run it: `pcg run fill/volume-by-noise`
 
 ## filter/by-distance-to
@@ -218,6 +230,8 @@ Measures each point's distance to the nearest point of a second cloud and keeps 
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `comparison` | enum | `"ge"` |  | `eq`, `ne`, `lt`, `le`, `gt`, `ge` |  | keep.comparison | 'ge' keeps what is far from the features (a clearance), 'le' keeps what is near them (a band). |
 | `distance` | f32 | `5` | >= 0 |  | yes | keep.value | The band edge, in world units. |
+
+**Examples:** [pipeline-3-lots.json](../graphs/pipeline-3-lots.json), [pipeline-3-lots-edits.json](../graphs/pipeline-3-lots-edits.json), [pipeline-4-detail.json](../graphs/pipeline-4-detail.json) — 6 total (`pcg graphs --primitive filter/by-distance-to`)
 
 Run it: `pcg run filter/by-distance-to`
 
@@ -243,6 +257,8 @@ Measures each point's distance to the supplied `curve` and keeps or drops it by 
 | `distance` | f32 | `5` | >= 0 |  | yes | dist.distance | The band edge, in world units — how far from the curve the decision flips. |
 | `resolution` | f32 | `1` | >= 0 |  |  | dense.spacing | How finely the curve is sampled before distances are measured, in world units. It is the accuracy of the measurement, and it only ever UNDERSTATES the band — sampling a curve sparsely puts every point further from the nearest sample than it is from the curve, so points are lost from the edges, never gained. Measured against a 5-unit band on a straight curve: resolution 1 (a fifth of `distance`) loses 0.2% of the points, 2 loses 0.7%, 5 (equal to `distance`) loses 4%, 10 loses 18% and 20 loses half. A fifth of `distance` is the practical floor; below that it only costs sample points, one more per step along every path. |
 
+**Examples:** [pipeline-3-lots.json](../graphs/pipeline-3-lots.json), [pipeline-3-lots-edits.json](../graphs/pipeline-3-lots-edits.json), [pipeline-4-detail.json](../graphs/pipeline-4-detail.json) — 6 total (`pcg graphs --primitive filter/by-distance-to-curve`)
+
 Run it: `pcg run filter/by-distance-to-curve`
 
 ## filter/by-neighbor-count
@@ -266,6 +282,8 @@ Counts each point's neighbours within a radius and keeps or drops it by that cou
 | `comparison` | enum | `"ge"` |  | `eq`, `ne`, `lt`, `le`, `gt`, `ge` |  | keep.comparison | 'ge' keeps the crowded points (cluster cores), 'le' keeps the isolated ones. |
 | `count` | f32 | `2` | >= 0 |  | yes | keep.value | How many neighbours the comparison is made against. The point itself is not counted. |
 | `radius` | f32 | `5` | >= 0 |  | yes | nbr.radius | How far around each point counts as its neighbourhood, in world units. As a FIELD it is a PER-POINT radius, so each point measures the neighbourhood it asks for and the relation stops being symmetric — B within A's reach does not put A within B's. |
+
+**Examples:** *(no corpus graph references it)*
 
 Run it: `pcg run filter/by-neighbor-count`
 
@@ -291,6 +309,8 @@ Keeps the points whose distance to a centre satisfies a comparison — 'le' for 
 | `comparison` | enum | `"le"` |  | `eq`, `ne`, `lt`, `le`, `gt`, `ge` |  | keep.comparison | How the distance is tested: 'le' keeps what is inside the radius, 'ge' keeps what is outside it. |
 | `radius` | f32 | `10` | >= 0 |  | yes | keep.value | The distance the comparison is made against, in world units. |
 
+**Examples:** *(no corpus graph references it)*
+
 Run it: `pcg run filter/inside-radius`
 
 ## filter/mask-by-noise
@@ -314,6 +334,8 @@ Keeps only the points where a normalized noise field rises above a threshold —
 | `frequency` | f32 | `0.02` |  |  | yes | *(nothing — the body's field expressions read it by name)* | Feature size: the noise sample position is multiplied by this, so smaller means larger regions. |
 | `threshold` | f32 | `0.5` | 0..1 |  | yes | *(nothing — the body's field expressions read it by name)* | Where the cut falls on the 0..1 noise — but the noise only reaches the MIDDLE of that range, so the whole knob lives between about 0.32 (keeps everything) and 0.68 (keeps nothing). Four octaves of normalized fBm come out bell-shaped around 0.5 with a standard deviation near 0.065, never at the ends: the theoretical 0..1 is the nominal range of the term, not the values it takes. Measured on a wide 2D spread: 0.42 keeps ~89%, 0.46 ~75%, 0.50 ~50%, 0.55 ~23%, 0.59 ~9%. So a threshold of 0.8 does not keep a fifth, it keeps NOTHING, and 0.2 does not keep four fifths, it keeps everything. `frequency`, `variant` and how widely the points sample the field move the two ends by a few hundredths. |
 | `variant` | f32 | `0` |  |  | yes | *(nothing — the body's field expressions read it by name)* | Offset added to the noise sample position — the per-instance re-roll. Two instances with the same value mask identically. |
+
+**Examples:** [basics-compose-primitives.json](../graphs/basics-compose-primitives.json) — 1 total (`pcg graphs --primitive filter/mask-by-noise`)
 
 Run it: `pcg run filter/mask-by-noise`
 
@@ -339,6 +361,8 @@ Writes a normalized noise field into the standard `density` attribute and keeps 
 | `seed` | u32 | `0` |  |  |  | thin.seed | Re-rolls which points survive within the same pattern. It does NOT move the pattern; `variant` does that. |
 | `variant` | f32 | `0` |  |  | yes | *(nothing — the body's field expressions read it by name)* | Offset added to the noise sample position — the only way to give two instances different PATTERNS. Any two different values are unrelated; the same value always reproduces. |
 
+**Examples:** *(no corpus graph references it)*
+
 Run it: `pcg run filter/thin-by-density`
 
 ## place/align-to-surface
@@ -363,6 +387,8 @@ Casts a ray from every point onto a mesh, reads the surface `normal` where it la
 | `direction` | vec3 | `[0,-1,0]` |  |  | yes | normal.direction | Which way the ray travels to find the surface. [0,-1,0] looks straight down. |
 | `maxDistance` | f32 | `0` | >= 0 |  | yes | normal.maxDistance | Longest ray that still counts as a find, in world units. 0 means unlimited. |
 | `up` | vec3 | `[0,1,0]` |  |  | yes | orient.up | Up hint fixing the roll around the normal. |
+
+**Examples:** *(no corpus graph references it)*
 
 Run it: `pcg run place/align-to-surface`
 
@@ -390,6 +416,8 @@ Places points at even arc-length steps along every path of the supplied `curve` 
 | `spacing` | f32 | `1` | >= 0 |  | yes | resample.spacing | Distance between points in world units in 'spacing' mode — exact for every step except the LAST, which is the leftover. The walk starts at the beginning of each path, steps `spacing` until another step would overshoot, then puts a final point exactly on the end: a 40-unit path at spacing 7 comes out with gaps 7, 7, 7, 7, 7, 5. So the count per path is floor(length / spacing) + 2, or length / spacing + 1 when it divides exactly, and the far end is always the short one. For props that must be evenly pitched the whole way, pick a `spacing` that divides the path length. Must be greater than 0 and short enough to leave 2 points on the shortest path; ignored in 'count' mode. |
 | `up` | vec3 | `[0,1,0]` |  |  | yes | orient.up | Up hint fixing the roll around the curve; leave it at world up for props that stand on the ground. |
 
+**Examples:** [basics-props-along-a-path.json](../graphs/basics-props-along-a-path.json), [basics-under-cover.json](../graphs/basics-under-cover.json), [pipeline-4-detail.json](../graphs/pipeline-4-detail.json) — 6 total (`pcg graphs --primitive place/along-curve`)
+
 Run it: `pcg run place/along-curve`
 
 ## place/drop-to-surface
@@ -412,6 +440,8 @@ Casts a ray from every point along a direction, moves each one to where it hits 
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `direction` | vec3 | `[0,-1,0]` |  |  | yes | snap.direction | Which way the ray travels. [0,-1,0] drops straight down; rays are forward-only, so points below the surface miss. |
 | `maxDistance` | f32 | `0` | >= 0 |  | yes | snap.maxDistance | Longest drop that still counts as a landing, in world units. 0 means unlimited. |
+
+**Examples:** [pipeline-2-districts.json](../graphs/pipeline-2-districts.json), [pipeline-3-lots.json](../graphs/pipeline-3-lots.json), [pipeline-3-lots-edits.json](../graphs/pipeline-3-lots-edits.json) — 7 total (`pcg graphs --primitive place/drop-to-surface`)
 
 Run it: `pcg run place/drop-to-surface`
 
@@ -436,6 +466,8 @@ Scatters points over a triangle mesh with probability proportional to triangle a
 | `count` | i32 | `1000` | >= 0 |  |  | sample.count | Candidates placed on the mesh before density acceptance. |
 | `density` | f32 | `1` | 0..1 |  | yes | sample.densityField | Acceptance probability per candidate, 0..1 — where sampling is allowed at all. Pass a field spec to make it vary across the surface. |
 | `seed` | u32 | `0` |  |  |  | sample.seed | Re-rolls the sampling. Two instances already differ without it. |
+
+**Examples:** *(no corpus graph references it)*
 
 Run it: `pcg run place/on-surface`
 
@@ -463,6 +495,8 @@ Scatters points on a mesh and keeps only the ones on gentle enough ground below 
 | `maxSlope` | f32 | `0.3` |  |  | yes | slope.value | Steepest ground still plantable, on the `slope` scale `write/height-slope` writes — which is 1 - cos(angle), NOT a fraction of 90 degrees, so it is heavily compressed at the flat end and half the scale already covers two thirds of the range of real slopes. The default 0.3 is therefore a 45-degree limit, not the 27-degree one a linear reading gives. The anchors, measured: 10 degrees is 0.015, 20 is 0.060, 30 is 0.134, 45 is 0.293, 60 is 0.500, 75 is 0.741, 90 is 1. Inverted, for a limit of A degrees pass 1 - cos(A). |
 | `seed` | u32 | `0` |  |  |  | pts.seed | Re-rolls the sampling. Two instances already differ without it. |
 
+**Examples:** [pipeline-4-detail.json](../graphs/pipeline-4-detail.json), [pipeline-4-detail-edits.json](../graphs/pipeline-4-detail-edits.json), [pipeline-5-roads.json](../graphs/pipeline-5-roads.json) — 4 total (`pcg graphs --primitive place/plantable`)
+
 Run it: `pcg run place/plantable`
 
 ## place/radial-on-curve
@@ -485,6 +519,8 @@ Places points at even arc-length steps along every path of the supplied `curve`,
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `count` | i32 | `24` | >= 2 |  |  | resample.count | Points per path: exactly this many come out whatever the path's length, evenly spaced at length / (count - 1), and both ends are always occupied. At least 2 (3 on a closed path). For a fixed pitch in world units instead, resample with `place/along-curve` in 'spacing' mode first and feed the result in here. |
 | `spread` | f32 | `1` | >= 0 |  | yes | *(nothing — the body's field expressions read it by name)* | How much of a full turn around the curve the fan covers, as a fraction: 1 spreads uniformly over the whole circle, 0.25 over a quarter turn, and 0 aims every point the same way — straight along the transported `curveNormal`, which is a smooth ribbon rather than a fan, and the one setting that does NOT vary between two instances. The angle is drawn uniformly over 0..spread turns, so it is one-sided: the fan opens from the normal in one direction only, and a spread of 0.5 covers a half turn from it rather than a quarter turn either side. Values above 1 wrap and buy nothing. |
+
+**Examples:** [basics-radial-on-curve.json](../graphs/basics-radial-on-curve.json) — 1 total (`pcg graphs --primitive place/radial-on-curve`)
 
 Run it: `pcg run place/radial-on-curve`
 
@@ -512,6 +548,8 @@ Scatters points uniformly inside a disc in the XZ plane by scattering a square a
 | `seed` | u32 | `0` |  |  |  | scatter.seed | Re-rolls the scatter. Two instances already differ without it. |
 | `size` | vec3 | `[8,8,8]` |  |  | yes | place.scale | Size of the shape in world units — a radius for the round ones. A bare number is not accepted here: pass three numbers [8,8,8], or {"fn":"constant","value":8} for a uniform one. Unequal components give an ellipse or an ellipsoid. |
 
+**Examples:** *(no corpus graph references it)*
+
 Run it: `pcg run shape/disc`
 
 ## shape/path-loop
@@ -536,6 +574,8 @@ Builds a CLOSED PATH — polyline topology, not a loose point cloud — around a
 | `count` | i32 | `24` | >= 3 |  |  | ring.count | Corner points around the loop. At least 3 — two points cannot enclose anything — and higher counts make the polygon read as a circle. |
 | `rotate` | vec3 | `[0,0,0]` |  |  | yes | ring.rotate | Rotation in degrees per world axis, applied about the origin before the loop is moved into place. |
 | `size` | vec3 | `[8,8,8]` |  |  | yes | ring.size | Radius of the loop in world units. A bare number is not accepted here: pass three numbers [8,8,8], or {"fn":"constant","value":8} for a uniform one. Unequal components give an ellipse. |
+
+**Examples:** [basics-extrude-polygon.json](../graphs/basics-extrude-polygon.json), [basics-merge-primitives.json](../graphs/basics-merge-primitives.json), [basics-scatter-along-a-path.json](../graphs/basics-scatter-along-a-path.json) — 9 total (`pcg graphs --primitive shape/path-loop`)
 
 Run it: `pcg run shape/path-loop`
 
@@ -565,6 +605,8 @@ Builds an open PATH — polyline topology — that runs along X and wanders off 
 | `variant` | f32 | `0` |  |  | yes | *(nothing — the body's field expressions read it by name)* | Offset added to the noise sample position — the per-instance re-roll, and the ONLY one: no seed can move a noise field. |
 | `wander` | f32 | `0.15` |  |  | yes | *(nothing — the body's field expressions read it by name)* | How far the path strays from the straight line between its ends. 0 is a straight line; above that the peak deviation is about 0.22 * wander * `size.z`, exactly linear in both — so at the default `size` [40,1,40], 0.15 strays about 1.3 units to each side and 0.5 about 4.4. Inverted, for a peak of a fraction f of `size.z`, ask for wander around 4.6 * f. This is a FRACTION OF A NOMINAL RANGE, not of the deviation you get: the value scales a noise term whose range is +/-1 in principle, but four octaves of normalized fBm sampled along one line only cover part of it, and `frequency` and `variant` move that coverage (measured 0.13 to 0.31 of wander * `size.z` across the usable range). The wander is sideways only — the path is a height field along X, so it NEVER doubles back on itself at any wander; for a curve that turns back, build the corners yourself and run `pointsToPath` over them. |
 
+**Examples:** [basics-gather-on-path.json](../graphs/basics-gather-on-path.json), [basics-sweep-profile.json](../graphs/basics-sweep-profile.json), [basics-props-along-a-path.json](../graphs/basics-props-along-a-path.json) — 5 total (`pcg graphs --primitive shape/path-meander`)
+
 Run it: `pcg run shape/path-meander`
 
 ## shape/ring
@@ -592,6 +634,8 @@ Places points evenly around a circle in the XZ plane, optionally sweeping only p
 | `size` | vec3 | `[8,8,8]` |  |  | yes | place.scale | Size of the shape in world units — a radius for the round ones. A bare number is not accepted here: pass three numbers [8,8,8], or {"fn":"constant","value":8} for a uniform one. Unequal components give an ellipse or an ellipsoid. |
 | `sweep` | f32 | `1` | 0..1 |  | yes | *(nothing — the body's field expressions read it by name)* | How far round to go: 1 is a closed circle, 0.5 a half-circle, 0.25 a quarter arc. |
 
+**Examples:** [basics-points-to-path.json](../graphs/basics-points-to-path.json), [basics-path-resample.json](../graphs/basics-path-resample.json), [basics-orient-along-path.json](../graphs/basics-orient-along-path.json) — 13 total (`pcg graphs --primitive shape/ring`)
+
 Run it: `pcg run shape/ring`
 
 ## shape/sphere-points
@@ -617,6 +661,8 @@ Scatters points uniformly over the surface of a sphere, by rejecting a cube scat
 | `rotate` | vec3 | `[0,0,0]` |  |  | yes | place.rotateEuler | Rotation in degrees per world axis, applied about the origin before the shape is moved into place. |
 | `seed` | u32 | `0` |  |  |  | scatter.seed | Re-rolls the scatter. Two instances already differ without it. |
 | `size` | vec3 | `[8,8,8]` |  |  | yes | place.scale | Size of the shape in world units — a radius for the round ones. A bare number is not accepted here: pass three numbers [8,8,8], or {"fn":"constant","value":8} for a uniform one. Unequal components give an ellipse or an ellipsoid. |
+
+**Examples:** *(no corpus graph references it)*
 
 Run it: `pcg run shape/sphere-points`
 
@@ -644,6 +690,8 @@ Winds points outward from the origin over a given number of turns in the XZ plan
 | `size` | vec3 | `[8,8,8]` |  |  | yes | place.scale | Size of the shape in world units — a radius for the round ones. A bare number is not accepted here: pass three numbers [8,8,8], or {"fn":"constant","value":8} for a uniform one. Unequal components give an ellipse or an ellipsoid. |
 | `turns` | f32 | `3` | >= 0 |  | yes | *(nothing — the body's field expressions read it by name)* | How many full revolutions the spiral makes between the centre and the outer radius. |
 
+**Examples:** [basics-under-cover.json](../graphs/basics-under-cover.json) — 1 total (`pcg graphs --primitive shape/spiral`)
+
 Run it: `pcg run shape/spiral`
 
 ## transform/displace-by-noise
@@ -668,6 +716,8 @@ Displaces every point along +Y by a noise field centred on zero, so a flat scatt
 | `frequency` | f32 | `0.05` |  |  | yes | *(nothing — the body's field expressions read it by name)* | Feature size: the noise sample position is multiplied by this, so smaller means longer, gentler waves. |
 | `variant` | f32 | `0` |  |  | yes | *(nothing — the body's field expressions read it by name)* | Offset added to the noise sample position — the per-instance re-roll, and the ONLY one: no seed can move a noise field. |
 
+**Examples:** [pipeline-1-boundary.json](../graphs/pipeline-1-boundary.json), [examples-forest.json](../graphs/examples-forest.json), [pipeline-2-districts.json](../graphs/pipeline-2-districts.json) — 9 total (`pcg graphs --primitive transform/displace-by-noise`)
+
 Run it: `pcg run transform/displace-by-noise`
 
 ## transform/gather-on-path
@@ -690,6 +740,8 @@ Slides every point of a path along the curve it already sits on, toward the cent
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `amount` | f32 | `0.7` | 0..1 |  | yes | *(nothing — the body's field expressions read it by name)* | How far of the way to its bin centre each point travels, 0..1: 0 leaves the distribution exactly as it arrived, 1 collapses every bin onto a single point, and the travel is exactly linear in between — 0.5 halves every gap to the centre. Field-capable, resolved on the points BEFORE they move, so a field over `curveU` can gather one end of a path harder than the other. |
 | `bins` | f32 | `6` | >= 1 |  | yes | *(nothing — the body's field expressions read it by name)* | How many clumps each path gets: its 0..1 parameter is cut into this many equal bins and every point heads for the centre of its own. Fewer bins means fewer, fatter clumps further apart, and the clumps land at (i + 0.5) / bins along each path — a fixed lattice, not a random one, so two paths of different lengths clump at the same RELATIVE places. It is per path rather than per world unit, so a long path and a short one both get `bins` clumps; for a fixed clump pitch, resample to a `spacing` first and scale this with the length. A fractional value leaves a short last bin at the far end. Field-capable like every knob here, but keep it UNIFORM unless you mean otherwise: a bin count that varies per point stops partitioning the path, because neighbouring points then head for the centres of bins that do not line up. A field over something constant along each path — a per-path attribute, say — is the coherent way to vary it; a field over `curveU` or position is not. Guarded at the point of use, because it is the DIVISOR that turns a 0..1 parameter into a bin: anything below the declared minimum of 1 is read as exactly 1 — one bin, the whole path gathering onto a single spot — and that covers the values a bound cannot refuse, since a field's are never range-checked. A plain value below 1 is still an error rather than a clamp. |
+
+**Examples:** [basics-gather-on-path.json](../graphs/basics-gather-on-path.json) — 1 total (`pcg graphs --primitive transform/gather-on-path`)
 
 Run it: `pcg run transform/gather-on-path`
 
@@ -714,6 +766,8 @@ Nudges every point away from the centroid of its neighbours, so crowded regions 
 | `radius` | f32 | `4` | >= 0 |  | yes | nbr.radius | How far around each point counts as its neighbourhood, in world units. Points with nothing inside it do not move. As a FIELD it is a PER-POINT radius, so each point measures the neighbourhood it asks for and the relation stops being symmetric — B within A's reach does not put A within B's. |
 | `strength` | f32 | `0.5` |  |  | yes | *(nothing — the body's field expressions read it by name)* | How far along the push each point travels: the point moves exactly strength * (its own position - the mean position of its neighbours inside `radius`), so 0 changes nothing and the travel is exactly linear in strength. It is a fraction of a LOCAL offset, not a world distance, so `radius` sets the scale and this sets the fraction of it: measured on 300 points in a 30x30 box, strength 0.5 moves the average point 0.42 units at radius 4 and 1.5 units at radius 12, and strength 1 moves it exactly twice as far. 0.5 is one relaxation step; run the primitive twice rather than pushing past 1, which overshoots and oscillates. |
 
+**Examples:** *(no corpus graph references it)*
+
 Run it: `pcg run transform/relax-spacing`
 
 ## transform/snap-to-grid
@@ -736,6 +790,8 @@ Snaps every point to the nearest corner of a regular 3D grid of the given pitch,
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `cellSize` | f32 | `4` | >= 0.000001 |  | yes | *(nothing — the body's field expressions read it by name)* | Grid pitch in world units, the same on all three axes. It is the DIVISOR of the snap, so it must be greater than 0 — declared as well as said: a plain value below 0.000001 is refused by name, and a FIELD delivering one — which no declared bound can refuse — is clamped to 0.000001 at the point of use rather than dividing by it. That clamp is the limit the pitch was heading for anyway: a millionth-of-a-unit grid moves a point by at most half of that, so a pitch of 0 or less leaves the cloud where it is instead of snapping every position to NaN. The clamp is a floor and nothing more: a field that returns NaN still snaps to NaN, because there is no value to floor it to. |
 
+**Examples:** *(no corpus graph references it)*
+
 Run it: `pcg run transform/snap-to-grid`
 
 ## write/color-from-attribute
@@ -757,6 +813,8 @@ Rescales any numeric point attribute to 0..1 over its OWN observed range, then m
 | Param | Type | Default | Range | Enum | Field | Writes to | Description |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `source` | string | `"density"` |  |  |  | fit.name | Numeric point attribute to colour by. It is fitted to its own minimum and maximum, so any scale works — 'density', 'height', 'slope' or anything you computed yourself. |
+
+**Examples:** *(no corpus graph references it)*
 
 Run it: `pcg run write/color-from-attribute`
 
@@ -782,6 +840,8 @@ Writes a full orthonormal frame at every point of a path — `tangent`, `curveNo
 | `normalName` | string | `"curveNormal"` |  |  |  | frame.normalName | Attribute the transported normal is written to. Do NOT rename it to 'normal': `surfaceSample` writes a surface `normal` of the very same shape (f32, tuple 3), and a matching shape is exactly the case an attribute writer ACCEPTS — so a graph that samples a surface and frames a curve would have one silently overwrite the other. |
 | `tangentName` | string | `"tangent"` |  |  |  | frame.tangentName | Attribute the unit tangent is written to. The default 'tangent' is what `pathResample` and `splineSample` emit and what an `orientAlongVector` direction field reads, so leave it alone unless two frames have to coexist on one cloud. |
 
+**Examples:** *(no corpus graph references it)*
+
 Run it: `pcg run write/curve-frame`
 
 ## write/density-from-noise
@@ -805,6 +865,8 @@ Writes `density` (f32, 0..1) from four octaves of normalized Perlin fBm — the 
 | `frequency` | f32 | `0.02` |  |  | yes | *(nothing — the body's field expressions read it by name)* | Feature size: the noise sample position is multiplied by this, so smaller means broader blobs. 0.02 gives features tens of world units across. |
 | `variant` | f32 | `0` |  |  | yes | *(nothing — the body's field expressions read it by name)* | Offset added to the noise sample position. This is the per-instance re-roll this primitive offers: any two different values give unrelated patterns, and the same value always reproduces. |
 
+**Examples:** *(no corpus graph references it)*
+
 Run it: `pcg run write/density-from-noise`
 
 ## write/height-slope
@@ -822,6 +884,8 @@ Writes the two standard terrain quantities onto points that already carry a surf
 **Outputs:** `out` (geometry)
 
 **Params:** *(none)*
+
+**Examples:** *(no corpus graph references it)*
 
 Run it: `pcg run write/height-slope`
 
@@ -848,6 +912,8 @@ Chooses an asset id per point from a list and emits the instance batches — the
 | `seed` | u32 | `0` |  |  |  | species.seed | Re-rolls which point gets which asset. 0 uses the node's own derived seed. |
 | `speciesAttr` | string | `"species"` |  |  |  | species.name, spawn.assetAttr | Name of the string point attribute holding the per-point asset id. One knob writes it and reads it, so the writer and the spawner cannot disagree. |
 
+**Examples:** [pipeline-4-detail.json](../graphs/pipeline-4-detail.json), [pipeline-4-detail-edits.json](../graphs/pipeline-4-detail-edits.json), [pipeline-5-roads.json](../graphs/pipeline-5-roads.json) — 4 total (`pcg graphs --primitive write/instances-by-species`)
+
 Run it: `pcg run write/instances-by-species`
 
 ## write/local-density
@@ -869,6 +935,8 @@ Counts each point's neighbours within a radius and rescales the counts to 0..1 o
 | Param | Type | Default | Range | Enum | Field | Writes to | Description |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `radius` | f32 | `5` | >= 0 |  | yes | nbr.radius | How far around each point counts as its neighbourhood, in world units. It changes the ORDERING of the densities, never their range: the counts are refitted to 0..1 over whatever spread they happen to have, so the emptiest point is always exactly 0 and the fullest always exactly 1 at every radius, and even a perfectly uniform scatter comes out spanning the full 0..1 (measured mean 0.56). Two consequences an agent has to plan around: the values are NOT comparable between two clouds, two radii or two cooks with different counts, and a threshold like 0.8 means 'the top of THIS cloud' rather than any absolute crowding. For an absolute measure, read the raw neighbour count with a `pointNeighborhood` node instead. As a FIELD it is a PER-POINT radius, so each point measures the neighbourhood it asks for and the relation stops being symmetric — B within A's reach does not put A within B's. |
+
+**Examples:** *(no corpus graph references it)*
 
 Run it: `pcg run write/local-density`
 
@@ -892,6 +960,8 @@ Writes a unit `tangent` along the polyline at every point of a path, then sets `
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `axis` | enum | `"+z"` |  | `+x`, `-x`, `+y`, `-y`, `+z`, `-z` |  | orient.axis | Which local axis of the asset points along the path. '+z' is the forward axis assets face by convention. |
 | `up` | vec3 | `[0,1,0]` |  |  | yes | orient.up | Up hint fixing the roll around the path; leave it at world up for props that stand on the ground. |
+
+**Examples:** *(no corpus graph references it)*
 
 Run it: `pcg run write/orient-along-path`
 
@@ -917,6 +987,8 @@ Writes the standard `scale` attribute (f32, tuple 3) as ONE random size per poin
 | `min` | f32 | `0.7` |  |  | yes | *(nothing — the body's field expressions read it by name)* | Smallest size a point can get, as a multiple of the asset's own size. |
 | `seed` | u32 | `0` |  |  |  | scaleAttr.seed | Re-rolls which point gets which size. 0 uses the node's own derived seed. |
 
+**Examples:** [basics-compose-primitives.json](../graphs/basics-compose-primitives.json), [pipeline-3-lots.json](../graphs/pipeline-3-lots.json), [pipeline-3-lots-edits.json](../graphs/pipeline-3-lots-edits.json) — 7 total (`pcg graphs --primitive write/random-scale`)
+
 Run it: `pcg run write/random-scale`
 
 ## write/random-yaw
@@ -939,5 +1011,7 @@ Writes the standard `rot` attribute so every point faces a uniformly random dire
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `axis` | enum | `"+z"` |  | `+x`, `-x`, `+y`, `-y`, `+z`, `-z` |  | yaw.axis | Which local axis of the asset turns to face the random direction. '+z' is the forward axis assets face by convention. |
 | `up` | vec3 | `[0,1,0]` |  |  | yes | yaw.up | Up hint fixing the roll; leave it at world up unless the assets stand along another axis. |
+
+**Examples:** [basics-sightline-cull.json](../graphs/basics-sightline-cull.json), [pipeline-4-detail.json](../graphs/pipeline-4-detail.json), [pipeline-4-detail-edits.json](../graphs/pipeline-4-detail-edits.json) — 5 total (`pcg graphs --primitive write/random-yaw`)
 
 Run it: `pcg run write/random-yaw`

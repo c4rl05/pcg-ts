@@ -64,6 +64,8 @@ for (const [module, name, exported] of [
   ["dist/index.js", "listSubgraphs", lib.listSubgraphs],
   ["dist/docs/index.js", "describePrimitive", docs.describePrimitive],
   ["dist/docs/index.js", "renderPrimitiveCatalog", docs.renderPrimitiveCatalog],
+  ["dist/docs/index.js", "loadGraphs", docs.loadGraphs],
+  ["dist/docs/index.js", "describeExample", docs.describeExample],
 ]) {
   if (typeof exported !== "function") {
     console.error(`gen-primitives: ${module} does not export ${name}(); rebuild with \`npm run build\`.`);
@@ -71,8 +73,11 @@ for (const [module, name, exported] of [
   }
 }
 
+// Rebuilt from `graphs/`, not read from docs/graphs.json, for the reason
+// gen-node-reference.mjs gives: docs:graphs runs after this in `npm run docs`.
+const corpus = docs.loadGraphs(root).map(docs.describeExample);
 const entries = lib.listSubgraphs();
-const { json, markdown } = docs.renderPrimitiveCatalog(entries.map(docs.describePrimitive));
+const { json, markdown } = docs.renderPrimitiveCatalog(entries.map(docs.describePrimitive), corpus);
 
 const docsDir = join(root, "docs");
 mkdirSync(docsDir, { recursive: true });

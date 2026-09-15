@@ -29,6 +29,7 @@
 import type { ParamSchema, ParamType, ParamValue } from "../graph/index.js";
 import type { NodeTypeInfo, PinInfo } from "../nodes/registry.js";
 import type { PinKind } from "../graph/index.js";
+import { type CorpusEntry, rankExamples } from "../cli/corpus.js";
 
 /** One rendered catalog: the bytes of each generated file. */
 export interface NodeReference {
@@ -163,7 +164,34 @@ function firstSentence(description: string): string {
 
 const UNCATEGORIZED = "(uncategorized)";
 
-function renderMarkdown(types: readonly NodeTypeInfo[]): string {
+/** How many corpus graphs an `Examples:` line links before pointing at `pcg graphs`. */
+export const CATALOG_EXAMPLE_LINKS = 3;
+
+/**
+ * The `**Examples:**` line a catalog entry carries: up to
+ * {@link CATALOG_EXAMPLE_LINKS} corpus graphs, best first by the same
+ * {@link rankExamples} order `pcg nodes <type>` prints, linked relative to
+ * `docs/` so the link resolves in the repository and in the installed
+ * package alike (both ship `graphs/` beside `docs/`), then the count and
+ * the command that lists every one. Shared with the primitive catalog.
+ */
+export function examplesLine(
+  corpus: readonly CorpusEntry[],
+  subject: string,
+  pred: (entry: CorpusEntry) => boolean,
+  listCommand: string,
+  none: string,
+): string {
+  const ranked = rankExamples(corpus, pred, subject);
+  if (ranked.length === 0) return `**Examples:** *(${none})*`;
+  const links = ranked
+    .slice(0, CATALOG_EXAMPLE_LINKS)
+    .map((e) => `[${e.file}](../${e.path})`)
+    .join(", ");
+  return `**Examples:** ${links} — ${ranked.length} total (\`${listCommand}\`)`;
+}
+
+function renderMarkdown(types: readonly NodeTypeInfo[], corpus: readonly CorpusEntry[] | undefined): string {
   /** Category buckets in first-appearance-agnostic (alphabetical) order; uncategorized last. */
   const byCategory = new Map<string, NodeTypeInfo[]>();
   for (const t of types) {
@@ -224,6 +252,18 @@ function renderMarkdown(types: readonly NodeTypeInfo[]): string {
     lines.push("");
     lines.push(`**Outputs:** ${formatPins(t.outputs, "output")}`);
     lines.push("");
+    if (corpus !== undefined) {
+      lines.push(
+        examplesLine(
+          corpus,
+          t.type,
+          (e) => e.nodeTypes.includes(t.type),
+          `pcg graphs --node ${t.type}`,
+          "no corpus graph uses it",
+        ),
+      );
+      lines.push("");
+    }
     const paramNames = Object.keys(t.params);
     if (paramNames.length === 0) {
       lines.push("**Params:** *(none)*");
@@ -258,16 +298,24 @@ function renderMarkdown(types: readonly NodeTypeInfo[]): string {
 /**
  * Render the node reference from registry metadata (`listNodeTypes()`).
  *
+ * `corpus` is the example index's entries (`loadGraphs` + `describeExample`
+ * over `graphs/`); given, every section gains an `Examples:` line. It feeds
+ * `nodes.md` only — `nodes.json` stays pure registry data, so a graph edit
+ * never moves a byte of it.
+ *
  * Deterministic by three mechanisms, all of which the drift test depends
  * on: node types are sorted by name here (not left in registration
  * order), object keys are emitted in a fixed canonical order, and every
  * line break is an LF — so rendering the same registry twice yields
  * identical bytes on every platform.
  */
-export function renderNodeReference(types: readonly NodeTypeInfo[]): NodeReference {
+export function renderNodeReference(
+  types: readonly NodeTypeInfo[],
+  corpus?: readonly CorpusEntry[],
+): NodeReference {
   const sorted = types.slice().sort((a, b) => (a.type < b.type ? -1 : a.type > b.type ? 1 : 0));
   return {
     json: JSON.stringify(sorted.map(canonicalType), null, 2) + "\n",
-    markdown: renderMarkdown(sorted),
+    markdown: renderMarkdown(sorted, corpus),
   };
 }
