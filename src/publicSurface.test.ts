@@ -42,6 +42,10 @@ const ROOT_SURFACE = [
   // single source the docs render from, additive-only) and the reader
   // that recovers records from any thrown value. See src/diagnostics.
   "DIAGNOSTIC_CODES", "diagnosticsOf",
+  // The structural checks that produce those records for a live graph:
+  // unconnected required pins, unreachable nodes, no outputs, stranded
+  // graph-param values. Runs beside the loader, never inside it.
+  "diagnoseGraph",
   // A field read an attribute its domain does not carry. A class, not only
   // a code, so a caller can branch with instanceof and read the typed facts
   // (domain, available names, the domains that DO carry it) without parsing.

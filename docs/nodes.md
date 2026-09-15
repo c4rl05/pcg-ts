@@ -415,7 +415,7 @@ Concatenates the points of every connected geometry, in connection order, into o
 
 **Category:** point op
 
-**Inputs:** `in` (geometry, multi)
+**Inputs:** `in` (geometry, multi, optional)
 
 **Outputs:** `out` (geometry)
 
@@ -427,7 +427,7 @@ Concatenates every connected geometry, in connection order, KEEPING TOPOLOGY: po
 
 **Category:** point op
 
-**Inputs:** `in` (geometry, multi)
+**Inputs:** `in` (geometry, multi, optional)
 
 **Outputs:** `out` (geometry)
 
@@ -439,7 +439,7 @@ Turns a scalar FIELD into a triangle mesh: the surface where the field crosses `
 
 **Category:** source
 
-**Inputs:** `in` (geometry)
+**Inputs:** `in` (geometry, optional)
 
 **Outputs:** `out` (geometry)
 
@@ -1223,7 +1223,7 @@ Fills an axis-aligned box with a regular grid of points: each axis is divided in
 
 **Category:** sampler
 
-**Inputs:** `in` (geometry)
+**Inputs:** `in` (geometry, optional)
 
 **Outputs:** `out` (geometry)
 

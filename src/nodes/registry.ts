@@ -69,6 +69,14 @@ export interface PinInfo {
   readonly name: string;
   readonly kind: PinKind;
   readonly multi: boolean;
+  /**
+   * Input pins: whether the node needs this pin connected to cook — `true`
+   * unless the def marks it {@link PinDef.optional}. An unconnected
+   * required pin on a node that feeds an output is what `diagnoseGraph`
+   * reports as `required-pin-unconnected`. Output pins: always `false`,
+   * since nothing needs an output connected.
+   */
+  readonly required: boolean;
 }
 
 /** JSON-safe metadata of one registered node type. */
@@ -140,8 +148,23 @@ function copySchema(schema: ParamSchema): ParamSchema {
   return copy;
 }
 
-function copyPins(pins: readonly PinDef[]): PinInfo[] {
-  return pins.map((p) => ({ name: p.name, kind: p.kind, multi: p.multi === true }));
+/**
+ * Catalog pins from a def's pins. `required` is decided here, once, from
+ * `optional` and the side: an input is required unless marked optional,
+ * and an output is never required.
+ */
+function pinInfos(pins: readonly PinDef[], side: "input" | "output"): PinInfo[] {
+  return pins.map((p) => ({
+    name: p.name,
+    kind: p.kind,
+    multi: p.multi === true,
+    required: side === "input" && p.optional !== true,
+  }));
+}
+
+/** A caller's copy of catalog pins, field by field like everything else here. */
+function copyPins(pins: readonly PinInfo[]): PinInfo[] {
+  return pins.map((p) => ({ name: p.name, kind: p.kind, multi: p.multi, required: p.required }));
 }
 
 /**
@@ -216,8 +239,8 @@ export function standardNode<P>(spec: NodeSpec<P>): NodeDef<P> {
       type: spec.type,
       description: spec.description,
       ...(spec.category !== undefined ? { category: spec.category } : {}),
-      inputs: copyPins(spec.inputs),
-      outputs: copyPins(spec.outputs),
+      inputs: pinInfos(spec.inputs, "input"),
+      outputs: pinInfos(spec.outputs, "output"),
       params,
       // Spread conditionally, like `category`, so the emitted key order
       // is fixed and a type that does not self-meter carries no key at

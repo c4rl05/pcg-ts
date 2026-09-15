@@ -7,19 +7,22 @@
       {
         "name": "path",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       },
       {
         "name": "ranges",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -102,14 +105,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -156,14 +161,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -236,14 +243,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -292,14 +301,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -340,19 +351,22 @@
       {
         "name": "source",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       },
       {
         "name": "target",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -396,7 +410,8 @@
       {
         "name": "out",
         "kind": "any",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -415,14 +430,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -478,14 +495,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -537,14 +556,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -607,14 +628,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -657,14 +680,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -698,14 +723,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -757,14 +784,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -847,14 +876,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -883,14 +914,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": true
+        "multi": true,
+        "required": false
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {}
@@ -903,14 +936,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": true
+        "multi": true,
+        "required": false
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {}
@@ -923,14 +958,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -989,7 +1026,8 @@
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -1056,19 +1094,22 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       },
       {
         "name": "sight",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -1142,14 +1183,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -1196,14 +1239,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -1222,19 +1267,22 @@
       {
         "name": "path",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       },
       {
         "name": "boxes",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -1314,14 +1362,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -1350,14 +1400,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -1413,14 +1465,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -1482,14 +1536,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -1542,14 +1598,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -1595,14 +1653,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -1647,7 +1707,8 @@
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -1698,7 +1759,8 @@
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -1756,14 +1818,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -1811,7 +1875,8 @@
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -1855,7 +1920,8 @@
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -1920,14 +1986,16 @@
       {
         "name": "path",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -1958,14 +2026,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -2003,14 +2073,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -2049,14 +2121,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -2109,14 +2183,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -2174,14 +2250,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -2238,14 +2316,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -2328,19 +2408,22 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       },
       {
         "name": "source",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -2381,14 +2464,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -2433,14 +2518,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -2521,14 +2608,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -2562,19 +2651,22 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "instances",
         "kind": "instances",
-        "multi": false
+        "multi": false,
+        "required": false
       },
       {
         "name": "points",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -2608,14 +2700,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -2669,14 +2763,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -2709,14 +2805,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -2808,19 +2906,22 @@
       {
         "name": "path",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       },
       {
         "name": "at",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -2854,19 +2955,22 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       },
       {
         "name": "source",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -2942,19 +3046,22 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       },
       {
         "name": "source",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -2999,14 +3106,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -3051,7 +3160,8 @@
       {
         "name": "out",
         "kind": "value",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -3070,14 +3180,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -3127,14 +3239,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -3174,14 +3288,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {
@@ -3215,14 +3331,16 @@
       {
         "name": "in",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": true
       }
     ],
     "outputs": [
       {
         "name": "out",
         "kind": "geometry",
-        "multi": false
+        "multi": false,
+        "required": false
       }
     ],
     "params": {

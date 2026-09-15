@@ -177,7 +177,7 @@ export function forEachNode(
   exposedParams: readonly ExposedParam[] = [],
 ): NodeDef<Record<string, unknown>> {
   const iterated = resolveIteratedPin(exposedInputs);
-  const parts = prepareWrapper(inner, exposedInputs, exposedOutputs, exposedParams);
+  const parts = prepareWrapper(inner, exposedInputs, exposedOutputs, exposedParams, "forEach");
   const { portals, paramList } = parts;
   // The iterated pin takes as many connections as an author wants, whatever
   // the inner pin behind it accepts, because the two arities are about
@@ -189,7 +189,14 @@ export function forEachNode(
   // catch two connections carrying one geometry each and miss one
   // connection carrying two, which is the same mistake wired differently.
   const inputPins: PinDef[] = parts.inputPins.map((pin) =>
-    pin.name === iterated.name ? { name: pin.name, kind: pin.kind, multi: true } : pin,
+    // The iterated pin is OPTIONAL whatever the inner pin behind it is: an
+    // unconnected one plans zero iterations and cooks to empty outputs, so
+    // the inner node never runs to throw. Broadcast pins keep the flag
+    // `prepareWrapper` measured on the body, which answers for a loop that
+    // runs.
+    pin.name === iterated.name
+      ? { name: pin.name, kind: pin.kind, multi: true, optional: true }
+      : pin,
   );
 
   const def = defineNode<Record<string, unknown>>({

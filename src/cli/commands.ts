@@ -16,6 +16,7 @@ import {
   type Graph,
   type NodeDoneInfo,
   type NodeTypeInfo,
+  type PinInfo,
   type ParamSchema,
   cook,
   describeGraphAssets,
@@ -212,17 +213,25 @@ function paramRow(name: string, schema: ParamSchema): string[] {
 }
 
 function nodeDetailText(info: NodeTypeInfo): string {
-  const pins = (list: readonly { name: string; kind: string; multi: boolean }[]): string =>
+  // Every INPUT says required or optional, both spelled out: an agent wiring
+  // a node must not have to infer a pin's status from a word's absence.
+  // Outputs say neither — nothing ever needs an output connected.
+  const pins = (list: readonly PinInfo[], side: "input" | "output"): string =>
     list.length === 0
       ? "(none)"
-      : list.map((p) => `${p.name} (${p.kind}${p.multi ? ", multi" : ""})`).join(", ");
+      : list
+          .map((p) => {
+            const status = side === "input" ? (p.required ? ", required" : ", optional") : "";
+            return `${p.name} (${p.kind}${p.multi ? ", multi" : ""}${status})`;
+          })
+          .join(", ");
   const lines = [
     `${info.type}${info.category !== undefined ? `  [${info.category}]` : ""}`,
     "",
     info.description,
     "",
-    `inputs:  ${pins(info.inputs)}`,
-    `outputs: ${pins(info.outputs)}`,
+    `inputs:  ${pins(info.inputs, "input")}`,
+    `outputs: ${pins(info.outputs, "output")}`,
     "",
   ];
   const names = Object.keys(info.params);

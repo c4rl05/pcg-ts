@@ -854,19 +854,317 @@ export function subgraphNode(
   return def;
 }
 
+/** @internal One required input pin a cook would find empty; see {@link analyzeStarvation}. */
+export interface StarvedPin {
+  /** The node owning the pin. */
+  readonly nodeId: string;
+  /** The pin, as its def declares it. */
+  readonly pin: PinDef;
+  /**
+   * The nodes whose connections reach the pin and deliver nothing, in
+   * connection order without repeats; empty when nothing is connected.
+   */
+  readonly via: readonly string[];
+  /**
+   * On a wrapper's pin: the other pins of the smallest set of open pins
+   * whose connection clears the node's body faults (see `wrapperBlame`).
+   * Membership only, not a claim about which pins fault together.
+   */
+  readonly jointly: readonly string[];
+}
+
+/** @internal What a cook would find empty in one graph; see {@link analyzeStarvation}. */
+export interface StarvationAnalysis {
+  /**
+   * The required input pins a cook would run with nothing on them, in node
+   * insertion order and pin declaration order. Every one throws, because a
+   * required pin is exactly one whose node throws when empty.
+   */
+  readonly starved: readonly StarvedPin[];
+  /**
+   * `forEach` nodes whose iterated pin receives nothing: they plan zero
+   * iterations, so neither their other pins nor their body ever run.
+   */
+  readonly zeroIteration: ReadonlySet<string>;
+  /** Does output `pin` of node `id` deliver an empty collection? */
+  emitsNothing(id: string, pin: string): boolean;
+  /**
+   * For a wrapper node: the portal ids in its body whose exposed pin
+   * receives nothing — what the body sees as empty on its first (or only)
+   * pass. A `forEach`'s iterated portal is never among them: when the
+   * body runs at all, that portal holds an element.
+   */
+  emptyPortals(id: string): Set<string>;
+}
+
+/** Analyses already built in one top-level question, per graph and empty set. */
+type StarvationMemo = Map<Graph, Map<string, StarvationAnalysis>>;
+
+/**
+ * @internal What a cook of `graph` would find EMPTY, decided structurally,
+ * with the nodes in `empty` (a wrapper's portals, when the question is
+ * "what if this exposed pin is left open") taken to emit nothing.
+ *
+ * Only nodes a declared output reaches are considered: a cook never runs
+ * the rest. An input pin receives nothing when every connection into it
+ * delivers nothing — vacuously so when it has none. What delivers nothing
+ * is deliberately narrow:
+ *
+ * - a node in `empty`;
+ * - a `forEach` whose iterated pin receives nothing: zero iterations, and
+ *   every output an empty collection — the one standard node that turns
+ *   "nothing in" into "nothing out" rather than into an empty geometry;
+ * - a `subgraph` or `forEach` output whose body, seeing the empty portals
+ *   its own open pins make, delivers nothing on the node behind that
+ *   output — so the emptiness passes through wrappers, nested or not.
+ *
+ * Every other node, `repeatUntil` included, is taken to deliver something.
+ * A `forEach` that plans zero iterations has no starved pins of its own,
+ * because its execute never reads them, and any wrapper's open pins are
+ * judged together against its body (see `wrapperBlame`).
+ *
+ * STRUCTURAL, NOT DATA. Only emptiness the graph's shape decides is
+ * followed. Emptiness the data decides — a filter that drops every item, an
+ * `eachPoint` loop over zero points, a `repeatUntil` output — is assumed not
+ * to happen, so a loop whose iterated input is merely EMPTY TODAY still has
+ * its open broadcast pins reported: they throw as soon as it runs.
+ *
+ * Shared by the wrapper factories (whether an exposed pin is required) and
+ * by `diagnoseGraph` (which required pins a cook would find empty), so the
+ * flag a wrapper publishes and the error the diagnosis reports are one rule.
+ */
+export function analyzeStarvation(
+  graph: Graph,
+  empty: ReadonlySet<string>,
+  memo: StarvationMemo = new Map(),
+): StarvationAnalysis {
+  const memoKey = [...empty].sort().join("\0");
+  let byKey = memo.get(graph);
+  if (byKey === undefined) memo.set(graph, (byKey = new Map()));
+  const hit = byKey.get(memoKey);
+  if (hit !== undefined) return hit;
+
+  const reachable = new Set<string>();
+  const stack: string[] = [];
+  for (const o of graph._outputs) {
+    if (!reachable.has(o.node)) {
+      reachable.add(o.node);
+      stack.push(o.node);
+    }
+  }
+  while (stack.length > 0) {
+    const id = stack.pop() as string;
+    for (const c of graph._inTo.get(id) ?? []) {
+      if (!reachable.has(c.from)) {
+        reachable.add(c.from);
+        stack.push(c.from);
+      }
+    }
+  }
+
+  const specOf = (id: string): SubgraphSpec | undefined => {
+    const state = graph._nodes.get(id);
+    return state === undefined ? undefined : subgraphSpecs.get(state.def);
+  };
+  const receivesNothing = (id: string, pin: string): boolean =>
+    (graph._inTo.get(id) ?? [])
+      .filter((c) => c.toPin === pin)
+      .every((c) => emitsNothing(c.from, c.fromPin));
+  const isZeroIteration = (id: string): boolean => {
+    const spec = specOf(id);
+    if (spec?.wrapper !== "forEach") return false;
+    const iterated = spec.inputs.find((e) => ITERATED_PIN_NAMES.has(e.name));
+    return iterated !== undefined && receivesNothing(id, iterated.name);
+  };
+  const emptyPortals = (id: string): Set<string> => {
+    const spec = specOf(id);
+    const out = new Set<string>();
+    if (spec === undefined) return out;
+    for (const exp of spec.inputs) {
+      if (spec.wrapper === "forEach" && ITERATED_PIN_NAMES.has(exp.name)) continue;
+      if (receivesNothing(id, exp.name)) out.add(`__in_${exp.name}`);
+    }
+    return out;
+  };
+  // Memoized over the DAG; `onPath` makes a cycle (which `connect` refuses)
+  // read as "delivers something" instead of recursing forever.
+  const known = new Map<string, boolean>();
+  const onPath = new Set<string>();
+  function emitsNothing(id: string, pin: string): boolean {
+    if (empty.has(id)) return true;
+    const key = `${id}\0${pin}`;
+    const cached = known.get(key);
+    if (cached !== undefined) return cached;
+    if (onPath.has(key)) return false;
+    onPath.add(key);
+    let result = false;
+    const spec = specOf(id);
+    if (spec !== undefined && spec.wrapper !== "repeatUntil") {
+      if (isZeroIteration(id)) {
+        result = true;
+      } else {
+        const exposed = spec.outputs.find((e) => e.name === pin);
+        if (exposed !== undefined) {
+          result = analyzeStarvation(spec.graph, emptyPortals(id), memo).emitsNothing(
+            exposed.node.id,
+            exposed.pin,
+          );
+        }
+      }
+    }
+    onPath.delete(key);
+    known.set(key, result);
+    return result;
+  }
+
+  const starved: StarvedPin[] = [];
+  const zeroIteration = new Set<string>();
+  const analysis: StarvationAnalysis = { starved, zeroIteration, emitsNothing, emptyPortals };
+  byKey.set(memoKey, analysis);
+  for (const state of graph._nodes.values()) {
+    if (!reachable.has(state.id)) continue;
+    if (isZeroIteration(state.id)) {
+      zeroIteration.add(state.id);
+      continue;
+    }
+    const incoming = graph._inTo.get(state.id) ?? [];
+    const viaOf = (pin: string): string[] => [
+      ...new Set(incoming.filter((c) => c.toPin === pin).map((c) => c.from)),
+    ];
+    const spec = specOf(state.id);
+    if (spec !== undefined) {
+      // A WRAPPER's pins are judged together, against its body, instead of
+      // one by one against their flags. A flag answers "this pin alone
+      // open"; with several open the answer can differ both ways — an open
+      // iterated pin excuses an open broadcast pin (zero iterations read
+      // nothing), and two open pins into one loop's iterated pin starve
+      // what neither starves alone.
+      for (const blame of wrapperBlame(spec, emptyPortals(state.id), memo)) {
+        const pin = state.def.inputs.find((p) => p.name === blame.name);
+        if (pin === undefined) continue;
+        starved.push({ nodeId: state.id, pin, via: viaOf(pin.name), jointly: blame.jointly });
+      }
+      continue;
+    }
+    for (const pin of state.def.inputs) {
+      if (pin.optional === true) continue;
+      if (!receivesNothing(state.id, pin.name)) continue;
+      starved.push({ nodeId: state.id, pin, via: viaOf(pin.name), jointly: [] });
+    }
+  }
+  return analysis;
+}
+
+/** Past this many open pins on one wrapper, blame stops searching for the smallest fix. */
+const MAX_BLAME_SEARCH = 10;
+
+/**
+ * Which of a wrapper's OPEN exposed pins (their portal ids in `open`) a cook
+ * would throw on, judged against the body with all of them empty at once.
+ *
+ * Nothing, when the body with every open portal empty has no fault it does
+ * not already have with them fed. Otherwise the SMALLEST set of open pins
+ * whose connection clears every one of those faults, ties broken by
+ * declaration order — so the pins named are a complete fix, none of them
+ * is idle, and a pin whose open state is hidden by another's (an open
+ * broadcast pin behind an open iterated pin) is named in the same pass.
+ * Each carries the other pins of the set as `jointly`.
+ *
+ * The search is exhaustive by size and so exponential in the number of
+ * open pins; past {@link MAX_BLAME_SEARCH} of them — a wrapper nobody
+ * writes by hand — every open pin is named.
+ */
+function wrapperBlame(
+  spec: SubgraphSpec,
+  open: ReadonlySet<string>,
+  memo: StarvationMemo,
+): { readonly name: string; readonly jointly: readonly string[] }[] {
+  if (open.size === 0) return [];
+  const keysWith = (empty: ReadonlySet<string>) =>
+    bodyFaultKeys(spec.graph, spec.wrapper, spec.outputs, empty, memo);
+  const base = keysWith(new Set());
+  const clean = (empty: ReadonlySet<string>) => [...keysWith(empty)].every((k) => base.has(k));
+  if (clean(open)) return [];
+  const names = spec.inputs.filter((e) => open.has(`__in_${e.name}`)).map((e) => e.name);
+  let fix: readonly string[] = names;
+  if (names.length <= MAX_BLAME_SEARCH) {
+    search: for (let size = 1; size <= names.length; size++) {
+      for (const subset of combinations(names, size)) {
+        const stillOpen = new Set(open);
+        for (const name of subset) stillOpen.delete(`__in_${name}`);
+        if (clean(stillOpen)) {
+          fix = subset;
+          break search;
+        }
+      }
+    }
+  }
+  // `jointly`: the other pins of the same smallest fix. Not "the pins this
+  // one faults with" — several faults can share a fix — so nothing reading
+  // it may claim more than membership in the fix.
+  return fix.map((name) => ({ name, jointly: fix.filter((n) => n !== name) }));
+}
+
+/** The `size`-element subsets of `items`, in lexicographic order of position. */
+function* combinations<T>(items: readonly T[], size: number): Generator<T[]> {
+  const index = Array.from({ length: size }, (_, i) => i);
+  while (true) {
+    yield index.map((i) => items[i] as T);
+    let i = size - 1;
+    while (i >= 0 && index[i] === items.length - size + i) i--;
+    if (i < 0) return;
+    (index[i] as number)++;
+    for (let j = i + 1; j < size; j++) index[j] = (index[j - 1] as number) + 1;
+  }
+}
+
+/**
+ * The faults a wrapper's body would throw on with the portals in `empty`
+ * left empty, as `node\0pin` keys: its starved pins, plus — for a
+ * `repeatUntil` — a `node\0\0carry` key when the node behind the carried
+ * output delivers nothing, which the loop refuses by name after round 1
+ * ("emitted no geometry"). Compared as sets, with and without a portal
+ * empty, to decide what that portal's emptiness costs.
+ */
+function bodyFaultKeys(
+  body: Graph,
+  wrapper: WrapperKind,
+  outputs: readonly ExposedPin[],
+  empty: ReadonlySet<string>,
+  memo: StarvationMemo,
+): Set<string> {
+  const analysis = analyzeStarvation(body, empty, memo);
+  const keys = starvedPinKeys(analysis);
+  if (wrapper === "repeatUntil") {
+    const carry = outputs.find((e) => CARRIED_PIN_NAMES.has(e.name));
+    if (carry !== undefined && analysis.emitsNothing(carry.node.id, carry.pin)) {
+      keys.add(`${carry.node.id}\0\0carry`);
+    }
+  }
+  return keys;
+}
+
+/** The starved pins of an analysis as `node\0pin` keys, for set comparison. */
+export function starvedPinKeys(analysis: StarvationAnalysis): Set<string> {
+  return new Set(analysis.starved.map((s) => `${s.nodeId}\0${s.pin.name}`));
+}
+
 /**
  * @internal Validate one wrapper's exposed interface and inject its
  * plumbing, returning what the definition needs.
  *
  * Shared by {@link subgraphNode} and `forEachNode` because the interface is
  * the same construction in both: the two differ only in how often the body
- * cooks, which is the execute body and nothing here.
+ * cooks, which is the execute body and nothing here — and in `wrapper`,
+ * which decides what an open exposed pin costs (a `repeatUntil` also
+ * refuses an empty carried output; see `bodyFaultKeys`).
  */
 export function prepareWrapper(
   inner: Graph,
   exposedInputs: readonly ExposedPin[],
   exposedOutputs: readonly ExposedPin[],
   exposedParams: readonly ExposedParam[],
+  wrapper: WrapperKind = "subgraph",
 ): {
   inputPins: PinDef[];
   outputPins: PinDef[];
@@ -893,6 +1191,9 @@ export function prepareWrapper(
     const handle = inner.add(portalDef, undefined, `__in_${exp.name}`);
     inner.connect(handle, "out", exp.node, exp.pin);
     plumbing.portalIds.add(handle.id);
+    // `optional` is decided below, once the body's outputs are declared:
+    // whether an open exposed pin throws depends on what the body does
+    // with the empty collection, not only on the inner pin's own flag.
     inputPins.push({ name: exp.name, kind: pin.kind, multi: pin.multi });
     portals.push({ name: exp.name, handle });
   }
@@ -914,6 +1215,24 @@ export function prepareWrapper(
     inner.output(exp.node, exp.pin, `__out_${exp.name}`);
     plumbing.outputNames.add(`__out_${exp.name}`);
     outputPins.push({ name: exp.name, kind: pin.kind });
+  }
+
+  // An exposed pin is REQUIRED exactly when leaving it open starves a
+  // required pin in the body that is not already starved with it fed: its
+  // portal then emits an empty collection (see `analyzeStarvation`). Measured
+  // against the cook for all three wrappers by `requiredPins.test.ts`. The
+  // answer describes the body as it is NOW; a body edited through
+  // `getSubgraphSpec(def).graph` afterwards keeps the flags it was wrapped
+  // with, as it keeps its pins. For a `forEach` this answers for a loop that
+  // runs: an open broadcast pin under an open iterated pin is `diagnoseGraph`'s
+  // to excuse, since zero iterations read nothing.
+  const memo: StarvationMemo = new Map();
+  const baseline = bodyFaultKeys(inner, wrapper, exposedOutputs, new Set(), memo);
+  for (let i = 0; i < portals.length; i++) {
+    const portal = portals[i] as { name: string; handle: NodeHandle<PortalParams> };
+    const starved = bodyFaultKeys(inner, wrapper, exposedOutputs, new Set([portal.handle.id]), memo);
+    const required = [...starved].some((key) => !baseline.has(key));
+    if (!required) inputPins[i] = { ...(inputPins[i] as PinDef), optional: true };
   }
 
   // Exposed params. Every target is checked against the live inner graph

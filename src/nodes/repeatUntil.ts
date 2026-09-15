@@ -405,7 +405,7 @@ export function repeatUntilNode(
       );
     }
   }
-  const parts = prepareWrapper(inner, exposedInputs, exposedOutputs, exposedParams);
+  const parts = prepareWrapper(inner, exposedInputs, exposedOutputs, exposedParams, "repeatUntil");
   const { portals, paramList } = parts;
   // The carry INPUT takes as many connections as an author wants, for the
   // reason `forEach`'s iterated pin does: the arity of the outer pin and
@@ -413,7 +413,10 @@ export function repeatUntilNode(
   // body sees whatever collection round k emitted, which is a collection
   // however many producers assembled the first one.
   const inputPins: PinDef[] = parts.inputPins.map((pin) =>
-    pin.name === CARRY_PIN_NAME ? { name: pin.name, kind: pin.kind, multi: true } : pin,
+    // The carry pin keeps the `optional` `prepareWrapper` measured on the
+    // body: round 1 feeds the body an empty collection, which throws when it
+    // starves a required pin inside or leaves the carried output empty.
+    pin.name === CARRY_PIN_NAME ? { ...pin, multi: true } : pin,
   );
   const outputPins: PinDef[] = [
     ...parts.outputPins,

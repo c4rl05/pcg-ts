@@ -39,10 +39,10 @@ function testCloud(n = 3): Geometry {
 describe("spawnInstances registry metadata", () => {
   it("registers with instances/points output pins and string params", () => {
     const info = getNodeType("spawnInstances").info;
-    expect(info.inputs).toEqual([{ name: "in", kind: "geometry", multi: false }]);
+    expect(info.inputs).toEqual([{ name: "in", kind: "geometry", multi: false, required: true }]);
     expect(info.outputs).toEqual([
-      { name: "instances", kind: "instances", multi: false },
-      { name: "points", kind: "geometry", multi: false },
+      { name: "instances", kind: "instances", multi: false, required: false },
+      { name: "points", kind: "geometry", multi: false, required: false },
     ]);
     expect(info.params.assetId.type).toBe("string");
     expect(info.params.assetAttr.type).toBe("string");

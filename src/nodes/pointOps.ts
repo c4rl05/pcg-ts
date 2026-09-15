@@ -1151,7 +1151,7 @@ export const mergePoints = standardNode<MergePointsParams>({
   category: "point op",
   description:
     "Concatenates the points of every connected geometry, in connection order, into one point cloud. The output carries the union of all point attributes: an attribute missing on an input fills with its default over that input's range. Attributes sharing a name must agree on type and tuple size. Topology (vertices/primitives) is not carried — the result is points only, so a network or a mesh arrives here and leaves as a bare cloud; `mergePrimitives` is the twin that keeps it. Output tags are the union of input tags.",
-  inputs: [{ name: "in", kind: "geometry", multi: true }],
+  inputs: [{ name: "in", kind: "geometry", multi: true, optional: true }],
   outputs: [{ name: "out", kind: "geometry" }],
   params: {},
   execute({ inputs }) {
@@ -1193,7 +1193,7 @@ export const mergePrimitives = standardNode<MergePrimitivesParams>({
   category: "point op",
   description:
     "Concatenates every connected geometry, in connection order, KEEPING TOPOLOGY: points, vertices and primitives are appended and each input's vertex and primitive references are renumbered onto its place in the result, so an authored network merged with a generated one comes out a single network. The topology-preserving twin of mergePoints, which carries points only and so turns any input into a bare cloud. The point, vertex and primitive domains each carry the union of that domain's attributes: an attribute missing on an input fills with its default over that input's range, and attributes sharing a name must agree on type and tuple size. The one exception is `primtype`, which is a type tag rather than a value: each input's primitives keep their own tag, and primitives from an input carrying no primtype column come out with an EMPTY tag rather than inheriting another input's — this node cannot know what an untagged primitive is and must not guess. One consequence to know before relying on absence: surfaceSample ignores the tag entirely when a geometry has NO primtype column, so an untagged triangle mesh samples fine alone but is skipped once a tagged input is merged in and the column exists — tag such a mesh upstream (createTriangleMesh does) rather than leaving it untagged. Mixed primitive types are allowed, because every consumer selects what it understands (surfaceSample takes 3-vertex `poly`, the path nodes take `polyline`). An input with no topology contributes its points and no primitives, which is not an error. The detail domain is not carried: every input has one and choosing between them would be a guess. Output tags are the union of input tags. Point identity is position bits plus the `seed` attribute and both are copied verbatim, so two inputs holding a point at the same position with the same seed are ONE point to every identity-keyed decision (jitter, probabilistic filters, randomField) — the same inherited hazard mergePoints carries. Give clouds that must stay distinct distinct seeds.",
-  inputs: [{ name: "in", kind: "geometry", multi: true }],
+  inputs: [{ name: "in", kind: "geometry", multi: true, optional: true }],
   outputs: [{ name: "out", kind: "geometry" }],
   params: {},
   execute({ inputs }) {

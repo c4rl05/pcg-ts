@@ -27,7 +27,7 @@
  * Output is deterministic — see {@link renderNodeReference}.
  */
 import type { ParamSchema, ParamType, ParamValue } from "../graph/index.js";
-import type { NodeTypeInfo } from "../nodes/registry.js";
+import type { NodeTypeInfo, PinInfo } from "../nodes/registry.js";
 import type { PinKind } from "../graph/index.js";
 
 /** One rendered catalog: the bytes of each generated file. */
@@ -46,6 +46,8 @@ interface CanonicalPin {
   readonly name: string;
   readonly kind: PinKind;
   readonly multi: boolean;
+  /** See {@link PinInfo.required}: inputs unless optional, never outputs. */
+  readonly required: boolean;
 }
 
 interface CanonicalSchema {
@@ -78,8 +80,8 @@ interface CanonicalNodeType {
   readonly selfMetered?: boolean;
 }
 
-function canonicalPin(pin: { name: string; kind: PinKind; multi?: boolean }): CanonicalPin {
-  return { name: pin.name, kind: pin.kind, multi: pin.multi === true };
+function canonicalPin(pin: PinInfo): CanonicalPin {
+  return { name: pin.name, kind: pin.kind, multi: pin.multi, required: pin.required };
 }
 
 /**
@@ -139,10 +141,19 @@ function formatRange(schema: ParamSchema): string {
   return infinite.trim();
 }
 
-function formatPins(pins: readonly { name: string; kind: PinKind; multi?: boolean }[]): string {
+/**
+ * Pins as a markdown list. An input that is not required says `optional`;
+ * required is the default and unmarked, so the common case reads as it
+ * always did.
+ */
+function formatPins(pins: readonly PinInfo[], side: "input" | "output"): string {
   if (pins.length === 0) return "*(none)*";
   return pins
-    .map((p) => "`" + p.name + "` (" + p.kind + (p.multi === true ? ", multi" : "") + ")")
+    .map(
+      (p) =>
+        "`" + p.name + "` (" + p.kind + (p.multi ? ", multi" : "") +
+        (side === "input" && !p.required ? ", optional" : "") + ")",
+    )
     .join(", ");
 }
 
@@ -209,9 +220,9 @@ function renderMarkdown(types: readonly NodeTypeInfo[]): string {
       );
       lines.push("");
     }
-    lines.push(`**Inputs:** ${formatPins(t.inputs)}`);
+    lines.push(`**Inputs:** ${formatPins(t.inputs, "input")}`);
     lines.push("");
-    lines.push(`**Outputs:** ${formatPins(t.outputs)}`);
+    lines.push(`**Outputs:** ${formatPins(t.outputs, "output")}`);
     lines.push("");
     const paramNames = Object.keys(t.params);
     if (paramNames.length === 0) {

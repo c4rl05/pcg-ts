@@ -554,7 +554,7 @@ export const volumeSample = standardNode<VolumeSampleParams>({
   category: "sampler",
   description:
     "Fills an axis-aligned box with a regular grid of points: each axis is divided into floor(extent / cellSize) cells (at least 1) and a point is placed at each cell center, then jittered inside its cell. jitter in [0, 1] scales a deterministic per-cell random offset (0 = exact centers, 1 = anywhere in the cell) and may be a field evaluated on the un-jittered centers. Bounds come from the optional input geometry's P extents when connected, else from boundsMin/boundsMax. Emits a standard point cloud.",
-  inputs: [{ name: "in", kind: "geometry" }],
+  inputs: [{ name: "in", kind: "geometry", optional: true }],
   outputs: [{ name: "out", kind: "geometry" }],
   params: {
     boundsMin: {

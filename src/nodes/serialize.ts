@@ -46,6 +46,9 @@ import { forEachNode } from "./forEach.js";
 import { REPEAT_UNTIL_PARAM_SCHEMAS, repeatUntilNode } from "./repeatUntil.js";
 import { getNodeType, hasNodeType, listNodeTypes, standardNode } from "./registry.js";
 import { type ExposedParamDecl, resolveExposedParam } from "./subgraphParams.js";
+// The ref record lives in its own module so `diagnoseGraph` can tell an
+// inline body from a referenced one; see `./subgraphRefs.ts`.
+import { recordSubgraphRef, subgraphRefOf } from "./subgraphRefs.js";
 // Import cycle, deliberate and safe: the registry stores serialized
 // recipes (so it needs this module's writer and reader) and this module
 // must resolve names (so it needs the registry's lookups). Neither module
@@ -881,19 +884,6 @@ export function serializeGraph(graph: Graph): SerializedGraph {
 }
 
 /**
- * @internal Reference recorded against a def materialized from a `ref`, so
- * serialization writes the reference back out instead of re-embedding the
- * primitive. Keyed on the def, which is created fresh per reference (see
- * `registerSubgraph`), so two references never share a record.
- */
-const subgraphRefs = new WeakMap<object, SerializedSubgraphRef>();
-
-/** @internal Remember the reference a materialized def came from. */
-function recordSubgraphRef(def: object, ref: SerializedSubgraphRef): void {
-  subgraphRefs.set(def, ref);
-}
-
-/**
  * Serialize one subgraph node: as a `ref` when its def was materialized
  * from one, as an embedded payload otherwise. `seen` holds the graphs on
  * the current path.
@@ -913,7 +903,7 @@ function serializeSubgraphNode(
   def: object,
 ): SerializedNode {
   const embedded = buildEmbeddedSubgraphNode(id, nodeParams, spec, seen);
-  const ref = subgraphRefs.get(def);
+  const ref = subgraphRefOf(def);
   if (ref === undefined) return embedded;
   const registered = _registeredSubgraphKey(ref.name);
   if (registered === undefined) {

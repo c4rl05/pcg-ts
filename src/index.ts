@@ -21,6 +21,10 @@ export {
   type DiagnosticCode,
   diagnosticsOf,
 } from "./diagnostics/index.js";
+// The structural checks that produce those records for a live graph. Named
+// here, beside the record types, rather than starred through
+// `./nodes/index.ts`: it is the graph-level half of the same promise.
+export { diagnoseGraph } from "./nodes/diagnose.js";
 // Named rather than starred through `./nodes/index.js`, because it is the
 // one node-layer module that reads BOTH sides of the spawner seam: the graph
 // walk lives with the other graph reports, and the question it answers is a

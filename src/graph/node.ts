@@ -13,6 +13,22 @@ export interface PinDef {
    * concatenated in connection order.
    */
   readonly multi?: boolean;
+  /**
+   * Input pins only: the node cooks with this pin unconnected — it falls
+   * back to params, or an empty multi pin is a slot to fill later. Absent
+   * means REQUIRED: leaving the pin unconnected throws at cook, and
+   * `diagnoseGraph` reports it as `required-pin-unconnected` before any
+   * cook runs. Required is the default because it is the common case and
+   * because a missing flag must fail loudly rather than pass silently.
+   *
+   * A wrapper (`subgraphNode`, `forEachNode`, `repeatUntilNode`) decides it
+   * for each exposed input from its body: required exactly when leaving
+   * that pin alone open starves a required pin inside (followed through
+   * nested wrappers and zero-iteration loops; see `analyzeStarvation`).
+   * `forEachNode` marks its iterated pin optional: an unconnected iterated
+   * pin plans zero iterations and cooks to empty outputs.
+   */
+  readonly optional?: boolean;
 }
 
 /** What execute returns: one collection per declared output pin. */
