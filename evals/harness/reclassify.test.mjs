@@ -88,13 +88,16 @@ test("a rewrite re-derives only what the classifier owns", () => {
     assert.equal(rewritten.outsideWrites.length, 1);
     // The second slot gains its read statistics.
     assert.equal(plan.records.find((r) => r.slotId === "r0.t2.A").readCounts.llms, 1);
-    // Scores, solved, timings: untouched, on purpose.
-    for (const key of ["solved", "score", "turns", "toolCalls", "wallMs", "usage", "final"]) {
+    // Scores and timings: untouched, on purpose.
+    for (const key of ["score", "turns", "toolCalls", "wallMs", "usage", "final"]) {
       assert.deepEqual(rewritten[key], JSON.parse(readFileSync(join(c.results, "runs.jsonl"), "utf8").split("\n")[0])[key], key);
     }
     // ...which leaves solved disagreeing with the score, and that is REPORTED.
-    assert.deepEqual(plan.inconsistent.map((x) => x.slotId), ["r0.t1.A"]);
-    assert.ok(RECLASSIFIED_FIELDS.includes("contaminated") && !RECLASSIFIED_FIELDS.includes("solved"));
+    // `solved` IS recomputed: it is derived from the score and the verdict, and
+    // a derived field that is not re-derived is stale, not preserved.
+    assert.equal(rewritten.solved, true, "the scorer said it solved and it is no longer contaminated");
+    assert.ok(RECLASSIFIED_FIELDS.includes("contaminated") && RECLASSIFIED_FIELDS.includes("solved"));
+    assert.ok(!RECLASSIFIED_FIELDS.includes("score") && !RECLASSIFIED_FIELDS.includes("final"));
   } finally {
     rmSync(c.root, { recursive: true, force: true });
   }
@@ -133,16 +136,23 @@ test("a rewrite refuses a running campaign and a missing transcript, and writes 
 
 test("a written rewrite records its provenance in the report, not just the commit", () => {
   const c = campaign([
-    { slotId: "r0.t1.A", contaminated: true, outsideContaminating: ["/tmp/a.svg"], solved: false, commands: ["npx pcg render graph.json --out /tmp/a.svg && cmp /tmp/a.svg /tmp/a.svg"] },
+    // A discarded first attempt the corrected classifier calls clean, and the
+    // retry that superseded it and still counts.
+    { slotId: "r0.t1.A", attempt: 1, final: false, contaminated: true, outsideContaminating: ["/tmp/a.svg"], solved: false, commands: ["npx pcg render graph.json --out /tmp/a.svg && cmp /tmp/a.svg /tmp/a.svg"] },
+    { slotId: "r0.t1.A", attempt: 2, commands: ["cat node_modules/pcg-ts/llms.txt"] },
   ]);
   try {
     const plan = planRewrite({ resultsDir: c.results, runsDir: c.runs });
-    const { provenance } = applyRewrite(plan, { now: new Date("2026-09-18T12:00:00Z"), harness: { sha: "abcdef1234567890", dirty: false } });
+    assert.deepEqual(plan.supersededClean.map((x) => x.slotId), ["r0.t1.A"]);
+    assert.equal(plan.supersededClean[0].counting.attempt, 2, "latest-wins still decides");
+    assert.equal(plan.supersededClean[0].superseded.attempt, 1);
+    const { provenance } = applyRewrite(plan, { now: new Date("2026-09-18T12:00:00Z"), harness: { sha: "abcdef1234567890", dirty: false }, note: "All four discards were classifier artifacts." });
     assert.equal(provenance.verdictsMoved.length, 1);
     // runs.jsonl really changed...
     const rec = readFileSync(join(c.results, "runs.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l))[0];
     assert.equal(rec.contaminated, false);
-    assert.equal(rec.solved, false, "solved is still the scorer's, untouched");
+    assert.equal(rec.solved, true, "solved is derived, so it follows the verdict");
+    assert.deepEqual(rec.score, { solved: true }, "the SCORE is never re-run");
     // ...and the sidecar plus the report say so.
     assert.ok(existsSync(join(c.results, "reclassified.json")));
     const md = readFileSync(join(c.results, "report.md"), "utf8");
@@ -150,7 +160,11 @@ test("a written rewrite records its provenance in the report, not just the commi
     assert.match(md, /RE-DERIVED from their transcripts on 2026-09-18T12:00:00/);
     assert.match(md, /harness commit `abcdef1`/);
     assert.match(md, /\| r0\.t1\.A \| 1 \| contaminated \| clean \|/);
-    assert.match(md, /solved.*deliberately not recomputed|not recomputed here/);
+    assert.match(md, /Which attempt counts has NOT changed/);
+    assert.match(md, /a2 \(counts\)/, "the counting attempt is named");
+    assert.match(md, /All four discards were classifier artifacts\./, "the operator's note is recorded");
+    assert.match(md, /latest-wins \(in force\) vs first-clean-attempt/, "both selection rules are shown");
+    assert.match(md, /every .*figure elsewhere in this report is the COUNTING attempt's|COUNTING attempt/i);
     // The note survives a later regeneration, because it is read from disk.
     const again = readFileSync(join(c.results, "report.json"), "utf8");
     assert.match(again, /"reclassified"/);

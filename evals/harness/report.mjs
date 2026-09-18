@@ -948,10 +948,41 @@ export function renderMarkdown(report) {
         L.push(`| ${v.slotId} | ${v.attempt} | ${v.before.contaminated ? "contaminated" : "clean"} | ${v.after.contaminated ? "contaminated" : "clean"} | ${(v.before.paths ?? []).map((p) => `\`${p}\``).join(", ") || "–"} |`);
       }
     }
-    if (r.inconsistent?.length) {
+    if (r.note) L.push("", r.note);
+    const m = r.metric ?? "turns";
+    if (r.supersededClean?.length) {
       L.push(
         "",
-        `${r.inconsistent.length} record(s) now read \`contaminated: false\` while still \`solved: false\`: \`solved\` is stored as \`score.solved && !contaminated\` and was deliberately not recomputed here, because whether a cleared attempt should count instead of the retry that superseded it is a campaign decision. They are: ${r.inconsistent.map((x) => `${x.slotId} a${x.attempt}`).join(", ")}.`,
+        `**Which attempt counts has NOT changed.** The campaign's rule is latest-wins and it stays that way: choosing a selection rule once the outcome is visible is choosing the answer. ${r.supersededClean.length} slot(s) now have an earlier attempt that is clean, listed here so the alternative is visible rather than applied. Every ${m} figure elsewhere in this report is the COUNTING attempt's.`,
+        "",
+        `| slot | arm | counting attempt | its ${m} | superseded attempt | its ${m} |`,
+        "|---|---|---|---|---|---|",
+      );
+      for (const x of r.supersededClean) {
+        L.push(`| ${x.slotId} | ${x.arm} | a${x.counting.attempt} (counts) | ${x.counting[m] ?? "n/a"} | a${x.superseded.attempt} | ${x.superseded[m] ?? "n/a"} |`);
+      }
+    }
+    if (r.comparison) {
+      const c = r.comparison;
+      const pctc = (x) => (Number.isFinite(x) ? `${(x * 100).toFixed(1)}%` : "n/a");
+      const numc = (x) => (Number.isFinite(x) ? String(x) : "n/a");
+      const armsc = Object.keys(c.latest.median);
+      L.push("", `### Selection rule: latest-wins (in force) vs first-clean-attempt (counterfactual)`, "");
+      L.push(`| figure (${c.metric}) | latest-wins | first-clean |`, "|---|---|---|");
+      for (const a of armsc) L.push(`| ${a} solved | ${c.latest.solved[a].solved}/${c.latest.solved[a].n} | ${c.firstClean.solved[a].solved}/${c.firstClean.solved[a].n} |`);
+      for (const a of armsc) L.push(`| ${a} median | ${numc(c.latest.median[a])} | ${numc(c.firstClean.median[a])} |`);
+      if (c.baselineArms?.[0] && c.baselineArms?.[1]) L.push(`| **A/A gap** | **${pctc(c.latest.aaGap)}** | **${pctc(c.firstClean.aaGap)}** |`);
+      if (c.strippedArm) L.push(`| ${c.strippedArm} vs ${c.refArm} | ${pctc(c.latest.strippedVsRef)} | ${pctc(c.firstClean.strippedVsRef)} |`);
+      const measurable = Number.isFinite(c.latest.aaGap) || Number.isFinite(c.firstClean.aaGap);
+      const sameGap = measurable && Math.abs(c.latest.aaGap - c.firstClean.aaGap) < 5e-4;
+      const movedMedian = armsc.filter((a) => c.latest.median[a] !== c.firstClean.median[a]);
+      L.push(
+        "",
+        !measurable
+          ? `This campaign has no A/A pair, so there is no gap to compare${movedMedian.length ? `; the ${c.metric} median would differ under the other rule (${movedMedian.map((a) => `${a} ${numc(c.latest.median[a])} vs ${numc(c.firstClean.median[a])}`).join(", ")})` : ""}.`
+          : sameGap
+            ? `The A/A gap on ${c.metric} — what the gate's effort limb is measured against — is the SAME under both rules, so the selection question does not touch the pre-registered thresholds.`
+            : `**The A/A gap on ${c.metric} DIFFERS between the rules (${pctc(c.latest.aaGap)} vs ${pctc(c.firstClean.aaGap)}).** The pre-registered thresholds rest on it, so this needs a decision rather than a footnote.`,
       );
     }
     L.push("");

@@ -808,15 +808,23 @@ The turn cap is the CLI's own `--max-turns`.
   (`r1.trees-on-hills.stripped a1`, `msys:/` from `k=>/[Pp]rimitive|.../`).
   **No run in either campaign is contaminated under the current classifier.**
 
-  What correcting them changes: four slots would count their first attempt
-  instead of its retry — turns 60→59, 68→52, 28→30 and 70→38. The pilot's
-  SOLVED conclusion does not move (18/18 in every arm, gate STOP, the same six
-  tasks to replace), and neither does the turns median in any arm
-  (34 / 34 / 33.5) nor the A/A gap on turns (4.4%) or tool calls (4.6%). The
-  stripped arm's turns mean falls 38.6 → 35.9 and its paired gap against A
-  goes 6.3% → 1.8%. Output tokens and wall minutes DO move — see the threshold
-  table above, which states both readings; the gate's metric is turns, so no
-  threshold is affected.
+  What correcting them changes, and what it does NOT. WHICH ATTEMPT COUNTS
+  does not change: the campaign's rule is latest-wins and it stays, because
+  picking a selection rule once the outcome is visible is picking the answer.
+  So the four cleared records are superseded attempts that still do not count,
+  and every effort figure in the pilot report is the same as before. What the
+  rewrite changes on disk is that those records stop asserting a contamination
+  that did not happen — and, because `solved` is derived from the verdict, it
+  is recomputed with it.
+
+  The alternative rule is nevertheless computed and PRINTED, so nobody has to
+  relitigate it: under first-clean-attempt the four slots would count turns 38,
+  59, 52 and 30 instead of 70, 60, 68 and 28. **The A/A gap on turns is 4.4%
+  under BOTH rules**, solved is 18/18 in every arm under both, and every arm's
+  turns median is identical (34 / 34 / 33.5); only the stripped-vs-A figure
+  differs (6.3% against 1.8%), and neither is within reach of the 25% margin.
+  The selection question therefore does not touch a single pre-registered
+  threshold, which is a fact rather than an argument.
 - **A classifier fix does not rewrite records that are already written.**
   `readCounts` is computed when the transcript is parsed, so the committed
   calibration records still carry the old "a listing is a read" counts, and
