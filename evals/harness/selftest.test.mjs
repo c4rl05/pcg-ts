@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { ConfigError, collectCanaries, detectLeak, judgeNegative, lintBrief, loadConfig, selectTasks, validateTaskDir } from "./selftest.mjs";
+import { ConfigError, collectCanaries, detectLeak, judgeNegative, lintBrief, loadConfig, resolveArms, resolveFromRepo, selectTasks, validateTaskDir } from "./selftest.mjs";
 
 const FIXTURE = fileURLToPath(new URL("fixtures/tasks/fixture-grid", import.meta.url));
 const NAMES = {
@@ -127,11 +127,60 @@ test("the shipped config's campaigns are shaped the way the runner needs", () =>
   assert.deepEqual(cal.tasks, { campaign: "v2" });
   assert.equal(cal.gate.mode, "calibration");
 
-  // The pilot's gate must not have picked up v2's effort thresholds.
+  // The pilot's gate must not have picked up v2's effort thresholds, its
+  // reference arm, or the calibration mode.
   const pilot = loadConfig(CONFIG, "pilot");
   assert.equal(pilot.gate.strippedArm, "stripped");
   assert.equal(pilot.gate.strippedEffortMinMargin, undefined);
+  assert.equal(pilot.gate.strippedRefArm, undefined);
   assert.equal(pilot.gate.mode, undefined);
+  // stripped-all was CUT FROM candidate-U1, so that is what limb (a) measures
+  // it against; against a baseline off another commit the strip and the
+  // library change would be one effect.
+  assert.equal(v2.gate.strippedRefArm, "candidate-U1");
+  assert.ok(v2.arms.some((a) => a.label === v2.gate.strippedRefArm), "the reference arm has to be in the campaign");
+});
+
+// The whole point of strippedRefArm: the reference has to be the tarball the
+// stripped arm was actually cut from, or limb (a) measures two changes at once.
+test("v2's reference arm IS the tarball stripped-all was derived from", { skip: !existsSync(resolveFromRepo(loadConfig(CONFIG, "v2").arms[0].tarball)) && "tarballs not on this machine" }, () => {
+  const v2 = loadConfig(CONFIG, "v2");
+  const resolved = resolveArms(v2);
+  const stripped = resolved.find((a) => a.label === v2.gate.strippedArm);
+  const parent = resolved.find((a) => a.label === v2.gate.strippedRefArm);
+  assert.ok(stripped && parent, "both arms are in the campaign");
+  assert.equal(stripped.manifest.derivedFrom.sha256, parent.sha256);
+  assert.deepEqual(stripped.manifest.stripSets, ["docs", "graphs"]);
+});
+
+test("a calibration mode on a campaign that is not shaped like one is refused", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pcg-calcfg-"));
+  try {
+    const tasks = tasksDir({ "a-v2": { campaign: "v2" } });
+    const base = {
+      model: "m",
+      prompt: "x",
+      publicTasksDir: tasks,
+      gate: { baselineArms: ["A", "A-prime"], strippedArm: "stripped", aaMaxGap: 0.28, strippedMinMargin: 0.17 },
+      campaigns: {
+        // The trap: `gate` is merged, so one stray key reaches a full campaign.
+        bad: { arms: [{ label: "A", tarball: "x" }, { label: "B", tarball: "y" }], runsPerTask: 3, gate: { mode: "calibration" } },
+        good: { arms: [{ label: "A", tarball: "x" }], runsPerTask: 1, gate: { mode: "calibration" } },
+        plain: { arms: [{ label: "A", tarball: "x" }], runsPerTask: 3 },
+      },
+    };
+    const cfg = join(dir, "eval.config.json");
+    writeFileSync(cfg, JSON.stringify(base));
+    assert.throws(
+      () => loadConfig(cfg, "bad"),
+      (err) => err instanceof ConfigError && /gate\.mode is "calibration" but the campaign has 2 arms and 3 runs per task/.test(err.message),
+    );
+    assert.equal(loadConfig(cfg, "good").gate.mode, "calibration");
+    assert.equal(loadConfig(cfg, "plain").gate.mode, undefined);
+    rmSync(tasks, { recursive: true, force: true });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("adding campaigns did not change the pilot's identity", { skip: !existsSync(PILOT_MANIFEST) && "pilot results not in this checkout" }, () => {

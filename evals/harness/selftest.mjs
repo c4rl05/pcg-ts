@@ -33,6 +33,11 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { RETRY_KINDS } from "./limits.mjs";
 import { readManifest, readTgzFile } from "./pack.mjs";
+// report.mjs decides no record, which is why it is outside the harness
+// identity hash; these two only decide whether a campaign may START, which is
+// settled before any record exists. No cycle: report.mjs imports sandbox.mjs
+// and nothing else of ours.
+import { calibrationShapeError, hasCalibrationShape } from "./report.mjs";
 import {
   EVALS_DIR,
   HARNESS_DIR,
@@ -93,6 +98,13 @@ export function loadConfig(configPath = join(EVALS_DIR, "eval.config.json"), cam
   merged.configPath = resolve(configPath);
   merged.configSha256 = sha256File(configPath);
   if (!merged.model) throw new ConfigError(`${configPath}: "model" is required`);
+  // `gate` is MERGED over the defaults, so one stray key reaches every
+  // campaign. A calibration mode on a campaign that is not shaped like one
+  // would disable its gate: refuse here, before a slot is spent, rather than
+  // at report time when the runs are already paid for.
+  if (merged.gate?.mode === "calibration" && !hasCalibrationShape(merged)) {
+    throw new ConfigError(calibrationShapeError(merged, `${configPath}: campaign "${campaign}"`));
+  }
   if (merged.concurrency !== undefined && merged.concurrency !== 1) {
     throw new ConfigError(`${configPath}: concurrency must be 1 (runs share one subscription allowance and one machine); got ${merged.concurrency}`);
   }

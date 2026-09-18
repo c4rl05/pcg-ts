@@ -424,6 +424,14 @@ arm. A campaign counts as a calibration when its config sets
 `"gate": { "mode": "calibration" }`, or simply when it has one arm and one run
 per task.
 
+`gate` is MERGED over the config defaults, so a stray `mode` key reaches every
+campaign — and used to void the gate on a real one and print a per-task table
+claiming to be one run of one arm over data that was three runs of three. The
+mode is now honoured only when the campaign really is one arm at one run per
+task, and refused as a config error (exit 2) otherwise. `loadConfig` raises it,
+so `selftest.mjs` and `run.mjs` both stop before a slot is spent, and
+`report.mjs` refuses again rather than print the false claim.
+
 It exists because of how the pilot failed: 54/54 solved in every arm, six
 tasks at the ceiling, nothing measured. Calibration answers "what does this
 task cost" for each candidate task BEFORE 96 slots are spent on them. Read
@@ -446,9 +454,15 @@ minutes, output tokens, validate calls and probe graphs:
   baseline's median (a threshold can be stated in fractions, since a task's turn
   count is set by the task);
 - around the mean of those per-task values, a **95% percentile bootstrap over
-  TASKS** (2000 resamples, seeded from a fixed constant, so re-running
-  `report.mjs` on the same `runs.jsonl` prints the same interval) and an exact
-  two-sided **sign test** on the per-task signs.
+  TASKS** (2000 resamples, seeded per `(arm, ref, metric, kind)` so re-running
+  `report.mjs` on the same `runs.jsonl` prints the same interval AND the six
+  metric rows are six independent draws — one shared seed draws the same task
+  indices for every row, which makes six rows of one draw look like six views
+  of the data) and an exact two-sided **sign test** on the per-task signs.
+
+The tasks quoted beside a relative interval are the tasks that could
+contribute one: a task whose reference median is 0 has no relative difference,
+so it is in `tasks` but not in `relativeTasks`.
 
 The bootstrap treats the tasks as the sample: it answers "would another set of
 tasks like these show the same difference", which is the question a campaign of
@@ -467,40 +481,77 @@ Fixed in `eval.config.json` before v2's first run, and printed in the report.
 Arms: A and A-prime (the same baseline tarball — the noise floor),
 candidate-U1, and stripped-all. Go iff all of:
 
-- **(a)** the `stripped-all` arm is worse than BOTH baselines, on EITHER limb.
-  The report says which fired (`gate.a.firedBy`).
-  - **solved** — below each baseline by more than the A/A gap and by at least
+- **(a)** the `stripped-all` arm is worse than its REFERENCE arm, on EITHER
+  limb. The report says which fired (`gate.a.firedBy`).
+  - **solved** — below the reference by more than the A/A gap and by at least
     `strippedMinMargin` = **0.17**; or
   - **effort** — needing at least `strippedEffortMinMargin` = **0.25** more
-    `effortMetric` = **turns** than EACH baseline (paired by task, as a
-    fraction of that baseline), by more than the A/A effort gap, with the
-    bootstrap interval clear of zero (`effortCiMustExcludeZero`).
+    `effortMetric` = **turns** than the reference (paired by task, as a
+    fraction of it), by more than the A/A effort gap, with the bootstrap
+    interval clear of zero (`effortCiMustExcludeZero`).
 - **(b)** the A/A gap is at most `aaMaxGap` = **0.28** on solved AND at most
   `aaMaxEffortGap` = **0.15** on effort.
-- **(c)** no task at 0% or 100% solved pooled across all arms (as the pilot).
+- **(c)** no task at 0% or 100% solved — pooled across all arms, AND across
+  the reference arms on their own.
+
+**The reference is the tarball the stripped arm was CUT FROM**
+(`gate.strippedRefArm`, here `candidate-U1`), not the baseline. `stripped-all`
+is derived from candidate-U1 @9284b1f while A and A-prime are @0ad6998, and 19
+shared non-doc entries differ byte-for-byte between those two tarballs —
+`dist/index.js`, `dist/cli/index.js`, `package.json`, `README.md` and every
+chunk. Against a baseline off another commit, limb (a) would measure "lost the
+docs and the corpus" and "changed the library" as ONE effect. A strip arm
+answers a question about the tarball it was cut from, so that is what it is
+measured against; the A/A pair stays the noise floor, which is its job in (b)
+and in the "more than the A/A gap" term of (a). Unset, the references are the
+baselines — the pilot's rule, which was right there because its stripped arm
+WAS cut from its baseline.
+
+Both contrasts are printed in the report body, not only inside the gate:
+`candidate-U1 vs A` says whether the U1 work helped, `stripped-all vs
+candidate-U1` says whether these tasks can see documentation at all. Both are
+already in the schedule, so computing only the first would throw the clean one
+away for nothing.
+
+**Limb (c) looks at the reference arms as well as the pool.** Pooling every arm
+hides the case that matters most: references at 3/3 on every task with only the
+stripped arm missing pools to 11/12 per task and passes — yet the contrast
+cannot move, because its reference has no room to fall. Calibration is meant to
+catch this first; (c) is the backstop, and a backstop that only looks at the
+pool is not one. Tasks caught this way are listed as
+`at: "ceiling-in-reference"` / `"floor-in-reference"`, with the arms counted.
+
+**An absent, null or unmeasurable threshold never passes its check.** Two ways
+that went wrong once: `strippedMinMargin ?? 0` made a MISSING margin the
+easiest one to clear (with a zero A/A gap, one run of difference passed), and
+`null + EPS` = 1e-9 made a null `aaMaxGap` pass only an exactly-zero gap —
+which the pilot's happened to be. A limb with no threshold now has no opinion
+rather than an automatic pass, and a threshold that is configured but cannot be
+measured fails.
 
 Why these numbers. `aaMaxGap` and `strippedMinMargin` are the pilot's,
 unchanged: n per arm moves only from 18 to 24, so the noise argument below
 still holds. The effort thresholds come from the pilot's own A/A pair — the
-only measurement of run-to-run wobble there is — quoted in the SAME statistic
-the gate computes (paired by task, mean relative difference of per-task
-medians, 95% bootstrap over tasks):
+only measurement of run-to-run wobble there is — quoted in the statistic the
+gate actually computes: the LARGER MAGNITUDE of the two directions of the
+paired-by-task mean relative difference (larger, because a relative difference
+is asymmetric, and the gate must not depend on the order of `baselineArms`):
 
-| metric | A-prime − A | 95% bootstrap |
-|---|---|---|
-| turns | −2.4% | −12.4% to +9.9% |
-| tool calls | −2.5% | −12.7% to +10.3% |
-| output tokens | +4.3% | −10.0% to +19.0% |
-| wall minutes | +9.6% | −7.1% to +29.0% |
+| metric | A-prime − A | A − A-prime | what the gate uses |
+|---|---|---|---|
+| turns | −2.4% | +4.4% | **4.4%** |
+| tool calls | −2.5% | +4.6% | **4.6%** |
+| output tokens | +4.3% | −0.8% | **4.3%** |
+| wall minutes | +9.6% | −5.3% | **9.6%** |
 
-`aaMaxEffortGap` = 0.15 sits above the widest of those point estimates (wall
-minutes, 9.6%) and far above turns' 2.4%, so the pilot's own noise would have
-passed (b). `strippedEffortMinMargin` = 0.25 is about 2.6x that widest A/A
-point estimate. For scale, the pilot's stripped arm came in at **+6.3% on
-turns paired against A, 95% [−17.1%, +30.8%]** — it would have failed both the
-margin and the interval test, which is the right answer for an arm that still
-solved 18/18. `effortMetric` is turns because it is what the cap is set on, it
-is an integer, it does not move with machine load (wall minutes) or verbosity
+`aaMaxEffortGap` = 0.15 sits above the widest of those (wall minutes, 9.6%)
+and well above turns' 4.4%, so the pilot's own noise would have passed (b).
+`strippedEffortMinMargin` = 0.25 is about 2.6x that widest A/A value. For
+scale, the pilot's stripped arm came in at **+6.3% on turns paired against A,
+95% [−17.1%, +29.7%]** — it would have failed both the margin and the interval
+test, which is the right answer for an arm that still solved 18/18.
+`effortMetric` is turns because it is what the cap is set on, it is an
+integer, it does not move with machine load (wall minutes) or verbosity
 (output tokens), and it was the quietest of the four across the A/A pair.
 
 Two sharp edges the rule has to handle, and does. A relative difference is

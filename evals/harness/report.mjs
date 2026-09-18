@@ -14,37 +14,48 @@
  * either.
  *
  * - Solved counts per task x arm with Wilson 95% intervals, and paired-by-task
- *   deltas of each arm against the first baseline arm (exact sign test).
+ *   deltas of each arm against the first baseline arm (exact sign test), PLUS
+ *   the stripped arm against `gate.strippedRefArm` when that is a different
+ *   arm. Both contrasts are already in the schedule and answer different
+ *   questions: candidate vs baseline is "did the work help", stripped vs the
+ *   tarball it was CUT FROM is "can these tasks see documentation at all".
  * - Process metrics (the pilot's table, kept for continuity) plus EFFORT:
  *   turns, tool calls, wall minutes, output tokens, `pcg validate` calls and
  *   their failure rate, probe graphs, and what was read (llms/docs/skills/
- *   graphs) — per arm AND per task, as medians, with a paired-by-task
- *   comparison against the baseline arm. The paired comparison carries a
- *   seeded percentile bootstrap over TASKS and an exact sign test, so a
- *   reader can tell an effort difference from run-to-run wobble. The A/A pair
- *   is the noise floor for effort exactly as it is for solved.
+ *   graphs) — per arm AND per task, as medians, with the same paired
+ *   comparisons. Each carries a percentile bootstrap over TASKS, seeded per
+ *   (arm, ref, metric) so six metric rows are six independent draws and not
+ *   one draw shown six times, and an exact sign test. The A/A pair is the
+ *   noise floor for effort exactly as it is for solved.
  * - The GATE, go iff
- *   (a) the stripped arm is worse than the baseline arms, EITHER on solved
- *       rate — below EACH baseline by more than the A/A gap and by at least
- *       `gate.strippedMinMargin` — OR on effort, needing at least
- *       `gate.strippedEffortMinMargin` more `gate.effortMetric` than EACH
- *       baseline (as a fraction of that baseline, paired by task), by more
- *       than the A/A effort gap, with the bootstrap interval clear of zero.
- *       The report says which limb fired;
+ *   (a) the stripped arm is worse than its REFERENCE arms — `strippedRefArm`
+ *       when set, else the baselines — EITHER on solved rate (below each by
+ *       more than the A/A gap and by at least `gate.strippedMinMargin`) OR on
+ *       effort (at least `gate.strippedEffortMinMargin` more
+ *       `gate.effortMetric` than each, as a fraction of it, paired by task,
+ *       by more than the A/A effort gap, with the bootstrap interval clear of
+ *       zero). The report says which limb fired;
  *   (b) the A/A gap |A - A'| is at most `gate.aaMaxGap`, and (when effort
  *       thresholds are configured) the A/A effort gap is at most
  *       `gate.aaMaxEffortGap`;
- *   (c) no task sits at 0% or 100% solved pooled across all arms. Tasks that
- *       fail (c) are listed for replacement by reserve tasks.
+ *   (c) no task sits at 0% or 100% solved — pooled across all arms, AND
+ *       across the reference arms on their own, because a task the references
+ *       already ace cannot move the contrast whatever the stripped arm does.
  *   A campaign with unfinished slots reports `pending`, never go or stop.
  *   A campaign whose gate configures no effort thresholds is the pilot gate,
  *   unchanged: limb (a) is solved-only and (b) checks the solved gap alone.
+ *
+ *   A threshold that is absent, null or unmeasurable never passes its check.
+ *   `strippedMinMargin ?? 0` made a missing margin the easiest one to clear,
+ *   and `null + EPS` made a null `aaMaxGap` pass only an exactly-zero gap.
  *
  * CALIBRATION campaigns (`gate.mode: "calibration"`, or one arm at one run
  * per task) skip the gate — one run proves nothing — and get `calibration.md`:
  * one row per task with solved, turns, tool calls, wall minutes, output
  * tokens, caps hit and contamination, which is what picking the tasks for a
- * campaign needs.
+ * campaign needs. `gate` is MERGED from the config defaults, so the mode is
+ * honoured only when the campaign really is one arm at one run per task and
+ * refused loudly otherwise: a stray key must not void a real campaign's gate.
  *
  * Which record counts for a slot: the LAST line for that slot id in
  * runs.jsonl (a contaminated first attempt is superseded by its retry).
@@ -137,6 +148,22 @@ export function makeReportRng(seed) {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/**
+ * A seed derived from a base seed and a label (FNV-1a over the label, folded
+ * in). Two metrics bootstrapped from one seed draw the SAME resample indices,
+ * so their intervals move together and six rows read as six independent views
+ * of the data when they are one. Deterministic: the same label always gives
+ * the same seed, so re-running the report prints the same intervals.
+ */
+export function seedFor(seed, label) {
+  let h = 0x811c9dc5 ^ (seed >>> 0);
+  for (let i = 0; i < label.length; i++) {
+    h ^= label.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
 }
 
 /**
@@ -252,16 +279,25 @@ export function pairedEffort(effort, tasks, arm, ref, opts = {}) {
       else if (d < 0) losses++;
       else ties++;
     }
+    // Each metric resamples on its own seed: one seed for all six would draw
+    // the same task indices every time, and the six intervals would be one
+    // draw shown six times rather than six independent ones.
+    const base = opts.seed ?? 0x5eed;
+    const seeded = (kind) => ({ ...opts, seed: seedFor(base, `${arm}|${ref}|${m.key}|${kind}`) });
     // `wins` counts "more effort"; for effort that is the arm doing worse.
     metrics[m.key] = {
       metric: m.key,
       tasks: deltas.length,
+      // The relative CI is over `rel`, which drops any task whose reference
+      // median is 0 (no relative difference is defined there). Quoting
+      // `tasks` beside that interval would overstate its sample.
+      relativeTasks: rel.length,
       perTask,
       meanDelta: mean(deltas),
       medianDelta: median(deltas),
       meanRelative: mean(rel),
-      relativeCi: bootstrapCi(rel, mean, opts),
-      deltaCi: bootstrapCi(deltas, mean, opts),
+      relativeCi: bootstrapCi(rel, mean, seeded("relative")),
+      deltaCi: bootstrapCi(deltas, mean, seeded("delta")),
       higher: wins,
       lower: losses,
       ties,
@@ -384,21 +420,42 @@ export function evaluateGate(summary, tasks, gate, { complete, effort = null, bo
   const s = gate.strippedArm;
   const arms = Object.keys(summary.byArm);
   const label = gate.label ?? "Pilot gate";
-  const missing = [a1, a2, s].filter((x) => !x || !arms.includes(x));
+  // What limb (a) measures the stripped arm AGAINST. A strip arm answers a
+  // question about the tarball it was CUT FROM: comparing `stripped-all`
+  // (derived from candidate-U1) against a baseline built from a different
+  // commit would measure "lost the docs" and "changed the library" as one
+  // effect. Unset, the references are the baselines — the pilot's rule,
+  // which was right there because its stripped arm was cut from its baseline.
+  const refArms = gate.strippedRefArm ? [gate.strippedRefArm] : [a1, a2].filter(Boolean);
+  const missing = [...new Set([a1, a2, s, ...refArms])].filter((x) => !x || !arms.includes(x));
   if (missing.length) {
-    return { decision: "stop", complete, label, reasons: [`gate arms not in the campaign: ${missing.join(", ") || "(unset)"}; configure gate.baselineArms and gate.strippedArm`], a: null, b: null, c: null };
+    return { decision: "stop", complete, label, reasons: [`gate arms not in the campaign: ${missing.join(", ") || "(unset)"}; configure gate.baselineArms, gate.strippedArm and gate.strippedRefArm`], a: null, b: null, c: null };
   }
   const pA = summary.byArm[a1].p;
   const pA2 = summary.byArm[a2].p;
   const pS = summary.byArm[s].p;
   const aaGap = pA !== null && pA2 !== null ? Math.abs(pA - pA2) : null;
-  const margin = Math.max(aaGap ?? 0, gate.strippedMinMargin ?? 0);
-  const dA = pA !== null && pS !== null ? pA - pS : null;
-  const dA2 = pA2 !== null && pS !== null ? pA2 - pS : null;
   // Rates are k/n in floating point: 14/18 - 10/18 and 10/18 - 6/18 are the
   // same gap but need not be the same double. EPS keeps a tie a tie.
   const EPS = 1e-9;
-  const solvedPass = dA !== null && dA2 !== null && aaGap !== null && dA > aaGap + EPS && dA2 > aaGap + EPS && Math.min(dA, dA2) >= (gate.strippedMinMargin ?? 0) - EPS;
+
+  // --- the solved limb -----------------------------------------------------
+  // An ABSENT margin is not a margin of zero. `?? 0` made a missing threshold
+  // the easiest one to clear — with a zero A/A gap a single run of difference
+  // passed — so a limb with no threshold has no opinion instead, exactly as
+  // the effort limb does.
+  const solvedConfigured = Number.isFinite(gate.strippedMinMargin);
+  const req = gate.strippedMinMargin;
+  const margin = solvedConfigured ? Math.max(aaGap ?? 0, req) : null;
+  const solvedChecks = refArms.map((ref) => {
+    const pR = summary.byArm[ref].p;
+    const d = pR !== null && pS !== null ? pR - pS : null;
+    const okAboveNoise = d !== null && aaGap !== null && d > aaGap + EPS;
+    const okMargin = solvedConfigured && d !== null && d >= req - EPS;
+    return { ref, rate: pR, delta: d, okMargin, okAboveNoise, pass: okMargin && okAboveNoise };
+  });
+  const solvedPass = solvedConfigured && solvedChecks.length > 0 && solvedChecks.every((c) => c.pass);
+  if (!solvedConfigured) reasons.push(`(a) gate.strippedMinMargin is not configured, so the solved limb has no threshold to meet and cannot fire`);
 
   // --- effort: the A/A gap for (b), then the limb for (a) ------------------
   // Both are computed whenever EITHER threshold is configured. Deriving the
@@ -433,23 +490,23 @@ export function evaluateGate(summary, tasks, gate, { complete, effort = null, bo
     } else {
       const opts = bootstrap ?? {};
       const needCi = gate.effortCiMustExcludeZero !== false;
-      const checks = [a1, a2].map((base) => {
-        const m = pairedEffort(effort, tasks, s, base, opts).metrics[metricKey];
+      const checks = refArms.map((ref) => {
+        const m = pairedEffort(effort, tasks, s, ref, opts).metrics[metricKey];
         const rel = m.meanRelative;
         const okMargin = Number.isFinite(rel) && rel >= req - EPS;
         const okAboveNoise = Number.isFinite(rel) && aaEffortGap !== null && rel > aaEffortGap + EPS;
         const okCi = !needCi || (Number.isFinite(m.relativeCi.lo) && m.relativeCi.lo > 0);
-        return { base, relative: rel, ci: m.relativeCi, tasks: m.tasks, higherOn: m.higher, lowerOn: m.lower, signTestP: m.signTestP, okMargin, okAboveNoise, okCi, pass: okMargin && okAboveNoise && okCi };
+        return { ref, relative: rel, ci: m.relativeCi, tasks: m.relativeTasks, higherOn: m.higher, lowerOn: m.lower, signTestP: m.signTestP, okMargin, okAboveNoise, okCi, pass: okMargin && okAboveNoise && okCi };
       });
       effortLimb = {
-        pass: checks.every((c) => c.pass),
+        pass: checks.length > 0 && checks.every((c) => c.pass),
         metric: metricKey,
         requiredMargin: req,
         requiredAboveAaGap: aaEffortGap,
         ciMustExcludeZero: needCi,
         aaEffortGap,
         aaTasks: aaEffortTasks,
-        perBaseline: Object.fromEntries(checks.map((c) => [c.base, c])),
+        perReference: Object.fromEntries(checks.map((c) => [c.ref, c])),
       };
     }
   }
@@ -461,31 +518,46 @@ export function evaluateGate(summary, tasks, gate, { complete, effort = null, bo
     firedBy,
     solvedPass,
     strippedArm: s,
-    baseline: { [a1]: pA, [a2]: pA2 },
+    // The arms the stripped arm was measured against: the baselines, unless
+    // `strippedRefArm` named its parent. `baseline` keeps the pilot's key.
+    refArms,
+    baseline: Object.fromEntries(solvedChecks.map((c) => [c.ref, c.rate])),
     stripped: pS,
-    deltas: { [a1]: dA, [a2]: dA2 },
+    deltas: Object.fromEntries(solvedChecks.map((c) => [c.ref, c.delta])),
+    solvedChecks,
     aaGap,
     requiredMargin: margin,
     effort: effortLimb,
   };
-  if (!aPass) {
-    reasons.push(`(a) stripped arm ${fmt(pS)} is not below both baselines (${fmt(pA)}, ${fmt(pA2)}) by more than the A/A gap ${fmt(aaGap)} and at least ${fmt(gate.strippedMinMargin ?? 0)}: the eval may not see documentation`);
-    if (effortLimb) {
-      reasons.push(
-        effortLimb.unavailable
-          ? `(a) the effort limb could not be evaluated: ${effortLimb.unavailable}`
-          : `(a) nor does it cost more: ${metricKey} paired by task is ${[a1, a2].map((base) => `${fmt(effortLimb.perBaseline[base].relative)} vs ${base} (95% ${fmt(effortLimb.perBaseline[base].ci.lo)}–${fmt(effortLimb.perBaseline[base].ci.hi)})`).join(", ")}, needing ${fmt(effortLimb.requiredMargin)} and more than the A/A effort gap ${fmt(aaEffortGap)}${effortLimb.ciMustExcludeZero ? " with the interval clear of zero" : ""}`,
-      );
-    }
+  if (!aPass && solvedConfigured) {
+    reasons.push(`(a) stripped arm ${fmt(pS)} is not below ${refArms.length > 1 ? "both references" : `its reference ${refArms[0]}`} (${solvedChecks.map((c) => fmt(c.rate)).join(", ")}) by more than the A/A gap ${fmt(aaGap)} and at least ${fmt(req)}: the eval may not see documentation`);
+  }
+  if (!aPass && effortLimb) {
+    reasons.push(
+      effortLimb.unavailable
+        ? `(a) the effort limb could not be evaluated: ${effortLimb.unavailable}`
+        : `(a) nor does it cost more: ${metricKey} paired by task is ${refArms.map((ref) => `${fmt(effortLimb.perReference[ref].relative)} vs ${ref} (95% ${fmt(effortLimb.perReference[ref].ci.lo)}–${fmt(effortLimb.perReference[ref].ci.hi)})`).join(", ")}, needing ${fmt(effortLimb.requiredMargin)} and more than the A/A effort gap ${fmt(aaEffortGap)}${effortLimb.ciMustExcludeZero ? " with the interval clear of zero" : ""}`,
+    );
   }
   const aaEffortMax = gate.aaMaxEffortGap;
-  const bSolved = aaGap !== null && aaGap <= gate.aaMaxGap + EPS;
+  // `null + EPS` is 1e-9, so a null aaMaxGap used to pass only an exactly-zero
+  // gap while `undefined` failed closed. Both are "not configured" now.
+  const aaMaxConfigured = Number.isFinite(gate.aaMaxGap);
+  const bSolved = aaMaxConfigured && aaGap !== null && aaGap <= gate.aaMaxGap + EPS;
   // Configured but unmeasurable fails CLOSED, as the (a) limb does: a check
   // that cannot be run has not passed.
   const bEffort = !aaEffortConfigured ? null : aaEffortGap === null ? false : aaEffortGap <= aaEffortMax + EPS;
   const bPass = bSolved && bEffort !== false;
   const b = { pass: bPass, aaGap, aaMaxGap: gate.aaMaxGap, solvedPass: bSolved, aaEffortGap, aaEffortTasks, aaMaxEffortGap: aaEffortMax ?? null, effortPass: bEffort };
-  if (!bSolved) reasons.push(`(b) A/A gap ${fmt(aaGap)} exceeds gate.aaMaxGap ${fmt(gate.aaMaxGap)}: noise swamps the comparison`);
+  if (!bSolved) {
+    reasons.push(
+      !aaMaxConfigured
+        ? `(b) gate.aaMaxGap is not a number (${JSON.stringify(gate.aaMaxGap ?? null)}), so the A/A gap has no bound to be within: set it before the campaign runs`
+        : aaGap === null
+          ? `(b) the A/A gap could not be measured (one of ${a1}, ${a2} has no countable runs), so gate.aaMaxGap ${fmt(gate.aaMaxGap)} could not be checked`
+          : `(b) A/A gap ${fmt(aaGap)} exceeds gate.aaMaxGap ${fmt(gate.aaMaxGap)}: noise swamps the comparison`,
+    );
+  }
   if (bEffort === false) {
     reasons.push(
       aaEffortGap === null
@@ -494,13 +566,31 @@ export function evaluateGate(summary, tasks, gate, { complete, effort = null, bo
     );
   }
   // A task with no countable runs (all contaminated or infrastructure) measured nothing: it fails (c) too.
-  const floorCeiling = tasks.filter((t) => summary.byTask[t].n === 0 || summary.byTask[t].solved === 0 || summary.byTask[t].solved === summary.byTask[t].n);
-  const at = (t) => (summary.byTask[t].n === 0 ? "no-data" : summary.byTask[t].solved === 0 ? "floor" : "ceiling");
-  const c = {
-    pass: floorCeiling.length === 0,
-    replaceTasks: floorCeiling.map((t) => ({ task: t, solved: summary.byTask[t].solved, n: summary.byTask[t].n, at: at(t) })),
-  };
-  if (!c.pass) reasons.push(`(c) task(s) at floor or ceiling across all arms, replace from reserve: ${c.replaceTasks.map((x) => `${x.task} (${x.at})`).join(", ")}`);
+  const saturated = (n, solved) => n === 0 || solved === 0 || solved === n;
+  const at = (n, solved) => (n === 0 ? "no-data" : solved === 0 ? "floor" : "ceiling");
+  const pooled = tasks.filter((t) => saturated(summary.byTask[t].n, summary.byTask[t].solved));
+  const replaceTasks = pooled.map((t) => ({ task: t, solved: summary.byTask[t].solved, n: summary.byTask[t].n, at: at(summary.byTask[t].n, summary.byTask[t].solved) }));
+  // Pooling every arm hides the case that matters most: baselines at 3/3 on
+  // every task, with only the stripped arm missing, pools to 11/12 and passes
+  // — yet the headline contrast cannot move, because its reference is already
+  // at the ceiling. So check the arms the stripped arm is measured against on
+  // their own. Calibration is supposed to catch this first; (c) is the
+  // backstop, and a backstop that only looks at the pool is not one.
+  const refScope = [...new Set([...refArms, a1, a2].filter(Boolean))];
+  const already = new Set(pooled);
+  for (const t of tasks) {
+    if (already.has(t)) continue;
+    let n = 0;
+    let solved = 0;
+    for (const arm of refScope) {
+      n += summary.cell[t]?.[arm]?.n ?? 0;
+      solved += summary.cell[t]?.[arm]?.solved ?? 0;
+    }
+    if (!saturated(n, solved)) continue;
+    replaceTasks.push({ task: t, solved, n, at: `${at(n, solved)}-in-reference`, scope: refScope });
+  }
+  const c = { pass: replaceTasks.length === 0, replaceTasks };
+  if (!c.pass) reasons.push(`(c) task(s) at floor or ceiling, replace from reserve: ${c.replaceTasks.map((x) => `${x.task} (${x.at})`).join(", ")}`);
   if (!complete) return { decision: "pending", complete, label, reasons: ["campaign incomplete: the gate is evaluated only on a finished campaign", ...reasons], a, b, c };
   const decision = aPass && bPass && c.pass ? "go" : "stop";
   if (decision === "stop" && !reasons.some((r) => r.startsWith("fix:"))) {
@@ -524,19 +614,43 @@ function fmt(x) {
 /** Stated in the report, so a reader never has to open this file to know what the interval is. */
 export const EFFORT_METHOD =
   "Effort is summarised as the MEDIAN over runs, not the mean: one run that hits its turn cap would otherwise move an arm on its own. " +
-  "The comparison against the baseline arm is PAIRED BY TASK — per task, the difference of the two arms' medians, and that difference as a fraction of the baseline's median, since a task's turn count is set by the task. " +
-  "The aggregate is the mean of those per-task values, with a 95% percentile bootstrap over TASKS (2000 resamples, seeded, so the same runs.jsonl always prints the same interval) and an exact two-sided sign test on the per-task signs. " +
+  "Each comparison is PAIRED BY TASK — per task, the difference of the two arms' medians, and that difference as a fraction of the REFERENCE arm's median, since a task's turn count is set by the task. The stripped arm's reference is the tarball it was cut from, not the baseline: against a build from another commit, losing the docs and changing the library would be one effect. " +
+  "The aggregate is the mean of those per-task values, with a 95% percentile bootstrap over TASKS (2000 resamples, seeded per arm/reference/metric — so the same runs.jsonl always prints the same interval, and the metric rows are independent draws rather than one draw repeated) and an exact two-sided sign test on the per-task signs. " +
   "The bootstrap treats the tasks as the sample: it answers 'would another set of tasks like these show the same difference', which is the question a campaign of a handful of tasks can ask. " +
   "The A/A pair is the noise floor: whatever separates the same tarball under two labels is what run-to-run wobble looks like here, and an effect smaller than that is not an effect.";
+
+/** Does the campaign have a calibration's SHAPE: one arm, one run per task. */
+export function hasCalibrationShape(manifest) {
+  return (manifest?.arms?.length ?? 0) === 1 && manifest?.runsPerTask === 1;
+}
+
+/** The message a mismatched `gate.mode: "calibration"` is refused with. */
+export function calibrationShapeError(manifest, where = "manifest") {
+  const arms = manifest?.arms?.length ?? 0;
+  const runs = manifest?.runsPerTask;
+  return (
+    `${where}: gate.mode is "calibration" but the campaign has ${arms} arm${arms === 1 ? "" : "s"} and ${runs} run${runs === 1 ? "" : "s"} per task. ` +
+    `Calibration means one arm at one run per task; on anything else it silently disables the gate and prints a per-task table claiming to be one run of one arm. ` +
+    `Remove gate.mode, or make the campaign one arm at runsPerTask 1.`
+  );
+}
 
 /**
  * A calibration campaign: one arm, one run per task, no gate. Declared with
  * `gate.mode: "calibration"`; a single-arm single-run campaign counts as one
  * anyway, because that is all a calibration is.
+ *
+ * `gate` is MERGED from the config defaults, so one stray `mode` key was
+ * enough to void the gate on a full campaign and print a table describing
+ * data that was never collected. The mode is honoured only when the shape
+ * agrees, and refused loudly when it does not.
  */
 export function isCalibration(manifest) {
-  if (manifest?.gate?.mode === "calibration") return true;
-  return (manifest?.arms?.length ?? 0) === 1 && manifest?.runsPerTask === 1;
+  if (manifest?.gate?.mode === "calibration") {
+    if (!hasCalibrationShape(manifest)) throw new Error(calibrationShapeError(manifest));
+    return true;
+  }
+  return hasCalibrationShape(manifest);
 }
 
 /**
@@ -619,10 +733,19 @@ export function buildReport({ manifest, records }) {
   const complete = done === manifest.schedule.length;
   const summary = summarize(finals, arms, tasks);
   const ref = manifest.gate?.baselineArms?.[0] ?? arms[0];
-  const deltas = arms.filter((a) => a !== ref).map((a) => pairedDelta(summary, tasks, a, ref));
   const metrics = processMetrics(finals, arms);
   const effort = effortMetrics(finals, arms, tasks);
-  const effortPaired = arms.filter((a) => a !== ref).map((a) => pairedEffort(effort, tasks, a, ref));
+  // Every arm against the baseline, PLUS the stripped arm against the arm it
+  // was cut from when that is a different arm. Both contrasts are already in
+  // the schedule, so computing only the first would throw away the clean one:
+  // candidate vs baseline says whether the work helped, stripped vs its own
+  // parent says whether these tasks can see documentation at all.
+  const strippedRef = manifest.gate?.strippedRefArm;
+  const stripped = manifest.gate?.strippedArm;
+  const extra = strippedRef && stripped && strippedRef !== ref && arms.includes(strippedRef) && arms.includes(stripped) ? [[stripped, strippedRef]] : [];
+  const pairings = [...arms.filter((a) => a !== ref).map((a) => [a, ref]), ...extra];
+  const deltas = pairings.map(([a, r]) => pairedDelta(summary, tasks, a, r));
+  const effortPaired = pairings.map(([a, r]) => pairedEffort(effort, tasks, a, r));
   const calibration = isCalibration(manifest) ? calibrationTable(finals, manifest, arms, tasks) : null;
   // One run per task proves nothing about an arm: a calibration campaign is
   // measured, never gated.
@@ -724,15 +847,15 @@ export function renderMarkdown(report) {
     L.push("", `report.json carries every metric per task, not just ${gm.label}.`);
   }
   if (report.effortPaired?.length) {
-    L.push("", `## Effort paired by task, against \`${report.effortRef}\``, "");
+    L.push("", "## Effort paired by task", "");
     L.push(`> ${report.effortMethod}`, "");
-    L.push("| arm | metric | tasks | median Δ | mean Δ | Δ relative | 95% bootstrap (relative) | higher / lower / tied | sign p |");
-    L.push(`|---|${new Array(8).fill("---").join("|")}|`);
+    L.push("| arm | vs | metric | tasks | median Δ | mean Δ | Δ relative | 95% bootstrap (relative) | higher / lower / tied | sign p |");
+    L.push(`|---|${new Array(9).fill("---").join("|")}|`);
     for (const p of report.effortPaired) {
       for (const m of EFFORT_METRICS) {
         const x = p.metrics[m.key];
         const ci = range(x.relativeCi.lo, x.relativeCi.hi);
-        L.push(`| ${p.arm} | ${m.label} | ${x.tasks} | ${n1(x.medianDelta)} | ${n1(x.meanDelta)} | ${pct(x.meanRelative)} | ${ci} | ${x.higher} / ${x.lower} / ${x.ties} | ${x.signTestP.toFixed(3)} |`);
+        L.push(`| ${p.arm} | ${p.ref} | ${m.label} | ${x.relativeTasks} | ${n1(x.medianDelta)} | ${n1(x.meanDelta)} | ${pct(x.meanRelative)} | ${ci} | ${x.higher} / ${x.lower} / ${x.ties} | ${x.signTestP.toFixed(3)} |`);
       }
     }
     L.push("", "\"higher\" means the arm spent MORE than the reference on that metric, which for effort is the arm doing worse. An interval spanning zero is a difference this campaign cannot tell from noise.");
@@ -747,14 +870,14 @@ export function renderMarkdown(report) {
     const g = report.gate;
     L.push("", `## ${g.label ?? "Pilot gate"}: **${g.decision.toUpperCase()}**`, "");
     if (g.a) {
-      L.push(`- (a) the ${g.a.strippedArm ?? "stripped"} arm is worse than both baselines${g.a.effort ? " on solved rate OR on effort" : ""}: ${g.a.pass ? `pass (fired by ${g.a.firedBy})` : "FAIL"}`);
-      L.push(`  - solved: ${g.a.solvedPass ? "pass" : "FAIL"} — baselines ${Object.entries(g.a.baseline).map(([k, v]) => `${k} ${pct(v)}`).join(", ")}, ${g.a.strippedArm ?? "stripped"} ${pct(g.a.stripped)}, A/A gap ${pct(g.a.aaGap)}, required margin ${pct(g.a.requiredMargin)}`);
+      L.push(`- (a) the ${g.a.strippedArm ?? "stripped"} arm is worse than ${(g.a.refArms ?? []).length === 1 ? `its reference \`${g.a.refArms[0]}\`` : "both baselines"}${g.a.effort ? " on solved rate OR on effort" : ""}: ${g.a.pass ? `pass (fired by ${g.a.firedBy})` : "FAIL"}`);
+      L.push(`  - solved: ${g.a.solvedPass ? "pass" : "FAIL"} — reference${(g.a.refArms ?? []).length > 1 ? "s" : ""} ${Object.entries(g.a.baseline).map(([k, v]) => `${k} ${pct(v)}`).join(", ")}, ${g.a.strippedArm ?? "stripped"} ${pct(g.a.stripped)}, A/A gap ${pct(g.a.aaGap)}, required margin ${pct(g.a.requiredMargin)}`);
       if (g.a.effort) {
         const e = g.a.effort;
         if (e.unavailable) L.push(`  - effort: not evaluated — ${e.unavailable}`);
         else {
-          L.push(`  - effort (${e.metric}): ${e.pass ? "pass" : "FAIL"} — needs ≥ ${pct(e.requiredMargin)} more than EACH baseline, above the A/A effort gap ${pct(e.aaEffortGap)}${e.ciMustExcludeZero ? ", interval clear of zero" : ""}`);
-          for (const [base, c] of Object.entries(e.perBaseline)) {
+          L.push(`  - effort (${e.metric}): ${e.pass ? "pass" : "FAIL"} — needs ≥ ${pct(e.requiredMargin)} more than ${(g.a.refArms ?? []).length === 1 ? "its reference" : "EACH reference"}, above the A/A effort gap ${pct(e.aaEffortGap)}${e.ciMustExcludeZero ? ", interval clear of zero" : ""}`);
+          for (const [base, c] of Object.entries(e.perReference)) {
             L.push(`    - vs ${base}: ${pct(c.relative)} (95% ${range(c.ci.lo, c.ci.hi)}) over ${c.tasks} tasks, higher on ${c.higherOn}, lower on ${c.lowerOn}, sign p = ${c.signTestP.toFixed(3)} — margin ${c.okMargin ? "ok" : "short"}, above A/A ${c.okAboveNoise ? "ok" : "no"}, interval ${c.okCi ? "ok" : "spans zero"}`);
           }
         }
