@@ -123,7 +123,13 @@ export function webMembers(
   if (detail.lacedWeb !== true && !riveted) return { meshes: [faceSkin(g, id, paths, outer)] };
   const ends =
     joints === undefined ? {} : memberJoints(g, id, paths, outer, joints.upright, riveted);
-  const struts = latticeStruts(g, id, paths, {
+  // A member with joints is a strut only between them: its ends stop where
+  // its joint starts, just clear of the upright, and the gusset plates
+  // cover the rest. Running it axis to axis put its lacing (and lacing
+  // rivets) inside the upright's box — up to 15% of them in the shaft.
+  const members =
+    joints === undefined ? paths : trimToJoints(g, id, paths, outer, joints.upright);
+  const struts = latticeStruts(g, id, members, {
     halfWidth: outer.map(([y, w]) => [y, w - CHORD] as const),
     chord: CHORD,
     lacing: LACE,
@@ -145,6 +151,59 @@ const CLEAR = 0.05;
 const PLATE_REACH = 3;
 /** Rivets along a chord over a plate, every this far [estimated, as the seams]. */
 const JOINT_PITCH = 0.1;
+
+/**
+ * How far along a member, from its end `end` (0 first, 1 second), its
+ * joint starts: clear of the upright's box. A point a along the member and
+ * w off its axis (a chord's rivet row) is a sin(t) - w cos(t) from the
+ * upright's axis, t being the angle the member meets it at (`endSin`) — so
+ * a steep diagonal is still inside the box well past r along its own
+ * length. Solved for the upright's half-width plus a margin; the sine is
+ * clamped, so a member all but parallel to its upright does not run away.
+ */
+function jointStart(
+  outer: ReadonlyArray<readonly [number, number]>,
+  upright: ReadonlyArray<readonly [number, number]>,
+  end: 0 | 1,
+): Field {
+  const y = component(position(), 1);
+  const w = sub(ramp(y, outer), CHORD);
+  const sine = max(component(attribute(END_SINE, 2), end), 0.25);
+  const cosine = sqrt(sub(1, mul(sine, sine)));
+  return div(add(add(ramp(y, upright), CLEAR), mul(add(w, CHORD), cosine)), sine);
+}
+
+/**
+ * Shorten every member to the stretch between its joints: each end moves
+ * in along the member to where its joint starts. The members of an edge
+ * rule share their end points, so each is first resampled onto two points
+ * of its own (carrying its primitive attributes, `faceN` and `endSin`).
+ */
+function trimToJoints(
+  g: Graph,
+  id: string,
+  paths: NodeHandle,
+  outer: ReadonlyArray<readonly [number, number]>,
+  upright: ReadonlyArray<readonly [number, number]>,
+): NodeHandle {
+  const own = g.add(pathResample, { mode: "count", count: 2 }, `${id}Own`);
+  const first = lt(attribute("curveU"), 0.5);
+  const T = attribute("tangent", 3);
+  const moved = g.add(
+    transformPoints,
+    {
+      translate: select(
+        first,
+        mul(T, jointStart(outer, upright, 0)),
+        mul(T, mul(jointStart(outer, upright, 1), -1)),
+      ),
+    },
+    `${id}Trimmed`,
+  );
+  g.connect(paths, "out", own, "in");
+  g.connect(own, "out", moved, "in");
+  return moved;
+}
 
 /**
  * THE JOINTS. Every web member ends on an upright, and at each end a pair
@@ -171,17 +230,7 @@ function memberJoints(
 ): { gussets: NodeHandle; jointRivets?: NodeHandle } {
   const y = component(position(), 1);
   const w = sub(ramp(y, outer), CHORD);
-  // Clear of the upright's box. A point a along the member and w off its
-  // axis (a chord's rivet row) is a sin(t) - w cos(t) from the upright's
-  // axis, t being the angle the member meets it at — so a steep diagonal
-  // is still inside the box well past r along its own length. Solve for
-  // the upright's half-width plus a margin; the sine is clamped, so a
-  // member all but parallel to its upright does not run away.
-  const clearAt = (end: 0 | 1): Field => {
-    const sine = max(component(attribute(END_SINE, 2), end), 0.25);
-    const cosine = sqrt(sub(1, mul(sine, sine)));
-    return div(add(add(ramp(y, upright), CLEAR), mul(add(w, CHORD), cosine)), sine);
-  };
+  const clearAt = (end: 0 | 1): Field => jointStart(outer, upright, end);
   const reach = mul(w, PLATE_REACH);
   const T = attribute("tangent", 3);
   const F = attribute(FACE_NORMAL, 3);
