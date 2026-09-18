@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-18T06:13:51.517Z",
+  "ok": true,
+  "problems": [],
+  "version": "2.1.273",
+  "probe": {
+    "cached": true,
+    "key": "4f67c85e64c92f417950e4a36bc35db860cd4103716cf6a09da27a4fdece20c2",
+    "at": "2026-09-15T20:28:36.793Z",
+    "cleanHits": [],
+    "controlHitCount": 52
+  },
+  "limited": null
+}

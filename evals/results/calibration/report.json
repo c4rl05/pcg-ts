@@ -1,0 +1,825 @@
+{
+  "campaign": "calibration",
+  "generatedAt": "2026-09-18T07:53:05.540Z",
+  "progress": {
+    "done": 8,
+    "total": 8,
+    "complete": true
+  },
+  "model": "claude-sonnet-5",
+  "claudeVersion": "2.1.273",
+  "claudeVersionsSeen": [
+    "2.1.273"
+  ],
+  "arms": [
+    "A"
+  ],
+  "tasks": [
+    "canopy-gaps",
+    "cavern-lamps",
+    "contour-vines",
+    "crater-debris",
+    "facade-windows",
+    "quarry-terraces",
+    "quay-cranes",
+    "twin-quarters"
+  ],
+  "summary": {
+    "cell": {
+      "canopy-gaps": {
+        "A": {
+          "n": 1,
+          "solved": 1,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.20654931437723745,
+          "hi": 1
+        }
+      },
+      "cavern-lamps": {
+        "A": {
+          "n": 1,
+          "solved": 1,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.20654931437723745,
+          "hi": 1
+        }
+      },
+      "contour-vines": {
+        "A": {
+          "n": 1,
+          "solved": 1,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.20654931437723745,
+          "hi": 1
+        }
+      },
+      "crater-debris": {
+        "A": {
+          "n": 1,
+          "solved": 1,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.20654931437723745,
+          "hi": 1
+        }
+      },
+      "facade-windows": {
+        "A": {
+          "n": 1,
+          "solved": 1,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.20654931437723745,
+          "hi": 1
+        }
+      },
+      "quarry-terraces": {
+        "A": {
+          "n": 1,
+          "solved": 1,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.20654931437723745,
+          "hi": 1
+        }
+      },
+      "quay-cranes": {
+        "A": {
+          "n": 1,
+          "solved": 1,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.20654931437723745,
+          "hi": 1
+        }
+      },
+      "twin-quarters": {
+        "A": {
+          "n": 1,
+          "solved": 1,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.20654931437723745,
+          "hi": 1
+        }
+      }
+    },
+    "byArm": {
+      "A": {
+        "n": 8,
+        "solved": 8,
+        "contaminated": 0,
+        "infra": 0,
+        "p": 1,
+        "lo": 0.6755924351161198,
+        "hi": 1
+      }
+    },
+    "byTask": {
+      "canopy-gaps": {
+        "n": 1,
+        "solved": 1,
+        "p": 1,
+        "lo": 0.20654931437723745,
+        "hi": 1
+      },
+      "cavern-lamps": {
+        "n": 1,
+        "solved": 1,
+        "p": 1,
+        "lo": 0.20654931437723745,
+        "hi": 1
+      },
+      "contour-vines": {
+        "n": 1,
+        "solved": 1,
+        "p": 1,
+        "lo": 0.20654931437723745,
+        "hi": 1
+      },
+      "crater-debris": {
+        "n": 1,
+        "solved": 1,
+        "p": 1,
+        "lo": 0.20654931437723745,
+        "hi": 1
+      },
+      "facade-windows": {
+        "n": 1,
+        "solved": 1,
+        "p": 1,
+        "lo": 0.20654931437723745,
+        "hi": 1
+      },
+      "quarry-terraces": {
+        "n": 1,
+        "solved": 1,
+        "p": 1,
+        "lo": 0.20654931437723745,
+        "hi": 1
+      },
+      "quay-cranes": {
+        "n": 1,
+        "solved": 1,
+        "p": 1,
+        "lo": 0.20654931437723745,
+        "hi": 1
+      },
+      "twin-quarters": {
+        "n": 1,
+        "solved": 1,
+        "p": 1,
+        "lo": 0.20654931437723745,
+        "hi": 1
+      }
+    }
+  },
+  "pairedDeltas": [],
+  "processMetrics": {
+    "A": {
+      "runs": 8,
+      "turnsMean": 47.375,
+      "turnsMedian": 45,
+      "toolCallsMean": 46.375,
+      "validateCallsMean": 0.875,
+      "validateFailureRate": 0,
+      "probeGraphsMean": 0,
+      "outputTokensMean": 55492.125,
+      "wallMinutesMean": 10.19923125,
+      "capsHit": {},
+      "readShare": {
+        "llms": 1,
+        "docs": 0.875,
+        "skills": 0.375,
+        "graphs": 0.875
+      },
+      "graphProducedRate": 1
+    }
+  },
+  "effort": {
+    "byArm": {
+      "A": {
+        "runs": 8,
+        "validateFailureRate": 0,
+        "capsHit": {},
+        "capsHitRate": 0,
+        "readShare": {
+          "llms": 1,
+          "docs": 0.875,
+          "skills": 0.375,
+          "graphs": 0.875
+        },
+        "graphProducedRate": 1,
+        "metrics": {
+          "turns": {
+            "n": 8,
+            "mean": 47.375,
+            "median": 45,
+            "p25": 31,
+            "p75": 56
+          },
+          "toolCalls": {
+            "n": 8,
+            "mean": 46.375,
+            "median": 44,
+            "p25": 30,
+            "p75": 55
+          },
+          "wallMinutes": {
+            "n": 8,
+            "mean": 10.19923125,
+            "median": 7.902491666666666,
+            "p25": 5.42755,
+            "p75": 11.254383333333333
+          },
+          "outputTokens": {
+            "n": 8,
+            "mean": 55492.125,
+            "median": 43243,
+            "p25": 32329,
+            "p75": 62090
+          },
+          "validateCalls": {
+            "n": 8,
+            "mean": 0.875,
+            "median": 1,
+            "p25": 0,
+            "p75": 1
+          },
+          "probeGraphs": {
+            "n": 8,
+            "mean": 0,
+            "median": 0,
+            "p25": 0,
+            "p75": 0
+          }
+        }
+      }
+    },
+    "cell": {
+      "canopy-gaps": {
+        "A": {
+          "runs": 1,
+          "metrics": {
+            "turns": {
+              "n": 1,
+              "mean": 31,
+              "median": 31,
+              "p25": 31,
+              "p75": 31
+            },
+            "toolCalls": {
+              "n": 1,
+              "mean": 30,
+              "median": 30,
+              "p25": 30,
+              "p75": 30
+            },
+            "wallMinutes": {
+              "n": 1,
+              "mean": 6.730466666666667,
+              "median": 6.730466666666667,
+              "p25": 6.730466666666667,
+              "p75": 6.730466666666667
+            },
+            "outputTokens": {
+              "n": 1,
+              "mean": 32406,
+              "median": 32406,
+              "p25": 32406,
+              "p75": 32406
+            },
+            "validateCalls": {
+              "n": 1,
+              "mean": 1,
+              "median": 1,
+              "p25": 1,
+              "p75": 1
+            },
+            "probeGraphs": {
+              "n": 1,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        }
+      },
+      "cavern-lamps": {
+        "A": {
+          "runs": 1,
+          "metrics": {
+            "turns": {
+              "n": 1,
+              "mean": 57,
+              "median": 57,
+              "p25": 57,
+              "p75": 57
+            },
+            "toolCalls": {
+              "n": 1,
+              "mean": 56,
+              "median": 56,
+              "p25": 56,
+              "p75": 56
+            },
+            "wallMinutes": {
+              "n": 1,
+              "mean": 11.254383333333333,
+              "median": 11.254383333333333,
+              "p25": 11.254383333333333,
+              "p75": 11.254383333333333
+            },
+            "outputTokens": {
+              "n": 1,
+              "mean": 62090,
+              "median": 62090,
+              "p25": 62090,
+              "p75": 62090
+            },
+            "validateCalls": {
+              "n": 1,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            },
+            "probeGraphs": {
+              "n": 1,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        }
+      },
+      "contour-vines": {
+        "A": {
+          "runs": 1,
+          "metrics": {
+            "turns": {
+              "n": 1,
+              "mean": 31,
+              "median": 31,
+              "p25": 31,
+              "p75": 31
+            },
+            "toolCalls": {
+              "n": 1,
+              "mean": 30,
+              "median": 30,
+              "p25": 30,
+              "p75": 30
+            },
+            "wallMinutes": {
+              "n": 1,
+              "mean": 6.956,
+              "median": 6.956,
+              "p25": 6.956,
+              "p75": 6.956
+            },
+            "outputTokens": {
+              "n": 1,
+              "mean": 36321,
+              "median": 36321,
+              "p25": 36321,
+              "p75": 36321
+            },
+            "validateCalls": {
+              "n": 1,
+              "mean": 1,
+              "median": 1,
+              "p25": 1,
+              "p75": 1
+            },
+            "probeGraphs": {
+              "n": 1,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        }
+      },
+      "crater-debris": {
+        "A": {
+          "runs": 1,
+          "metrics": {
+            "turns": {
+              "n": 1,
+              "mean": 53,
+              "median": 53,
+              "p25": 53,
+              "p75": 53
+            },
+            "toolCalls": {
+              "n": 1,
+              "mean": 52,
+              "median": 52,
+              "p25": 52,
+              "p75": 52
+            },
+            "wallMinutes": {
+              "n": 1,
+              "mean": 8.848983333333333,
+              "median": 8.848983333333333,
+              "p25": 8.848983333333333,
+              "p75": 8.848983333333333
+            },
+            "outputTokens": {
+              "n": 1,
+              "mean": 50165,
+              "median": 50165,
+              "p25": 50165,
+              "p75": 50165
+            },
+            "validateCalls": {
+              "n": 1,
+              "mean": 2,
+              "median": 2,
+              "p25": 2,
+              "p75": 2
+            },
+            "probeGraphs": {
+              "n": 1,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        }
+      },
+      "facade-windows": {
+        "A": {
+          "runs": 1,
+          "metrics": {
+            "turns": {
+              "n": 1,
+              "mean": 56,
+              "median": 56,
+              "p25": 56,
+              "p75": 56
+            },
+            "toolCalls": {
+              "n": 1,
+              "mean": 55,
+              "median": 55,
+              "p25": 55,
+              "p75": 55
+            },
+            "wallMinutes": {
+              "n": 1,
+              "mean": 16.2,
+              "median": 16.2,
+              "p25": 16.2,
+              "p75": 16.2
+            },
+            "outputTokens": {
+              "n": 1,
+              "mean": 91838,
+              "median": 91838,
+              "p25": 91838,
+              "p75": 91838
+            },
+            "validateCalls": {
+              "n": 1,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            },
+            "probeGraphs": {
+              "n": 1,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        }
+      },
+      "quarry-terraces": {
+        "A": {
+          "runs": 1,
+          "metrics": {
+            "turns": {
+              "n": 1,
+              "mean": 83,
+              "median": 83,
+              "p25": 83,
+              "p75": 83
+            },
+            "toolCalls": {
+              "n": 1,
+              "mean": 82,
+              "median": 82,
+              "p25": 82,
+              "p75": 82
+            },
+            "wallMinutes": {
+              "n": 1,
+              "mean": 21.80228333333333,
+              "median": 21.80228333333333,
+              "p25": 21.80228333333333,
+              "p75": 21.80228333333333
+            },
+            "outputTokens": {
+              "n": 1,
+              "mean": 117991,
+              "median": 117991,
+              "p25": 117991,
+              "p75": 117991
+            },
+            "validateCalls": {
+              "n": 1,
+              "mean": 2,
+              "median": 2,
+              "p25": 2,
+              "p75": 2
+            },
+            "probeGraphs": {
+              "n": 1,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        }
+      },
+      "quay-cranes": {
+        "A": {
+          "runs": 1,
+          "metrics": {
+            "turns": {
+              "n": 1,
+              "mean": 37,
+              "median": 37,
+              "p25": 37,
+              "p75": 37
+            },
+            "toolCalls": {
+              "n": 1,
+              "mean": 36,
+              "median": 36,
+              "p25": 36,
+              "p75": 36
+            },
+            "wallMinutes": {
+              "n": 1,
+              "mean": 5.42755,
+              "median": 5.42755,
+              "p25": 5.42755,
+              "p75": 5.42755
+            },
+            "outputTokens": {
+              "n": 1,
+              "mean": 32329,
+              "median": 32329,
+              "p25": 32329,
+              "p75": 32329
+            },
+            "validateCalls": {
+              "n": 1,
+              "mean": 1,
+              "median": 1,
+              "p25": 1,
+              "p75": 1
+            },
+            "probeGraphs": {
+              "n": 1,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        }
+      },
+      "twin-quarters": {
+        "A": {
+          "runs": 1,
+          "metrics": {
+            "turns": {
+              "n": 1,
+              "mean": 31,
+              "median": 31,
+              "p25": 31,
+              "p75": 31
+            },
+            "toolCalls": {
+              "n": 1,
+              "mean": 30,
+              "median": 30,
+              "p25": 30,
+              "p75": 30
+            },
+            "wallMinutes": {
+              "n": 1,
+              "mean": 4.374183333333334,
+              "median": 4.374183333333334,
+              "p25": 4.374183333333334,
+              "p75": 4.374183333333334
+            },
+            "outputTokens": {
+              "n": 1,
+              "mean": 20797,
+              "median": 20797,
+              "p25": 20797,
+              "p75": 20797
+            },
+            "validateCalls": {
+              "n": 1,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            },
+            "probeGraphs": {
+              "n": 1,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        }
+      }
+    }
+  },
+  "effortPaired": [],
+  "effortRef": "A",
+  "effortMethod": "Effort is summarised as the MEDIAN over runs, not the mean: one run that hits its turn cap would otherwise move an arm on its own. Each comparison is PAIRED BY TASK — per task, the difference of the two arms' medians, and that difference as a fraction of the REFERENCE arm's median, since a task's turn count is set by the task. The stripped arm's reference is the tarball it was cut from, not the baseline: against a build from another commit, losing the docs and changing the library would be one effect. The aggregate is the mean of those per-task values, with a 95% percentile bootstrap over TASKS (2000 resamples, seeded per arm/reference/metric — so the same runs.jsonl always prints the same interval, and the metric rows are independent draws rather than one draw repeated) and an exact two-sided sign test on the per-task signs. The bootstrap treats the tasks as the sample: it answers 'would another set of tasks like these show the same difference', which is the question a campaign of a handful of tasks can ask. The A/A pair is the noise floor: whatever separates the same tarball under two labels is what run-to-run wobble looks like here, and an effect smaller than that is not an effect.",
+  "calibration": {
+    "arm": "A",
+    "rows": [
+      {
+        "task": "canopy-gaps",
+        "tier": "held-out",
+        "runs": 1,
+        "solved": 1,
+        "graphProduced": 1,
+        "turns": 31,
+        "toolCalls": 30,
+        "wallMinutes": 6.730466666666667,
+        "outputTokens": 32406,
+        "validateCalls": 1,
+        "capsHit": [],
+        "contaminated": 0,
+        "infraError": 0,
+        "outcome": "ok",
+        "scorerError": false
+      },
+      {
+        "task": "cavern-lamps",
+        "tier": "held-out",
+        "runs": 1,
+        "solved": 1,
+        "graphProduced": 1,
+        "turns": 57,
+        "toolCalls": 56,
+        "wallMinutes": 11.254383333333333,
+        "outputTokens": 62090,
+        "validateCalls": 0,
+        "capsHit": [],
+        "contaminated": 0,
+        "infraError": 0,
+        "outcome": "ok",
+        "scorerError": false
+      },
+      {
+        "task": "contour-vines",
+        "tier": "held-out",
+        "runs": 1,
+        "solved": 1,
+        "graphProduced": 1,
+        "turns": 31,
+        "toolCalls": 30,
+        "wallMinutes": 6.956,
+        "outputTokens": 36321,
+        "validateCalls": 1,
+        "capsHit": [],
+        "contaminated": 0,
+        "infraError": 0,
+        "outcome": "ok",
+        "scorerError": false
+      },
+      {
+        "task": "crater-debris",
+        "tier": "held-out",
+        "runs": 1,
+        "solved": 1,
+        "graphProduced": 1,
+        "turns": 53,
+        "toolCalls": 52,
+        "wallMinutes": 8.848983333333333,
+        "outputTokens": 50165,
+        "validateCalls": 2,
+        "capsHit": [],
+        "contaminated": 0,
+        "infraError": 0,
+        "outcome": "ok",
+        "scorerError": false
+      },
+      {
+        "task": "facade-windows",
+        "tier": "held-out",
+        "runs": 1,
+        "solved": 1,
+        "graphProduced": 1,
+        "turns": 56,
+        "toolCalls": 55,
+        "wallMinutes": 16.2,
+        "outputTokens": 91838,
+        "validateCalls": 0,
+        "capsHit": [],
+        "contaminated": 0,
+        "infraError": 0,
+        "outcome": "ok",
+        "scorerError": false
+      },
+      {
+        "task": "quarry-terraces",
+        "tier": "held-out",
+        "runs": 1,
+        "solved": 1,
+        "graphProduced": 1,
+        "turns": 83,
+        "toolCalls": 82,
+        "wallMinutes": 21.80228333333333,
+        "outputTokens": 117991,
+        "validateCalls": 2,
+        "capsHit": [],
+        "contaminated": 0,
+        "infraError": 0,
+        "outcome": "ok",
+        "scorerError": false
+      },
+      {
+        "task": "quay-cranes",
+        "tier": "held-out",
+        "runs": 1,
+        "solved": 1,
+        "graphProduced": 1,
+        "turns": 37,
+        "toolCalls": 36,
+        "wallMinutes": 5.42755,
+        "outputTokens": 32329,
+        "validateCalls": 1,
+        "capsHit": [],
+        "contaminated": 0,
+        "infraError": 0,
+        "outcome": "ok",
+        "scorerError": false
+      },
+      {
+        "task": "twin-quarters",
+        "tier": "held-out",
+        "runs": 1,
+        "solved": 1,
+        "graphProduced": 1,
+        "turns": 31,
+        "toolCalls": 30,
+        "wallMinutes": 4.374183333333334,
+        "outputTokens": 20797,
+        "validateCalls": 0,
+        "capsHit": [],
+        "contaminated": 0,
+        "infraError": 0,
+        "outcome": "ok",
+        "scorerError": false
+      }
+    ],
+    "totals": {
+      "tasks": 8,
+      "runs": 8,
+      "solved": 8,
+      "turnsMedian": 45,
+      "wallMinutesTotal": 81.59385,
+      "outputTokensTotal": 443937,
+      "capsHit": [],
+      "contaminated": 0
+    }
+  },
+  "contaminated": [],
+  "infraErrors": [],
+  "scorerErrors": [],
+  "gate": null,
+  "proposedReplacement": null,
+  "caveat": "n = 8 runs per arm. A Wilson interval this wide detects only large effects; pass rates are not significance tests, and the gate is a go/stop rule, not a hypothesis test."
+}

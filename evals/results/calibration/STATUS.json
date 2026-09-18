@@ -1,0 +1,16 @@
+{
+  "state": "done",
+  "completed": 8,
+  "total": 8,
+  "wakeReasons": [],
+  "campaign": "calibration",
+  "sleepUntil": null,
+  "blockedSince": null,
+  "infraSince": null,
+  "updatedAt": "2026-09-18T07:53:05.541Z",
+  "pid": 61032,
+  "currentSlot": null,
+  "attempt": 1,
+  "lastSlot": "r0.quarry-terraces.A",
+  "gate": null
+}
