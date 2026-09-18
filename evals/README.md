@@ -11,18 +11,18 @@ is nondeterministic and it spends the owner's Claude subscription allowance.
 | Path | What | In git |
 |---|---|---|
 | `evals/eval.config.json` | model, arms, tasks, caps, gate thresholds, campaigns | yes |
-| `evals/harness/pack.mjs` | build + pack a tarball with a manifest; derive the stripped arm | yes |
+| `evals/harness/pack.mjs` | build + pack a tarball with a manifest; derive a stripped arm (`docs` and/or `graphs`) | yes |
 | `evals/harness/sandbox.mjs` | a temp consumer project per run (plus shared helpers) | yes |
 | `evals/harness/agents/claude-code.mjs` | headless Claude Code adapter: isolation, caps, transcript parsing | yes |
 | `evals/harness/limits.mjs` | usage-limit vs failure classification, reset parsing, backoff | yes |
 | `evals/harness/selftest.mjs` | task validation, reference/negative scoring, brief lint, isolation probe | yes |
 | `evals/harness/run.mjs` | the resumable campaign runner | yes |
-| `evals/harness/report.mjs` | Wilson intervals, paired deltas, process metrics, the pilot gate | yes |
+| `evals/harness/report.mjs` | Wilson intervals, paired deltas, effort metrics and their bootstrap, the gate, the calibration table | yes |
 | `evals/harness/score.mjs`, `evals/lib/` | the scorer (separate unit; contract below) | yes |
 | `evals/harness/fixtures/` | a trivial task, a stub scorer, a stub agent, a real transcript | yes |
 | `evals/tasks/<id>/` | corpus-adjacent tasks | yes |
 | `D:/Projects/JS/pcg-ts-private/evals/tasks/<id>/` | held-out tasks (briefs in a public repo end up in training data) | private repo |
-| `evals/results/<campaign>/` | `manifest.json`, `runs.jsonl`, `discarded.jsonl`, `STATUS.json`, `selftest.json`, `report.{json,md}` | yes |
+| `evals/results/<campaign>/` | `manifest.json`, `runs.jsonl`, `discarded.jsonl`, `STATUS.json`, `selftest.json`, `report.{json,md}`, `calibration.md` (calibration campaigns only) | yes |
 | `evals/tarballs/` | the tarballs themselves, referenced by absolute path from the config | **no** |
 | `evals/runs/<campaign>/<slot>-a<attempt>/` | transcripts, the agent's graph and workspace | **no** |
 
@@ -31,12 +31,21 @@ is nondeterministic and it spends the owner's Claude subscription allowance.
 ```sh
 node evals/harness/pack.mjs --from-repo --label candidate-u1     # build + pack the current tree
 node evals/harness/pack.mjs --strip-docs evals/tarballs/baseline-0.17.0-0ad6998.tgz
+node evals/harness/pack.mjs --strip-graphs evals/tarballs/baseline-0.17.0-0ad6998.tgz
+node evals/harness/pack.mjs --strip-docs --strip-graphs \
+  --from evals/tarballs/candidate-U1-0.17.0-9284b1f.tgz          # -> stripped-all-0.17.0-9284b1f.tgz
+node evals/harness/pack.mjs --verify evals/tarballs/<t>.tgz      # install it and run its CLI
 node evals/harness/selftest.mjs --campaign pilot                 # exit 0 pass, 1 fail, 2 config
-node evals/harness/run.mjs --campaign pilot                      # exit 0 done, 10 wake owner, 2 config, 1 crash
-node evals/harness/run.mjs --campaign pilot --dry-run            # print the schedule, spend nothing
-node evals/harness/report.mjs --campaign pilot
-node --test --test-concurrency=1 "evals/harness/*.test.mjs"      # the harness' own tests (~90 s)
+node evals/harness/run.mjs --campaign calibration                # one run per task, one arm, no gate
+node evals/harness/run.mjs --campaign v2                         # exit 0 done, 10 wake owner, 2 config, 1 crash
+node evals/harness/run.mjs --campaign v2 --dry-run               # print the schedule, spend nothing
+node evals/harness/report.mjs --campaign v2
+node --test --test-concurrency=1 "evals/harness/*.test.mjs"      # the harness' own tests (~5 min)
 ```
+
+Run the tests with `NODE_ENV` unset (`env -u NODE_ENV node --test ...`): this
+machine's shell exports `NODE_ENV=production`, which other suites in this
+repository read.
 
 `npm run eval`, `npm run eval:selftest` and `npm run eval:pack` are the same
 three entry points. To exercise the runner end to end without spending
@@ -54,9 +63,19 @@ STUB_AGENT_SCRIPT=<script.json> node evals/harness/run.mjs --campaign fixture \
 - A task dir holds `brief.md`, `task.json`, `reference.graph.json`,
   `check.mjs`, and `negatives/<name>.graph.json` each with
   `negatives/<name>.expect.json` = `{ "failsCheck": "<checkId>" }`.
-- `task.json` = `{ id, tier: "corpus-adjacent"|"held-out", title, outputs: [{ name, kind }], seeds: number[], budgets: { turns, wallMinutes }, checks: [{ id, hard, description }], reserve? }`.
+- `task.json` = `{ id, tier: "corpus-adjacent"|"held-out", title, outputs: [{ name, kind }], seeds: number[], budgets: { turns, wallMinutes }, checks: [{ id, hard, description }], reserve?, campaign? }`.
   `id` must equal the directory name. `reserve: true` tasks are not in a
   `"non-reserve"` selection; the gate swaps them in for floor/ceiling tasks.
+  `campaign: "<name>"` is how a campaign takes a set of tasks without naming
+  them one by one: `"tasks": { "campaign": "v2" }` in the config selects every
+  task file carrying that value, across both task dirs, reserve or not. An
+  explicit `tasks.include` wins over `tasks.campaign`, because `run.mjs` finds
+  the reserve pool by re-selecting the same object with `include: "reserve"`.
+  Pair it with `expectTaskCount` so a task that did not land is a loud config
+  error rather than a smaller campaign. A task that names a campaign is NOT in
+  the default `"non-reserve"` pool, the way a reserve task is not — it belongs
+  to the campaign that claimed it. Without that, authoring v2's eight tasks
+  would have quietly enlarged the pilot's six.
 - `node evals/harness/score.mjs --task <taskDir> --graph <graph.json> --pcg <sandbox>/node_modules/pcg-ts`
   prints ONE JSON object `{ graphProduced, validates, cooks, deterministic, partitionSafe, checks: { [id]: { pass, perSeed } }, solved, score, error? }`
   and exits 0 whenever it produced it. The harness always runs it in a new
@@ -342,6 +361,165 @@ over a long campaign lands on every task alike); task order shuffled per
 round; arm order shuffled within each (task, run) block. mulberry32 seeded
 by `scheduleSeed`; the whole schedule is written into the manifest.
 
+## Campaigns and arms
+
+| Campaign | Arms | Tasks | Runs/task | Slots | Gate |
+|---|---|---|---|---|---|
+| `pilot` | A, A-prime, stripped | non-reserve (6) | 3 | 54 | pilot gate (solved only) |
+| `calibration` | A | `campaign: "v2"` (8) | 1 | 8 | none — `calibration.md` instead |
+| `v2` | A, A-prime, candidate-U1, stripped-all | `campaign: "v2"` (8) | 3 | 96 | v2 gate (solved OR effort) |
+| `fixture` | A, A-prime, stripped | `fixture-grid` | 1 | 3 | pilot gate |
+
+**Strip sets.** `pack.mjs` derives a sensitivity arm by filtering a tarball's
+tar stream block by block — nothing else can change, no re-ordered entries, no
+new mtimes, no platform tar differences. Two sets:
+
+| Flag | Removes | Default label |
+|---|---|---|
+| `--strip-docs` | `llms.txt`, `docs/`, `skills/` | `stripped` |
+| `--strip-graphs` | `graphs/`, `docs/graphs.json`, `docs/graphs.md` | `stripped-graphs` |
+| both | the union | `stripped-all` |
+
+They combine: `--strip-docs a.tgz --strip-graphs`, `--strip-graphs a.tgz
+--strip-docs` and `--strip-docs --strip-graphs --from a.tgz` all name the same
+job, and two different source tarballs is an error. The manifest beside the
+result records `stripSets`, `strippedPaths`, `derivedFrom: { file, sha256 }`
+and every removed entry, and the result is installed into a scratch sandbox
+where `pcg --help` and `pcg nodes --json` must run, or the tarball is deleted
+and the command fails.
+
+The `graphs` set takes the corpus index with the corpus bodies on purpose:
+`docs/graphs.json` carries every graph's title, description, tags and node
+types, so leaving it would leave the corpus in prose and point `pcg graphs` at
+files that are not there. Removing the bodies is the point — **the pilot's own
+finding was that agents read the shipped `graphs/` corpus in 83–89% of runs in
+EVERY arm, the docs-stripped one included**, so the prose was never what the
+docs-blind arm lost.
+
+**How the CLI degrades without the corpus** (measured 2026-09-18 against
+`stripped-all-0.17.0-9284b1f`, recorded per tarball in the manifest's
+`degradation`, which probes `pcg graphs`, `pcg nodes <type>` and `pcg agents`):
+
+- `pcg nodes <type>` answers normally and exits 0; only its example list is
+  gone. `readCorpusIndex` (`src/cli/corpus.ts`) never throws — a missing
+  `docs/graphs.json` comes back as `available: false` with a note, because
+  every caller but `pcg graphs` must still answer the question it was asked.
+- `pcg graphs`, whose whole answer IS the corpus, exits 1 with a named cause
+  and no stack trace. A coded failure, not a crash.
+- `pcg agents` exits 1 the same way in a docs-stripped arm (it reads the
+  shipped skill).
+- `pcg --help`, `pcg nodes --json`, `validate`, `cook`, `inspect` and `render`
+  are unaffected. Nothing an agent needs to AUTHOR a graph was removed — only
+  what it could read to learn how.
+
+## Calibration
+
+`node evals/harness/run.mjs --campaign calibration` is an ordinary campaign
+with one arm and one run per task: the same sandbox, adapter, scorer, resume,
+usage-limit and contamination behaviour, the same `runs.jsonl` records. What
+it adds is `calibration.md` — one row per task with solved, turns, tool calls,
+wall minutes, output tokens, validate calls, caps hit and contamination — and
+what it drops is the gate, because one run per task decides nothing about an
+arm. A campaign counts as a calibration when its config sets
+`"gate": { "mode": "calibration" }`, or simply when it has one arm and one run
+per task.
+
+It exists because of how the pilot failed: 54/54 solved in every arm, six
+tasks at the ceiling, nothing measured. Calibration answers "what does this
+task cost" for each candidate task BEFORE 96 slots are spent on them. Read
+turns and caps together with solved: a task solved in a handful of turns, with
+no validate call and no probe graph, is one v2 will find saturated; a task
+that burns the turn cap without producing a graph is at the floor.
+
+## Effort, and how it is compared
+
+The pilot's solved rate saturated while its process metrics kept varying, so
+the report leads with BOTH. Per arm and per task, for turns, tool calls, wall
+minutes, output tokens, validate calls and probe graphs:
+
+- the **median** over runs, with p25–p75, not the mean — one run that hits its
+  turn cap would otherwise move an arm on its own;
+- the rates that are not per-run numbers: validate failure rate, what was read
+  (`llms`/`docs`/`skills`/`graphs`), caps hit, graph-produced rate;
+- a **paired-by-task** comparison against the first baseline arm: per task, the
+  difference of the two arms' medians, and that difference as a fraction of the
+  baseline's median (a threshold can be stated in fractions, since a task's turn
+  count is set by the task);
+- around the mean of those per-task values, a **95% percentile bootstrap over
+  TASKS** (2000 resamples, seeded from a fixed constant, so re-running
+  `report.mjs` on the same `runs.jsonl` prints the same interval) and an exact
+  two-sided **sign test** on the per-task signs.
+
+The bootstrap treats the tasks as the sample: it answers "would another set of
+tasks like these show the same difference", which is the question a campaign of
+a handful of tasks can ask. An interval spanning zero is a difference this
+campaign cannot tell from noise. The A/A pair is the noise floor for effort
+exactly as it is for solved — whatever separates the same tarball under two
+labels is what run-to-run wobble looks like here. Contaminated and
+infrastructure runs are excluded from effort exactly as they are from rates.
+
+The report states this method in its own text, so a reader never has to open
+the source to know what the interval is.
+
+## The v2 gate, and why these thresholds
+
+Fixed in `eval.config.json` before v2's first run, and printed in the report.
+Arms: A and A-prime (the same baseline tarball — the noise floor),
+candidate-U1, and stripped-all. Go iff all of:
+
+- **(a)** the `stripped-all` arm is worse than BOTH baselines, on EITHER limb.
+  The report says which fired (`gate.a.firedBy`).
+  - **solved** — below each baseline by more than the A/A gap and by at least
+    `strippedMinMargin` = **0.17**; or
+  - **effort** — needing at least `strippedEffortMinMargin` = **0.25** more
+    `effortMetric` = **turns** than EACH baseline (paired by task, as a
+    fraction of that baseline), by more than the A/A effort gap, with the
+    bootstrap interval clear of zero (`effortCiMustExcludeZero`).
+- **(b)** the A/A gap is at most `aaMaxGap` = **0.28** on solved AND at most
+  `aaMaxEffortGap` = **0.15** on effort.
+- **(c)** no task at 0% or 100% solved pooled across all arms (as the pilot).
+
+Why these numbers. `aaMaxGap` and `strippedMinMargin` are the pilot's,
+unchanged: n per arm moves only from 18 to 24, so the noise argument below
+still holds. The effort thresholds come from the pilot's own A/A pair — the
+only measurement of run-to-run wobble there is — quoted in the SAME statistic
+the gate computes (paired by task, mean relative difference of per-task
+medians, 95% bootstrap over tasks):
+
+| metric | A-prime − A | 95% bootstrap |
+|---|---|---|
+| turns | −2.4% | −12.4% to +9.9% |
+| tool calls | −2.5% | −12.7% to +10.3% |
+| output tokens | +4.3% | −10.0% to +19.0% |
+| wall minutes | +9.6% | −7.1% to +29.0% |
+
+`aaMaxEffortGap` = 0.15 sits above the widest of those point estimates (wall
+minutes, 9.6%) and far above turns' 2.4%, so the pilot's own noise would have
+passed (b). `strippedEffortMinMargin` = 0.25 is about 2.6x that widest A/A
+point estimate. For scale, the pilot's stripped arm came in at **+6.3% on
+turns paired against A, 95% [−17.1%, +30.8%]** — it would have failed both the
+margin and the interval test, which is the right answer for an arm that still
+solved 18/18. `effortMetric` is turns because it is what the cap is set on, it
+is an integer, it does not move with machine load (wall minutes) or verbosity
+(output tokens), and it was the quietest of the four across the A/A pair.
+
+Two sharp edges the rule has to handle, and does. A relative difference is
+asymmetric (130 is 30% above 100; 100 is 23% below 130), so the A/A effort gap
+is the LARGER magnitude of the two directions — otherwise the order of
+`gate.baselineArms` would decide (b). And `aaMaxEffortGap` is checked whenever
+it is configured, with or without an effort limb; configured but unmeasurable
+FAILS, as limb (a) does, because a check that could not be run has not passed.
+
+On STOP the report says what to change, as the pilot's does: which limb
+failed, and a `fix:` line naming the action (make the stripped arm cost
+something — harder tasks, or a stronger strip set; shrink the A/A gap; replace
+the floor/ceiling tasks from the reserve).
+
+A gate that configures no effort thresholds is the pilot gate, unchanged:
+limb (a) is the solved comparison alone and (b) checks the solved gap alone.
+That is what `evals/results/pilot/` was measured against and what it still
+reads as.
+
 ## The pilot gate, and why these thresholds
 
 Pilot: 6 tasks x 3 runs x 3 arms (A, A-prime = the same baseline tarball,
@@ -401,6 +579,15 @@ graphs written, the score object, and the transcript and graph by path and
 sha256. Held-out tasks appear by id only; no brief text or agent reply is
 written to a committed file.
 
+`report.json` carries, besides the solved summary and paired deltas:
+`processMetrics` (the pilot's per-arm table, kept so old reports and new ones
+read alike), `effort` (`byArm` and `cell[task][arm]`, every metric as
+n/mean/median/p25/p75, plus the rates), `effortPaired` (one entry per non-
+reference arm, every metric with per-task values, mean and median deltas,
+relative mean, both bootstrap intervals, and the sign test), `effortRef`,
+`effortMethod` (the method as prose), and `calibration` for a calibration
+campaign.
+
 ## Caps
 
 Per task `budgets.turns` and `budgets.wallMinutes` (config `caps` are the
@@ -422,6 +609,19 @@ The turn cap is the CLI's own `--max-turns`.
 - A selftest failure always wakes; telling a failure caused by a changed
   node (which the plan would log and move past) from a harness fault is not
   implemented.
+- A fixture that quotes an absolute epoch is a test that turns red on a date.
+  Two `limits.test.mjs` cases did, on 2026-09-15, when the clock passed the
+  `1789492800` they assert a reset time from: `classifySession` is right that a
+  reset already in the past is no reset. They now pin `nowMs` before that
+  epoch. Test files are outside the harness identity hash, so fixing one costs
+  no campaign.
+- The v2 work changed `selftest.mjs`, so the harness code hash changed, so
+  `run.mjs --campaign pilot` now refuses to resume the pilot (exit 2,
+  "campaign changed since it started"). That is the guard doing its job and
+  nothing is stranded: the pilot's 54 slots are all final. Its committed
+  records and report are untouched, and `report.mjs` — deliberately outside
+  the identity hash — still reads them to the same STOP with the same counts
+  (`report.test.mjs` asserts exactly that).
 - A process the agent started in the background and detached from the
   session's tree can outlive the session on Windows; the launcher stops
   waiting for its pipes 30 s after the session exits.

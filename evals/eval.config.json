@@ -30,6 +30,7 @@
     "isolationProbe": { "leakCwd": null, "turns": 2, "wallMinutes": 5 }
   },
   "gate": {
+    "$comment": "Defaults, used as-is by the pilot. A campaign overrides what it needs; see evals/README.md, 'The gate'. Effort thresholds are absent here on purpose — without them limb (a) is the pilot's solved-only comparison.",
     "baselineArms": ["A", "A-prime"],
     "strippedArm": "stripped",
     "aaMaxGap": 0.28,
@@ -46,6 +47,40 @@
       "expectTaskCount": 6,
       "runsPerTask": 3,
       "scheduleSeed": 20260915
+    },
+    "calibration": {
+      "$comment": "Picks the tasks for v2. One run per task on the baseline arm, no repeats, no gate: it says what each task COSTS, so a task that solves in nine turns (ceiling) or burns the cap without a graph (floor) is dropped before it wastes 3 x 4 slots in v2. Same sandbox, adapter, scorer, resume, limit and contamination behaviour as any campaign; `calibration.md` is written beside report.md.",
+      "arms": [{ "label": "A", "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/baseline-0.17.0-0ad6998.tgz" }],
+      "tasks": { "campaign": "v2" },
+      "expectTaskCount": 8,
+      "runsPerTask": 1,
+      "scheduleSeed": 20260917,
+      "gate": { "mode": "calibration" }
+    },
+    "v2": {
+      "$comment": "The sensitivity campaign the pilot asked for. The pilot came back 54/54 in EVERY arm with the corpus read in 83-89% of runs including the docs-stripped one, so v2 changes two things: held-out tasks (task.json carries \"campaign\": \"v2\"), and a stripped-all arm that loses the corpus as well as the prose. THRESHOLDS ARE FIXED HERE BEFORE THE FIRST RUN and printed in the report.",
+      "arms": [
+        { "label": "A", "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/baseline-0.17.0-0ad6998.tgz" },
+        { "label": "A-prime", "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/baseline-0.17.0-0ad6998.tgz" },
+        { "label": "candidate-U1", "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/candidate-U1-0.17.0-9284b1f.tgz" },
+        { "label": "stripped-all", "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/stripped-all-0.17.0-9284b1f.tgz" }
+      ],
+      "tasks": { "campaign": "v2" },
+      "expectTaskCount": 8,
+      "runsPerTask": 3,
+      "scheduleSeed": 20260918,
+      "gate": {
+        "label": "v2 gate",
+        "baselineArms": ["A", "A-prime"],
+        "strippedArm": "stripped-all",
+        "aaMaxGap": 0.28,
+        "strippedMinMargin": 0.17,
+        "effortMetric": "turns",
+        "strippedEffortMinMargin": 0.25,
+        "aaMaxEffortGap": 0.15,
+        "effortCiMustExcludeZero": true,
+        "$why": "aaMaxGap and strippedMinMargin are the pilot's, unchanged: n per arm moves only from 18 to 24, so the noise argument that fixed them still holds. The effort numbers come from the pilot's own A/A pair, which is the only measurement of run-to-run wobble there is, quoted in the SAME statistic the gate computes (paired by task, mean relative difference of per-task medians, with the 95% bootstrap over tasks): turns -2.4% [-12.4%, +9.9%], tool calls -2.5% [-12.7%, +10.3%], output tokens +4.3% [-10.0%, +19.0%], wall minutes +9.6% [-7.1%, +29.0%]. aaMaxEffortGap 0.15 sits above the widest of those point estimates (wall minutes, 9.6%) and far above turns' 2.4%, so the pilot's own noise would have passed (b). strippedEffortMinMargin 0.25 is ~2.6x that widest A/A point estimate; for scale the pilot's stripped arm came in at +6.3% on turns paired against A, with a 95% interval of [-17.1%, +30.8%] that straddles zero, so it would have failed both the margin and the interval test - which is the right answer, since that arm still solved 18/18. effortMetric is turns because it is what the cap is set on, it is an integer, it does not move with machine load (wall minutes) or verbosity (output tokens), and it was the quietest of the four across the A/A pair."
+      }
     },
     "fixture": {
       "$comment": "Exercises the runner end to end with the harness fixture task. Use with --agent evals/harness/fixtures/stub-agent.mjs --scorer evals/harness/fixtures/stub-score.mjs to spend no allowance.",

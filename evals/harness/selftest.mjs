@@ -162,6 +162,9 @@ export function validateTaskDir(dir) {
       ids.add(c?.id);
     }
     if (task.reserve !== undefined && typeof task.reserve !== "boolean") problems.push(`${id}: reserve must be a boolean when present`);
+    if (task.campaign !== undefined && (typeof task.campaign !== "string" || !task.campaign)) {
+      problems.push(`${id}: campaign must be a non-empty string when present (it is what tasks.campaign selects on); got ${JSON.stringify(task.campaign)}`);
+    }
     for (const neg of listNegatives(dir)) {
       if (!neg.expect) {
         problems.push(`${id}: negatives/${neg.name}.graph.json has no ${neg.name}.expect.json`);
@@ -199,9 +202,20 @@ export function listNegatives(dir) {
 
 /**
  * Discover and select tasks. `config.tasks` is
- * `{ include: "non-reserve" | "all" | "reserve" | string[], dirs?: string[] }`;
+ * `{ include: "non-reserve" | "all" | "reserve" | string[], campaign?: string, dirs?: string[] }`;
  * dirs default to [publicTasksDir, privateTasksDir]. A task id present in two
  * dirs is a config error.
+ *
+ * `campaign` selects the tasks whose `task.json` carries that `"campaign"`
+ * field — how a campaign takes a set of held-out tasks it does not have to
+ * name one by one. `include` wins when both are given, because the reserve
+ * lookup in run.mjs re-selects over the same `tasks` object with
+ * `include: "reserve"` and must still find every reserve task.
+ *
+ * A task that names a campaign is NOT in the default (`"non-reserve"`) pool,
+ * the way a reserve task is not: it belongs to the campaign that claimed it.
+ * Without that, authoring one campaign's tasks changes what every other
+ * campaign selects.
  */
 export function selectTasks(config) {
   const sel = config.tasks ?? { include: "non-reserve" };
@@ -231,7 +245,22 @@ export function selectTasks(config) {
     chosen = sel.include.map((id) => all.find((t) => t.id === id));
   } else if (sel.include === "all") chosen = all;
   else if (sel.include === "reserve") chosen = all.filter((t) => t.task.reserve === true);
-  else chosen = all.filter((t) => t.task.reserve !== true);
+  else if (sel.include === undefined && typeof sel.campaign === "string") {
+    chosen = all.filter((t) => t.task.campaign === sel.campaign);
+    if (!chosen.length) {
+      throw new ConfigError(
+        `campaign "${config.campaign}": no task.json carries "campaign": ${JSON.stringify(sel.campaign)} (searched ${dirs.join(", ")}` +
+          (missingDirs.length ? `; missing: ${missingDirs.join(", ")}` : "") +
+          `). Add the field to the tasks that belong to it, or select them by id with tasks.include.`,
+      );
+    }
+  } else {
+    // The default pool. A task that names a campaign belongs to THAT campaign
+    // and is not in it: otherwise authoring v2's tasks would silently enlarge
+    // every other campaign and trip its expectTaskCount. `include: "all"` and
+    // an explicit id list still reach them.
+    chosen = all.filter((t) => t.task.reserve !== true && t.task.campaign === undefined);
+  }
   if (config.expectTaskCount !== undefined && chosen.length !== config.expectTaskCount) {
     throw new ConfigError(
       `campaign "${config.campaign}" expects ${config.expectTaskCount} tasks and found ${chosen.length} (${chosen.map((t) => t.id).join(", ") || "none"})` +

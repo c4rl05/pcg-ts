@@ -1,11 +1,11 @@
 // node --test --test-concurrency=1 "evals/harness/*.test.mjs"
 import assert from "node:assert/strict";
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { collectCanaries, detectLeak, judgeNegative, lintBrief, validateTaskDir } from "./selftest.mjs";
+import { ConfigError, collectCanaries, detectLeak, judgeNegative, lintBrief, loadConfig, selectTasks, validateTaskDir } from "./selftest.mjs";
 
 const FIXTURE = fileURLToPath(new URL("fixtures/tasks/fixture-grid", import.meta.url));
 const NAMES = {
@@ -51,6 +51,106 @@ test("the fixture task is valid and a broken one names its problems", () => {
   } finally {
     rmSync(join(dir, ".."), { recursive: true, force: true });
   }
+});
+
+/** A tasks dir of bare task.json files: all selectTasks reads to choose. */
+function tasksDir(spec) {
+  const dir = mkdtempSync(join(tmpdir(), "pcg-tasksel-"));
+  for (const [id, task] of Object.entries(spec)) {
+    mkdirSync(join(dir, id), { recursive: true });
+    writeFileSync(join(dir, id, "task.json"), JSON.stringify({ id, ...task }));
+  }
+  return dir;
+}
+
+test("tasks.campaign selects the task files that carry that campaign", () => {
+  const dir = tasksDir({
+    "a-v2": { campaign: "v2" },
+    "b-v2": { campaign: "v2" },
+    "c-pilot": { campaign: "pilot" },
+    "d-plain": {},
+    "e-v2-reserve": { campaign: "v2", reserve: true },
+    "f-reserve": { reserve: true },
+  });
+  try {
+    const sel = { campaign: "v2", dirs: [dir] };
+    assert.deepEqual(selectTasks({ tasks: sel }).tasks.map((t) => t.id), ["a-v2", "b-v2", "e-v2-reserve"], "the campaign field selects, reserve does not filter it");
+    // run.mjs finds the reserve pool by re-selecting over the same object with
+    // include: "reserve" — which must keep meaning every reserve task.
+    assert.deepEqual(selectTasks({ tasks: { ...sel, include: "reserve" } }).tasks.map((t) => t.id), ["e-v2-reserve", "f-reserve"]);
+    assert.deepEqual(selectTasks({ tasks: { ...sel, include: ["c-pilot"] } }).tasks.map((t) => t.id), ["c-pilot"], "an explicit include list wins");
+    // The default pool must not grow when another campaign's tasks are authored.
+    assert.deepEqual(selectTasks({ tasks: { dirs: [dir] } }).tasks.map((t) => t.id), ["d-plain"], "a campaign-tagged task is not in the default pool");
+    assert.deepEqual(selectTasks({ tasks: { include: "non-reserve", dirs: [dir] } }).tasks.map((t) => t.id), ["d-plain"]);
+    assert.deepEqual(selectTasks({ tasks: { include: "all", dirs: [dir] } }).tasks.map((t) => t.id), ["a-v2", "b-v2", "c-pilot", "d-plain", "e-v2-reserve", "f-reserve"], '"all" still means all');
+    assert.throws(() => selectTasks({ campaign: "v3", tasks: { campaign: "v3", dirs: [dir] } }), (err) => err instanceof ConfigError && /no task\.json carries "campaign": "v3"/.test(err.message));
+    assert.throws(() => selectTasks({ campaign: "v2", expectTaskCount: 8, tasks: sel }), /expects 8 tasks and found 3/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a task's campaign field must be a non-empty string", () => {
+  const dir = join(mkdtempSync(join(tmpdir(), "pcg-selftest-")), "fixture-grid");
+  try {
+    cpSync(FIXTURE, dir, { recursive: true });
+    const task = JSON.parse(readFileSync(join(dir, "task.json"), "utf8"));
+    writeFileSync(join(dir, "task.json"), JSON.stringify({ ...task, campaign: "v2" }));
+    assert.deepEqual(validateTaskDir(dir).problems, [], "a campaign field is allowed");
+    writeFileSync(join(dir, "task.json"), JSON.stringify({ ...task, campaign: 2 }));
+    assert.ok(validateTaskDir(dir).problems.some((p) => /campaign must be a non-empty string/.test(p)));
+  } finally {
+    rmSync(join(dir, ".."), { recursive: true, force: true });
+  }
+});
+
+const CONFIG = fileURLToPath(new URL("../eval.config.json", import.meta.url));
+const PILOT_MANIFEST = new URL("../results/pilot/manifest.json", import.meta.url);
+
+test("the shipped config's campaigns are shaped the way the runner needs", () => {
+  const v2 = loadConfig(CONFIG, "v2");
+  assert.deepEqual(v2.arms.map((a) => a.label), ["A", "A-prime", "candidate-U1", "stripped-all"]);
+  assert.equal(v2.arms[0].tarball, v2.arms[1].tarball, "A and A-prime must be the SAME tarball: that is the noise floor");
+  assert.match(v2.arms[3].tarball, /stripped-all-/);
+  assert.deepEqual(v2.tasks, { campaign: "v2" });
+  assert.equal(v2.runsPerTask, 3);
+  assert.equal(v2.expectTaskCount, 8);
+  assert.equal(v2.gate.strippedArm, "stripped-all");
+  assert.ok(v2.gate.strippedEffortMinMargin > v2.gate.aaMaxEffortGap, "an effect must have to clear the A/A allowance");
+  assert.ok(v2.gate.effortMetric === "turns" && v2.gate.effortCiMustExcludeZero === true);
+  assert.ok(Number.isInteger(v2.scheduleSeed));
+
+  const cal = loadConfig(CONFIG, "calibration");
+  assert.equal(cal.arms.length, 1);
+  assert.equal(cal.arms[0].tarball, v2.arms[0].tarball, "calibration runs the baseline arm");
+  assert.equal(cal.runsPerTask, 1);
+  assert.deepEqual(cal.tasks, { campaign: "v2" });
+  assert.equal(cal.gate.mode, "calibration");
+
+  // The pilot's gate must not have picked up v2's effort thresholds.
+  const pilot = loadConfig(CONFIG, "pilot");
+  assert.equal(pilot.gate.strippedArm, "stripped");
+  assert.equal(pilot.gate.strippedEffortMinMargin, undefined);
+  assert.equal(pilot.gate.mode, undefined);
+});
+
+test("adding campaigns did not change the pilot's identity", { skip: !existsSync(PILOT_MANIFEST) && "pilot results not in this checkout" }, () => {
+  const manifest = JSON.parse(readFileSync(PILOT_MANIFEST, "utf8"));
+  const pilot = loadConfig(CONFIG, "pilot");
+  // Everything identityParts() in run.mjs derives from the CONFIG. (The
+  // harness code hash is not one of these: it changes when the harness
+  // changes, which is what it is for.)
+  assert.equal(pilot.model, manifest.model);
+  assert.equal(pilot.effort ?? null, manifest.effort ?? null);
+  assert.equal(pilot.runsPerTask, manifest.runsPerTask);
+  assert.equal(pilot.scheduleSeed, manifest.scheduleSeed);
+  assert.equal(pilot.prompt, manifest.prompt);
+  assert.deepEqual(pilot.caps, manifest.caps);
+  assert.deepEqual(pilot.arms.map((a) => a.label), manifest.arms.map((a) => a.label));
+  assert.deepEqual(pilot.arms.map((a) => a.tarball.replace(/\\/g, "/")), manifest.arms.map((a) => a.tarball));
+  // The task list is identity too, and v2's tasks live in the same dirs: they
+  // must not have joined the pilot's selection.
+  assert.deepEqual(selectTasks(pilot).tasks.map((t) => t.id), manifest.tasks.map((t) => t.id));
 });
 
 const TASK = { checks: [{ id: "count", hard: true }, { id: "square", hard: true }, { id: "soft", hard: false }] };

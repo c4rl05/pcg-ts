@@ -1,7 +1,27 @@
 // node --test --test-concurrency=1 "evals/harness/*.test.mjs"
 import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
-import { buildReport, evaluateGate, latestBySlot, pairedDelta, renderMarkdown, signTest, summarize, wilson } from "./report.mjs";
+import {
+  bootstrapCi,
+  buildReport,
+  calibrationTable,
+  effortMetrics,
+  evaluateGate,
+  isCalibration,
+  latestBySlot,
+  pairedDelta,
+  pairedEffort,
+  parseJsonl,
+  renderCalibration,
+  renderMarkdown,
+  signTest,
+  summarize,
+  wilson,
+  writeReport,
+} from "./report.mjs";
 
 const close = (a, b, eps = 1e-4) => assert.ok(Math.abs(a - b) < eps, `${a} ≈ ${b}`);
 
@@ -128,6 +148,354 @@ test("the last record per slot counts; contaminated finals are excluded from rat
   assert.equal(s.cell.t1.A.n, 1);
   assert.equal(s.cell.t1.A.solved, 1);
   assert.equal(s.cell.t1.A.contaminated, 1);
+});
+
+// ---------------------------------------------------------------------------
+// Effort
+// ---------------------------------------------------------------------------
+
+/**
+ * Synthetic runs with effort attached. `turnsBy` is a map arm -> turns, or
+ * arm -> (task) => turns, so a test can make one arm cost more per task.
+ */
+function effortRecords({ arms, tasks, runs = 3, turnsBy, solvedBy = () => runs, extra = () => ({}) }) {
+  const out = [];
+  for (const arm of arms) {
+    for (const task of tasks) {
+      const t = typeof turnsBy[arm] === "function" ? turnsBy[arm](task) : turnsBy[arm];
+      const turnsPerRun = Array.isArray(t) ? t : [t, t, t].slice(0, runs);
+      for (let r = 0; r < runs; r++) {
+        const turns = turnsPerRun[r % turnsPerRun.length];
+        out.push({
+          slotId: `r${r}.${task}.${arm}`,
+          task,
+          arm,
+          final: true,
+          solved: r < solvedBy(arm, task),
+          turns,
+          toolCalls: turns + 2,
+          wallMs: turns * 10_000,
+          usage: { output_tokens: turns * 700 },
+          pcgCommands: { validate: 2 },
+          pcgFailures: { validate: 1 },
+          probeGraphsWritten: 1,
+          capsHit: [],
+          readCounts: { llms: 1, docs: 1, skills: 0, graphs: 1 },
+          graphProduced: true,
+          ...extra(arm, task, r),
+        });
+      }
+    }
+  }
+  return out;
+}
+
+const E_TASKS = ["t1", "t2", "t3", "t4", "t5", "t6"];
+const E_ARMS = ["A", "A-prime", "stripped-all"];
+const V2_GATE = {
+  label: "v2 gate",
+  baselineArms: ["A", "A-prime"],
+  strippedArm: "stripped-all",
+  aaMaxGap: 0.28,
+  strippedMinMargin: 0.17,
+  effortMetric: "turns",
+  strippedEffortMinMargin: 0.25,
+  aaMaxEffortGap: 0.15,
+  effortCiMustExcludeZero: true,
+};
+
+test("effort is summarised as medians with an IQR, and caps/reads as rates", () => {
+  const recs = effortRecords({
+    arms: ["A"],
+    tasks: ["t1"],
+    turnsBy: { A: [10, 20, 90] }, // a capped run must not drag the median
+    extra: (_a, _t, r) => (r === 2 ? { capsHit: ["turns"] } : {}),
+  });
+  const e = effortMetrics(recs, ["A"], ["t1"]);
+  const m = e.byArm.A.metrics;
+  assert.equal(m.turns.median, 20);
+  close(m.turns.mean, 40);
+  assert.deepEqual([m.turns.p25, m.turns.p75], [10, 90]);
+  assert.equal(m.toolCalls.median, 22);
+  assert.equal(m.outputTokens.median, 14_000);
+  close(e.byArm.A.validateFailureRate, 0.5);
+  assert.deepEqual(e.byArm.A.capsHit, { turns: 1 });
+  close(e.byArm.A.capsHitRate, 1 / 3);
+  assert.deepEqual(e.byArm.A.readShare, { llms: 1, docs: 1, skills: 0, graphs: 1 });
+  assert.equal(e.cell.t1.A.metrics.turns.median, 20);
+});
+
+test("contaminated and infrastructure runs are excluded from effort as they are from rates", () => {
+  const recs = effortRecords({ arms: ["A"], tasks: ["t1"], turnsBy: { A: [10, 20, 30] } });
+  recs[2] = { ...recs[2], contaminated: true, turns: 999 };
+  const e = effortMetrics(recs, ["A"], ["t1"]);
+  assert.equal(e.byArm.A.runs, 2);
+  assert.equal(e.byArm.A.metrics.turns.median, 15);
+});
+
+test("the bootstrap is seeded, brackets the mean, and reports nothing for a sample of one", () => {
+  const xs = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6];
+  const a = bootstrapCi(xs);
+  const b = bootstrapCi(xs);
+  assert.deepEqual(a, b, "the same values must always give the same interval");
+  assert.ok(a.lo < 0.35 && a.hi > 0.35, `${a.lo}–${a.hi} should bracket the mean 0.35`);
+  assert.ok(a.lo > 0, "an all-positive sample has an interval clear of zero");
+  assert.equal(a.samples, 2000);
+  const wide = bootstrapCi([-0.5, -0.4, 0.4, 0.5, 0.45, -0.45]);
+  assert.ok(wide.lo < 0 && wide.hi > 0, "a sample straddling zero must not claim a sign");
+  assert.deepEqual(bootstrapCi([0.3]), { lo: null, hi: null, samples: 0, b: 2000, alpha: 0.05 });
+  assert.deepEqual(bootstrapCi([]).lo, null);
+});
+
+test("effort is paired by task: per-task median differences, absolute and relative", () => {
+  const recs = effortRecords({
+    arms: ["A", "stripped-all"],
+    tasks: ["t1", "t2"],
+    turnsBy: { A: (t) => (t === "t1" ? 20 : 40), "stripped-all": (t) => (t === "t1" ? 30 : 50) },
+  });
+  const e = effortMetrics(recs, ["A", "stripped-all"], ["t1", "t2"]);
+  const p = pairedEffort(e, ["t1", "t2"], "stripped-all", "A").metrics.turns;
+  assert.deepEqual(p.perTask.t1, { arm: 30, ref: 20, delta: 10, relative: 0.5 });
+  assert.deepEqual(p.perTask.t2, { arm: 50, ref: 40, delta: 10, relative: 0.25 });
+  assert.equal(p.meanDelta, 10);
+  close(p.meanRelative, 0.375);
+  assert.deepEqual([p.higher, p.lower, p.ties], [2, 0, 0]);
+  // A task with no countable run on either arm drops out rather than counting as zero.
+  const withGap = pairedEffort(e, ["t1", "t2", "t3"], "stripped-all", "A").metrics.turns;
+  assert.equal(withGap.tasks, 2);
+});
+
+test("v2 gate says GO on an arm that solves as often but costs much more", () => {
+  const recs = effortRecords({
+    arms: E_ARMS,
+    tasks: E_TASKS,
+    turnsBy: { A: 30, "A-prime": 30, "stripped-all": 45 },
+    solvedBy: () => 2, // 2/3 everywhere: no task at floor or ceiling, no solved signal
+  });
+  const s = summarize(recs, E_ARMS, E_TASKS);
+  const e = effortMetrics(recs, E_ARMS, E_TASKS);
+  const g = evaluateGate(s, E_TASKS, V2_GATE, { complete: true, effort: e });
+  assert.equal(g.decision, "go", g.reasons.join("; "));
+  assert.equal(g.a.firedBy, "effort");
+  assert.equal(g.a.solvedPass, false, "solved rates are identical: only effort can fire");
+  close(g.a.effort.perBaseline.A.relative, 0.5);
+  assert.ok(g.a.effort.perBaseline.A.ci.lo > 0);
+  assert.equal(g.a.effort.aaEffortGap, 0);
+  assert.equal(g.b.pass, true);
+  assert.equal(g.c.pass, true);
+  assert.equal(g.label, "v2 gate");
+});
+
+test("v2 gate still says GO on a solved-rate effect, and names which limb fired", () => {
+  const recs = effortRecords({
+    arms: E_ARMS,
+    tasks: E_TASKS,
+    turnsBy: { A: 30, "A-prime": 30, "stripped-all": 30 },
+    solvedBy: (arm) => (arm === "stripped-all" ? 0 : 2),
+  });
+  const g = evaluateGate(summarize(recs, E_ARMS, E_TASKS), E_TASKS, V2_GATE, { complete: true, effort: effortMetrics(recs, E_ARMS, E_TASKS) });
+  assert.equal(g.decision, "go", g.reasons.join("; "));
+  assert.equal(g.a.firedBy, "solved");
+  assert.equal(g.a.effort.pass, false, "effort is identical; the solved limb carried it");
+});
+
+test("v2 gate says STOP when the stripped arm costs only a little more", () => {
+  const recs = effortRecords({
+    arms: E_ARMS,
+    tasks: E_TASKS,
+    turnsBy: { A: 30, "A-prime": 30, "stripped-all": 33 }, // +10%, under the 25% margin
+    solvedBy: () => 2,
+  });
+  const g = evaluateGate(summarize(recs, E_ARMS, E_TASKS), E_TASKS, V2_GATE, { complete: true, effort: effortMetrics(recs, E_ARMS, E_TASKS) });
+  assert.equal(g.decision, "stop");
+  assert.equal(g.a.firedBy, null);
+  assert.equal(g.a.effort.perBaseline.A.okMargin, false);
+  assert.ok(g.reasons.some((r) => /nor does it cost more/.test(r)), g.reasons.join("; "));
+  assert.ok(g.reasons.some((r) => r.startsWith("fix:")), "a STOP must say what to change");
+});
+
+test("v2 gate says STOP when a big mean effort difference is only noise across tasks", () => {
+  // Three tasks +150%, three -30%: the mean clears 25%, the bootstrap does not clear zero.
+  const recs = effortRecords({
+    arms: E_ARMS,
+    tasks: E_TASKS,
+    turnsBy: { A: 20, "A-prime": 20, "stripped-all": (t) => (["t1", "t2", "t3"].includes(t) ? 50 : 14) },
+    solvedBy: () => 2,
+  });
+  const g = evaluateGate(summarize(recs, E_ARMS, E_TASKS), E_TASKS, V2_GATE, { complete: true, effort: effortMetrics(recs, E_ARMS, E_TASKS) });
+  const c = g.a.effort.perBaseline.A;
+  assert.equal(c.okMargin, true, `relative ${c.relative} should clear the margin`);
+  assert.equal(c.okCi, false, `interval ${c.ci.lo}–${c.ci.hi} should straddle zero`);
+  assert.ok(c.ci.lo < 0 && c.ci.hi > 0);
+  assert.equal(g.decision, "stop");
+});
+
+test("v2 gate (b) fails when the same tarball under two labels already differs on effort", () => {
+  const recs = effortRecords({
+    arms: E_ARMS,
+    tasks: E_TASKS,
+    turnsBy: { A: 30, "A-prime": 40, "stripped-all": 60 }, // A/A gap 33% > aaMaxEffortGap 15%
+    solvedBy: () => 2,
+  });
+  const g = evaluateGate(summarize(recs, E_ARMS, E_TASKS), E_TASKS, V2_GATE, { complete: true, effort: effortMetrics(recs, E_ARMS, E_TASKS) });
+  assert.equal(g.b.effortPass, false);
+  assert.equal(g.b.solvedPass, true, "the solved A/A gap is fine; effort is what failed");
+  assert.equal(g.decision, "stop");
+  assert.ok(g.reasons.some((r) => /A\/A effort gap/.test(r)), g.reasons.join("; "));
+});
+
+test("the effort limb reports itself unavailable rather than silently passing", () => {
+  const recs = effortRecords({ arms: E_ARMS, tasks: E_TASKS, turnsBy: { A: 30, "A-prime": 30, "stripped-all": 60 }, solvedBy: () => 2 });
+  const s = summarize(recs, E_ARMS, E_TASKS);
+  const noData = evaluateGate(s, E_TASKS, V2_GATE, { complete: true });
+  assert.equal(noData.a.effort.pass, false);
+  assert.match(noData.a.effort.unavailable, /no effort data/);
+  const badMetric = evaluateGate(s, E_TASKS, { ...V2_GATE, effortMetric: "vibes" }, { complete: true, effort: effortMetrics(recs, E_ARMS, E_TASKS) });
+  assert.match(badMetric.a.effort.unavailable, /"vibes" is not one of/);
+  assert.equal(badMetric.decision, "stop");
+});
+
+test("the A/A effort gap does not depend on which baseline is named first", () => {
+  // A relative difference is asymmetric: 40 is 33% above 30, 30 is 25% below 40.
+  const recs = effortRecords({ arms: E_ARMS, tasks: E_TASKS, turnsBy: { A: 30, "A-prime": 40, "stripped-all": 80 }, solvedBy: () => 2 });
+  const s = summarize(recs, E_ARMS, E_TASKS);
+  const e = effortMetrics(recs, E_ARMS, E_TASKS);
+  const forward = evaluateGate(s, E_TASKS, V2_GATE, { complete: true, effort: e });
+  const reversed = evaluateGate(s, E_TASKS, { ...V2_GATE, baselineArms: ["A-prime", "A"] }, { complete: true, effort: e });
+  close(forward.b.aaEffortGap, 1 / 3);
+  assert.equal(forward.b.aaEffortGap, reversed.b.aaEffortGap, "the larger magnitude, whichever way round");
+  assert.equal(forward.b.effortPass, reversed.b.effortPass);
+  assert.equal(forward.decision, reversed.decision);
+});
+
+test("aaMaxEffortGap is checked even when no effort limb is configured, and fails closed", () => {
+  const bOnly = { ...V2_GATE, strippedEffortMinMargin: undefined };
+  const recs = effortRecords({ arms: E_ARMS, tasks: E_TASKS, turnsBy: { A: 30, "A-prime": 60, "stripped-all": 30 }, solvedBy: (arm) => (arm === "stripped-all" ? 0 : 2) });
+  const s = summarize(recs, E_ARMS, E_TASKS);
+  const g = evaluateGate(s, E_TASKS, bOnly, { complete: true, effort: effortMetrics(recs, E_ARMS, E_TASKS) });
+  assert.equal(g.a.effort, null, "no limb without strippedEffortMinMargin");
+  assert.equal(g.a.pass, true, "the solved limb still carries (a)");
+  assert.equal(g.b.effortPass, false, "but the A/A effort gap is still checked");
+  assert.equal(g.decision, "stop");
+  // Configured and unmeasurable is a failure, not a pass.
+  const noData = evaluateGate(s, E_TASKS, bOnly, { complete: true });
+  assert.equal(noData.b.effortPass, false);
+  assert.ok(noData.reasons.some((r) => /could not be measured/.test(r)), noData.reasons.join("; "));
+});
+
+test("a gate with no effort thresholds is the pilot gate, unchanged", () => {
+  const recs = records({ A: perTask([2, 2, 2, 1, 2, 1]), "A-prime": perTask([2, 1, 2, 2, 2, 1]), stripped: perTask([1, 0, 1, 0, 1, 0]) });
+  const s = summarize(recs, ARMS, TASKS);
+  const g = evaluateGate(s, TASKS, GATE, { complete: true, effort: effortMetrics(recs, ARMS, TASKS) });
+  assert.equal(g.decision, "go");
+  assert.equal(g.a.effort, null, "no strippedEffortMinMargin means no effort limb at all");
+  assert.equal(g.b.effortPass, null);
+  assert.equal(g.label, "Pilot gate");
+});
+
+// ---------------------------------------------------------------------------
+// Calibration
+// ---------------------------------------------------------------------------
+
+const CAL_TASKS = ["t1", "t2", "t3"];
+function calibrationManifest(extra = {}) {
+  return {
+    campaign: "calibration",
+    model: "m",
+    claudeVersion: "1",
+    arms: [{ label: "A" }],
+    tasks: CAL_TASKS.map((id) => ({ id, tier: "held-out" })),
+    runsPerTask: 1,
+    schedule: CAL_TASKS.map((t) => ({ slotId: `r0.${t}.A` })),
+    gate: { mode: "calibration", baselineArms: ["A", "A-prime"], strippedArm: "stripped", aaMaxGap: 0.28, strippedMinMargin: 0.17 },
+    ...extra,
+  };
+}
+
+test("a calibration campaign is one arm at one run per task, declared or inferred", () => {
+  assert.equal(isCalibration(calibrationManifest()), true);
+  assert.equal(isCalibration({ arms: [{ label: "A" }], runsPerTask: 1 }), true, "one arm, one run: that IS a calibration");
+  assert.equal(isCalibration({ arms: [{ label: "A" }, { label: "B" }], runsPerTask: 1 }), false);
+  assert.equal(isCalibration({ arms: [{ label: "A" }], runsPerTask: 3 }), false);
+  assert.equal(isCalibration({ arms: ARMS.map((label) => ({ label })), runsPerTask: 3, gate: GATE }), false, "the pilot is not a calibration");
+});
+
+test("the calibration table is one row per task, and the gate is skipped", () => {
+  const recs = [
+    { slotId: "r0.t1.A", task: "t1", arm: "A", final: true, solved: true, turns: 12, toolCalls: 14, wallMs: 180_000, usage: { output_tokens: 8000 }, pcgCommands: { validate: 1 }, capsHit: [], graphProduced: true, outcome: "ok" },
+    { slotId: "r0.t2.A", task: "t2", arm: "A", final: true, solved: false, turns: 80, toolCalls: 90, wallMs: 1_800_000, usage: { output_tokens: 90_000 }, pcgCommands: { validate: 6 }, capsHit: ["turns"], graphProduced: true, outcome: "ok" },
+    { slotId: "r0.t3.A", task: "t3", arm: "A", final: true, solved: false, turns: 30, toolCalls: 31, wallMs: 400_000, usage: { output_tokens: 20_000 }, pcgCommands: { validate: 0 }, capsHit: [], graphProduced: false, outcome: "ok" },
+  ];
+  const manifest = calibrationManifest();
+  const report = buildReport({ manifest, records: recs });
+  assert.equal(report.gate, null, "one run per task decides nothing");
+  assert.equal(report.calibration.arm, "A");
+  assert.deepEqual(
+    report.calibration.rows.map((r) => [r.task, r.solved, r.turns, r.capsHit]),
+    [["t1", 1, 12, []], ["t2", 0, 80, ["turns"]], ["t3", 0, 30, []]],
+  );
+  assert.deepEqual(report.calibration.totals.solved, 1);
+  assert.deepEqual(report.calibration.totals.capsHit, ["turns"]);
+  close(report.calibration.totals.wallMinutesTotal, 3 + 30 + 400 / 60);
+  const md = renderCalibration(report);
+  assert.match(md, /# Calibration: calibration/);
+  assert.match(md, /\| t2 \| held-out \| no \| 80 \| 90 \| 30\.0 \| 90000 \| 6 \| turns \| – \|/);
+  assert.match(md, /\| t3 \| held-out \| no graph \|/, "a task that produced no graph must say so");
+  assert.match(renderMarkdown(report), /## No gate/);
+  // A contaminated run is excluded here exactly as it is from a rate.
+  const contaminated = calibrationTable([{ ...recs[0], contaminated: true }], manifest, ["A"], CAL_TASKS);
+  assert.equal(contaminated.rows[0].runs, 0);
+  assert.equal(contaminated.rows[0].solved, null);
+  assert.equal(contaminated.rows[0].contaminated, 1);
+});
+
+test("writeReport writes calibration.md beside report.md, and only for a calibration", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pcg-cal-"));
+  try {
+    writeFileSync(join(dir, "manifest.json"), JSON.stringify(calibrationManifest()));
+    writeFileSync(
+      join(dir, "runs.jsonl"),
+      CAL_TASKS.map((t, i) => JSON.stringify({ slotId: `r0.${t}.A`, task: t, arm: "A", final: true, solved: i === 0, turns: 10 + i, toolCalls: 10, wallMs: 60_000, usage: { output_tokens: 100 }, capsHit: [], graphProduced: true })).join("\n") + "\n",
+    );
+    const r = writeReport(dir);
+    assert.ok(existsSync(join(dir, "calibration.md")));
+    assert.match(readFileSync(join(dir, "calibration.md"), "utf8"), /\| t1 \| held-out \| yes \| 10 \|/);
+    assert.equal(r.progress.complete, true);
+    assert.equal(r.gate, null);
+
+    // The same directory with three arms and three runs is a normal campaign.
+    writeFileSync(join(dir, "manifest.json"), JSON.stringify({ ...calibrationManifest(), arms: ARMS.map((label) => ({ label })), runsPerTask: 3, gate: GATE, schedule: [{ slotId: "r0.t1.A" }] }));
+    rmSync(join(dir, "calibration.md"));
+    const r2 = writeReport(dir);
+    assert.equal(existsSync(join(dir, "calibration.md")), false);
+    assert.ok(r2.gate, "a three-arm campaign is gated");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// The committed pilot must still read the same way
+// ---------------------------------------------------------------------------
+
+const PILOT = new URL("../results/pilot/", import.meta.url);
+test("the committed pilot still reports the same gate and the same counts", { skip: !existsSync(new URL("manifest.json", PILOT)) && "pilot results not in this checkout" }, () => {
+  const manifest = JSON.parse(readFileSync(new URL("manifest.json", PILOT), "utf8"));
+  const records = parseJsonl(readFileSync(new URL("runs.jsonl", PILOT), "utf8"), { tolerant: true });
+  const committed = JSON.parse(readFileSync(new URL("report.json", PILOT), "utf8"));
+  const fresh = buildReport({ manifest, records });
+  assert.equal(fresh.gate.decision, committed.gate.decision);
+  assert.equal(fresh.gate.decision, "stop");
+  assert.deepEqual(fresh.progress, committed.progress);
+  for (const arm of fresh.arms) {
+    assert.deepEqual([fresh.summary.byArm[arm].solved, fresh.summary.byArm[arm].n], [committed.summary.byArm[arm].solved, committed.summary.byArm[arm].n], arm);
+  }
+  assert.deepEqual(fresh.gate.c.replaceTasks, committed.gate.c.replaceTasks);
+  assert.equal(fresh.gate.a.effort, null, "the pilot's gate configures no effort thresholds, so it must keep the pilot's meaning");
+  assert.equal(fresh.calibration, null);
+  // What is NEW is the effort reporting, which the pilot's records already carry.
+  assert.ok(fresh.effort.byArm.A.metrics.turns.median > 0);
+  assert.equal(fresh.effortPaired.length, fresh.arms.length - 1);
 });
 
 test("paired deltas and a full report render", () => {

@@ -6,6 +6,12 @@ import { backoffMs, classifySession, parseResetClause, sleepPlan, zonedToUtc } f
 const MIN = 60_000;
 const errResult = (text, extra = {}) => ({ type: "result", subtype: "success", is_error: true, result: text, num_turns: 0, ...extra });
 const okResult = (text = "done") => ({ type: "result", subtype: "success", is_error: false, result: text, num_turns: 4 });
+// The reset epoch these ASSUMED fixtures quote, and a `nowMs` before it.
+// `classifySession` reports a reset already in the past as no reset, so a
+// bare epoch literal turns the test red the day the clock passes it —
+// which is exactly what happened to these two on 2026-09-15.
+const EPOCH = 1789492800;
+const BEFORE_EPOCH = EPOCH * 1000 - 90 * MIN;
 
 test("a normal session is ok, even when the agent's own reply talks about limits", () => {
   const c = classifySession({ exitCode: 0, events: [okResult("I hit the usage limit reached message in pcg's budget docs · resets 3pm")] });
@@ -13,9 +19,11 @@ test("a normal session is ok, even when the agent's own reply talks about limits
 });
 
 test("ASSUMED pipe-epoch format carries its reset time", () => {
-  const c = classifySession({ exitCode: 1, events: [errResult("Claude AI usage limit reached|1789492800")] });
+  const c = classifySession({ exitCode: 1, events: [errResult(`Claude AI usage limit reached|${EPOCH}`)], nowMs: BEFORE_EPOCH });
   assert.equal(c.kind, "usage-limit");
-  assert.equal(c.resetAt, new Date(1789492800 * 1000).toISOString());
+  assert.equal(c.resetAt, new Date(EPOCH * 1000).toISOString());
+  // A reset already in the past is no reset, whatever the message says.
+  assert.equal(classifySession({ exitCode: 1, events: [errResult(`Claude AI usage limit reached|${EPOCH}`)], nowMs: EPOCH * 1000 + MIN }).resetAt, null);
 });
 
 test("ASSUMED prose formats are limits, with reset parsed in the named zone", () => {
@@ -47,12 +55,12 @@ test("a limit without a reset time still classifies, and falls back to backoff w
 });
 
 test("OBSERVED rate_limit_event shape: allowed is not a hit, rejected is (ASSUMED)", () => {
-  const allowed = { type: "rate_limit_event", rate_limit_info: { status: "allowed", resetsAt: 1789492800, rateLimitType: "five_hour" } };
-  assert.equal(classifySession({ exitCode: 0, events: [allowed, okResult()] }).kind, "ok");
-  const rejected = { type: "rate_limit_event", rate_limit_info: { status: "rejected", resetsAt: 1789492800, rateLimitType: "five_hour" } };
-  const c = classifySession({ exitCode: 1, events: [rejected, errResult("")] });
+  const allowed = { type: "rate_limit_event", rate_limit_info: { status: "allowed", resetsAt: EPOCH, rateLimitType: "five_hour" } };
+  assert.equal(classifySession({ exitCode: 0, events: [allowed, okResult()], nowMs: BEFORE_EPOCH }).kind, "ok");
+  const rejected = { type: "rate_limit_event", rate_limit_info: { status: "rejected", resetsAt: EPOCH, rateLimitType: "five_hour" } };
+  const c = classifySession({ exitCode: 1, events: [rejected, errResult("")], nowMs: BEFORE_EPOCH });
   assert.equal(c.kind, "usage-limit");
-  assert.equal(c.resetAt, new Date(1789492800 * 1000).toISOString());
+  assert.equal(c.resetAt, new Date(EPOCH * 1000).toISOString());
 });
 
 test("caps are the agent's own failure classes, not limits", () => {

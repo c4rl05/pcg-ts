@@ -3,20 +3,36 @@
  *
  *   node evals/harness/pack.mjs --from-repo [--label candidate] [--role "..."] [--out evals/tarballs]
  *   node evals/harness/pack.mjs --strip-docs <tgz> [--label stripped] [--out <dir of tgz>] [--no-verify]
+ *   node evals/harness/pack.mjs --strip-graphs <tgz> [--label stripped-graphs] ...
+ *   node evals/harness/pack.mjs --strip-docs --strip-graphs <tgz> [--label stripped-all] ...
  *   node evals/harness/pack.mjs --verify <tgz>
  *
  * --from-repo builds the current tree and packs it to
  * `<label>-<version>-<sha7>.tgz` beside a `<same>.manifest.json`
  * `{ role, file, sha256, version, gitSha, dirty, node, packedAt }`.
  *
- * --strip-docs derives the documentation-blind arm: the same package with
- * `llms.txt`, `docs/` and `skills/` removed and every other byte of every
- * other entry kept. The tar stream is filtered block by block rather than
- * extracted and re-packed, so nothing else can change (no re-ordered
- * entries, no new mtimes, no platform tar differences). The manifest gains
- * `derivedFrom: { file, sha256 }` and the list of removed entries. The result
- * is installed into a scratch sandbox and `pcg --help` and `pcg nodes --json`
- * must run, or the tarball is deleted and the command fails.
+ * --strip-docs and --strip-graphs derive a sensitivity arm: the same package
+ * with one or both of the STRIP_SETS removed and every other byte of every
+ * other entry kept.
+ *
+ * - `docs`: `llms.txt`, `docs/` and `skills/` — the prose.
+ * - `graphs`: `graphs/` and its index `docs/graphs.json` / `docs/graphs.md` —
+ *   the shipped corpus. The index goes with the bodies because it carries
+ *   each graph's title, description, tags and node types: leaving it would
+ *   leave the corpus in prose, and would point `pcg graphs` at files that
+ *   are not there. The pilot measured agents reading the corpus in 83–89% of
+ *   runs in EVERY arm, the docs-stripped one included, which is why the
+ *   corpus is its own strip set.
+ *
+ * Both together are the `stripped-all` arm. The tar stream is filtered block
+ * by block rather than extracted and re-packed, so nothing else can change
+ * (no re-ordered entries, no new mtimes, no platform tar differences). The
+ * manifest gains `stripSets`, `derivedFrom: { file, sha256 }` and the list of
+ * every removed entry. The result is installed into a scratch sandbox and
+ * `pcg --help` and `pcg nodes --json` must run, or the tarball is deleted and
+ * the command fails; `pcg graphs` and `pcg nodes <type>` are probed too and
+ * their behaviour recorded in the manifest's `degradation` (they degrade to a
+ * note rather than an error — see readCorpusIndex in src/cli/corpus.ts).
  */
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -26,12 +42,51 @@ import { fileURLToPath } from "node:url";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { REPO_ROOT, createSandbox, readJson, runNpm, sha256, sha256File, writeJson } from "./sandbox.mjs";
 
-/** Entries (relative to the package root) the stripped arm loses. */
-export const STRIP_RULES = [
-  { kind: "file", path: "llms.txt" },
-  { kind: "dir", path: "docs/" },
-  { kind: "dir", path: "skills/" },
-];
+/**
+ * Entries (relative to the package root) each strip set removes. A set is
+ * named on the command line (`--strip-docs`, `--strip-graphs`) and recorded
+ * in the manifest, so an arm's label is never the only record of what it lost.
+ */
+export const STRIP_SETS = {
+  docs: [
+    { kind: "file", path: "llms.txt" },
+    { kind: "dir", path: "docs/" },
+    { kind: "dir", path: "skills/" },
+  ],
+  graphs: [
+    { kind: "dir", path: "graphs/" },
+    { kind: "file", path: "docs/graphs.json" },
+    { kind: "file", path: "docs/graphs.md" },
+  ],
+};
+
+/** The label a set combination gets when `--label` is not given. */
+export const STRIP_LABELS = { docs: "stripped", graphs: "stripped-graphs", "docs+graphs": "stripped-all" };
+
+/** Entries the documentation-blind arm loses. The default for the rule helpers. */
+export const STRIP_RULES = STRIP_SETS.docs;
+
+/** The union of the named sets' rules, in set order, deduplicated by path. */
+export function stripRulesFor(sets) {
+  const unknown = sets.filter((s) => !STRIP_SETS[s]);
+  if (unknown.length) throw new Error(`unknown strip set(s) ${unknown.join(", ")}; known sets: ${Object.keys(STRIP_SETS).join(", ")}`);
+  const seen = new Set();
+  const out = [];
+  for (const s of sets) {
+    for (const r of STRIP_SETS[s]) {
+      if (seen.has(r.path)) continue;
+      seen.add(r.path);
+      out.push(r);
+    }
+  }
+  return out;
+}
+
+/** The canonical label for a set combination ("docs+graphs" → "stripped-all"). */
+export function defaultStripLabel(sets) {
+  const key = [...new Set(sets)].sort().join("+");
+  return STRIP_LABELS[key] ?? `stripped-${key.replace(/\+/g, "-")}`;
+}
 
 const BLOCK = 512;
 
@@ -159,19 +214,37 @@ export function readManifest(tgzPath) {
 }
 
 /**
+ * Corpus-facing commands whose answer an arm without `graphs/` changes. They
+ * are probed but never required: a stripped arm is allowed to say less, it is
+ * not allowed to crash. `pcg nodes <type>` names a node the package always
+ * registers, so the probe reads the same on every arm.
+ */
+const DEGRADE_PROBES = [
+  { command: ["graphs"], why: "lists the shipped corpus" },
+  { command: ["nodes", "pointScatterInBounds"], why: "a node type's page, whose example list comes from the corpus" },
+  { command: ["agents"], why: "the agent entry point, which links the shipped documentation" },
+];
+
+/**
  * Install a tarball into a scratch sandbox and run its CLI. Returns
- * `{ ok, detail }`; the sandbox is always removed.
+ * `{ ok, detail, degradation }`; the sandbox is always removed.
+ *
+ * `ok` is decided by `pcg --help` and `pcg nodes --json` alone — the two
+ * commands every arm must answer. `degradation` records, without judging,
+ * what the corpus-facing commands did, so an arm's manifest carries evidence
+ * rather than a claim.
  */
 export function verifyTarball(tgzPath) {
   let sb;
   try {
     sb = createSandbox({ tarball: tgzPath, copyBrief: false, baseDir: join(tmpdir(), "pcg-pack-verify") });
     const bin = join(sb.pcgDir, "bin", "pcg.mjs");
-    const help = spawnSync(process.execPath, [bin, "--help"], { cwd: sb.dir, encoding: "utf8", windowsHide: true });
+    const run = (args) => spawnSync(process.execPath, [bin, ...args], { cwd: sb.dir, encoding: "utf8", windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+    const help = run(["--help"]);
     if (help.status !== 0 || !/usage: pcg/.test(help.stdout)) {
       return { ok: false, detail: `pcg --help exited ${help.status}: ${(help.stderr || help.stdout).slice(-500)}` };
     }
-    const nodes = spawnSync(process.execPath, [bin, "nodes", "--json"], { cwd: sb.dir, encoding: "utf8", windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+    const nodes = run(["nodes", "--json"]);
     let count = 0;
     try {
       count = JSON.parse(nodes.stdout).length;
@@ -179,7 +252,22 @@ export function verifyTarball(tgzPath) {
       /* reported below */
     }
     if (nodes.status !== 0 || !count) return { ok: false, detail: `pcg nodes --json exited ${nodes.status} with ${count} entries` };
-    return { ok: true, detail: `pcg --help ok; pcg nodes --json lists ${count} node types; installed offline=${sb.installedOffline}` };
+    const degradation = DEGRADE_PROBES.map((p) => {
+      const r = run(p.command);
+      const text = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+      return {
+        command: `pcg ${p.command.join(" ")}`,
+        why: p.why,
+        exitCode: r.status,
+        crashed: /^\s*(Error|TypeError|ReferenceError)\b|\bat .*\.mjs:\d+/m.test(text),
+        firstLine: text.split(/\r?\n/).find((l) => l.trim()) ?? "",
+      };
+    });
+    return {
+      ok: true,
+      detail: `pcg --help ok; pcg nodes --json lists ${count} node types; installed offline=${sb.installedOffline}`,
+      degradation,
+    };
   } catch (err) {
     return { ok: false, detail: err.message };
   } finally {
@@ -187,35 +275,49 @@ export function verifyTarball(tgzPath) {
   }
 }
 
-export function stripDocs({ tarball, outDir, label = "stripped", verify = true }) {
+/**
+ * Derive a sensitivity arm by removing one or more STRIP_SETS from a tarball.
+ * `sets` defaults to `["docs"]`, which is what `stripDocs` was.
+ */
+export function stripTarball({ tarball, sets = ["docs"], outDir, label, verify = true }) {
+  const chosen = [...new Set(sets)];
+  if (!chosen.length) throw new Error(`--strip-*: name at least one strip set (${Object.keys(STRIP_SETS).join(", ")})`);
+  const rules = stripRulesFor(chosen);
+  const flag = `--strip-${chosen.join(" --strip-")}`;
   const src = resolve(tarball);
-  if (!existsSync(src)) throw new Error(`--strip-docs: tarball not found: ${src}`);
+  if (!existsSync(src)) throw new Error(`${flag}: tarball not found: ${src}`);
   const srcManifest = readManifest(src);
   const pkgBytes = readTgzFile(src, "package.json");
-  if (!pkgBytes) throw new Error(`--strip-docs: ${src} has no package/package.json`);
+  if (!pkgBytes) throw new Error(`${flag}: ${src} has no package/package.json`);
   const pkgJson = JSON.parse(pkgBytes.toString("utf8"));
   const version = srcManifest?.version ?? pkgJson.version;
   const gitSha = srcManifest?.gitSha ?? null;
   const sha7 = gitSha ? gitSha.slice(0, 7) : sha256File(src).slice(0, 7);
-  const { tgz, removed } = stripTgz(readFileSync(src));
-  if (!removed.length) throw new Error(`--strip-docs: nothing matched ${STRIP_RULES.map((r) => r.path).join(", ")} in ${src}`);
+  const { tgz, removed } = stripTgz(readFileSync(src), rules);
+  // Every set must have bitten. A set that matched nothing means the package
+  // stopped shipping what the arm is supposed to lose, and a silently
+  // identical arm is the one failure this command exists to prevent.
+  const empty = chosen.filter((s) => !removed.some((p) => matchesStripRule(p, STRIP_SETS[s])));
+  if (empty.length) {
+    throw new Error(`${flag}: strip set(s) ${empty.join(", ")} matched nothing in ${src} (looked for ${empty.flatMap((s) => STRIP_SETS[s].map((r) => r.path)).join(", ")})`);
+  }
   const dest = resolve(outDir ?? dirname(src));
   mkdirSync(dest, { recursive: true });
-  const file = `${label}-${version}-${sha7}.tgz`;
+  const file = `${label ?? defaultStripLabel(chosen)}-${version}-${sha7}.tgz`;
   const out = join(dest, file);
   writeFileSync(out, tgz);
-  const leftovers = listTgz(out).filter((p) => matchesStripRule(p));
-  if (leftovers.length) throw new Error(`--strip-docs: ${out} still holds ${leftovers.join(", ")}`);
+  const leftovers = listTgz(out).filter((p) => matchesStripRule(p, rules));
+  if (leftovers.length) throw new Error(`${flag}: ${out} still holds ${leftovers.join(", ")}`);
   let verification = null;
   if (verify) {
     verification = verifyTarball(out);
     if (!verification.ok) {
       rmSync(out, { force: true });
-      throw new Error(`--strip-docs: the stripped tarball does not work: ${verification.detail}`);
+      throw new Error(`${flag}: the stripped tarball does not work: ${verification.detail}`);
     }
   }
   const manifest = {
-    role: `stripped arm: ${STRIP_RULES.map((r) => r.path).join(", ")} removed`,
+    role: `stripped arm (${chosen.join("+")}): ${rules.map((r) => r.path).join(", ")} removed`,
     file,
     sha256: sha256(tgz),
     version,
@@ -223,12 +325,30 @@ export function stripDocs({ tarball, outDir, label = "stripped", verify = true }
     dirty: srcManifest?.dirty ?? null,
     node: process.version,
     packedAt: new Date().toISOString(),
+    stripSets: chosen,
+    strippedPaths: rules.map((r) => r.path),
     derivedFrom: { file: basename(src), sha256: sha256File(src) },
     removed,
     verification: verification?.detail ?? "skipped",
+    degradation: verification?.degradation ?? "skipped",
+    // Measured on 2026-09-18 against stripped-all-0.17.0-9284b1f, not assumed;
+    // `degradation` above is the evidence for whichever arm this is.
+    note:
+      (chosen.includes("graphs")
+        ? "This arm ships no graph corpus. `pcg nodes <type>` still answers (exit 0) and simply drops its example list, because readCorpusIndex in src/cli/corpus.ts never throws — a missing docs/graphs.json comes back as available:false. `pcg graphs`, whose whole answer IS the corpus, exits 1 with a named cause and no stack trace. "
+        : "") +
+      (chosen.includes("docs")
+        ? "This arm ships no llms.txt, docs/ or skills/. `pcg agents`, which reads the shipped skill, exits 1 with a named cause and no stack trace. "
+        : "") +
+      "`pcg --help`, `pcg nodes --json`, validate, cook, inspect and render are unaffected: nothing an agent needs to AUTHOR a graph was removed, only what it could read to learn how. See `degradation` for what the probes actually printed.",
   };
   writeJson(manifestPathFor(out), manifest);
   return { path: out, manifest };
+}
+
+/** The documentation-blind arm: `stripTarball` with the `docs` set. */
+export function stripDocs({ tarball, outDir, label = "stripped", verify = true }) {
+  return stripTarball({ tarball, sets: ["docs"], outDir, label, verify });
 }
 
 export function packFromRepo({ repoRoot = REPO_ROOT, label = "candidate", role, outDir, build = true }) {
@@ -279,6 +399,50 @@ export function packFromRepo({ repoRoot = REPO_ROOT, label = "candidate", role, 
   }
 }
 
+const USAGE = [
+  "usage: node evals/harness/pack.mjs --from-repo [--label L] [--role R] [--out DIR] [--no-build]",
+  "       node evals/harness/pack.mjs --strip-docs [<tgz>] [--strip-graphs] [--from <tgz>] [--label L] [--out DIR] [--no-verify]",
+  "       node evals/harness/pack.mjs --strip-graphs <tgz> [--label L] [--out DIR] [--no-verify]",
+  "       node evals/harness/pack.mjs --verify <tgz>",
+  "",
+  `strip sets: ${Object.entries(STRIP_SETS)
+    .map(([k, rs]) => `${k} (${rs.map((r) => r.path).join(", ")})`)
+    .join("; ")}`,
+  `default labels: ${Object.entries(STRIP_LABELS)
+    .map(([k, v]) => `${k} → ${v}`)
+    .join("; ")}`,
+].join("\n");
+
+/**
+ * Parse the strip flags. Each may carry the source tarball or stand alone, so
+ * `--strip-docs a.tgz --strip-graphs`, `--strip-graphs a.tgz --strip-docs` and
+ * `--strip-docs --strip-graphs --from a.tgz` all name the same job. A value
+ * beginning with `-` belongs to the next flag, not to this one.
+ */
+export function parseStripArgs(argv) {
+  const value = (flag) => {
+    const i = argv.indexOf(flag);
+    if (i < 0) return undefined;
+    const v = argv[i + 1];
+    return v !== undefined && !v.startsWith("-") ? v : null;
+  };
+  const sets = [];
+  const froms = [];
+  for (const set of Object.keys(STRIP_SETS)) {
+    const v = value(`--strip-${set}`);
+    if (v === undefined) continue;
+    sets.push(set);
+    if (v !== null) froms.push(v);
+  }
+  if (!sets.length) return null;
+  const explicit = value("--from");
+  if (explicit) froms.push(explicit);
+  const unique = [...new Set(froms)];
+  if (unique.length > 1) throw new Error(`--strip-*: two different source tarballs named (${unique.join(", ")}); give it once, or use --from`);
+  if (!unique.length) throw new Error(`--strip-${sets.join(" --strip-")}: no source tarball; pass it after a --strip flag or as --from <tgz>`);
+  return { sets, tarball: unique[0] };
+}
+
 function main(argv) {
   const get = (flag) => {
     const i = argv.indexOf(flag);
@@ -290,8 +454,9 @@ function main(argv) {
       console.log(JSON.stringify(r, null, 2));
       return 0;
     }
-    if (argv.includes("--strip-docs")) {
-      const r = stripDocs({ tarball: get("--strip-docs"), outDir: get("--out"), label: get("--label") ?? "stripped", verify: !argv.includes("--no-verify") });
+    const strip = parseStripArgs(argv);
+    if (strip) {
+      const r = stripTarball({ tarball: strip.tarball, sets: strip.sets, outDir: get("--out"), label: get("--label"), verify: !argv.includes("--no-verify") });
       console.log(JSON.stringify(r, null, 2));
       return 0;
     }
@@ -304,7 +469,7 @@ function main(argv) {
     console.error(`pack: ${err.message}`);
     return 1;
   }
-  console.error("usage: node evals/harness/pack.mjs --from-repo [--label L] [--role R] [--out DIR] [--no-build]\n       node evals/harness/pack.mjs --strip-docs <tgz> [--label stripped] [--out DIR] [--no-verify]\n       node evals/harness/pack.mjs --verify <tgz>");
+  console.error(USAGE);
   return 2;
 }
 

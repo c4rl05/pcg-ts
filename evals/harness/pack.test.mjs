@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { gunzipSync, gzipSync } from "node:zlib";
-import { listTgz, matchesStripRule, readTgzFile, stripTgz, tarRecords } from "./pack.mjs";
+import { STRIP_SETS, defaultStripLabel, listTgz, matchesStripRule, parseStripArgs, readManifest, readTgzFile, stripRulesFor, stripTgz, tarRecords, verifyTarball } from "./pack.mjs";
 
 /** Minimal ustar writer for fixtures (with an optional pax path record). */
 function tarEntry(name, body, { pax } = {}) {
@@ -77,7 +77,69 @@ test("stripping removes docs entries (pax paths included) and keeps every other 
   }
 });
 
-const BASELINE = "D:/Projects/JS/pcg-ts/evals/tarballs/baseline-0.17.0-0ad6998.tgz";
+test("the graphs strip set takes the corpus and its index, and nothing that is code", () => {
+  const rules = STRIP_SETS.graphs;
+  for (const p of ["graphs/basics-x.json", "graphs/panels/x.json", "docs/graphs.json", "docs/graphs.md"]) assert.equal(matchesStripRule(p, rules), true, p);
+  for (const p of ["docs/nodes.md", "llms.txt", "dist/index.js", "graphsy/a.json", "docs/graphs.schema.json", "README.md"]) assert.equal(matchesStripRule(p, rules), false, p);
+});
+
+test("strip sets union in set order, deduplicated, and name their own label", () => {
+  assert.deepEqual(stripRulesFor(["docs"]).map((r) => r.path), ["llms.txt", "docs/", "skills/"]);
+  assert.deepEqual(stripRulesFor(["docs", "graphs"]).map((r) => r.path), ["llms.txt", "docs/", "skills/", "graphs/", "docs/graphs.json", "docs/graphs.md"]);
+  // docs/ already covers docs/graphs.json; the dir rule wins and the union does not repeat it.
+  assert.equal(stripRulesFor(["graphs", "docs"]).filter((r) => r.path === "docs/graphs.json").length, 1);
+  assert.equal(defaultStripLabel(["docs"]), "stripped");
+  assert.equal(defaultStripLabel(["graphs"]), "stripped-graphs");
+  assert.equal(defaultStripLabel(["docs", "graphs"]), "stripped-all");
+  assert.equal(defaultStripLabel(["graphs", "docs"]), "stripped-all", "set order must not change the label");
+  assert.throws(() => stripRulesFor(["prose"]), /unknown strip set\(s\) prose/);
+});
+
+test("the strip flags combine, take the tarball from either of them, and refuse an ambiguous one", () => {
+  assert.deepEqual(parseStripArgs(["--strip-docs", "a.tgz", "--strip-graphs"]), { sets: ["docs", "graphs"], tarball: "a.tgz" });
+  assert.deepEqual(parseStripArgs(["--strip-graphs", "a.tgz", "--strip-docs"]), { sets: ["docs", "graphs"], tarball: "a.tgz" });
+  assert.deepEqual(parseStripArgs(["--strip-docs", "--strip-graphs", "--from", "a.tgz"]), { sets: ["docs", "graphs"], tarball: "a.tgz" });
+  assert.deepEqual(parseStripArgs(["--strip-graphs", "a.tgz"]), { sets: ["graphs"], tarball: "a.tgz" });
+  assert.deepEqual(parseStripArgs(["--strip-docs", "a.tgz", "--strip-docs"]), { sets: ["docs"], tarball: "a.tgz" }, "the same flag twice is still one set");
+  assert.equal(parseStripArgs(["--verify", "a.tgz"]), null);
+  assert.throws(() => parseStripArgs(["--strip-docs", "a.tgz", "--strip-graphs", "b.tgz"]), /two different source tarballs/);
+  assert.throws(() => parseStripArgs(["--strip-docs", "--strip-graphs"]), /no source tarball/);
+});
+
+test("stripping both sets removes both and keeps every other byte range", () => {
+  const input = tgz([
+    tarEntry("package/package.json", '{"name":"pcg-ts","version":"0.0.1"}'),
+    tarEntry("package/llms.txt", "index"),
+    tarEntry("package/docs/nodes.md", "doc"),
+    tarEntry("package/docs/graphs.json", "[]"),
+    tarEntry("package/graphs/basics-a.json", "{}"),
+    tarEntry("package/graphs/panels/basics-a.json", "{}"),
+    tarEntry("package/skills/a/SKILL.md", "skill"),
+    tarEntry("package/dist/index.js", "code"),
+    tarEntry("package/bin/pcg.mjs", "bin"),
+    tarEntry("package/README.md", "readme"),
+  ]);
+  const both = stripTgz(input, stripRulesFor(["docs", "graphs"]));
+  assert.deepEqual(both.removed.sort(), ["docs/graphs.json", "docs/nodes.md", "graphs/basics-a.json", "graphs/panels/basics-a.json", "llms.txt", "skills/a/SKILL.md"]);
+  // Graphs alone must leave the prose but take the index with the bodies.
+  const graphsOnly = stripTgz(input, stripRulesFor(["graphs"]));
+  assert.deepEqual(graphsOnly.removed.sort(), ["docs/graphs.json", "graphs/basics-a.json", "graphs/panels/basics-a.json"]);
+  const dir = mkdtempSync(join(tmpdir(), "pcg-packtest-"));
+  try {
+    const f = join(dir, "all.tgz");
+    writeFileSync(f, both.tgz);
+    assert.deepEqual(listTgz(f), ["package.json", "dist/index.js", "bin/pcg.mjs", "README.md"]);
+    assert.equal(readTgzFile(f, "bin/pcg.mjs").toString(), "bin");
+    assert.equal(readTgzFile(f, "graphs/basics-a.json"), null);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+const TARBALLS = "D:/Projects/JS/pcg-ts/evals/tarballs";
+const BASELINE = `${TARBALLS}/baseline-0.17.0-0ad6998.tgz`;
+const STRIPPED_ALL = `${TARBALLS}/stripped-all-0.17.0-9284b1f.tgz`;
+
 test("the real baseline strips to exactly llms.txt, docs/ and skills/", { skip: !existsSync(BASELINE) && "baseline tarball not on this machine" }, async () => {
   const { readFileSync } = await import("node:fs");
   const { removed } = stripTgz(readFileSync(BASELINE));
@@ -85,4 +147,35 @@ test("the real baseline strips to exactly llms.txt, docs/ and skills/", { skip: 
   assert.ok(removed.every((p) => p === "llms.txt" || p.startsWith("docs/") || p.startsWith("skills/")));
   assert.equal(removed.filter((p) => p.startsWith("skills/")).length, 3);
   assert.ok(tarRecords(gunzipSync(readFileSync(BASELINE))).some((r) => r.path === "package/dist/docs/index.js"), "dist/docs is code and stays");
+});
+
+test("the stripped-all arm has lost the corpus and the prose, and kept the package", { skip: !existsSync(STRIPPED_ALL) && "stripped-all tarball not on this machine" }, () => {
+  const entries = listTgz(STRIPPED_ALL);
+  for (const p of entries) assert.ok(!matchesStripRule(p, stripRulesFor(["docs", "graphs"])), `${p} should have been stripped`);
+  assert.equal(entries.filter((p) => p.startsWith("graphs/")).length, 0);
+  assert.equal(entries.filter((p) => p.startsWith("docs/")).length, 0);
+  assert.ok(entries.includes("package.json"));
+  assert.ok(entries.some((p) => p.startsWith("bin/")), "the CLI is still there");
+  assert.ok(entries.some((p) => p.startsWith("dist/")), "the library is still there");
+  const m = readManifest(STRIPPED_ALL);
+  assert.deepEqual(m.stripSets, ["docs", "graphs"]);
+  assert.ok(m.removed.some((p) => p.startsWith("graphs/")) && m.removed.includes("llms.txt"));
+  assert.equal(m.derivedFrom.file, "candidate-U1-0.17.0-9284b1f.tgz");
+  assert.ok(typeof m.derivedFrom.sha256 === "string" && m.derivedFrom.sha256.length === 64);
+  assert.match(m.verification, /pcg --help ok/);
+});
+
+// Slow: installs the tarball into a scratch sandbox. It is the only check
+// that the arm the campaign will actually run is a working package.
+test("the stripped-all tarball installs and its CLI runs; corpus commands degrade without crashing", { skip: !existsSync(STRIPPED_ALL) && "stripped-all tarball not on this machine" }, () => {
+  const r = verifyTarball(STRIPPED_ALL);
+  assert.equal(r.ok, true, r.detail);
+  assert.match(r.detail, /pcg nodes --json lists \d+ node types/);
+  const by = Object.fromEntries(r.degradation.map((d) => [d.command, d]));
+  for (const d of r.degradation) assert.equal(d.crashed, false, `${d.command} printed a stack trace: ${d.firstLine}`);
+  // A node type's page still answers; only its example list is gone.
+  assert.equal(by["pcg nodes pointScatterInBounds"].exitCode, 0);
+  // `pcg graphs` IS the corpus, so it fails — but with a named cause, not a crash.
+  assert.equal(by["pcg graphs"].exitCode, 1);
+  assert.match(by["pcg graphs"].firstLine, /graphs:.*graphs\.json/);
 });
