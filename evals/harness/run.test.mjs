@@ -72,7 +72,7 @@ const root = mkdtempSync(join(tmpdir(), "pcg-runtest-"));
 after(() => rmSync(root, { recursive: true, force: true }));
 const sharedRuns = join(root, "runs");
 
-function setup(name, outcomes, { probeOutcomes, auditOutcomes } = {}) {
+function setup(name, outcomes, { probeOutcomes, auditOutcomes, taskBudgets } = {}) {
   const dir = join(root, name);
   mkdirSync(dir, { recursive: true });
   const config = {
@@ -92,6 +92,7 @@ function setup(name, outcomes, { probeOutcomes, auditOutcomes } = {}) {
         tasks: { include: ["fixture-grid"], dirs: [join(HARNESS, "fixtures", "tasks")] },
         runsPerTask: 1,
         scheduleSeed: 11,
+        ...(taskBudgets ? { taskBudgets } : {}),
       },
     },
   };
@@ -245,6 +246,26 @@ test("e2e: torn STATUS.json and .lock.json from a crash do not block a restart",
   assert.equal(b.status, 0, b.stderr);
   assert.equal(b.runs.length, 2);
   assert.equal(b.status_.state, "done");
+});
+
+test("e2e: taskBudgets in the campaign override the task's own budgets", { skip, timeout: 300_000 }, () => {
+  // A task's budgets REPLACE the campaign caps, so the cap is often not the
+  // number a run was measured against; the campaign may in turn override the
+  // task, which is how a budget for a task defined in another repository is
+  // set — and recorded — where the campaign lives.
+  const plain = run(setup("budget-plain", ["ok"]));
+  assert.equal(plain.status, 0, plain.stderr);
+  const taskTurns = plain.runs[0].budgets.turns;
+  assert.ok(Number.isFinite(taskTurns), "the record carries the effective budget");
+
+  const overridden = run(setup("budget-override", ["ok"], { taskBudgets: { "fixture-grid": { turns: 137, wallMinutes: 7 } } }));
+  assert.equal(overridden.status, 0, overridden.stderr);
+  assert.equal(overridden.runs[0].budgets.turns, 137);
+  assert.equal(overridden.runs[0].budgets.wallMinutes, 7);
+  assert.notEqual(overridden.runs[0].budgets.turns, taskTurns, "the override has to change something to be worth having");
+  // A task the override does not name keeps its own budget.
+  const other = run(setup("budget-other", ["ok"], { taskBudgets: { "some-other-task": { turns: 999 } } }));
+  assert.equal(other.runs[0].budgets.turns, taskTurns);
 });
 
 test("contamination guard: more than half of the last six finished attempts", () => {

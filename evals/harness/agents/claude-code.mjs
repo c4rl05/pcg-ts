@@ -315,7 +315,15 @@ export function tokenPath(token, cwd, { bareRoot = true } = {}) {
     t = value + env[5];
   }
   const win = process.platform === "win32";
-  if (t === "~" || /^~[\\/]/.test(t)) return resolve(homedir(), t.slice(2) || ".");
+  // A BARE `~` is the home directory only as an argument of a filesystem
+  // command, exactly as a bare `/` is just below. Otherwise it is punctuation:
+  // `awk '$0 ~ /^## /'` matches a regex, and quote stripping in
+  // `commandTokens` leaves the awk PROGRAM as bare tokens — which read as
+  // "this run opened the home directory" and cost two re-runs in calibration.
+  // `~/...` is unambiguous and stays unconditional; `cd ~` is handled by the
+  // `cd` branch in scanShell, and `echo ~` by its own exemption there.
+  if (t === "~") return bareRoot ? homedir() : null;
+  if (/^~[\\/]/.test(t)) return resolve(homedir(), t.slice(2) || ".");
   if (/^[A-Za-z]:[\\/]/.test(t)) return resolve(t);
   if (t.startsWith("/")) {
     if (t.startsWith("//")) return null; // a comment or a URL remnant, never a path here
@@ -526,6 +534,26 @@ function packageArea(rel) {
   return "pkg";
 }
 
+/**
+ * Verbs that read the CONTENT of what they are given, as opposed to its name.
+ * `ls`, `find`, `tree`, `du` and `stat` list; these open. The distinction is
+ * what separates "the agent read the docs" from "the agent saw that a docs
+ * directory exists" — counting the second as the first is how the calibration
+ * report claimed skills were read in 38% of runs when one run of eight opened
+ * a skill file.
+ */
+const CONTENT_VERBS = new Set([
+  "cat", "head", "tail", "less", "more", "type", "grep", "egrep", "fgrep", "rg", "ag",
+  "sed", "awk", "jq", "wc", "strings", "od", "xxd", "get-content", "gc", "select-string", "sls",
+  "node", "deno", "bun", "python", "python3", "py", "perl", "ruby", "php", "diff", "cmp", "md5sum", "sha256sum",
+]);
+
+/** Does this package-relative path name a file rather than a directory? */
+function namesFile(rel) {
+  const last = rel.replace(/\\/g, "/").split("/").pop() ?? "";
+  return /\.[A-Za-z0-9]{1,8}$/.test(last);
+}
+
 const PCG_CMD = /(?:^|[\s;&|(])(?:npx\s+(?:--no-install\s+)?pcg|(?:\.[\\/])?node_modules[\\/]\.bin[\\/]pcg(?:\.cmd)?|node\s+\S*pcg-ts[\\/]bin[\\/]pcg\.mjs|pcg)\s+(nodes|fields|validate|assets|cook|run|inspect|render|--help|-h|--version)\b/g;
 
 /**
@@ -543,6 +571,9 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
   const toolUses = new Map();
   const toolCallsByName = {};
   const readSets = { docs: new Set(), graphs: new Set(), skills: new Set(), llms: new Set(), pkg: new Set() };
+  // Touched but not opened: a directory the agent listed. Kept as evidence,
+  // never counted as a read.
+  const listSets = { docs: new Set(), graphs: new Set(), skills: new Set(), llms: new Set(), pkg: new Set() };
   const outside = new Set();
   const outsideWrites = new Set();
   const created = [];
@@ -572,7 +603,7 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
    * then the agent's own), "mkdir" (that exact directory may then be listed),
    * "append" (recorded, grants nothing: the file may have held anything).
    */
-  const touch = (p, { write = false, recursive = false, cd = false, base = sandbox, nodeEntry = false } = {}) => {
+  const touch = (p, { write = false, recursive = false, cd = false, base = sandbox, nodeEntry = false, content = false } = {}) => {
     if (!p || typeof p !== "string") return;
     const abs = p.startsWith("msys:") ? p : resolveArg(p, base);
     if (abs.startsWith("msys:") || !isInside(abs, sandbox)) {
@@ -589,7 +620,11 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
     }
     if (isInside(abs, pcgDir)) {
       const rel = relative(pcgDir, abs);
-      readSets[packageArea(rel)].add(rel.replace(/\\/g, "/") || ".");
+      const key = rel.replace(/\\/g, "/") || ".";
+      // "Read the docs" has to mean a file was opened. A bare `ls docs` names
+      // what is there and reads none of it; a recursive CONTENT verb
+      // (`grep -r x docs/`) opens every file under it and does count.
+      (namesFile(key) || (content && recursive) ? readSets : listSets)[packageArea(rel)].add(key);
     } else if (write) {
       writes.add(relative(sandbox, abs).replace(/\\/g, "/"));
     }
@@ -676,7 +711,7 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
         const key = String(path).toLowerCase();
         // `echo $HOME`, `echo ~` print a name; they read nothing.
         if (["echo", "printf"].includes(verb) && /^(?:~|\$\{?\w+\}?|%\w+%|\$env:\w+)$/i.test(token)) continue;
-        if (!writtenHere.has(key) && !destHere.has(key)) touch(path, { recursive: recursive || glob, nodeEntry: verb === "node" && token === flagless[0] });
+        if (!writtenHere.has(key) && !destHere.has(key)) touch(path, { recursive: recursive || glob, content: CONTENT_VERBS.has(verb), nodeEntry: verb === "node" && token === flagless[0] });
       }
       if (!isInside(vcwd, sandbox)) {
         // Outside the sandbox, anything that names a file relative to where the shell is names it THERE,
@@ -745,7 +780,10 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
             const pattern = String(input.pattern ?? "");
             const wild = pattern.search(/[*?{[]/);
             const descends = pattern.includes("**") || (wild >= 0 && /[\\/]/.test(pattern.slice(wild)));
-            touch(input.path ?? ".", { recursive: block.name === "Grep" || (block.name === "Glob" && descends) });
+            // Grep opens every file it searches, so a Grep over a directory is
+            // a content read of that directory — the tool form of `grep -r`.
+            // Glob and LS match NAMES and read nothing.
+            touch(input.path ?? ".", { recursive: block.name === "Grep" || (block.name === "Glob" && descends), content: block.name === "Grep" });
             if (block.name === "Glob" && pattern) {
               const prefix = (wild >= 0 ? pattern.slice(0, wild) : pattern).replace(/[^\\/]*$/, "");
               if (prefix) touch(input.path ? join(tokenPath(input.path, sandbox) ?? resolve(sandbox, input.path), prefix) : prefix, { recursive: descends || wild >= 0 });
@@ -827,6 +865,14 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
       pkg: sorted(readSets.pkg),
       outsideSandbox: sorted(outside),
       contaminating: sorted(contaminating),
+    },
+    // Directories the agent listed without opening a file in them.
+    listedPaths: {
+      docs: sorted(listSets.docs),
+      graphs: sorted(listSets.graphs),
+      skills: sorted(listSets.skills),
+      llms: sorted(listSets.llms),
+      pkg: sorted(listSets.pkg),
     },
     writes: sorted(writes),
     outsideWrites: sorted(outsideWrites),
@@ -996,6 +1042,7 @@ export async function launch({
     classification,
     capsHit,
     readPaths: parsed.readPaths,
+    listedPaths: parsed.listedPaths,
     writes: parsed.writes,
     outsideWrites: parsed.outsideWrites,
     networkAttempts: parsed.networkAttempts,

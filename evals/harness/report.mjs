@@ -108,10 +108,28 @@ export function parseJsonl(text, { tolerant = false, onSkip = () => {} } = {}) {
   return out;
 }
 
-/** The record that counts for each slot: the last one written. */
+/**
+ * The record that counts for each slot: the LATEST ATTEMPT, not merely the
+ * last line. Attempts are appended in order, so the two agree on a healthy
+ * file — but selecting by position alone means a re-ordered or concatenated
+ * runs.jsonl can retire a clean retry in favour of the contaminated attempt
+ * it superseded, which silently drops a run from the rates. Keying on
+ * `attempt` makes the choice a property of the records. A record without an
+ * attempt number falls back to its position.
+ */
 export function latestBySlot(records) {
   const m = new Map();
-  for (const r of records) m.set(r.slotId, r);
+  const rank = new Map();
+  records.forEach((r, i) => {
+    const key = r.slotId;
+    const score = Number.isFinite(r.attempt) ? r.attempt : -1;
+    const prev = rank.get(key);
+    // Higher attempt wins; equal or unknown attempts fall back to later position.
+    if (prev === undefined || score > prev.score || (score === prev.score && i > prev.index)) {
+      rank.set(key, { score, index: i });
+      m.set(key, r);
+    }
+  });
   return m;
 }
 
@@ -202,6 +220,48 @@ export const EFFORT_METRICS = [
 
 /** The runs that measured their arm: neither contaminated nor an infra error. */
 export const countableRuns = (finals) => finals.filter((r) => !r.contaminated && !r.infraError);
+
+/**
+ * The turn budget each task actually ran under, taken from the records rather
+ * than the caps: a task's own `budgets.turns` REPLACES the campaign cap, and
+ * the campaign's `taskBudgets` may replace that again. A turn count printed
+ * without the budget it is against cannot be read — 83 is comfortable under
+ * 100 and truncated under 80 — so every effort figure is shown over its
+ * budget. `varied` marks a task whose runs did not all share one budget,
+ * which would mean the campaign changed under it.
+ */
+export function effectiveBudgets(finals, tasks) {
+  const out = {};
+  for (const task of tasks) {
+    const seen = new Set();
+    for (const r of finals) {
+      if (r.task !== task) continue;
+      const t = r.budgets?.turns;
+      if (Number.isFinite(t)) seen.add(t);
+    }
+    const walls = new Set();
+    for (const r of finals) {
+      if (r.task !== task) continue;
+      const w = r.budgets?.wallMinutes;
+      if (Number.isFinite(w)) walls.add(w);
+    }
+    const values = [...seen].sort((a, b) => a - b);
+    const wallValues = [...walls].sort((a, b) => a - b);
+    out[task] = {
+      turns: values.length ? values[values.length - 1] : null,
+      wallMinutes: wallValues.length ? wallValues[wallValues.length - 1] : null,
+      varied: values.length > 1,
+      values,
+    };
+  }
+  return out;
+}
+
+/** `83/100`, or `83` when the budget is unknown. */
+export function overBudget(value, budget, format = (x) => Math.round(x).toString()) {
+  if (!Number.isFinite(value)) return "n/a";
+  return Number.isFinite(budget) ? `${format(value)}/${format(budget)}` : format(value);
+}
 
 function effortStats(rs) {
   const out = {};
@@ -468,6 +528,8 @@ export function evaluateGate(summary, tasks, gate, { complete, effort = null, bo
   let aaEffortGap = null;
   let aaEffortTasks = null;
   let effortUnavailable = null;
+  /** task -> |relative effort difference| against its reference(s). */
+  const effortSpread = new Map();
   if (limbConfigured || aaEffortConfigured) {
     if (!effort) effortUnavailable = "no effort data was passed to the gate";
     else if (!EFFORT_METRICS.some((m) => m.key === metricKey)) effortUnavailable = `gate.effortMetric "${metricKey}" is not one of ${EFFORT_METRICS.map((m) => m.key).join(", ")}`;
@@ -492,6 +554,15 @@ export function evaluateGate(summary, tasks, gate, { complete, effort = null, bo
       const needCi = gate.effortCiMustExcludeZero !== false;
       const checks = refArms.map((ref) => {
         const m = pairedEffort(effort, tasks, s, ref, opts).metrics[metricKey];
+        // Keep the per-task spread: limb (c) needs to know which individual
+        // tasks separated the arms, not just the aggregate.
+        for (const t of tasks) {
+          const r = m.perTask[t]?.relative;
+          const mag = Number.isFinite(r) ? Math.abs(r) : null;
+          // A task must clear the noise floor against EVERY reference to
+          // count as informative, so keep the smallest magnitude seen.
+          if (mag !== null) effortSpread.set(t, effortSpread.has(t) ? Math.min(effortSpread.get(t), mag) : mag);
+        }
         const rel = m.meanRelative;
         const okMargin = Number.isFinite(rel) && rel >= req - EPS;
         const okAboveNoise = Number.isFinite(rel) && aaEffortGap !== null && rel > aaEffortGap + EPS;
@@ -565,17 +636,23 @@ export function evaluateGate(summary, tasks, gate, { complete, effort = null, bo
         : `(b) A/A effort gap on ${metricKey} ${fmt(aaEffortGap)} exceeds gate.aaMaxEffortGap ${fmt(aaEffortMax)}: the same tarball under two labels already differs that much, so an effort difference means nothing`,
     );
   }
-  // A task with no countable runs (all contaminated or infrastructure) measured nothing: it fails (c) too.
+  // (c) asks whether a task can DISCRIMINATE in the dimension the gate is
+  // using. Solved saturation only disqualifies a task when the verdict rests
+  // on solved: an 8/8-solved task that costs the stripped arm 40% more turns
+  // is carrying the result, not blocking it. Calibration measured 10 solves
+  // in 10 attempts, 5 of them one-shot, so a solved-only (c) would fail on
+  // nearly every task while the signal we expect lives in effort.
+  // A task with no countable runs (all contaminated or infrastructure)
+  // measured nothing, and is saturated in every dimension.
   const saturated = (n, solved) => n === 0 || solved === 0 || solved === n;
   const at = (n, solved) => (n === 0 ? "no-data" : solved === 0 ? "floor" : "ceiling");
   const pooled = tasks.filter((t) => saturated(summary.byTask[t].n, summary.byTask[t].solved));
   const replaceTasks = pooled.map((t) => ({ task: t, solved: summary.byTask[t].solved, n: summary.byTask[t].n, at: at(summary.byTask[t].n, summary.byTask[t].solved) }));
-  // Pooling every arm hides the case that matters most: baselines at 3/3 on
+  // Pooling every arm hides the case that matters most: references at 3/3 on
   // every task, with only the stripped arm missing, pools to 11/12 and passes
-  // — yet the headline contrast cannot move, because its reference is already
-  // at the ceiling. So check the arms the stripped arm is measured against on
-  // their own. Calibration is supposed to catch this first; (c) is the
-  // backstop, and a backstop that only looks at the pool is not one.
+  // — yet the contrast cannot move, because its reference is already at the
+  // ceiling. So check the arms the stripped arm is measured against on their
+  // own too.
   const refScope = [...new Set([...refArms, a1, a2].filter(Boolean))];
   const already = new Set(pooled);
   for (const t of tasks) {
@@ -587,10 +664,34 @@ export function evaluateGate(summary, tasks, gate, { complete, effort = null, bo
       solved += summary.cell[t]?.[arm]?.solved ?? 0;
     }
     if (!saturated(n, solved)) continue;
+    already.add(t);
     replaceTasks.push({ task: t, solved, n, at: `${at(n, solved)}-in-reference`, scope: refScope });
   }
-  const c = { pass: replaceTasks.length === 0, replaceTasks };
-  if (!c.pass) reasons.push(`(c) task(s) at floor or ceiling, replace from reserve: ${c.replaceTasks.map((x) => `${x.task} (${x.at})`).join(", ")}`);
+  // Effort-flat: this task's arms differ by less than the campaign's own A/A
+  // effort gap, so the row says nothing either way. `null` = not measurable,
+  // which is not the same as flat and never counts as informative.
+  const effortFlatness = new Map();
+  for (const t of tasks) {
+    const mag = effortSpread.get(t);
+    effortFlatness.set(t, aaEffortGap === null || mag === undefined ? null : mag <= aaEffortGap + EPS);
+  }
+  const dimension = firedBy ?? "any";
+  const informativeSolved = (t) => !already.has(t);
+  const informativeEffort = (t) => effortFlatness.get(t) === false;
+  const informative = (t) => (dimension === "solved" ? informativeSolved(t) : dimension === "effort" ? informativeEffort(t) : informativeSolved(t) || informativeEffort(t));
+  // Flat rows are worth replacing too, once the gate is reading effort.
+  if (dimension === "effort" || dimension === "any") {
+    for (const t of tasks) {
+      if (already.has(t) || effortFlatness.get(t) !== true) continue;
+      replaceTasks.push({ task: t, solved: summary.byTask[t].solved, n: summary.byTask[t].n, at: "flat-in-effort", relative: effortSpread.get(t) ?? null, aaEffortGap });
+    }
+  }
+  const blocking = tasks.filter((t) => !informative(t));
+  const c = { pass: blocking.length === 0, dimension, blocking, replaceTasks };
+  if (!c.pass) {
+    const why = dimension === "solved" ? "at floor or ceiling on solved" : dimension === "effort" ? `flat on ${metricKey} (within the A/A effort gap ${fmt(aaEffortGap)})` : "unable to discriminate on solved or on effort";
+    reasons.push(`(c) ${blocking.length} of ${tasks.length} task(s) ${why}, replace from reserve: ${blocking.join(", ")}`);
+  }
   if (!complete) return { decision: "pending", complete, label, reasons: ["campaign incomplete: the gate is evaluated only on a finished campaign", ...reasons], a, b, c };
   const decision = aPass && bPass && c.pass ? "go" : "stop";
   if (decision === "stop" && !reasons.some((r) => r.startsWith("fix:"))) {
@@ -661,15 +762,20 @@ export function isCalibration(manifest) {
  */
 export function calibrationTable(finals, manifest, arms, tasks) {
   const arm = arms[0];
+  const budgets = effectiveBudgets(finals, tasks);
   const rows = tasks.map((task) => {
     const rs = finals.filter((r) => r.task === task && r.arm === arm);
     const counted = countableRuns(rs);
     const pick = (of) => median(counted.map(of).filter((x) => Number.isFinite(x)));
     const capsHit = [...new Set(counted.flatMap((r) => r.capsHit ?? []))];
+    const budget = budgets[task] ?? { turns: null, varied: false };
     return {
       task,
       tier: manifest.tasks?.find((t) => t.id === task)?.tier ?? null,
       runs: counted.length,
+      turnsBudget: budget.turns,
+      turnsBudgetVaried: budget.varied,
+      wallBudget: budget.wallMinutes,
       solved: counted.length ? counted.filter((r) => r.solved === true).length : null,
       graphProduced: counted.length ? counted.filter((r) => r.graphProduced ?? r.score?.graphProduced).length : null,
       turns: pick((r) => r.turns),
@@ -706,14 +812,19 @@ export function renderCalibration(report) {
   L.push(`# Calibration: ${report.campaign}`, "");
   L.push(`Generated ${report.generatedAt}. Model \`${report.model}\`, arm \`${c.arm}\`, one run per task.`);
   L.push(`Progress: ${report.progress.done}/${report.progress.total} slots${report.progress.complete ? "" : " (INCOMPLETE)"}. No gate: one run per task decides nothing, it only says what a task costs.`, "");
-  L.push("| task | tier | solved | turns | tool calls | wall min | out tokens | validate | caps hit | contaminated |");
+  L.push("| task | tier | solved | turns / budget | tool calls | wall min / budget | out tokens | validate | caps hit | contaminated |");
   L.push("|---|---|---|---|---|---|---|---|---|---|");
   for (const r of c.rows) {
     const solved = r.runs === 0 ? "no data" : r.solved === r.runs ? "yes" : r.solved ? `${r.solved}/${r.runs}` : r.graphProduced ? "no" : "no graph";
-    L.push(`| ${r.task} | ${r.tier ?? "–"} | ${solved} | ${n0(r.turns)} | ${n0(r.toolCalls)} | ${n1(r.wallMinutes)} | ${n0(r.outputTokens)} | ${n0(r.validateCalls)} | ${r.capsHit.join(" ") || "–"} | ${r.contaminated || "–"} |`);
+    L.push(`| ${r.task} | ${r.tier ?? "–"} | ${solved} | ${overBudget(r.turns, r.turnsBudget)}${r.turnsBudgetVaried ? " ⚠" : ""} | ${n0(r.toolCalls)} | ${overBudget(r.wallMinutes, r.wallBudget, (x) => x.toFixed(1))} | ${n0(r.outputTokens)} | ${n0(r.validateCalls)} | ${r.capsHit.join(" ") || "–"} | ${r.contaminated || "–"} |`);
   }
   L.push(`| **total** | | **${c.totals.solved}/${c.totals.runs}** | median ${n0(c.totals.turnsMedian)} | | ${n1(c.totals.wallMinutesTotal)} | ${n0(c.totals.outputTokensTotal)} | | ${c.totals.capsHit.join(" ") || "–"} | ${c.totals.contaminated || "–"} |`, "");
+  L.push("Turns and wall minutes are shown over the budget that run ACTUALLY had. A task's own `budgets` replace the campaign caps, and a campaign's `taskBudgets` replace those again, so the campaign cap is often not the number a run was measured against — 83 is comfortable under 100 and truncated under 80, and the bare figure cannot tell you which.", "");
   L.push("A task that solves in one run tells you it is not at the floor; it does NOT tell you it is not at the ceiling. Read turns and caps hit together with solved: a task solved in a handful of turns, with no validate call and no probe graph, is one the campaign will find saturated.", "");
+  const tight = c.rows.filter((r) => Number.isFinite(r.turns) && Number.isFinite(r.turnsBudget) && r.turnsBudget < r.turns * 1.5);
+  if (tight.length) {
+    L.push(`**Headroom.** ${tight.map((r) => `${r.task} used ${r.turns} of ${r.turnsBudget}`).join("; ")} — under 50% spare. An arm that legitimately costs more would be truncated rather than measured, so raise the budget (campaign \`taskBudgets\`) before a comparison run.`, "");
+  }
   if (report.contaminated.length) L.push(`Contaminated after retry (excluded): ${report.contaminated.join(", ")}`, "");
   if (report.infraErrors.length) L.push(`Infrastructure errors (excluded): ${report.infraErrors.map((e) => `${e.slotId}: ${e.error}`).join("; ")}`, "");
   if (report.scorerErrors?.length) L.push(`Scorer errors (counted as unsolved): ${report.scorerErrors.map((e) => `${e.slotId}: ${e.error.slice(0, 160)}`).join("; ")}`, "");
@@ -735,6 +846,7 @@ export function buildReport({ manifest, records }) {
   const ref = manifest.gate?.baselineArms?.[0] ?? arms[0];
   const metrics = processMetrics(finals, arms);
   const effort = effortMetrics(finals, arms, tasks);
+  const budgets = effectiveBudgets(finals, tasks);
   // Every arm against the baseline, PLUS the stripped arm against the arm it
   // was cut from when that is a different arm. Both contrasts are already in
   // the schedule, so computing only the first would throw away the clean one:
@@ -753,7 +865,10 @@ export function buildReport({ manifest, records }) {
   // Replacement proposal for (c): reserve tasks in id order, one per task to drop.
   let proposedReplacement = null;
   if (gate?.c && !gate.c.pass) {
-    const drop = gate.c.replaceTasks.map((x) => x.task);
+    // Propose replacements for the tasks that actually block first; the
+    // other flagged ones are worth swapping later but are not why it stopped.
+    const blocking = new Set(gate.c.blocking ?? gate.c.replaceTasks.map((x) => x.task));
+    const drop = [...gate.c.replaceTasks.map((x) => x.task).filter((t) => blocking.has(t)), ...gate.c.replaceTasks.map((x) => x.task).filter((t) => !blocking.has(t))];
     const reserve = (manifest.reserveTasks ?? []).filter((id) => !tasks.includes(id));
     proposedReplacement = { drop, add: reserve.slice(0, drop.length), short: Math.max(0, drop.length - reserve.length) };
   }
@@ -773,6 +888,7 @@ export function buildReport({ manifest, records }) {
     effort,
     effortPaired,
     effortRef: ref,
+    budgets,
     effortMethod: EFFORT_METHOD,
     calibration,
     contaminated: finals.filter((r) => r.contaminated).map((r) => r.slotId),
@@ -841,10 +957,11 @@ export function renderMarkdown(report) {
     L.push("", `### ${gm.label} per task (median)`, "");
     L.push(`| task | ${report.arms.join(" | ")} |`);
     L.push(`|---|${report.arms.map(() => "---").join("|")}|`);
+    const cap = (t) => (gm.key === "turns" ? report.budgets?.[t]?.turns : gm.key === "wallMinutes" ? report.budgets?.[t]?.wallMinutes : null);
     for (const t of report.tasks) {
-      L.push(`| ${t} | ${report.arms.map((a) => n0(report.effort.cell[t]?.[a]?.metrics?.[gm.key]?.median)).join(" | ")} |`);
+      L.push(`| ${t} | ${report.arms.map((a) => overBudget(report.effort.cell[t]?.[a]?.metrics?.[gm.key]?.median, cap(t))).join(" | ")} |`);
     }
-    L.push("", `report.json carries every metric per task, not just ${gm.label}.`);
+    L.push("", `report.json carries every metric per task, not just ${gm.label}. Where a budget applies it is printed after the slash: that is the budget the run ACTUALLY had (a task's own \`budgets\` replace the campaign caps, and the campaign's \`taskBudgets\` replace those), which is the only number the figure can be read against.`);
   }
   if (report.effortPaired?.length) {
     L.push("", "## Effort paired by task", "");
@@ -886,7 +1003,12 @@ export function renderMarkdown(report) {
     if (g.b) {
       L.push(`- (b) A/A gap within ${pct(g.b.aaMaxGap)}${g.b.aaMaxEffortGap !== null && g.b.aaMaxEffortGap !== undefined ? ` on solved and ${pct(g.b.aaMaxEffortGap)} on effort` : ""}: ${g.b.pass ? "pass" : "FAIL"} — solved gap ${pct(g.b.aaGap)}${g.b.aaEffortGap === null || g.b.aaEffortGap === undefined ? "" : `, effort gap ${pct(g.b.aaEffortGap)}`}`);
     }
-    if (g.c) L.push(`- (c) no task at floor or ceiling: ${g.c.pass ? "pass" : `FAIL — replace ${g.c.replaceTasks.map((x) => `${x.task} (${x.at}, ${x.solved}/${x.n})`).join(", ")}`}`);
+    if (g.c) {
+      L.push(`- (c) every task can discriminate on ${g.c.dimension === "any" ? "solved or effort" : g.c.dimension}: ${g.c.pass ? "pass" : `FAIL — ${(g.c.blocking ?? []).join(", ")}`}`);
+      if ((g.c.replaceTasks ?? []).length) {
+        L.push(`  - worth replacing from the reserve (not all of these block): ${g.c.replaceTasks.map((x) => `${x.task} (${x.at}, ${x.solved}/${x.n})`).join(", ")}`);
+      }
+    }
     for (const r of g.reasons) L.push(`- ${r}`);
     if (report.proposedReplacement) {
       const p = report.proposedReplacement;

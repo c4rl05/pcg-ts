@@ -630,10 +630,16 @@ export async function runCampaign(argv, { log = (m) => console.error(`[run ${new
       writeStatus({ state: "running", currentSlot: slot.slotId, attempt, completed: completedCount() });
       log(`slot ${slot.slotIndex + 1}/${schedule.length} ${slot.slotId} attempt ${attempt}`);
 
+      // A task's own budgets REPLACE the campaign caps, and the campaign may
+      // in turn override a task's, by id, in `taskBudgets`. That last hop
+      // exists because the held-out tasks live in another repository: a budget
+      // that has to change for THIS campaign is set where the campaign is
+      // defined, and is visible in the public config beside the thresholds.
+      const override = config.taskBudgets?.[slot.task] ?? {};
       const budgets = {
-        turns: task.task.budgets?.turns ?? config.caps?.turns,
-        wallMinutes: task.task.budgets?.wallMinutes ?? config.caps?.wallMinutes,
-        outputTokens: task.task.budgets?.outputTokens ?? config.caps?.outputTokens ?? undefined,
+        turns: override.turns ?? task.task.budgets?.turns ?? config.caps?.turns,
+        wallMinutes: override.wallMinutes ?? task.task.budgets?.wallMinutes ?? config.caps?.wallMinutes,
+        outputTokens: override.outputTokens ?? task.task.budgets?.outputTokens ?? config.caps?.outputTokens ?? undefined,
       };
       const base = {
         campaign: args.campaign,
@@ -748,8 +754,11 @@ export async function runCampaign(argv, { log = (m) => console.error(`[run ${new
           outsideContaminating: rp.contaminating ?? [],
           outsideBenign: (rp.outsideSandbox ?? []).filter((p) => !(rp.contaminating ?? []).includes(p)),
           outsideWrites: result.outsideWrites ?? [],
+          // A read is a FILE opened. A directory the agent only listed is
+          // recorded beside it, never counted as a read.
           readCounts: { llms: rp.llms?.length ?? 0, docs: rp.docs?.length ?? 0, skills: rp.skills?.length ?? 0, graphs: rp.graphs?.length ?? 0, pkg: rp.pkg?.length ?? 0 },
           readPaths: { llms: rp.llms ?? [], docs: rp.docs ?? [], skills: rp.skills ?? [], graphs: rp.graphs ?? [], pkg: rp.pkg ?? [] },
+          listedPaths: result.listedPaths ?? {},
           networkAttempts: result.networkAttempts ?? [],
           pcgCommands: result.pcgCommands ?? {},
           pcgFailures: result.pcgFailures ?? {},

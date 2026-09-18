@@ -265,6 +265,47 @@ test("laundering review repros: writes whitelist only what they created; globs, 
   }
 });
 
+test("a bare listing is not a read: only an opened file counts", () => {
+  const root = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes" : "/var/tmp/pcg-eval/sandboxes";
+  const cwd = join(root, "pcg-eval-Q1w2E3", "project");
+  const pkg = "node_modules/pcg-ts";
+  const parse = (command) =>
+    parseTranscript(syntheticTranscript(cwd, "sid", [{ name: "Bash", input: { command } }]), { cwd, tmpEntriesAtStart: new Set(["claude"]), benignRoots: jailOf(cwd) });
+  const read = (command, area) => parse(command).readPaths[area];
+  const listed = (command, area) => parse(command).listedPaths[area];
+
+  // Seeing that a directory exists is not reading what is in it. The
+  // calibration report said skills were read in 38% of runs; one run of eight
+  // had opened a skill file, the rest had run `ls`.
+  assert.deepEqual(read(`ls ${pkg}/skills`, "skills"), []);
+  assert.deepEqual(listed(`ls ${pkg}/skills`, "skills"), ["skills"]);
+  assert.deepEqual(read(`ls -la ${pkg}/docs`, "docs"), []);
+  assert.deepEqual(read(`find ${pkg}/graphs -name '*.json'`, "graphs"), []);
+
+  // Opening a file is.
+  assert.deepEqual(read(`cat ${pkg}/skills/graph-authoring/SKILL.md`, "skills"), ["skills/graph-authoring/SKILL.md"]);
+  assert.deepEqual(read(`head -50 ${pkg}/docs/nodes.md`, "docs"), ["docs/nodes.md"]);
+  assert.deepEqual(read(`cat ${pkg}/llms.txt`, "llms"), ["llms.txt"]);
+  // ...and so is a recursive CONTENT verb, which opens every file under it.
+  assert.deepEqual(read(`grep -r scatterPoints ${pkg}/docs/`, "docs"), ["docs"]);
+  assert.deepEqual(listed(`grep -r scatterPoints ${pkg}/docs/`, "docs"), []);
+  // The Grep TOOL opens every file it searches — the tool form of `grep -r` —
+  // while Glob and LS match names. The difference is not cosmetic: a Grep over
+  // docs/ is how an agent reads documentation without opening one file by name.
+  const tool = (name, input) => parseTranscript(syntheticTranscript(cwd, "sid", [{ name, input }]), { cwd, tmpEntriesAtStart: new Set(["claude"]), benignRoots: jailOf(cwd) });
+  assert.deepEqual(tool("Grep", { path: `${pkg}/docs`, pattern: "scatter" }).readPaths.docs, ["docs"]);
+  assert.deepEqual(tool("Grep", { path: `${pkg}/docs`, pattern: "scatter" }).listedPaths.docs, []);
+  assert.deepEqual(tool("Glob", { pattern: `${pkg}/graphs/*.json` }).readPaths.graphs, []);
+  assert.deepEqual(tool("Glob", { pattern: `${pkg}/graphs/*.json` }).listedPaths.graphs, ["graphs"]);
+  // The Read tool names a file by definition.
+  const viaTool = parseTranscript(syntheticTranscript(cwd, "sid", [{ name: "Read", input: { file_path: join(cwd, "node_modules", "pcg-ts", "docs", "authoring.md") } }]), {
+    cwd,
+    tmpEntriesAtStart: new Set(["claude"]),
+    benignRoots: jailOf(cwd),
+  });
+  assert.deepEqual(viaTool.readPaths.docs, ["docs/authoring.md"]);
+});
+
 test("review round 5: normal work stays clean; the remaining plausible escapes are caught", () => {
   const root = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes" : "/var/tmp/pcg-eval/sandboxes";
   const cwd = join(root, "pcg-eval-Q1w2E3", "project");
@@ -276,6 +317,14 @@ test("review round 5: normal work stays clean; the remaining plausible escapes a
   for (const cmd of [
     "sed -n '/^## scatter/,/^## /p' node_modules/pcg-ts/docs/nodes.md",
     `sed -n '/"id": "a"/,/}/p' graph.json`,
+    // REAL commands from the calibration campaign, verbatim. Both were
+    // flagged and cost a re-run: `commandTokens` strips quotes, so the awk
+    // PROGRAM's match operator `$0 ~ /^## /` left a bare `~` token, which
+    // resolved to the home directory. awk is not a filesystem verb, so it
+    // never grants a bare root. (r0.twin-quarters.A-a1, r0.cavern-lamps.A-a1)
+    "awk '/^## mergePoints/,/^## /{if(seen && $0 ~ /^## /) exit} /^## mergePoints/{seen=1} seen' docs/nodes.md | head -40",
+    'cd /c/pcg-eval/sandboxes/pcg-eval-Q1w2E3/project/node_modules/pcg-ts/docs\nfor n in pointGrid setAttribute spawnInstances; do\necho "=== $n ==="\nawk -v n="$n" \'BEGIN{p=0} $0 ~ "^## "n"$" {p=1} p && $0 ~ "^## " && $0 !~ ("^## "n"$") {if(p==1 && $0 !~ ("^## "n"$")) {p=0}} p\' nodes.md | sed -n \'1,60p\'\ndone',
+    `jq -r '.nodes[] | select(.type ~ "point")' graph.json`,
     "echo $HOME",
     "echo ~",
     'node -e "console.log(a /b)"',
@@ -285,6 +334,12 @@ test("review round 5: normal work stays clean; the remaining plausible escapes a
   }
   assert.deepEqual(verdict([{ name: "Write", input: { file_path: join(cwd, "scratch", "deep", "s.mjs"), content: "const g = readFileSync('../../graph.json'); import('../../node_modules/pcg-ts/dist/index.js');" } }]), []);
   assert.deepEqual(verdict([{ name: "Write", input: { file_path: join(cwd, "scratch", "deep", "s.sh"), content: "npx pcg validate ../../graph.json" } }]), []);
+  // ...but a bare `~` as the argument of a filesystem command is still the
+  // home directory, and so is every `~/...`. Narrowing the awk case must not
+  // narrow these.
+  for (const cmd of ["ls ~", "find ~ -name '*.md'", "grep -r pcg ~", "cat ~/.npmrc", "cd ~ && ls", "tar -cf x.tar ~"]) {
+    assert.deepEqual(bash(cmd), [homedir()].map((h) => (cmd.includes("~/.npmrc") ? join(h, ".npmrc") : h)), cmd);
+  }
   // escapes
   assert.equal(bash("mkdir -p /tmp/claude/D--Projects-JS-pcg-ts && ls /tmp/claude/D--Projects-JS-pcg-ts").length, 1, "mkdir -p on an existing dir grants nothing");
   if (win) {

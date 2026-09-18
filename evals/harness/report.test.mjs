@@ -9,11 +9,13 @@ import {
   buildReport,
   calibrationTable,
   EFFORT_METRICS,
+  effectiveBudgets,
   effortMetrics,
   evaluateGate,
   hasCalibrationShape,
   isCalibration,
   latestBySlot,
+  overBudget,
   pairedDelta,
   pairedEffort,
   parseJsonl,
@@ -537,6 +539,122 @@ test("a task already caught by the pooled check is not listed twice", () => {
   const g = evaluateGate(summarize(recs, ARMS, TASKS), TASKS, GATE, { complete: true });
   assert.deepEqual(g.c.replaceTasks.map((x) => x.task), ["t1", "t2"]);
   assert.deepEqual(g.c.replaceTasks.map((x) => x.at), ["ceiling", "floor"], "the pooled verdict wins");
+});
+
+test("(c) asks about the dimension the gate is using, not always about solved", () => {
+  // Every arm solves everything — calibration measured 10 solves in 10
+  // attempts, so this is the case v2 will actually be in — but the stripped
+  // arm costs 45% more turns on every task. The verdict rests on effort, so
+  // solved saturation must not veto it.
+  const recs = effortRecords({
+    arms: V2_ARMS,
+    tasks: E_TASKS,
+    turnsBy: { A: 40, "A-prime": 40, "candidate-U1": 40, "stripped-all": 58 },
+    solvedBy: () => 3,
+  });
+  const s = summarize(recs, V2_ARMS, E_TASKS);
+  const e = effortMetrics(recs, V2_ARMS, E_TASKS);
+  const g = evaluateGate(s, E_TASKS, V2_REF_GATE, { complete: true, effort: e });
+  assert.equal(g.a.firedBy, "effort");
+  assert.equal(g.c.dimension, "effort");
+  assert.deepEqual(g.c.blocking, [], "spread on effort, so every task can discriminate");
+  assert.equal(g.c.pass, true);
+  assert.equal(g.decision, "go", g.reasons.join("; "));
+  // Saturated tasks are still named for replacement — they just do not veto.
+  assert.deepEqual(g.c.replaceTasks.map((x) => x.task), E_TASKS);
+  assert.ok(g.c.replaceTasks.every((x) => x.at === "ceiling"));
+
+  // The same campaign where the effort difference is inside the A/A noise:
+  // now the tasks ARE uninformative in the dimension the gate is reading.
+  const flat = effortRecords({
+    arms: V2_ARMS,
+    tasks: E_TASKS,
+    turnsBy: { A: 40, "A-prime": 40, "candidate-U1": 40, "stripped-all": 40 },
+    solvedBy: () => 3,
+  });
+  const gf = evaluateGate(summarize(flat, V2_ARMS, E_TASKS), E_TASKS, V2_REF_GATE, { complete: true, effort: effortMetrics(flat, V2_ARMS, E_TASKS) });
+  assert.equal(gf.a.firedBy, null);
+  assert.equal(gf.c.dimension, "any");
+  assert.deepEqual(gf.c.blocking, E_TASKS, "saturated on solved AND flat on effort discriminates in neither");
+  assert.equal(gf.decision, "stop");
+});
+
+test("(c) still fails a solved-saturated task when the verdict rests on solved", () => {
+  const recs = effortRecords({
+    arms: V2_ARMS,
+    tasks: E_TASKS,
+    turnsBy: { A: 40, "A-prime": 40, "candidate-U1": 40, "stripped-all": 40 },
+    solvedBy: (arm) => (arm === "stripped-all" ? 0 : 3),
+  });
+  const g = evaluateGate(summarize(recs, V2_ARMS, E_TASKS), E_TASKS, V2_REF_GATE, { complete: true, effort: effortMetrics(recs, V2_ARMS, E_TASKS) });
+  assert.equal(g.a.firedBy, "solved");
+  assert.equal(g.c.dimension, "solved");
+  assert.deepEqual(g.c.blocking, E_TASKS, "the references have no room to fall");
+  assert.equal(g.decision, "stop");
+});
+
+// ---------------------------------------------------------------------------
+// Budgets: an effort figure is unreadable without the budget it is against
+// ---------------------------------------------------------------------------
+
+test("the effective budget comes from the records, and every effort figure is shown over it", () => {
+  const recs = effortRecords({ arms: ["A"], tasks: ["t1", "t2"], turnsBy: { A: (t) => (t === "t1" ? 83 : 31) } }).map((r) => ({
+    ...r,
+    // A task's own budgets replace the campaign caps; t2 keeps the default.
+    budgets: r.task === "t1" ? { turns: 100, wallMinutes: 50 } : { turns: 120, wallMinutes: 60 },
+  }));
+  const b = effectiveBudgets(recs, ["t1", "t2"]);
+  assert.deepEqual([b.t1.turns, b.t2.turns], [100, 120]);
+  assert.equal(b.t1.varied, false);
+  assert.equal(overBudget(83, 100), "83/100");
+  assert.equal(overBudget(83, null), "83", "no budget known, no fraction invented");
+  assert.equal(overBudget(null, 100), "n/a");
+  // A slot whose runs disagree on their budget is flagged, not averaged away.
+  const mixed = effectiveBudgets([...recs, { ...recs[0], budgets: { turns: 130 } }], ["t1", "t2"]);
+  assert.equal(mixed.t1.varied, true);
+  assert.deepEqual(mixed.t1.values, [100, 130]);
+});
+
+test("calibration.md prints turns over the budget the run actually had, and warns on thin headroom", () => {
+  const tasks = ["quarry-terraces", "canopy-gaps"];
+  const recs = [
+    { slotId: "r0.quarry-terraces.A", task: "quarry-terraces", arm: "A", final: true, attempt: 1, solved: true, turns: 83, toolCalls: 90, wallMs: 1_800_000, usage: { output_tokens: 60_000 }, pcgCommands: { validate: 2 }, capsHit: [], graphProduced: true, budgets: { turns: 100, wallMinutes: 50 } },
+    { slotId: "r0.canopy-gaps.A", task: "canopy-gaps", arm: "A", final: true, attempt: 1, solved: true, turns: 31, toolCalls: 34, wallMs: 300_000, usage: { output_tokens: 20_000 }, pcgCommands: { validate: 1 }, capsHit: [], graphProduced: true, budgets: { turns: 100, wallMinutes: 50 } },
+  ];
+  const manifest = {
+    campaign: "calibration",
+    model: "m",
+    claudeVersion: "1",
+    arms: [{ label: "A" }],
+    tasks: tasks.map((id) => ({ id, tier: "held-out" })),
+    runsPerTask: 1,
+    schedule: recs.map((r) => ({ slotId: r.slotId })),
+    gate: { mode: "calibration" },
+  };
+  const report = buildReport({ manifest, records: recs });
+  assert.equal(report.calibration.rows[0].turnsBudget, 100);
+  const md = renderCalibration(report);
+  assert.match(md, /\| quarry-terraces \| held-out \| yes \| 83\/100 \|/, "the budget is printed beside the count");
+  assert.match(md, /\| canopy-gaps \| held-out \| yes \| 31\/100 \|/);
+  assert.match(md, /turns \/ budget/, "and the column says so");
+  // 83 of 100 is under 50% spare; 31 of 100 is not.
+  assert.match(md, /\*\*Headroom\.\*\*[^\n]*quarry-terraces used 83 of 100/);
+  assert.ok(!/canopy-gaps used/.test(md), "a task with room is not warned about");
+});
+
+test("the record that counts is the latest ATTEMPT, not merely the last line", () => {
+  // A re-ordered runs.jsonl must not retire the clean retry in favour of the
+  // contaminated attempt it superseded.
+  const a1 = { slotId: "r0.t1.A", task: "t1", arm: "A", attempt: 1, final: false, contaminated: true, solved: false };
+  const a2 = { slotId: "r0.t1.A", task: "t1", arm: "A", attempt: 2, final: true, contaminated: false, solved: true };
+  for (const order of [[a1, a2], [a2, a1]]) {
+    const chosen = latestBySlot(order).get("r0.t1.A");
+    assert.equal(chosen.attempt, 2, `order ${order.map((r) => r.attempt).join(",")}`);
+    assert.equal(chosen.solved, true);
+  }
+  // Records with no attempt number still fall back to position.
+  const noAttempt = [{ slotId: "s", solved: false }, { slotId: "s", solved: true }];
+  assert.equal(latestBySlot(noAttempt).get("s").solved, true);
 });
 
 // ---------------------------------------------------------------------------

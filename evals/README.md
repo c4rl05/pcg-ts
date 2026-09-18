@@ -37,6 +37,7 @@ node evals/harness/pack.mjs --strip-docs --strip-graphs \
 node evals/harness/pack.mjs --verify evals/tarballs/<t>.tgz      # install it and run its CLI
 node evals/harness/selftest.mjs --campaign pilot                 # exit 0 pass, 1 fail, 2 config
 node evals/harness/run.mjs --campaign calibration                # one run per task, one arm, no gate
+node evals/harness/run.mjs --campaign calibration-reserves       # the same, for the two reserve tasks
 node evals/harness/run.mjs --campaign v2                         # exit 0 done, 10 wake owner, 2 config, 1 crash
 node evals/harness/run.mjs --campaign v2 --dry-run               # print the schedule, spend nothing
 node evals/harness/report.mjs --campaign v2
@@ -367,6 +368,7 @@ by `scheduleSeed`; the whole schedule is written into the manifest.
 |---|---|---|---|---|---|
 | `pilot` | A, A-prime, stripped | non-reserve (6) | 3 | 54 | pilot gate (solved only) |
 | `calibration` | A | `campaign: "v2"` (8) | 1 | 8 | none — `calibration.md` instead |
+| `calibration-reserves` | A | `forest-clearing`, `spiral-stair` | 1 | 2 | none — prices the reserves |
 | `v2` | A, A-prime, candidate-U1, stripped-all | `campaign: "v2"` (8) | 3 | 96 | v2 gate (solved OR effort) |
 | `fixture` | A, A-prime, stripped | `fixture-grid` | 1 | 3 | pilot gate |
 
@@ -464,6 +466,29 @@ The tasks quoted beside a relative interval are the tasks that could
 contribute one: a task whose reference median is 0 has no relative difference,
 so it is in `tasks` but not in `relativeTasks`.
 
+**Every effort figure is printed over the budget that run actually had** —
+`83/100`, not `83`. A task's own `budgets` REPLACE the campaign `caps`, and a
+campaign's `taskBudgets` replace those again, so the campaign cap is usually
+not the number a run was measured against: 83 is comfortable under 100 and
+truncated under 80, and the bare figure cannot tell you which. `report.budgets`
+carries the per-task effective budget, taken from the records rather than the
+config, and flags a task whose runs did not all share one.
+
+`calibration.md` also warns when a task used more than two thirds of its
+budget: an arm that legitimately costs more would then be TRUNCATED rather than
+measured, and the gate would read the cap instead of the effect. That is why
+`quarry-terraces` (83 of 100 in calibration, 20% spare — the only one of the
+eight under 50%) is raised to 130 by `v2.taskBudgets`: the gate's own effort
+threshold is +25%, which would have put a harder arm at ~104 and over the line.
+
+**"Read" means a file was opened.** A bare `ls node_modules/pcg-ts/skills`
+names what is there and reads none of it; it lands in `listedPaths`, not
+`readPaths`, and does not count toward the read rate. A recursive CONTENT verb
+(`grep -r x docs/`) does count, because it opens every file under the
+directory. This mattered: the first calibration report put the skills-read rate
+at 38% when one run of ten had opened a skill file and four had only listed the
+directory. A statistic quoted as evidence has to mean what it says.
+
 The bootstrap treats the tasks as the sample: it answers "would another set of
 tasks like these show the same difference", which is the question a campaign of
 a handful of tasks can ask. An interval spanning zero is a difference this
@@ -491,8 +516,7 @@ candidate-U1, and stripped-all. Go iff all of:
     interval clear of zero (`effortCiMustExcludeZero`).
 - **(b)** the A/A gap is at most `aaMaxGap` = **0.28** on solved AND at most
   `aaMaxEffortGap` = **0.15** on effort.
-- **(c)** no task at 0% or 100% solved — pooled across all arms, AND across
-  the reference arms on their own.
+- **(c)** every task can DISCRIMINATE in the dimension limb (a) fired on.
 
 **The reference is the tarball the stripped arm was CUT FROM**
 (`gate.strippedRefArm`, here `candidate-U1`), not the baseline. `stripped-all`
@@ -513,13 +537,34 @@ candidate-U1` says whether these tasks can see documentation at all. Both are
 already in the schedule, so computing only the first would throw the clean one
 away for nothing.
 
-**Limb (c) looks at the reference arms as well as the pool.** Pooling every arm
+**Limb (c) is dimension-aware.** It asks whether a task can tell the arms
+apart in the dimension the verdict actually rests on:
+
+| limb (a) fired on | (c) requires of every task |
+|---|---|
+| solved | not at floor or ceiling — pooled across all arms, AND across the reference arms on their own |
+| effort | the arms differ on `effortMetric` by more than the A/A effort gap |
+| nothing fired | informative in at least one of the two |
+
+The solved half checks the reference arms as well as the pool, because pooling
 hides the case that matters most: references at 3/3 on every task with only the
-stripped arm missing pools to 11/12 per task and passes — yet the contrast
-cannot move, because its reference has no room to fall. Calibration is meant to
-catch this first; (c) is the backstop, and a backstop that only looks at the
-pool is not one. Tasks caught this way are listed as
-`at: "ceiling-in-reference"` / `"floor-in-reference"`, with the arms counted.
+stripped arm missing pools to 11/12 and passes — yet the contrast cannot move,
+because its reference has no room to fall. Tasks caught that way are listed as
+`at: "ceiling-in-reference"` / `"floor-in-reference"`, with the arms counted;
+effort-flat ones as `at: "flat-in-effort"`.
+
+The dimension matters because solved saturates. Calibration returned **10
+solves in 10 attempts, 5 of them one-shot**, the cheapest at 23 turns — a
+solved-only (c) would have failed on essentially every v2 task while the signal
+we expect from a docs-stripped arm lives in effort. An 8/8-solved task that
+costs the stripped arm 40% more turns is CARRYING the result, not blocking it.
+Saturated tasks are still named in `replaceTasks` — they are worth swapping for
+reserves later — but `blocking` is the list that actually stopped the gate, and
+only tasks uninformative in the live dimension are on it.
+
+This was a **pre-registration change**, decided from calibration evidence and
+committed before v2's first slot with zero v2 data in existence. It changes what
+(c) MEANS; it changes no threshold. `gate.$limbCWhy` in the config records that.
 
 **An absent, null or unmeasurable threshold never passes its check.** Two ways
 that went wrong once: `strippedMinMargin ?? 0` made a MISSING margin the
