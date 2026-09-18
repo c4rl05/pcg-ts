@@ -114,8 +114,10 @@ export function parseJsonl(text, { tolerant = false, onSkip = () => {} } = {}) {
  * file — but selecting by position alone means a re-ordered or concatenated
  * runs.jsonl can retire a clean retry in favour of the contaminated attempt
  * it superseded, which silently drops a run from the rates. Keying on
- * `attempt` makes the choice a property of the records. A record without an
- * attempt number falls back to its position.
+ * `attempt` makes the choice a property of the records. A NUMERIC `attempt`
+ * always beats a record without one, whatever their order; among records that
+ * all lack one, position decides. run.mjs writes `attempt` on every record,
+ * so the mixed case only arises in a hand-edited file.
  */
 export function latestBySlot(records) {
   const m = new Map();
@@ -250,8 +252,10 @@ export function effectiveBudgets(finals, tasks) {
     out[task] = {
       turns: values.length ? values[values.length - 1] : null,
       wallMinutes: wallValues.length ? wallValues[wallValues.length - 1] : null,
-      varied: values.length > 1,
+      // Either budget disagreeing means the campaign changed under the task.
+      varied: values.length > 1 || wallValues.length > 1,
       values,
+      wallValues,
     };
   }
   return out;
@@ -675,21 +679,41 @@ export function evaluateGate(summary, tasks, gate, { complete, effort = null, bo
     const mag = effortSpread.get(t);
     effortFlatness.set(t, aaEffortGap === null || mag === undefined ? null : mag <= aaEffortGap + EPS);
   }
-  const dimension = firedBy ?? "any";
+  // The dimension is the one the VERDICT rests on. When no limb fired the
+  // gate stops regardless, and (c) is only advising which tasks to replace —
+  // so it falls back to the solved question it has always asked rather than
+  // to effort. Asking about effort there would be worse than useless: the
+  // floor is the MEASURED A/A gap, which is 0 whenever the two baselines
+  // happen to share a median (common with small integer turn counts), and a
+  // floor of 0 makes every non-identical task "informative". That would have
+  // quietly passed (c) on a campaign the old rule failed.
+  const dimension = firedBy ?? "solved";
   const informativeSolved = (t) => !already.has(t);
   const informativeEffort = (t) => effortFlatness.get(t) === false;
-  const informative = (t) => (dimension === "solved" ? informativeSolved(t) : dimension === "effort" ? informativeEffort(t) : informativeSolved(t) || informativeEffort(t));
-  // Flat rows are worth replacing too, once the gate is reading effort.
-  if (dimension === "effort" || dimension === "any") {
+  const informative = (t) => (dimension === "effort" ? informativeEffort(t) : informativeSolved(t));
+  // Everything that blocks must also be listed for replacement, or the report
+  // proposes swapping tasks that were fine and keeps the one that stopped the
+  // gate. `flatness === null` (no measurable effort for this task) blocks in
+  // the effort dimension, so it needs an entry of its own.
+  if (dimension === "effort") {
     for (const t of tasks) {
-      if (already.has(t) || effortFlatness.get(t) !== true) continue;
-      replaceTasks.push({ task: t, solved: summary.byTask[t].solved, n: summary.byTask[t].n, at: "flat-in-effort", relative: effortSpread.get(t) ?? null, aaEffortGap });
+      if (already.has(t) || informativeEffort(t)) continue;
+      already.add(t);
+      const flat = effortFlatness.get(t) === true;
+      replaceTasks.push({
+        task: t,
+        solved: summary.byTask[t].solved,
+        n: summary.byTask[t].n,
+        at: flat ? "flat-in-effort" : "no-effort-data",
+        relative: effortSpread.get(t) ?? null,
+        aaEffortGap,
+      });
     }
   }
   const blocking = tasks.filter((t) => !informative(t));
   const c = { pass: blocking.length === 0, dimension, blocking, replaceTasks };
   if (!c.pass) {
-    const why = dimension === "solved" ? "at floor or ceiling on solved" : dimension === "effort" ? `flat on ${metricKey} (within the A/A effort gap ${fmt(aaEffortGap)})` : "unable to discriminate on solved or on effort";
+    const why = dimension === "effort" ? `cannot separate the arms on ${metricKey} by more than the A/A effort gap ${fmt(aaEffortGap)}` : "at floor or ceiling on solved";
     reasons.push(`(c) ${blocking.length} of ${tasks.length} task(s) ${why}, replace from reserve: ${blocking.join(", ")}`);
   }
   if (!complete) return { decision: "pending", complete, label, reasons: ["campaign incomplete: the gate is evaluated only on a finished campaign", ...reasons], a, b, c };

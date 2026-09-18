@@ -574,9 +574,54 @@ test("(c) asks about the dimension the gate is using, not always about solved", 
   });
   const gf = evaluateGate(summarize(flat, V2_ARMS, E_TASKS), E_TASKS, V2_REF_GATE, { complete: true, effort: effortMetrics(flat, V2_ARMS, E_TASKS) });
   assert.equal(gf.a.firedBy, null);
-  assert.equal(gf.c.dimension, "any");
+  assert.equal(gf.c.dimension, "solved", "no limb fired, so (c) falls back to the solved question");
   assert.deepEqual(gf.c.blocking, E_TASKS, "saturated on solved AND flat on effort discriminates in neither");
   assert.equal(gf.decision, "stop");
+});
+
+test("everything that blocks (c) is also listed for replacement", () => {
+  // t1's stripped runs are all contaminated, so its effort is not measurable
+  // while its reference arms are healthy. It blocks in the effort dimension —
+  // and must therefore be the FIRST thing proposed for replacement, not
+  // silently dropped while three sound tasks are swapped out instead.
+  const recs = effortRecords({
+    arms: V2_ARMS,
+    tasks: E_TASKS,
+    turnsBy: { A: 40, "A-prime": 40, "candidate-U1": 40, "stripped-all": 58 },
+    solvedBy: (arm, task) => (task === "t1" && arm !== "stripped-all" ? 2 : 3),
+  }).map((r) => (r.task === "t1" && r.arm === "stripped-all" ? { ...r, contaminated: true } : r));
+  const s = summarize(recs, V2_ARMS, E_TASKS);
+  const g = evaluateGate(s, E_TASKS, V2_REF_GATE, { complete: true, effort: effortMetrics(recs, V2_ARMS, E_TASKS) });
+  assert.equal(g.c.dimension, "effort");
+  assert.deepEqual(g.c.blocking, ["t1"]);
+  const named = g.c.replaceTasks.map((x) => x.task);
+  for (const t of g.c.blocking) assert.ok(named.includes(t), `${t} blocks but is not listed for replacement`);
+  assert.equal(g.c.replaceTasks.find((x) => x.task === "t1").at, "no-effort-data");
+  assert.equal(named.filter((t) => t === "t1").length, 1, "and not listed twice");
+  const report = buildReport({
+    manifest: { campaign: "v2", model: "m", claudeVersion: "1", arms: V2_ARMS.map((label) => ({ label })), tasks: E_TASKS.map((id) => ({ id })), runsPerTask: 3, reserveTasks: ["r1", "r2"], schedule: recs.map((r) => ({ slotId: r.slotId })), gate: V2_REF_GATE },
+    records: recs,
+  });
+  assert.equal(report.proposedReplacement.drop[0], "t1", "the task that stopped the gate is proposed first");
+});
+
+test("with no limb fired, (c) is the solved question it has always asked", () => {
+  // The trap: the effort floor is the MEASURED A/A gap. Two baselines with
+  // identical medians make it 0, and a floor of 0 calls every non-identical
+  // task informative — which would pass (c) on a campaign the old rule failed.
+  const recs = effortRecords({
+    arms: V2_ARMS,
+    tasks: E_TASKS,
+    turnsBy: { A: 40, "A-prime": 40, "candidate-U1": 40, "stripped-all": 44 }, // +10%: under the 25% margin, so nothing fires
+    solvedBy: () => 3,
+  });
+  const s = summarize(recs, V2_ARMS, E_TASKS);
+  const g = evaluateGate(s, E_TASKS, V2_REF_GATE, { complete: true, effort: effortMetrics(recs, V2_ARMS, E_TASKS) });
+  assert.equal(g.a.firedBy, null, "neither limb fired");
+  assert.equal(g.b.aaEffortGap, 0, "and the measured effort floor is zero");
+  assert.equal(g.c.dimension, "solved");
+  assert.deepEqual(g.c.blocking, E_TASKS, "every task is at the ceiling, exactly as the old rule said");
+  assert.equal(g.decision, "stop");
 });
 
 test("(c) still fails a solved-saturated task when the verdict rests on solved", () => {

@@ -544,7 +544,7 @@ apart in the dimension the verdict actually rests on:
 |---|---|
 | solved | not at floor or ceiling — pooled across all arms, AND across the reference arms on their own |
 | effort | the arms differ on `effortMetric` by more than the A/A effort gap |
-| nothing fired | informative in at least one of the two |
+| nothing fired | the solved rule again — the gate stops anyway, and (c) is only advising |
 
 The solved half checks the reference arms as well as the pool, because pooling
 hides the case that matters most: references at 3/3 on every task with only the
@@ -561,6 +561,15 @@ costs the stripped arm 40% more turns is CARRYING the result, not blocking it.
 Saturated tasks are still named in `replaceTasks` — they are worth swapping for
 reserves later — but `blocking` is the list that actually stopped the gate, and
 only tasks uninformative in the live dimension are on it.
+
+When NOTHING fired, (c) deliberately does not ask about effort: the effort
+floor is the MEASURED A/A gap, which is 0 whenever the two baselines happen to
+share a median — common with small integer turn counts — and a floor of 0 would
+call every non-identical task informative, passing (c) on a campaign the old
+rule failed. Every task that blocks is also listed in `replaceTasks`, including
+one whose effort simply could not be measured (`at: "no-effort-data"`), so the
+report never proposes swapping sound tasks while keeping the one that stopped
+the gate.
 
 This was a **pre-registration change**, decided from calibration evidence and
 committed before v2's first slot with zero v2 data in existence. It changes what
@@ -705,6 +714,16 @@ The turn cap is the CLI's own `--max-turns`.
 - A selftest failure always wakes; telling a failure caused by a changed
   node (which the plan would log and move past) from a harness fault is not
   implemented.
+- **A classifier fix does not rewrite records that are already written.**
+  `readCounts` is computed when the transcript is parsed, so the committed
+  calibration records still carry the old "a listing is a read" counts, and
+  re-running `report.mjs` over them reprints the old rates (skills 38%). The
+  corrected rates — llms 100%, docs 80%, graphs 70%, skills 10% — come from
+  re-parsing the transcripts under `evals/runs/`, which are git-ignored and
+  local. Likewise `listedPaths` is absent from every record written before
+  this change, and the committed `calibration.md` predates the budget column
+  and the headroom warning. A campaign's numbers belong to the classifier
+  that produced them; to restate them under a new one, re-parse or re-run.
 - A fixture that quotes an absolute epoch is a test that turns red on a date.
   Two `limits.test.mjs` cases did, on 2026-09-15, when the clock passed the
   `1789492800` they assert a reset time from: `classifySession` is right that a
