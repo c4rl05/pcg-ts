@@ -1,0 +1,380 @@
+/**
+ * Station lattices: the one construction every part of the tower uses.
+ *
+ * A STATION LATTICE is a grid of points — `ring` stations around a section
+ * at each of `levels` heights — and every member is either a CHAIN (a path
+ * up through one station's column) or an EDGE RULE (from station s on
+ * level k to station s + ds on level k + dk). A leg is a four-station ring
+ * whose section is the square [inner, outer]^2; the shaft is an
+ * eight-station ring around [-w, w]^2; a girder between two legs is an
+ * open ring lying in a face plane. The geometry of every rule is a field
+ * of the station's (s, k); WHERE a rule applies is a mask over the
+ * stations, written in TypeScript and carried as a table.
+ *
+ * Station (s, k) is point k * ring + s: pointGrid runs X fastest, so an
+ * edge's far end is an ordinal the field computes directly, which is what
+ * connectByIndex spends.
+ */
+import {
+  type Field,
+  type FieldLike,
+  Graph,
+  type NodeHandle,
+  add,
+  attribute,
+  component,
+  connectByIndex,
+  copyToPoints,
+  index,
+  lerp,
+  meshPrimitive,
+  mergePrimitives,
+  mod,
+  mul,
+  pointGrid,
+  pointsToPath,
+  position,
+  ramp,
+  select,
+  setAttribute,
+  sweepProfile,
+  transformPoints,
+  vec,
+} from "pcg-ts";
+
+/**
+ * One level of a lattice. A station with ring coordinates (u, v) sits at
+ * (lerp(x0, x1, u), y, lerp(z0, z1, v)).
+ */
+export interface Level {
+  readonly y: number;
+  readonly x0: number;
+  readonly x1: number;
+  readonly z0: number;
+  readonly z1: number;
+}
+
+export interface LatticeSpec {
+  /** Node-id prefix; must be unique in the graph. */
+  readonly id: string;
+  /** Each station's (u, v) in the level's section, in ring order. */
+  readonly ring: ReadonlyArray<readonly [number, number]>;
+  /** Whether the last station's neighbour is the first. */
+  readonly closed: boolean;
+  /** Bottom to top. */
+  readonly levels: readonly Level[];
+}
+
+/** A placed lattice: its stations, with `s` and `k` point attributes. */
+export interface Lattice {
+  readonly g: Graph;
+  readonly id: string;
+  readonly ringSize: number;
+  readonly levelCount: number;
+  readonly closed: boolean;
+  readonly stations: NodeHandle;
+}
+
+/** A per-station predicate: station s on level k. */
+export type StationMask = (s: number, k: number) => boolean;
+
+/**
+ * A table field over the point index, exact at every integer: runs of one
+ * value collapse to their two ends, and ramp interpolates only between
+ * integers, which no point reads.
+ */
+export function indexTable(values: readonly number[]): Field {
+  const stops: Array<readonly [number, number]> = [];
+  for (let i = 0; i < values.length; i++) {
+    // + 0 turns -0 into 0: a serialized param refuses -0.
+    const v = (values[i] as number) + 0;
+    const prev = values[i - 1];
+    const next = values[i + 1];
+    if (i === 0 || i === values.length - 1 || v !== prev || v !== next) stops.push([i, v]);
+  }
+  if (stops.length === 1) stops.push([stops[0]![0] + 1, stops[0]![1]]);
+  return ramp(index(), stops);
+}
+
+/** A table field over an integer point attribute. */
+function tableOver(attr: string, values: readonly number[]): Field {
+  return ramp(attribute(attr), values.map((v, i) => [i, v] as const));
+}
+
+/** Place a lattice's stations. */
+export function stationLattice(g: Graph, spec: LatticeSpec): Lattice {
+  const { id, ring, levels } = spec;
+  const grid = g.add(
+    pointGrid,
+    {
+      countX: ring.length,
+      countY: levels.length,
+      countZ: 1,
+      spacing: [1, 1, 1],
+      origin: [0, 0, 0],
+    },
+    `${id}Grid`,
+  );
+  const tagS = g.add(
+    setAttribute,
+    { name: "s", type: "i32", value: component(position(), 0) },
+    `${id}S`,
+  );
+  const tagK = g.add(
+    setAttribute,
+    { name: "k", type: "i32", value: component(position(), 1) },
+    `${id}K`,
+  );
+  const u = tableOver("s", ring.map((r) => r[0]));
+  const v = tableOver("s", ring.map((r) => r[1]));
+  const at = (pick: (l: Level) => number) => tableOver("k", levels.map(pick));
+  const place = g.add(
+    setAttribute,
+    {
+      name: "P",
+      type: "f32",
+      tupleSize: 3,
+      value: vec(
+        lerp(at((l) => l.x0), at((l) => l.x1), u),
+        at((l) => l.y),
+        lerp(at((l) => l.z0), at((l) => l.z1), v),
+      ),
+    },
+    `${id}Place`,
+  );
+  g.connect(grid, "out", tagS, "in");
+  g.connect(tagS, "out", tagK, "in");
+  g.connect(tagK, "out", place, "in");
+  return {
+    g,
+    id,
+    ringSize: ring.length,
+    levelCount: levels.length,
+    closed: spec.closed,
+    stations: place,
+  };
+}
+
+export type Vec3 = readonly [number, number, number];
+
+/** rows[k][s] = at(s, k): station positions for {@link placedLattice}. */
+export function stationRows(
+  ringSize: number,
+  levelCount: number,
+  at: (s: number, k: number) => Vec3,
+): Vec3[][] {
+  return Array.from({ length: levelCount }, (_, k) =>
+    Array.from({ length: ringSize }, (_, s) => at(s, k)),
+  );
+}
+
+/**
+ * A lattice whose stations sit at explicit positions — rows[k][s] is
+ * station s on level k — for what no level section describes: points
+ * along a circle, a rib whose two chords cross each height at different
+ * radii, posts at fixed x between uprights that lean. It carries the same
+ * `s` and `k` attributes in the same point order as {@link stationLattice},
+ * so {@link edges} and {@link chains} run on it unchanged.
+ */
+export function placedLattice(
+  g: Graph,
+  id: string,
+  rows: ReadonlyArray<ReadonlyArray<Vec3>>,
+  closed = false,
+): Lattice {
+  const ringSize = rows[0]?.length ?? 0;
+  if (ringSize === 0 || rows.some((r) => r.length !== ringSize)) {
+    throw new Error(`eiffel lattice "${id}": placedLattice needs rows of one non-zero length`);
+  }
+  const grid = g.add(
+    pointGrid,
+    { countX: ringSize, countY: rows.length, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
+    `${id}Grid`,
+  );
+  const tagS = g.add(
+    setAttribute,
+    { name: "s", type: "i32", value: component(position(), 0) },
+    `${id}S`,
+  );
+  const tagK = g.add(
+    setAttribute,
+    { name: "k", type: "i32", value: component(position(), 1) },
+    `${id}K`,
+  );
+  const flat = rows.flat();
+  const place = g.add(
+    setAttribute,
+    {
+      name: "P",
+      type: "f32",
+      tupleSize: 3,
+      value: vec(
+        indexTable(flat.map((p) => p[0])),
+        indexTable(flat.map((p) => p[1])),
+        indexTable(flat.map((p) => p[2])),
+      ),
+    },
+    `${id}Place`,
+  );
+  g.connect(grid, "out", tagS, "in");
+  g.connect(tagS, "out", tagK, "in");
+  g.connect(tagK, "out", place, "in");
+  return { g, id, ringSize, levelCount: rows.length, closed, stations: place };
+}
+
+/** Evaluate a mask over every station, in point order. */
+function maskTable(lat: Lattice, keep: StationMask): number[] {
+  const out: number[] = [];
+  for (let k = 0; k < lat.levelCount; k++) {
+    for (let s = 0; s < lat.ringSize; s++) out.push(keep(s, k) ? 1 : 0);
+  }
+  return out;
+}
+
+/**
+ * An edge rule: one 2-point member from (s, k) to (s + ds, k + dk) at every
+ * station the mask keeps. An edge that would leave the lattice (past the
+ * top, or round an open ring's end) is dropped here, so masks only state
+ * the structure.
+ */
+export function edges(
+  lat: Lattice,
+  id: string,
+  ds: number,
+  dk: number,
+  keep: StationMask = () => true,
+): NodeHandle {
+  const R = lat.ringSize;
+  const mask = maskTable(lat, (s, k) => {
+    if (k + dk < 0 || k + dk >= lat.levelCount) return false;
+    if (!lat.closed && (s + ds < 0 || s + ds >= R)) return false;
+    if (ds === 0 && dk === 0) return false;
+    return keep(s, k);
+  });
+  const s = attribute("s");
+  const k = attribute("k");
+  const target = add(mul(add(k, dk), R), mod(add(s, ds), R));
+  const node = lat.g.add(
+    connectByIndex,
+    { index: select(indexTable(mask), target, -1) },
+    `${lat.id}${id}`,
+  );
+  lat.g.connect(lat.stations, "out", node, "in");
+  return node;
+}
+
+/**
+ * Chains: one path up through each station's column, over the levels the
+ * mask keeps (they must be contiguous). A masked-out station gets a key of
+ * its own and is dropped as a one-point group.
+ */
+export function chains(lat: Lattice, id: string, keep: StationMask = () => true): NodeHandle {
+  const mask = maskTable(lat, keep);
+  const chain = lat.g.add(
+    setAttribute,
+    {
+      name: "chain",
+      type: "i32",
+      value: select(indexTable(mask), attribute("s"), add(index(), 100000)),
+    },
+    `${lat.id}${id}Key`,
+  );
+  const paths = lat.g.add(
+    pointsToPath,
+    { groupAttr: "chain", shortGroups: "skip" },
+    `${lat.id}${id}`,
+  );
+  lat.g.connect(lat.stations, "out", chain, "in");
+  lat.g.connect(chain, "out", paths, "in");
+  return paths;
+}
+
+/** Concatenate geometry, keeping topology, in the order given. */
+export function merge(g: Graph, id: string, parts: readonly NodeHandle[]): NodeHandle {
+  const node = g.add(mergePrimitives, {}, id);
+  for (const p of parts) g.connect(p, "out", node, "in");
+  return node;
+}
+
+/**
+ * Four targets at the origin turned 0, 90, 180 and 270 degrees about +y.
+ * Copying a part built in the +x+z quadrant (or on the +z face) onto them
+ * gives all four legs (or faces).
+ */
+export function quadrants(g: Graph, id: string): NodeHandle {
+  const grid = g.add(
+    pointGrid,
+    { countX: 4, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
+    `${id}Grid`,
+  );
+  const origin = g.add(
+    setAttribute,
+    { name: "P", type: "f32", tupleSize: 3, value: vec(0, 0, 0) },
+    `${id}Origin`,
+  );
+  const turn = g.add(transformPoints, { rotateEuler: vec(0, mul(index(), 90), 0) }, `${id}Turn`);
+  g.connect(grid, "out", origin, "in");
+  g.connect(origin, "out", turn, "in");
+  return turn;
+}
+
+/**
+ * Copy PATHS onto the quadrant targets. Copy before skinning: copyToPoints
+ * turns positions, not a mesh's `normal` attribute.
+ */
+export function copyToQuadrants(
+  g: Graph,
+  id: string,
+  source: NodeHandle,
+  targets: NodeHandle,
+): NodeHandle {
+  const node = g.add(copyToPoints, { topology: "keep" }, id);
+  g.connect(source, "out", node, "source");
+  g.connect(targets, "out", node, "target");
+  return node;
+}
+
+/**
+ * Skin paths as square-section members whose half-width follows the given
+ * (height, half-width) stops. `up` fixes the section's roll: [1, 0, 0]
+ * keeps a near-vertical member's faces square to the tower's faces.
+ */
+export function skin(
+  g: Graph,
+  id: string,
+  paths: NodeHandle,
+  halfWidth: ReadonlyArray<readonly [number, number]> | number,
+  up: readonly [number, number, number] = [0, 1, 0],
+): NodeHandle {
+  const radius: FieldLike =
+    typeof halfWidth === "number" ? halfWidth : ramp(component(position(), 1), halfWidth);
+  const node = g.add(
+    sweepProfile,
+    { profile: "square", radius, frame: "upHint", up: [...up] },
+    id,
+  );
+  g.connect(paths, "out", node, "in");
+  return node;
+}
+
+/** An axis-aligned box from its centre and full size. */
+export function box(
+  g: Graph,
+  id: string,
+  center: readonly [number, number, number],
+  size: readonly [number, number, number],
+): NodeHandle {
+  return g.add(meshPrimitive, { shape: "box", center: [...center], size: [...size] }, id);
+}
+
+/** The ring of a square section subdivided into `perSide` bays per side. */
+export function squareRing(perSide: number): Array<readonly [number, number]> {
+  const out: Array<readonly [number, number]> = [];
+  // Ring order from corner (1,1): along v = 1 to (0,1), down u = 0 to
+  // (0,0), along v = 0 to (1,0), up u = 1 back toward (1,1).
+  for (let i = 0; i < perSide; i++) out.push([1 - i / perSide, 1]);
+  for (let i = 0; i < perSide; i++) out.push([0, 1 - i / perSide]);
+  for (let i = 0; i < perSide; i++) out.push([i / perSide, 0]);
+  for (let i = 0; i < perSide; i++) out.push([1, i / perSide]);
+  return out;
+}
