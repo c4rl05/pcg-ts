@@ -848,8 +848,8 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
       deck(g, "thirdFloor", PLATFORMS.third.side, FLOORS.third),
       fitBlocks,
       fitPrisms,
-      copyToQuadrants(g, "names", namesBand(g), quads),
     ],
+    names: [copyToQuadrants(g, "names", namesBand(g), quads)],
     masonry: [copyToQuadrants(g, "pedestals", pedestal, quads)],
   };
 }

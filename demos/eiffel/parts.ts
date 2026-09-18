@@ -26,6 +26,8 @@ export const PART_CLASSES = [
   "summit",
   /** Gusset plates where web members meet the uprights. */
   "gussets",
+  /** The 72 names on the first-floor skirt, gilded. */
+  "names",
 ] as const;
 
 export type PartClass = (typeof PART_CLASSES)[number];

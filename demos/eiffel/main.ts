@@ -83,6 +83,9 @@ const LOOK: Record<PartClass, { color: number; roughness: number; metalness: num
   masonry: { color: 0xcdc3ae, roughness: 0.93, metalness: 0 },
   summit: { color: 0x72533f, roughness: 0.62, metalness: 0.15 },
   gussets: { color: 0x684a39, roughness: 0.6, metalness: 0.15 },
+  // The names were gilded; the only thing on the tower that is not iron
+  // paint or stone.
+  names: { color: 0xc9a14a, roughness: 0.32, metalness: 0.85 },
 };
 
 const MATERIALS = Object.fromEntries(
