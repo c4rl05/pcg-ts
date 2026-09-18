@@ -13,7 +13,13 @@ import type { Graph } from "pcg-ts";
 import { chains, edges, merge, skin, squareRing, stationLattice } from "./lattice.js";
 import type { Detail, Parts } from "./parts.js";
 import { MEMBERS, NODES } from "./spec.js";
-import { UPRIGHT_SEAMS, rivetOutputs, seamRivets, webMembers } from "./strut.js";
+import {
+  UPRIGHT_SEAMS,
+  gussetMeshes,
+  rivetOutputs,
+  seamRivets,
+  webMembers,
+} from "./strut.js";
 
 export function buildShaft(g: Graph, detail: Detail = {}): Parts {
   const from = NODES.findIndex((n) => n.name === "XI");
@@ -31,12 +37,21 @@ export function buildShaft(g: Graph, detail: Detail = {}): Parts {
     edges(lat, "CrossA", 1, 1),
     edges(lat, "CrossB", -1, 1),
   ]);
-  const horizontalWeb = webMembers(g, "shaftHorizontal", horizontals, MEMBERS.horizontal, detail);
-  const bracingWeb = webMembers(g, "shaftBracing", crosses, MEMBERS.web, detail);
+  const joints = { upright: MEMBERS.upright };
+  const horizontalWeb = webMembers(
+    g,
+    "shaftHorizontal",
+    horizontals,
+    MEMBERS.horizontal,
+    detail,
+    joints,
+  );
+  const bracingWeb = webMembers(g, "shaftBracing", crosses, MEMBERS.web, detail, joints);
   return {
     uprights: [skin(g, "shaftUprightSkin", uprights, MEMBERS.upright, [1, 0, 0])],
     horizontals: horizontalWeb.meshes,
     bracing: bracingWeb.meshes,
+    gussets: gussetMeshes([horizontalWeb, bracingWeb]),
     rivets: [
       ...(detail.rivets === true
         ? [

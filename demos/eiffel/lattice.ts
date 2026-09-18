@@ -278,9 +278,15 @@ export function edges(
   // Edges come out in point order, one per station the mask keeps, so the
   // face table is indexed by primitive in that same order.
   const normals: Vec3[] = [];
+  const sinA: number[] = [];
+  const sinB: number[] = [];
   for (let k = 0; k < lat.levelCount; k++) {
     for (let s = 0; s < R; s++) {
-      if (mask[k * R + s] === 1) normals.push(faceNormal(lat, s, k, ds, dk));
+      if (mask[k * R + s] !== 1) continue;
+      normals.push(faceNormal(lat, s, k, ds, dk));
+      const s2 = (((s + ds) % R) + R) % R;
+      sinA.push(endSine(lat, s, k, s2, k + dk));
+      sinB.push(endSine(lat, s2, k + dk, s, k));
     }
   }
   const faces = lat.g.add(
@@ -298,8 +304,57 @@ export function edges(
     },
     `${lat.id}${id}Faces`,
   );
+  const ends = lat.g.add(
+    setAttribute,
+    {
+      name: END_SINE,
+      domain: "primitive",
+      type: "f32",
+      tupleSize: 2,
+      value: vec(indexTable(sinA), indexTable(sinB)),
+    },
+    `${lat.id}${id}Ends`,
+  );
   lat.g.connect(node, "out", faces, "in");
-  return faces;
+  lat.g.connect(faces, "out", ends, "in");
+  return ends;
+}
+
+/**
+ * The other primitive attribute every edge rule writes (f32 x 2): the sine
+ * of the angle at which the member meets its station's column, at its
+ * first end and at its second. A member leaving a node at angle theta to
+ * the upright there is still inside that upright's box until it is r /
+ * sin(theta) along — so anything that has to start clear of the upright (a
+ * joint) divides by this. A scalar, so a copy onto turned targets carries
+ * it unchanged.
+ */
+export const END_SINE = "endSin";
+
+/**
+ * The sine of the angle between the member from (s, k) to (s2, k2) and the
+ * column through (s, k) there: the bisector of the column's segments below
+ * and above the station (one of them at the lattice's ends).
+ */
+function endSine(lat: Lattice, s: number, k: number, s2: number, k2: number): number {
+  const P = lat.positions;
+  const at = P[k]![s]!;
+  const below = P[k - 1]?.[s];
+  const above = P[k + 1]?.[s];
+  const unit = (v: Vec3): Vec3 => {
+    const l = Math.hypot(v[0], v[1], v[2]);
+    return l > 0 ? [v[0] / l, v[1] / l, v[2] / l] : [0, 1, 0];
+  };
+  const up = unit(
+    [
+      (above === undefined ? at : above)[0] - (below === undefined ? at : below)[0],
+      (above === undefined ? at : above)[1] - (below === undefined ? at : below)[1],
+      (above === undefined ? at : above)[2] - (below === undefined ? at : below)[2],
+    ],
+  );
+  const m = unit(sub3(P[k2]![s2]!, at));
+  const c = cross3(up, m);
+  return Math.hypot(c[0], c[1], c[2]);
 }
 
 /**

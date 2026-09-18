@@ -30,6 +30,14 @@ import {
   dot,
   index,
   lerp,
+  copyToPoints,
+  div,
+  filterByExpression,
+  ge,
+  le,
+  lt,
+  max,
+  meshPrimitive,
   mergePoints,
   mod,
   mul,
@@ -37,14 +45,17 @@ import {
   orientAlongVector,
   pathResample,
   position,
+  promoteAttribute,
   ramp,
   setAttribute,
   spawnInstances,
+  select,
+  sqrt,
   sub,
   transformPoints,
   vec,
 } from "pcg-ts";
-import { FACE_NORMAL, merge, skin } from "./lattice.js";
+import { END_SINE, FACE_NORMAL, merge, skin } from "./lattice.js";
 import { type Detail, RIVET_ASSET } from "./parts.js";
 
 /** A corner angle's half-width: 80-100 mm angles (Plate XXXI) [derived]. */
@@ -79,6 +90,18 @@ export function faceSkin(
 export interface WebMembers {
   readonly meshes: NodeHandle[];
   readonly rivets?: NodeHandle;
+  /** Gusset plates at the members' ends, when `joints` was given. */
+  readonly gussets?: NodeHandle;
+  /** The rivets fastening the members' chords to those plates. */
+  readonly jointRivets?: NodeHandle;
+}
+
+/**
+ * Where a web member's ends land: on an upright whose half-width, by
+ * height, is this. The joint starts just clear of it.
+ */
+export interface JointOpts {
+  readonly upright: ReadonlyArray<readonly [number, number]>;
 }
 
 /**
@@ -93,9 +116,12 @@ export function webMembers(
   paths: NodeHandle,
   outer: ReadonlyArray<readonly [number, number]>,
   detail: Detail,
+  joints?: JointOpts,
 ): WebMembers {
   const riveted = detail.rivets === true;
   if (detail.lacedWeb !== true && !riveted) return { meshes: [faceSkin(g, id, paths, outer)] };
+  const ends =
+    joints === undefined ? {} : memberJoints(g, id, paths, outer, joints.upright, riveted);
   const struts = latticeStruts(g, id, paths, {
     halfWidth: outer.map(([y, w]) => [y, w - CHORD] as const),
     chord: CHORD,
@@ -106,7 +132,143 @@ export function webMembers(
   return {
     meshes: [struts.chords, struts.lacing],
     ...(struts.rivets === undefined ? {} : { rivets: struts.rivets }),
+    ...ends,
   };
+}
+
+/** A gusset plate's thickness [estimated]. */
+const PLATE = 0.015;
+/** The joint's clearance past the upright's face [estimated]. */
+const CLEAR = 0.05;
+/** A plate runs this many strut half-widths along its member [estimated]. */
+const PLATE_REACH = 3;
+/** Rivets along a chord over a plate, every this far [estimated, as the seams]. */
+const JOINT_PITCH = 0.1;
+
+/**
+ * THE JOINTS. Every web member ends on an upright, and at each end a pair
+ * of gusset plates takes it: one either side of the member's face plane,
+ * just outside the chords on that side, starting clear of the upright's
+ * face and reaching PLATE_REACH half-widths along the member. The plates
+ * of the members meeting at a node overlap into the irregular gusset a
+ * real joint has, without the node needing to know who meets it: each
+ * member brings its own.
+ *
+ * On each plate, the two chords that lie against it are riveted to it in
+ * a row along the chord, every JOINT_PITCH over the plate's reach. The
+ * members' ends are found by field, not by table: a resample reports each
+ * sample's arc position and the member's length, and a sample is a joint
+ * rivet when it is within reach of EITHER end.
+ */
+function memberJoints(
+  g: Graph,
+  id: string,
+  paths: NodeHandle,
+  outer: ReadonlyArray<readonly [number, number]>,
+  upright: ReadonlyArray<readonly [number, number]>,
+  riveted: boolean,
+): { gussets: NodeHandle; jointRivets?: NodeHandle } {
+  const y = component(position(), 1);
+  const w = sub(ramp(y, outer), CHORD);
+  // Clear of the upright's box. A point a along the member and w off its
+  // axis (a chord's rivet row) is a sin(t) - w cos(t) from the upright's
+  // axis, t being the angle the member meets it at — so a steep diagonal
+  // is still inside the box well past r along its own length. Solve for
+  // the upright's half-width plus a margin; the sine is clamped, so a
+  // member all but parallel to its upright does not run away.
+  const clearAt = (end: 0 | 1): Field => {
+    const sine = max(component(attribute(END_SINE, 2), end), 0.25);
+    const cosine = sqrt(sub(1, mul(sine, sine)));
+    return div(add(add(ramp(y, upright), CLEAR), mul(add(w, CHORD), cosine)), sine);
+  };
+  const reach = mul(w, PLATE_REACH);
+  const T = attribute("tangent", 3);
+  const F = attribute(FACE_NORMAL, 3);
+  const N = normalize(sub(F, mul(T, dot(F, T))));
+  const B = cross(N, T);
+  const off = add(w, CHORD);
+
+  // Plates: one target per member end and side; the box's local x runs
+  // along the member (into it), y across the face (N), z along B.
+  const tips = g.add(pathResample, { mode: "count", count: 2 }, `${id}Tips`);
+  g.connect(paths, "out", tips, "in");
+  const into = mul(T, sub(1, mul(attribute("curveU"), 2)));
+  // curveU is 0 at a member's first end and 1 at its second.
+  const start = select(lt(attribute("curveU"), 0.5), clearAt(0), clearAt(1));
+  const plateSides = [1, -1].map((side) => {
+    const name = `${id}Plate${side > 0 ? "Out" : "In"}`;
+    const at = g.add(
+      transformPoints,
+      {
+        translate: add(
+          mul(into, add(start, mul(reach, 0.5))),
+          mul(N, mul(add(off, PLATE / 2), side)),
+        ),
+      },
+      name,
+    );
+    const aim = g.add(orientAlongVector, { direction: into, up: N, axis: "+x" }, `${name}Aim`);
+    g.connect(tips, "out", at, "in");
+    g.connect(at, "out", aim, "in");
+    return aim;
+  });
+  const targets = g.add(mergePoints, {}, `${id}PlateTargets`);
+  for (const p of plateSides) g.connect(p, "out", targets, "in");
+  const sized = g.add(
+    setAttribute,
+    {
+      name: "scale",
+      type: "f32",
+      tupleSize: 3,
+      value: vec(reach, PLATE, mul(add(off, 0.08), 2)),
+    },
+    `${id}PlateSize`,
+  );
+  const unit = g.add(meshPrimitive, { shape: "box", size: [1, 1, 1] }, `${id}PlateUnit`);
+  const plates = g.add(copyToPoints, { topology: "keep" }, `${id}Gussets`);
+  g.connect(targets, "out", sized, "in");
+  g.connect(unit, "out", plates, "source");
+  g.connect(sized, "out", plates, "target");
+  if (!riveted) return { gussets: plates };
+
+  // Rivets: samples within reach of either end, on both plates' chords.
+  const samples = g.add(
+    pathResample,
+    { mode: "spacing", spacing: JOINT_PITCH, sampleArcAttr: "arc", lengthAttr: "memberLen" },
+    `${id}JointSamples`,
+  );
+  const len = g.add(
+    promoteAttribute,
+    { name: "memberLen", from: "primitive", to: "point", mode: "first" },
+    `${id}JointLen`,
+  );
+  const arc = attribute("arc");
+  const fromEnd = sub(attribute("memberLen"), arc);
+  const within = (a: Field, from: Field) => mul(ge(a, from), le(a, add(from, reach)));
+  const near = g.add(
+    filterByExpression,
+    { predicate: max(within(arc, clearAt(0)), within(fromEnd, clearAt(1))) },
+    `${id}JointNear`,
+  );
+  g.connect(paths, "out", samples, "in");
+  g.connect(samples, "out", len, "in");
+  g.connect(len, "out", near, "in");
+  const heads = [1, -1].flatMap((side) =>
+    [1, -1].map((chord) => {
+      const out = mul(N, side);
+      const name = `${id}Joint${side > 0 ? "Out" : "In"}${chord > 0 ? "P" : "M"}`;
+      const at = g.add(
+        transformPoints,
+        { translate: add(mul(B, mul(w, chord)), mul(out, add(off, PLATE))) },
+        name,
+      );
+      const aim = g.add(orientAlongVector, { direction: out, up: T, axis: "+y" }, `${name}Aim`);
+      g.connect(near, "out", at, "in");
+      g.connect(at, "out", aim, "in");
+      return aim;
+    }),
+  );
+  return { gussets: plates, jointRivets: rivetSpawn(g, `${id}Joint`, heads) };
 }
 
 /** Name the rivet spawners of several web-member sets, skipping the rivetless. */
@@ -116,8 +278,14 @@ export function rivetOutputs(
   const out: Array<{ name: string; spawn: NodeHandle }> = [];
   for (const [name, set] of Object.entries(sets)) {
     if (set.rivets !== undefined) out.push({ name, spawn: set.rivets });
+    if (set.jointRivets !== undefined) out.push({ name: `${name}.joints`, spawn: set.jointRivets });
   }
   return out;
+}
+
+/** The gusset meshes of several web-member sets, skipping the jointless. */
+export function gussetMeshes(sets: readonly WebMembers[]): NodeHandle[] {
+  return sets.flatMap((set) => (set.gussets === undefined ? [] : [set.gussets]));
 }
 
 /**

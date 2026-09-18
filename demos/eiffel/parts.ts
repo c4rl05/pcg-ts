@@ -24,6 +24,8 @@ export const PART_CLASSES = [
   "masonry",
   /** Everything above the 3rd floor, and the 3rd-floor room. */
   "summit",
+  /** Gusset plates where web members meet the uprights. */
+  "gussets",
 ] as const;
 
 export type PartClass = (typeof PART_CLASSES)[number];

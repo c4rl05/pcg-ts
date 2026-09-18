@@ -41,7 +41,14 @@ import {
 } from "./lattice.js";
 import type { Detail, Parts } from "./parts.js";
 import { MEMBERS, NODES, type NodeLevel, node } from "./spec.js";
-import { UPRIGHT_SEAMS, faceSkin, rivetOutputs, seamRivets, webMembers } from "./strut.js";
+import {
+  UPRIGHT_SEAMS,
+  faceSkin,
+  gussetMeshes,
+  rivetOutputs,
+  seamRivets,
+  webMembers,
+} from "./strut.js";
 
 /** Stations b and a (c is 0, d is 3). */
 const B = 1;
@@ -174,6 +181,7 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     fourMembers("legHorizontals4", horizontals),
     MEMBERS.horizontal,
     detail,
+    { upright: MEMBERS.upright },
   );
   const bracingWeb = webMembers(
     g,
@@ -181,6 +189,7 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     fourMembers("legBracing4", merge(g, "legCrosses", crosses)),
     MEMBERS.web,
     detail,
+    { upright: MEMBERS.upright },
   );
   const uprights4 = four("legUprights4", uprights);
   const seams =
@@ -197,6 +206,7 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     horizontals: horizontalWeb.meshes,
     bracing: bracingWeb.meshes,
     girders: [faceSkin(g, "legBelt", fourMembers("legBelts4", belts), MEMBERS.girderBar)],
+    gussets: gussetMeshes([horizontalWeb, bracingWeb]),
     rivets: [
       ...seams,
       ...rivetOutputs({ "leg.horizontals": horizontalWeb, "leg.bracing": bracingWeb }),

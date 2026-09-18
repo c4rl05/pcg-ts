@@ -82,6 +82,7 @@ const LOOK: Record<PartClass, { color: number; roughness: number; metalness: num
   platforms: { color: 0x4a3a2f, roughness: 0.8, metalness: 0.05 },
   masonry: { color: 0xcdc3ae, roughness: 0.93, metalness: 0 },
   summit: { color: 0x72533f, roughness: 0.62, metalness: 0.15 },
+  gussets: { color: 0x684a39, roughness: 0.6, metalness: 0.15 },
 };
 
 const MATERIALS = Object.fromEntries(
