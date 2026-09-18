@@ -319,6 +319,22 @@ re-runs the current classifier over a campaign's finished records without
 changing them, and prints before/after verdicts, plus how many paths each run
 wrote outside its sandbox.
 
+`--plan` shows what a REWRITE would change; `--write` applies it: each record
+is re-derived from its transcript with the current classifier, `runs.jsonl` is
+rewritten, and the report regenerated. It rewrites only what the classifier
+owns — contamination, the outside-write hazards, the read statistics and the
+network attempts — and never touches scores, `solved`, `final`, timings or
+usage, which are the scorer's and the runner's output. It refuses a campaign
+whose `STATUS.json` says `running`, and refuses outright if ANY transcript is
+missing rather than leaving `runs.jsonl` half in one classifier's terms and
+half in another's. A `reclassified.json` sidecar records when, against which
+harness commit, and every verdict that moved; `writeReport` reads it, so
+`report.md` carries that provenance through any later regeneration. Clearing a
+contamination leaves `solved` disagreeing with the score (it is stored as
+`score.solved && !contaminated`), and whether a cleared attempt should now
+count instead of the retry that superseded it is a campaign decision, not a
+classifier one — so those records are listed rather than quietly changed.
+
 It cannot know the launch-time Temp snapshot — that is not recorded — so it
 judges each transcript BOTH ways (strict: every Temp entry pre-dated the run;
 permissive: anything in Temp was the agent's own) and marks a run AMBIGUOUS
@@ -780,24 +796,27 @@ The turn cap is the CLI's own `--max-turns`.
 - A selftest failure always wakes; telling a failure caused by a changed
   node (which the plan would log and move past) from a harness fault is not
   implemented.
-- **Three pilot discards were classifier artifacts; two are now fixed and one
-  is not.** Re-classified at this commit,
+- **All four pilot discards were classifier artifacts, and all four are now
+  fixed.** Re-classified at this commit,
   the pilot has no ambiguous runs and one verdict moves —
   `r2.even-spacing.A a1` clears, having been discarded over its own
   `--out /tmp/out1.json` colliding with a stale same-named file in Temp. Three
-  cleared with the cwd fix (`r1.trees-on-hills.A a1`,
-  `r2.trees-on-hills.stripped a1`), and ONE stays contaminated:
-  `r1.trees-on-hills.stripped a1` on `msys:/`, a JS regex literal inside
-  `node -e` read as a filesystem root. That one is a different shape and is
-  still open.
+  Three shapes, all now fixed: the cross-call cwd
+  (`r1.trees-on-hills.A a1`, `r2.trees-on-hills.stripped a1`), the output-flag
+  write (`r2.even-spacing.A a1`, its own `--out` file colliding with a stale
+  name), and a JS regex literal read as a filesystem root
+  (`r1.trees-on-hills.stripped a1`, `msys:/` from `k=>/[Pp]rimitive|.../`).
+  **No run in either campaign is contaminated under the current classifier.**
 
-  What the two cleared ones cost, and what correcting them changes: three
-  slots now count their first attempt instead of its retry — turns 60→59,
-  68→52 and 28→30. The pilot's SOLVED conclusion does not move (18/18 in
-  every arm, gate STOP, the same six tasks to replace), and neither does the
-  turns median in any arm (34 / 34 / 33.5) nor the A/A gap on turns or tool
-  calls. Output tokens and wall minutes DO move — see the threshold table
-  above, which states both readings, and note that the gate's metric is turns.
+  What correcting them changes: four slots would count their first attempt
+  instead of its retry — turns 60→59, 68→52, 28→30 and 70→38. The pilot's
+  SOLVED conclusion does not move (18/18 in every arm, gate STOP, the same six
+  tasks to replace), and neither does the turns median in any arm
+  (34 / 34 / 33.5) nor the A/A gap on turns (4.4%) or tool calls (4.6%). The
+  stripped arm's turns mean falls 38.6 → 35.9 and its paired gap against A
+  goes 6.3% → 1.8%. Output tokens and wall minutes DO move — see the threshold
+  table above, which states both readings; the gate's metric is turns, so no
+  threshold is affected.
 - **A classifier fix does not rewrite records that are already written.**
   `readCounts` is computed when the transcript is parsed, so the committed
   calibration records still carry the old "a listing is a read" counts, and

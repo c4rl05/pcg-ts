@@ -17,6 +17,7 @@ import {
   jailOf,
   launch,
   parseTranscript,
+  stripRedirects,
 } from "./agents/claude-code.mjs";
 
 const HERE = new URL(".", import.meta.url);
@@ -330,6 +331,33 @@ test("an output FLAG names a file the command creates, not one it reads", () => 
   assert.ok(/attribute\.ts$/.test(inline.outsideWrites[0]), inline.outsideWrites[0]);
   // ...but merely READING an outside path from inline code still counts.
   assert.equal(parse(`node -e "console.log(require('fs').readFileSync('/tmp/someone-elses.json','utf8'))"`).readPaths.contaminating.length, 1);
+});
+
+test("a JS arrow is not a shell redirect, so a regex literal is not a path", () => {
+  const root = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes" : "/var/tmp/pcg-eval/sandboxes";
+  const cwd = join(root, "pcg-eval-Q1w2E3", "project");
+  const bash = (command) => parseTranscript(syntheticTranscript(cwd, "sid", [{ name: "Bash", input: { command } }]), { cwd, tmpEntriesAtStart: null, benignRoots: jailOf(cwd) }).readPaths.contaminating;
+
+  // The pilot shape (r1.trees-on-hills.stripped-a1): `k=>/[Pp]rimitive|...`
+  // read as a redirect to `/[Pp]rimitive`, truncated at the glob to a bare
+  // `/`, and reported as the filesystem root. One run discarded over a regex.
+  assert.deepEqual(bash(`node -e "console.log(Object.keys(m).filter(k=>/[Pp]rimitive|[Ss]ubgraph|[Rr]egist/.test(k)))"`), []);
+  // Regex literals are ordinary in the code these agents write.
+  for (const re of ["/^## /", "/\\d+/", "/\\s*,\\s*/", "/[a-z]+/gi", "/^(?:a|b)$/"]) {
+    assert.deepEqual(bash(`node -e "const f = (s) => ${re}.test(s); console.log(f('x'))"`), [], re);
+  }
+  assert.deepEqual(bash(`node -e "const parts = s.split(/\\s*,\\s*/); console.log(parts)"`), []);
+  assert.deepEqual(bash(`node -e "if (a >= b) console.log(1)"`), [], ">= is a comparison");
+
+  // ...and every real redirect still redirects.
+  const red = (c) => stripRedirects(c);
+  assert.deepEqual(red("echo x > out.txt").targets, ["out.txt"]);
+  assert.deepEqual(red("npx pcg cook g.json --json > cook.json").targets, ["cook.json"]);
+  assert.deepEqual(red("a >> log.txt").appends, ["log.txt"]);
+  assert.deepEqual(red("cmd 2>&1").targets, [], "a dup is not a file");
+  assert.deepEqual(red("tail -f x 2> /dev/null").targets, [], "/dev/null is not a read");
+  // A redirect OUT of the sandbox is still recorded as a write.
+  assert.equal(parseTranscript(syntheticTranscript(cwd, "sid", [{ name: "Bash", input: { command: "node -e \"console.log(1)\" > /tmp/scratch.txt" } }]), { cwd, tmpEntriesAtStart: null, benignRoots: jailOf(cwd) }).outsideWrites.length, 1);
 });
 
 test("the shell keeps its working directory ACROSS tool calls", () => {

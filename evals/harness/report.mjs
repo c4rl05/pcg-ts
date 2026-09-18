@@ -855,7 +855,7 @@ export function renderCalibration(report) {
   return L.join("\n") + "\n";
 }
 
-export function buildReport({ manifest, records }) {
+export function buildReport({ manifest, records, provenance = null }) {
   const arms = manifest.arms.map((a) => a.label);
   const tasks = manifest.tasks.map((t) => t.id);
   const finalsMap = latestBySlot(records);
@@ -900,6 +900,7 @@ export function buildReport({ manifest, records }) {
   return {
     campaign: manifest.campaign,
     generatedAt: new Date().toISOString(),
+    reclassified: provenance,
     progress: { done, total: manifest.schedule.length, complete },
     model: manifest.model,
     claudeVersion: manifest.claudeVersion,
@@ -933,6 +934,28 @@ export function renderMarkdown(report) {
   L.push(`# Eval report: ${report.campaign}`, "");
   L.push(`Generated ${report.generatedAt}. Model \`${report.model}\`, Claude Code ${report.claudeVersion}${report.claudeVersionsSeen.length > 1 ? ` (versions seen: ${report.claudeVersionsSeen.join(", ")})` : ""}.`);
   L.push(`Progress: ${report.progress.done}/${report.progress.total} slots${report.progress.complete ? "" : " (INCOMPLETE)"}.`, "");
+  if (report.reclassified) {
+    const r = report.reclassified;
+    L.push("", "## Reclassified", "");
+    L.push(
+      `**These records were RE-DERIVED from their transcripts on ${r.at}**, against harness commit \`${r.harnessGit?.sha?.slice(0, 7) ?? "?"}\`${r.harnessGit?.dirty ? " (dirty)" : ""}, adapter sha256 \`${String(r.adapter).slice(0, 12)}\`. ` +
+        `They are therefore NOT what the run log recorded at the time: ${r.changed} of ${r.records} records changed and ${r.verdictsMoved.length} contamination verdict(s) moved. ` +
+        `Only what the classifier derives from a transcript was rewritten (${r.fields.join(", ")}); ${r.untouched.join(", ")} are the scorer's and the runner's output and are untouched.`,
+    );
+    if (r.verdictsMoved.length) {
+      L.push("", "| slot | attempt | before | after | paths that no longer count |", "|---|---|---|---|---|");
+      for (const v of r.verdictsMoved) {
+        L.push(`| ${v.slotId} | ${v.attempt} | ${v.before.contaminated ? "contaminated" : "clean"} | ${v.after.contaminated ? "contaminated" : "clean"} | ${(v.before.paths ?? []).map((p) => `\`${p}\``).join(", ") || "–"} |`);
+      }
+    }
+    if (r.inconsistent?.length) {
+      L.push(
+        "",
+        `${r.inconsistent.length} record(s) now read \`contaminated: false\` while still \`solved: false\`: \`solved\` is stored as \`score.solved && !contaminated\` and was deliberately not recomputed here, because whether a cleared attempt should count instead of the retry that superseded it is a campaign decision. They are: ${r.inconsistent.map((x) => `${x.slotId} a${x.attempt}`).join(", ")}.`,
+      );
+    }
+    L.push("");
+  }
   L.push(`> ${report.caveat}`, "");
   L.push("## Solved, per task and arm (Wilson 95%)", "");
   L.push(`| task | ${report.arms.join(" | ")} | pooled |`);
@@ -1046,7 +1069,11 @@ export function writeReport(campaignDir) {
   const manifest = readJson(join(campaignDir, "manifest.json"));
   const runsPath = join(campaignDir, "runs.jsonl");
   const records = existsSync(runsPath) ? parseJsonl(readFileSync(runsPath, "utf8"), { tolerant: true }) : [];
-  const report = buildReport({ manifest, records });
+  // Provenance for a campaign whose records were re-derived from their
+  // transcripts. Read from the sidecar rather than passed in, so the note
+  // survives every later regeneration of this report.
+  const sidecar = join(campaignDir, "reclassified.json");
+  const report = buildReport({ manifest, records, provenance: existsSync(sidecar) ? readJson(sidecar) : null });
   writeFileSync(join(campaignDir, "report.json"), JSON.stringify(report, null, 2) + "\n");
   writeFileSync(join(campaignDir, "report.md"), renderMarkdown(report));
   if (report.calibration) writeFileSync(join(campaignDir, "calibration.md"), renderCalibration(report));

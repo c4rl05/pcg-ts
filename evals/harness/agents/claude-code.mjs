@@ -488,7 +488,14 @@ function shellWords(clause) {
 export function stripRedirects(clause) {
   const targets = [];
   const appends = [];
-  const text = String(clause).replace(/(?:^|(?<=[^<>&0-9]))(\d?>>?|&>>?)\s*("[^"]*"|'[^']*'|[^\s;&|<>]+)/g, (_, op, target) => {
+  // `=>` and `>=` are JS, not shell. An arrow function is ordinary in the
+  // code these agents write, and reading `k=>/[Pp]rimitive|.../` as a
+  // redirect to `/[Pp]rimitive` truncated it at the glob to a bare `/` and
+  // reported the filesystem root — one pilot run discarded over a regex
+  // literal. So a `>` preceded by `=` or `-`, or followed by `=`, redirects
+  // nothing. This is lexical: it needs no JS parsing, and it does not
+  // weaken any real redirect (`2>&1`, `>out`, `x >> log` all still match).
+  const text = String(clause).replace(/(?:^|(?<=[^<>&0-9=-]))(\d?>>?|&>>?)\s*("[^"]*"|'[^']*'|[^\s;&|<>=]+)/g, (_, op, target) => {
     const t = unquote(target);
     if (!/^&\d*$|^\/dev\/null$|^NUL$|^\$null$/i.test(t)) (op.endsWith(">>") ? appends : targets).push(t);
     return " ";
