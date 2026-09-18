@@ -672,6 +672,7 @@ export async function runCampaign(argv, { log = (m) => console.error(`[run ${new
       try {
         result = await adapter.launch({
           cwd: sb.dir,
+          tmpDir: sb.tmpDir,
           prompt: renderPrompt(prompt, sb.dir),
           model: config.model,
           effort: config.effort ?? undefined,

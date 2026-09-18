@@ -262,6 +262,37 @@ Outside paths are classified:
   `npx <anything but pcg>`, and so on; a bare `npm install` (which reinstalls
   `file:../pcg-ts.tgz`) is not.
 
+**A read outside the jail and a write outside it are not the same event, and
+they never were.** The threat this eval defends against is the agent SEEING
+something it should not — the repository under evaluation, another task's
+brief, its own earlier run's work. A scratch file written to Temp gives the
+run no information it did not already have, so it is recorded in
+`outsideWrites` as a HAZARD and never contaminates the run that made it. What
+makes it a hazard is the next run: 96 slots share one machine, and a file left
+behind is a file a later run could read. Both halves of that now hold:
+
+- **Each run has its own temp directory**, `<jail>/tmp`, with `TMPDIR`, `TEMP`
+  and `TMP` all pointing at it. The jail is already a benign root, so a scratch
+  write is not a finding at all; and the jail is removed with the run, so
+  nothing survives into the next one. This is why the behaviour disappears
+  rather than being punished — the alternative was re-running the most
+  expensive task in the campaign twelve times.
+- **A write is recognised however it is made.** Shell redirects and copy
+  destinations always were; an output FLAG (`pcg render --out /tmp/a.svg`) and
+  an fs call inside inline code (`node -e "...writeFileSync('/tmp/x')..."`) now
+  are too. Before that, those two shapes read as READS of paths that happened
+  to be in Temp, so the verdict turned on whether the name looked pre-existing
+  rather than on the command that created it. Measured over the pilot and
+  calibration: 38 of 69 runs wrote outside their sandbox, in six distinct
+  shapes; `--out` and inline-code writes were the two the record never showed.
+  Short `-o` is deliberately NOT treated as an output flag — to `grep` it means
+  only-matching, and inventing a write is worse than missing one.
+
+A file the agent created is its own to read back, whichever way it created it.
+That rule is not new (a `>` redirect always granted it); it is now applied
+consistently, which is what stopped the live classifier and the reclassifier
+disagreeing.
+
 A contaminating run is recorded `contaminated: true, final: false` and the
 slot re-runs once. If more than half of the last six finished attempts
 (`limits.contaminationRateWindow`, `limits.contaminationRateMax`) are
@@ -271,7 +302,18 @@ allowance. The heuristic cannot see a path assembled at runtime from pieces.
 
 `node evals/harness/reclassify.mjs --results evals/results/<campaign> [--runs evals/runs/<campaign>]`
 re-runs the current classifier over a campaign's finished records without
-changing them, and prints before/after verdicts. On the aborted first pilot
+changing them, and prints before/after verdicts, plus how many paths each run
+wrote outside its sandbox.
+
+It cannot know the launch-time Temp snapshot — that is not recorded — so it
+judges each transcript BOTH ways (strict: every Temp entry pre-dated the run;
+permissive: anything in Temp was the agent's own) and marks a run AMBIGUOUS
+when they disagree, rather than picking one and calling it the verdict. That
+disagreement is what made the same quarry-terraces transcript clean at run
+time and contaminated on review. It is now empty on both campaigns: once a
+created file is recognised from the command that created it, the verdict is a
+property of the TRANSCRIPT rather than of the machine's temp directory, and
+the two entry points cannot disagree. On the aborted first pilot
 (`pilot-aborted-1`, 5 records, 4 flagged) it keeps exactly one contaminated:
 the agent's disk-wide `find /`. The other three were the session's own
 offloaded tool output, a file the agent wrote to `/tmp` and read back, and a
@@ -714,6 +756,23 @@ The turn cap is the CLI's own `--max-turns`.
 - A selftest failure always wakes; telling a failure caused by a changed
   node (which the plan would log and move past) from a harness fault is not
   implemented.
+- **Three pilot discards were classifier artifacts, and two of them share a
+  cause worth fixing before the next campaign.** Re-classified at this commit,
+  the pilot has no ambiguous runs and one verdict moves —
+  `r2.even-spacing.A a1` clears, having been discarded over its own
+  `--out /tmp/out1.json` colliding with a stale same-named file in Temp. Three
+  stay contaminated on artifacts: `r1.trees-on-hills.stripped a1` on `msys:/`
+  (a JS regex literal inside `node -e` read as a path), and
+  `r1.trees-on-hills.A a1` + `r2.trees-on-hills.stripped a1` on paths two
+  levels above the sandbox. The latter two look like the same bug: the Bash
+  tool keeps its working directory ACROSS tool calls, but `scanShell` resets to
+  the sandbox on every call, so a `../../graph.json` issued after an earlier
+  `cd node_modules/pcg-ts` resolves too high. Both commands demonstrably
+  succeeded against the in-sandbox file, which is the evidence for it. Not
+  changed here: it is a claim about the tool's behaviour, and it moves pilot
+  verdicts. The pilot's SOLVED conclusion does not move either way — every
+  discarded attempt scored 1 and so did its retry, and `solved` is gated on
+  `final` — but four extra runs were spent and four slots' turn counts shifted.
 - **A classifier fix does not rewrite records that are already written.**
   `readCounts` is computed when the transcript is parsed, so the committed
   calibration records still carry the old "a listing is a read" counts, and

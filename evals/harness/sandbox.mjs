@@ -230,6 +230,16 @@ export function createSandbox({
   const jail = mkdtempSync(join(baseDir, SANDBOX_PREFIX));
   const dir = join(jail, "project");
   mkdirSync(dir);
+  // The run's own temp directory. TMPDIR/TEMP/TMP point here, so a scratch
+  // file the agent writes (`pcg render --out /tmp/a.svg`, observed) lands
+  // inside the jail instead of the shared OS temp directory. That matters
+  // twice: the jail is already a benign root, so the write is not mistaken
+  // for contamination; and it is removed with the jail, so nothing a run
+  // leaves behind can be read by the NEXT run. It sits beside `project`
+  // rather than inside it, so scratch files do not turn up in the agent's
+  // file list or inflate `probeGraphsWritten`.
+  const tmpDir = join(jail, "tmp");
+  mkdirSync(tmpDir);
   const cleanup = () => {
     removeDir(jail);
     removeClaudeProjectDir(dir);
@@ -266,6 +276,7 @@ export function createSandbox({
     return {
       dir,
       jail,
+      tmpDir,
       pcgDir,
       briefPath,
       graphPath: join(dir, "graph.json"),

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { after, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { buildSchedule, checkSandboxRoot, contaminationRate, finishedSlots, firstUnfinished, makeRng, msUntilWindow, renderPrompt } from "./run.mjs";
@@ -246,6 +246,21 @@ test("e2e: torn STATUS.json and .lock.json from a crash do not block a restart",
   assert.equal(b.status, 0, b.stderr);
   assert.equal(b.runs.length, 2);
   assert.equal(b.status_.state, "done");
+});
+
+test("e2e: each run gets its own temp directory, inside its jail and gone with it", { skip, timeout: 300_000 }, () => {
+  const dir = setup("tmpdir", ["ok"]);
+  const r = run(dir, [], {}, join(dir, "runs"));
+  assert.equal(r.status, 0, r.stderr);
+  const args = JSON.parse(readFileSync(join(dir, "runs", "e2e", `${r.runs[0].slotId}-a1`, "launch-args.json"), "utf8"));
+  assert.ok(args.tmpDir, "the runner hands the adapter a temp directory");
+  // It is the run's own, inside the jail that holds the project — so the
+  // classifier already treats it as benign — and beside the project, not in it.
+  const jail = join(args.cwd, "..");
+  assert.equal(resolve(args.tmpDir), resolve(join(jail, "tmp")));
+  assert.ok(!resolve(args.tmpDir).startsWith(resolve(args.cwd) + sep), "not inside the project");
+  // The sandbox is removed after the run, so nothing survives for the next one.
+  assert.ok(!existsSync(args.tmpDir), "the run's temp dir does not outlive the run");
 });
 
 test("e2e: taskBudgets in the campaign override the task's own budgets", { skip, timeout: 300_000 }, () => {

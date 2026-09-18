@@ -68,8 +68,16 @@ export function billingEnvViolations(env = process.env) {
   return realBilling(env);
 }
 
-export async function launch({ cwd, prompt, transcriptPath, isolation = true, tools, onSpawn }) {
+export async function launch({ cwd, prompt, transcriptPath, isolation = true, tools, onSpawn, tmpDir }) {
   onSpawn?.(process.pid);
+  // Record what the runner handed us, so an e2e test can assert the run's own
+  // temp directory really reaches the adapter rather than trusting the wiring.
+  try {
+    mkdirSync(dirname(transcriptPath), { recursive: true });
+    writeFileSync(join(dirname(transcriptPath), "launch-args.json"), JSON.stringify({ cwd, tmpDir: tmpDir ?? null, isolation }));
+  } catch {
+    /* the test that needs it will say so */
+  }
   const isProbe = /configuration audit/i.test(prompt);
   const isLimitProbe = /single word OK/.test(prompt);
   const { outcome, s } = isProbe ? nextOutcome("audit") : nextOutcome(isLimitProbe ? "probe" : "task");

@@ -9,6 +9,7 @@ import {
   billingEnvViolations,
   buildArgs,
   buildEnv,
+  TEMP_ENV_VARS,
   claudeConfigDir,
   classifyOutsidePath,
   extractCommandPaths,
@@ -40,6 +41,34 @@ test("child env drops the parent session's plumbing and records what it dropped"
   assert.equal(env.CLAUDE_CODE_GIT_BASH_PATH, "g", "user configuration the CLI needs is kept");
   assert.equal(env.CLAUDE_CODE_DISABLE_AUTO_MEMORY, "1");
   assert.equal(buildEnv({ PATH: "p" }, { isolation: false }).env.CLAUDE_CODE_DISABLE_AUTO_MEMORY, undefined);
+});
+
+test("the session's temp directory is the run's own, under every name", () => {
+  const tmpDir = join("C:\\pcg-eval\\sandboxes", "pcg-eval-Q1w2E3", "tmp");
+  const base = { PATH: "p", TMPDIR: "/shared/tmp", TEMP: "C:\\Users\\x\\AppData\\Local\\Temp", TMP: "C:\\Users\\x\\AppData\\Local\\Temp" };
+  const { env } = buildEnv(base, { tmpDir });
+  for (const name of TEMP_ENV_VARS) assert.equal(env[name], tmpDir, name);
+  // Windows env lookup is case-insensitive, so a stray `Temp` beside `TEMP`
+  // would let the machine's value win.
+  const mixed = buildEnv({ PATH: "p", Temp: "C:\\Users\\x\\AppData\\Local\\Temp", Tmp: "C:\\old" }, { tmpDir }).env;
+  assert.deepEqual(
+    Object.keys(mixed).filter((k) => ["TMPDIR", "TEMP", "TMP"].includes(k.toUpperCase())).sort(),
+    ["TEMP", "TMP", "TMPDIR"],
+    "exactly one spelling of each survives",
+  );
+  for (const k of Object.keys(mixed)) if (["TEMP", "TMP", "TMPDIR"].includes(k.toUpperCase())) assert.equal(mixed[k], tmpDir, k);
+  // Without a tmpDir the environment is left alone (the isolation probe).
+  assert.equal(buildEnv(base).env.TMPDIR, "/shared/tmp");
+  // Anything under the jail is benign, so a scratch write there is not a
+  // finding at all — which is the point of putting it there.
+  const cwd = join("C:\\pcg-eval\\sandboxes", "pcg-eval-Q1w2E3", "project");
+  assert.deepEqual(jailOf(cwd), [join("C:\\pcg-eval\\sandboxes", "pcg-eval-Q1w2E3")]);
+  const p = parseTranscript(syntheticTranscript(cwd, "sid", [{ name: "Bash", input: { command: "npx pcg render graph.json --out ../tmp/a.svg && cat ../tmp/a.svg" } }]), {
+    cwd,
+    tmpEntriesAtStart: null,
+    benignRoots: jailOf(cwd),
+  });
+  assert.deepEqual(p.readPaths.contaminating, [], "the run's own temp dir is inside the jail");
 });
 
 test("isolated args carry every isolation flag; the control run carries none", () => {
@@ -263,6 +292,44 @@ test("laundering review repros: writes whitelist only what they created; globs, 
     assert.equal(bash("ls /c/pcg-eval/node_modules").length, 1);
     assert.equal(bash("cat C:/node_modules/x/index.js").length, 1);
   }
+});
+
+test("an output FLAG names a file the command creates, not one it reads", () => {
+  const root = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes" : "/var/tmp/pcg-eval/sandboxes";
+  const cwd = join(root, "pcg-eval-Q1w2E3", "project");
+  const parse = (command) => parseTranscript(syntheticTranscript(cwd, "sid", [{ name: "Bash", input: { command } }]), { cwd, tmpEntriesAtStart: null, benignRoots: jailOf(cwd) });
+  // The real calibration command (r0.quarry-terraces.A-a1). Before this, the
+  // four files read as READS of paths that looked pre-existing, so the run's
+  // verdict depended on a Temp snapshot the record never kept — which is why
+  // the live classifier called it clean and the reclassifier called it
+  // contaminated. Now the transcript itself says the agent made them.
+  const render = parse("npx pcg render graph.json --out /tmp/a.svg --seed 1 2>&1 | tail -20 && npx pcg render graph.json --out /tmp/b.svg --seed 1 2>&1 | tail -5 && cmp /tmp/a.svg /tmp/b.svg && echo IDENTICAL");
+  assert.deepEqual(render.readPaths.contaminating, [], "reading back its own output is not contamination");
+  assert.equal(render.outsideWrites.length, 2, "and both writes are RECORDED");
+  assert.ok(render.outsideWrites.every((p) => /[ab]\.svg$/.test(p)), render.outsideWrites.join(", "));
+  // The same verdict under the permissive reading: the transcript settles it,
+  // so the two entry points cannot disagree any more.
+  const permissive = parseTranscript(syntheticTranscript(cwd, "sid", [{ name: "Bash", input: { command: "npx pcg render graph.json --out /tmp/a.svg && cmp /tmp/a.svg /tmp/a.svg" } }]), { cwd, tmpEntriesAtStart: new Set(["claude"]), benignRoots: jailOf(cwd) });
+  assert.deepEqual(permissive.readPaths.contaminating, []);
+  // `--out=X`, and a directory form.
+  assert.equal(parse("npx pcg cook graph.json --output=/tmp/c1.json").outsideWrites.length, 1);
+  // A path INSIDE the sandbox is a normal write, not an outside one.
+  const inside = parse("npx pcg render graph.json --out out.svg");
+  assert.deepEqual(inside.outsideWrites, []);
+  assert.ok(inside.writes.includes("out.svg"));
+  // `-o` is NOT treated as an output flag: to grep it means only-matching,
+  // and inventing a write there would be worse than missing one.
+  assert.deepEqual(parse("grep -o scatter node_modules/pcg-ts/docs/nodes.md").outsideWrites, []);
+  // Inline code that WRITES a file has created it, not read it. This shape
+  // (pilot r1.settlement-roads.A-a1) was the last unrecorded outside write:
+  // the script made /tmp/attribute.ts and the run was then judged as having
+  // reached into Temp for it.
+  const inline = parse(`node -e "const fs=require('fs'); fs.writeFileSync('/tmp/attribute.ts', 'x'); console.log(fs.readFileSync('/tmp/attribute.ts','utf8'))"`);
+  assert.deepEqual(inline.readPaths.contaminating, [], "a script reading back what it just wrote is not contamination");
+  assert.equal(inline.outsideWrites.length, 1);
+  assert.ok(/attribute\.ts$/.test(inline.outsideWrites[0]), inline.outsideWrites[0]);
+  // ...but merely READING an outside path from inline code still counts.
+  assert.equal(parse(`node -e "console.log(require('fs').readFileSync('/tmp/someone-elses.json','utf8'))"`).readPaths.contaminating.length, 1);
 });
 
 test("a bare listing is not a read: only an opened file counts", () => {

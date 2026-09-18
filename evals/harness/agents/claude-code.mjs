@@ -110,6 +110,9 @@ export const SESSION_ENV_VARS = [
   "AI_AGENT",
 ];
 
+/** Every name a tool might read the temp directory from. */
+export const TEMP_ENV_VARS = ["TMPDIR", "TEMP", "TMP"];
+
 export const ISOLATION_ENV = {
   CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
   CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
@@ -162,6 +165,7 @@ export function isolationFingerprint() {
       isolationEnv: ISOLATION_ENV,
       sessionEnvVars: SESSION_ENV_VARS,
       billingEnvVars: BILLING_ENV_VARS,
+      tempEnvVars: TEMP_ENV_VARS,
       tools: DEFAULT_TOOLS,
       code: [buildArgs, buildEnv, launch].map((f) => f.toString()),
     }),
@@ -169,7 +173,7 @@ export function isolationFingerprint() {
 }
 
 /** Build the child env: copy, remove session plumbing, add isolation vars. */
-export function buildEnv(baseEnv = process.env, { isolation = true } = {}) {
+export function buildEnv(baseEnv = process.env, { isolation = true, tmpDir = null } = {}) {
   const violations = billingEnvViolations(baseEnv);
   if (violations.length) throw new BillingEnvError(violations);
   const env = {};
@@ -184,6 +188,21 @@ export function buildEnv(baseEnv = process.env, { isolation = true } = {}) {
     env[k] = v;
   }
   if (isolation) Object.assign(env, ISOLATION_ENV);
+  // Point the session's temp directory at the run's own. All three names,
+  // because which one a tool consults varies: POSIX code reads TMPDIR,
+  // Windows reads TEMP and TMP, and Git Bash's `/tmp` follows TMP. Without
+  // this a scratch write (`pcg render --out /tmp/a.svg`, observed in
+  // calibration) lands in the shared OS temp directory, where it is
+  // indistinguishable from the orchestrator's files and where the NEXT run
+  // could read it. Existing spellings are deleted first: Windows env lookup
+  // is case-insensitive, so leaving a stray `Temp` beside `TEMP` would let
+  // the old value win.
+  if (tmpDir) {
+    for (const name of TEMP_ENV_VARS) {
+      for (const k of Object.keys(env)) if (k.toUpperCase() === name) delete env[k];
+      env[name] = tmpDir;
+    }
+  }
   return { env, removed };
 }
 
@@ -548,6 +567,20 @@ const CONTENT_VERBS = new Set([
   "node", "deno", "bun", "python", "python3", "py", "perl", "ruby", "php", "diff", "cmp", "md5sum", "sha256sum",
 ]);
 
+/**
+ * Paths a piece of CODE writes: the first argument of an fs write call.
+ * A path the script CREATED is its own however it reads it back, so this is
+ * what keeps `node -e "...writeFileSync('/tmp/x')..."` from reading as a
+ * reach into Temp. Found in the pilot as the last unrecorded write shape.
+ */
+export function scriptWrites(text) {
+  const out = new Set();
+  for (const m of String(text).matchAll(/\b(?:fs\.)?(?:writeFileSync|appendFileSync|createWriteStream|writeFile|appendFile|mkdirSync|copyFileSync|renameSync)\s*\(\s*(['"`])([^'"`\n]+)\1/g)) {
+    out.add(m[2]);
+  }
+  return out;
+}
+
 /** Does this package-relative path name a file rather than a directory? */
 function namesFile(rel) {
   const last = rel.replace(/\\/g, "/").split("/").pop() ?? "";
@@ -637,11 +670,16 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
     // A script can do anything to what it names, so its outside paths count as recursive reads.
     // A relative path may be meant against the script's folder (imports, URLs) or the cwd (fs calls):
     // it counts as outside only when both readings are.
+    const written = scriptWrites(text);
     const inCwd = new Map(extractCommandPathEntries(text, cwd, { bareRoot }).map((e) => [e.token, e.path]));
     for (const e of extractCommandPathEntries(text, scriptDir, { bareRoot })) {
       const other = inCwd.get(e.token);
       const inside = [e.path, other].find((x) => x && !String(x).startsWith("msys:") && isInside(x, sandbox));
-      touch(inside ?? other ?? e.path, { recursive: true });
+      const target = inside ?? other ?? e.path;
+      // A created file is the script's own however it is read back; a
+      // directory it made grants only a listing, so `mkdir` stays a create.
+      if (written.has(e.token)) touch(target, { write: "create" });
+      else touch(target, { recursive: true });
     }
     const net = extractNetworkAttempts(body);
     network.push(...net.commands);
@@ -688,6 +726,18 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
       for (const t of appends) touch(t, { write: "append", base: vcwd });
       if (["mkdir", "md", "new-item", "ni"].includes(verb)) for (const w of flagless) touch(w, { write: "mkdir", base: vcwd });
       if (verb === "touch") for (const w of flagless) touch(w, { write: "append", base: vcwd });
+      // An output FLAG names a file the command CREATES. Without this,
+      // `pcg render graph.json --out /tmp/a.svg` read as a READ of
+      // /tmp/a.svg: the run was judged on whether that path looked
+      // pre-existing rather than on the fact that this command made it.
+      // Long forms only — `-o` is "only-matching" to grep and friends, and
+      // guessing wrong there would invent writes that never happened.
+      for (const [i, w] of words.entries()) {
+        const m = /^--(?:out|output|outfile|out-file|out-dir|output-dir)(?:=(.*))?$/i.exec(w);
+        if (!m) continue;
+        const target = m[1] ?? words[i + 1];
+        if (target && !target.startsWith("-")) touch(unquote(target), { write: "create", base: vcwd });
+      }
       if (verb === "tee") for (const w of flagless) touch(w, { write: words.some((x) => /^-(?:a|-append)$/.test(x)) ? "append" : "create", base: vcwd });
       const tflag = words.findIndex((w) => w === "-t" || w.startsWith("--target-directory"));
       const targetDir = tflag < 0 ? null : words[tflag].includes("=") ? words[tflag].split("=")[1] : words[tflag + 1];
@@ -707,11 +757,18 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
       // Only a truncating redirect hides its target from the clause's reads; `2>> F` beside `grep x F` still reads F.
       const writtenHere = new Set(targets.map((t) => resolveArg(t, vcwd).toLowerCase()));
       const destHere = ["cp", "mv", "copy", "move", "copy-item", "move-item", "mkdir", "md", "touch", "tee"].includes(verb) ? new Set((verb === "cp" || verb === "mv" || verb.startsWith("co") || verb.startsWith("mo") ? (targetDir ? [targetDir] : flagless.slice(-1)) : flagless).map((w) => resolveArg(w, vcwd).toLowerCase())) : new Set();
+      // Inline code (`node -e`, `python -c`) writes through fs calls, not
+      // through the shell, so its writes are invisible to stripRedirects.
+      const codeWrites = scriptWrites(text);
       for (const { path, token, glob } of extractCommandPathEntries(text, vcwd, { bareRoot })) {
         const key = String(path).toLowerCase();
         // `echo $HOME`, `echo ~` print a name; they read nothing.
         if (["echo", "printf"].includes(verb) && /^(?:~|\$\{?\w+\}?|%\w+%|\$env:\w+)$/i.test(token)) continue;
-        if (!writtenHere.has(key) && !destHere.has(key)) touch(path, { recursive: recursive || glob, content: CONTENT_VERBS.has(verb), nodeEntry: verb === "node" && token === flagless[0] });
+        if (writtenHere.has(key) || destHere.has(key)) continue;
+        // Inline code (`node -e`, `python -c`) writes through fs calls, not
+        // through the shell, so its writes are invisible to stripRedirects.
+        if (codeWrites.has(token)) touch(path, { write: "create", base: vcwd });
+        else touch(path, { recursive: recursive || glob, content: CONTENT_VERBS.has(verb), nodeEntry: verb === "node" && token === flagless[0] });
       }
       if (!isInside(vcwd, sandbox)) {
         // Outside the sandbox, anything that names a file relative to where the shell is names it THERE,
@@ -922,6 +979,7 @@ function tmpEntries() {
  * @param {string} o.transcriptPath      where the raw stream-json goes
  * @param {boolean} [o.isolation=true]   false only for the selftest's negative control
  * @param {string[]} [o.tools]
+ * @param {string} [o.tmpDir]            the run's own temp dir; TMPDIR/TEMP/TMP point at it
  * @param {object} [o.env]               base env (default process.env)
  * @param {string} [o.command="claude"]
  * @param {string} [o.effort]
@@ -939,10 +997,11 @@ export async function launch({
   command = "claude",
   effort,
   onSpawn,
+  tmpDir,
 }) {
   if (!cwd || !existsSync(cwd)) throw new Error(`launch: cwd does not exist: ${cwd}`);
   if (!transcriptPath) throw new Error("launch: transcriptPath is required");
-  const { env, removed } = buildEnv(baseEnv, { isolation }); // throws BillingEnvError
+  const { env, removed } = buildEnv(baseEnv, { isolation, tmpDir }); // throws BillingEnvError
   mkdirSync(dirname(transcriptPath), { recursive: true });
   let mcpConfigPath;
   if (isolation) {

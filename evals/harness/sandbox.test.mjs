@@ -62,8 +62,19 @@ test("a sandbox under a dedicated root installs, names no tarball path, and clea
     const sb = createSandbox({ tarball: BASELINE, copyBrief: false, baseDir: root });
     assert.ok(sb.dir.startsWith(root));
     assert.equal(JSON.parse(readFileSync(join(sb.dir, "package.json"), "utf8")).dependencies["pcg-ts"], "file:../pcg-ts.tgz");
+    // The run's own temp directory: inside the JAIL (so it is a benign root
+    // and vanishes with the jail), beside `project` rather than inside it
+    // (so scratch files never turn up in the agent's file list).
+    assert.ok(sb.tmpDir, "the sandbox hands out a temp dir");
+    assert.equal(sb.tmpDir, join(sb.jail, "tmp"));
+    assert.ok(existsSync(sb.tmpDir));
+    assert.ok(!sb.tmpDir.startsWith(sb.dir), "not inside the project");
+    assert.ok(!existsSync(join(sb.dir, "tmp")));
+    // It is the agent's to write in, and it is gone when the run is.
+    writeFileSync(join(sb.tmpDir, "scratch.svg"), "x");
     sb.cleanup();
     assert.ok(!existsSync(sb.jail));
+    assert.ok(!existsSync(sb.tmpDir), "a run cannot leave scratch behind for the next one");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
