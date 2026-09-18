@@ -14,6 +14,7 @@ import {
   classifyOutsidePath,
   extractCommandPaths,
   extractNetworkAttempts,
+  heredocName,
   jailOf,
   launch,
   parseTranscript,
@@ -331,6 +332,46 @@ test("an output FLAG names a file the command creates, not one it reads", () => 
   assert.ok(/attribute\.ts$/.test(inline.outsideWrites[0]), inline.outsideWrites[0]);
   // ...but merely READING an outside path from inline code still counts.
   assert.equal(parse(`node -e "console.log(require('fs').readFileSync('/tmp/someone-elses.json','utf8'))"`).readPaths.contaminating.length, 1);
+});
+
+test("a heredoc is read the way its INTERPRETER reads it, not as shell", () => {
+  const root = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes" : "/var/tmp/pcg-eval/sandboxes";
+  const cwd = join(root, "pcg-eval-Q1w2E3", "project");
+  const bash = (command) => parseTranscript(syntheticTranscript(cwd, "sid", [{ name: "Bash", input: { command } }]), { cwd, tmpEntriesAtStart: null, benignRoots: jailOf(cwd) }).readPaths.contaminating;
+
+  // The v2 shapes. A heredoc fed to an interpreter was named `heredoc.sh`
+  // whatever ate it, so JS and Python were scanned as SHELL — and every
+  // division and every regex literal became a bare `/`, the filesystem root.
+  // (r1.quarry-terraces.A-a1 divided; r1.quarry-terraces.A-a2 used regexes.)
+  assert.deepEqual(bash("python3 - <<'PY'\ni = Math.floor((x + 60) / CELL)\nj = (z + 60) / CELL\nPY"), [], "division");
+  assert.deepEqual(bash("node - <<'EOF'\nconst t = 2 * Math.PI / sw.lambda;\nEOF"), [], "division in JS");
+  assert.deepEqual(bash("node - <<'EOF'\ns = s.replace(/sine: process\\.env\\.SINE/, 'x');\nEOF"), [], "regex literal");
+  assert.deepEqual(bash("node - <<'EOF'\nconst re = /warp: JSON\\.parse\\(.*\\),/g;\nEOF"), []);
+  for (const interp of ["node", "deno", "bun", "python", "python3", "perl", "ruby", "php"]) {
+    assert.deepEqual(bash(`${interp} - <<'EOF'\nz = (a + b) / c\nEOF`), [], interp);
+  }
+
+  // A real path INSIDE that code is still caught, because code is scanned for
+  // its string literals. Narrowing how the body is read must not blind it.
+  assert.equal(bash("node - <<'EOF'\nrequire('fs').readFileSync('../../secret.txt');\nEOF").length, 1);
+  assert.equal(bash("python3 - <<'PY'\nopen('/etc/passwd').read()\nPY").length, 1);
+  // ...and a heredoc fed to a SHELL is still shell, `cd` and all.
+  assert.equal(bash("bash <<'EOF'\ncd ../..\ncat notes.md\nEOF").length, 1);
+  assert.deepEqual(heredocName({ interpreter: "node" }), "heredoc.mjs");
+  assert.deepEqual(heredocName({ interpreter: null }), "heredoc.sh");
+  assert.deepEqual(heredocName({ interpreter: "node", target: "out.txt" }), "out.txt", "a redirect names it");
+});
+
+test("a genuine disk-wide search is still contamination", () => {
+  const root = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes" : "/var/tmp/pcg-eval/sandboxes";
+  const cwd = join(root, "pcg-eval-Q1w2E3", "project");
+  const bash = (command) => parseTranscript(syntheticTranscript(cwd, "sid", [{ name: "Bash", input: { command } }]), { cwd, tmpEntriesAtStart: null, benignRoots: jailOf(cwd) }).readPaths.contaminating;
+  // Two of the four v2 flags were REAL: the agent searched the whole
+  // filesystem for its own tarball. `msys:/` is how that reads on Windows,
+  // so refusing to treat it as a path would have hidden a true escape.
+  assert.equal(bash(`find / -maxdepth 3 -iname "pcg-ts.tgz" 2>/dev/null`).length, 1);
+  assert.equal(bash(`find / -iname "*.json" -path "*primitives*" 2>/dev/null | head -20`).length, 1);
+  assert.equal(bash("ls /").length, 1);
 });
 
 test("a JS arrow is not a shell redirect, so a regex literal is not a path", () => {

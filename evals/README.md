@@ -227,6 +227,41 @@ far the command got — the reading that keeps the shell INSIDE the sandbox
 wins: a wrong guess that moves it out turns every later relative path into a
 false contamination, and a re-run costs more than a run's worth of doubt.
 
+**A heredoc is read the way its INTERPRETER reads it.** `node - <<'EOF'` and
+`python3 - <<'PY'` carry CODE, and code is scanned for its string literals
+only — where real paths live — not token by token. Scanning it as shell turns
+every division (`(x + 60) / CELL`) and every regex literal
+(`s.replace(/sine: .*/, ...)`) into a bare `/`, which on Windows reads as the
+filesystem root and contaminates the run. That cost four v2 runs before it was
+found, two of them the same slot, which spent its one reschedule. The body is
+named after the interpreter that eats it (`heredoc.mjs`, `heredoc.py`, ...),
+and `scriptPathText` reads the extension; a redirect target names it instead,
+and a body fed to a SHELL is still shell, `cd` and all.
+
+**The classifier's remaining false-positive surface, measured rather than
+assumed.** 27 constructed non-path shapes — URLs, `file://`, `data:`, regex
+literals, divisions, arrows, `>=`, sed ranges, awk `~`, jq paths, brace
+expansion, globs, ternaries, dates, fractions, `cmd /c`, arithmetic expansion,
+MSYS variables, printf formats, comments — produce ONE flag between them, and
+that one is `net:curl`, which is a network detection working as intended. Every
+control (`find /`, a home read, a repo read, `../../..`, the npm cache) still
+flags. What is left, and is not fixable without semantics the harness does not
+have:
+
+- **A path-shaped regex in single-line inline code.** `node -e "const r =
+  /etc/passwd/"` flags, because that token is lexically identical to a read of
+  `/etc/passwd/`. Inside a heredoc it is now clean; only the one-line `-e`/`-c`
+  form remains, and agents write `/^## /` far more often than `/etc/passwd/`.
+- **A bare `/` as the argument of a filesystem verb.** `cat a / b` flags, for
+  the same reason `find /` must: the classifier cannot tell division from the
+  root once the token is bare. `ls /*` likewise — and there it is correct.
+
+Both need a path-shaped literal inside a clause led by a filesystem verb. The
+fix for each would be to guess, and guessing wrong in the other direction hides
+a real escape — which is exactly what refusing to treat `msys:/` as a path
+would have done: two of the four v2 flags were genuine `find /` searches for
+the arm's own tarball.
+
 Shell commands are judged clause by clause (split at `&&`, `||`, `;`, `|`,
 newlines; heredoc bodies are lifted out first and scanned as the script they
 are), and the parser follows `cd`: after `cd X`, a reading command's plain
@@ -291,6 +326,18 @@ behind is a file a later run could read. Both halves of that now hold:
   nothing survives into the next one. This is why the behaviour disappears
   rather than being punished — the alternative was re-running the most
   expensive task in the campaign twelve times.
+
+  **It redirects less than it looks.** A Node process the agent runs reads
+  `os.tmpdir()` from `TEMP`/`TMP`, so it lands in the jail — but Git Bash
+  resolves a literal `/tmp/...` from its OWN fstab mount, which those variables
+  do not touch. Measured on `r0.quarry-terraces.candidate-U1-a1`, which wrote
+  `pcg render --out /tmp/terrace.png` and then read
+  `C:\Users\...\Temp\terrace.png` back successfully: same file, so `/tmp` was
+  still the machine's. The classifier therefore resolves `/tmp` to the
+  MACHINE's temp, which is correct — an earlier attempt to point it at the
+  run's own was reverted when that measurement contradicted it. A shell
+  `/tmp/x` write is still a hazard recorded in `outsideWrites`; it is only the
+  Node-side scratch that the per-run directory actually contains.
 - **A write is recognised however it is made.** Shell redirects and copy
   destinations always were; an output FLAG (`pcg render --out /tmp/a.svg`) and
   an fs call inside inline code (`node -e "...writeFileSync('/tmp/x')..."`) now
