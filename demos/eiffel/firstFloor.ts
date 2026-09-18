@@ -43,34 +43,71 @@
  *   to the chords [estimated], which leaves the 3.595 end bays at the
  *   bottom chord the plate prints [derived: 2 x 3.595 + 8 x 3.8825 =
  *   38.25] and narrows them to 0.82 at the top, where the uprights have
- *   leaned in [derived]. Every bay, end bays included, is X-braced
- *   [sourced drawing]. The legs' own uprights close each end, so the
- *   girder draws no end verticals.
+ *   leaned in [derived]. Verticals with X diagonals [sourced drawing], in
+ *   every bay, end bays included [estimated]. The legs' own uprights
+ *   close each end, so the girder draws no end verticals.
  * - THE 2nd-FLOOR GIRDER between the legs, panel 11: node XVIII (y 110.6)
  *   to node XVII (115.5). [estimated] The spec gives panel 11's girder
  *   belt and its depth but never states explicitly that a girder spans
  *   the face between the legs; this assumes one, laced like the first
  *   floor's, with 4 bays of equal share of the span [estimated].
  *
+ * - THE FRIEZE: the names of 72 French scientists and engineers, 18 on
+ *   each side, gilded on the frieze of the first-floor girder [the count is
+ *   well known; SOURCES does not carry it]. Here 18 raised plaques per face
+ *   on the grande poutre's outer face, evenly spaced between the uprights
+ *   in a band just under its top chord, below the gallery [estimated:
+ *   position and size; SOURCES gives neither].
+ *
+ * Every girder member is squared to its face. The chords and the web bars
+ * are all edge-rule members, so each carries its face's normal
+ * (`FACE_NORMAL`); they are copied onto the other faces with
+ * `copyMembersToQuadrants`, which turns that normal with them, and skinned
+ * from it afterwards. (Skinning before the copy would not do: the copy
+ * turns positions, not a sweep's `normal`.) The chord at node XXIV, where
+ * the face kinks, is the grande poutre's bottom chord and squares to its
+ * face, panel 5's. The chords are plate boxes — the belts' "500 x 10"
+ * chord plates [sourced PL-VII], carried over to these girders
+ * [estimated] — and the web bars struts that fit inside them (`GIRDER_WEB`).
+ *
+ * DETAIL, as for the legs. With `lacedWeb` the web bars become laced
+ * struts (`webMembers`); with `rivets` those struts carry their lacing
+ * rivets, and every chord carries seam rows along its corner angles.
+ *
  * A lattice whose stations fall on no regular section — posts at fixed x
  * between uprights that lean, points along a circle — is placed here from
  * explicit positions (`placedLattice`), and the toolkit's edge and chain
  * rules then run on it unchanged.
  */
-import type { Graph, NodeHandle } from "pcg-ts";
 import {
+  type Graph,
+  type NodeHandle,
+  add,
+  attribute,
+  copyToPoints,
+  meshPrimitive,
+  pointGrid,
+  setAttribute,
+  transformPoints,
+  vec,
+} from "pcg-ts";
+import {
+  FACE_NORMAL,
   type Lattice,
   chains,
+  copyMembersToQuadrants,
   copyToQuadrants,
   edges,
+  indexTable,
   type Vec3,
   merge,
   placedLattice,
   skin,
   stationLattice,
 } from "./lattice.js";
-import type { Parts } from "./parts.js";
+import type { Detail, Parts } from "./parts.js";
 import { ARCH, FIRST_FLOOR, MEMBERS, PEDESTAL, node, profileAt } from "./spec.js";
+import { UPRIGHT_SEAMS, faceSkin, rivetOutputs, seamRivets, webMembers } from "./strut.js";
 
 /** A point in the face plane: x across it, t up it from the arch centre. */
 type InPlane = readonly [number, number];
@@ -83,6 +120,36 @@ const ARCH_BAND_HALF = 0.3;
 const ARCH_PITCH = ARCH.band;
 /** Segments per round head of the arcade [estimated: drawing resolution]. */
 const HEAD_SEGMENTS = 8;
+
+/**
+ * The girders' web bars, as outer half-width by height: 480 mm struts, the
+ * room between the two 10 mm plates of a 500 mm chord that the bars are
+ * riveted inside [estimated: SOURCES gives the belts' "500 x 10" chord
+ * plates and no web section for any first-floor girder]. Laced, that is
+ * the legs' 90 mm corner angles on 390 mm centres.
+ */
+const GIRDER_WEB = [
+  [0, 0.24],
+  [300, 0.24],
+] as const;
+
+/**
+ * The chords' seam rows: the uprights' rhythm, a rivet every 0.10 m 55 mm
+ * in from each corner (strut.ts) [estimated: no source gives the chords'].
+ */
+const CHORD_SEAMS = UPRIGHT_SEAMS;
+
+/**
+ * A rivet head's radius: strut.ts's (38 mm across for a 22 mm rivet
+ * [estimated]), which that module does not export.
+ */
+const RIVET_HEAD = 0.019;
+
+/**
+ * The frieze's plaques [estimated, all but the count]: 0.6 m tall, 20 mm
+ * proud, 0.3 m apart, their top 0.1 m under the top chord's lower face.
+ */
+const FRIEZE = { perFace: 18, height: 0.6, thickness: 0.02, gap: 0.3, below: 0.1 } as const;
 
 /**
  * The face's lean in panels 1-4, horizontal per vertical, from the node
@@ -146,6 +213,100 @@ function girderMembers(
       edges(lat, "XB", -1, 1),
     ]),
   };
+}
+
+/** A (height, value) stop table read at y, as a skin's ramp reads it. */
+function stopAt(stops: ReadonlyArray<readonly [number, number]>, y: number): number {
+  const first = stops[0]!;
+  if (y <= first[0]) return first[1];
+  for (let i = 1; i < stops.length; i++) {
+    const [y0, v0] = stops[i - 1]!;
+    const [y1, v1] = stops[i]!;
+    if (y <= y1) return v0 + ((y - y0) / (y1 - y0)) * (v1 - v0);
+  }
+  return stops[stops.length - 1]![1];
+}
+
+/** A box section's four corners in ring order, as (sN, sB) sign pairs. */
+const CORNERS = [
+  [1, 1],
+  [-1, 1],
+  [-1, -1],
+  [1, -1],
+] as const;
+
+/**
+ * The frieze on the +z face: a row of thin plaques across the grande
+ * poutre just under its top chord, clear of the uprights, each lying in the
+ * face plane on the web bars' outer faces. One box, tilted into the face,
+ * copied along the row. A box carries no `normal`, so the finished row can
+ * be copied onto the other faces as a mesh.
+ */
+function buildFrieze(g: Graph): NodeHandle {
+  const bottom = node("XXIV");
+  const top = node("XXIII");
+  const rise = top.y - bottom.y;
+  const lean = bottom.outer - top.outer;
+  // In-plane depth 7.5309 [sourced PL-XI; derived here from the nodes].
+  const depth = Math.hypot(rise, lean);
+  // The face's outward normal: out along +z, and up, as the face leans in.
+  const out: Vec3 = [0, lean / depth, rise / depth];
+  // The band's centre, in the face plane, below the top chord's axis.
+  const t = depth - MEMBERS.girderChord - FRIEZE.below - FRIEZE.height / 2;
+  const y = bottom.y + (t * rise) / depth;
+  const { outer } = profileAt(y);
+  const lift = GIRDER_WEB[0][1] + FRIEZE.thickness / 2;
+  // The row stops clear of the uprights wherever a plaque reaches, so it is
+  // measured where they have leaned in furthest, at the plaques' top edge,
+  // and against the widest a square upright can be at any roll: its
+  // half-diagonal, stretched by its lean in a level cut. In panel 5 the legs
+  // are parallel prisms leaning equally in x and z, so that cut stretches
+  // the section by hypot(1, s, s) [derived]. The roll matters: the uprights
+  // are squared to x on every leg, so the +z row, copied, meets them at a
+  // different roll on the x faces.
+  const yTop = y + (lift + FRIEZE.thickness / 2) * out[1] + (FRIEZE.height / 2) * (rise / depth);
+  const slope = lean / rise;
+  const reach = stopAt(MEMBERS.upright, yTop) * Math.SQRT2 * Math.hypot(1, slope, slope);
+  const clear = 2 * (profileAt(yTop).inner - reach);
+  const pitch = clear / FRIEZE.perFace;
+  const plaque = g.add(
+    meshPrimitive,
+    {
+      shape: "box",
+      center: [0, 0, 0],
+      size: [pitch - FRIEZE.gap, FRIEZE.height, FRIEZE.thickness],
+    },
+    "ffFriezePlaque",
+  );
+  // Turn about x by the face's lean, so the box's y runs up the face and
+  // its z along the normal.
+  const tilt = g.add(
+    transformPoints,
+    { rotateEuler: [(-Math.atan2(lean, rise) * 180) / Math.PI, 0, 0] },
+    "ffFriezeTilt",
+  );
+  const slots = g.add(
+    pointGrid,
+    { countX: FRIEZE.perFace, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
+    "ffFriezeSlots",
+  );
+  const xs = Array.from({ length: FRIEZE.perFace }, (_, i) => -clear / 2 + (i + 0.5) * pitch);
+  const place = g.add(
+    setAttribute,
+    {
+      name: "P",
+      type: "f32",
+      tupleSize: 3,
+      value: vec(indexTable(xs), y + lift * out[1], outer + lift * out[2]),
+    },
+    "ffFriezeSlotsPlace",
+  );
+  const row = g.add(copyToPoints, { topology: "keep" }, "ffFrieze");
+  g.connect(plaque, "out", tilt, "in");
+  g.connect(slots, "out", place, "in");
+  g.connect(tilt, "out", row, "source");
+  g.connect(place, "out", row, "target");
+  return row;
 }
 
 /**
@@ -260,7 +421,7 @@ function buildArch(g: Graph): { band: NodeHandle; web: NodeHandle } {
 }
 
 /** Build the between-leg girders and the arches on all four faces. */
-export function buildFirstFloor(g: Graph, quads: NodeHandle): Parts {
+export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}): Parts {
   // The grande poutre, panel 5.
   const main = girderMembers(
     placedLattice(g, "ffMain", girderRows(node("XXIV"), node("XXIII"))),
@@ -295,16 +456,43 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle): Parts {
   const arch = buildArch(g);
 
   const four = (id: string, h: NodeHandle) => copyToQuadrants(g, id, h, quads);
-  const chords = merge(g, "ffChords", [main.chords, deco.chords, second.chords]);
-  const bars = merge(g, "ffBars", [main.bars, deco.bars, second.bars]);
+  // Edge-rule members carry their faces' normals, which the copy must turn.
+  const fourMembers = (id: string, h: NodeHandle) => copyMembersToQuadrants(g, id, h, quads);
+  const chords = fourMembers(
+    "ffChords4",
+    merge(g, "ffChords", [main.chords, deco.chords, second.chords]),
+  );
+  const web = webMembers(
+    g,
+    "ffWeb",
+    fourMembers("ffBars4", merge(g, "ffBars", [main.bars, deco.bars, second.bars])),
+    GIRDER_WEB,
+    detail,
+  );
+  const rivets = rivetOutputs({ "ff.girders.web": web });
+  if (detail.rivets === true) {
+    rivets.push({
+      name: "ff.girders.seams",
+      spawn: seamRivets(
+        g,
+        "ffChord",
+        chords,
+        MEMBERS.girderChord,
+        attribute(FACE_NORMAL, 3),
+        CHORD_SEAMS,
+      ),
+    });
+  }
   return {
     girders: [
-      skin(g, "ffChordSkin", four("ffChords4", chords), MEMBERS.girderChord),
-      skin(g, "ffBarSkin", four("ffBars4", bars), MEMBERS.girderBar),
+      faceSkin(g, "ffChord", chords, MEMBERS.girderChord),
+      ...web.meshes,
+      four("ffFrieze4", buildFrieze(g)),
     ],
     arches: [
       skin(g, "ffArchBandSkin", four("ffArchBand4", arch.band), ARCH_BAND_HALF),
       skin(g, "ffArchWebSkin", four("ffArchWeb4", arch.web), MEMBERS.girderBar),
     ],
+    rivets,
   };
 }

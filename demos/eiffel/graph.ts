@@ -35,7 +35,7 @@ export function buildEiffel(seed = 1889, detail: Detail = {}): Graph {
     joinParts(
       buildLegs(g, quads, detail),
       buildShaft(g, detail),
-      buildFirstFloor(g, quads),
+      buildFirstFloor(g, quads, detail),
       buildSummit(g),
       buildPlatforms(g, quads),
     ),

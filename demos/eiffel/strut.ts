@@ -21,6 +21,7 @@
  */
 import {
   type Field,
+  type FieldLike,
   type Graph,
   type NodeHandle,
   add,
@@ -303,14 +304,16 @@ export const UPRIGHT_SEAMS = { pitch: 0.1, inset: 0.055 } as const;
  * `inset` in from the corner, every `pitch` along the member. The rows
  * follow the member's own square section, which the skin squares to the
  * projection of `up` (so a face normal is N = up made perpendicular to the
- * member, and B = T x N): rivets and plates cannot disagree.
+ * member, and B = T x N): rivets and plates cannot disagree. `up` is a
+ * constant for the uprights and a field for members squared to their own
+ * leaning faces (the girder chords pass their face normal).
  */
 export function seamRivets(
   g: Graph,
   id: string,
   paths: NodeHandle,
-  halfWidth: ReadonlyArray<readonly [number, number]>,
-  up: readonly [number, number, number],
+  halfWidth: ReadonlyArray<readonly [number, number]> | number,
+  up: readonly [number, number, number] | Field,
   opts: { readonly pitch: number; readonly inset: number },
 ): NodeHandle {
   const samples = g.add(
@@ -319,9 +322,12 @@ export function seamRivets(
     `${id}SeamSamples`,
   );
   g.connect(paths, "out", samples, "in");
-  const r = ramp(component(position(), 1), halfWidth);
+  const r: FieldLike =
+    typeof halfWidth === "number" ? halfWidth : ramp(component(position(), 1), halfWidth);
   const T = attribute("tangent", 3);
-  const U = vec(up[0], up[1], up[2]);
+  // A constant up (the uprights, squared to the tower's faces) or a field:
+  // a member's own face normal, the one its skin is squared to.
+  const U: FieldLike = isVec3(up) ? vec(up[0], up[1], up[2]) : up;
   const N = normalize(sub(U, mul(T, dot(U, T))));
   const B = cross(T, N);
   const rows = CORNERS.flatMap(([sn, sb], c) =>
@@ -349,6 +355,10 @@ export function seamRivets(
     }),
   );
   return rivetSpawn(g, `${id}Seam`, rows);
+}
+
+function isVec3(v: readonly [number, number, number] | Field): v is readonly [number, number, number] {
+  return Array.isArray(v);
 }
 
 /** Merge rivet point sets, size them, and spawn them. */
