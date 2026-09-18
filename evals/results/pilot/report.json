@@ -1,6 +1,215 @@
 {
   "campaign": "pilot",
-  "generatedAt": "2026-09-15T22:24:01.210Z",
+  "generatedAt": "2026-09-18T10:49:51.627Z",
+  "reclassified": {
+    "at": "2026-09-18T10:49:51.563Z",
+    "harnessGit": {
+      "sha": "e3d644ea22484234512b72a5a25247be05346c72",
+      "dirty": false
+    },
+    "adapter": "1b87e89193feec37cae7e3a0ce0c2d7fcccb6a97303d93850c6314b1fd8ba955",
+    "fields": [
+      "contaminated",
+      "outsideContaminating",
+      "outsideBenign",
+      "outsideWrites",
+      "readCounts",
+      "readPaths",
+      "listedPaths",
+      "networkAttempts",
+      "solved"
+    ],
+    "records": 58,
+    "changed": 58,
+    "verdictsMoved": [
+      {
+        "slotId": "r1.trees-on-hills.stripped",
+        "attempt": 1,
+        "before": {
+          "contaminated": true,
+          "paths": [
+            "msys:/"
+          ]
+        },
+        "after": {
+          "contaminated": false,
+          "paths": []
+        }
+      },
+      {
+        "slotId": "r1.trees-on-hills.A",
+        "attempt": 1,
+        "before": {
+          "contaminated": true,
+          "paths": [
+            "C:\\pcg-eval\\sandboxes\\node_modules\\pcg-ts\\graphs\\examples-forest.json"
+          ]
+        },
+        "after": {
+          "contaminated": false,
+          "paths": []
+        }
+      },
+      {
+        "slotId": "r2.trees-on-hills.stripped",
+        "attempt": 1,
+        "before": {
+          "contaminated": true,
+          "paths": [
+            "C:\\pcg-eval\\sandboxes\\graph.json"
+          ]
+        },
+        "after": {
+          "contaminated": false,
+          "paths": []
+        }
+      },
+      {
+        "slotId": "r2.even-spacing.A",
+        "attempt": 1,
+        "before": {
+          "contaminated": true,
+          "paths": [
+            "C:\\Users\\c4rl05\\AppData\\Local\\Temp\\out1.json"
+          ]
+        },
+        "after": {
+          "contaminated": false,
+          "paths": []
+        }
+      }
+    ],
+    "untouched": [
+      "score",
+      "final",
+      "wallMs",
+      "turns",
+      "toolCalls",
+      "usage",
+      "capsHit"
+    ],
+    "supersededClean": [
+      {
+        "slotId": "r1.trees-on-hills.stripped",
+        "task": "trees-on-hills",
+        "arm": "stripped",
+        "counting": {
+          "attempt": 2,
+          "turns": 70,
+          "solved": true
+        },
+        "superseded": {
+          "attempt": 1,
+          "turns": 38,
+          "solved": true
+        }
+      },
+      {
+        "slotId": "r1.trees-on-hills.A",
+        "task": "trees-on-hills",
+        "arm": "A",
+        "counting": {
+          "attempt": 2,
+          "turns": 60,
+          "solved": true
+        },
+        "superseded": {
+          "attempt": 1,
+          "turns": 59,
+          "solved": true
+        }
+      },
+      {
+        "slotId": "r2.trees-on-hills.stripped",
+        "task": "trees-on-hills",
+        "arm": "stripped",
+        "counting": {
+          "attempt": 2,
+          "turns": 68,
+          "solved": true
+        },
+        "superseded": {
+          "attempt": 1,
+          "turns": 52,
+          "solved": true
+        }
+      },
+      {
+        "slotId": "r2.even-spacing.A",
+        "task": "even-spacing",
+        "arm": "A",
+        "counting": {
+          "attempt": 2,
+          "turns": 28,
+          "solved": true
+        },
+        "superseded": {
+          "attempt": 1,
+          "turns": 30,
+          "solved": true
+        }
+      }
+    ],
+    "comparison": {
+      "metric": "turns",
+      "baselineArms": [
+        "A",
+        "A-prime"
+      ],
+      "strippedArm": "stripped",
+      "refArm": "A",
+      "latest": {
+        "rule": "latest",
+        "solved": {
+          "A": {
+            "solved": 18,
+            "n": 18
+          },
+          "A-prime": {
+            "solved": 18,
+            "n": 18
+          },
+          "stripped": {
+            "solved": 18,
+            "n": 18
+          }
+        },
+        "median": {
+          "A": 34,
+          "A-prime": 34,
+          "stripped": 33.5
+        },
+        "aaGap": 0.04447797775445026,
+        "strippedVsRef": 0.06282267115600448
+      },
+      "firstClean": {
+        "rule": "firstClean",
+        "solved": {
+          "A": {
+            "solved": 18,
+            "n": 18
+          },
+          "A-prime": {
+            "solved": 18,
+            "n": 18
+          },
+          "stripped": {
+            "solved": 18,
+            "n": 18
+          }
+        },
+        "median": {
+          "A": 34,
+          "A-prime": 34,
+          "stripped": 33.5
+        },
+        "aaGap": 0.04447797775445026,
+        "strippedVsRef": 0.018378226711560034
+      }
+    },
+    "metric": "turns",
+    "note": "All four pilot discards were classifier artifacts: two cross-call cwd, one output-flag write, one a JS arrow read as a redirect."
+  },
   "progress": {
     "done": 54,
     "total": 54,
@@ -328,8 +537,8 @@
       },
       "readShare": {
         "llms": 0.9444444444444444,
-        "docs": 0.7777777777777778,
-        "skills": 0.1111111111111111,
+        "docs": 0.5555555555555556,
+        "skills": 0.05555555555555555,
         "graphs": 0.8333333333333334
       },
       "graphProducedRate": 1
@@ -349,9 +558,9 @@
       },
       "readShare": {
         "llms": 0.9444444444444444,
-        "docs": 0.8888888888888888,
-        "skills": 0.16666666666666666,
-        "graphs": 0.8888888888888888
+        "docs": 0.7777777777777778,
+        "skills": 0.05555555555555555,
+        "graphs": 0.8333333333333334
       },
       "graphProducedRate": 1
     },
@@ -368,25 +577,1926 @@
       "capsHit": {},
       "readShare": {
         "llms": 0.3333333333333333,
-        "docs": 0.5,
-        "skills": 0.1111111111111111,
-        "graphs": 0.8333333333333334
+        "docs": 0.2777777777777778,
+        "skills": 0,
+        "graphs": 0.7777777777777778
       },
       "graphProducedRate": 1
     }
   },
+  "effort": {
+    "byArm": {
+      "A": {
+        "runs": 18,
+        "validateFailureRate": 0,
+        "capsHit": {
+          "turns": 1
+        },
+        "capsHitRate": 0.05555555555555555,
+        "readShare": {
+          "llms": 0.9444444444444444,
+          "docs": 0.5555555555555556,
+          "skills": 0.05555555555555555,
+          "graphs": 0.8333333333333334
+        },
+        "graphProducedRate": 1,
+        "metrics": {
+          "turns": {
+            "n": 18,
+            "mean": 37.388888888888886,
+            "median": 34,
+            "p25": 28,
+            "p75": 46
+          },
+          "toolCalls": {
+            "n": 18,
+            "mean": 36.388888888888886,
+            "median": 33,
+            "p25": 27,
+            "p75": 45
+          },
+          "wallMinutes": {
+            "n": 18,
+            "mean": 4.780132407407407,
+            "median": 4.153441666666667,
+            "p25": 3.1590166666666666,
+            "p75": 5.008233333333333
+          },
+          "outputTokens": {
+            "n": 18,
+            "mean": 24577.944444444445,
+            "median": 22427,
+            "p25": 16206,
+            "p75": 26726
+          },
+          "validateCalls": {
+            "n": 18,
+            "mean": 1.2777777777777777,
+            "median": 1,
+            "p25": 1,
+            "p75": 2
+          },
+          "probeGraphs": {
+            "n": 18,
+            "mean": 0,
+            "median": 0,
+            "p25": 0,
+            "p75": 0
+          }
+        }
+      },
+      "A-prime": {
+        "runs": 18,
+        "validateFailureRate": 0,
+        "capsHit": {
+          "turns": 1
+        },
+        "capsHitRate": 0.05555555555555555,
+        "readShare": {
+          "llms": 0.9444444444444444,
+          "docs": 0.7777777777777778,
+          "skills": 0.05555555555555555,
+          "graphs": 0.8333333333333334
+        },
+        "graphProducedRate": 1,
+        "metrics": {
+          "turns": {
+            "n": 18,
+            "mean": 37.44444444444444,
+            "median": 34,
+            "p25": 29,
+            "p75": 48
+          },
+          "toolCalls": {
+            "n": 18,
+            "mean": 36.44444444444444,
+            "median": 33,
+            "p25": 28,
+            "p75": 47
+          },
+          "wallMinutes": {
+            "n": 18,
+            "mean": 5.387858333333331,
+            "median": 3.6507416666666668,
+            "p25": 3.31225,
+            "p75": 6.8103
+          },
+          "outputTokens": {
+            "n": 18,
+            "mean": 26321.61111111111,
+            "median": 21537.5,
+            "p25": 18160,
+            "p75": 32168
+          },
+          "validateCalls": {
+            "n": 18,
+            "mean": 1.1111111111111112,
+            "median": 1,
+            "p25": 0,
+            "p75": 2
+          },
+          "probeGraphs": {
+            "n": 18,
+            "mean": 0,
+            "median": 0,
+            "p25": 0,
+            "p75": 0
+          }
+        }
+      },
+      "stripped": {
+        "runs": 18,
+        "validateFailureRate": 0.03333333333333333,
+        "capsHit": {},
+        "capsHitRate": 0,
+        "readShare": {
+          "llms": 0.3333333333333333,
+          "docs": 0.2777777777777778,
+          "skills": 0,
+          "graphs": 0.7777777777777778
+        },
+        "graphProducedRate": 1,
+        "metrics": {
+          "turns": {
+            "n": 18,
+            "mean": 38.611111111111114,
+            "median": 33.5,
+            "p25": 24,
+            "p75": 51
+          },
+          "toolCalls": {
+            "n": 18,
+            "mean": 37.611111111111114,
+            "median": 32.5,
+            "p25": 23,
+            "p75": 50
+          },
+          "wallMinutes": {
+            "n": 18,
+            "mean": 4.810238888888889,
+            "median": 3.5495416666666664,
+            "p25": 2.8772,
+            "p75": 6.6989
+          },
+          "outputTokens": {
+            "n": 18,
+            "mean": 23135.11111111111,
+            "median": 19426,
+            "p25": 13038,
+            "p75": 32245
+          },
+          "validateCalls": {
+            "n": 18,
+            "mean": 1.6666666666666667,
+            "median": 2,
+            "p25": 1,
+            "p75": 2
+          },
+          "probeGraphs": {
+            "n": 18,
+            "mean": 0,
+            "median": 0,
+            "p25": 0,
+            "p75": 0
+          }
+        }
+      }
+    },
+    "cell": {
+      "even-spacing": {
+        "A": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 26.666666666666668,
+              "median": 28,
+              "p25": 24,
+              "p75": 28
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 25.666666666666668,
+              "median": 27,
+              "p25": 23,
+              "p75": 27
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 3.5913555555555554,
+              "median": 3.401133333333333,
+              "p25": 2.5845166666666666,
+              "p75": 4.7884166666666665
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 17332.333333333332,
+              "median": 17450,
+              "p25": 10924,
+              "p75": 23623
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 1,
+              "median": 1,
+              "p25": 1,
+              "p75": 1
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        },
+        "A-prime": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 27.666666666666668,
+              "median": 26,
+              "p25": 16,
+              "p75": 41
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 26.666666666666668,
+              "median": 25,
+              "p25": 15,
+              "p75": 40
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 3.5858000000000003,
+              "median": 3.31225,
+              "p25": 1.7487,
+              "p75": 5.69645
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 16147,
+              "median": 13476,
+              "p25": 8654,
+              "p75": 26311
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 1,
+              "median": 1,
+              "p25": 1,
+              "p75": 1
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        },
+        "stripped": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 23.666666666666668,
+              "median": 24,
+              "p25": 20,
+              "p75": 27
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 22.666666666666668,
+              "median": 23,
+              "p25": 19,
+              "p75": 26
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 2.1997444444444443,
+              "median": 1.9841333333333333,
+              "p25": 1.6874666666666667,
+              "p75": 2.9276333333333335
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 12251.333333333334,
+              "median": 10842,
+              "p25": 10054,
+              "p75": 15858
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 1,
+              "median": 1,
+              "p25": 1,
+              "p75": 1
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        }
+      },
+      "riverbank": {
+        "A": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 28.666666666666668,
+              "median": 27,
+              "p25": 21,
+              "p75": 38
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 27.666666666666668,
+              "median": 26,
+              "p25": 20,
+              "p75": 37
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 2.917216666666667,
+              "median": 2.56975,
+              "p25": 2.5052333333333334,
+              "p75": 3.6766666666666667
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 18083.333333333332,
+              "median": 15942,
+              "p25": 14953,
+              "p75": 23355
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 2,
+              "median": 2,
+              "p25": 2,
+              "p75": 2
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        },
+        "A-prime": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 29.333333333333332,
+              "median": 29,
+              "p25": 23,
+              "p75": 36
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 28.333333333333332,
+              "median": 28,
+              "p25": 22,
+              "p75": 35
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 3.317066666666667,
+              "median": 3.3449333333333335,
+              "p25": 2.9123666666666668,
+              "p75": 3.6939
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 19422.666666666668,
+              "median": 20418,
+              "p25": 16162,
+              "p75": 21688
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 1.6666666666666667,
+              "median": 2,
+              "p25": 1,
+              "p75": 2
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        },
+        "stripped": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 30,
+              "median": 34,
+              "p25": 19,
+              "p75": 37
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 29,
+              "median": 33,
+              "p25": 18,
+              "p75": 36
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 3.4693888888888886,
+              "median": 3.652433333333333,
+              "p25": 2.8772,
+              "p75": 3.8785333333333334
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 19709.666666666668,
+              "median": 22605,
+              "p25": 13038,
+              "p75": 23486
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 1,
+              "median": 1,
+              "p25": 0,
+              "p75": 2
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        }
+      },
+      "road-props": {
+        "A": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 33,
+              "median": 33,
+              "p25": 31,
+              "p75": 35
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 32,
+              "median": 32,
+              "p25": 30,
+              "p75": 34
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 4.80975,
+              "median": 4.612683333333333,
+              "p25": 4.562616666666667,
+              "p75": 5.25395
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 26629.333333333332,
+              "median": 26726,
+              "p25": 25319,
+              "p75": 27843
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 1.3333333333333333,
+              "median": 1,
+              "p25": 1,
+              "p75": 2
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        },
+        "A-prime": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 45.666666666666664,
+              "median": 41,
+              "p25": 31,
+              "p75": 65
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 44.666666666666664,
+              "median": 40,
+              "p25": 30,
+              "p75": 64
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 8.414072222222222,
+              "median": 6.8103,
+              "p25": 5.835516666666667,
+              "p75": 12.5964
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 40064.333333333336,
+              "median": 32168,
+              "p25": 31954,
+              "p75": 56071
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 1.3333333333333333,
+              "median": 0,
+              "p25": 0,
+              "p75": 4
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        },
+        "stripped": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 53.666666666666664,
+              "median": 51,
+              "p25": 37,
+              "p75": 73
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 52.666666666666664,
+              "median": 50,
+              "p25": 36,
+              "p75": 72
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 6.978433333333332,
+              "median": 6.6989,
+              "p25": 5.567516666666666,
+              "p75": 8.668883333333333
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 33735,
+              "median": 32245,
+              "p25": 30456,
+              "p75": 38504
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 2.6666666666666665,
+              "median": 2,
+              "p25": 2,
+              "p75": 4
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        }
+      },
+      "settlement-roads": {
+        "A": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 36.666666666666664,
+              "median": 35,
+              "p25": 29,
+              "p75": 46
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 35.666666666666664,
+              "median": 34,
+              "p25": 28,
+              "p75": 45
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 3.9392833333333335,
+              "median": 3.95215,
+              "p25": 3.5109666666666666,
+              "p75": 4.354733333333333
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 21000.333333333332,
+              "median": 20446,
+              "p25": 19115,
+              "p75": 23440
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 1.3333333333333333,
+              "median": 1,
+              "p25": 1,
+              "p75": 2
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        },
+        "A-prime": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 37.333333333333336,
+              "median": 31,
+              "p25": 27,
+              "p75": 54
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 36.333333333333336,
+              "median": 30,
+              "p25": 26,
+              "p75": 53
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 4.342005555555556,
+              "median": 3.4938166666666666,
+              "p25": 3.1249333333333333,
+              "p75": 6.407266666666667
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 21358,
+              "median": 21387,
+              "p25": 17029,
+              "p75": 25658
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 1,
+              "median": 1,
+              "p25": 1,
+              "p75": 1
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        },
+        "stripped": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 34,
+              "median": 33,
+              "p25": 29,
+              "p75": 40
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 33,
+              "median": 32,
+              "p25": 28,
+              "p75": 39
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 3.4656055555555554,
+              "median": 3.44665,
+              "p25": 3.045516666666667,
+              "p75": 3.90465
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 17646,
+              "median": 18263,
+              "p25": 14086,
+              "p75": 20589
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 2,
+              "median": 2,
+              "p25": 2,
+              "p75": 2
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        }
+      },
+      "species-mix": {
+        "A": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 35.666666666666664,
+              "median": 36,
+              "p25": 23,
+              "p75": 48
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 34.666666666666664,
+              "median": 35,
+              "p25": 22,
+              "p75": 47
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 3.3830166666666663,
+              "median": 3.1590166666666666,
+              "p25": 1.9818,
+              "p75": 5.008233333333333
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 16438,
+              "median": 16206,
+              "p25": 11609,
+              "p75": 21499
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 0.6666666666666666,
+              "median": 1,
+              "p25": 0,
+              "p75": 1
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        },
+        "A-prime": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 34.666666666666664,
+              "median": 32,
+              "p25": 30,
+              "p75": 42
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 33.666666666666664,
+              "median": 31,
+              "p25": 29,
+              "p75": 41
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 3.4184388888888892,
+              "median": 3.3426,
+              "p25": 3.3051333333333335,
+              "p75": 3.6075833333333334
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 18235.666666666668,
+              "median": 18195,
+              "p25": 18160,
+              "p75": 18352
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 1.6666666666666667,
+              "median": 2,
+              "p25": 1,
+              "p75": 2
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        },
+        "stripped": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 24.333333333333332,
+              "median": 23,
+              "p25": 23,
+              "p75": 27
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 23.333333333333332,
+              "median": 22,
+              "p25": 22,
+              "p75": 26
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 2.3254277777777776,
+              "median": 2.00985,
+              "p25": 1.9747666666666666,
+              "p75": 2.9916666666666667
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 12372.666666666666,
+              "median": 11693,
+              "p25": 11025,
+              "p75": 14400
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 1,
+              "median": 1,
+              "p25": 1,
+              "p75": 1
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        }
+      },
+      "trees-on-hills": {
+        "A": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 63.666666666666664,
+              "median": 60,
+              "p25": 60,
+              "p75": 71
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 62.666666666666664,
+              "median": 59,
+              "p25": 59,
+              "p75": 70
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 10.040172222222223,
+              "median": 10.379716666666667,
+              "p25": 8.8993,
+              "p75": 10.8415
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 47984.333333333336,
+              "median": 50277,
+              "p25": 42589,
+              "p75": 51087
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 1.3333333333333333,
+              "median": 1,
+              "p25": 1,
+              "p75": 2
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        },
+        "A-prime": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 50,
+              "median": 50,
+              "p25": 48,
+              "p75": 52
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 49,
+              "median": 49,
+              "p25": 47,
+              "p75": 51
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 9.249766666666666,
+              "median": 9.18075,
+              "p25": 9.16115,
+              "p75": 9.4074
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 42702,
+              "median": 41991,
+              "p25": 41111,
+              "p75": 45004
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        },
+        "stripped": {
+          "runs": 3,
+          "metrics": {
+            "turns": {
+              "n": 3,
+              "mean": 66,
+              "median": 68,
+              "p25": 60,
+              "p75": 70
+            },
+            "toolCalls": {
+              "n": 3,
+              "mean": 65,
+              "median": 67,
+              "p25": 59,
+              "p75": 69
+            },
+            "wallMinutes": {
+              "n": 3,
+              "mean": 10.422833333333333,
+              "median": 8.582183333333333,
+              "p25": 7.533366666666667,
+              "p75": 15.15295
+            },
+            "outputTokens": {
+              "n": 3,
+              "mean": 43096,
+              "median": 42072,
+              "p25": 39862,
+              "p75": 47354
+            },
+            "validateCalls": {
+              "n": 3,
+              "mean": 2.3333333333333335,
+              "median": 2,
+              "p25": 2,
+              "p75": 3
+            },
+            "probeGraphs": {
+              "n": 3,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        }
+      }
+    }
+  },
+  "effortPaired": [
+    {
+      "arm": "A-prime",
+      "ref": "A",
+      "metrics": {
+        "turns": {
+          "metric": "turns",
+          "tasks": 6,
+          "relativeTasks": 6,
+          "perTask": {
+            "even-spacing": {
+              "arm": 26,
+              "ref": 28,
+              "delta": -2,
+              "relative": -0.07142857142857142
+            },
+            "riverbank": {
+              "arm": 29,
+              "ref": 27,
+              "delta": 2,
+              "relative": 0.07407407407407407
+            },
+            "road-props": {
+              "arm": 41,
+              "ref": 33,
+              "delta": 8,
+              "relative": 0.24242424242424243
+            },
+            "settlement-roads": {
+              "arm": 31,
+              "ref": 35,
+              "delta": -4,
+              "relative": -0.11428571428571428
+            },
+            "species-mix": {
+              "arm": 32,
+              "ref": 36,
+              "delta": -4,
+              "relative": -0.1111111111111111
+            },
+            "trees-on-hills": {
+              "arm": 50,
+              "ref": 60,
+              "delta": -10,
+              "relative": -0.16666666666666666
+            }
+          },
+          "meanDelta": -1.6666666666666667,
+          "medianDelta": -3,
+          "meanRelative": -0.024498957832291165,
+          "relativeCi": {
+            "lo": -0.12354497354497355,
+            "hi": 0.09599166265832933,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "deltaCi": {
+            "lo": -6,
+            "hi": 3,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "higher": 2,
+          "lower": 4,
+          "ties": 0,
+          "signTestP": 0.6875
+        },
+        "toolCalls": {
+          "metric": "toolCalls",
+          "tasks": 6,
+          "relativeTasks": 6,
+          "perTask": {
+            "even-spacing": {
+              "arm": 25,
+              "ref": 27,
+              "delta": -2,
+              "relative": -0.07407407407407407
+            },
+            "riverbank": {
+              "arm": 28,
+              "ref": 26,
+              "delta": 2,
+              "relative": 0.07692307692307693
+            },
+            "road-props": {
+              "arm": 40,
+              "ref": 32,
+              "delta": 8,
+              "relative": 0.25
+            },
+            "settlement-roads": {
+              "arm": 30,
+              "ref": 34,
+              "delta": -4,
+              "relative": -0.11764705882352941
+            },
+            "species-mix": {
+              "arm": 31,
+              "ref": 35,
+              "delta": -4,
+              "relative": -0.11428571428571428
+            },
+            "trees-on-hills": {
+              "arm": 49,
+              "ref": 59,
+              "delta": -10,
+              "relative": -0.1694915254237288
+            }
+          },
+          "meanDelta": -1.6666666666666667,
+          "medianDelta": -3,
+          "meanRelative": -0.02476254928066161,
+          "relativeCi": {
+            "lo": -0.1271061594757175,
+            "hi": 0.09916505063563887,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "deltaCi": {
+            "lo": -6,
+            "hi": 2.6666666666666665,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "higher": 2,
+          "lower": 4,
+          "ties": 0,
+          "signTestP": 0.6875
+        },
+        "wallMinutes": {
+          "metric": "wallMinutes",
+          "tasks": 6,
+          "relativeTasks": 6,
+          "perTask": {
+            "even-spacing": {
+              "arm": 3.31225,
+              "ref": 3.401133333333333,
+              "delta": -0.08888333333333298,
+              "relative": -0.026133445714173604
+            },
+            "riverbank": {
+              "arm": 3.3449333333333335,
+              "ref": 2.56975,
+              "delta": 0.7751833333333336,
+              "relative": 0.3016571002367287
+            },
+            "road-props": {
+              "arm": 6.8103,
+              "ref": 4.612683333333333,
+              "delta": 2.1976166666666668,
+              "relative": 0.4764291211550761
+            },
+            "settlement-roads": {
+              "arm": 3.4938166666666666,
+              "ref": 3.95215,
+              "delta": -0.4583333333333335,
+              "relative": -0.11597063201885897
+            },
+            "species-mix": {
+              "arm": 3.3426,
+              "ref": 3.1590166666666666,
+              "delta": 0.18358333333333343,
+              "relative": 0.058114075582591664
+            },
+            "trees-on-hills": {
+              "arm": 9.18075,
+              "ref": 10.379716666666667,
+              "delta": -1.1989666666666672,
+              "relative": -0.11551053898388368
+            }
+          },
+          "meanDelta": 0.23503333333333334,
+          "medianDelta": 0.047350000000000225,
+          "meanRelative": 0.09643094670958004,
+          "relativeCi": {
+            "lo": -0.071753603183682,
+            "hi": 0.27903921893626027,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "deltaCi": {
+            "lo": -0.5366500000000002,
+            "hi": 1.1368027777777778,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "higher": 3,
+          "lower": 3,
+          "ties": 0,
+          "signTestP": 1
+        },
+        "outputTokens": {
+          "metric": "outputTokens",
+          "tasks": 6,
+          "relativeTasks": 6,
+          "perTask": {
+            "even-spacing": {
+              "arm": 13476,
+              "ref": 17450,
+              "delta": -3974,
+              "relative": -0.22773638968481374
+            },
+            "riverbank": {
+              "arm": 20418,
+              "ref": 15942,
+              "delta": 4476,
+              "relative": 0.2807677832141513
+            },
+            "road-props": {
+              "arm": 32168,
+              "ref": 26726,
+              "delta": 5442,
+              "relative": 0.20362194118087257
+            },
+            "settlement-roads": {
+              "arm": 21387,
+              "ref": 20446,
+              "delta": 941,
+              "relative": 0.04602367211190453
+            },
+            "species-mix": {
+              "arm": 18195,
+              "ref": 16206,
+              "delta": 1989,
+              "relative": 0.12273232136245835
+            },
+            "trees-on-hills": {
+              "arm": 41991,
+              "ref": 50277,
+              "delta": -8286,
+              "relative": -0.16480696938958173
+            }
+          },
+          "meanDelta": 98,
+          "medianDelta": 1465,
+          "meanRelative": 0.04343372646583188,
+          "relativeCi": {
+            "lo": -0.10272178744573801,
+            "hi": 0.18958924037740177,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "deltaCi": {
+            "lo": -4032,
+            "hi": 3633.3333333333335,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "higher": 4,
+          "lower": 2,
+          "ties": 0,
+          "signTestP": 0.6875
+        },
+        "validateCalls": {
+          "metric": "validateCalls",
+          "tasks": 6,
+          "relativeTasks": 6,
+          "perTask": {
+            "even-spacing": {
+              "arm": 1,
+              "ref": 1,
+              "delta": 0,
+              "relative": 0
+            },
+            "riverbank": {
+              "arm": 2,
+              "ref": 2,
+              "delta": 0,
+              "relative": 0
+            },
+            "road-props": {
+              "arm": 0,
+              "ref": 1,
+              "delta": -1,
+              "relative": -1
+            },
+            "settlement-roads": {
+              "arm": 1,
+              "ref": 1,
+              "delta": 0,
+              "relative": 0
+            },
+            "species-mix": {
+              "arm": 2,
+              "ref": 1,
+              "delta": 1,
+              "relative": 1
+            },
+            "trees-on-hills": {
+              "arm": 0,
+              "ref": 1,
+              "delta": -1,
+              "relative": -1
+            }
+          },
+          "meanDelta": -0.16666666666666666,
+          "medianDelta": 0,
+          "meanRelative": -0.16666666666666666,
+          "relativeCi": {
+            "lo": -0.6666666666666666,
+            "hi": 0.3333333333333333,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "deltaCi": {
+            "lo": -0.6666666666666666,
+            "hi": 0.3333333333333333,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "higher": 1,
+          "lower": 2,
+          "ties": 3,
+          "signTestP": 1
+        },
+        "probeGraphs": {
+          "metric": "probeGraphs",
+          "tasks": 6,
+          "relativeTasks": 0,
+          "perTask": {
+            "even-spacing": {
+              "arm": 0,
+              "ref": 0,
+              "delta": 0,
+              "relative": null
+            },
+            "riverbank": {
+              "arm": 0,
+              "ref": 0,
+              "delta": 0,
+              "relative": null
+            },
+            "road-props": {
+              "arm": 0,
+              "ref": 0,
+              "delta": 0,
+              "relative": null
+            },
+            "settlement-roads": {
+              "arm": 0,
+              "ref": 0,
+              "delta": 0,
+              "relative": null
+            },
+            "species-mix": {
+              "arm": 0,
+              "ref": 0,
+              "delta": 0,
+              "relative": null
+            },
+            "trees-on-hills": {
+              "arm": 0,
+              "ref": 0,
+              "delta": 0,
+              "relative": null
+            }
+          },
+          "meanDelta": 0,
+          "medianDelta": 0,
+          "meanRelative": null,
+          "relativeCi": {
+            "lo": null,
+            "hi": null,
+            "samples": 0,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "deltaCi": {
+            "lo": 0,
+            "hi": 0,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "higher": 0,
+          "lower": 0,
+          "ties": 6,
+          "signTestP": 1
+        }
+      }
+    },
+    {
+      "arm": "stripped",
+      "ref": "A",
+      "metrics": {
+        "turns": {
+          "metric": "turns",
+          "tasks": 6,
+          "relativeTasks": 6,
+          "perTask": {
+            "even-spacing": {
+              "arm": 24,
+              "ref": 28,
+              "delta": -4,
+              "relative": -0.14285714285714285
+            },
+            "riverbank": {
+              "arm": 34,
+              "ref": 27,
+              "delta": 7,
+              "relative": 0.25925925925925924
+            },
+            "road-props": {
+              "arm": 51,
+              "ref": 33,
+              "delta": 18,
+              "relative": 0.5454545454545454
+            },
+            "settlement-roads": {
+              "arm": 33,
+              "ref": 35,
+              "delta": -2,
+              "relative": -0.05714285714285714
+            },
+            "species-mix": {
+              "arm": 23,
+              "ref": 36,
+              "delta": -13,
+              "relative": -0.3611111111111111
+            },
+            "trees-on-hills": {
+              "arm": 68,
+              "ref": 60,
+              "delta": 8,
+              "relative": 0.13333333333333333
+            }
+          },
+          "meanDelta": 2.3333333333333335,
+          "medianDelta": 2.5,
+          "meanRelative": 0.06282267115600448,
+          "relativeCi": {
+            "lo": -0.17067901234567903,
+            "hi": 0.2968895302228635,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "deltaCi": {
+            "lo": -5.666666666666667,
+            "hi": 9.5,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "higher": 3,
+          "lower": 3,
+          "ties": 0,
+          "signTestP": 1
+        },
+        "toolCalls": {
+          "metric": "toolCalls",
+          "tasks": 6,
+          "relativeTasks": 6,
+          "perTask": {
+            "even-spacing": {
+              "arm": 23,
+              "ref": 27,
+              "delta": -4,
+              "relative": -0.14814814814814814
+            },
+            "riverbank": {
+              "arm": 33,
+              "ref": 26,
+              "delta": 7,
+              "relative": 0.2692307692307692
+            },
+            "road-props": {
+              "arm": 50,
+              "ref": 32,
+              "delta": 18,
+              "relative": 0.5625
+            },
+            "settlement-roads": {
+              "arm": 32,
+              "ref": 34,
+              "delta": -2,
+              "relative": -0.058823529411764705
+            },
+            "species-mix": {
+              "arm": 22,
+              "ref": 35,
+              "delta": -13,
+              "relative": -0.37142857142857144
+            },
+            "trees-on-hills": {
+              "arm": 67,
+              "ref": 59,
+              "delta": 8,
+              "relative": 0.13559322033898305
+            }
+          },
+          "meanDelta": 2.3333333333333335,
+          "medianDelta": 2.5,
+          "meanRelative": 0.06482062343021132,
+          "relativeCi": {
+            "lo": -0.16045033397974576,
+            "hi": 0.3123114630467571,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "deltaCi": {
+            "lo": -6.166666666666667,
+            "hi": 10.833333333333334,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "higher": 3,
+          "lower": 3,
+          "ties": 0,
+          "signTestP": 1
+        },
+        "wallMinutes": {
+          "metric": "wallMinutes",
+          "tasks": 6,
+          "relativeTasks": 6,
+          "perTask": {
+            "even-spacing": {
+              "arm": 1.9841333333333333,
+              "ref": 3.401133333333333,
+              "delta": -1.4169999999999998,
+              "relative": -0.4166258306054844
+            },
+            "riverbank": {
+              "arm": 3.652433333333333,
+              "ref": 2.56975,
+              "delta": 1.0826833333333332,
+              "relative": 0.4213185459026494
+            },
+            "road-props": {
+              "arm": 6.6989,
+              "ref": 4.612683333333333,
+              "delta": 2.086216666666667,
+              "relative": 0.4522783195609209
+            },
+            "settlement-roads": {
+              "arm": 3.44665,
+              "ref": 3.95215,
+              "delta": -0.5055000000000001,
+              "relative": -0.12790506433207244
+            },
+            "species-mix": {
+              "arm": 2.00985,
+              "ref": 3.1590166666666666,
+              "delta": -1.1491666666666664,
+              "relative": -0.363773537123894
+            },
+            "trees-on-hills": {
+              "arm": 8.582183333333333,
+              "ref": 10.379716666666667,
+              "delta": -1.7975333333333339,
+              "relative": -0.17317749521101256
+            }
+          },
+          "meanDelta": -0.2833833333333333,
+          "medianDelta": -0.8273333333333333,
+          "meanRelative": -0.034647510301482186,
+          "relativeCi": {
+            "lo": -0.30905023873319853,
+            "hi": 0.24101852856400927,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "deltaCi": {
+            "lo": -1.3465055555555552,
+            "hi": 0.903138888888889,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "higher": 2,
+          "lower": 4,
+          "ties": 0,
+          "signTestP": 0.6875
+        },
+        "outputTokens": {
+          "metric": "outputTokens",
+          "tasks": 6,
+          "relativeTasks": 6,
+          "perTask": {
+            "even-spacing": {
+              "arm": 10842,
+              "ref": 17450,
+              "delta": -6608,
+              "relative": -0.37868194842406877
+            },
+            "riverbank": {
+              "arm": 22605,
+              "ref": 15942,
+              "delta": 6663,
+              "relative": 0.41795257809559655
+            },
+            "road-props": {
+              "arm": 32245,
+              "ref": 26726,
+              "delta": 5519,
+              "relative": 0.20650303075656665
+            },
+            "settlement-roads": {
+              "arm": 18263,
+              "ref": 20446,
+              "delta": -2183,
+              "relative": -0.1067690501809645
+            },
+            "species-mix": {
+              "arm": 11693,
+              "ref": 16206,
+              "delta": -4513,
+              "relative": -0.2784771072442305
+            },
+            "trees-on-hills": {
+              "arm": 42072,
+              "ref": 50277,
+              "delta": -8205,
+              "relative": -0.1631958947431231
+            }
+          },
+          "meanDelta": -1554.5,
+          "medianDelta": -3348,
+          "meanRelative": -0.05044473195670395,
+          "relativeCi": {
+            "lo": -0.2567508432738344,
+            "hi": 0.18832207820253236,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "deltaCi": {
+            "lo": -5970.666666666667,
+            "hi": 2944.6666666666665,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "higher": 2,
+          "lower": 4,
+          "ties": 0,
+          "signTestP": 0.6875
+        },
+        "validateCalls": {
+          "metric": "validateCalls",
+          "tasks": 6,
+          "relativeTasks": 6,
+          "perTask": {
+            "even-spacing": {
+              "arm": 1,
+              "ref": 1,
+              "delta": 0,
+              "relative": 0
+            },
+            "riverbank": {
+              "arm": 1,
+              "ref": 2,
+              "delta": -1,
+              "relative": -0.5
+            },
+            "road-props": {
+              "arm": 2,
+              "ref": 1,
+              "delta": 1,
+              "relative": 1
+            },
+            "settlement-roads": {
+              "arm": 2,
+              "ref": 1,
+              "delta": 1,
+              "relative": 1
+            },
+            "species-mix": {
+              "arm": 1,
+              "ref": 1,
+              "delta": 0,
+              "relative": 0
+            },
+            "trees-on-hills": {
+              "arm": 2,
+              "ref": 1,
+              "delta": 1,
+              "relative": 1
+            }
+          },
+          "meanDelta": 0.3333333333333333,
+          "medianDelta": 0.5,
+          "meanRelative": 0.4166666666666667,
+          "relativeCi": {
+            "lo": -0.08333333333333333,
+            "hi": 0.8333333333333334,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "deltaCi": {
+            "lo": -0.3333333333333333,
+            "hi": 0.8333333333333334,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "higher": 3,
+          "lower": 1,
+          "ties": 2,
+          "signTestP": 0.625
+        },
+        "probeGraphs": {
+          "metric": "probeGraphs",
+          "tasks": 6,
+          "relativeTasks": 0,
+          "perTask": {
+            "even-spacing": {
+              "arm": 0,
+              "ref": 0,
+              "delta": 0,
+              "relative": null
+            },
+            "riverbank": {
+              "arm": 0,
+              "ref": 0,
+              "delta": 0,
+              "relative": null
+            },
+            "road-props": {
+              "arm": 0,
+              "ref": 0,
+              "delta": 0,
+              "relative": null
+            },
+            "settlement-roads": {
+              "arm": 0,
+              "ref": 0,
+              "delta": 0,
+              "relative": null
+            },
+            "species-mix": {
+              "arm": 0,
+              "ref": 0,
+              "delta": 0,
+              "relative": null
+            },
+            "trees-on-hills": {
+              "arm": 0,
+              "ref": 0,
+              "delta": 0,
+              "relative": null
+            }
+          },
+          "meanDelta": 0,
+          "medianDelta": 0,
+          "meanRelative": null,
+          "relativeCi": {
+            "lo": null,
+            "hi": null,
+            "samples": 0,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "deltaCi": {
+            "lo": 0,
+            "hi": 0,
+            "samples": 2000,
+            "b": 2000,
+            "alpha": 0.05
+          },
+          "higher": 0,
+          "lower": 0,
+          "ties": 6,
+          "signTestP": 1
+        }
+      }
+    }
+  ],
+  "effortRef": "A",
+  "budgets": {
+    "even-spacing": {
+      "turns": 40,
+      "wallMinutes": 20,
+      "varied": false,
+      "values": [
+        40
+      ],
+      "wallValues": [
+        20
+      ]
+    },
+    "riverbank": {
+      "turns": 90,
+      "wallMinutes": 45,
+      "varied": false,
+      "values": [
+        90
+      ],
+      "wallValues": [
+        45
+      ]
+    },
+    "road-props": {
+      "turns": 90,
+      "wallMinutes": 45,
+      "varied": false,
+      "values": [
+        90
+      ],
+      "wallValues": [
+        45
+      ]
+    },
+    "settlement-roads": {
+      "turns": 60,
+      "wallMinutes": 30,
+      "varied": false,
+      "values": [
+        60
+      ],
+      "wallValues": [
+        30
+      ]
+    },
+    "species-mix": {
+      "turns": 50,
+      "wallMinutes": 25,
+      "varied": false,
+      "values": [
+        50
+      ],
+      "wallValues": [
+        25
+      ]
+    },
+    "trees-on-hills": {
+      "turns": 70,
+      "wallMinutes": 35,
+      "varied": false,
+      "values": [
+        70
+      ],
+      "wallValues": [
+        35
+      ]
+    }
+  },
+  "effortMethod": "Effort is summarised as the MEDIAN over runs, not the mean: one run that hits its turn cap would otherwise move an arm on its own. Each comparison is PAIRED BY TASK — per task, the difference of the two arms' medians, and that difference as a fraction of the REFERENCE arm's median, since a task's turn count is set by the task. The stripped arm's reference is the tarball it was cut from, not the baseline: against a build from another commit, losing the docs and changing the library would be one effect. The aggregate is the mean of those per-task values, with a 95% percentile bootstrap over TASKS (2000 resamples, seeded per arm/reference/metric — so the same runs.jsonl always prints the same interval, and the metric rows are independent draws rather than one draw repeated) and an exact two-sided sign test on the per-task signs. The bootstrap treats the tasks as the sample: it answers 'would another set of tasks like these show the same difference', which is the question a campaign of a handful of tasks can ask. The A/A pair is the noise floor: whatever separates the same tarball under two labels is what run-to-run wobble looks like here, and an effect smaller than that is not an effect.",
+  "calibration": null,
   "contaminated": [],
   "infraErrors": [],
   "scorerErrors": [],
   "gate": {
     "decision": "stop",
     "complete": true,
+    "label": "Pilot gate",
     "reasons": [
-      "(a) stripped arm 100.0% is not below both baselines (100.0%, 100.0%) by more than the A/A gap 0.0% and at least 17.0%: the eval may not see documentation",
-      "(c) task(s) at floor or ceiling across all arms, replace from reserve: even-spacing (ceiling), riverbank (ceiling), road-props (ceiling), settlement-roads (ceiling), species-mix (ceiling), trees-on-hills (ceiling)"
+      "(a) stripped arm 100.0% is not below both references (100.0%, 100.0%) by more than the A/A gap 0.0% and at least 17.0%: the eval may not see documentation",
+      "(c) 6 of 6 task(s) at floor or ceiling on solved, replace from reserve: even-spacing, riverbank, road-props, settlement-roads, species-mix, trees-on-hills",
+      "fix: make the stripped arm cost something — harder tasks (limb (c) names the saturated ones), or a stronger strip set — because the arms did not separate; replace the floor/ceiling task(s) from the reserve and re-run"
     ],
     "a": {
       "pass": false,
+      "firedBy": null,
+      "solvedPass": false,
+      "strippedArm": "stripped",
+      "refArms": [
+        "A",
+        "A-prime"
+      ],
       "baseline": {
         "A": 1,
         "A-prime": 1
@@ -396,16 +2506,49 @@
         "A": 0,
         "A-prime": 0
       },
+      "solvedChecks": [
+        {
+          "ref": "A",
+          "rate": 1,
+          "delta": 0,
+          "okMargin": false,
+          "okAboveNoise": false,
+          "pass": false
+        },
+        {
+          "ref": "A-prime",
+          "rate": 1,
+          "delta": 0,
+          "okMargin": false,
+          "okAboveNoise": false,
+          "pass": false
+        }
+      ],
       "aaGap": 0,
-      "requiredMargin": 0.17
+      "requiredMargin": 0.17,
+      "effort": null
     },
     "b": {
       "pass": true,
       "aaGap": 0,
-      "aaMaxGap": 0.28
+      "aaMaxGap": 0.28,
+      "solvedPass": true,
+      "aaEffortGap": null,
+      "aaEffortTasks": null,
+      "aaMaxEffortGap": null,
+      "effortPass": null
     },
     "c": {
       "pass": false,
+      "dimension": "solved",
+      "blocking": [
+        "even-spacing",
+        "riverbank",
+        "road-props",
+        "settlement-roads",
+        "species-mix",
+        "trees-on-hills"
+      ],
       "replaceTasks": [
         {
           "task": "even-spacing",

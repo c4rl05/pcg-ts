@@ -1,0 +1,209 @@
+{
+  "at": "2026-09-18T10:49:51.563Z",
+  "harnessGit": {
+    "sha": "e3d644ea22484234512b72a5a25247be05346c72",
+    "dirty": false
+  },
+  "adapter": "1b87e89193feec37cae7e3a0ce0c2d7fcccb6a97303d93850c6314b1fd8ba955",
+  "fields": [
+    "contaminated",
+    "outsideContaminating",
+    "outsideBenign",
+    "outsideWrites",
+    "readCounts",
+    "readPaths",
+    "listedPaths",
+    "networkAttempts",
+    "solved"
+  ],
+  "records": 58,
+  "changed": 58,
+  "verdictsMoved": [
+    {
+      "slotId": "r1.trees-on-hills.stripped",
+      "attempt": 1,
+      "before": {
+        "contaminated": true,
+        "paths": [
+          "msys:/"
+        ]
+      },
+      "after": {
+        "contaminated": false,
+        "paths": []
+      }
+    },
+    {
+      "slotId": "r1.trees-on-hills.A",
+      "attempt": 1,
+      "before": {
+        "contaminated": true,
+        "paths": [
+          "C:\\pcg-eval\\sandboxes\\node_modules\\pcg-ts\\graphs\\examples-forest.json"
+        ]
+      },
+      "after": {
+        "contaminated": false,
+        "paths": []
+      }
+    },
+    {
+      "slotId": "r2.trees-on-hills.stripped",
+      "attempt": 1,
+      "before": {
+        "contaminated": true,
+        "paths": [
+          "C:\\pcg-eval\\sandboxes\\graph.json"
+        ]
+      },
+      "after": {
+        "contaminated": false,
+        "paths": []
+      }
+    },
+    {
+      "slotId": "r2.even-spacing.A",
+      "attempt": 1,
+      "before": {
+        "contaminated": true,
+        "paths": [
+          "C:\\Users\\c4rl05\\AppData\\Local\\Temp\\out1.json"
+        ]
+      },
+      "after": {
+        "contaminated": false,
+        "paths": []
+      }
+    }
+  ],
+  "untouched": [
+    "score",
+    "final",
+    "wallMs",
+    "turns",
+    "toolCalls",
+    "usage",
+    "capsHit"
+  ],
+  "supersededClean": [
+    {
+      "slotId": "r1.trees-on-hills.stripped",
+      "task": "trees-on-hills",
+      "arm": "stripped",
+      "counting": {
+        "attempt": 2,
+        "turns": 70,
+        "solved": true
+      },
+      "superseded": {
+        "attempt": 1,
+        "turns": 38,
+        "solved": true
+      }
+    },
+    {
+      "slotId": "r1.trees-on-hills.A",
+      "task": "trees-on-hills",
+      "arm": "A",
+      "counting": {
+        "attempt": 2,
+        "turns": 60,
+        "solved": true
+      },
+      "superseded": {
+        "attempt": 1,
+        "turns": 59,
+        "solved": true
+      }
+    },
+    {
+      "slotId": "r2.trees-on-hills.stripped",
+      "task": "trees-on-hills",
+      "arm": "stripped",
+      "counting": {
+        "attempt": 2,
+        "turns": 68,
+        "solved": true
+      },
+      "superseded": {
+        "attempt": 1,
+        "turns": 52,
+        "solved": true
+      }
+    },
+    {
+      "slotId": "r2.even-spacing.A",
+      "task": "even-spacing",
+      "arm": "A",
+      "counting": {
+        "attempt": 2,
+        "turns": 28,
+        "solved": true
+      },
+      "superseded": {
+        "attempt": 1,
+        "turns": 30,
+        "solved": true
+      }
+    }
+  ],
+  "comparison": {
+    "metric": "turns",
+    "baselineArms": [
+      "A",
+      "A-prime"
+    ],
+    "strippedArm": "stripped",
+    "refArm": "A",
+    "latest": {
+      "rule": "latest",
+      "solved": {
+        "A": {
+          "solved": 18,
+          "n": 18
+        },
+        "A-prime": {
+          "solved": 18,
+          "n": 18
+        },
+        "stripped": {
+          "solved": 18,
+          "n": 18
+        }
+      },
+      "median": {
+        "A": 34,
+        "A-prime": 34,
+        "stripped": 33.5
+      },
+      "aaGap": 0.04447797775445026,
+      "strippedVsRef": 0.06282267115600448
+    },
+    "firstClean": {
+      "rule": "firstClean",
+      "solved": {
+        "A": {
+          "solved": 18,
+          "n": 18
+        },
+        "A-prime": {
+          "solved": 18,
+          "n": 18
+        },
+        "stripped": {
+          "solved": 18,
+          "n": 18
+        }
+      },
+      "median": {
+        "A": 34,
+        "A-prime": 34,
+        "stripped": 33.5
+      },
+      "aaGap": 0.04447797775445026,
+      "strippedVsRef": 0.018378226711560034
+    }
+  },
+  "metric": "turns",
+  "note": "All four pilot discards were classifier artifacts: two cross-call cwd, one output-flag write, one a JS arrow read as a redirect."
+}

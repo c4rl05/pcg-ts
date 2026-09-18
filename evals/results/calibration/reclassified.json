@@ -1,0 +1,131 @@
+{
+  "at": "2026-09-18T10:49:57.367Z",
+  "harnessGit": {
+    "sha": "e3d644ea22484234512b72a5a25247be05346c72",
+    "dirty": false
+  },
+  "adapter": "1b87e89193feec37cae7e3a0ce0c2d7fcccb6a97303d93850c6314b1fd8ba955",
+  "fields": [
+    "contaminated",
+    "outsideContaminating",
+    "outsideBenign",
+    "outsideWrites",
+    "readCounts",
+    "readPaths",
+    "listedPaths",
+    "networkAttempts",
+    "solved"
+  ],
+  "records": 10,
+  "changed": 10,
+  "verdictsMoved": [
+    {
+      "slotId": "r0.twin-quarters.A",
+      "attempt": 1,
+      "before": {
+        "contaminated": true,
+        "paths": [
+          "C:\\Users\\c4rl05"
+        ]
+      },
+      "after": {
+        "contaminated": false,
+        "paths": []
+      }
+    },
+    {
+      "slotId": "r0.cavern-lamps.A",
+      "attempt": 1,
+      "before": {
+        "contaminated": true,
+        "paths": [
+          "C:\\Users\\c4rl05"
+        ]
+      },
+      "after": {
+        "contaminated": false,
+        "paths": []
+      }
+    }
+  ],
+  "untouched": [
+    "score",
+    "final",
+    "wallMs",
+    "turns",
+    "toolCalls",
+    "usage",
+    "capsHit"
+  ],
+  "supersededClean": [
+    {
+      "slotId": "r0.twin-quarters.A",
+      "task": "twin-quarters",
+      "arm": "A",
+      "counting": {
+        "attempt": 2,
+        "turns": 31,
+        "solved": true
+      },
+      "superseded": {
+        "attempt": 1,
+        "turns": 23,
+        "solved": true
+      }
+    },
+    {
+      "slotId": "r0.cavern-lamps.A",
+      "task": "cavern-lamps",
+      "arm": "A",
+      "counting": {
+        "attempt": 2,
+        "turns": 57,
+        "solved": true
+      },
+      "superseded": {
+        "attempt": 1,
+        "turns": 41,
+        "solved": true
+      }
+    }
+  ],
+  "comparison": {
+    "metric": "turns",
+    "baselineArms": [
+      "A",
+      "A-prime"
+    ],
+    "strippedArm": "stripped",
+    "refArm": "A",
+    "latest": {
+      "rule": "latest",
+      "solved": {
+        "A": {
+          "solved": 8,
+          "n": 8
+        }
+      },
+      "median": {
+        "A": 45
+      },
+      "aaGap": null,
+      "strippedVsRef": null
+    },
+    "firstClean": {
+      "rule": "firstClean",
+      "solved": {
+        "A": {
+          "solved": 8,
+          "n": 8
+        }
+      },
+      "median": {
+        "A": 39
+      },
+      "aaGap": null,
+      "strippedVsRef": null
+    }
+  },
+  "metric": "turns",
+  "note": "Both calibration discards were classifier artifacts: awk's match operator read as the home directory."
+}

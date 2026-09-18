@@ -1,6 +1,137 @@
 {
   "campaign": "calibration",
-  "generatedAt": "2026-09-18T07:53:05.540Z",
+  "generatedAt": "2026-09-18T10:49:57.418Z",
+  "reclassified": {
+    "at": "2026-09-18T10:49:57.367Z",
+    "harnessGit": {
+      "sha": "e3d644ea22484234512b72a5a25247be05346c72",
+      "dirty": false
+    },
+    "adapter": "1b87e89193feec37cae7e3a0ce0c2d7fcccb6a97303d93850c6314b1fd8ba955",
+    "fields": [
+      "contaminated",
+      "outsideContaminating",
+      "outsideBenign",
+      "outsideWrites",
+      "readCounts",
+      "readPaths",
+      "listedPaths",
+      "networkAttempts",
+      "solved"
+    ],
+    "records": 10,
+    "changed": 10,
+    "verdictsMoved": [
+      {
+        "slotId": "r0.twin-quarters.A",
+        "attempt": 1,
+        "before": {
+          "contaminated": true,
+          "paths": [
+            "C:\\Users\\c4rl05"
+          ]
+        },
+        "after": {
+          "contaminated": false,
+          "paths": []
+        }
+      },
+      {
+        "slotId": "r0.cavern-lamps.A",
+        "attempt": 1,
+        "before": {
+          "contaminated": true,
+          "paths": [
+            "C:\\Users\\c4rl05"
+          ]
+        },
+        "after": {
+          "contaminated": false,
+          "paths": []
+        }
+      }
+    ],
+    "untouched": [
+      "score",
+      "final",
+      "wallMs",
+      "turns",
+      "toolCalls",
+      "usage",
+      "capsHit"
+    ],
+    "supersededClean": [
+      {
+        "slotId": "r0.twin-quarters.A",
+        "task": "twin-quarters",
+        "arm": "A",
+        "counting": {
+          "attempt": 2,
+          "turns": 31,
+          "solved": true
+        },
+        "superseded": {
+          "attempt": 1,
+          "turns": 23,
+          "solved": true
+        }
+      },
+      {
+        "slotId": "r0.cavern-lamps.A",
+        "task": "cavern-lamps",
+        "arm": "A",
+        "counting": {
+          "attempt": 2,
+          "turns": 57,
+          "solved": true
+        },
+        "superseded": {
+          "attempt": 1,
+          "turns": 41,
+          "solved": true
+        }
+      }
+    ],
+    "comparison": {
+      "metric": "turns",
+      "baselineArms": [
+        "A",
+        "A-prime"
+      ],
+      "strippedArm": "stripped",
+      "refArm": "A",
+      "latest": {
+        "rule": "latest",
+        "solved": {
+          "A": {
+            "solved": 8,
+            "n": 8
+          }
+        },
+        "median": {
+          "A": 45
+        },
+        "aaGap": null,
+        "strippedVsRef": null
+      },
+      "firstClean": {
+        "rule": "firstClean",
+        "solved": {
+          "A": {
+            "solved": 8,
+            "n": 8
+          }
+        },
+        "median": {
+          "A": 39
+        },
+        "aaGap": null,
+        "strippedVsRef": null
+      }
+    },
+    "metric": "turns",
+    "note": "Both calibration discards were classifier artifacts: awk's match operator read as the home directory."
+  },
   "progress": {
     "done": 8,
     "total": 8,
@@ -201,8 +332,8 @@
       "readShare": {
         "llms": 1,
         "docs": 0.875,
-        "skills": 0.375,
-        "graphs": 0.875
+        "skills": 0.125,
+        "graphs": 0.75
       },
       "graphProducedRate": 1
     }
@@ -217,8 +348,8 @@
         "readShare": {
           "llms": 1,
           "docs": 0.875,
-          "skills": 0.375,
-          "graphs": 0.875
+          "skills": 0.125,
+          "graphs": 0.75
         },
         "graphProducedRate": 1,
         "metrics": {
@@ -664,6 +795,96 @@
   },
   "effortPaired": [],
   "effortRef": "A",
+  "budgets": {
+    "canopy-gaps": {
+      "turns": 100,
+      "wallMinutes": 50,
+      "varied": false,
+      "values": [
+        100
+      ],
+      "wallValues": [
+        50
+      ]
+    },
+    "cavern-lamps": {
+      "turns": 120,
+      "wallMinutes": 60,
+      "varied": false,
+      "values": [
+        120
+      ],
+      "wallValues": [
+        60
+      ]
+    },
+    "contour-vines": {
+      "turns": 100,
+      "wallMinutes": 50,
+      "varied": false,
+      "values": [
+        100
+      ],
+      "wallValues": [
+        50
+      ]
+    },
+    "crater-debris": {
+      "turns": 120,
+      "wallMinutes": 60,
+      "varied": false,
+      "values": [
+        120
+      ],
+      "wallValues": [
+        60
+      ]
+    },
+    "facade-windows": {
+      "turns": 120,
+      "wallMinutes": 60,
+      "varied": false,
+      "values": [
+        120
+      ],
+      "wallValues": [
+        60
+      ]
+    },
+    "quarry-terraces": {
+      "turns": 100,
+      "wallMinutes": 50,
+      "varied": false,
+      "values": [
+        100
+      ],
+      "wallValues": [
+        50
+      ]
+    },
+    "quay-cranes": {
+      "turns": 100,
+      "wallMinutes": 50,
+      "varied": false,
+      "values": [
+        100
+      ],
+      "wallValues": [
+        50
+      ]
+    },
+    "twin-quarters": {
+      "turns": 120,
+      "wallMinutes": 60,
+      "varied": false,
+      "values": [
+        120
+      ],
+      "wallValues": [
+        60
+      ]
+    }
+  },
   "effortMethod": "Effort is summarised as the MEDIAN over runs, not the mean: one run that hits its turn cap would otherwise move an arm on its own. Each comparison is PAIRED BY TASK — per task, the difference of the two arms' medians, and that difference as a fraction of the REFERENCE arm's median, since a task's turn count is set by the task. The stripped arm's reference is the tarball it was cut from, not the baseline: against a build from another commit, losing the docs and changing the library would be one effect. The aggregate is the mean of those per-task values, with a 95% percentile bootstrap over TASKS (2000 resamples, seeded per arm/reference/metric — so the same runs.jsonl always prints the same interval, and the metric rows are independent draws rather than one draw repeated) and an exact two-sided sign test on the per-task signs. The bootstrap treats the tasks as the sample: it answers 'would another set of tasks like these show the same difference', which is the question a campaign of a handful of tasks can ask. The A/A pair is the noise floor: whatever separates the same tarball under two labels is what run-to-run wobble looks like here, and an effect smaller than that is not an effect.",
   "calibration": {
     "arm": "A",
@@ -672,6 +893,9 @@
         "task": "canopy-gaps",
         "tier": "held-out",
         "runs": 1,
+        "turnsBudget": 100,
+        "turnsBudgetVaried": false,
+        "wallBudget": 50,
         "solved": 1,
         "graphProduced": 1,
         "turns": 31,
@@ -689,6 +913,9 @@
         "task": "cavern-lamps",
         "tier": "held-out",
         "runs": 1,
+        "turnsBudget": 120,
+        "turnsBudgetVaried": false,
+        "wallBudget": 60,
         "solved": 1,
         "graphProduced": 1,
         "turns": 57,
@@ -706,6 +933,9 @@
         "task": "contour-vines",
         "tier": "held-out",
         "runs": 1,
+        "turnsBudget": 100,
+        "turnsBudgetVaried": false,
+        "wallBudget": 50,
         "solved": 1,
         "graphProduced": 1,
         "turns": 31,
@@ -723,6 +953,9 @@
         "task": "crater-debris",
         "tier": "held-out",
         "runs": 1,
+        "turnsBudget": 120,
+        "turnsBudgetVaried": false,
+        "wallBudget": 60,
         "solved": 1,
         "graphProduced": 1,
         "turns": 53,
@@ -740,6 +973,9 @@
         "task": "facade-windows",
         "tier": "held-out",
         "runs": 1,
+        "turnsBudget": 120,
+        "turnsBudgetVaried": false,
+        "wallBudget": 60,
         "solved": 1,
         "graphProduced": 1,
         "turns": 56,
@@ -757,6 +993,9 @@
         "task": "quarry-terraces",
         "tier": "held-out",
         "runs": 1,
+        "turnsBudget": 100,
+        "turnsBudgetVaried": false,
+        "wallBudget": 50,
         "solved": 1,
         "graphProduced": 1,
         "turns": 83,
@@ -774,6 +1013,9 @@
         "task": "quay-cranes",
         "tier": "held-out",
         "runs": 1,
+        "turnsBudget": 100,
+        "turnsBudgetVaried": false,
+        "wallBudget": 50,
         "solved": 1,
         "graphProduced": 1,
         "turns": 37,
@@ -791,6 +1033,9 @@
         "task": "twin-quarters",
         "tier": "held-out",
         "runs": 1,
+        "turnsBudget": 120,
+        "turnsBudgetVaried": false,
+        "wallBudget": 60,
         "solved": 1,
         "graphProduced": 1,
         "turns": 31,
