@@ -213,6 +213,20 @@ segment anywhere, or a reference into `node_modules`. In code files
 regex literals and division are not paths; in shell scripts comment lines are
 dropped.
 
+**The Bash tool keeps ONE shell, and its working directory survives between
+tool calls.** The classifier tracks it the same way: `cd node_modules/pcg-ts`
+in one call and `cat ../../graph.json` in the next names the sandbox's own
+graph, not something two levels above it. Resetting to the sandbox on every
+call discarded three pilot runs over files that were never outside. The state
+is per SESSION — a new sandbox starts at its own project directory, and
+nothing carries between runs. Bare `cd` goes home, `cd -` returns to where the
+shell was before its last move, `pushd`/`popd` are a stack, and a `cd` inside
+`( ... )` or `bash -c '...'` is local to that child shell. Where the transcript
+cannot settle it — the tool call reported an error, so there is no telling how
+far the command got — the reading that keeps the shell INSIDE the sandbox
+wins: a wrong guess that moves it out turns every later relative path into a
+false contamination, and a re-run costs more than a run's worth of doubt.
+
 Shell commands are judged clause by clause (split at `&&`, `||`, `;`, `|`,
 newlines; heredoc bodies are lifted out first and scanned as the script they
 are), and the parser follows `cd`: after `cd X`, a reading command's plain
@@ -633,15 +647,25 @@ gate actually computes: the LARGER MAGNITUDE of the two directions of the
 paired-by-task mean relative difference (larger, because a relative difference
 is asymmetric, and the gate must not depend on the order of `baselineArms`):
 
-| metric | A-prime − A | A − A-prime | what the gate uses |
-|---|---|---|---|
-| turns | −2.4% | +4.4% | **4.4%** |
-| tool calls | −2.5% | +4.6% | **4.6%** |
-| output tokens | +4.3% | −0.8% | **4.3%** |
-| wall minutes | +9.6% | −5.3% | **9.6%** |
+| metric | what the gate uses (committed) | after the cwd correction |
+|---|---|---|
+| **turns** (the gate's metric) | **4.4%** | **4.4%** — unchanged |
+| tool calls | 4.6% | 4.6% — unchanged |
+| output tokens | 4.3% | **14.0%** |
+| wall minutes | 9.6% | **13.5%** |
 
-`aaMaxEffortGap` = 0.15 sits above the widest of those (wall minutes, 9.6%)
-and well above turns' 4.4%, so the pilot's own noise would have passed (b).
+The second column is what those gaps become once the cross-call cwd fix clears
+three pilot discards and the cleared attempts count instead of their retries
+(see Known gaps). Turns and tool calls do not move at all; output tokens and
+wall minutes do, and the widest gap goes from 9.6% to 14.0% against a 15%
+bound. The gate's `effortMetric` is turns, so **no threshold is affected
+whichever way the pilot records are finally settled** — only the headroom in
+this justification. Stated on the metric the gate actually uses,
+`aaMaxEffortGap` 0.15 is 3.4x the A/A turns gap and `strippedEffortMinMargin`
+0.25 is 5.7x it.
+
+`aaMaxEffortGap` = 0.15 sits above the widest of those and well above turns'
+4.4%, so the pilot's own noise would have passed (b).
 `strippedEffortMinMargin` = 0.25 is about 2.6x that widest A/A value. For
 scale, the pilot's stripped arm came in at **+6.3% on turns paired against A,
 95% [−17.1%, +29.7%]** — it would have failed both the margin and the interval
@@ -756,23 +780,24 @@ The turn cap is the CLI's own `--max-turns`.
 - A selftest failure always wakes; telling a failure caused by a changed
   node (which the plan would log and move past) from a harness fault is not
   implemented.
-- **Three pilot discards were classifier artifacts, and two of them share a
-  cause worth fixing before the next campaign.** Re-classified at this commit,
+- **Three pilot discards were classifier artifacts; two are now fixed and one
+  is not.** Re-classified at this commit,
   the pilot has no ambiguous runs and one verdict moves —
   `r2.even-spacing.A a1` clears, having been discarded over its own
   `--out /tmp/out1.json` colliding with a stale same-named file in Temp. Three
-  stay contaminated on artifacts: `r1.trees-on-hills.stripped a1` on `msys:/`
-  (a JS regex literal inside `node -e` read as a path), and
-  `r1.trees-on-hills.A a1` + `r2.trees-on-hills.stripped a1` on paths two
-  levels above the sandbox. The latter two look like the same bug: the Bash
-  tool keeps its working directory ACROSS tool calls, but `scanShell` resets to
-  the sandbox on every call, so a `../../graph.json` issued after an earlier
-  `cd node_modules/pcg-ts` resolves too high. Both commands demonstrably
-  succeeded against the in-sandbox file, which is the evidence for it. Not
-  changed here: it is a claim about the tool's behaviour, and it moves pilot
-  verdicts. The pilot's SOLVED conclusion does not move either way — every
-  discarded attempt scored 1 and so did its retry, and `solved` is gated on
-  `final` — but four extra runs were spent and four slots' turn counts shifted.
+  cleared with the cwd fix (`r1.trees-on-hills.A a1`,
+  `r2.trees-on-hills.stripped a1`), and ONE stays contaminated:
+  `r1.trees-on-hills.stripped a1` on `msys:/`, a JS regex literal inside
+  `node -e` read as a filesystem root. That one is a different shape and is
+  still open.
+
+  What the two cleared ones cost, and what correcting them changes: three
+  slots now count their first attempt instead of its retry — turns 60→59,
+  68→52 and 28→30. The pilot's SOLVED conclusion does not move (18/18 in
+  every arm, gate STOP, the same six tasks to replace), and neither does the
+  turns median in any arm (34 / 34 / 33.5) nor the A/A gap on turns or tool
+  calls. Output tokens and wall minutes DO move — see the threshold table
+  above, which states both readings, and note that the gate's metric is turns.
 - **A classifier fix does not rewrite records that are already written.**
   `readCounts` is computed when the transcript is parsed, so the committed
   calibration records still carry the old "a listing is a read" counts, and

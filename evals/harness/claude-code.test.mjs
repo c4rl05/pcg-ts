@@ -332,6 +332,79 @@ test("an output FLAG names a file the command creates, not one it reads", () => 
   assert.equal(parse(`node -e "console.log(require('fs').readFileSync('/tmp/someone-elses.json','utf8'))"`).readPaths.contaminating.length, 1);
 });
 
+test("the shell keeps its working directory ACROSS tool calls", () => {
+  const root = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes" : "/var/tmp/pcg-eval/sandboxes";
+  const cwd = join(root, "pcg-eval-Q1w2E3", "project");
+  const verdict = (uses, opts = {}) =>
+    parseTranscript(syntheticTranscript(cwd, "sid", uses), { cwd, tmpEntriesAtStart: new Set(["claude"]), benignRoots: jailOf(cwd), ...opts }).readPaths.contaminating;
+  const bash = (...commands) => verdict(commands.map((command) => ({ name: "Bash", input: { command } })));
+
+  // The pilot shape (r1.trees-on-hills.A-a1, r2.trees-on-hills.stripped-a1):
+  // cd in one call, a relative path in the NEXT. Resetting to the sandbox on
+  // every call put `../../graph.json` two levels above it and discarded the run.
+  assert.deepEqual(bash("cd node_modules/pcg-ts", "cat ../../graph.json"), [], "the shell is still in the package");
+  assert.deepEqual(bash("cd node_modules/pcg-ts/graphs", "cat ../../../graph.json"), []);
+  // ...and a path that really IS outside is still caught from wherever the
+  // shell actually is. Narrowing must not blind it.
+  assert.equal(bash("cd node_modules/pcg-ts", "cat ../../../../secret.txt").length, 1);
+  // A cd OUT is tracked too: the later command runs THERE, not in the sandbox.
+  // (A bare listing of the sandbox root is benign by design, so this uses a
+  // directory that is foreign under any reading.)
+  assert.equal(bash("cd ~", "ls").length, 1);
+  assert.equal(bash("cd ../..", "cat notes.md").length, 1, "a file in the sandbox root is not the agent's");
+
+  // `cd -` returns to the previous directory, which is not "stay put".
+  assert.deepEqual(bash("cd node_modules/pcg-ts", "cd -", "cat graph.json"), []);
+  // pushd/popd are a stack. The relative read has to be one whose meaning
+  // DIFFERS between "popd returned" and "popd did nothing", or the assertion
+  // proves nothing: from the project `../../notes.md` is the sandbox root's,
+  // from node_modules it is the jail's own and benign.
+  assert.equal(bash("pushd node_modules", "popd", "cat ../../notes.md").length, 1, "popd came back to the project");
+  assert.deepEqual(bash("pushd node_modules/pcg-ts/graphs", "popd", "cat node_modules/pcg-ts/llms.txt"), []);
+  assert.deepEqual(bash("pushd node_modules", "pushd pcg-ts/graphs", "popd", "cat pcg-ts/llms.txt"), [], "popd returns to node_modules");
+
+  // A subshell's cd is local: the parent shell never moved. Again the read
+  // must distinguish the two readings — `cd ../..` inside the group, so a
+  // leaked cwd would put the later read in the sandbox root.
+  assert.equal(bash("( cd ../.. && ls )", "cat notes.md").length, 0, "the parent is still in the project");
+  assert.equal(bash("bash -c 'cd ../.. && ls'", "cat notes.md").length, 0);
+  // ...including a group that is one balanced segment, where there is no
+  // opening clause to notice.
+  assert.equal(bash("( cd ../.. )", "cat notes.md").length, 0);
+  // And INSIDE the group the cd still applies to the clauses after it: the
+  // group is a child shell, not a dead zone. Without lifting it, `(` became
+  // the verb, the cd was never seen, and this read was judged from the
+  // project — two levels too high.
+  assert.deepEqual(bash("( cd node_modules/pcg-ts && cat ../../graph.json )"), []);
+  // A pushd inside a subshell does not survive it either.
+  assert.equal(bash("( pushd ../.. )", "cat notes.md").length, 0);
+  // The control: the SAME read after a cd that really did move the shell.
+  assert.equal(bash("cd ../..", "cat notes.md").length, 1);
+
+  // Each session starts at its own sandbox: state never leaks between runs.
+  assert.deepEqual(bash("cat graph.json"), [], "a fresh transcript starts in the sandbox");
+});
+
+test("a failed cd does not move the shell where that would invent contamination", () => {
+  const root = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes" : "/var/tmp/pcg-eval/sandboxes";
+  const cwd = join(root, "pcg-eval-Q1w2E3", "project");
+  const use = (id, name, input) => ({ type: "assistant", message: { id: `m${id}`, content: [{ type: "tool_use", id: `t${id}`, name, input }], usage: { output_tokens: 1 } } });
+  const res = (id, isError) => ({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: `t${id}`, is_error: isError, content: "" }] } });
+  const run = (events) => parseTranscript([{ type: "system", subtype: "init", cwd, session_id: "sid" }, ...events], { cwd, tmpEntriesAtStart: new Set(["claude"]), benignRoots: jailOf(cwd) }).readPaths.contaminating;
+
+  // The transcript says the call FAILED but not how far it got. Treating the
+  // cd as having succeeded would put every later relative path outside the
+  // sandbox — a false contamination, which costs a re-run. The reading that
+  // does not flag wins: the shell is left where it was.
+  const failedOut = run([use(1, "Bash", { command: "cd ../../elsewhere" }), res(1, true), use(2, "Bash", { command: "cat notes.md" }), res(2, false)]);
+  assert.deepEqual(failedOut, [], "a cd that may not have happened does not move the shell out");
+  // A cd that SUCCEEDED is honoured, outside or not.
+  assert.equal(run([use(1, "Bash", { command: "cd ../../elsewhere" }), res(1, false), use(2, "Bash", { command: "cat notes.md" }), res(2, false)]).length, 1);
+  // An errored call whose cd stays INSIDE the sandbox is honoured either way,
+  // because both readings agree about what the later paths name.
+  assert.deepEqual(run([use(1, "Bash", { command: "cd node_modules/pcg-ts && false" }), res(1, true), use(2, "Bash", { command: "cat ../../graph.json" }), res(2, false)]), []);
+});
+
 test("a bare listing is not a read: only an opened file counts", () => {
   const root = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes" : "/var/tmp/pcg-eval/sandboxes";
   const cwd = join(root, "pcg-eval-Q1w2E3", "project");

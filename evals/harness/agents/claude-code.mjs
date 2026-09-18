@@ -393,6 +393,26 @@ export function commandSegments(command) {
 }
 
 /**
+ * Commit a shell's end state to the session after one tool call.
+ *
+ * The Bash tool keeps ONE shell, so its working directory survives between
+ * calls: `cd node_modules/pcg-ts` in one call and `cat ../../graph.json` in
+ * the next names the sandbox's own graph. Resetting to the sandbox each call
+ * put that read two levels too high and discarded three pilot runs.
+ *
+ * When the call reported an error we cannot tell how far the command got, so
+ * we take whichever reading leaves the shell INSIDE the sandbox. A wrong
+ * guess that moves it out turns every later relative path into a false
+ * contamination, and a re-run costs more than a run's worth of doubt.
+ */
+export function commitShellState(before, after, errored, sandbox) {
+  if (!errored) return after;
+  if (isInside(after.cwd, sandbox)) return after;
+  if (isInside(before.cwd, sandbox)) return before;
+  return after;
+}
+
+/**
  * Clauses that read a directory's CONTENTS rather than list its names. A bare
  * listing of the sandbox root is benign; one of these aimed at it is not.
  */
@@ -619,6 +639,12 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
   const rateLimitEvents = [];
   let finalText = "";
 
+  // The Bash tool keeps ONE shell for the whole session: its working
+  // directory, its `cd -` target and its pushd stack all survive between tool
+  // calls. Initialised here, so a reset means a reset per session — which is
+  // what a fresh sandbox gets.
+  let shell = { cwd: sandbox, prev: sandbox, stack: [] };
+
   const toolErrors = new Map();
   for (const e of events) {
     if (e?.type !== "user" || !e.message) continue;
@@ -687,7 +713,13 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
   };
 
   /** One shell tool call, clause by clause, following `cd`. */
-  const scanShell = (raw, depth = 0, startCwd = sandbox) => {
+  /**
+   * One shell tool call. Takes and returns the shell's STATE, because the
+   * Bash tool keeps one shell whose working directory survives between calls.
+   * A nested call (a subshell, a heredoc fed to bash) is handed a copy and
+   * its result is discarded: that is what makes `( cd x )` local.
+   */
+  const scanShell = (raw, depth = 0, startState = { cwd: sandbox, prev: sandbox, stack: [] }) => {
     const split = splitHeredocs(raw);
     const heredocs = split.heredocs;
     // `eval '...'` runs its string in THIS shell (a `cd` inside it moves the shell); `bash -c '...'`
@@ -699,26 +731,50 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
       .replace(/\b(?:bash|sh|zsh|dash)(?:\.exe)?\s+-c\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)")/g, (_, a, b) => {
         subshells.push(a ?? b);
         return ` __PCGSUBSHELL${subshells.length - 1}__ `;
+      })
+      // `( cd x && ... )` runs in a CHILD shell: the parent never moves. Only
+      // groups that actually change directory are lifted, so a parenthesis in
+      // ordinary code (`node -e "console.log(1)"`) is left alone. `$(` is
+      // excluded — command substitution is the tokeniser's business.
+      .replace(/(?<![$\w])\(([^()]*)\)/g, (whole, body) => {
+        if (!/(?:^|[\s;&|])(?:cd|pushd|popd)(?:[\s;&|]|$)/.test(body)) return whole;
+        subshells.push(body);
+        return ` __PCGSUBSHELL${subshells.length - 1}__ `;
       });
-    let vcwd = startCwd;
+    let vcwd = startState.cwd;
+    let prevCwd = startState.prev;
+    // A `pushd` inside a subshell must not survive it, so the stack is copied.
+    const dirStack = [...(startState.stack ?? [])];
     for (const rawSeg of commandSegments(command)) {
       const markers = [...rawSeg.matchAll(/__PCGHEREDOC(\d+)__/g)].map((m) => heredocs[Number(m[1])]).filter(Boolean);
-      for (const m of rawSeg.matchAll(/__PCGSUBSHELL(\d+)__/g)) if (depth < 3) scanShell(subshells[Number(m[1])] ?? "", depth + 1, vcwd);
+      for (const m of rawSeg.matchAll(/__PCGSUBSHELL(\d+)__/g)) if (depth < 3) scanShell(subshells[Number(m[1])] ?? "", depth + 1, { cwd: vcwd, prev: prevCwd, stack: dirStack });
       const seg = rawSeg.replace(/__PCGHEREDOC\d+__|__PCGSUBSHELL\d+__/g, " ");
       const { text, targets, appends } = stripRedirects(seg);
       const words = shellWords(text);
       const verb = (words[0] ?? "").replace(/^.*[\\/]/, "").replace(/\.exe$/i, "").toLowerCase();
-      if (["cd", "pushd", "chdir", "set-location", "sl"].includes(verb)) {
-        const arg = words.slice(1).find((w) => !w.startsWith("-"));
-        const target = !arg || arg === "~" ? homedir() : arg === "-" ? vcwd : resolveArg(arg, vcwd);
+      if (["cd", "pushd", "popd", "chdir", "set-location", "sl", "push-location", "pop-location"].includes(verb)) {
+        // `-` is `cd`'s ARGUMENT, not a flag: skipping it the way a flag is
+        // skipped turns `cd -` into bare `cd`, which goes home.
+        const arg = words.slice(1).find((w) => w === "-" || !w.startsWith("-"));
+        let target;
+        if (verb === "popd" || verb === "pop-location") {
+          // An empty stack leaves the shell where it is, as a real shell does.
+          target = dirStack.length ? dirStack.pop() : vcwd;
+        } else {
+          if (verb === "pushd" || verb === "push-location") dirStack.push(vcwd);
+          // Bare `cd` goes home; `cd -` returns to where the shell was before
+          // its last move, which is not the same as staying put.
+          target = !arg || arg === "~" ? homedir() : arg === "-" ? prevCwd : resolveArg(arg, vcwd);
+        }
         touch(target, { cd: true });
+        prevCwd = vcwd;
         vcwd = target;
         continue;
       }
       for (const h of markers) {
         if (h.target) touch(h.target, { write: h.append ? "append" : "create", base: vcwd });
         // A body fed to a shell is a script of shell clauses, cd and all; any other body is a file's content.
-        if (h.shell && !h.target && depth < 3) scanShell(h.body, depth + 1, vcwd);
+        if (h.shell && !h.target && depth < 3) scanShell(h.body, depth + 1, { cwd: vcwd, prev: prevCwd, stack: dirStack });
         else scanScript(h.target ?? "heredoc.sh", h.body, vcwd);
       }
       const flagless = words.slice(1).filter((x) => !x.startsWith("-"));
@@ -793,6 +849,7 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
         }
       }
     }
+    return { cwd: vcwd, prev: prevCwd, stack: dirStack };
   };
 
   for (const e of events) {
@@ -850,7 +907,8 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
         case "Bash":
         case "PowerShell": {
           const cmd = String(input.command ?? "");
-          scanShell(cmd);
+          // The shell persists across tool calls, so its state carries over.
+          shell = commitShellState(shell, scanShell(cmd, 0, shell), toolErrors.get(block.id) === true, sandbox);
           const net = extractNetworkAttempts(cmd);
           network.push(...net.commands, ...net.urls);
           for (const c of net.commands) contaminating.add(`net:${c}`);
