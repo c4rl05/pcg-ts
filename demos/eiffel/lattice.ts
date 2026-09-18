@@ -25,6 +25,7 @@ import {
   component,
   connectByIndex,
   copyToPoints,
+  cross,
   index,
   lerp,
   meshPrimitive,
@@ -34,7 +35,9 @@ import {
   pointGrid,
   pointsToPath,
   position,
+  promoteAttribute,
   ramp,
+  removeAttribute,
   select,
   setAttribute,
   sweepProfile,
@@ -73,6 +76,12 @@ export interface Lattice {
   readonly levelCount: number;
   readonly closed: boolean;
   readonly stations: NodeHandle;
+  /**
+   * Where every station sits, positions[k][s], known before the cook: the
+   * levels and the ring are data, so the graph's fields and this table are
+   * two readings of the same numbers. Edge rules read it for their faces.
+   */
+  readonly positions: ReadonlyArray<ReadonlyArray<Vec3>>;
 }
 
 /** A per-station predicate: station s on level k. */
@@ -145,6 +154,11 @@ export function stationLattice(g: Graph, spec: LatticeSpec): Lattice {
   g.connect(grid, "out", tagS, "in");
   g.connect(tagS, "out", tagK, "in");
   g.connect(tagK, "out", place, "in");
+  const positions = levels.map((l) =>
+    ring.map(
+      ([u, v]) => [l.x0 + (l.x1 - l.x0) * u, l.y, l.z0 + (l.z1 - l.z0) * v] as const,
+    ),
+  );
   return {
     g,
     id,
@@ -152,6 +166,7 @@ export function stationLattice(g: Graph, spec: LatticeSpec): Lattice {
     levelCount: levels.length,
     closed: spec.closed,
     stations: place,
+    positions,
   };
 }
 
@@ -219,7 +234,7 @@ export function placedLattice(
   g.connect(grid, "out", tagS, "in");
   g.connect(tagS, "out", tagK, "in");
   g.connect(tagK, "out", place, "in");
-  return { g, id, ringSize, levelCount: rows.length, closed, stations: place };
+  return { g, id, ringSize, levelCount: rows.length, closed, stations: place, positions: rows };
 }
 
 /** Evaluate a mask over every station, in point order. */
@@ -260,7 +275,102 @@ export function edges(
     `${lat.id}${id}`,
   );
   lat.g.connect(lat.stations, "out", node, "in");
-  return node;
+  // Edges come out in point order, one per station the mask keeps, so the
+  // face table is indexed by primitive in that same order.
+  const normals: Vec3[] = [];
+  for (let k = 0; k < lat.levelCount; k++) {
+    for (let s = 0; s < R; s++) {
+      if (mask[k * R + s] === 1) normals.push(faceNormal(lat, s, k, ds, dk));
+    }
+  }
+  const faces = lat.g.add(
+    setAttribute,
+    {
+      name: FACE_NORMAL,
+      domain: "primitive",
+      type: "f32",
+      tupleSize: 3,
+      value: vec(
+        indexTable(normals.map((n) => n[0])),
+        indexTable(normals.map((n) => n[1])),
+        indexTable(normals.map((n) => n[2])),
+      ),
+    },
+    `${lat.id}${id}Faces`,
+  );
+  lat.g.connect(node, "out", faces, "in");
+  return faces;
+}
+
+/**
+ * The primitive attribute every edge rule writes: the unit normal of the
+ * lattice face the member lies in (f32 x 3). A member's section is squared
+ * to it, which is what makes a strut in a LEANING face lie flat in that
+ * face — an up hint of +y squares it to the vertical instead, which in
+ * panel 1 is 30 degrees off.
+ */
+export const FACE_NORMAL = "faceN";
+
+/**
+ * The face an edge rule's member lies in: the ring segment it spans (or,
+ * for a post, the one starting at its station) between the levels it
+ * spans (or, for a horizontal, the level above it — the one below at the
+ * top). Its normal is the segment crossed with the rise between the
+ * segment's midpoints, which is exact for the trapezoid faces of a
+ * tapering section. The sign is not normalised: a square section does not
+ * care which way its normal points.
+ */
+function faceNormal(lat: Lattice, s: number, k: number, ds: number, dk: number): Vec3 {
+  const R = lat.ringSize;
+  const wrap = (i: number) => ((i % R) + R) % R;
+  let a = ds < 0 ? wrap(s + ds) : s;
+  let b = ds === 0 ? s + 1 : ds < 0 ? s : s + ds;
+  if (!lat.closed && b >= R) {
+    b = a;
+    a = a - 1;
+  }
+  a = wrap(a);
+  b = wrap(b);
+  let k0 = Math.min(k, k + dk);
+  let k1 = k0 + Math.max(Math.abs(dk), 1);
+  if (k1 >= lat.levelCount) {
+    k1 = k0;
+    k0 = k0 - 1;
+  }
+  const P = lat.positions;
+  const pa0 = P[k0]![a]!;
+  const pb0 = P[k0]![b]!;
+  const pa1 = P[k1]![a]!;
+  const pb1 = P[k1]![b]!;
+  const along = sub3(pb0, pa0);
+  const rise = sub3(mid3(pa1, pb1), mid3(pa0, pb0));
+  const n = cross3(along, rise);
+  const len = Math.hypot(n[0], n[1], n[2]);
+  if (!(len > 1e-9)) {
+    throw new Error(
+      `eiffel lattice "${lat.id}": station ${s} on level ${k} spans a degenerate face; ` +
+        "an edge rule needs a ring segment and a rise that are not parallel",
+    );
+  }
+  return [n[0] / len, n[1] / len, n[2] / len];
+}
+
+const sub3 = (p: Vec3, q: Vec3): Vec3 => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+const mid3 = (p: Vec3, q: Vec3): Vec3 => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2];
+const cross3 = (p: Vec3, q: Vec3): Vec3 => [
+  p[1] * q[2] - p[2] * q[1],
+  p[2] * q[0] - p[0] * q[2],
+  p[0] * q[1] - p[1] * q[0],
+];
+
+/**
+ * Rotate a vector field by a quaternion field [x, y, z, w]:
+ * v + w t + q x t with t = 2 (q x v).
+ */
+export function rotateByQuat(q: FieldLike, v: FieldLike): Field {
+  const qv = vec(component(q, 0), component(q, 1), component(q, 2));
+  const t = mul(cross(qv, v), 2);
+  return add(add(v, mul(component(q, 3), t)), cross(qv, t));
 }
 
 /**
@@ -335,6 +445,48 @@ export function copyToQuadrants(
 }
 
 /**
+ * Copy edge-rule MEMBERS onto the quadrant targets, turning their face
+ * normals with them. copyToPoints composes a copy's position and `rot`,
+ * but a vector attribute rides along unturned, so the copies' `rot` is
+ * lifted onto their primitives and applied to {@link FACE_NORMAL} there.
+ */
+export function copyMembersToQuadrants(
+  g: Graph,
+  id: string,
+  source: NodeHandle,
+  targets: NodeHandle,
+): NodeHandle {
+  const copied = copyToQuadrants(g, id, source, targets);
+  const lifted = g.add(
+    promoteAttribute,
+    { name: "rot", from: "point", to: "primitive", mode: "first" },
+    `${id}Rot`,
+  );
+  const turned = g.add(
+    setAttribute,
+    {
+      name: FACE_NORMAL,
+      domain: "primitive",
+      type: "f32",
+      tupleSize: 3,
+      value: rotateByQuat(attribute("rot", 4), attribute(FACE_NORMAL, 3)),
+    },
+    `${id}Faces`,
+  );
+  // The lifted `rot` goes again: a resample carries primitive attributes
+  // onto its samples and refuses one named like a point attribute it writes.
+  const dropped = g.add(
+    removeAttribute,
+    { names: ["rot"], domain: "primitive" },
+    `${id}RotDone`,
+  );
+  g.connect(copied, "out", lifted, "in");
+  g.connect(lifted, "out", turned, "in");
+  g.connect(turned, "out", dropped, "in");
+  return dropped;
+}
+
+/**
  * Skin paths as square-section members whose half-width follows the given
  * (height, half-width) stops. `up` fixes the section's roll: [1, 0, 0]
  * keeps a near-vertical member's faces square to the tower's faces.
@@ -344,13 +496,13 @@ export function skin(
   id: string,
   paths: NodeHandle,
   halfWidth: ReadonlyArray<readonly [number, number]> | number,
-  up: readonly [number, number, number] = [0, 1, 0],
+  up: Vec3 | Field = [0, 1, 0],
 ): NodeHandle {
   const radius: FieldLike =
     typeof halfWidth === "number" ? halfWidth : ramp(component(position(), 1), halfWidth);
   const node = g.add(
     sweepProfile,
-    { profile: "square", radius, frame: "upHint", up: [...up] },
+    { profile: "square", radius, frame: "upHint", up: Array.isArray(up) ? [...up] : up },
     id,
   );
   g.connect(paths, "out", node, "in");

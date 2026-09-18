@@ -31,6 +31,7 @@ import {
   type Lattice,
   type Level,
   chains,
+  copyMembersToQuadrants,
   copyToQuadrants,
   edges,
   merge,
@@ -40,7 +41,7 @@ import {
 } from "./lattice.js";
 import type { Detail, Parts } from "./parts.js";
 import { MEMBERS, NODES, type NodeLevel, node } from "./spec.js";
-import { webMembers } from "./strut.js";
+import { faceSkin, webMembers } from "./strut.js";
 
 /** Stations b and a (c is 0, d is 3). */
 const B = 1;
@@ -165,24 +166,24 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
   ]);
 
   const four = (id: string, h: NodeHandle) => copyToQuadrants(g, id, h, quads);
+  // Edge-rule members carry their faces' normals, which the copy must turn.
+  const fourMembers = (id: string, h: NodeHandle) => copyMembersToQuadrants(g, id, h, quads);
   return {
     uprights: [skin(g, "legUprightSkin", four("legUprights4", uprights), MEMBERS.upright, [1, 0, 0])],
     horizontals: webMembers(
       g,
       "legHorizontal",
-      four("legHorizontals4", horizontals),
+      fourMembers("legHorizontals4", horizontals),
       MEMBERS.horizontal,
       detail,
     ),
     bracing: webMembers(
       g,
       "legBracing",
-      four("legBracing4", merge(g, "legCrosses", crosses)),
+      fourMembers("legBracing4", merge(g, "legCrosses", crosses)),
       MEMBERS.web,
       detail,
     ),
-    girders: [
-      skin(g, "legBeltSkin", four("legBelts4", belts), MEMBERS.girderBar),
-    ],
+    girders: [faceSkin(g, "legBelt", fourMembers("legBelts4", belts), MEMBERS.girderBar)],
   };
 }

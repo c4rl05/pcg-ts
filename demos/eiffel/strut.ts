@@ -8,12 +8,12 @@
  * and eight zigzags — two per face, in opposite phase, which is an X per
  * lacing bay.
  *
- * The strut's section is squared to the tower's faces, not left to a curve
- * frame: for a member with direction T, the section axes are
- * N = normalize(T x up) and B = N x T with up = +y, which puts N on the
- * face normal for every diagonal and horizontal lying in a face plane.
- * (A vertical member would make that degenerate — none is laced: the
- * uprights are closed plate boxes.)
+ * The strut's section is squared to the face it lies in: every edge rule
+ * writes its face's normal (`FACE_NORMAL`, see lattice.ts), and the
+ * section axes are that normal made perpendicular to the member, N, and
+ * B = N x T. An up hint of +y would square it to the vertical instead,
+ * which in panel 1, where the faces lean 26.7 degrees, is up to 30 degrees
+ * off.
  *
  * Built like the truss in the corpus rig graph: resample, then displace
  * copies of the same paths — each chord or zigzag is one transformPoints
@@ -27,6 +27,7 @@ import {
   attribute,
   component,
   cross,
+  dot,
   index,
   lerp,
   mod,
@@ -39,13 +40,30 @@ import {
   transformPoints,
   vec,
 } from "pcg-ts";
-import { merge, skin } from "./lattice.js";
+import { FACE_NORMAL, merge, skin } from "./lattice.js";
 import type { Detail } from "./parts.js";
 
 /** A corner angle's half-width: 80-100 mm angles (Plate XXXI) [derived]. */
 const CHORD = 0.045;
 /** A lacing bar's half-width: 45 x 45 x 5 angles (Plate VII) [derived]. */
 const LACE = 0.02;
+
+/**
+ * Solid square members squared to their faces. The members of an edge rule
+ * share their end points, and a sweep's up hint resolves per POINT, so each
+ * member is first resampled onto points of its own (2 samples: its two
+ * ends), which carry its primitive face normal down to them.
+ */
+export function faceSkin(
+  g: Graph,
+  id: string,
+  paths: NodeHandle,
+  halfWidth: ReadonlyArray<readonly [number, number]> | number,
+): NodeHandle {
+  const own = g.add(pathResample, { mode: "count", count: 2 }, `${id}Ends`);
+  g.connect(paths, "out", own, "in");
+  return skin(g, `${id}Skin`, own, halfWidth, attribute(FACE_NORMAL, 3));
+}
 
 /**
  * Web members at the requested detail: solid square members of the given
@@ -58,7 +76,7 @@ export function webMembers(
   outer: ReadonlyArray<readonly [number, number]>,
   detail: Detail,
 ): NodeHandle[] {
-  if (detail.lacedWeb !== true) return [skin(g, `${id}Skin`, paths, outer)];
+  if (detail.lacedWeb !== true) return [faceSkin(g, id, paths, outer)];
   const struts = latticeStruts(g, id, paths, {
     halfWidth: outer.map(([y, w]) => [y, w - CHORD] as const),
     chord: CHORD,
@@ -114,7 +132,8 @@ export function latticeStruts(
   g.connect(paths, "out", samples, "in");
 
   const T = attribute("tangent", 3);
-  const N = normalize(cross(T, vec(0, 1, 0)));
+  const F = attribute(FACE_NORMAL, 3);
+  const N = normalize(sub(F, mul(T, dot(F, T))));
   const B = cross(N, T);
   const corner = (c: number): Field => {
     const [sn, sb] = CORNERS[c % 4]!;

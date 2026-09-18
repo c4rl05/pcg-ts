@@ -126,6 +126,38 @@ describe("eiffel skeleton", () => {
     expect(crossing(all, 220)).toBe(8);
   });
 
+  it("squares every copied web member to its leaning face", async () => {
+    // Panels 1-4: the legs are parallel prisms leaning 0.50268 (horizontal
+    // per vertical) on every face, so a face normal there tilts up by
+    // exactly that slope and is square to x or to z. Checked on all four
+    // quadrants' copies, where an unturned normal would not even be
+    // perpendicular to its own member.
+    const { legBracing4RotDone } = await cookWith(["legBracing4RotDone"]);
+    const geo = legBracing4RotDone!;
+    const faceN = geo.attrs.primitive.get("faceN");
+    expect(faceN?.tupleSize).toBe(3);
+    const n = faceN!.data as Float32Array;
+    const lines = polylines(geo);
+    let checked = 0;
+    const quadrantsSeen = new Set<string>();
+    lines.forEach(([a, b], p) => {
+      const nx = n[3 * p] as number;
+      const ny = n[3 * p + 1] as number;
+      const nz = n[3 * p + 2] as number;
+      const e = [b![0] - a![0], b![1] - a![1], b![2] - a![2]];
+      const eLen = Math.hypot(e[0]!, e[1]!, e[2]!);
+      expect(Math.abs(nx * e[0]! + ny * e[1]! + nz * e[2]!) / eLen).toBeLessThan(1e-4);
+      if (Math.max(a![1], b![1]) > node("XXIV").y + 1e-3) return;
+      expect(Math.min(Math.abs(nx), Math.abs(nz))).toBeLessThan(1e-4);
+      expect(Math.abs(ny) / Math.hypot(nx, nz)).toBeCloseTo(0.50268, 3);
+      quadrantsSeen.add(`${Math.sign(a![0])},${Math.sign(a![2])}`);
+      checked++;
+    });
+    // 4 legs x 4 faces x 2 diagonals x 4 panels.
+    expect(checked).toBe(128);
+    expect(quadrantsSeen.size).toBe(4);
+  });
+
   it("round-trips through its serialized form to the same geometry", async () => {
     const g = buildEiffel();
     const again = deserializeGraph(JSON.parse(JSON.stringify(serializeGraph(g))));
