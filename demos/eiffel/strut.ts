@@ -30,23 +30,33 @@ import {
   dot,
   index,
   lerp,
+  mergePoints,
   mod,
   mul,
   normalize,
+  orientAlongVector,
   pathResample,
   position,
   ramp,
+  setAttribute,
+  spawnInstances,
   sub,
   transformPoints,
   vec,
 } from "pcg-ts";
 import { FACE_NORMAL, merge, skin } from "./lattice.js";
-import type { Detail } from "./parts.js";
+import { type Detail, RIVET_ASSET } from "./parts.js";
 
 /** A corner angle's half-width: 80-100 mm angles (Plate XXXI) [derived]. */
 const CHORD = 0.045;
 /** A lacing bar's half-width: 45 x 45 x 5 angles (Plate VII) [derived]. */
 const LACE = 0.02;
+/**
+ * A rivet head's radius. The rivets ran 14-25 mm (a secondary source
+ * quoting Eiffel's price lists); a round head is about 1.7 shank
+ * diameters, so 38 mm across for a 22 mm rivet [estimated].
+ */
+const RIVET_HEAD = 0.019;
 
 /**
  * Solid square members squared to their faces. The members of an edge rule
@@ -65,9 +75,17 @@ export function faceSkin(
   return skin(g, `${id}Skin`, own, halfWidth, attribute(FACE_NORMAL, 3));
 }
 
+/** Web members at some detail: their meshes, and their rivets when asked. */
+export interface WebMembers {
+  readonly meshes: NodeHandle[];
+  readonly rivets?: NodeHandle;
+}
+
 /**
  * Web members at the requested detail: solid square members of the given
- * outer half-width, or laced struts whose chords sit just inside it.
+ * outer half-width, or laced struts whose chords sit just inside it, with
+ * their rivets as a spawner when `detail.rivets` asks (which implies the
+ * lacing: a rivet is where a lacing bar meets a chord).
  */
 export function webMembers(
   g: Graph,
@@ -75,15 +93,109 @@ export function webMembers(
   paths: NodeHandle,
   outer: ReadonlyArray<readonly [number, number]>,
   detail: Detail,
-): NodeHandle[] {
-  if (detail.lacedWeb !== true) return [faceSkin(g, id, paths, outer)];
+): WebMembers {
+  const riveted = detail.rivets === true;
+  if (detail.lacedWeb !== true && !riveted) return { meshes: [faceSkin(g, id, paths, outer)] };
   const struts = latticeStruts(g, id, paths, {
     halfWidth: outer.map(([y, w]) => [y, w - CHORD] as const),
     chord: CHORD,
     lacing: LACE,
     pitch: 1,
+    rivets: riveted,
   });
-  return [struts.chords, struts.lacing];
+  return {
+    meshes: [struts.chords, struts.lacing],
+    ...(struts.rivets === undefined ? {} : { rivets: struts.rivets }),
+  };
+}
+
+/** Name the rivet spawners of several web-member sets, skipping the rivetless. */
+export function rivetOutputs(
+  sets: Record<string, WebMembers>,
+): Array<{ name: string; spawn: NodeHandle }> {
+  const out: Array<{ name: string; spawn: NodeHandle }> = [];
+  for (const [name, set] of Object.entries(sets)) {
+    if (set.rivets !== undefined) out.push({ name, spawn: set.rivets });
+  }
+  return out;
+}
+
+/**
+ * The uprights' seam rows: a rivet every 0.10 m [estimated — no source
+ * found gives a pitch; about 4.5 diameters of a 22 mm rivet, a common
+ * 19th-century spacing], 55 mm in from the corner, the middle of a
+ * 100 mm angle's leg [derived from the 100 x 100 corner angles].
+ */
+export const UPRIGHT_SEAMS = { pitch: 0.1, inset: 0.055 } as const;
+
+/**
+ * Seam rivets along closed box members — the uprights, which are plate
+ * boxes with an angle in each corner (Plate XXXI's section tables). Each
+ * corner angle is riveted to the two plates it joins: a row on each face,
+ * `inset` in from the corner, every `pitch` along the member. The rows
+ * follow the member's own square section, which the skin squares to the
+ * projection of `up` (so a face normal is N = up made perpendicular to the
+ * member, and B = T x N): rivets and plates cannot disagree.
+ */
+export function seamRivets(
+  g: Graph,
+  id: string,
+  paths: NodeHandle,
+  halfWidth: ReadonlyArray<readonly [number, number]>,
+  up: readonly [number, number, number],
+  opts: { readonly pitch: number; readonly inset: number },
+): NodeHandle {
+  const samples = g.add(
+    pathResample,
+    { mode: "spacing", spacing: opts.pitch },
+    `${id}SeamSamples`,
+  );
+  g.connect(paths, "out", samples, "in");
+  const r = ramp(component(position(), 1), halfWidth);
+  const T = attribute("tangent", 3);
+  const U = vec(up[0], up[1], up[2]);
+  const N = normalize(sub(U, mul(T, dot(U, T))));
+  const B = cross(T, N);
+  const rows = CORNERS.flatMap(([sn, sb], c) =>
+    (
+      [
+        // On the N face: out along sn N, in from the corner along B.
+        ["N", mul(N, sn), mul(B, sb)],
+        // On the B face: out along sb B, in from the corner along N.
+        ["B", mul(B, sb), mul(N, sn)],
+      ] as const
+    ).map(([side, out, along]) => {
+      const at = g.add(
+        transformPoints,
+        { translate: add(mul(out, r), mul(along, sub(r, opts.inset))) },
+        `${id}Seam${c}${side}`,
+      );
+      const aim = g.add(
+        orientAlongVector,
+        { direction: out, up: T, axis: "+y" },
+        `${id}Seam${c}${side}Aim`,
+      );
+      g.connect(samples, "out", at, "in");
+      g.connect(at, "out", aim, "in");
+      return aim;
+    }),
+  );
+  return rivetSpawn(g, `${id}Seam`, rows);
+}
+
+/** Merge rivet point sets, size them, and spawn them. */
+function rivetSpawn(g: Graph, id: string, sets: readonly NodeHandle[]): NodeHandle {
+  const all = g.add(mergePoints, {}, `${id}Rivets`);
+  for (const h of sets) g.connect(h, "out", all, "in");
+  const sized = g.add(
+    setAttribute,
+    { name: "scale", type: "f32", tupleSize: 3, value: RIVET_HEAD },
+    `${id}RivetSize`,
+  );
+  const spawn = g.add(spawnInstances, { assetId: RIVET_ASSET }, `${id}RivetSpawn`);
+  g.connect(all, "out", sized, "in");
+  g.connect(sized, "out", spawn, "in");
+  return spawn;
 }
 
 export interface StrutOpts {
@@ -98,6 +210,8 @@ export interface StrutOpts {
    * lacing bar at 45 degrees across its face.
    */
   readonly pitch: number;
+  /** Also spawn a rivet wherever a lacing bar meets a chord. */
+  readonly rivets?: boolean;
 }
 
 /** The four section corners in ring order, as (sN, sB) sign pairs. */
@@ -118,7 +232,7 @@ export function latticeStruts(
   id: string,
   paths: NodeHandle,
   o: StrutOpts,
-): { chords: NodeHandle; lacing: NodeHandle } {
+): { chords: NodeHandle; lacing: NodeHandle; rivets?: NodeHandle } {
   const y = component(position(), 1);
   const w = ramp(y, o.halfWidth);
   // The resample step is uniform per call, so it takes the strut's widest
@@ -151,8 +265,42 @@ export function latticeStruts(
     shifted(`LaceA${f}`, lerp(corner(f), corner(f + 1), phase)),
     shifted(`LaceB${f}`, lerp(corner(f), corner(f + 1), sub(1, phase))),
   ]);
-  return {
-    chords: skin(g, `${id}ChordSkin`, merge(g, `${id}Chords`, chords), o.chord),
-    lacing: skin(g, `${id}LaceSkin`, merge(g, `${id}Lacing`, lacing), o.lacing),
+  // The chords and lacing are squared to the strut's face too (they carry
+  // its normal from the resample): with the default +y hint a chord box
+  // rolls up to 40 degrees off the face its rivets sit on.
+  const meshes = {
+    chords: skin(g, `${id}ChordSkin`, merge(g, `${id}Chords`, chords), o.chord, F),
+    lacing: skin(g, `${id}LaceSkin`, merge(g, `${id}Lacing`, lacing), o.lacing, F),
   };
+  if (o.rivets !== true) return meshes;
+
+  // RIVETS. At every sample each face's two zigzags meet the face's two
+  // chords, one each, so every chord takes a lacing end from each of the
+  // two faces it borders: two rivets per chord per sample, eight per
+  // strut section. Each head sits on its chord's outer face on that side,
+  // its axis along the face's outward normal.
+  const heads = CORNERS.flatMap(([sn, sb], c) =>
+    (
+      [
+        ["N", mul(N, sn)],
+        ["B", mul(B, sb)],
+      ] as const
+    ).map(([side, out]) => {
+      const at = g.add(
+        transformPoints,
+        { translate: add(corner(c), mul(out, o.chord)) },
+        `${id}Rivet${c}${side}`,
+      );
+      const aim = g.add(
+        orientAlongVector,
+        { direction: out, up: T, axis: "+y" },
+        `${id}Rivet${c}${side}Aim`,
+      );
+      g.connect(samples, "out", at, "in");
+      g.connect(at, "out", aim, "in");
+      return aim;
+    }),
+  );
+  const spawn = rivetSpawn(g, id, heads);
+  return { ...meshes, rivets: spawn };
 }

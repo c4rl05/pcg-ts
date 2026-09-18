@@ -20,24 +20,35 @@
  * just enough to tell them apart up close; the stone and the decks step
  * out of the family because they are different materials.
  *
+ * THE RIVETS ARE INSTANCES, not mesh. `?rivets` (which implies `?laced`)
+ * makes the cook put out `rivets*` outputs of instance batches — millions
+ * of them — and the page draws each batch as one instanced unit-size dome
+ * whose instance matrix carries the rivet's true size. They receive the
+ * sun's shadow but do not cast it: a head a few centimetres high throws
+ * nothing a 4096 map over 600 m could resolve, and casting would put
+ * millions of instances into every shadow pass.
+ *
  * Offline quality first: this page does not try to be fast yet.
  */
 import { type DataCollection, cook } from "pcg-ts";
-import { toBufferGeometry } from "pcg-ts/three";
+import { type AssetMap, toBufferGeometry, toInstancedMeshes } from "pcg-ts/three";
 import {
   ACESFilmicToneMapping,
   Box3,
+  type BufferGeometry,
   Color,
   DirectionalLight,
   DoubleSide,
   Fog,
   HemisphereLight,
+  type Material,
   Mesh,
   MeshStandardMaterial,
   PCFShadowMap,
   PerspectiveCamera,
   PlaneGeometry,
   Scene,
+  SphereGeometry,
   Vector3,
   WebGLRenderer,
 } from "three";
@@ -81,6 +92,55 @@ const MATERIALS = Object.fromEntries(
 ) as Record<PartClass, MeshStandardMaterial>;
 
 /**
+ * An output no class names — a module under construction declaring its
+ * own. Drawn rather than dropped, in a grey outside the iron family, so it
+ * is seen and seen to be unclassed.
+ */
+const UNCLASSED = new MeshStandardMaterial({
+  color: 0x8c8c8c,
+  roughness: 0.7,
+  metalness: 0.1,
+  side: DoubleSide,
+});
+
+/**
+ * The rivet head, at UNIT size: a spherical cap of base radius 1 seated on
+ * y = 0 and rising 0.7 along +y, the rivet's axis out of the plate. Each
+ * instance matrix carries the rivet's true size, so this is the shape
+ * only. Open at the base, which lies against the plate and is never seen;
+ * 16 around and 3 rings is 80 triangles, and there are millions of these.
+ */
+function rivetHead(): BufferGeometry {
+  const base = 1;
+  const rise = 0.7;
+  // The radius of the sphere the cap is cut from, and the polar angle at
+  // which it meets the base circle.
+  const r = (base * base + rise * rise) / (2 * rise);
+  return new SphereGeometry(r, 16, 3, 0, Math.PI * 2, 0, Math.acos((r - rise) / r)).translate(
+    0,
+    rise - r,
+    0,
+  );
+}
+
+/**
+ * What the cook's instance batches resolve against. The rivets are the
+ * iron's family a step darker than any class: they sit proud of the plate
+ * and read as its shaded dots.
+ */
+const ASSETS: AssetMap = {
+  rivet: {
+    geometry: rivetHead(),
+    material: new MeshStandardMaterial({ color: 0x5c4232, roughness: 0.58, metalness: 0.18 }),
+  },
+};
+
+/** Does this output carry rivets? The cook names them `rivets`, `rivets.<class>`, ... */
+function isRivets(name: string): boolean {
+  return name.startsWith("rivets");
+}
+
+/**
  * The tower's nominal envelope — Plate XXXI's base square with some room,
  * to the top of the campanile. The shadow camera is fitted to what the
  * cook actually built; this is only the fallback when it built nothing.
@@ -99,7 +159,10 @@ const SUN_DIR = new Vector3(-0.45, 0.78, 0.5).normalize();
 // The scene.
 // ------------------------------------------------------------------ //
 
-const renderer = new WebGLRenderer({ antialias: true });
+// A logarithmic depth buffer, because the page spans a rivet's head (a few
+// centimetres, from half a metre away) and the whole 312 m tower from 2 km:
+// a linear buffer over near 0.05 and far 2000 z-fights the far members.
+const renderer = new WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = ACESFilmicToneMapping;
@@ -121,14 +184,22 @@ scene.fog = new Fog(SKY, 900, 1950);
 // 3/4 view from about 600 m out, a little above the first floor: the
 // whole 312 m fits with room over the lantern, and the base square is
 // seen on its diagonal so all four legs are in view.
-const camera = new PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.5, 2000);
+const camera = new PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.05, 2000);
 camera.position.set(360, 140, 470);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 110, 0);
+// `?cam=x,y,z,tx,ty,tz` opens on a given eye and target instead: a way back
+// to a close look, and what a scripted capture poses the page with.
+const pose = new URLSearchParams(location.search).get("cam")?.split(",").map(Number);
+if (pose !== undefined && pose.length === 6 && pose.every(Number.isFinite)) {
+  const [x, y, z, tx, ty, tz] = pose as [number, number, number, number, number, number];
+  camera.position.set(x, y, z);
+  controls.target.set(tx, ty, tz);
+}
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
-controls.minDistance = 2;
+controls.minDistance = 0.2;
 controls.maxDistance = 1500;
 // Never under the ground plane: from below it the ground is a lid.
 controls.maxPolarAngle = Math.PI / 2 - 0.01;
@@ -249,8 +320,8 @@ attachWordmark();
 // The cook.
 // ------------------------------------------------------------------ //
 
-/** Every class's meshes, once built. */
-const meshes = new Map<PartClass, Mesh[]>();
+/** Every drawn output's meshes, by output name, once built. */
+const meshes = new Map<string, Mesh[]>();
 
 function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -263,34 +334,70 @@ function report(problems: readonly string[]): void {
   for (const p of problems) console.error(`eiffel: ${p}`);
 }
 
-/**
- * One class's output, as meshes. A collection may carry several geometry
- * items; each becomes its own mesh. Anything that is not a triangle mesh
- * (a stray polyline output from a module under construction) is reported
- * rather than drawn.
- */
-function meshesOf(cls: PartClass, collection: DataCollection, problems: string[]): Mesh[] {
-  const out: Mesh[] = [];
-  for (const item of collection) {
-    if (item.kind !== "geometry") continue;
-    try {
-      const geometry = toBufferGeometry(item.geo);
-      geometry.computeBoundingBox();
-      const mesh = new Mesh(geometry, MATERIALS[cls]);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mesh.name = cls;
-      out.push(mesh);
-    } catch (err) {
-      problems.push(`${cls}: ${message(err)}`);
-    }
-  }
-  return out;
-}
-
 function triangles(mesh: Mesh): number {
   const g = mesh.geometry;
   return (g.index ? g.index.count : g.getAttribute("position").count) / 3;
+}
+
+/** One output, drawn. */
+interface Drawn {
+  readonly meshes: Mesh[];
+  /** Triangles in the output's own meshes (instances not counted). */
+  readonly triangles: number;
+  /** Instances across its instance batches. */
+  readonly instances: number;
+}
+
+/**
+ * One output, as meshes. A collection may carry several items; each
+ * geometry item becomes its own mesh in `material` (and grows `box`), and
+ * each instances item becomes one instanced mesh per batch against
+ * {@link ASSETS}. Anything that fails to convert (a stray polyline output
+ * from a module under construction, an asset id nobody modelled) is
+ * reported rather than drawn.
+ */
+function draw(
+  name: string,
+  collection: DataCollection,
+  material: Material,
+  box: Box3,
+  problems: string[],
+): Drawn {
+  const out: Mesh[] = [];
+  let tris = 0;
+  let instances = 0;
+  for (const item of collection) {
+    try {
+      if (item.kind === "geometry") {
+        const geometry = toBufferGeometry(item.geo);
+        geometry.computeBoundingBox();
+        const mesh = new Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.name = name;
+        out.push(mesh);
+        tris += triangles(mesh);
+        box.union(geometry.boundingBox as Box3);
+      } else if (item.kind === "instances") {
+        // A device-resident item THROWS on `batches`; this page cooks on
+        // the CPU, so one here is a surprise worth naming, not drawing.
+        if (item.deviceBatches !== undefined) {
+          problems.push(`${name}: device-resident instances; this page draws CPU batches only`);
+          continue;
+        }
+        for (const mesh of toInstancedMeshes(item.batches, ASSETS)) {
+          mesh.castShadow = false;
+          mesh.receiveShadow = true;
+          mesh.name = name;
+          out.push(mesh);
+          instances += mesh.count;
+        }
+      }
+    } catch (err) {
+      problems.push(`${name}: ${message(err)}`);
+    }
+  }
+  return { meshes: out, triangles: tris, instances };
 }
 
 async function main(): Promise<void> {
@@ -298,8 +405,11 @@ async function main(): Promise<void> {
   statCook("cooking…");
   // `?laced` builds the web bars as laced lattice struts (about 1.5M
   // triangles more): the second of the tower's self-similar scales.
-  const laced = new URLSearchParams(location.search).has("laced");
-  const graph = buildEiffel(1889, { lacedWeb: laced });
+  // `?rivets` sets rivets on them as instances, and so implies `?laced`.
+  const params = new URLSearchParams(location.search);
+  const rivets = params.has("rivets");
+  const laced = params.has("laced") || rivets;
+  const graph = buildEiffel(1889, { lacedWeb: laced, rivets });
   // Shown before the cook, so a graph that fails to cook can still be read.
   attachGraphPanel([{ name: "eiffel skeleton", graph }], { into: graphSlot, title: "graph" });
 
@@ -309,30 +419,49 @@ async function main(): Promise<void> {
 
   const box = new Box3();
   let total = 0;
-  const present: PartClass[] = [];
+  let riveted = 0;
+  /** Drawn outputs the "show" select can isolate one at a time (not rivets). */
+  const present: string[] = [];
+  const keep = (name: string, drawn: Drawn): void => {
+    for (const mesh of drawn.meshes) scene.add(mesh);
+    meshes.set(name, drawn.meshes);
+    total += drawn.triangles;
+    riveted += drawn.instances;
+  };
   for (const cls of PART_CLASSES) {
     const collection = outputs[cls];
     if (collection === undefined) {
       classStats[cls]("absent");
       continue;
     }
-    const built = meshesOf(cls, collection, problems);
-    if (built.length === 0) {
+    const drawn = draw(cls, collection, MATERIALS[cls], box, problems);
+    if (drawn.meshes.length === 0) {
       classStats[cls]("no mesh");
       continue;
     }
-    let tris = 0;
-    for (const mesh of built) {
-      tris += triangles(mesh);
-      box.union(mesh.geometry.boundingBox as Box3);
-      scene.add(mesh);
-    }
-    meshes.set(cls, built);
+    keep(cls, drawn);
     present.push(cls);
-    total += tris;
-    classStats[cls](tris.toLocaleString());
+    classStats[cls](drawn.triangles.toLocaleString());
+  }
+  // Everything else the cook put out: the rivets, and any output no class
+  // names, which gets a stat line of its own so it cannot pass unseen.
+  for (const [name, collection] of Object.entries(outputs)) {
+    if ((PART_CLASSES as readonly string[]).includes(name)) continue;
+    const drawn = draw(name, collection, UNCLASSED, box, problems);
+    if (!isRivets(name)) {
+      overlay.addStat(`${name} (unclassed)`)(
+        drawn.meshes.length === 0 ? "no mesh" : drawn.triangles.toLocaleString(),
+      );
+    }
+    if (drawn.meshes.length === 0) continue;
+    keep(name, drawn);
+    if (!isRivets(name)) present.push(name);
   }
   statTotal(total.toLocaleString());
+  if (rivets || riveted > 0) {
+    overlay.addStat("rivets")(riveted > 0 ? riveted.toLocaleString() : "absent");
+  }
+  const hasRivets = [...meshes.keys()].some(isRivets);
 
   if (box.isEmpty()) {
     statSize("—");
@@ -344,17 +473,22 @@ async function main(): Promise<void> {
   }
 
   // Isolating one class is how a class is judged on its own; the shadows
-  // are redrawn with it, so an isolated class shades only itself.
-  if (present.length > 1) {
-    overlay.addSelect(
-      "show",
-      [{ value: "all", label: "all classes" }, ...present.map((c) => ({ value: c, label: c }))],
-      "all",
-      (v) => {
-        for (const [cls, list] of meshes) for (const m of list) m.visible = v === "all" || v === cls;
-        renderer.shadowMap.needsUpdate = true;
-      },
-    );
+  // are redrawn with it, so an isolated class shades only itself. A class
+  // keeps its own rivets (`rivets.<class>`), and "rivets" shows them alone.
+  if (meshes.size > 1) {
+    const options = [
+      { value: "all", label: "all classes" },
+      ...present.map((c) => ({ value: c, label: c })),
+    ];
+    if (hasRivets) options.push({ value: "rivets", label: "rivets" });
+    overlay.addSelect("show", options, "all", (v) => {
+      for (const [name, list] of meshes) {
+        const on =
+          v === "all" || v === name || (isRivets(name) && (v === "rivets" || name === `rivets.${v}`));
+        for (const m of list) m.visible = on;
+      }
+      renderer.shadowMap.needsUpdate = true;
+    });
   }
 
   report(problems);
@@ -372,7 +506,18 @@ renderer.setAnimationLoop(() => {
   tickFps();
 });
 
-main().catch((err: unknown) => {
-  statCook("failed");
-  report([message(err)]);
-});
+main()
+  .then(() => {
+    // Two frames after the scene is complete — the first draws the shadow
+    // map — `data-ready` tells a scripted capture it can shoot.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        document.body.dataset.ready = "1";
+      }),
+    );
+  })
+  .catch((err: unknown) => {
+    statCook("failed");
+    report([message(err)]);
+    document.body.dataset.ready = "failed";
+  });

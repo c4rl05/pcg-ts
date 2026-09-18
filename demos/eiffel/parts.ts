@@ -4,7 +4,8 @@
  * them back sorted by class. The graph merges each class into one output,
  * so a render colours by class and an inspection counts by class.
  */
-import { type Graph, type NodeHandle, mergePrimitives } from "pcg-ts";
+import type { Graph, NodeHandle } from "pcg-ts";
+import { mergePrimitives } from "pcg-ts";
 
 export const PART_CLASSES = [
   /** The corner uprights ("arbalétriers") of the legs and the shaft. */
@@ -35,10 +36,29 @@ export interface Detail {
    * About 1.5M triangles more.
    */
   readonly lacedWeb?: boolean;
+  /**
+   * Rivets as instances (asset id {@link RIVET_ASSET}): one wherever a
+   * lacing bar meets a chord. Implies `lacedWeb`. Around 1.5M instances.
+   */
+  readonly rivets?: boolean;
 }
 
-/** What a module returns: its finished mesh nodes, by class. */
-export type Parts = Partial<Record<PartClass, NodeHandle[]>>;
+/**
+ * The asset id every rivet spawns. A rivet's instance matrix carries its
+ * true size, so the host's asset is a UNIT round head: a dome of base
+ * radius 1 on local y = 0, rising along +y, the rivet's axis, out of the
+ * plate.
+ */
+export const RIVET_ASSET = "rivet";
+
+/**
+ * What a module returns: its finished mesh nodes, by class, and any rivet
+ * spawners, each named (a spawn call is capped at about a million
+ * instances, so rivets come out as several outputs, `rivets.<name>`).
+ */
+export type Parts = Partial<Record<PartClass, NodeHandle[]>> & {
+  rivets?: Array<{ name: string; spawn: NodeHandle }>;
+};
 
 /** Declare one graph output per class that has parts, named for the class. */
 export function assemble(g: Graph, parts: Parts): void {
@@ -52,6 +72,7 @@ export function assemble(g: Graph, parts: Parts): void {
     }
     g.output(out, "out", cls);
   }
+  for (const { name, spawn } of parts.rivets ?? []) g.output(spawn, "instances", `rivets.${name}`);
 }
 
 /** Fold several modules' parts into one. */
@@ -62,6 +83,7 @@ export function joinParts(...all: Parts[]): Parts {
       const list = parts[cls];
       if (list !== undefined && list.length > 0) (out[cls] ??= []).push(...list);
     }
+    if (parts.rivets !== undefined) (out.rivets ??= []).push(...parts.rivets);
   }
   return out;
 }

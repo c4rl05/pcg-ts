@@ -19,6 +19,7 @@ import {
 } from "pcg-ts";
 import { buildEiffel } from "../demos/eiffel/graph.js";
 import { NODES, node } from "../demos/eiffel/spec.js";
+import { UPRIGHT_SEAMS } from "../demos/eiffel/strut.js";
 
 type Vec3 = readonly [number, number, number];
 
@@ -156,6 +157,32 @@ describe("eiffel skeleton", () => {
     // 4 legs x 4 faces x 2 diagonals x 4 panels.
     expect(checked).toBe(128);
     expect(quadrantsSeen.size).toBe(4);
+  });
+
+  it("rivets the uprights' seams at the rule's pitch: 8 rows per upright", async () => {
+    // The count a spacing resample implies for a path of length L at pitch
+    // p: a sample every p from the start, plus the true end when L is not
+    // a whole number of pitches.
+    const g = buildEiffel(1889, { rivets: true });
+    g.output({ id: "legUprights4" } as NodeHandle, "out", "probe:uprights");
+    const { outputs } = await cook(g);
+    const lines = polylines(firstGeometry(outputs["probe:uprights"]!)!);
+    let expected = 0;
+    for (const line of lines) {
+      let L = 0;
+      for (let i = 1; i < line.length; i++) {
+        const [a, b] = [line[i - 1]!, line[i]!];
+        L += Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+      }
+      const whole = Math.floor(L / UPRIGHT_SEAMS.pitch + 1e-6);
+      expected += 8 * (whole + 1 + (L - whole * UPRIGHT_SEAMS.pitch > 1e-4 ? 1 : 0));
+    }
+    const item = outputs["rivets.leg.uprights"]![0]!;
+    expect(item.kind).toBe("instances");
+    if (item.kind !== "instances") return;
+    const count = item.batches.reduce((n, b) => n + b.count, 0);
+    expect(item.batches.map((b) => b.assetId)).toEqual(["rivet"]);
+    expect(count).toBe(expected);
   });
 
   it("round-trips through its serialized form to the same geometry", async () => {

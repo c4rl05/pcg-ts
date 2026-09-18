@@ -177,18 +177,24 @@ export const ARCH = { radius: 36.4064, crownY: 39.4, band: 2.5488 } as const;
  * lattice struts in panels 1-9 and 0.50 m in panels 12-28.
  */
 export const MEMBERS = {
+  // A section changes at a panel node, but a swept member has one ring
+  // per node and interpolates between them, so a step placed a centimetre
+  // past a node would be a step in anything else that reads this table
+  // (the rivets) and an 11 m taper in the skin. The stops sit ON nodes,
+  // and the change is spread over the panel above: XXIII -> XXII for the
+  // 1st floor's, XVII -> XVI for the 2nd's [estimated].
   upright: [
     [2.5, 0.41],
     [57.4, 0.41],
-    [57.41, 0.435],
+    [68.4, 0.435],
     [115.5, 0.435],
-    [115.51, 0.25],
+    [126.8, 0.25],
     [276.13, 0.25],
   ],
   web: [
     [0, 0.4],
-    [110, 0.4],
-    [115.51, 0.25],
+    [110.6, 0.4],
+    [115.5, 0.25],
     [276.13, 0.25],
   ],
   /** Horizontal struts: built of 80 x 80 angles [sourced]; depth [estimated]. */

@@ -41,7 +41,7 @@ import {
 } from "./lattice.js";
 import type { Detail, Parts } from "./parts.js";
 import { MEMBERS, NODES, type NodeLevel, node } from "./spec.js";
-import { faceSkin, webMembers } from "./strut.js";
+import { UPRIGHT_SEAMS, faceSkin, rivetOutputs, seamRivets, webMembers } from "./strut.js";
 
 /** Stations b and a (c is 0, d is 3). */
 const B = 1;
@@ -168,22 +168,38 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
   const four = (id: string, h: NodeHandle) => copyToQuadrants(g, id, h, quads);
   // Edge-rule members carry their faces' normals, which the copy must turn.
   const fourMembers = (id: string, h: NodeHandle) => copyMembersToQuadrants(g, id, h, quads);
+  const horizontalWeb = webMembers(
+    g,
+    "legHorizontal",
+    fourMembers("legHorizontals4", horizontals),
+    MEMBERS.horizontal,
+    detail,
+  );
+  const bracingWeb = webMembers(
+    g,
+    "legBracing",
+    fourMembers("legBracing4", merge(g, "legCrosses", crosses)),
+    MEMBERS.web,
+    detail,
+  );
+  const uprights4 = four("legUprights4", uprights);
+  const seams =
+    detail.rivets === true
+      ? [
+          {
+            name: "leg.uprights",
+            spawn: seamRivets(g, "legUpright", uprights4, MEMBERS.upright, [1, 0, 0], UPRIGHT_SEAMS),
+          },
+        ]
+      : [];
   return {
-    uprights: [skin(g, "legUprightSkin", four("legUprights4", uprights), MEMBERS.upright, [1, 0, 0])],
-    horizontals: webMembers(
-      g,
-      "legHorizontal",
-      fourMembers("legHorizontals4", horizontals),
-      MEMBERS.horizontal,
-      detail,
-    ),
-    bracing: webMembers(
-      g,
-      "legBracing",
-      fourMembers("legBracing4", merge(g, "legCrosses", crosses)),
-      MEMBERS.web,
-      detail,
-    ),
+    uprights: [skin(g, "legUprightSkin", uprights4, MEMBERS.upright, [1, 0, 0])],
+    horizontals: horizontalWeb.meshes,
+    bracing: bracingWeb.meshes,
     girders: [faceSkin(g, "legBelt", fourMembers("legBelts4", belts), MEMBERS.girderBar)],
+    rivets: [
+      ...seams,
+      ...rivetOutputs({ "leg.horizontals": horizontalWeb, "leg.bracing": bracingWeb }),
+    ],
   };
 }
