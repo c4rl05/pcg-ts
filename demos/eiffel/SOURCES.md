@@ -512,3 +512,220 @@ Level check: 309.63 + 17.035 = 326.665, against the printed lantern-terrace floo
    - web bars 0.80 m (panels 1–9) and 0.50 m (panels 12–28)
    - each strut made of 4 corner angles 80–100 mm, laced with 45 mm angles in X
 10. **Top.** Campanile: 4.85 + 4.50 box, a 7.435 cross-vault of 4 diagonal arches, the lantern, the top terrace at z = 300.515 and the flagpole to z = 312.275.
+
+---
+
+## 10. The floors as fitted out in 1889: pavilions, galleries, balustrades
+
+Compiled 2026-09-18 for `platforms.ts`. Heights are z above the ground at the tower centre (§0; the code's y) unless a number is marked as an altitude, which is z + 33.50. Tags as in §0.
+
+### 10.1 Source keys (added)
+
+Every plate below is from the same album as PL-I (Gallica ark bpt6k6542854f). Each plate is two scan halves, view f(n−1) on the left and f(n) on the right. The album's own "Table des planches" (https://gallica.bnf.fr/services/Toc?ark=bpt6k6542854f) gives the titles.
+
+| Key | Source | URL |
+|---|---|---|
+| PL-XIII | **Pl. XIII** "Galerie du premier étage" | https://gallica.bnf.fr/ark:/12148/bpt6k6542854f/f68.item , …/f69.item |
+| PL-13bis | **Pl. 13bis** "Galerie du deuxième étage" | https://gallica.bnf.fr/ark:/12148/bpt6k6542854f/f72.item , …/f73.item |
+| PL-XIV | **Pl. XIV** "Panneau 29 et troisième étage" | https://gallica.bnf.fr/ark:/12148/bpt6k6542854f/f76.item , …/f77.item |
+| PL-XVI | **Pl. XVI** "Ensembles des planchers des divers étages" | https://gallica.bnf.fr/ark:/12148/bpt6k6542854f/f84.item , …/f85.item |
+| PL-XVII | **Pl. XVII** "Détails des planchers des divers étages" (joint details only) | https://gallica.bnf.fr/ark:/12148/bpt6k6542854f/f88.item , …/f89.item |
+| PL-XVIII | **Pl. XVIII** "Rez-de-chaussée et premier étage. Aménagements", Fig. 3 "Aménagement du premier étage", 1:250 | https://gallica.bnf.fr/ark:/12148/bpt6k6542854f/f92.item , …/f93.item |
+| PL-XIX | **Pl. XIX** "Étages et parties supérieures. Élévations extérieures et aménagements", Fig. 1 "Élévation du côté de l'École Militaire", 1:200 | https://gallica.bnf.fr/ark:/12148/bpt6k6542854f/f96.item , …/f97.item |
+| PL-XXIX | **Pl. XXIX** "Restaurant français et restaurant russe" | https://gallica.bnf.fr/ark:/12148/bpt6k6542854f/f152.item , …/f153.item |
+| PL-XXX | **Pl. XXX** "Bar anglo-américain et Théâtre" | https://gallica.bnf.fr/ark:/12148/bpt6k6542854f/f156.item , …/f157.item |
+| E1900-TXT | G. Eiffel, *La Tour de trois cents mètres*, **Texte** (1900), Gallica ark bpt6k106381w. Chapter II "Plates-formes", § 1 "Plate-forme du 1er étage", pp. 212–214. Gallica's text endpoint is behind a bot check, so the OCR of the same scan was read from the Internet Archive mirror (OCR slips are flagged where a digit matters) | https://archive.org/download/n-0106381-pdf-1-400/N0106381_PDF_1_400_djvu.txt |
+| WOW-FIG | wonders-of-the-world.net, "Printery Le Figaro on the Eiffel tower" (secondary) | https://www.wonders-of-the-world.net/Eiffel-Tower/Prinery-le-Figaro-on-the-Eiffel-tower.php |
+| WOW-3F | wonders-of-the-world.net, "Third floor", quoting Eiffel 1900 (secondary) | https://www.wonders-of-the-world.net/Eiffel-Tower/Third-floor.php |
+
+The album is from 1900, and PL-XVIII's Nota says it shows changes made « après l'Exposition de 1889 ». Where a plate shows a post-1889 state, the 1889 state is taken from the text or from a figure titled "pendant l'Exposition de 1889".
+
+### 10.2 The 1st-floor plan (PL-XVIII Fig. 3)
+
+**Where each building stands.** One building stands on each side, between two legs, centred on the face's centre line [sourced PL-XVIII, dash-dot axes]. The figure puts Pile n°2 (Est) top left, n°3 (Sud) top right, n°1 (Nord) bottom left and n°4 (Ouest) bottom right [sourced].
+
+| side of the figure | between | building | face [sourced E1900-TXT] |
+|---|---|---|---|
+| top | piles 2 and 3 | RESTAURANT FRANÇAIS | SE, École Militaire side |
+| left | piles 2 and 1 | RESTAURANT RUSSE | NE |
+| right | piles 3 and 4 | BAR ANGLO-AMÉRICAIN | SW |
+| bottom | piles 1 and 4 | SALLE DE SPECTACLE, the 1889 **restaurant flamand** | NW, Trocadéro side |
+
+PL-XVIII's Nota [sourced]: « Après l'Exposition de 1889, le restaurant Flamand a été transformé en Salle de Fêtes, en Théâtre ». Every building's floor is "Sol (91.13)", z 57.63 [sourced; derived].
+
+**The outer edge.**
+
+- **Face length.** The dimension line under the bottom side reads **8.16 | 7.76 × 7 | 8.16**, "Longueur totale d'une face 70.69" [sourced PL-XVIII]. That is seven bays of 7.765 centred on the face and two end bays of 35.3475 − 3.5 × 7.765 = 8.17 [derived]. The buildings take the middle three bays.
+- **The 70.69 is measured on the arcade's column axis.** 0.40 + 9 × 7.765 + 0.40 = 70.685 [derived]. The floor gutter runs outboard of it: « 71,69 m » to the outside of the gutter [sourced E1900-TXT], so 0.50 each side [derived].
+- **The legs.** The column axis stands **4.00** outside each leg's outer upright line, and the leg is **15.00** [sourced PL-XVIII]. Against the node table: 35.3475 − 31.3476 = 3.9999 [derived]. The plan closes on PL-XXXI to the millimetre.
+
+**The strips, from the column axis inward**, on a building's face:
+
+1. **GALERIE, 2.60** wide [sourced PL-XVIII]. Its floor is printed **(89.93)** on PL-XVIII and **"Niveau de la Galerie promenade (89.90)"** on PL-XIX, with "1.23" between it and the restaurant floor [sourced]. E1900-TXT gives 1.20 in one passage and 1.23 in another [sourced]. This spec uses **89.90, z 56.40, 1.23 below the platform** [derived]. At the leg zones the gallery is 4.00 wide [sourced PL-XVIII].
+2. **TERRASSE** at the platform level, reached from the gallery by paired flights of steps at each building's entrance [sourced drawing]. It is **1.52** wide on PL-XVIII but **1.6865** on PL-XXX Figs 4 and 16 [sourced]. PL-XXX's larger-scale figure is preferred. The difference, 0.1665, is probably a different reference line (façade face against façade axis) [estimated].
+3. **The building, 14.9975 deep** (§10.4). PL-XVIII rounds it to "14.99", and the Français chain there to 11.94 + 3.00 [sourced].
+4. **BALCON**, the platform's inner edge, bows into the central void as an arc between the legs. Its chord is printed **32.695** [sourced PL-XVIII], the grande poutre's top span (§5.1), and 16.34 each side of the centre line [sourced]. E1900-TXT describes the void as a **29.00 m** square with cut corners and one rounded balcony per face [sourced]. §1's 4,200 m² gives a 28.245 square [derived, `spec.ts`]. The model keeps the 28.245 square.
+
+**Where the buildings stand** [derived]:
+
+- The gallery-side façade is 35.3475 − 4.2865 = **31.061** from the tower axis. The interior façade is 31.061 − 14.9975 = **16.0635**. Along the face they span ±23.295 / 2 = **±11.6475**, exactly the pier centres of the middle three bays.
+- So each building fills the bay between two legs, over the full depth of a leg: at the floor, the leg's outer upright line is 31.270 from the axis and its inner line 16.289 (PL-XXXI at z 57.63).
+- Along the face, a building's end clears the side uprights' axes by 4.64 at the floor and by 2.77 at z 65. It would reach an upright's skin (half-width 0.435) only at z ≈ 75.7, 18 m above the floor.
+- E1900-TXT (1900 chapter, p. 326) says the passage left behind the buildings « était beaucoup trop étroit », and in 1900 the rear façades were moved back to leave at least 2 m [sourced]. So the 1889 rear façades are the ones on PL-XXIX and PL-XXX, not those on Pl. XLVII.
+
+**Basements.** "Cuisine sous-sol (87.47)" and "Caves sous-sol (87.47)" flank every building [sourced PL-XVIII]. That floor is 3.66 below the platform [derived], and E1900-TXT agrees: « la hauteur de 3,66 m » [sourced]. The basements sit inside one 4 m panel of the floor girders (§10.6), so **nothing hangs below the deck** [derived].
+
+### 10.3 The 1st-floor gallery and its arcade (PL-XIII, PL-XIX)
+
+The outer gallery is a **roofed arcade** [sourced PL-XVIII legend: "P, Piliers des arcades de la galerie du 1er étage", "toiture des arcades"]. Heights below are above the gallery floor, z 56.40.
+
+**Plan.**
+
+- **Bays.** 9 bays per face on a **7.765** module (= 2 × 3.8825, the girder bays) [sourced PL-XIII, PL-XVIII].
+- **Columns.** At each bay end stands a pier of **two cast-iron columns 0.800 apart**, centre to centre. Mid-bay stands **one column**. Between them are two small arches of **3.4825** each, centre to centre [sourced PL-XIII]. The corner pier stands 0.40 from the corner, so its outer column is the corner column [derived].
+- **Column section.** The shaft is **0.18** square, on a 0.35 socle [sourced].
+- **Roof depth.** The roof spans **4.1875** from the column axis to an inner arcade of iron pilasters [sourced PL-XIII Fig. 21]. Compare 2.60 + 1.52 = 4.12 on PL-XVIII [derived].
+
+**Heights.**
+
+| element | above the gallery floor | z | tag |
+|---|---|---|---|
+| balustrade | **1.15** | 57.55 | [sourced PL-XIII "1.150", PL-XIX "1.15"] |
+| column | **3.80** | 60.20 | [sourced PL-XIII "Haut' de la colonne 3m80", PL-XIX] |
+| small arches' springing | 4.10 | 60.50 | [sourced: 0.300 above the capitals, PL-XIII] |
+| small arches' extrados crown | **5.84** | 62.24 | [sourced PL-XIX]; 3.80 + 0.30 + 1.538 + 0.20 = 5.838 [derived] |
+| plate pier over each pair, to the valley gutter | 3.80 + **2.25** = **6.05** | 62.45 | [sourced 2.250 = 1.000 + 0.650 + 0.600, PL-XIII; sum derived] |
+| inner arc of the arched gable (lattice-filled) | 6.95 | 63.35 | [sourced PL-XIX]; E1900-TXT « 6,94 m à la clef » [sourced] |
+| **vault crown at the face** | **8.70** | **65.10**, altitude 98.60 | [sourced PL-XIX "8.70" = 3.80 + 4.90]. PL-XXIX Fig. 13 gives the same line independently: 91.13 + 4.610 + 2.860 = 98.60 to "Dessus des arcs de la Galerie" [derived] |
+| vault crown at the inner pilasters | 8.940 | 65.34 | [sourced PL-XIII Figs 28, 31]: the vault rises 0.24 inward and drains outward [derived] |
+| palmette crest over each crown | ~10.0–10.4 | ~66.5 | [estimated, PL-XIX at 80 px/m] |
+| flag masts, one per pier | top ~12.2 | ~68.6 | E1900-TXT « mâts de 8,00 m de hauteur portant des drapeaux » [sourced]; top [estimated, PL-XIX] |
+
+**Arches and vaults.**
+
+- **Small arches.** Intrados radius **1.538**, rib 0.200 deep [sourced PL-XIII Fig. 11], semicircular [estimated from the drawing].
+- **Vault axis.** Each bay is roofed by its own vault, running back from the face with its axis perpendicular to it [sourced PL-XIII, E1900-TXT: « la toiture de chaque arceau »].
+- **Valley gutters.** They sit over the piers, **0.730** wide [sourced PL-XIII].
+- **Gable profile.** The outer arc fits a semi-ellipse with half-span (7.765 − 0.73) / 2 = 3.5175 and rise about 2.65 [estimated fit on PL-XIII Fig. 26; 8.70 − 6.05 = 2.65, derived]. PL-XIII prints radii 3.0675 (Fig. 11) and 3.3675 (Fig. 26) for these arcs, with 1.950 between the crowns on Fig. 26 [sourced]; the fit does not use them.
+- **Crown band.** Between the inner arc and the outer arc runs a band **1.75** deep at the crown [sourced PL-XIX]; E1900-TXT says « un croissant, dont la hauteur au sommet est de 2,00 m » [sourced].
+- **Roofing.** « La couverture de la galerie est en zinc ondulé reposant sur un voligeage qui lui-même prend appui sur cinq petites fermes en fer comprises dans la profondeur de l'arcade » [sourced E1900-TXT].
+
+### 10.4 The four pavilions (PL-XXIX, PL-XXX, E1900-TXT)
+
+**One plan for all four.** « quatre bâtiments ayant les mêmes dimensions en plan » [sourced E1900-TXT].
+
+- **Length: 23m295** along the face = 3 × 7.765 [sourced PL-XXIX Fig. 10, PL-XXX Figs 4, 16, 21; derived]. PL-XXIX Fig. 11 prints "21m295" [sourced], taken as a slip.
+- **Depth: 14m9975** = 3 × 3.8825 + 3.350 [sourced PL-XXIX Fig. 10, PL-XXX Figs 4, 16; derived]. E1900-TXT rounds it: « 11,65 m, plus une annexe de 3,35 m, soit ensemble 15,00 m » [sourced]. The Français' Fig. 4 prints "14m9075" [sourced], taken as a slip for 14.9975 [estimated].
+- **Setback.** The gallery-side façade stands 1.6865 (terrace) + 2.600 (gallery) = **4.2865** inside the column axis [sourced PL-XXX; derived].
+- **The rear annex.** « Cette annexe ne monte à toute hauteur que dans la travée centrale. Sur les côtés, cette partie s'arrête à une hauteur de 2,95 m et forme deux terrasses » [sourced E1900-TXT]. The terrace sits at **2.950** on the Bar (PL-XXX) and **2.90** on the Russe (PL-XXIX Fig. 9, "Sol (94.03)" on PL-XVIII) [sourced]. It has a 1.00 balustrade [sourced].
+
+**The roof is the arcade's.** « Au droit des restaurants, la toiture de chaque arceau se prolonge sur toute la profondeur du bâtiment et fait corps avec lui » [sourced E1900-TXT]. So the three bays' vaults run on from the arcade to the building's back: 19.28 in the centre bay and 15.93 in the outer bays [derived]. The roof plan PL-XXX Fig. 21 prints 15.155 + 4.124 = 19.279 [sourced].
+
+**Heights above the restaurant floor** (z 57.63):
+
+| | Français (PL-XXIX Fig. 7) | Russe (PL-XXIX Fig. 13) | Bar (PL-XXX Figs 1, 2, 6) | Flamand |
+|---|---|---|---|---|
+| gutter / wall | 5.020 [sourced] | 4.610 [sourced] | 5.030 [sourced] | 4.610 [sourced, PL-XXX Fig. 12, drawn as the theatre] |
+| vault crown | 7.497 → alt. 98.63 [sourced] | 7.47 → 98.60 [derived] | lantern eave **7.537** → 98.67 [sourced] | as the Bar: « identique au bar Anglo-Américain, sauf la décoration » [sourced E1900-TXT] |
+| lantern ridge | 8.257 → 99.39 [sourced; the chain gives 8.217] | "Hauteur totale 8.27" → 99.40 [sourced] | 7.537 + 0.700 = **8.237** → 99.37 [derived] | 99.37 [derived] |
+
+**Lanterns.** Each vault carries a gabled ridge lantern, **3.800** wide eave to eave, with a **2.650** glazed body, rising **0.700** [sourced PL-XXX Fig. 6; pitch atan(0.70 / 1.90) = 20.2°, derived]. Its length is [estimated from PL-XXX Fig. 21]:
+
+- in the centre bay, about 13.6, from 0.7 inside the interior façade to 1.0 short of the gallery façade;
+- in the outer bays, about 10.4, ending 0.4 short of the gallery façade.
+
+Only the lanterns rise above the arcade crowns, by about 0.8.
+
+**Taller ornaments, not modelled.**
+
+- The Russe's clock frontispiece finial, about 10.4 above the floor [estimated: an estimated apex + a printed 2.60, PL-XXIX Fig. 9].
+- The Français' 1889 crest finial, about 8.7 [estimated, PL-XXIX Fig. 1, "pendant l'Exposition de 1889"].
+
+### 10.5 Balustrades
+
+| where | height | posts | tag |
+|---|---|---|---|
+| 1st-floor gallery, outer edge | **1.150**: 0.150 plinth + 0.890 + 0.050 channel, a wooden handrail on top | cast-iron pilasters **180** wide every **1.74125** (half a small arch), the columns taking the other stations | [sourced PL-XIII Figs 11, 19, 20]. Infill: « 5 balustres en terre cuite dans chaque intervalle de 1.74125 » [sourced] |
+| 1st floor, round the central void ("Balcon") | not printed on the plates read | – | modelled as the gallery's [estimated] |
+| 2nd-floor gallery, outer edge | **1.150** = 0.150 + 0.900 + 0.100 | the gallery posts (§10.7), X panels 834.22 wide between them | [sourced PL-13bis Fig. 93] |
+| 3rd floor | the glazed room's **1.200** plate parapet (« Garde-corps de la galerie du 3me étage »), with glazing above it to 2.43 | – | [sourced PL-XIV Figs 2, 7] |
+| Eiffel's balcony, 2.58 above the 3rd floor | **1.000**, three round bars | – | [sourced PL-XIV Fig. 7; PL-XIX Fig. 3] |
+
+### 10.6 The 1st-floor deck and the skirt under it (PL-XVI, PL-XIX)
+
+**The deck structure.**
+
+- **Main girders.** 7.00 deep: the outer one is the grande poutre (§5.1) [sourced PL-XVI Fig. 6, PL-XIX]. The inner one is drawn the same way [estimated from PL-XVI Fig. 8]. Their tops are **0.230** below the floor [sourced].
+- **Cross girders** ("poutres transversales"). They span between the main girders every **3.8825**, **4.000** deep (3.90 in the leg zones) [sourced PL-XVI Figs 9, 11]. Between them run longitudinal struts 3.920 deep [sourced]. The cross girders' lattice form is not printed on the crops read [estimated].
+- **Joists.** I 160 parallel to the face at **0.6471** centres [sourced "647.1"; 3.8825 / 6 = 0.64708, derived].
+- **Floor build-up** [sourced PL-XVI Nota]: hourdis Perrière, a cement screed, sleepers, planks and asphalt. « Le sol des galeries n'a pas de hourdis Perrière ».
+- **Depth.** The deck is 4.23 deep at the cross girders and 7.23 at the main girders [derived: 0.23 + 4.00; 0.23 + 7.00].
+
+**Consoles.** Brackets ("consoles de la grande galerie de circulation") project from the outer girder every **3.8825**, one under each column position [sourced PL-XVI Fig. 9]. They carry the gallery 4.00 beyond the girder axis [sourced]. Each is **7.000** deep, with its outer edge a circular arc of **R = 14 m** [sourced PL-XIII]. The foot sits about 0.9 inboard of the top [estimated].
+
+**The skirt.** A **0.50** cornice plus **5.50** of 3 mm plate panels hangs below the gallery floor, down to altitude **83.90**, z 50.40 [sourced PL-XIX, PL-XIII; derived]. Two chains close on that level [derived]:
+
+- 89.90 − 0.50 − 5.50 = 83.90;
+- 91.13 − 0.23 − 7.00 = 83.90, the grande poutre's bottom.
+
+From outside, the grande poutre is hidden behind the skirt [derived]. The skirt's decoration, from the top down [sourced PL-XIX]:
+
+- a 1.50 zone of volute brackets over fluted panels;
+- a lattice cresting;
+- a **0.80** band of names in cartouches (COUCHY, BELGRAND, REGNAULT …), about 4.1–5.0 below the gallery floor [estimated position].
+
+**So the 72 names are on this skirt, 4.00 outboard of the grande poutre, not on the girder.**
+
+### 10.7 The 2nd floor (PL-13bis, PL-XIX)
+
+**The covered gallery.** Round the edge runs a roofed gallery, "Galerie couverte" [sourced PL-XIX Fig. 7], level with the platform (149.23) [sourced].
+
+- **Cantilever.** Consoles cantilever **2.000 + 0.760** [sourced PL-13bis Figs 71, 72, 78].
+- **Posts.** Box posts of two 160 channels stand every **3.36268** and rise **3.620** [sourced PL-13bis Figs 71, 93]. At the corners they are paired, 0.800 apart [sourced].
+- **Width.** The two post lines are **2.096** clear apart [sourced; the digit could read 2.996, and pixels favour 2.096].
+- **Roof.** A pitched roof, its ridge along the face [sourced PL-13bis Fig. 94]. Its eaves are about 3.0 and its ridge about 3.6 [estimated].
+- **Attic band.** A **0.62** band rises between the eaves beam (~2.85) and the post tops [sourced Fig. 93].
+- **Skirt.** It hangs **5.150** below the floor [sourced PL-XIX Fig. 2].
+
+**What stood on the platform.**
+
+- The 1900 album shows a **Buffet** of about 12.0 × 7.5, two decagonal customer tents about 7 across, and a photographer's cabin on a raised "Plateforme de l'abri (151.85)" [sourced labels, PL-XIX Fig. 7; sizes estimated]. These may postdate 1889.
+- **Le Figaro's 1889 printing pavilion** is not on the plates. A secondary source describes a two-part kiosk of pine and pitch-pine with glazed walls, near the north pile's lift, with no dimensions [sourced WOW-FIG].
+
+### 10.8 The 3rd floor (PL-XIV, PL-XIX)
+
+- **The gallery is inside the glazing.** The whole outline is labelled "Paroi vitrée", an octagon **16.560** across the flats with **10.90** straight sides and 45° chamfers [sourced PL-XIX Fig. 9; PL-XIV Fig. 8: 2 × 5.450].
+- **Its floor.** Inside it runs the "Galerie promenade (309.83)", **3.250** wide, round the 10.00 m core at (309.63) [sourced PL-XIV Fig. 2]. WOW-3F quotes Eiffel: a closed room 16.50 wide, 251 m² [sourced, secondary].
+- **The ceiling** is the floor of Eiffel's open balcony at 309.63 + **2.58** = 312.21 [sourced PL-XIX Fig. 3; derived]. The balcony overhangs the glass by about 0.5 [estimated].
+- **What 18.65 measures is not clear.** Nothing on these plates dimensions PL-I's 18.65 × 18.65 "côté extérieur". The balcony would be about 17.5 across [estimated]. So no plate shows what stands at the edge of an 18.65 deck.
+
+### 10.9 What `platforms.ts` builds from this
+
+- **1st-floor decks.** The platform ring stops 2.60 inside the column axis. The gallery ring below it has its top at z 56.40 and reaches 0.50 past the axis. It is 2.60 wide all round: the 4.00 width at the leg zones (§10.2) is left out.
+- **The arcade** as in §10.3, per face:
+  - 28 columns and 10 plate piers;
+  - 18 small arches of 6 facets each;
+  - 9 vaults, a semi-ellipse 3.5175 × 2.65 with a constant crown of 8.70 (the 0.24 inward rise left out);
+  - 9 crests and 10 masts.
+- **The four pavilions** from one massing (§10.4). The walls rise to the arcade's valley gutter, 4.82 above the floor [derived: 56.40 + 6.05 − 57.63], within the printed 4.61–5.03. The vaults are the arcade's, extended. The lanterns have their eave at 7.537 and their ridge at 8.237. The model has no compass: its layout copies PL-XVIII as drawn, with the render's top view (x right, z down) as the plate.
+- **Balustrades** as in §10.5: rails and posts only, no infill. The 3rd floor gets none of its own.
+- **The 2nd-floor covered gallery** with its attic band.
+- **The skirt** as one plane leaning in 0.50. That is less than the consoles' ~0.9 [estimated], so its foot clears the legs' outer uprights at the corners. The foot is at node XXIV (z 50.40), where the leg kinks and the upright's mitred skin reaches 34.66 from the axis; the panel's inner face is at 34.77 there [measured on the cooked mesh by slicing its triangles; derived].
+- **The cross girders** between the legs as 4-panel N-trusses, parallelograms that lean with the legs [the form estimated].
+- **Not built:**
+  - the inner arcade;
+  - the terrace level and its steps;
+  - the basements, joists and consoles;
+  - the names band;
+  - the per-building ornaments;
+  - anything on the 2nd platform but its gallery.
+
+### 10.10 Disagreements and open points
+
+- **Gallery floor.** 89.90 (PL-XIX) against 89.93 (PL-XVIII), a 3 cm difference. The drop is 1.23 (PL-XIX, PL-XVI, one E1900-TXT passage) against 1.20 (another E1900-TXT passage).
+- **Terrace width.** 1.52 (PL-XVIII) against 1.6865 (PL-XXX).
+- **Central void.** 29.00 with cut corners and bowed balconies (E1900-TXT) against the 28.245 square derived from PL-I's 4,200 m².
+- **Pavilion depth.** 14.9975 (three plans) against 14.9075 (Français Fig. 4). **Russe length:** 23.295 against "21m295" on Fig. 11. **Russe height:** 8.27 against "8.67" on Fig. 12.
+- **Français rear bays in 1889.** Terraces (E1900-TXT, which says they were covered « depuis l'Exposition ») against Fig. 1's ~5 m wall with arched gables.
+- **The names.** They are on the skirt (§10.6), but `firstFloor.ts` puts its frieze plaques on the grande poutre, which the skirt hides.
+- **The 3rd floor's 18.65** (PL-I) is not explained by any plate read (§10.8).

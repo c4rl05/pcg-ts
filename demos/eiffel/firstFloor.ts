@@ -52,12 +52,6 @@
  *   the face between the legs; this assumes one, laced like the first
  *   floor's, with 4 bays of equal share of the span [estimated].
  *
- * - THE FRIEZE: the names of 72 French scientists and engineers, 18 on
- *   each side, gilded on the frieze of the first-floor girder [the count is
- *   well known; SOURCES does not carry it]. Here 18 raised plaques per face
- *   on the grande poutre's outer face, evenly spaced between the uprights
- *   in a band just under its top chord, below the gallery [estimated:
- *   position and size; SOURCES gives neither].
  *
  * Every girder member is squared to its face. The chords and the web bars
  * are all edge-rule members, so each carries its face's normal
@@ -79,18 +73,7 @@
  * explicit positions (`placedLattice`), and the toolkit's edge and chain
  * rules then run on it unchanged.
  */
-import {
-  type Graph,
-  type NodeHandle,
-  add,
-  attribute,
-  copyToPoints,
-  meshPrimitive,
-  pointGrid,
-  setAttribute,
-  transformPoints,
-  vec,
-} from "pcg-ts";
+import { type Graph, type NodeHandle, attribute } from "pcg-ts";
 import {
   FACE_NORMAL,
   type Lattice,
@@ -98,7 +81,6 @@ import {
   copyMembersToQuadrants,
   copyToQuadrants,
   edges,
-  indexTable,
   type Vec3,
   merge,
   placedLattice,
@@ -144,12 +126,6 @@ const CHORD_SEAMS = UPRIGHT_SEAMS;
  * [estimated]), which that module does not export.
  */
 const RIVET_HEAD = 0.019;
-
-/**
- * The frieze's plaques [estimated, all but the count]: 0.6 m tall, 20 mm
- * proud, 0.3 m apart, their top 0.1 m under the top chord's lower face.
- */
-const FRIEZE = { perFace: 18, height: 0.6, thickness: 0.02, gap: 0.3, below: 0.1 } as const;
 
 /**
  * The face's lean in panels 1-4, horizontal per vertical, from the node
@@ -215,18 +191,6 @@ function girderMembers(
   };
 }
 
-/** A (height, value) stop table read at y, as a skin's ramp reads it. */
-function stopAt(stops: ReadonlyArray<readonly [number, number]>, y: number): number {
-  const first = stops[0]!;
-  if (y <= first[0]) return first[1];
-  for (let i = 1; i < stops.length; i++) {
-    const [y0, v0] = stops[i - 1]!;
-    const [y1, v1] = stops[i]!;
-    if (y <= y1) return v0 + ((y - y0) / (y1 - y0)) * (v1 - v0);
-  }
-  return stops[stops.length - 1]![1];
-}
-
 /** A box section's four corners in ring order, as (sN, sB) sign pairs. */
 const CORNERS = [
   [1, 1],
@@ -234,80 +198,6 @@ const CORNERS = [
   [-1, -1],
   [1, -1],
 ] as const;
-
-/**
- * The frieze on the +z face: a row of thin plaques across the grande
- * poutre just under its top chord, clear of the uprights, each lying in the
- * face plane on the web bars' outer faces. One box, tilted into the face,
- * copied along the row. A box carries no `normal`, so the finished row can
- * be copied onto the other faces as a mesh.
- */
-function buildFrieze(g: Graph): NodeHandle {
-  const bottom = node("XXIV");
-  const top = node("XXIII");
-  const rise = top.y - bottom.y;
-  const lean = bottom.outer - top.outer;
-  // In-plane depth 7.5309 [sourced PL-XI; derived here from the nodes].
-  const depth = Math.hypot(rise, lean);
-  // The face's outward normal: out along +z, and up, as the face leans in.
-  const out: Vec3 = [0, lean / depth, rise / depth];
-  // The band's centre, in the face plane, below the top chord's axis.
-  const t = depth - MEMBERS.girderChord - FRIEZE.below - FRIEZE.height / 2;
-  const y = bottom.y + (t * rise) / depth;
-  const { outer } = profileAt(y);
-  const lift = GIRDER_WEB[0][1] + FRIEZE.thickness / 2;
-  // The row stops clear of the uprights wherever a plaque reaches, so it is
-  // measured where they have leaned in furthest, at the plaques' top edge,
-  // and against the widest a square upright can be at any roll: its
-  // half-diagonal, stretched by its lean in a level cut. In panel 5 the legs
-  // are parallel prisms leaning equally in x and z, so that cut stretches
-  // the section by hypot(1, s, s) [derived]. The roll matters: the uprights
-  // are squared to x on every leg, so the +z row, copied, meets them at a
-  // different roll on the x faces.
-  const yTop = y + (lift + FRIEZE.thickness / 2) * out[1] + (FRIEZE.height / 2) * (rise / depth);
-  const slope = lean / rise;
-  const reach = stopAt(MEMBERS.upright, yTop) * Math.SQRT2 * Math.hypot(1, slope, slope);
-  const clear = 2 * (profileAt(yTop).inner - reach);
-  const pitch = clear / FRIEZE.perFace;
-  const plaque = g.add(
-    meshPrimitive,
-    {
-      shape: "box",
-      center: [0, 0, 0],
-      size: [pitch - FRIEZE.gap, FRIEZE.height, FRIEZE.thickness],
-    },
-    "ffFriezePlaque",
-  );
-  // Turn about x by the face's lean, so the box's y runs up the face and
-  // its z along the normal.
-  const tilt = g.add(
-    transformPoints,
-    { rotateEuler: [(-Math.atan2(lean, rise) * 180) / Math.PI, 0, 0] },
-    "ffFriezeTilt",
-  );
-  const slots = g.add(
-    pointGrid,
-    { countX: FRIEZE.perFace, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    "ffFriezeSlots",
-  );
-  const xs = Array.from({ length: FRIEZE.perFace }, (_, i) => -clear / 2 + (i + 0.5) * pitch);
-  const place = g.add(
-    setAttribute,
-    {
-      name: "P",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(indexTable(xs), y + lift * out[1], outer + lift * out[2]),
-    },
-    "ffFriezeSlotsPlace",
-  );
-  const row = g.add(copyToPoints, { topology: "keep" }, "ffFrieze");
-  g.connect(plaque, "out", tilt, "in");
-  g.connect(slots, "out", place, "in");
-  g.connect(tilt, "out", row, "source");
-  g.connect(place, "out", row, "target");
-  return row;
-}
 
 /**
  * The right half of the arch, crown to foot, as in-plane (intrados,
@@ -487,7 +377,6 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}
     girders: [
       faceSkin(g, "ffChord", chords, MEMBERS.girderChord),
       ...web.meshes,
-      four("ffFrieze4", buildFrieze(g)),
     ],
     arches: [
       skin(g, "ffArchBandSkin", four("ffArchBand4", arch.band), ARCH_BAND_HALF),
