@@ -1,0 +1,16 @@
+{
+  "state": "done",
+  "completed": 2,
+  "total": 2,
+  "wakeReasons": [],
+  "campaign": "calibration-reserves",
+  "sleepUntil": null,
+  "blockedSince": null,
+  "infraSince": null,
+  "updatedAt": "2026-09-18T10:04:32.972Z",
+  "pid": 70156,
+  "currentSlot": null,
+  "attempt": 1,
+  "lastSlot": "r0.spiral-stair.A",
+  "gate": null
+}

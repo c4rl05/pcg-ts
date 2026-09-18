@@ -1,0 +1,167 @@
+{
+  "campaign": "calibration-reserves",
+  "createdAt": "2026-09-18T09:52:43.129Z",
+  "model": "claude-sonnet-5",
+  "effort": null,
+  "agent": "claude-code",
+  "claudeVersion": "2.1.273",
+  "arms": [
+    {
+      "label": "A",
+      "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/baseline-0.17.0-0ad6998.tgz",
+      "sha256": "ee39df3869d9b71d678547bc4ae9b14aa8158e84e05d1ba08b55262655cf24bc",
+      "manifest": {
+        "role": "U0 baseline",
+        "file": "baseline-0.17.0-0ad6998.tgz",
+        "sha256": "ee39df3869d9b71d678547bc4ae9b14aa8158e84e05d1ba08b55262655cf24bc",
+        "version": "0.17.0",
+        "gitSha": "0ad699895f01d4de613a1db7c5002a35e3219092",
+        "dirty": false,
+        "srcLastChangedAt": "a67e9ec",
+        "node": "v22.20.0",
+        "packedAt": "2026-09-15"
+      }
+    }
+  ],
+  "tasks": [
+    {
+      "id": "forest-clearing",
+      "tier": "held-out",
+      "reserve": true,
+      "source": "../pcg-ts-private/evals/tasks/forest-clearing",
+      "sha256": "439bdc7ad937381cf9fc35a11afd4b99c4dbbe9169e6440facc2752986d57511",
+      "files": {
+        "CALIBRATION.md": "2f65589080b2c7e37da6c4bd48224d5a13b6e413dd9dd13e2456a085dafa73f1",
+        "brief.md": "8c9207c315c49f1f41e858a61ff442a3a264ee00a5408578425f623eacfcfcc1",
+        "check.mjs": "344e33df2645ecfaf600e60143357fb788d3ea4ba6b99e5807e5ce1b3feb6519",
+        "negatives/lifted-scatter.expect.json": "a33a7012d9809c7d16eca342b06772d39fdf0072048a39d560cab03bf15f604a",
+        "negatives/lifted-scatter.graph.json": "4c55995f28c2306d52aacba72a10b2ddafa5d6e665d0577fefe3a1e8f94aef7b",
+        "negatives/no-clearing.expect.json": "d465c97842c8ff54d2886db51177f1519355df0fa2ca5d15c35bdba07efcffb1",
+        "negatives/no-clearing.graph.json": "d95027654a43e3294bc4844d9d35dfb1a77364b8c3fd82ecd3da05051728efd0",
+        "negatives/palisade-ring.expect.json": "85acf2e894af3bc4640294dfe1e7f5abe29ebf92586223c06a82805683d0f772",
+        "negatives/palisade-ring.graph.json": "52496534ca36d1ecbaf7a32a9686ca095905598544c0d5050512f12f9000e5b6",
+        "negatives/spindly-trunks.expect.json": "85acf2e894af3bc4640294dfe1e7f5abe29ebf92586223c06a82805683d0f772",
+        "negatives/spindly-trunks.graph.json": "17e3b5cb0bfb265bf890e9d052f26a1c98ac3302e2f8d027d3c70283ddb6c263",
+        "negatives/thin-belt.expect.json": "fbca417a9dde4f8cd5a567c29076979da417527845a7c79a17e9e2aacca9120c",
+        "negatives/thin-belt.graph.json": "401d2448235f6c9e9c4c509f78f950187aaaf79771f01ba46f70db7363314bf7",
+        "negatives/unspaced-scatter.expect.json": "bb18c71ae36111388128eb43616a7b5f087ea228fcd4652ce9f019577fd5d172",
+        "negatives/unspaced-scatter.graph.json": "40db1a2e239885cee8f2dcbfab3405e9170de54db14dbad879c940ff7dd11036",
+        "reference.graph.json": "bf4f9205d4c2fbd5a5e92c42b1a34446fb35ac850259694a2a5d0a0cc4757c8b",
+        "task.json": "ef6f0f53dc8934ed21ac9e019e2f2049396d1e79c55b2c1f01000a13fcb468bb"
+      },
+      "budgets": {
+        "turns": 120,
+        "wallMinutes": 60
+      }
+    },
+    {
+      "id": "spiral-stair",
+      "tier": "corpus-adjacent",
+      "reserve": true,
+      "source": "evals/tasks/spiral-stair",
+      "sha256": "5f857fdb4effdadafb518d53306cd63f1456650cfe7b05143dbf2bfad89ca45d",
+      "files": {
+        "CALIBRATION.md": "8a0a4ce2ee16d7c2cbabf2423b308e84f63fc2ccbc5fd7f03d50776f8ed380d3",
+        "brief.md": "01c2f7d89c711ad86d53a589257285ea76c41a0c0a4f4c762887a469ae685e6c",
+        "check.mjs": "c2988952324486c1bad6544237b64fcc68c350b90737ab716de2da9e21db7d17",
+        "negatives/closed-turn.expect.json": "d8eadcf11325d485afd3f5facd85ca61eeb47152a969a46ab4360c9a7d8d8263",
+        "negatives/closed-turn.graph.json": "9e15167b4b56d1b42a7c1b6e72ea1c8b651ea88a8aa15a8376e57c1bfe39ea7b",
+        "negatives/facing-travel.expect.json": "bdff2c0c33a56a33013a4031c9fb8865f6617da5e428908a186d80ce31470c69",
+        "negatives/facing-travel.graph.json": "560f95c26ae18974dc98084a53277fef6833afd3f1690bd77d6b23c605b40bdb",
+        "negatives/one-too-many.expect.json": "7bbc6090537ecffeb7e78db3bbd90408418fd7bbdc716eb6e11899a85f9d54f0",
+        "negatives/one-too-many.graph.json": "bc576545b9e788d5dd586a35c6a8afe157577d26d7154d9554352080375d612c",
+        "negatives/ramp-tilted.expect.json": "e096d6442e75f6f3cc033ff5981babbe2fcd0c0e62e8ce89c591ae2c653993e0",
+        "negatives/ramp-tilted.graph.json": "f562edb3e18464bcb8212ee9b80782158443f75a51a2aa73dac39372b3943d72",
+        "negatives/tall-risers.expect.json": "2e88255a68edbbded1b892a8fd95132e72b874d6244d84abc14f5462c5ff62bd",
+        "negatives/tall-risers.graph.json": "12f07eb6098f02b38e93d0ebd8145d4a7d7fb2dae86582d388c5214c8f0bf01b",
+        "negatives/wobbling-radius.expect.json": "9e14299e888fc39e9383d83f3a1afc7fe197caa89327ae2b43f54dd4e72455d6",
+        "negatives/wobbling-radius.graph.json": "f2af3c86049f9e39410a6e2491f63cc89e89dbbf61fe121394ff4e5742c0efc3",
+        "reference.graph.json": "251eef1a39aea7bae644a2e4e7352f0ac86dfc93c01a599db8126bd6d561da68",
+        "task.json": "577a25aafb5041e94b41ccdfa80c4ce3015346f835f7ce7e689fae8fb939d504"
+      },
+      "budgets": {
+        "turns": 45,
+        "wallMinutes": 25
+      }
+    }
+  ],
+  "reserveTasks": [
+    "forest-clearing",
+    "spiral-stair"
+  ],
+  "retryOf": null,
+  "runsPerTask": 1,
+  "scheduleSeed": 20260919,
+  "schedule": [
+    {
+      "slotIndex": 0,
+      "slotId": "r0.forest-clearing.A",
+      "runIndex": 0,
+      "task": "forest-clearing",
+      "arm": "A",
+      "block": 0
+    },
+    {
+      "slotIndex": 1,
+      "slotId": "r0.spiral-stair.A",
+      "runIndex": 0,
+      "task": "spiral-stair",
+      "arm": "A",
+      "block": 1
+    }
+  ],
+  "caps": {
+    "turns": 80,
+    "wallMinutes": 30,
+    "outputTokens": 250000,
+    "scorerMinutes": 10,
+    "installMinutes": 10
+  },
+  "limits": {
+    "wakeAfterBlockedHours": 48,
+    "wakeAfterInfraHours": 12,
+    "maxContaminatedReschedules": 1,
+    "contaminationRateWindow": 6,
+    "contaminationRateMax": 0.5
+  },
+  "window": "always",
+  "gate": {
+    "$comment": "Defaults, used as-is by the pilot. A campaign overrides what it needs; see evals/README.md, 'The gate'. Effort thresholds are absent here on purpose — without them limb (a) is the pilot's solved-only comparison.",
+    "baselineArms": [
+      "A",
+      "A-prime"
+    ],
+    "strippedArm": "stripped",
+    "aaMaxGap": 0.28,
+    "strippedMinMargin": 0.17,
+    "mode": "calibration"
+  },
+  "prompt": "You are working in a Node.js project at {{cwd}} (in Git Bash: {{cwdBash}}), where the npm package pcg-ts is installed. That is your working directory. Read brief.md in this directory and do what it asks. Work only inside this directory. When you finish, the graph must be saved as graph.json in this directory.",
+  "promptSha256": "c1138921dd2697c3871ec154cdb73c1fba53985b8416b176554de79626256add",
+  "graphFile": "graph.json",
+  "sandboxRoot": "C:/pcg-eval/sandboxes",
+  "harnessGit": {
+    "sha": "2f2263a84e93e79aa7da68b1975f0c694e25cdaf",
+    "dirty": false
+  },
+  "harnessCode": {
+    "sha256": "f6db0c88dbc54f9572e1c82b9c094e5aacd21ef2a22561fd062f50e47bffd15d",
+    "files": {
+      "evals/harness/agents/claude-code.mjs": "ec873307ac5b4ec7e662614c564040e6abeb73c6f1d57e82e3a26bf4ea1ed3d5",
+      "evals/harness/limits.mjs": "5e1d67ca81a72743154d603f11d6152d22a89fbf4e03c52d30bc408290fe585d",
+      "evals/harness/reclassify.mjs": "28d2d03e3c6337fe60518eb3c31f59117d6b7409e5261b2e4d7fd3fb2ff5df61",
+      "evals/harness/run.mjs": "20941aa41f843e7b6927368deec8bbc689a1f77e4ea5383a031ef28f85e036fa",
+      "evals/harness/sandbox.mjs": "2a9393db48c1ae2c59d38f1665f6a70d8ed467f1ac4a75f9ed6ae8f57e8937d4",
+      "evals/harness/score.mjs": "022aa81a4bc6074246f3499cfbe8eb149801c301881aa8a1d3e76e361e4e6a4f",
+      "evals/harness/selftest.mjs": "e59f572ac229f8be9f09bf34f1415f9281215043bb85845ef9bd8a38e1aeb9d6",
+      "evals/lib/digest.mjs": "c0a658ca025cced1483c0d88ce3680e68da7fc6fd5fb9cdcc2f7dacb6aa5d835",
+      "evals/lib/digest.test.mjs": "605efe87f5042256dda6991492ef9274eb1b9c95a6ce9a3134d4ac43a44a1f99",
+      "evals/lib/geometry.mjs": "4db54395ba0accca321fce0c1872a45cd4352f4aea7e89b2b3c670fb27be0642",
+      "evals/lib/geometry.test.mjs": "001bf5a8d17314db95f05e8b59568fd52b366221bf170035f0e855cdb67aee3f",
+      "evals/lib/index.mjs": "d3acf23e28c874e6528bf05f04eb3f18201c5b4ba27c295a3bf8fc6a97a3ad85",
+      "evals/lib/items.mjs": "6183675d9adfe07fda0316900a5b340b1ca6349a7ea7cbfbfa3c8fe0a2c774ae",
+      "evals/lib/scorer.test.mjs": "ddf1a3232c212e15a12cc67dd9eb6ecff79d178bf91c6b4173c93e52fdce5f98"
+    }
+  },
+  "configPath": "evals/eval.config.json"
+}
