@@ -280,6 +280,8 @@ export function edges(
   const normals: Vec3[] = [];
   const sinA: number[] = [];
   const sinB: number[] = [];
+  const minA: number[] = [];
+  const minB: number[] = [];
   for (let k = 0; k < lat.levelCount; k++) {
     for (let s = 0; s < R; s++) {
       if (mask[k * R + s] !== 1) continue;
@@ -287,6 +289,8 @@ export function edges(
       const s2 = (((s + ds) % R) + R) % R;
       sinA.push(endSine(lat, s, k, s2, k + dk));
       sinB.push(endSine(lat, s2, k + dk, s, k));
+      minA.push(endSineMin(lat, s, k, s2, k + dk));
+      minB.push(endSineMin(lat, s2, k + dk, s, k));
     }
   }
   const faces = lat.g.add(
@@ -315,9 +319,21 @@ export function edges(
     },
     `${lat.id}${id}Ends`,
   );
+  const endsMin = lat.g.add(
+    setAttribute,
+    {
+      name: END_SINE_MIN,
+      domain: "primitive",
+      type: "f32",
+      tupleSize: 2,
+      value: vec(indexTable(minA), indexTable(minB)),
+    },
+    `${lat.id}${id}EndsMin`,
+  );
   lat.g.connect(node, "out", faces, "in");
   lat.g.connect(faces, "out", ends, "in");
-  return ends;
+  lat.g.connect(ends, "out", endsMin, "in");
+  return endsMin;
 }
 
 /**
@@ -330,6 +346,43 @@ export function edges(
  * it unchanged.
  */
 export const END_SINE = "endSin";
+
+/**
+ * Beside {@link END_SINE}, the smallest sine the member makes at each end
+ * with ANY line its column runs along there: the bisector, the segment
+ * below the station and the segment above (f32 x 2). Where the column
+ * kinks, a member's chord offset along it sits beside one segment, not the
+ * bisector, and the segment below a node can lean several degrees closer
+ * to the member than the bisector does: at XXIII a horizontal's bottom
+ * chord, 0.33 m below the node, is 20 mm nearer the upright than the
+ * bisector says. A clearance solved with this sine clears both segments.
+ */
+export const END_SINE_MIN = "endSinMin";
+
+/**
+ * The smallest of the sines between the member (s, k) -> (s2, k2) and the
+ * column's bisector, its segment below and its segment above at (s, k).
+ */
+function endSineMin(lat: Lattice, s: number, k: number, s2: number, k2: number): number {
+  const P = lat.positions;
+  const at = P[k]![s]!;
+  const m = unit3(sub3(P[k2]![s2]!, at));
+  const sineWith = (d: Vec3): number => {
+    const c = cross3(unit3(d), m);
+    return Math.hypot(c[0], c[1], c[2]);
+  };
+  let least = endSine(lat, s, k, s2, k2);
+  const below = P[k - 1]?.[s];
+  const above = P[k + 1]?.[s];
+  if (below !== undefined) least = Math.min(least, sineWith(sub3(at, below)));
+  if (above !== undefined) least = Math.min(least, sineWith(sub3(above, at)));
+  return least;
+}
+
+const unit3 = (v: Vec3): Vec3 => {
+  const l = Math.hypot(v[0], v[1], v[2]);
+  return l > 0 ? [v[0] / l, v[1] / l, v[2] / l] : [0, 1, 0];
+};
 
 /**
  * The sine of the angle between the member from (s, k) to (s2, k2) and the

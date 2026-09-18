@@ -8,12 +8,19 @@
  * node. Panels 19-28 are one straight frustum cut into self-similar
  * panels, every one a 0.94612 copy of the one below — Plate XXXI's node
  * table already carries that, so the lattice just reads it.
+ *
+ * The horizontals are 600 against the diagonals' 500 [sourced PL-VII
+ * Fig. 3], both laced at the plates' step (`LACING_STEP`), and their plates
+ * reach 0.90-1.00 m along them from the upright (Fig. 3's "900" and
+ * "1000").
  */
-import type { Graph } from "pcg-ts";
+import { type Graph, abs, add, component, le, lt, min, mul, position, ramp } from "pcg-ts";
 import { chains, edges, merge, skin, squareRing, stationLattice } from "./lattice.js";
 import type { Detail, Parts } from "./parts.js";
-import { MEMBERS, NODES } from "./spec.js";
+import { MEMBERS, NODES, node } from "./spec.js";
 import {
+  JOINT_REACH,
+  LACING_STEP,
   UPRIGHT_SEAMS,
   gussetMeshes,
   rivetOutputs,
@@ -37,18 +44,38 @@ export function buildShaft(g: Graph, detail: Detail = {}): Parts {
     edges(lat, "CrossA", 1, 1),
     edges(lat, "CrossB", -1, 1),
   ]);
-  const joints = { upright: MEMBERS.upright };
+  const laced = { lacingStep: LACING_STEP };
+  // At XI the shaft's bd stands on the two legs' b and d, still 0.50
+  // apart axis to axis (PL-VII Fig. 3 "250 250"): a member ending on bd
+  // there clears both boxes, 0.50 either side of the face centre, not one.
+  // Near a face centre line (within 1 m) and at or below XI [derived].
+  const P = position();
+  const y = component(P, 1);
+  const atMerge = mul(
+    le(y, node("XI").y + 0.01),
+    lt(min(abs(component(P, 0)), abs(component(P, 2))), 1),
+  );
+  const uprightAt = add(ramp(y, MEMBERS.upright), mul(atMerge, 0.25));
   const horizontalWeb = webMembers(
     g,
     "shaftHorizontal",
     horizontals,
     MEMBERS.horizontal,
     detail,
-    joints,
+    { upright: MEMBERS.upright, reach: JOINT_REACH.horizontal, kinks: true, uprightAt },
+    laced,
   );
-  const bracingWeb = webMembers(g, "shaftBracing", crosses, MEMBERS.web, detail, joints);
+  const bracingWeb = webMembers(
+    g,
+    "shaftBracing",
+    crosses,
+    MEMBERS.web,
+    detail,
+    { upright: MEMBERS.upright, reach: JOINT_REACH.diagonal, kinks: true, uprightAt },
+    laced,
+  );
   return {
-    uprights: [skin(g, "shaftUprightSkin", uprights, MEMBERS.upright, [1, 0, 0])],
+    uprights: [skin(g, "shaftUprightSkin", uprights, MEMBERS.uprightAbove, [1, 0, 0])],
     horizontals: horizontalWeb.meshes,
     bracing: bracingWeb.meshes,
     gussets: gussetMeshes([horizontalWeb, bracingWeb]),
@@ -57,7 +84,14 @@ export function buildShaft(g: Graph, detail: Detail = {}): Parts {
         ? [
             {
               name: "shaft.uprights",
-              spawn: seamRivets(g, "shaftUpright", uprights, MEMBERS.upright, [1, 0, 0], UPRIGHT_SEAMS),
+              spawn: seamRivets(
+                g,
+                "shaftUpright",
+                uprights,
+                MEMBERS.uprightAbove,
+                [1, 0, 0],
+                UPRIGHT_SEAMS,
+              ),
             },
           ]
         : []),

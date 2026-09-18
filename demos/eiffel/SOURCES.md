@@ -729,3 +729,526 @@ From outside, the grande poutre is hidden behind the skirt [derived]. The skirt'
 - **Français rear bays in 1889.** Terraces (E1900-TXT, which says they were covered « depuis l'Exposition ») against Fig. 1's ~5 m wall with arched gables.
 - **The names.** They are on the skirt (§10.6), but `firstFloor.ts` puts its frieze plaques on the grande poutre, which the skirt hides.
 - **The 3rd floor's 18.65** (PL-I) is not explained by any plate read (§10.8).
+
+---
+
+## 11. The lifts and the stairs (1889)
+
+Compiled 2026-09-18 for `lifts.ts`. Heights are z above the ground at the tower centre (§0) unless marked as an altitude (z + 33.50). Tags as in §0. Legs by the plates' numbering: n°1 Nord, n°2 Est, n°3 Sud, n°4 Ouest. E1900-TXT once prints "2 ou Ouest… 4 ou Est"; the plates and the rest of the text say 2 = Est, which is used.
+
+### 11.1 Source keys (added)
+
+Every plate is from the album of §10.1 (Gallica ark bpt6k6542854f), two scan halves each. The Gallica IIIF endpoint (`https://gallica.bnf.fr/iiif/ark:/12148/bpt6k6542854f/f<n>/<region>/<size>/0/native.jpg`) serves regions at full resolution, which is how the numbers below were read.
+
+| Key | Source | URL |
+|---|---|---|
+| PL-XX | **Pl. XX** "Ascenseurs. Réservoirs. Canalisation. Coupe verticale suivant la diagonale de la pile 1 (Nord) à la pile 3 (Sud)", 1:200. Figs 1–3 Edoux, Fig. 4 Otis; the "Description générale" with the stairs' legend; "Données numériques" for all three systems | https://gallica.bnf.fr/ark:/12148/bpt6k6542854f/f100.item , …/f101.item |
+| PL-XXI | **Pl. XXI** "Ascenseurs. Pompes. Réservoirs. Canalisation. Plan général", 1:200 | https://gallica.bnf.fr/ark:/12148/bpt6k6542854f/f104.item , …/f105.item |
+| PL-XXIIter | **Pl. XXII ter** "Ascenseur Otis. Poutre de l'ascenseur, voie, cabine, appareils de sûreté" | https://gallica.bnf.fr/ark:/12148/bpt6k6542854f/f116.item , …/f117.item |
+| PL-XXIII | **Pl. XXIII** "Ascenseurs à pistons articulés, système Roux Combaluzier et Lepape. Partie inférieure" | https://gallica.bnf.fr/ark:/12148/bpt6k6542854f/f124.item , …/f125.item |
+| PL-XXIIIter | **Pl. XXIII ter** "Ascenseur Édoux. Deuxième étage et étage intermédiaire" | https://gallica.bnf.fr/ark:/12148/bpt6k6542854f/f132.item , …/f133.item |
+| PL-XXVIII | **Pl. XXVIII** "Escalier de 1m00 de large du rez-de-chaussée au 1er étage" | https://gallica.bnf.fr/ark:/12148/bpt6k6542854f/f148.item , …/f149.item |
+| AUC-ADER | Ader, lot 2187, "Escalier de la tour Eiffel, tronçon de l'escalier hélicoïdal" (secondary) | https://www.ader-paris.fr/lot/2187/553958-escalier-de-la-tour-eiffel-troncon-de-lescalier-helicoidal |
+| AUC-ARTC | Artcurial, "An original staircase from the Eiffel Tower up for auction" (secondary) | https://www.artcurial.com/en/articles/an-original-staircase-from-the-eiffel-tower-up-for-auction |
+
+E1900-TXT (§10.1) is cited by page. Its page images are Gallica bpt6k106381w, view f(page + 14).
+
+### 11.2 Which lift in which leg (PL-XX, PL-XXI)
+
+| system | legs | from → to | printed | tag |
+|---|---|---|---|---|
+| Roux, Combaluzier et Lepape (articulated pistons) | piles 2 (Est) and 4 (Ouest) | rez-de-chaussée (35.08) → 1st floor (91.13) | « soit à 56m05 » | [sourced PL-XXI] |
+| Otis | piles 1 (Nord) and 3 (Sud) | rez-de-chaussée (35.08) → 2nd floor (149.23) | « soit à 114m15 avec arrêt facultatif au 1er étage » | [sourced PL-XX, PL-XXI] |
+| Edoux, vertical | the tower's centre | 2nd floor (149.23) → 3rd floor (309.63) | « soit sur une hauteur de 160m40 », in two stages of 80.20 | [sourced PL-XX] |
+
+- The rez-de-chaussée station, 35.08, is z **1.58** [derived]. The machinery is below it: « Sous-sol des machines », floor (30.50) [sourced PL-XX Fig. 4].
+- **Cars.** Roux: « cabine à double étage », 100 passengers [sourced PL-XX, PL-XXI]. Otis: double-deck, 50 passengers (« 50 voyageurs ») [sourced PL-XXI]. Edoux: 65 passengers (« 65 voyageurs pesant 4.350 ») [sourced PL-XX].
+- **Travel.** Roux car: « Distance parcourue par la cabine sur le chemin de roulement, 66m60 » [sourced]. Otis car: 10.83 × 12 = 129.96 along its track [sourced PL-XX]. Edoux: « Course des pistons et des cabines, 80m20 » [sourced].
+- **Base slope.** Both inclined systems print « composante … suivant l'inclinaison de la voie » as × **0.815** [sourced PL-XXI]. That is sin 54.6°, the leg's diagonal lean (§2.5) [derived].
+- **The Roux track curves at its top.** A straight 54.6° run would be 56.05 / 0.815 = 68.8 long, against the printed 66.60. That is consistent with a steeper top part, about 72° over the last 12 m or so [derived; only the total is printed].
+
+### 11.3 The inclined tracks
+
+- **In plan they lie on the pile's diagonal.** PL-XXI draws each track on its pile's diagonal, and PL-XXII ter Fig. 25 labels the beam's centre line « Diagonale de la Tour » [sourced]. PL-XX, a section along that diagonal, shows the beam ("P.A. Poutres des ascenseurs") between arbalétrier a and the leg's centre [sourced drawing].
+- **Otis beam** (PL-XXII ter, "Coupe verticale CD", 1:50) [sourced]:
+  - two plate girders **1.300** deep, their webs of plate with 60 × 60 × 7 angles;
+  - **3.800** apart axis to axis, **3.400** clear;
+  - top flanges **235** wide, with the rail on its « coussinet » above;
+  - lateral bracing between the girders in the plane of their bottoms (Fig. 26, "Coupe horizontale EF").
+- **The car rides on the beam's upper side.** On PL-XX the cars are drawn on the side facing up and out, away from the tower's axis [sourced drawing]. The car runs between the two girders: PL-XXII ter Fig. 27 draws the cabin between its rails [sourced drawing].
+- **Roux gauge.** Not printed. The two chain casings ("gaines G") on PL-XXIII Fig. 11 are about 2.8 apart at 1:50 [estimated].
+- **Where the rail line runs in the leg.** Only drawn, never dimensioned. It was measured on PL-XX at 1:200: the plate reads 76–79 px/m at full resolution, calibrated on a to c = 15√2 and on the 11.00 panels. Distances are along the diagonal, out from a's axis [estimated, about ±0.5 each]:
+
+  | z | beam centre | rail line | a → b/d |
+  |---|---|---|---|
+  | ~39 | 2.5 | 3.3 | 10.6 |
+  | ~68 | 3.4 | ~3.9 | 10.0 |
+  | 79.4 (XXI) | 3.9 | 4.75 | 9.3 |
+  | 90.4 (XX) | 3.7 | 4.55 | 8.6 |
+  | ~112 | 2.9 | 4.05 | 7.4 |
+
+- **The low readings cannot be right below the 1st floor.** A girder 1.9 off the diagonal has its foot 1.30 down the track's normal, 1.06 inward and 0.75 lower. It clears the leg's inner faces, and the horizontal struts in them, by 0.4 only if the rail stands at least **4.2** out from a [derived: 1.9 + 0.12 + 1.06 + 0.75 × 0.711 + 0.4√2 = 4.18]. So the half-width of the girder alone rules out the plate's 2.5 m beam centre there; the reading is off by about the width of a's box. `lifts.ts` uses 4.2–4.3 below node XXII and the measured values above it.
+- **Otis beam top.** It runs on about **9.9** above the 2nd floor to its pulleys [estimated, PL-XX Fig. 3].
+- **Roux circuit top.** Its top pulleys stand at the top of panel 6, node XXII, z 68.4. PL-XXIII Fig. 2 labels « Niveau sup.r du Panneau 6 » [sourced label].
+
+### 11.4 The cars
+
+- **Otis** (PL-XXII ter Fig. 1, "Élévation latérale", 1:50) [sourced unless noted]:
+  - two decks, « Plancher inférieur » and « Plancher supérieur », level, the upper set back up the slope: the stepped car of PL-XX Fig. 4;
+  - floors **4.670** long, and « Poutre transv.le du châssis, long.r 3.800 »;
+  - the decks **3.169** inside across (Fig. 2);
+  - doors « Porte roulante 2.02 »;
+  - a conductor's compartment ("Com.") at the lower end.
+  - Deck height 2.40 and outside width 3.40 [estimated].
+- **Roux.** No car drawing was read. `lifts.ts` uses decks 5.8 × 2.4 × 2.4 inside its narrower gauge [estimated].
+- **The level floors do not fit the curved part.** On a 54.6° track a level deck 4.67 long rises 6.6 m from end to end over the rail. The model's car dips its inner end at most 1.1 into the girders' trough and floats the rest. Above node XXIV the slope reaches about 70° and a rigid car can no longer sit level, so the model's cars all stand below XXIV [estimated moment].
+
+### 11.5 The Edoux (PL-XX Figs 1–3, PL-XXIII ter)
+
+- **The mechanism** [sourced PL-XX legend]:
+  - « Cy. Deux cylindres verticaux entre le 2e étage (149.23) et l'étage intermédiaire (229.43), soit 80.20 »;
+  - « Ca1. Cabine supérieure montant et descendant entre l'étage intermédiaire et le 3e étage … soulevée par deux pistons »;
+  - « Ca2. Cabine inférieure faisant contrepoids à la cabine Ca1 … entre le 2e étage et l'étage intermédiaire »;
+  - « Cab. Quatre câbles reliant les deux cabines au moyen de poulies de renvoi établies à la partie supérieure de la Tour ».
+- **The two cars run side by side.** « Les deux cabines arrivent simultanément au niveau du plancher intermédiaire où les voyageurs changent de cabine » [sourced PL-XXIII ter Fig. 19]. So when the upper car is h above the landing, the lower one is h below it [derived].
+- **Plan at the landing** (PL-XXIII ter Fig. 20, 1:50) [sourced]:
+  - « D'axe en axe des cabines 5m300 », 2.650 each side of the tower's axis;
+  - each car **3.570** × **3.900**;
+  - « D'axe en axe des pistons 4.064 » (upper car) and « D'axe en axe des guides 4.064 » (lower car), 0.247 beyond each car's end (printed "247");
+  - the landing floor (229.43); the « Plancher des machinistes » (227.17) under the distribution gear.
+- **The cars line up on the Nord–Sud diagonal.** PL-XX, a section along that diagonal, shows the two cars side by side: the upper car and its cylinders on the Nord side (left), the lower car on the Sud side (right) [sourced drawing]. Fig. 20's plan frame is the tower's diagonals: Poutre H runs between two adjacent faces' merged b/d [derived from the drawing].
+- **Guide posts** [sourced labels, PL-XX Fig. 2]:
+  - the « Poteau-guide » on the tower's axis, 890 × 600 (the first digit could be 8 [estimated]);
+  - a « Poteau-guide 500 × 600 » outboard of each car, about 5.0–5.5 from the axis on PL-XX [estimated]. PL-I's face-on elevation fixes it better: from the 2nd floor up it draws the lift as a strip of three vertical columns between the converging legs. There is one on the axis, about 0.8 wide, and one each side centred 3.64 off the axis and about 1.0 wide (edges 3.0–4.05) [estimated: dark-line runs on the deskewed PL-I Fig. 1 at 15.80 px/m, z 122–228, axis fitted on the side columns' symmetry]. Face-on, a point on the Nord–Sud diagonal shows at s / √2, so the outboard posts stand at s = 3.64 √2 = **5.15** [derived];
+  - a « Poteau-guide des câbles 390 × 580 ».
+- **Other members** [sourced PL-XXIII ter legend]:
+  - hollow cast-iron columns Co1 guide the pistons above the landing;
+  - columns Co2, « avec dents hélicoïdales à l'intérieur », guide the lower car's safety brake;
+  - « Tous les poteaux-guides sont eux-mêmes reliés à l'ossature de la Tour ».
+- **Heights.** 229.43 is z **195.93**, matching `FLOORS.landing` [derived]. The Edoux car height is 2.9 [estimated, PL-XX Fig. 2].
+
+### 11.6 The stairs
+
+- **Ground → 1st floor** [sourced PL-XX Nota]: « Un escalier de 1m00 de large conduit les visiteurs du rez-de-chaussée au 1er étage (56m00). Il y en a un dans la pile 2 et un dans la pile 4; les piles 1 et 3 n'ont pas d'escalier partant du rez-de-chaussée ».
+  - **Up and down.** « L'escalier de la pile 2 sert à la montée, l'autre à la descente » [sourced E1900-TXT p. 81].
+  - **Width.** E1900-TXT gives « 1,20 m entre garde-corps » against the plates' 1.00 [sourced both].
+  - **Form: straight flights with landings.** PL-XXVIII Fig. 1, "Escalier dans la pile n°2, élévation en diagonale" [sourced]:
+    - landings 1.300; runs printed "7.820 = 6.520 + 1.300" and "1.300 | 5.220 | 1.300";
+    - the pattern repeats every **7.8555** of height (with "3.1445", 11.00 together);
+    - the stair climbs « pente de 1m407 pour 1m00 », the leg's diagonal lean, so each repeat shifts 7.8555 / 1.407 = **5.583** inward [derived].
+  - **Direction of the flights.** « Les deux premières montées vont de gauche à droite tandis que la suivante revient de droite à gauche … ménager le passage de la cabine » [sourced E1900-TXT p. 81]. Per 11 m panel the text counts 23, 23 and 19 steps of 0.25 × 0.16 [sourced].
+  - **Position in the leg.** Hung from a beam near arbalétrier c (PL-XXVIII Fig. 1bis) [estimated]. PL-XXVIII's Nota: the stair in pile 4 is the same, except where it starts at the ground [sourced].
+- **1st → 2nd floor** [sourced PL-XX legend]: « e1. Escalier tournant de 1m60 de diamètre conduisant du 1er étage au 2e étage; il y en a quatre semblables, un dans chaque pile ».
+  - **Steps** [sourced E1900-TXT p. 81]:
+    - treads 0.64 wide, risers 0.178;
+    - one helix per panel, joined by straight flights of 10 treads of 0.255 and 11 risers of 0.207.
+  - **Position.** PL-XX Figs 3–4 draw the helices beside arbalétrier c, each panel's helix set further in than the one below it [sourced drawing]. Measured, the axis sits about 2.3 inside c along the diagonal, at the panel's top node [estimated]. Core about 1.60 − 2 × 0.64 = 0.32 [derived].
+- **2nd → 3rd floor, service only.** « interdit au public … simplement un escalier de service » [sourced E1900-TXT p. 81].
+  - **The helices** [sourced PL-XX legend; diameters read on PL-XX Fig. 2]:
+    - e2, 2nd floor → landing, Ø **1.600**;
+    - e3, landing → 3rd, Ø **1.680** (that the label is a diameter is [estimated]).
+    - e3 reaches « l'escalier de raccord (Panneau 26-27), 314 marches » [sourced PL-XX Fig. 2].
+  - **They take the halves of the shaft the cars leave free** [sourced drawing PL-XX Fig. 2]: e2 under the upper car's run, between its two cylinders; e3 over the lower car's run. E1900-TXT: « placé au départ dans la moitié gauche … reporté … dans la moitié droite … laisser libre la course des cabines » [sourced].
+  - **Auctioned sections** (dismantled 1983): Ø 1.70, 3.47 high (AUC-ADER); Ø 1.75, 2.60 to a landing, 14 steps, 24 sections cut and 20 sold on 1 December 1983 (AUC-ARTC) [sourced, secondary]. Those diameters are the later stair's, a little over the plate's.
+- **Step counts to each level, 1889** [sourced E1900-TXT p. 304]:
+
+  | level | steps | cumulative |
+  |---|---|---|
+  | 1st floor | 347 | 347 |
+  | 2nd floor | 327 | 674 |
+  | intermediate landing | 456 | 1,130 |
+  | 3rd floor | 455 | 1,585 |
+  | summit | 125 | **1,710** |
+
+  The average risers are 56.05 / 347 = 0.162, 58.10 / 327 = 0.178, and 80.20 / 456 = 0.176 [derived].
+- **After 1889.** In 1899–1900 the Sud Otis was replaced by a wide stair, the Est and Ouest stairs became up-only, and the helices were closed to the public [sourced E1900-TXT pp. 331, 361–362]. None of that is modelled.
+
+### 11.7 What `lifts.ts` builds from this
+
+- **Legs.** Following `platforms.ts`'s layout of PL-XVIII (x right, z down), pile 4 Ouest is the +x+z leg, quadrant target 0; then pile 3 Sud (1), pile 2 Est (2), pile 1 Nord (3). Otis tracks go to the odd targets and Roux tracks to the even ones [derived].
+- **Tracks.** Each is two 1.30-deep plate girders with rails, 3.80 apart (Otis) or 2.8 (Roux), plus a tie at every node and an X of lateral bracing per panel. The rail line is read at every node from the leg's inner corner plus `RAIL_OFFSET`.
+  - Otis: from z 0 to 125.63.
+  - Roux: from z 0 to 68.4.
+- **Cars.** One per leg, lower floors at 30 (Ouest), 42 (Sud), 12 (Est) and 22 (Nord) [estimated moment]. Each is two level decks stepped up the slope, a chassis along the rails, and a hanger under the lower deck's outer end.
+- **Edoux.**
+  - The central post, 115.73 → 276.13.
+  - Two outboard posts at ±5.15 on the Nord–Sud diagonal (from PL-I, §11.5).
+  - Measured face-on on a 4096 px orthographic render, the same way PL-I was read, the model's strip has the plate's three clusters. The side clusters are 2.95–4.02 off the axis against the plate's 3.0–4.05. The central cluster is 1.42 wide against about 0.8, because the boxes turned to the diagonal show their diagonals face-on. The model's columns are solid; the plate draws outlines.
+  - Nord: the cylinders at 2.650 ± 2.032 from the axis, up to the landing, then the piston columns on to 276.13.
+  - Sud: the lower car's guide columns, 115.73 → 195.93.
+  - Both cars at mid-run, 40.1 above and below the landing [estimated moment].
+- **Stairs.**
+  - e1 in all four legs: a helix per panel 6–11 and 11-riser flights between them.
+  - The ground → 1st stair in piles 2 and 4, in two 1.00 lanes 1.8–3.8 off the diagonal, clear of the car. Each 7.8555 repeat has three flights of 15 risers and a 5.583 inward shift.
+  - e2 and e3 in the shaft.
+  - Treads are boxes, with a newel per helix and a hand rail swept along each helix.
+- **Checked on the cooked mesh.** Every vertex, and 11 points along every triangle edge, was tested against the leg sections re-typed from §2.4.
+  - Tracks, cars and the leg stairs stay inside their leg below XVII. The closest margins to a face plane: Otis girders 0.41, Roux 0.76, cars 1.21, ground stair 0.63, e1 1.20. No sample falls inside a horizontal strut's 0.3 box.
+  - The Otis beam's last 10 m above XVII pass 0.6 inside the line of b and d, into the open middle, where the leg's inner faces carry no members.
+  - The Edoux posts stay 0.90 inside the shaft square at the top. The Otis beam tops stay 2.1 clear of them.
+- **Not built:**
+  - the machinery, cylinders and pulleys of the inclined lifts;
+  - the Edoux cables, top pulleys and distribution gear;
+  - e3's « escalier de raccord » and the stairs above the 3rd floor;
+  - the openings the lifts need in the decks of `platforms.ts`: the 1st and 2nd floors and the landing are solid there, so tracks, posts and stairs pass through them.
+
+### 11.8 Disagreements and open points
+
+- **Rail line below the 1st floor.** The plate reading gives 3.3; the clearance of the girders' feet requires at least 4.2 (§11.3). The model uses 4.2.
+- **Ground stair width.** 1.00 (PL-XX, PL-XXVIII) against 1.20 between hand rails (E1900-TXT).
+- **Riser.** 0.16 (E1900-TXT) against 7.8555 / 45 = 0.175 for three 15-riser flights per repeat (the model) [derived].
+- **Leg numbering.** One E1900-TXT passage swaps 2 and 4.
+- **e3's diameter.** 1.68 (PL-XX label) against 1.70–1.75 (auctioned sections).
+- **The Edoux central post.** "890 × 600" or "800 × 600".
+
+---
+
+## 12. The campanile re-read (PL-XIX Figs 3–13, PL-VII Fig. 4)
+
+Added 2026-09-18 after a proportion audit of the summit against the plates. Where this section and §6.3, §6.4 or §10.8 disagree, this section is the later reading and `summit.ts` follows it.
+
+### 12.1 Sources
+
+- **PL-XIX** (key in §10.1) has more than its Fig. 1. The other figures are all at 1:200 ("Échelle 0m005 p. m."):
+  - Fig. 3, "Troisième étage, élévation";
+  - Fig. 4, "Coupole, élévation";
+  - Fig. 5, the plan of the dome girders over "Toiture du logement de Monsieur Eiffel";
+  - Fig. 8, a second plan of the same girders;
+  - Fig. 9, "Plan du troisième étage, coupe horizontale AB";
+  - Figs 10–13, the lantern's horizontal sections QR, OP, MN, KL.
+
+  The scans are about 78.8 px/m. That was checked against figures printed on the same drawings: Fig. 3's "5.00" = 394–400 px and Fig. 4's "3.980" = 315 px. Figs 5 and 8 scan at about 82 px/m, so they were measured against their own "14.870".
+- **PL-VII Fig. 4** (key in §0) was re-read for panel 29's rows and members, and for the lantern.
+- Pixel readings here are **[estimated]**, following §0's tag rule. They were made on the full-resolution scans with a ruler overlay.
+
+### 12.2 Readings
+
+**Panel 29 (PL-VII Fig. 4)**
+
+- **Rows.** "3,173" is a lattice band at the base and "8,057" the rest [sourced].
+  - The 8.057 holds three X rows, drawn 2.42–2.47 apart between horizontals [estimated].
+  - PL-XIX Fig. 3 prints the band as "3.50" [sourced].
+- **Horizontals.** Plate girders: "600×6" at the band's top and at its base, "600×7" under the floor [sourced]. The two horizontals between the X rows are light angles [estimated].
+  - The band-top girder hangs from its node: drawn 0.1–0.65 below the 3.173 mark [estimated].
+  - The floor's structure is "850" deep [sourced], read as a 0.25 build-up over the 0.60 girder, which puts the girder 0.25–0.85 below the floor [derived].
+- **Posts.** "500" is printed three times [sourced]; the posts are drawn 0.53 [estimated]. They are as heavy as the corner uprights, not as light as the diagonals.
+- **The web.** Flat bars, drawn as double lines 0.08–0.11 wide [estimated].
+  - One X per cell in the rows.
+  - In the band, each diagonal is a pair of bars about 0.30 apart along the face [estimated].
+  - Every cell corner carries a gusset fillet [drawn].
+- **The core above the floor.** The corner uprights c and the merged b/d on the face centre lines continue up through the room to the balcony beam [drawn, PL-VII Fig. 4].
+
+**The room (PL-XIX Figs 3, 5, 9; PL-VII Fig. 4)**
+
+- **The chain's 4.850 [sourced] is two storeys:**
+  - 2.58, from 309.63 to "Niveau du plancher du logement de Mr Eiffel (312.21)" [sourced];
+  - then "Logement de Mr Eiffel 2.270" [sourced Fig. 3];
+  - 2.58 + 2.27 = 4.85 [derived].
+- **The 16.56 glazed octagon (§10.8) holds only the lower 2.58.**
+  - A 1.20 lattice parapet ("Treillis 40×40×4") [sourced PL-VII], with glazing above.
+  - PL-VII splits the storey 1.200 + 1.030 + 0.200 = 2.430 up to its balcony beam ("Fer I 120×5×48") [sourced]. That is 0.15 under PL-XIX's 2.58.
+- **The apartment stands inside the core.**
+  - Fig. 5 prints its roof square as "10.680" [sourced]; Fig. 3 draws it 10.84 wide and 2.27 tall [estimated].
+  - Nothing 16.56 wide continues above 312.21.
+  - 10.68² = 114 m² gross, against TE-APT's "100 m²" [derived].
+- **The balcony on the gallery's roof** ("Balcon du logement de Mr Eiffel").
+  - Railing "1.000" [sourced PL-VII].
+  - The deck's edge is drawn 17.6–17.9 across [estimated PL-VII], so it stands 0.5–0.7 proud of the glass.
+
+**The lattice box and the dome (PL-XIX Figs 3, 5, 8; PL-VII Fig. 4)**
+
+- **The dome is a true semicircle.**
+  - Fig. 5 prints "7.435" on each half-diagonal and "14.870" across [sourced].
+  - PL-VII's right-hand chain prints "11,935" = 4.500 + 7.435 [sourced].
+  - So the rise equals the plan radius, 7.435: a semicircle springing from the box's top, with no stilt. §6.4's "slightly stilted" is withdrawn.
+  - PL-VII's left-hand chain reads "7,485" [estimated digit]. 11.935 and Fig. 5 settle the rise at 7.435. The 0.05 gap to 326.715 stays open (§6.4).
+- **Fig. 3 labels the box's 4.50 "Parties droites des poutres en diagonale"** [sourced]. The diagonal girders run straight up through the box and curve above it, so 11.935 is their full height.
+- **The ribs are box girders.**
+  - "1.130" overall and "0.770" between the chords, at the girders' ends [sourced Fig. 5]. Fig. 8 reads "1.180" / "770" [sourced; a second reading].
+  - About 1.2 deep at the crown [estimated PL-VII]. They are not planar trusses.
+- **The box's width, read four ways:**
+  - corner-column axes 10.36 (PL-VII) and 10.48 (PL-XIX Fig. 3) apart, face-on [estimated];
+  - outer faces 10.96 and 11.2 [estimated];
+  - PL-VII prints "10,00" inside it [sourced];
+  - the plans draw a "10.680" square [sourced].
+
+  One layout fits all four: columns on the ribs' springing, 7.435/√2 = 5.257 from the axis, so 10.515 apart [derived], and about 0.55 wide [estimated]. That leaves 9.965 clear between them, PL-VII's 10.00. The 10.680 square falls within the columns' width.
+- **The box's faces.**
+  - A diamond mesh of flat bars about 0.09 wide, 0.75 apart along the face, at about 58° [estimated PL-XIX Fig. 3, PL-VII].
+  - A plate at the foot and one at the head, and posts at the 2.50 bays.
+  - No horizontal at mid-height.
+
+**The lantern (PL-XIX Figs 4, 10–13; PL-VII Fig. 4)**
+
+- **The lantern terrace** ("Plateforme du phare") is a square with chamfered corners [sourced drawing, Fig. 13].
+  - Fig. 13 dimensions "5.750" along the DIAGONAL, chamfer flat to chamfer flat, and prints "776" along a chamfer [sourced].
+  - The side is therefore 5.750/√2 + 0.776/√2 = 4.615 [derived].
+  - PL-VII draws the deck 4.57–4.63 [estimated]. Its own "5,750" arrows, 4.37 apart, sit across the elevation where the side should be.
+  - §6.4's "5.750 wide base" is withdrawn.
+- **The lantern is decagonal.**
+  - Figs 12 (section MN, the balcony) and 13 (KL, the soubassement) draw 10-sided plans with flats to the Seine side [sourced drawing]. The period engraving's apparent octagon is set aside for the plans.
+  - The soubassement is "2.60" across the flats [sourced Fig. 13]; 2.734 across the corners [derived]. PL-VII's "2.686" [sourced] falls between them.
+- **The balcony** ("Balcon de la Lanterne (329.7…)").
+  - "3.60" across the flats [sourced Fig. 12; the reading of its last digit is estimated]; 3.785 across the corners [derived].
+  - The elevations draw it 3.75 (PL-VII) and 3.83 (PL-XIX Fig. 4) across the corners [estimated].
+  - Its floor is 2.305 + 0.775 = 3.080 above the terrace [sourced PL-VII], at altitude 329.795 [derived], which agrees with the label.
+  - It stands on quarter-round consoles 0.775 deep [sourced], and its parapet is "0.900" [sourced PL-VII, PL-XIX Fig. 4].
+- **The cupola is bulbous.** Straight sides for about 0.9, then it rounds in to the top deck [estimated PL-XIX Fig. 4, PL-VII]. It is drawn 2.74 wide [estimated].
+- **The top terrace.** The 0.125 deck is drawn 1.75–1.80 wide [estimated PL-VII], with a "1.00" railing round it [sourced PL-XIX Fig. 4].
+- **"Soutien du paratonnerre 3.05"** [sourced PL-XIX Fig. 4] stands on the top terrace.
+  - Posts "1.700" apart [sourced PL-VII; PL-XIX draws 1.79].
+  - The posts run straight for "1.200" [sourced PL-VII], or about 1.8 [estimated PL-XIX], then close in on the pole.
+  - At 1:1000, on PL-I, it reads as a small cupola above the top terrace.
+
+### 12.3 What `summit.ts` builds from this
+
+- **Panel 29.**
+  - The band at 3.173, then three even X rows [estimated split].
+  - Posts 0.50; flat bars 0.09; paired bars in the band.
+  - 0.60 × 0.20 plate girders, one hanging from the band's top node and one 0.25–0.85 under the floor. The base's girder is the shaft's own 0.60 horizontal.
+  - The corner uprights and the b/d posts run on to the apartment floor.
+- **The gallery.** A 16.56 / 10.90 octagon, 2.58 tall, built as its frame: mullions about every 1.35 m, sill, parapet and head rails, and the parapet's X. The panes are left open, since no glass class exists.
+- **The balcony and the apartment.**
+  - The balcony deck is the same octagon grown 0.52, with a 1.00 railing.
+  - The apartment is a 10.68 × 2.27 box.
+- **The box.**
+  - Laced-looking corner columns 0.55 square at ±5.257.
+  - A plate at the foot (on the apartment's roof) and at the head (under the springing).
+  - Posts at the bays and the diamond mesh.
+- **The dome.** Two crossed semicircles of extrados radius 7.435 about the box's top, crown at y 292.915. Each rib is four chords 0.18 square, 1.02 × 0.95 apart (1.20 × 1.13 overall, 0.77 clear across), laced with a rung and an X on every face, in 12 segments.
+- **The lantern.**
+  - The 4.615 chamfered terrace with its 1.00 railing.
+  - The decagonal soubassement, balcony floor and 0.9 parapet, on ten consoles at the corners.
+  - The glazed lantern as rings, posts and a zigzag.
+  - The bulb cupola, a 1.80 top deck, and the conductor's cage (8 ribs, 1.70 × 3.05, two rails).
+- **Not built:**
+  - the straight parts of the diagonal girders inside the box;
+  - the "contrefiches" (struts) from the core to the box's corners inside the room;
+  - the glazing itself, windows and doors;
+  - the flag and the 1.50 lightning-rod fan.
+
+### 12.4 Disagreements and open points
+
+- **Terrace side.** 4.615 [derived from Fig. 13's printed diagonal and chamfer; PL-VII draws it] against PL-XIX's drawn 5.0 (Figs 4 and 13) [estimated]. PL-XIX's drawn chamfer-to-chamfer diagonal, about 6.0, is itself longer than its label.
+- **Balcony.** 3.60 across the flats (printed) against 3.97 as Fig. 12 draws it [estimated]. The elevations side with 3.60.
+- **The gallery's height.** 2.58 (PL-XIX) against 2.43 to PL-VII's balcony beam.
+- **The box.** Its column axes at 10.515 [derived] against the plans' 10.680 square. 10.680 is read as the apartment roof's outline, which the columns straddle.
+- **The girders' straight parts.** A 1.13 × 1.2 girder standing in each corner of the box would show about 1.6 wide face-on [derived]. Both plates draw 0.6–0.7 corner columns there [estimated]. How the straight parts sit inside the box is not resolved, so the model springs the ribs from the columns and does not build the straight parts.
+- **The ribs' intrados chords** land 6.35 out on the diagonal, inside the box's top, where no member is drawn in the model.
+- **Panel 29's rows.** This reading draws them 2.47 / 2.46 / 2.42; the audit read 2.68 / 2.45 / 2.65. Both sum to about the printed 8.057 less the plate girders. The model's even thirds are [estimated].
+
+## 13. Legs and shaft: member proportions against the plates (2026-09-18)
+
+An audit of the legs' and shaft's member SIZES against the plates (panels 1–28), each finding re-read on the full-resolution Gallica scans before any number changed. PL-VII is a rabattement: its depths are in the face plane, so a vertical depth is the printed one over √(1 + s²), s the face's slope. This section supersedes §4.1's "base tie ≈ 2 m [estimated]" and "lighter secondary diagonals [estimated]", and fills §4.2's silence on the horizontals' depth.
+
+### 13.1 Readings
+
+| Member | Plate reads | Was | Now | Tag |
+|---|---|---|---|---|
+| Horizontal struts, panels 1–11 | "800" on the node and mid horizontals of panels 1–4 (PL-IX Fig. 8, 1:100); ≈0.77 drawn in panels 6–11 (PL-VII Fig. 2) | 0.60 | **0.80** | [sourced PL-IX] |
+| Horizontal struts, panels 12–29 | "600" on the shaft horizontal at IX (PL-VII Fig. 3); 0.58–0.60 drawn at X and in panels 15–16. Heavier than the 500 diagonals | 0.40 | **0.60** | [sourced PL-VII] |
+| Panel 10 | a lattice band "3,6071" deep at its base (300 × 5 flats, 30 × 30 × 4 angles, ≈45°), a 600 top chord ("600" printed on it), then "6,564325" of TWO X's per leg face either side of a central post, every strut printed "600" (PL-VII Fig. 2) | one full-height X of 800 | band + two X's + post, all **0.60**; the band's top at XIX + 3.6071 / 1.0272 = 104.11 | [sourced]; the band's bar spacing 0.93 m [estimated] |
+| Upright section at the 2nd floor | sections XVIII–XXIII ≈ 0.87, XII–XVII "500" (PL-XXXI) | 0.87 → 0.50 spread over panel 12 | a **step at XVII**: the chains are cut there, each skinned and riveted from its own table | [sourced PL-XXXI] |
+| Lacing step (the X's repeat) | 800 struts: the mid horizontal's crossings every 61 px at 61 px/m, **1.00 m** (PL-IX Fig. 8; PL-VII panel 2 agrees); 600 shaft horizontals ≈ **0.94** (PL-VII Fig. 3, node X: 64 px at ≈67 px/m; an earlier reading 0.92); 500 struts **0.66–0.69** (PL-VII Fig. 3, panel 19) | 0.71 m everywhere (45°), the step taken from the call's widest section | per member, from its own width | [estimated, measured] |
+| Lacing bar | "Treillis 45 × 45 × 5" | 0.040 | **0.045** | [sourced PL-VII] |
+| Gusset plate thickness | "Gousset G (8 m/m)", "Attache 8 m/m", "8 m/m" at gussets A and E (PL-IX); "Ep. 10" at panel 5 (PL-VII) | 0.015 | **0.008** | [sourced PL-IX] |
+| Gusset extent | riveted over the upright's flange, out to **1.423** from the upright's axis along the horizontal and **1.298** along a flat diagonal (PL-IX Gousset A, 1:50); "1.340", "1.404"/"1.424" at panels 8–9 (PL-VII Fig. 2); "900"/"1000" on the shaft horizontals (PL-VII Fig. 3). A diagonal's chords end on the plate in groups of 5–6 rivets ≈0.08 apart | 1.38–2.44 m out along a panel-2 diagonal: an empty wedge at the upright | from the upright's face (the rectangle's obtuse corner on it) to 1.5 (diagonals) or 2.2 (horizontals) strut half-widths past the joint start. As built: the XXVII horizontal's plate ends 1.465 m out, panel 8's 1.34–1.40, the shaft's 0.86–0.88; a panel-2 diagonal's 1.27–1.91 | [sourced] extents; the reach multiples [estimated] |
+| Seam rivet pitch | the arbalétrier's flange rows on Gousset A, scaled by its printed 800 and 1.423 (310–318 px/m): every 40.4 px, **0.127–0.130**; a histogram of the sheet's rings clusters at 37.8 px, 0.122. (A first reading against the printed "88,5" gave 0.117, but that dimension is drawn too wide to scale by) | 0.10 | **0.125** | [estimated, measured] |
+| Base tie A (outer faces) | "2,987" between the chords' 200 × 8 plates and "3,387" over them (PL-VII Fig. 1); the drawn chords 255 px apart at 79.7 px/m, 3.20 | 2.24 in-plane | **3.187** in-plane axis to axis [derived] = 2.848 vertical | [sourced] + [derived] |
+| Base tie B (inner faces) | "2.000" (PL-VII Fig. 5; it passes over the door) | 2.24 | **2.000** in-plane = 1.787 vertical | [sourced] |
+| The ties' lattice | Warren girders of single 70 × 70 × 8 angles with a bottom chord and no posts but the central one (PL-VII Figs 1, 5); A's bottom joints ≈3.75 apart | 7 bays, posts and an X each, 0.24 m bars | a Warren, 4 V's a face, **0.10** m bars | [sourced] pattern; bays [estimated] |
+| Panel 5's belt | posts every 3.000; 80 × 80 × 8 bars from a post's foot through the next post's mid-height (square gussets) to the top of the one after, ≈50° off the chord (PL-VII Fig. 1) | an X a bay, 21–29° off the post, 0.24 m bars | that double lattice, 0.10 m bars | [sourced] |
+| Panel 5's chords | they line up with the grande poutre's, whose "800 × 12" chords' outer faces lie on the node lines ("Entre semelles 7,5309" = 7.00 × 1.07584; §14.1) | the node horizontals, centred on XXIV and XXIII: a 0.37 step against the girder at b | 0.80 laced chords with their outer faces on XXIV and XXIII, axes at 50.772 and 57.028; no horizontal on either node line; the central posts below and above run up to (down to) the node line | [sourced] |
+| Panel 4's Masque | "Masque placé sur le panneau 4" (PL-VII Fig. 6): a screen over the whole panel, 15.000 × 12.311 in the plane, in front of its web: a "630 × 4" chord whose lower edge clears the foot's node line by ≈0.45 (24 px at 50.8 px/m; an independent reading 0.43–0.47), a "750 × 4" chord "2,746" clear above it (drawn 2.68), a top band ≈0.52–0.59 deep under XXIV, a dense 45° double lattice between them; above, vertical posts and heavy bars crossing at the posts' mid-heights up to a top band under XXIV, its top corners rounded. The drawn posts fall 3.86 apart, the one nearest c cut short by the leaning upright: the decorative girder's 3.8825 rhythm from the axis, carried across the leg | none | built on the two leg faces in each tower face, 0.44 out from the face plane (clear of the uprights and their rivet heads), in flat plates and bars, in four layers so no two crossing plates share a plane; posts at 3.8825 k | [sourced] chords, clear and extent; the 0.45 lift, the bars' widths (0.32, 0.30, 0.20, drawn 0.3–0.4), the lower lattice's pitch (1.94), the top band (0.55) [estimated]; the rounded corners not built; which faces carry it is not printed, and outer faces only is inferred (Fig. 6 sits beside Fig. 1's outer face, same scale and orientation, and its posts keep the tower-axis rhythm) |
+| Panel 11's belt | posts "3,36268" apart (≈3 bays); a diamond lattice of 80 × 80 angles crossing at the posts' mid-heights and meeting the chords at mid-bay, an angle of 53°49′43″ printed at one bar (PL-VII Fig. 2) | 4 bays, an X each | 3 bays, the diamond, 0.10 m bars | [sourced]; bays [estimated] |
+| Central posts | a laced strut up the middle of every leg face, parallel to the uprights, through the X crossings and across the node horizontals at rosettes: "800" in panels 1–4 (PL-IX Fig. 8, "Rabattement de l'un des quatre premiers panneaux"), "Corn: 80×80×8" with "800" in panels 6–9 (PL-VII Fig. 2), "600" in panel 10, and continued down through both base ties (PL-VII Figs 1, 5) | none | on all 16 leg faces: tie, panels 1–4, 6–9, 10; each stretch stops clear of the member it stands on | [sourced] |
+| The gap between adjacent legs | an X per panel between b of one leg and d of the next, with the horizontals continued across it (PL-VII Fig. 2 panels 12–14, Fig. 3 panels 15–16: "5,1372" at XIV, "1,8627" at XII) | open | X's in **panels 12–16**, horizontals at XVI–XII, 500 / 600 | [sourced] |
+
+### 13.2 What changed in the model beyond the numbers
+
+- **The upright skins agree with their seam rows everywhere.** A swept chain puts one ring at each vertex, in the plane bisecting the two segments there and rolled against that bisector, while the seam rows lie in each segment's own frame; between kinked nodes the skin was a twisted blend of two rolls and the rows sat up to 10.8 mm off it (measured on the build before this change). The uprights now carry a ring 0.01 m either side of every node where the column turns (XXIV–XVIII and XV–XIII: where Plate XXXI's slope changes; XVI and XII are collinear to 1e-5), so each panel's box is untwisted, and no seam row is laid within 13 mm of such a node. Every seam rivet is now within 0.04 mm of its skin.
+- **Joint clearances see the column's kinks.** A member's joint began where it cleared the upright measured against the column's bisector at the node. With 0.80 horizontals the bottom chord at XXIII sits 0.33 m below the node, beside the segment below, which leans closer. The legs and the shaft now solve it against the closest of the bisector and the two segments (`endSinMin`, `JointOpts.kinks`). At XI the shaft's bd stands on the two legs' b and d, still 0.50 apart ("250 250", PL-VII Fig. 3): members ending there clear both (`JointOpts.uprightAt`).
+- **The slender gap X of panel 16** meets b and d at a sine of about 0.17, under the joints' default clamp of 0.25, which would leave its joint rivets inside them; that set clamps at 0.10 (`JointOpts.minSine`).
+- **Joint rivets only where a chord is.** Each member end's rivet window (its joint start, and that plus the plate's reach) is now read once at the end and carried along the member. Read at every sample, as before, a table that steps along the member (the upright's at XVII, the merge at XI) slid the window: an independent check found 352 heads 229–327 mm nearer the upright than the strut's trimmed start, on bare plate. Now every joint rivet has a chord 8 mm under it (the plate's thickness).
+- **`spec.ts`** now carries the arch as §14.1 reads it (`ARCH.band` 3.9173 outer to outer, `extradosRadius`, `montantPitch` 2.5488, `lowerRadius` 44.5258 from y 20.20, `footX` 37.1188) and `FIRST_FLOOR.arcadeOpenings` 7 per half with `montants` 14. `MEMBERS.upright` is a 1 cm step at XVII, so a reader of the size at 115.73 (the 2nd floor) now gets 0.25, not 0.435.
+
+### 13.3 Disagreements and open points
+
+- **Panel 5's chords** are labelled "500 × 10" on PL-VII Fig. 1 and drawn as solid plates; an independent reading puts them ≈0.5 deep, which would put their axes 0.25 inside the node lines, not 0.40. The model follows the grande poutre they line up with ("800 × 12", §14.1) and builds them 0.80, laced; their outer faces are on the node lines either way.
+- **Panel 17's gap** (XII → XI) is open on PL-VII Fig. 3: b and d close from 1.863 to 0.50 axis to axis, their boxes to touching. The audit listed the gap bracing as panels 12–17; the plate draws it in 12–16.
+- **The central post in the ties** is labelled "877" on PL-VII Figs 1 and 5, against "800" on PL-IX Fig. 8 in panels 1–4. The model uses 0.80 throughout panels 1–9 and the ties.
+- **The ties' top.** Measured up from the support centres, A's bottom chord ("1,378") plus its depth puts its top chord about 0.3 m above node XXVIII, and B's ("2,765" + 2.000) likewise. The model keeps both ties' tops at XXVIII, whose horizontal is their top chord, and hangs the depth below it.
+- **Panel 10's two printed spans** (3.6071 + 6.564325 in-plane) close to 9.90 m of vertical against the panel's 10.00. The band's top is taken from XIX.
+- **The belts' bars** are single 70–80 mm angles, 0.07–0.08 across, drawn 0.10–0.17 wide at 1:200. The model's 0.10 square sits between. Panel 10's band is of 300 × 5 flats, which a square member cannot draw; it gets the same 0.10.
+- **The lacing on the strut faces normal to the tower face** is a single zigzag on PL-IX Fig. 8's inset "Treillis des surfaces normales"; the model laces all four faces in an X.
+- **Panel 6's upright** still widens 0.82 → 0.87 over the panel, not at XXIII: PL-VII prints 822.8, 864.879 and 876.99 up it, and the audit found the spread within 5%.
+
+---
+
+## 14. The first floor, and the 2nd floor between the legs, re-read (2026-09-18)
+
+A proportion audit of the arches and the girders between the legs, each finding re-read on the Gallica scans of PL-VII (f40, f41) and PL-XI (f56) before any number changed. PL-VII is a rabattement: its printed depths are in the face plane. This section supersedes §5.2's "arcade of 14 small round-headed openings ('montants 1…14')", §5.3's "band depth 2.5488", its reading of which radius governs where, its single-circle approximation with "vertical legs below", §1's closing sentence as far as it concerns the model, and §10.6's "the inner one is drawn the same way [estimated]" (it is now built). `spec.ts`'s `ARCH` comment (band 2.5488, one circle) and `FIRST_FLOOR.arcadeOpenings` are stale for the same reasons; `firstFloor.ts` no longer reads either.
+
+### 14.1 Readings
+
+| Element | Plate reads | Was | Now | Tag |
+|---|---|---|---|---|
+| Band depth | "3m,9173" printed on the axis at the crown, from the intrados' underside to the extrados' top (PL-VII Fig. 1) = 40.32373 − 36.4064. PL-XI Fig. 1 measures ≈3.50 vertical (3.92 in the plane) outer to outer at x 2.7 | 2.5488 axis to axis | **3.9173** outer to outer: intrados R 36.4064 and extrados R 40.32373 concentric, to the members' outer faces; chords "600 × 7" | [sourced] |
+| 2.5488 | printed twice, tick to tick ALONG the intrados near the haunch (PL-VII Fig. 1): the montants' pitch | the band depth | the montant pitch | [sourced] |
+| Montants | numbered 1–14 from the crown, per half: "Montant 1" on the axis AB, "Montant 8" at the leg, 11–14 along the band near M (PL-XI Fig. 1); radial; "400" wide (PL-VII) | 15 posts spread evenly along the chord | radial lines at 2.5488 on the intrados: 1–8 run on to the arcade chord, 9–11 to b, 12–14 close the band where the extrados has met b | [sourced] |
+| Their check | PL-VII's post spacings along the arcade chord, axis outward: 2.8577, 2.8955, 2.9533, 3.043, 3.1683, 3.3347, 3.5505. Radial lines at a 2.5488 pitch on R 36.4064 cross the chord's axis (y 43.40) at spacings 2.8669, 2.8953, 2.9531, 3.0427, 3.1679, 3.3344, 3.5500 | — | six of seven within 0.5 mm (the first 9 mm long: measured off the axis post's face, perhaps). It fixes the circle's centre, the crown's 39.40 and the chord's 43.40 together | [derived] |
+| The lower arch | "R-36.4064 / R=44.5258" at B, and "1.00" across section AB from arbalétrier b's axis (PL-XI Fig. 10). Below the band one member, drawn curving to vertical onto a small pier at the pedestal's inner edge (PL-VII Fig. 1) | straight beside b from y 20.2, landing 3.7–7.3 m out on the pedestal (clear span 81.7) | the circle comes closest to b's axis where it runs parallel to it, y 20.20, at **1.0003** in the plane; there it turns, tangent, to R 44.5258, which is vertical at x **37.1188**, y 3.90: PL-I's pedestal face 37.119 to 0.2 mm, the 74.238 clear span | [derived] |
+| Pier and foot | a moulded capital at ≈ y 5.1, the pier ≈1.3 wide, standing from about the ground at the pedestal's inner edge; the member ≈0.46–0.6 wide there, its inner face at ≈37.03 (PL-VII Fig. 1 at 19.6 px/m, ±0.1) | none | the arch stops at y 5.10 on a 1.3 square pier from the ground | [estimated] |
+| Bracket | two ties from b to the lower arch, the upper continuing panel 1's mid horizontal, an X between them and a strut below: "Corn: 80×80×8", "C: 80×80×8" (PL-VII Fig. 1) | none | ties at 11.9 and 9.4, strut to the arch at 7.1 | [sourced] members; heights [estimated] |
+| Arcade | "tôles découpées en arc de cercle ou laissées pleines au sommet des arcs", on the extrados of faces 1 and 4 only (PL-XI Nota); plates "3m/m" (PL-VII). PL-XI Fig. 1 draws the spandrels solid between montants 1 and 4, openings 4\|5 … 7\|8 under the chord and 8\|9 … 10\|11 under b | 14 openings evenly across ±22.64, four over the crown | seven per half, solid within \|x\| < 8.9 | [sourced] |
+| Head radii | 1.2362 (5\|6), 1.272 (6\|7), 1.317 (7\|8) under the chord; 1.2506 and 1.196 beside the leg (PL-VII Fig. 1) | 1.617, one for all | the circle tangent to both montants' faces and to the chord's underside (or b's face): 1.2453, 1.2813, 1.3266; 1.2699, 1.2145 — 9–10 mm and 19 mm over, systematically (the openings' "50 × 50 × 6" edging, likely). None springs inside the extrados | [sourced] radii; the rule [estimated] |
+| Arcade chord | "749" deep, the post-spacing dimension line on its axis (PL-VII) | 0.50 | 0.749 | [sourced] |
+| Extrados at the crown | the printed numbers leave 0.19 in the plane between the extrados' top and the 749 chord's underside; PL-XI Fig. 1 draws ≈0.12 vertical at x 2.7 (4 px at 1:500) | 1.17 m gap | 0.19 in the plane, filled by the solid crown plates: nothing shows through | [derived] |
+| Decorative girder | posts every 3.8825 from the axis out to ±19.4125, the outer pair short ("500") from the chord up to b, leaving the end bay "3,2313" = 22.6438 − 19.4125 at the chord; "360" croisillons; its own top chord "330 × 8" under the grande poutre's bottom flange; the top corner at b rounded (PL-VII Fig. 1, PL-XI Fig. 1) | 9 posts to ±15.53, the 50.40 chord shared | 11 posts, an X a bay, the 330 chord, a fillet at b | [sourced]; the fillet's radius 1.5 [estimated] |
+| Grande poutre | chords "800 × 12"; "Entre semelles 7,5309" = 7.00 × 1.07584, the node-to-node depth in the plane, so the chords' outer faces lie ON the node lines (top 0.23 under the floor, PL-XVI); posts "168" with square mid-height gussets, the end pair "500"; a "360" diagonal per bay falling toward the axis ("Corn: 90×90×10") and a "360" set the other way through the posts' mid-height gussets ("Corn: 80×80×10"); the end bay's diagonal leaves b about a third of the way down (PL-VII Fig. 1) | 0.50 chords on the node lines; 0.48 bars in an X a bay | as read | [sourced]; the end diagonal's height [estimated] |
+| Two planes | "Les panneaux des arcs ne sont décorés que sur les faces extérieures 1 et 4 … Les poutres des deux arcs sont en outre contreventées en bas et en haut entre les faces 2 et 3" (PL-XI Nota). Fig. 1's side view runs "Arc décoratif, Face 1 / Face 2" along arbalétrier b and "Face 4" along arbalétrier a, "15.00" apart; Fig. 2 (coupe AB) draws the frames between faces 2 and 3 and, beyond them, the face-4 arch seen from the tower's centre with its own arcade and decorative girder ("Face 4 ornementée") | one plane | the arch, arcade, decorative girder and grande poutre twice: in the face plane, and 15.00 inboard on the a uprights, where the deck's cross girders (`platforms.ts`) now find their inner ends' support | [sourced] |
+| Entretoises | ABCD between faces 2 and 3 at montants 1, AEFD at montants 8, GHIJ at the decorative girders' posts 1'–5' ("1'" at 15.5, "2'" at 7.8, "3'" on the axis on Fig. 1: posts 0, ±7.765, ±15.53), and bracing top and bottom (PL-XI Nota, Fig. 2) | none | frames of latticed cross members with light diagonals; X bracing between the GHIJ frames at the girders' top and bottom chords | [sourced] positions; members [estimated from Fig. 2] |
+| 2nd floor, between the legs | at node XIX a band "3,6071" deep in the plane, a diamond lattice of "300 × 5" flats and "C. 30×30×4" under a "600" chord; above it to XVIII an X each side of a post on the axis, "600"; panel 11 "entre semelles 4,95368", chords "450 × 8", posts at 0 and ±"3,36268" — a fifth of the face's 16.8134, so the same rhythm runs on across the leg faces to c — and a diamond lattice of 80 × 80 angles (PL-VII Fig. 2; PL-I cross-hatches panels 10 and 11) | panel 11 only, four equal bays with X's [estimated] | all three | [sourced]; the band's bars ≈1.21 apart along the chord [estimated, measured] |
+
+Measured on the cooked model (ray casts in the face planes): crown clear height 39.40; band 3.9174 outer to outer in the plane; the lower arch's inner face at x 37.095 (y 5.2; traced at 5.3), 37.037 (6.24), 36.869 (8.1), 36.420 (10.9), 35.764 (13.64) against PL-XI's traced 37.22, 37.15, 36.92, 36.42, 35.71; clear span 74.19 at the pier top; the grande poutre's chords 0.800 deep with faces at 50.400 and 57.400, in both planes; the window between the 1st floor's gallery and the 2nd floor's lintel 33.7 at the axis (PL-I 33.0; was 43.7).
+
+### 14.2 The legs' faces (for `legs.ts`; not built by `firstFloor.ts`)
+
+- **Panel 5** of each leg face is a lattice belt (PL-VII Fig. 1, "500 × 10" chords, §13.1). On the plate its chords' outer edges line up with the grande poutre's, whose flanges lie on the node lines; a belt with its chords' AXES on the nodes steps about 0.37 against the girder where the two meet at b.
+- **"Masque placé sur le panneau 4"** (PL-VII Fig. 6): a decorative lattice screen over the whole of panel 4 of the leg face, 15.000 wide and 12.311 tall in the plane — posts, heavy X's and a top corner rounded like the decorative girder's, a "750 × 4" chord 2.746 above the panel's foot with a double lattice under it, and a "630 × 4" bottom chord. It carries the decorative girder's band across the legs, which is what makes the first floor read as one band running straight across each face. Not in the model.
+- **Panels 10 and 11**: the lintel band, the X's and panel 11's belt run across the leg faces from c to c' (PL-VII Fig. 2); `legs.ts` builds them (§13.1).
+
+### 14.3 Disagreements and open points
+
+- **Where the radius changes.** The audit read the junction at point N, y ≈ 17.7 on PL-XI Fig. 1. Two closures place it at the parallel point instead, y 20.20: the printed 1.00 holds only there, and only there does R 44.5258 land vertical on the pedestal face (at 17.7 it lands at 36.87). The audit's own PL-XI trace agrees: below y 16 it fits the parallel-point junction to +0.013 mean, 0.14 worst, against +0.16 and 0.37 for 17.7. "Partie N" is a detail around N, not the junction's height.
+- **PL-VII's drawn heights run short.** In the rabattement the band draws 3.36 at the crown for the printed 3.9173, and the grande poutre 6.36 for 7.5309: its heights draw at ≈0.85 of its horizontal scale. Readings off PL-VII take its printed numbers, never its pixel heights.
+- **The pier's** height, width and base are read off a 1:200 overview [estimated]. It overlaps the pedestal's inner face by ≈0.4, as drawn, so the ground-level opening between the piers is 73.50 where the arch's own is 74.24.
+- **b's face.** Everything that stops at upright b (montants 9–14, the heads beside the leg, the extrados' end, the girder's short posts and fillet) stops at its box face, 0.41 square to the member; b leans along the leg's diagonal, so that face is 0.4495 from its axis horizontally across the tower face [derived].
+- **The fans** stand for the band's fan-and-scroll ornament with a rim and three spokes; the entretoises' and the bracket's member sizes are estimated.
+- **Stale elsewhere**: `spec.ts`'s `ARCH` comment and `FIRST_FLOOR.arcadeOpenings` (above); §10.9/§10.10 on "the names band" and on `firstFloor.ts` carrying frieze plaques.
+
+---
+
+## 15. The platforms re-read: names band, landing, 3rd floor, 2nd-floor skirt (2026-09-18)
+
+Compiled for `platforms.ts` from a proportion audit against the plates. Every reading below was re-derived on the Gallica scans: PL-XIX f96/f97 at 1:200, PL-XIII f68/f69 at 1:50, PL-XIV f76/f77, PL-XVI f84/f85, PL-VII f41, PL-I f16. Each pixel measurement is calibrated on a dimension printed on the same figure. Tags as in §0.
+
+### 15.1 Readings
+
+**The 1st-floor gallery level.** PL-XIX prints "Niveau de la Galerie promenade (89.90)" with "1.23". PL-XVIII prints "GALERIE (89.93)" twice [sourced]. The model keeps 89.90, z 56.40. Plate I at 1:1000 draws its own 1st-floor level line 2.9 m low on its ground-to-3rd-floor calibration (the whole-tower audit's calibration A). So its reading that "the floor sits 2 m high in the band" is the plate's scale, not a model error.
+
+**The names band (PL-XIX Fig. 1, 80.7 px/m; calibrated on "0.50", "5.50" and "8.70").**
+
+- The band runs **4.02 → 4.82** below the gallery floor, altitude 85.88 → 85.08, z 52.38 → 51.58 [measured]. f96 and f97 agree within 0.04. §10.6's "4.1–5.0 [estimated]" is superseded.
+- There is one cartouche per console bay, between pilasters every 3.8825 [measured, 313 px]. PL-XIX's list gives 18 names a face [sourced].
+
+**The 1st-floor skirt, top down, below the gallery floor** [measured PL-XIX Fig. 1]:
+
+| zone | depth below the floor |
+|---|---|
+| cornice ("0.50") | 0–0.51 |
+| cove with volute consoles (printed "1.50", drawn 1.62) | 0.51–2.17 |
+| cresting | 2.17–3.61 |
+| mouldings | 3.61–4.03 |
+| names | 4.03–4.82 |
+| mouldings, fascia, bottom band | 4.82–6.00 (83.90) |
+
+**Its projection and lean (PL-XIII Fig. 2, "Console β, coupe transversale au milieu d'un pilier", 1:50; calibrated on "7,000" and "2,400").**
+
+- The gutter box's outer face is "326" + 350/2 = **0.50** outside the column axis [sourced]. That is E1900-TXT's 71.69.
+- The plate starts on the column axis 0.52 below the floor. It leans in **0.93** to the foot, straight: a line fits with rms 7 mm, and a circle of R 14 fits 11× worse [measured].
+- Fig. 1, the corner elevation, draws **0.62** [measured].
+- E1900-TXT calls the plate « de forme concave ».
+
+**The arcade gables (PL-XIX Fig. 1; PL-XIII Fig. 26; E1900-TXT).**
+
+- The lunette under the inner arc is « un treillis de bois »: a diamond trellis on PL-XIX, and no iron below the inner arc on PL-XIII Fig. 26 [sourced].
+- The glass (yellow cabochons, silvered and tinted cast glass) is in the crescent above [sourced].
+- The crescent's depth at the crown is 1.75 on PL-XIX, 1.95 on PL-XIII (the iron) and 2.00 in the text [sourced].
+
+**The landing (PL-XVI Figs 14–15 "Plancher intermédiaire"; PL-XIX Fig. 14, 79.8 px/m on the uprights' 2 × 8.367).**
+
+- **Side.** « **11.337** » on all four sides of PL-XVI Fig. 14 and twice on PL-XIX; the half-side is « 5.669 » [sourced]. So neither 11.237 nor 11.327, the readings the audit and this reading's first pass took.
+- **Plan.** A square turned 45° with its vertices on the face centre lines [sourced drawing, ±0.1]. The corner triangles of the shaft are open. Four « Contrefiche » struts run in from the shaft's corners.
+- **The well.** « Cage de la Cabine Edoux du 2ème étage à l'étage intermédiaire »: « 3.67 » along the N–S diagonal [sourced] by ≈4.2 across it [measured; PL-XVI prints a « 4.35 » nearby]. Its centre is ≈2.7 out toward pile 3's side [measured].
+- **Depth (PL-XVI Fig. 15).**
+  - Beams A, B, C, D and H: « 220 » under the floor, « 2.300 » deep. So the band is **2.52** deep, which is Plate I's ~2.5 m cross-hatched band.
+  - Beam G (facing pile 1): « 430 », « 1.300 ».
+  - E and F are lighter [sourced].
+
+**The 3rd floor (PL-XIX Figs 3, 6, 9; PL-VII Fig. 4; PL-XIV Figs 2, 13; E1900-TXT).**
+
+- **The floor structure.** The edge beams, « poutres de rive … de 850 mm de hauteur » [sourced; PL-XIX "850"], stand **flush** with the 16.56 glazed octagon, at most 0.07–0.14 inside it [measured].
+- **The consoles.** « des consoles de 7,207 m de hauteur fixées sur les faces extérieures des arbalétriers d'angle » [sourced]. So there are **two a face** on the corner uprights, 8 in all, and none on the 2.50 bays.
+  - PL-XIV Fig. 13 draws the corner upright with a console box of two webs « 500 » apart, and a second box going the perpendicular way [sourced].
+  - No fascia runs between them [sourced drawings].
+- **The console profile.** The webs are « découpées suivant un arc de cercle de 9,280 m de rayon » [sourced], concave outward.
+  - Free circle fits: R 8.96–9.01 on PL-XIV, 9.49 on PL-VII and 11.1 on PL-XIX.
+  - PL-VII's printed « R: 2,980 » fits no plate (rms 0.39–0.57) [measured].
+  - The tip is flush with 16.56, 3.2 beyond the c axis. PL-VII's « 3,000 » is the strut beyond the upright's face.
+  - The foot leaves the upright tangentially at 5.3–5.5 [measured].
+- **18.65.** At the 3rd floor the glass, the parapet, the edge beam, the console tips and the balcony railing all stand at 16.56. Nothing on any plate is 18.65 wide: Plate I's own strokes reach 17.6–17.7 [measured]. §10.8's open point is answered this far: whatever PL-I's "côté extérieur 18m65" measured, it is not drawn.
+
+**The 2nd-floor skirt (PL-XIX Figs 2, 7, f97; 78.95 px/m on the printed "10.46 | 12.71 | 10.46", 77.9 px/m vertically on "5.150").**
+
+- **Extent.** It hangs « 5.150 » from the floor's edge down to altitude 144.08, z 110.58: node XVIII, the foot of panel 11's belt [sourced].
+- **Form.** « une tôle courbée de 3 mm d'épaisseur formant corniche décorative » [sourced E1900-TXT].
+- **Continuity.** It runs unbroken across each face, over the legs and the gap between them, with no consoles under it. Its ornaments stand every 3.36 (the gallery posts), and it carries no names [sourced drawing].
+- **Profile.** Read from the silhouettes the perpendicular faces' skirts cut at the ends of the elevation, as depth below the floor → half-width [measured, both ends averaged]:
+  - 0.2–0.6 → 18.97
+  - 1.18 → 18.86
+  - 1.95 → 18.35
+  - 2.72 → 17.98
+  - 4.06 → 17.71
+  - 5.15 → 17.50
+
+  So it curves steeply under the cornice, then runs nearly straight: 1.45 in all from the drawn cornice line.
+
+### 15.2 What `platforms.ts` builds now
+
+Before → after figures are measured on the cooked mesh (`buildEiffel`, legs + shaft + summit + platforms).
+
+| item | before | after |
+|---|---|---|
+| names band, below the gallery floor | 1.10–1.90, 18 plaques at 70.69/18 | **4.02–4.82**, one per console bay at (k + ½) × 3.8825 |
+| 1st-floor skirt's lean | 0.50 | **0.60** |
+| arcade gables | solid half-ellipses | crescent + open lunette, the vault a 0.10 shell, solid over the pavilion halls |
+| landing | a 16.23 square, 0.60, 263.5 m² | **diamond** 11.337 on its girders' axes, 0.22 floor, 109.9 m² net of the wells; lattice girders 2.30 deep (G 1.30) round its edge |
+| 3rd floor | an 18.65 square × 0.60, overhanging the room by 1.05 | the **16.56 octagon** (10.90 sides) × **0.85**, flush (drawn 0.01 deeper, off panel 29's plate girders' underside) |
+| 3rd-floor consoles | none | 8, R 9.28 |
+| 3rd-floor face-on silhouette at z 269 / 272 / 274 / 275 | 10.5 (box only) | 11.03 / 12.27 / 14.40 / 16.04 |
+| 2nd-floor skirt | none (the deck 0.60) | **5.15** deep, five planar strips on the profile |
+
+- **The 1st-floor skirt's lean.** The panel is a plane mitred at the corners, so it takes one lean. At 0.60 its foot's inner face stands 34.67 from the axis at node XXIV: 0.01 off the grande poutre's bottom chord (34.66) and 0.09 clear of the legs' outer uprights (34.58) [measured on the cooked mesh]. The section's 0.93 would pass through that chord.
+- **The landing's girders and wells.**
+  - The girders are N-trusses of 5 panels [form and sections estimated].
+  - The wells are the lower car's, 3.67 × 4.2 at 2.650 toward pile 3, and a 1.80 square for the e2 stair at 2.650 toward pile 1, where `lifts.ts` builds its helix.
+- **The 3rd floor's wells.** The upper car's, as the landing's, at 2.650 toward pile 1, and the e3 stair's at 2.650 toward pile 3.
+- **The consoles.**
+  - Each is a box 0.50 wide in the plane of its upright's outer face.
+  - Its flange is the R 9.28 arc, tangent at 5.5 and reaching 8.28 at the edge beam's underside, and it runs straight below the tangent point to the foot 7.207 down.
+  - The web is a top strut, a foot tie, and horizontals and diagonals back to the upright [estimated].
+  - The silhouette follows PL-XIV's R 9.28 fit. Plate I's 13.1 / 16.3 at 272 / 274 is ±1 m at 1:1000.
+- **The 2nd-floor skirt.** It starts at the model's deck edge (18.815), not the drawn cornice line (18.95), and follows the measured half-widths below 1.18.
+- **The cross girders** already end on the legs' inner-upright line. `firstFloor.ts`'s inner grande poutre now stands there, and each girder's inner end sits inside its top chord and posts (z 16.30–16.70 at the end, y 57.25) [measured].
+- **Clashes.** Triangle against triangle, on the whole tower [measured]: the names, both skirts, the vault gables and shells touch nothing of the legs, the shaft, the girders or the lifts. The contacts that remain are joints:
+  - the consoles butt on the corner uprights' outer faces at 5.25;
+  - the cross girders end in the grande poutres;
+  - the Edoux guide posts pass through the landing;
+  - the 3rd floor is pierced by panel 29's uprights and posts and takes the ends of its top-row members, as the deck before it was.
+- **Triangles.** `platforms.ts`'s own output (the platforms class without the lifts) goes from 18,324 to 33,652. About 14,000 of that is the gables' crescents and the vault shells. The names class stays at 864.
+
+### 15.3 Disagreements and open points
+
+- **The console radius.** PL-VII prints « R: 2,980 », against the text's 9.280 and three plates' fits. It may be a transposition of 9,280, or the radius of the webs' cut-outs. This is unresolved.
+- **The 1st-floor skirt's lean.** The section gives 0.93 and the corner elevation 0.62. The model's plane takes 0.60, held off the grande poutre's chord. A warped panel (0.93 mid-face, 0.62 at the corners) is not built.
+- **The 2nd-floor skirt's profile** is read off the end silhouettes, which may partly be the corner consoles' decoration rather than the plate itself (medium confidence). The text's « courbée » supports a curve.
+- **The inner arc's radius.** 3.3675 is printed on PL-XIII Fig. 26; that it belongs to the inner arc is [estimated].
+- **The landing.** Beams A and C and the struts are not built. Its stair wells follow `lifts.ts`'s helices (e2 and e3 at 2.650 on the N–S diagonal), not Fig. 14's drawn stair positions. In `lifts.ts`, e3 starts on the landing over the lower car's well, and e2 arrives under the upper car's berth: that is `lifts.ts`'s matter.
+- **The 3rd floor's gallery floor** is 0.20 above the core's (309.83 against 309.63) [sourced PL-XIV]. The model's floor is flat at 309.63.
+- **18.65** stays unexplained. Nothing is built at that width.
+- **Stale elsewhere.**
+  - §6.3 "Gallery (outer platform) 18m65" and "Brackets … over about 3.0".
+  - §10.6's names position "4.1–5.0 [estimated]" and "the foot sits about 0.9 inboard".
+  - §10.8 "What 18.65 measures is not clear".
+  - §10.9: "the skirt as one plane leaning in 0.50", and "Not built: … the names band … the inner arcade's gable" (the gable is now built as the outer one).

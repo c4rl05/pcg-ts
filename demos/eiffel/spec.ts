@@ -157,56 +157,228 @@ export const FIRST_FLOOR = {
    * top 38.25, bottom 45.287 [sourced], same bay rhythm.
    */
   decorativeBottomY: 43.4,
-  /** An arcade of 14 small round-headed openings between it and the arch. */
-  arcadeOpenings: 14,
+  /**
+   * The arcade between the decorative girder and the arch: round-headed
+   * openings between the band's radial montants, SEVEN per half-face
+   * (between montants 4|5 ... 10|11), the spandrels solid over the crown
+   * (montants 1-4) [sourced PL-XI Fig. 1 and Nota; PL-VII Fig. 1]. Per
+   * half: the other half mirrors it (SOURCES.md §14.1).
+   */
+  arcadeOpenings: 7,
+  /** Radial montants per half-face, numbered 1-14 from the crown [sourced PL-XI Fig. 1]. */
+  montants: 14,
 } as const;
 
 /**
- * The four decorative arches (non-structural). A circle in the face plane
- * of radius 36.4064 with its crown 39.40 above the ground [sourced]; the
- * plate prints two more radii (40.32, 44.53) whose segments are only
- * estimated, so this uses the single circle. The band is 2.5488 deep in
- * the face plane.
+ * The four decorative arches (non-structural), in the face plane
+ * (SOURCES.md §14.1). The band runs between two CONCENTRIC circles: the
+ * intrados, R 36.4064 with its crown 39.40 above the ground, and the
+ * extrados, R 40.32373, both to the members' outer faces, so the band is
+ * 3.9173 deep outer to outer ["3m,9173" printed at the crown, PL-VII
+ * Fig. 1]. 2.5488 (printed twice along the intrados near the haunch) is
+ * the radial montants' PITCH along the intrados, not the band's depth.
+ * Below the band the intrados comes closest to arbalétrier b's axis where
+ * it runs parallel to it, 1.00 off at y 20.20 [sourced "1.00", PL-XI
+ * Fig. 10]; there it turns, tangent, onto R 44.5258 [sourced "R=44.5258"],
+ * which is vertical at x 37.1188, y 3.90: the pedestal's inner face
+ * [derived; PL-I 37.119].
  */
-export const ARCH = { radius: 36.4064, crownY: 39.4, band: 2.5488 } as const;
+export const ARCH = {
+  radius: 36.4064,
+  crownY: 39.4,
+  /** The band's depth, outer face to outer face in the plane [sourced]. */
+  band: 3.9173,
+  /** The extrados, concentric with the intrados [sourced]. */
+  extradosRadius: 40.32373,
+  /** The radial montants' pitch along the intrados [sourced "2,5488"]. */
+  montantPitch: 2.5488,
+  /** The intrados below its junction with b [sourced PL-XI Fig. 10]. */
+  lowerRadius: 44.5258,
+  /** Where the intrados changes to `lowerRadius`, tangent [derived]. */
+  lowerFromY: 20.2,
+  /** Where `lowerRadius` turns vertical, on the pedestal face [derived]. */
+  footX: 37.1188,
+} as const;
 
 /**
  * Member sizes, as HALF-widths of a square section (Plate XXXI's section
  * tables). Uprights are closed boxes 0.80-0.82 m square below the 1st
  * floor, about 0.87 m to the 2nd, 0.50 m above. Web bars are 0.80 m square
- * lattice struts in panels 1-9 and 0.50 m in panels 12-28.
+ * lattice struts in panels 1-9, 0.60 m in panel 10 and 0.50 m in panels
+ * 12-28; horizontals 0.80 m below the 2nd floor and 0.60 m above.
  */
 export const MEMBERS = {
-  // A section changes at a panel node, but a swept member has one ring
-  // per node and interpolates between them, so a step placed a centimetre
-  // past a node would be a step in anything else that reads this table
-  // (the rivets) and an 11 m taper in the skin. The stops sit ON nodes,
-  // and the change is spread over the panel above: XXIII -> XXII for the
-  // 1st floor's, XVII -> XVI for the 2nd's [estimated].
+  /**
+   * The uprights' half-width by height, for anything that READS the size
+   * at a height (joint clearances, platform fits): 0.41 below the 1st
+   * floor, 0.435 to the 2nd, 0.25 above. The 2nd floor's change is a STEP
+   * at node XVII [sourced PL-XXXI: sections XII-XVII are "500", sections
+   * XVIII-XXIII "au-dessous du 2e Étage" about 0.87], so the value AT
+   * 115.5 is the lower box's, the larger (a member at the node clears
+   * both). The 1st floor's change is spread over panel 6, XXIII -> XXII
+   * [estimated: the sections step from 822 to 866/854 at XXIII, and
+   * PL-VII prints 822.8, 864.879 and 876.99 up panel 6].
+   *
+   * A SKIN cannot read this table across XVII: a swept chain has one ring
+   * per node and interpolates between them, so a chain through XVII would
+   * taper 0.87 -> 0.50 over panel 12 while its seam rivets, sampled every
+   * pitch, stepped a centimetre above the node — the two disagreeing
+   * about where the steel is. The uprights are therefore split at XVII
+   * into two chains, each skinned AND riveted with its own part of this
+   * table: `uprightBelow` and `uprightAbove`.
+   */
   upright: [
     [2.5, 0.41],
     [57.4, 0.41],
     [68.4, 0.435],
     [115.5, 0.435],
-    [126.8, 0.25],
+    [115.51, 0.25],
     [276.13, 0.25],
   ],
-  web: [
-    [0, 0.4],
-    [110.6, 0.4],
+  /** The upright table from the supports to XVII (the lower chains). */
+  uprightBelow: [
+    [2.5, 0.41],
+    [57.4, 0.41],
+    [68.4, 0.435],
+    [115.5, 0.435],
+  ],
+  /** The upright table from XVII up (the upper chains): 0.25 at XVII itself. */
+  uprightAbove: [
     [115.5, 0.25],
     [276.13, 0.25],
   ],
-  /** Horizontal struts: built of 80 x 80 angles [sourced]; depth [estimated]. */
+  /**
+   * Web struts: 800 in panels 1-9 [sourced PL-XXXI table; PL-IX Fig. 8],
+   * 600 in panel 10 [sourced PL-VII Fig. 2 prints "600" on each of its
+   * diagonals and on its post], 500 above XVII [sourced PL-XXXI]. The
+   * steps sit where no member reads them: panel 9's diagonals end at XIX
+   * (100.6), panel 10's begin above its base band, and panel 11 is a belt.
+   */
+  web: [
+    [0, 0.4],
+    [100.6, 0.4],
+    [100.61, 0.3],
+    [110.6, 0.3],
+    [115.5, 0.25],
+    [276.13, 0.25],
+  ],
+  /**
+   * Horizontal struts: built of 80 x 80 angles [sourced], as heavy as the
+   * web or heavier: 800 below the 2nd floor [sourced PL-IX Fig. 8 prints
+   * "800" on the node and mid horizontals of panels 1-4; PL-VII Fig. 2
+   * measures about 0.77 in panels 6-11] and 600 above it [sourced PL-VII
+   * Fig. 3 prints "600" on the shaft horizontal at IX; panels 15-16 and
+   * node X measure 0.58-0.60] — heavier than the 500 diagonals there.
+   */
   horizontal: [
-    [0, 0.3],
-    [115.5, 0.3],
-    [115.51, 0.2],
-    [276.13, 0.2],
+    [0, 0.4],
+    [115.5, 0.4],
+    [115.51, 0.3],
+    [276.13, 0.3],
   ],
   /** Chords and lattice bars of the girder bands [estimated]. */
   girderChord: 0.25,
   girderBar: 0.12,
+  /**
+   * The lattice bars of the legs' belts (the base ties, panel 5, panel
+   * 10's base band and panel 11): single angles, 70 x 70 x 8 in the ties
+   * and 80 x 80 x 8/10 in the belts [sourced PL-VII Figs 1, 2, 5], drawn
+   * 0.10-0.17 m wide at 1:200. A 0.10 m square [estimated].
+   */
+  beltBar: 0.05,
+} as const;
+
+/**
+ * The legs' lattice belts and bands (PL-VII). Depths are printed IN THE
+ * FACE PLANE (the plate is a rabattement), so a vertical depth is the
+ * printed one over sqrt(1 + s^2), s the face's slope there.
+ */
+export const LEG_BELTS = {
+  /**
+   * Base tie A, on each leg's two outer faces: "2,987" between its chords'
+   * 200 x 8 plates and "3,387" over them [sourced PL-VII Fig. 1], so 3.187
+   * axis to axis [derived; the drawn chords are 255 px apart at 79.7 px/m,
+   * 3.20]. The earlier 2 m was B's depth read off the wrong figure.
+   */
+  tieOuterDepth: 3.187,
+  /** Base tie B, on the two inner faces: "2.000" [sourced PL-VII Fig. 5]. */
+  tieInnerDepth: 2.0,
+  /**
+   * The ties are Warren girders of single 70 x 70 x 8 angles with a bottom
+   * chord and no posts but the leg's central one [sourced PL-VII Figs 1,
+   * 5]: A's bottom-chord joints fall about 3.75 m apart, four V's across
+   * the face [estimated], and B is drawn alike. Bars 47-60 degrees off the
+   * chord (A's alternate about 37 and 63 on the plate).
+   */
+  tieOuterBays: 4,
+  tieInnerBays: 4,
+  /**
+   * Panel 5: posts every 3.000 (5 bays in the 15.000 face), and a double
+   * lattice of 80 x 80 x 8 angles crossing at square gussets at each
+   * post's mid-height, each bar spanning two bays over the belt's depth,
+   * about 50 degrees off the chord [sourced PL-VII Fig. 1, panel 5 detail;
+   * the pattern read off the drawing].
+   */
+  belt1Bays: 5,
+  /**
+   * Panel 11: posts "3,36268" apart, about 3 bays [sourced PL-VII Fig. 2],
+   * and a diamond lattice of 80 x 80 angles: bars crossing at square
+   * gussets at the posts' mid-heights and meeting the chords at mid-bay
+   * [the pattern read off the drawing], each bar spanning one bay over the
+   * belt's depth, about 55 degrees off the chord (an angle of 53°49'43"
+   * is printed at one of them) [derived].
+   */
+  belt2Bays: 3,
+  /**
+   * Panel 10's base band: "3,6071" deep [sourced PL-VII Fig. 2], a double
+   * lattice of 300 x 5 flats and 30 x 30 x 4 angles at 45 degrees, about
+   * 0.93 m apart [estimated], under a 600 top chord ("600" printed on it)
+   * [sourced]. Above it, "6,564325": two X's per leg face either side of
+   * a central post, all 600 [sourced].
+   */
+  band10Depth: 3.6071,
+  band10TopChord: 0.3,
+  /** Bars and levels of the band's lattice [estimated, from its 0.93 m]. */
+  band10Bays: 12,
+  band10Levels: 4,
+} as const;
+
+/**
+ * "Masque placé sur le panneau 4" (PL-VII Fig. 6): a decorative lattice
+ * screen over the whole of panel 4 of a leg face, 15.000 wide and 12.311
+ * tall in the plane [sourced], standing in front of the panel's own web.
+ * It carries the decorative girder's band across the legs, so its posts
+ * keep that girder's rhythm, 3.8825 from the tower's axis [derived: the
+ * drawn posts fall 3.86 apart, the one nearest c cut short by the leaning
+ * upright]. Distances are in the face plane, from panel 4's foot.
+ */
+export const MASQUE = {
+  /**
+   * The bottom chord's lower edge above the panel's foot: clear of the
+   * node horizontal there, 24 px over the node line at 50.8 px/m, and an
+   * independent reading 0.43-0.47 [estimated].
+   */
+  lowLift: 0.45,
+  /** The bottom chord, "630 × 4" [sourced]. */
+  lowChord: 0.63,
+  /** The middle chord, "750 × 4" [sourced]. */
+  midChord: 0.75,
+  /** Clear between the two chords, "2,746" [sourced; drawn 2.68]. */
+  lowClear: 2.746,
+  /** The top band, its top edge on node XXIV, drawn 0.52-0.59 deep [estimated]. */
+  topBand: 0.55,
+  /** The plates' thickness, "× 4" [sourced]. */
+  plate: 0.004,
+  /** Post pitch from the tower's axis: the decorative girder's bay [sourced 3.8825]. */
+  postPitch: 3.8825,
+  /** Flat bars' widths, drawn about 0.3-0.4 (posts, upper X's) and 0.2 (lower lattice) [estimated]. */
+  post: 0.32,
+  bar: 0.3,
+  lowerBar: 0.2,
+  /** The lower lattice's bars, 45 degrees, every half post pitch along the chord [estimated]. */
+  lowerPitch: 3.8825 / 2,
+  /** The bars' thickness [estimated]. */
+  barThickness: 0.01,
 } as const;
 
 /** Headline counts (Eiffel, and the operating company). */

@@ -3,7 +3,8 @@
  * with the 1st and 2nd floors fitted out as they stood in 1889.
  *
  * Every deck is a slab whose TOP is the printed floor level (Plate I; the
- * structural nodes sit 0.23 m below), 0.60 m thick [estimated]:
+ * structural nodes sit 0.23 m below), 0.60 m thick [estimated] unless the
+ * plates give its depth:
  *
  * - 1ST FLOOR, y 57.63: "côté extérieur 70m695, surface 4200 m²"
  *   [sourced]. 70.695² is 4,998 m², so the printed area only holds if the
@@ -19,12 +20,18 @@
  *   digit; see `PLATFORMS`]. 37.63² = 1,416 m² against the printed 1,400,
  *   which is inside the rounding the 3rd floor shows (18.65² = 348 m²
  *   against a printed 350), so no hole is inferred: a solid deck.
- * - LANDING, y 195.93 [sourced], inside the shaft between nodes X and IX.
- *   No plan is printed. It fills the shaft: the shaft's half-width at the
- *   floor, interpolated on Plate XXXI's profile, less an upright's
- *   half-width, 16.23 m square [estimated].
- * - 3RD FLOOR gallery, y 276.13: 18.65 m square [sourced], round the
- *   10 m panel-29 box and under the 16.56 m room (`summit.ts`).
+ * - LANDING, y 195.93 [sourced], inside the shaft between nodes X and IX:
+ *   a square turned 45 degrees, 11.337 on its girders' axes, its vertices
+ *   on the face centre lines, the corner triangles of the shaft left open
+ *   [sourced PL-XVI Fig. 14, PL-XIX Fig. 14]. A 0.22 floor over lattice
+ *   girders 2.30 deep round its edge, less the wells of the lower Edoux car
+ *   and the stair from the 2nd floor (see `LANDING`).
+ * - 3RD FLOOR, y 276.13: the glazed gallery's octagon, 16.56 across the
+ *   flats, 0.85 deep, flush with the glass [sourced PL-XIX Figs 3, 9],
+ *   less the wells of the upper Edoux car and the stair from the landing;
+ *   on two curved consoles a face (see `THIRD`, `CONSOLE`). Plate I's
+ *   "côté extérieur 18m65" matches nothing drawn there, so no deck is
+ *   18.65 wide.
  * - PEDESTALS: the four decorative masonry "soubassements", 4 m high from
  *   the ground [sourced], faces 37.119 and 62.453 from the axis on both x
  *   and z [derived from Plate I's ground chain 25.334 + 74.238 + 25.334;
@@ -53,7 +60,11 @@
  *   deep to an inner arcade of pilasters [sourced PL-XIII]; crown 8.70
  *   above the gallery floor [sourced PL-XIX], the vault a semi-ellipse on
  *   the 7.035 m between the 0.73 m valley gutters [estimated fit, PL-XIII].
- *   The inner arcade is not built: the vault ends in its gable. The crown
+ *   Its gable is a crescent between that arc and an inner arc crowned at
+ *   6.95 [sourced PL-XIX]; the lunette under the inner arc is an open
+ *   wooden trellis [sourced], so it is left open, and the vault behind it
+ *   is a shell (see `bayRoof`). The inner arcade is not built: the vault
+ *   ends in a gable drawn as the outer one. The crown
  *   carries a palmette crest to about 10.2 [estimated] and every pier an
  *   8.00 m flag mast [sourced text] topping out about 12.2 above the
  *   gallery floor [estimated].
@@ -90,29 +101,36 @@
  *   band on the outer posts [sourced height]. Nothing that stood on
  *   the 2nd platform in 1889 is dimensioned on the plates (the 1900 album's
  *   buffet and tents may be later), so the deck carries only the gallery.
+ *   Under the deck's edge hangs its SKIRT, a curved plate 5.15 deep
+ *   [sourced PL-XIX Fig. 2] leaning in 1.3 to its foot at node XVIII,
+ *   unbroken across the faces, which hides panel 11's belt (see
+ *   `SECOND_SKIRT`).
  * - THE SKIRT below the 1st-floor gallery: 0.50 of cornice and 5.50 of
- *   plate panels down to altitude 83.90 [sourced PL-XIX], hung on consoles
- *   whose outer edge curves in about 0.9 m at the foot [estimated], here a
- *   plane leaning in 0.50 (see `SKIRT`). The gallery slab's own edge
- *   stands for the cornice. Its names band, 0.80 tall [sourced], carries
- *   the 72 names of French scientists and engineers, 18 to a face [the
- *   count is well known; the plates give the band]: here 18 plaques per
- *   face on the panel's outer face just under the cornice, one per
- *   eighteenth of the face (see `namesBand`).
+ *   plate panels down to altitude 83.90 [sourced PL-XIX], the plate leaning
+ *   in 0.62-0.93 at the foot [measured PL-XIII], here a plane leaning in
+ *   0.60 (see `SKIRT`). The gallery slab's own edge stands for the
+ *   cornice. Its names band, 0.80 tall [sourced], carries the 72 names of
+ *   French scientists and engineers, 18 to a face [sourced PL-XIX's list]:
+ *   18 plaques per face on the panel's outer face, 4.02 to 4.82 below the
+ *   gallery floor [measured PL-XIX], one to each 3.8825 console bay (see
+ *   `NAMES`, `namesBand`).
  * - THE UNDERSIDE: cross girders 4.00 deep every 3.8825 [sourced PL-XVI],
  *   tops 0.23 under the floor [sourced], spanning between the main girders
- *   on the outer and inner uprights' lines between the legs. They lean with
- *   the legs (panel 5's parallel prisms), so each is a parallelogram; its
- *   lattice (4 panels, one diagonal each) and sections are [estimated].
+ *   on the outer and inner uprights' lines between the legs (the inner one
+ *   is `firstFloor.ts`'s inner grande poutre, which their inner ends meet
+ *   at the chord). They lean with the legs (panel 5's parallel prisms), so
+ *   each is a parallelogram; its lattice (4 panels, one diagonal each) and
+ *   sections are [estimated].
  * - THE 3rd FLOOR gets no balustrade: its gallery is INSIDE the glazed room
  *   (`summit.ts`), whose 1.200 plate parapet is the railing [sourced PL-XIV].
  *
  * Boxes carry no `normal`, so copying the meshes themselves is safe. Most
  * of the fit-out is boxes: one unit box copied onto a table of targets,
  * each carrying its size as `scale` and its turn as `rot`. The curved and
- * sloping parts — vaults, skirt panels, the 2nd-floor roof — are closed
- * outlines extruded along their own normals; their `normal` is removed, so
- * the class carries none and the page computes normals for all of it.
+ * sloping parts — vaults, skirt panels, the 2nd-floor roof, and the floors
+ * with wells — are closed convex outlines extruded along their own
+ * normals; their `normal` is removed, so the class carries none and the
+ * page computes normals for all of it.
  */
 import type { Graph, NodeHandle } from "pcg-ts";
 import {
@@ -129,7 +147,7 @@ import {
 } from "pcg-ts";
 import { type Vec3, box, copyToQuadrants, indexTable } from "./lattice.js";
 import type { Parts } from "./parts.js";
-import { FLOORS, MEMBERS, PEDESTAL, PLATFORMS, profileAt } from "./spec.js";
+import { FLOORS, MEMBERS, PANEL29, PEDESTAL, PLATFORMS, profileAt } from "./spec.js";
 
 /** Every deck's thickness [estimated]. */
 const DECK = 0.6;
@@ -164,6 +182,13 @@ const GALLERY = {
   crown: 8.7,
   /** Column axis to the inner arcade, where a vault ends [sourced]. */
   depth: 4.1875,
+  /**
+   * The gable's inner arc: its crown [sourced PL-XIX "6.95", 1.75 under
+   * the outer], and its radius [sourced PL-XIII Fig. 26 "R 3.3675"; that it
+   * is this arc's, estimated].
+   */
+  innerCrown: 6.95,
+  innerRadius: 3.3675,
 } as const;
 
 /** The arcade's lesser members [estimated: thicknesses, crest and mast sections]. */
@@ -174,6 +199,8 @@ const ARCADE = {
   archFacets: 6,
   /** Segments of each vault's half-ellipse. */
   vaultSegments: 12,
+  /** The vault's roof (zinc on boarding and purlins), as a shell. */
+  shell: 0.1,
   /** The palmette over each crown: width, height (to about 10.2), thickness. */
   crest: [1.2, 1.5, 0.12] as Vec3,
   /** Flag mast: 8.00 long [sourced text], foot 4.2 above the gallery floor, section. */
@@ -254,20 +281,37 @@ const SECOND_GALLERY = {
 } as const;
 
 /**
- * The skirt's foot [sourced: altitude 83.90]. The consoles' outer edge curves
- * in about 0.9 at the foot [estimated]; the panels lean in 0.50, which keeps
- * their foot clear of the legs' outer uprights where these come through the
- * corners. The foot is at node XXIV, where the leg kinks and the upright's
- * mitred section reaches 34.66 from the axis [measured on the cooked mesh];
- * the panel's inner face is at 34.77 there. Thickness [estimated].
+ * The skirt's foot [sourced: altitude 83.90], and its lean. PL-XIII's
+ * section through a pier (Fig. 2, 1:50) draws the plate starting on the
+ * column axis just under the 0.50 cornice and leaning in straight, 0.93 at
+ * the foot; its elevation of the corner (Fig. 1) draws 0.62 [measured,
+ * both]. The panel is a plane mitred at the corners, so it takes one
+ * lean: 0.60, which lands its inner face at the foot, node XXIV, 34.67
+ * from the axis: 0.01 off the grande poutre's bottom chord (34.66), where
+ * the plate is fixed, and 0.09 clear of the legs' outer uprights (34.58)
+ * [measured on the cooked mesh]. Thickness [estimated].
  */
-const SKIRT = { bottom: 83.9 - 33.5, lean: 0.5, thickness: 0.08 } as const;
+const SKIRT = { bottom: 83.9 - 33.5, lean: 0.6, thickness: 0.08 } as const;
 
 /**
- * The names band on the skirt: 0.80 tall [sourced], directly under the
- * 0.50 cornice [sourced]; plaque gaps and thickness [estimated].
+ * The names band on the skirt: 0.80 tall [sourced PL-XIX], its top 4.02
+ * below the gallery floor [measured PL-XIX Fig. 1, 1:200, and checked on
+ * both halves of the plate], under the cove of volute brackets and the
+ * lattice cresting, 1.18 above the skirt's foot. One plaque to each
+ * console bay, 3.8825 [sourced PL-XVI; PL-XIX "3.88"]: the consoles stand
+ * under the column positions, a multiple of 3.8825 from the face's middle
+ * out to the corner piers, so the 18 bays between them are the 18 names a
+ * face carries [sourced PL-XIX's list, 18 a face]. Plaque gaps and
+ * thickness [estimated].
  */
-const NAMES = { perFace: 18, cornice: 0.5, height: 0.8, gap: 0.4, thickness: 0.03 } as const;
+const NAMES = {
+  perFace: 18,
+  top: 4.02,
+  height: 0.8,
+  pitch: 3.8825,
+  gap: 0.4,
+  thickness: 0.03,
+} as const;
 
 /**
  * The names band on the +z face: one tilted plaque, copied along the row.
@@ -282,10 +326,12 @@ function namesBand(g: Graph): NodeHandle {
   // Down the panel, and its outward normal (it looks slightly down).
   const down: [number, number] = [-drop / len, -SKIRT.lean / len];
   const out: [number, number] = [-SKIRT.lean / len, drop / len];
-  const along = NAMES.cornice + NAMES.height / 2;
+  // The band's middle, as a distance down the panel from its top.
+  const middle = GALLERY.floor - NAMES.top - NAMES.height / 2;
+  const along = ((top - middle) * len) / drop;
   const y = top + down[0] * along + out[0] * (NAMES.thickness / 2);
   const z = EDGE + down[1] * along + out[1] * (NAMES.thickness / 2);
-  const pitch = (2 * EDGE) / NAMES.perFace;
+  const pitch = NAMES.pitch;
   const plaque = g.add(
     meshPrimitive,
     { shape: "box", center: [0, 0, 0], size: [pitch - NAMES.gap, NAMES.height, NAMES.thickness] },
@@ -298,7 +344,13 @@ function namesBand(g: Graph): NodeHandle {
   );
   const slots = g.add(
     pointGrid,
-    { countX: NAMES.perFace, countY: 1, countZ: 1, spacing: [pitch, 1, 1], origin: [-EDGE + pitch / 2, y, z] },
+    {
+      countX: NAMES.perFace,
+      countY: 1,
+      countZ: 1,
+      spacing: [pitch, 1, 1],
+      origin: [(-(NAMES.perFace - 1) * pitch) / 2, y, z],
+    },
     "namesSlots",
   );
   const row = g.add(copyToPoints, { topology: "keep" }, "namesRow");
@@ -307,6 +359,142 @@ function namesBand(g: Graph): NodeHandle {
   g.connect(slots, "out", row, "target");
   return row;
 }
+
+/**
+ * The 2nd floor's skirt (PL-XIX Fig. 2, 1:200; tags as in the file
+ * comment): « une tôle courbée de 3 mm … formant corniche décorative »
+ * [sourced text], hanging 5.150 below the floor [sourced], so to altitude
+ * 144.08, node XVIII, the foot of panel 11's belt, which it hides. It runs
+ * unbroken over the legs and across the gap between them, with no consoles
+ * under it [sourced drawing]. Its profile, from the silhouette the
+ * perpendicular faces' skirts cut at the ends of the elevation, as
+ * [depth below the floor, half-width] [measured at 78.95 px/m, the two ends
+ * averaged]: steep in under the cornice, then nearly straight, 1.45 in
+ * all. The plate's cornice line stands at 18.95, the moulding proud of the
+ * printed 37.63; the model's skirt starts at the deck's edge. Thickness
+ * [estimated].
+ */
+const SECOND_SKIRT = {
+  profile: [
+    [DECK, PLATFORMS.second.side / 2],
+    [1.18, PLATFORMS.second.side / 2],
+    [1.95, 18.35],
+    [2.72, 17.98],
+    [4.06, 17.71],
+    [5.15, 17.5],
+  ],
+  thickness: 0.08,
+} as const;
+
+/**
+ * The Edoux lift's two cars run on the N-S diagonal, their axes 2.650 out
+ * either side of the tower's axis [sourced PL-XX], the lower car toward
+ * pile 3 (+x -z), the upper toward pile 1; the service stairs e2 and e3,
+ * Ø 1.600 and 1.680 [sourced PL-XX Fig. 2], take the halves of the shaft
+ * the cars leave free (as `lifts.ts` builds them). A floor a car rises
+ * through, or a stair comes up through, has a well there: the stairs' a
+ * square 0.90 either side of the stair's axis, room for its rail
+ * [estimated].
+ */
+const CAR_AXIS = 2.65;
+const STAIR_HALF = 0.9;
+
+/** A rectangular well on the N-S diagonal: centre `s` out along it, size along and across it. */
+interface Well {
+  readonly s: number;
+  readonly along: number;
+  readonly across: number;
+}
+
+/**
+ * The 3rd floor's structure (PL-XIX Figs 3, 9; PL-VII Fig. 4; PL-XIV Figs
+ * 2, 13; tags as in the file comment). The floor's edge beams, « poutres de
+ * rive … de 850 mm de hauteur » [sourced text, PL-XIX "850"], stand flush
+ * with the glazed octagon over them: 16.56 across the flats, 10.90 straight
+ * sides [sourced PL-XIX Fig. 9], so the floor is that octagon, 0.85 deep.
+ * PL-I's "côté extérieur 18m65" matches nothing drawn at this level (the
+ * widest element on every plate is 16.56; PL-I's own strokes reach 17.7),
+ * so it is not built.
+ */
+const THIRD = {
+  across: 16.56,
+  straight: 10.9,
+  depth: 0.85,
+  wells: [
+    // The upper car's, arriving from the landing, as the landing's.
+    { s: -CAR_AXIS, along: 3.67, across: 4.2 },
+    // The service stair e3 from the landing.
+    { s: CAR_AXIS, along: 2 * STAIR_HALF, across: 2 * STAIR_HALF },
+  ],
+} as const;
+
+/**
+ * The consoles under it: « des consoles de 7,207 m de hauteur fixées sur
+ * les faces extérieures des arbalétriers d'angle » [sourced text, PL-XIX
+ * "7.207"], so two to a face, one on each corner upright's outer face,
+ * and none on the 2.50 bays between [sourced drawings]. Each is a box of
+ * two webs 0.50 apart under a curved « semelle 500 × 6 », the webs
+ * « découpées suivant un arc de cercle de 9,280 m de rayon » [sourced text;
+ * three plates fit 9.0-9.5, and PL-VII's "R: 2,980" fits none]. The arc
+ * is concave outward: it leaves the upright tangentially about 5.5 from
+ * the axis [measured 5.3-5.5] and meets the edge beam's underside flush
+ * with the 16.56 wall [measured 8.16-8.24], so the top strut runs 3.0 out
+ * from the upright's face [sourced PL-VII "3,000"]; below the tangent
+ * point the flange runs straight down to the foot. Flange thickness, web
+ * bars and their layout [estimated].
+ */
+const CONSOLE = {
+  height: 7.207,
+  radius: 9.28,
+  /** The flange's outer face where it leaves the upright [measured]. */
+  foot: 5.5,
+  /** The consoles' positions along a face: the corner uprights. */
+  at: [-PANEL29.half, PANEL29.half],
+  /** Width (the webs' spacing) and the flange's thickness; web bars; flange segments. */
+  width: 0.5,
+  flange: 0.12,
+  bar: 0.15,
+  segments: 8,
+} as const;
+
+/**
+ * The landing (PL-XIX Fig. 14, PL-XVI Figs 14-15; tags as in the file
+ * comment). A square turned 45 degrees whose sides, on their girders'
+ * axes, are 11.337 [sourced, printed on all four sides of PL-XVI Fig. 14
+ * and twice on PL-XIX; half-side "5.669"], so its vertices sit on the face
+ * centre lines 8.016 from the axis [derived], against the merged b/d
+ * uprights. The well of the lower Edoux car, "Cage de la Cabine Edoux du
+ * 2ème étage à l'étage intermédiaire", is 3.67 along the diagonal toward
+ * pile 3 [sourced] by about 4.2 across it [measured, PL-XIX at 79.8 px/m],
+ * centred 2.650 out along that diagonal [sourced: the cars' axes, which the
+ * well's measured centre, 2.7 out, matches]. The floor is 0.22 deep, down
+ * to the girders' tops [sourced PL-XVI Fig. 15 "220"]. The girders round
+ * the edge ("poutres" H, D, B) are 2.300 deep [sourced], the fourth, G,
+ * facing pile 1, 1.300 deep with its top 0.430 down [sourced]: lattice
+ * girders, as Plate I cross-hatches the band [the form estimated]. The
+ * inner beams A and C are left out.
+ */
+const LANDING = {
+  side: 11.337,
+  floor: 0.22,
+  wells: [
+    // The lower car's, toward pile 3.
+    { s: CAR_AXIS, along: 3.67, across: 4.2 },
+    // The service stair from the 2nd floor, e2, arriving under the upper car.
+    { s: -CAR_AXIS, along: 2 * STAIR_HALF, across: 2 * STAIR_HALF },
+  ],
+  /** Each side's girder, depth and drop, facing piles 4 (+x +z), 3 (+x -z), 2 and 1 in turn. */
+  girders: [
+    { depth: 2.3, drop: 0.22 },
+    { depth: 2.3, drop: 0.22 },
+    { depth: 2.3, drop: 0.22 },
+    { depth: 1.3, drop: 0.43 },
+  ],
+  /** Lattice panels per side, chord and bar sections [estimated]. */
+  panels: 5,
+  chord: 0.25,
+  bar: 0.12,
+} as const;
 
 /** The 1st floor's cross girders [sourced pitch, depth, drop; the rest estimated]. */
 const CROSS_GIRDER = {
@@ -524,6 +712,27 @@ function deck(g: Graph, id: string, side: number, top: number): NodeHandle {
 }
 
 /**
+ * An octagonal slab `across` the flats with `straight` sides and 45-degree
+ * chamfers, from y0 up to y1: counter-clockwise seen from above, so it
+ * extrudes up.
+ */
+function octagon(across: number, straight: number, y0: number, y1: number): Prism {
+  const h = across / 2;
+  const s = straight / 2;
+  const ring: [number, number][] = [
+    [s, h],
+    [h, s],
+    [h, -s],
+    [s, -h],
+    [-s, -h],
+    [-h, -s],
+    [-h, s],
+    [-s, h],
+  ];
+  return { outline: ring.map(([x, z]): Vec3 => [x, y0, z]), depth: y1 - y0 };
+}
+
+/**
  * A square ring of deck between half-widths `inner` and `outer`, top at
  * `top`: one pinwheel side slab (the +z side, on to the +x corner) copied
  * onto the quadrant targets, which tiles the ring with no overlap.
@@ -592,18 +801,78 @@ function bayCentre(k: number): number {
   return k * GALLERY.module;
 }
 
-/** A vault: a half-ellipse over bay centre `c`, its face at r, wound to extrude inward. */
-function vault(c: number, r: number, depth: number): Prism {
-  const half = (GALLERY.module - GALLERY.valley) / 2;
-  const rise = CROWN_Y - SPRING_Y;
-  const outline: Vec3[] = [];
-  // Left foot, over the crown, to the right foot: clockwise seen from +r,
-  // so the outline's normal points in, toward the tower's axis.
+/** A vault's outer arc over bay centre `c`, at r, left foot to right foot, shrunk by `inset`. */
+function vaultArc(c: number, r: number, inset = 0): Vec3[] {
+  const half = (GALLERY.module - GALLERY.valley) / 2 - inset;
+  const rise = CROWN_Y - SPRING_Y - inset;
+  const out: Vec3[] = [];
   for (let i = 0; i <= ARCADE.vaultSegments; i++) {
     const phi = Math.PI * (1 - i / ARCADE.vaultSegments);
-    outline.push([c + half * Math.cos(phi), SPRING_Y + rise * Math.sin(phi), r]);
+    out.push([c + half * Math.cos(phi), SPRING_Y + rise * Math.sin(phi), r]);
   }
-  return { outline, depth };
+  return out;
+}
+
+/**
+ * A vault: a half-ellipse over bay centre `c`, its face at r, wound to
+ * extrude inward. Left foot, over the crown, to the right foot: clockwise
+ * seen from +r, so the outline's normal points in, toward the tower's axis.
+ */
+function vault(c: number, r: number, depth: number): Prism {
+  return { outline: vaultArc(c, r), depth };
+}
+
+/**
+ * The quads between two arcs of equal count, each wound as the arcs are
+ * (the first over the second), extruded `depth` inward: a crescent or a
+ * shell cut into convex pieces, since a cap is a fan.
+ */
+function between(upper: readonly Vec3[], lower: readonly Vec3[], depth: number): Prism[] {
+  const out: Prism[] = [];
+  for (let i = 0; i + 1 < upper.length; i++) {
+    out.push({
+      outline: [upper[i] as Vec3, upper[i + 1] as Vec3, lower[i + 1] as Vec3, lower[i] as Vec3],
+      depth,
+    });
+  }
+  return out;
+}
+
+/**
+ * A gable's inner arc over bay centre `c`, at r, left foot to right foot:
+ * the circle of GALLERY.innerRadius through the inner crown, cut by the
+ * vault's springing line, one point per point of `vaultArc`.
+ */
+function innerArc(c: number, r: number): Vec3[] {
+  const n = ARCADE.vaultSegments;
+  const R = GALLERY.innerRadius;
+  const cy = GALLERY.floor + GALLERY.innerCrown - R;
+  const psi0 = Math.asin((SPRING_Y - cy) / R);
+  const out: Vec3[] = [];
+  for (let i = 0; i <= n; i++) {
+    const psi = Math.PI - psi0 - ((Math.PI - 2 * psi0) * i) / n;
+    out.push([c + R * Math.cos(psi), cy + R * Math.sin(psi), r]);
+  }
+  return out;
+}
+
+/**
+ * A bay's roof, face at r. The gable at the face is the crescent between
+ * the vault's outer arc and its inner arc, a plate [sourced: glazed and
+ * gilt in the cells between its rays]; the lunette under the inner arc
+ * is « un treillis de bois » [sourced PL-XIX, PL-XIII Fig. 26, Eiffel's
+ * text], an open trellis, so it is left open like the balustrades' infill.
+ * Behind the gable the vault is a shell for `open` (the gallery and, at the
+ * pavilions, the terrace), then solid on to `depth` where a hall stands
+ * under it; where nothing does, the inner arcade's gable closes it, drawn
+ * as the outer one [estimated: the inner arcade is not dimensioned].
+ */
+function bayRoof(c: number, r: number, open: number, depth: number): Prism[] {
+  const gable = (at: number) => between(vaultArc(c, at), innerArc(c, at), ARCADE.plate);
+  const out = [...gable(r), ...between(vaultArc(c, r), vaultArc(c, r, ARCADE.shell), open)];
+  if (depth > open) out.push(vault(c, r - open, depth - open));
+  else out.push(...gable(r - open + ARCADE.plate));
+  return out;
 }
 
 /** The arcade on the +z face: columns, piers, arches, crests and masts. */
@@ -676,7 +945,7 @@ function pavilionFace(): { walls: Block[]; vaults: Prism[] } {
   for (const k of [-1, 0, 1]) {
     const c = bayCentre(k);
     const end = k === 0 ? back : annex;
-    vaults.push(vault(c, EDGE, EDGE - end));
+    vaults.push(...bayRoof(c, EDGE, P.front, EDGE - end));
     const r1 = front - (k === 0 ? P.centreLantern.front : P.outerLantern.front);
     const r0 = k === 0 ? back + P.centreLantern.back : r1 - P.outerLantern.length;
     // The lantern's glazed body, sunk into the vault's crown, and its roof.
@@ -719,6 +988,256 @@ function crossGirders(): Block[] {
       out.push(member(pt(yBot, t), pt(yTop, t), G.bar));
       if (i < G.panels) out.push(member(pt(yBot, t), pt(yTop, (i + 1) / G.panels), G.bar));
     }
+  }
+  return out;
+}
+
+/**
+ * A straight member of square section `w` from p to q, both in the plane
+ * r = const: a box along its own x, turned about the r axis onto p->q.
+ */
+function memberAlong(p: Vec3, q: Vec3, w: number): Block {
+  const da = q[0] - p[0];
+  const dy = q[1] - p[1];
+  return {
+    at: [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2],
+    size: [Math.hypot(da, dy), w, w],
+    rot: turn(2, Math.atan2(dy, da)),
+  };
+}
+
+/** A point (s, t) of the diagonals' frame, on the plan (x, z). */
+function fromDiagonals([s, t]: readonly [number, number]): [number, number] {
+  return [(s + t) * Math.SQRT1_2, (t - s) * Math.SQRT1_2];
+}
+
+/** A convex polygon (s, t) clipped to the box s0..s1, t0..t1 (Sutherland-Hodgman). */
+function clipToBox(
+  poly: readonly (readonly [number, number])[],
+  s0: number,
+  s1: number,
+  t0: number,
+  t1: number,
+): [number, number][] {
+  let out = poly.map((p): [number, number] => [p[0], p[1]]);
+  const planes: [0 | 1, number, 1 | -1][] = [
+    [0, s0, 1],
+    [0, s1, -1],
+    [1, t0, 1],
+    [1, t1, -1],
+  ];
+  for (const [k, v, sign] of planes) {
+    const inside = (p: [number, number]) => sign * (p[k] - v) >= -1e-9;
+    const next: [number, number][] = [];
+    for (let i = 0; i < out.length; i++) {
+      const a = out[i] as [number, number];
+      const b = out[(i + 1) % out.length] as [number, number];
+      if (inside(a)) next.push(a);
+      if (inside(a) !== inside(b)) {
+        const f = (v - a[k]) / (b[k] - a[k]);
+        next.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]);
+      }
+    }
+    out = next;
+    if (out.length === 0) break;
+  }
+  return out;
+}
+
+/**
+ * A floor slab from y0 up to y1 over a convex plan (in the diagonals'
+ * frame) less rectangular wells on the N-S diagonal, as convex prisms: the
+ * plan cut into bands at the wells' edges across the diagonal, each band
+ * into pieces between the wells it crosses. Every piece is wound
+ * counter-clockwise seen from above, so it extrudes up.
+ */
+function floorWithWells(
+  plan: readonly (readonly [number, number])[],
+  wells: readonly Well[],
+  y0: number,
+  y1: number,
+): Prism[] {
+  const big = 1e3;
+  const edges = wells.flatMap((w) => [-w.across / 2, w.across / 2]);
+  const ts = [-big, big, ...edges].sort((a, b) => a - b);
+  const out: Prism[] = [];
+  for (let i = 0; i + 1 < ts.length; i++) {
+    const [ta, tb] = [ts[i] as number, ts[i + 1] as number];
+    if (tb - ta < 1e-9) continue;
+    const mid = (ta + tb) / 2;
+    // The wells this band crosses, as intervals along the diagonal.
+    const cut = wells
+      .filter((w) => Math.abs(mid) < w.across / 2)
+      .map((w) => [w.s - w.along / 2, w.s + w.along / 2] as const)
+      .sort((a, b) => a[0] - b[0]);
+    const spans: [number, number][] = [];
+    let from = -big;
+    for (const [c0, c1] of cut) {
+      spans.push([from, c0]);
+      from = c1;
+    }
+    spans.push([from, big]);
+    for (const [sa, sb] of spans) {
+      const piece = clipToBox(plan, sa, sb, ta, tb);
+      if (piece.length < 3) continue;
+      const xz = piece.map(fromDiagonals);
+      let area = 0;
+      for (let k = 0; k < xz.length; k++) {
+        const [x0, z0] = xz[k] as [number, number];
+        const [x1, z1] = xz[(k + 1) % xz.length] as [number, number];
+        area += x0 * z1 - x1 * z0;
+      }
+      if (Math.abs(area) < 1e-6) continue;
+      if (area > 0) xz.reverse();
+      out.push({ outline: xz.map(([x, z]): Vec3 => [x, y0, z]), depth: y1 - y0 });
+    }
+  }
+  return out;
+}
+
+/** The landing's floor, less its wells (plan: the square in the diagonals' frame). */
+function landingFloor(): Prism[] {
+  const h = LANDING.side / 2;
+  const plan: [number, number][] = [
+    [-h, -h],
+    [h, -h],
+    [h, h],
+    [-h, h],
+  ];
+  return floorWithWells(plan, LANDING.wells, FLOORS.landing - LANDING.floor, FLOORS.landing);
+}
+
+/** The 3rd floor, less its wells: the octagon, in the diagonals' frame. */
+function thirdFloor(): Prism[] {
+  const plan = octagon(THIRD.across, THIRD.straight, 0, 1).outline.map(
+    ([x, , z]): [number, number] => [(x - z) * Math.SQRT1_2, (x + z) * Math.SQRT1_2],
+  );
+  // Drawn 0.01 deeper than the edge beams, so its underside does not lie in
+  // the plane of panel 29's plate girders, which `summit.ts` hangs to the
+  // same 0.85.
+  return floorWithWells(plan, THIRD.wells, FLOORS.third - THIRD.depth - 0.01, FLOORS.third);
+}
+
+/**
+ * The landing's girders, the lattice round its edge. Laid out in the
+ * diagonals' frame — s toward +x -z (pile 3), t toward +x +z (pile 4) —
+ * where the turned square is |s|, |t| <= side / 2, and turned onto it
+ * whole: a box turned 45 degrees about +y has its x along s and its z
+ * along t. Each side's girder is built in its own face frame (a along the
+ * side, r out to it) and turned onto the square's sides by quarter turns
+ * first.
+ */
+function landingBlocks(): Block[] {
+  const L = LANDING;
+  const h = L.side / 2;
+  const top = FLOORS.landing;
+  const yawDiag = turn(1, Math.PI / 4);
+  const toWorld = (b: Block): Block => {
+    const [s, y, t] = b.at;
+    return {
+      at: [(s + t) * Math.SQRT1_2, y, (t - s) * Math.SQRT1_2],
+      size: b.size,
+      rot: qmul(yawDiag, b.rot ?? [0, 0, 0, 1]),
+    };
+  };
+  const inSquare: Block[] = [];
+  const G = L.girders;
+  // The girders: chords, posts and one diagonal per panel. Two sides meet
+  // at each corner, and one post stands there: the deeper side's.
+  G.forEach(({ depth, drop }, f) => {
+    const next = (G[(f + 1) % 4] as (typeof G)[number]).depth;
+    const prev = (G[(f + 3) % 4] as (typeof G)[number]).depth;
+    const yTop = top - drop - L.chord / 2;
+    const yBot = top - drop - depth + L.chord / 2;
+    const side: Block[] = [
+      memberAlong([-h, yTop, h], [h, yTop, h], L.chord),
+      memberAlong([-h, yBot, h], [h, yBot, h], L.chord),
+    ];
+    for (let i = 0; i <= L.panels; i++) {
+      const a = -h + (2 * h * i) / L.panels;
+      const corner = (i === 0 && prev > depth) || (i === L.panels && next >= depth);
+      if (!corner) side.push(post(a, h, L.bar, yBot, yTop));
+      if (i < L.panels) {
+        const b = -h + (2 * h * (i + 1)) / L.panels;
+        side.push(memberAlong([a, yBot, h], [b, yTop, h], L.bar));
+      }
+    }
+    const yaw = turn(1, (f * Math.PI) / 2);
+    for (const b of side) {
+      inSquare.push({ at: onFace(f, b.at), size: b.size, rot: qmul(yaw, b.rot ?? [0, 0, 0, 1]) });
+    }
+  });
+  return inSquare.map(toWorld);
+}
+
+/**
+ * The 3rd floor's consoles on the +z face, each in the plane a = const,
+ * from the corner upright's outer face out to the edge beam's. The flange
+ * is the arc of CONSOLE.radius whose centre stands level with the tangent
+ * point, radius + foot from the axis, so the arc leaves the upright
+ * vertically and turns out to the wall line at the top; its axis runs half
+ * a flange inside that outer face. A top strut under the edge beam, a tie
+ * across the foot, and from every other flange node a horizontal and a
+ * diagonal back to the upright, make the web.
+ */
+function consolesFace(): Block[] {
+  const C = CONSOLE;
+  const yTop = FLOORS.third - THIRD.depth;
+  const yFoot = yTop - C.height;
+  const r0 = PANEL29.half + uprightAt(FLOORS.third);
+  const tip = THIRD.across / 2;
+  const cr = C.foot + C.radius;
+  // The arc's centre height, from the outer face reaching the tip at yTop.
+  const cy = yTop - Math.sqrt(C.radius ** 2 - (cr - tip) ** 2);
+  const sweep = Math.asin((yTop - cy) / C.radius);
+  const ra = C.radius + C.flange / 2;
+  const out: Block[] = [];
+  const flange = (p: Vec3, q: Vec3): Block => {
+    const b = member(p, q, C.width);
+    return { ...b, size: [C.width, C.flange, b.size[2]] };
+  };
+  for (const a of C.at) {
+    const node = (i: number): Vec3 => {
+      const f = (sweep * i) / C.segments;
+      return [a, cy + ra * Math.sin(f), cr - ra * Math.cos(f)];
+    };
+    out.push(flange([a, yFoot, cr - ra], node(0)));
+    for (let i = 0; i < C.segments; i++) out.push(flange(node(i), node(i + 1)));
+    const strutY = yTop - C.bar / 2;
+    out.push(member([a, strutY, r0], [a, strutY, tip], C.bar));
+    out.push(member([a, yFoot + C.bar / 2, r0], [a, yFoot + C.bar / 2, cr - ra], C.bar));
+    for (let i = 2; i < C.segments; i += 2) {
+      const p = node(i);
+      const up = Math.min(node(i + 2)[1] as number, strutY);
+      out.push(member(p, [a, p[1], r0], C.bar));
+      out.push(member(p, [a, up, r0], C.bar));
+    }
+  }
+  return out;
+}
+
+/**
+ * The 2nd floor's skirt on the +z face: one planar strip per step of its
+ * profile, each mitred at the corners, so the four faces close.
+ */
+function secondSkirtFace(): Prism[] {
+  const P = SECOND_SKIRT.profile;
+  const out: Prism[] = [];
+  for (let i = 0; i + 1 < P.length; i++) {
+    const [d0, w0] = P[i] as readonly [number, number];
+    const [d1, w1] = P[i + 1] as readonly [number, number];
+    const y0 = FLOORS.second - d0;
+    const y1 = FLOORS.second - d1;
+    out.push({
+      // Clockwise seen from outside, so the strip extrudes inward.
+      outline: [
+        [-w0, y0, w0],
+        [w0, y0, w0],
+        [w1, y1, w1],
+        [-w1, y1, w1],
+      ],
+      depth: SECOND_SKIRT.thickness,
+    });
   }
   return out;
 }
@@ -783,8 +1302,6 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
   const first = ring(g, "firstFloor", hole, terrace, FLOORS.first, quads);
   const gallery = ring(g, "firstGallery", terrace, EDGE + GALLERY.gutter, GALLERY.floor, quads);
 
-  const landingHalf = profileAt(FLOORS.landing).outer - uprightAt(FLOORS.landing);
-
   const pedMid = (PEDESTAL.inner + PEDESTAL.outer) / 2;
   const pedSide = PEDESTAL.outer - PEDESTAL.inner;
   const pedestal = box(
@@ -799,7 +1316,7 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
   const second = secondGalleryFace();
   const bays: Prism[] = [];
   for (let k = -4; k <= 4; k++) {
-    if (Math.abs(k) > 1) bays.push(vault(bayCentre(k), EDGE, GALLERY.depth));
+    if (Math.abs(k) > 1) bays.push(...bayRoof(bayCentre(k), EDGE, GALLERY.depth, GALLERY.depth));
   }
   const skirt: Prism = {
     // Clockwise seen from outside, so the panel extrudes inward.
@@ -831,21 +1348,20 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
       ...voidRail,
       ...crossGirders(),
       ...second.posts,
-    ]),
+      ...consolesFace(),
+    ]).concat(landingBlocks()),
   );
-  const fitPrisms = prisms(
-    g,
-    "fitOutCurved",
-    allFacesPrisms([...pavilion.vaults, ...bays, skirt, ...second.roof]),
-  );
+  const fitPrisms = prisms(g, "fitOutCurved", [
+    ...allFacesPrisms([...pavilion.vaults, ...bays, skirt, ...secondSkirtFace(), ...second.roof]),
+    ...landingFloor(),
+    ...thirdFloor(),
+  ]);
 
   return {
     platforms: [
       first,
       gallery,
       deck(g, "secondFloor", PLATFORMS.second.side, FLOORS.second),
-      deck(g, "landing", 2 * landingHalf, FLOORS.landing),
-      deck(g, "thirdFloor", PLATFORMS.third.side, FLOORS.third),
       fitBlocks,
       fitPrisms,
     ],

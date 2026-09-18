@@ -15,6 +15,7 @@ import { Graph } from "pcg-ts";
 import { buildFirstFloor } from "./firstFloor.js";
 import { quadrants } from "./lattice.js";
 import { buildLegs } from "./legs.js";
+import { buildLifts } from "./lifts.js";
 import { type Detail, assemble, joinParts } from "./parts.js";
 import { buildPlatforms } from "./platforms.js";
 import { buildShaft } from "./shaft.js";
@@ -38,6 +39,7 @@ export function buildEiffel(seed = 1889, detail: Detail = {}): Graph {
       buildFirstFloor(g, quads, detail),
       buildSummit(g, detail),
       buildPlatforms(g, quads),
+      buildLifts(g, quads, detail),
     ),
   );
   return g;

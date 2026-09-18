@@ -48,6 +48,7 @@ import {
   position,
   promoteAttribute,
   ramp,
+  removeAttribute,
   setAttribute,
   spawnInstances,
   select,
@@ -56,13 +57,13 @@ import {
   transformPoints,
   vec,
 } from "pcg-ts";
-import { END_SINE, FACE_NORMAL, merge, skin } from "./lattice.js";
+import { END_SINE, END_SINE_MIN, FACE_NORMAL, merge, skin } from "./lattice.js";
 import { type Detail, RIVET_ASSET } from "./parts.js";
 
 /** A corner angle's half-width: 80-100 mm angles (Plate XXXI) [derived]. */
 const CHORD = 0.045;
-/** A lacing bar's half-width: 45 x 45 x 5 angles (Plate VII) [derived]. */
-const LACE = 0.02;
+/** A lacing bar's half-width: 45 x 45 x 5 angles (Plate VII) [derived: 45 / 2 mm]. */
+const LACE = 0.0225;
 /**
  * A rivet head's radius. The rivets ran 14-25 mm (a secondary source
  * quoting Eiffel's price lists); a round head is about 1.7 shank
@@ -103,7 +104,75 @@ export interface WebMembers {
  */
 export interface JointOpts {
   readonly upright: ReadonlyArray<readonly [number, number]>;
+  /**
+   * How far past the joint start the plate (and its rivet rows) runs along
+   * the member, in strut half-widths. Default PLATE_REACH (3).
+   */
+  readonly reach?: number;
+  /**
+   * The smallest sine of the meeting angle the clearance assumes. Default
+   * 0.25; a member meeting its upright more steeply than that is trimmed
+   * as if at the clamp, which leaves its rivet rows INSIDE the box — so a
+   * set with steeper members (the slender gap X of panel 16) lowers it.
+   */
+  readonly minSine?: number;
+  /**
+   * Solve the clearance against every line the column runs along at the
+   * node (its bisector and the segments below and above, `END_SINE_MIN`),
+   * not the bisector alone. Where the column kinks, a deep member's chord
+   * sits beside one segment, which can lean closer to it than the
+   * bisector: without this, a horizontal's bottom chord at XXIII puts its
+   * rivets 2 mm inside the upright. Default false (the bisector).
+   */
+  readonly kinks?: boolean;
+  /**
+   * The upright's half-width at a member end, as a field of the end's
+   * position, in place of `upright` read at its height — for a station
+   * whose steel is not the table's (at XI the shaft's bd stands on two
+   * leg boxes 0.50 apart). Read for the clearance only.
+   */
+  readonly uprightAt?: Field;
 }
+
+/** How a laced web member is laced: options beyond its size. */
+export interface WebOpts {
+  /**
+   * The lacing's step along each member, in metres, by the member's OUTER
+   * half-width: (half-width, step) stops, read once per member at its mean
+   * height (see {@link LACING_STEP}). Without it the step is the old rule,
+   * the full chord-to-chord width of the widest section in the table
+   * (lacing bars at 45 degrees).
+   */
+  readonly lacingStep?: ReadonlyArray<readonly [number, number]>;
+}
+
+/**
+ * The lacing step Eiffel's struts show, by the strut's outer half-width
+ * [estimated, measured on the plates]: 1.00 m in the 800 struts (PL-IX
+ * Fig. 8 at 1:100, the crossings of the mid horizontal about 61 px apart
+ * at 61 px/m; PL-VII panel 2 agrees), about 0.94 m in the 600 shaft
+ * horizontals (PL-VII Fig. 3, node X: 64 px at about 67 px/m; an earlier
+ * reading gave 0.92) and 0.66-0.69 m in the 500 struts (PL-VII Fig. 3,
+ * panel 19). So the lacing bars run about 35 degrees off the axis in the
+ * 800 struts, not 45.
+ */
+export const LACING_STEP: ReadonlyArray<readonly [number, number]> = [
+  [0.25, 0.68],
+  [0.3, 0.94],
+  [0.4, 1.0],
+];
+
+/**
+ * How far a plate runs along its member past the joint start, in strut
+ * half-widths (`JointOpts.reach`), for the legs' and shaft's members
+ * [estimated from PL-IX's Gousset A at 1:50 and PL-VII Fig. 3]: a
+ * diagonal's chords end on the plate in groups of 5-6 rivets about 0.08
+ * apart, about 0.5 m of overlap, 1.5 half-widths of an 800 strut; a
+ * horizontal's run 7-8 rivets over about 1 m, and its plate ends 1.423 m
+ * from the upright's axis (PL-IX) or 0.90-1.00 (PL-VII Fig. 3, the 600
+ * shaft horizontals), which 2.2 half-widths past the joint start gives.
+ */
+export const JOINT_REACH = { diagonal: 1.5, horizontal: 2.2 } as const;
 
 /**
  * Web members at the requested detail: solid square members of the given
@@ -118,23 +187,29 @@ export function webMembers(
   outer: ReadonlyArray<readonly [number, number]>,
   detail: Detail,
   joints?: JointOpts,
+  opts: WebOpts = {},
 ): WebMembers {
   const riveted = detail.rivets === true;
   if (detail.lacedWeb !== true && !riveted) return { meshes: [faceSkin(g, id, paths, outer)] };
   const ends =
-    joints === undefined ? {} : memberJoints(g, id, paths, outer, joints.upright, riveted);
+    joints === undefined
+      ? {}
+      : memberJoints(g, id, paths, outer, joints, riveted);
   // A member with joints is a strut only between them: its ends stop where
   // its joint starts, just clear of the upright, and the gusset plates
   // cover the rest. Running it axis to axis put its lacing (and lacing
   // rivets) inside the upright's box — up to 15% of them in the shaft.
   const members =
-    joints === undefined ? paths : trimToJoints(g, id, paths, outer, joints.upright);
+    joints === undefined ? paths : trimToJoints(g, id, paths, outer, joints);
   const struts = latticeStruts(g, id, members, {
     halfWidth: outer.map(([y, w]) => [y, w - CHORD] as const),
     chord: CHORD,
     lacing: LACE,
     pitch: 1,
     rivets: riveted,
+    ...(opts.lacingStep === undefined
+      ? {}
+      : { step: opts.lacingStep.map(([w, s]) => [w - CHORD, s] as const) }),
   });
   return {
     meshes: [struts.chords, struts.lacing],
@@ -143,12 +218,20 @@ export function webMembers(
   };
 }
 
-/** A gusset plate's thickness [estimated]. */
-const PLATE = 0.015;
+/**
+ * A gusset plate's thickness [sourced PL-IX: "Gousset G (8 m/m)",
+ * "Attache 8 m/m", and "8 m/m" at gussets A and E of Fig. 8; PL-VII prints
+ * "Ep. 10" on the panel-5 gusset].
+ */
+const PLATE = 0.008;
 /** The joint's clearance past the upright's face [estimated]. */
 const CLEAR = 0.05;
 /** A plate runs this many strut half-widths along its member [estimated]. */
 const PLATE_REACH = 3;
+/** The point attribute a plate target carries its span in (near, far, width). */
+const GUSSET_SPAN = "gussetSpan";
+/** A member's two rivet windows along it: (from, to) at its first end, then its second. */
+const JOINT_WINDOW = "jointWindow";
 /** Rivets along a chord over a plate, every this far [estimated, as the seams]. */
 const JOINT_PITCH = 0.1;
 
@@ -163,14 +246,25 @@ const JOINT_PITCH = 0.1;
  */
 function jointStart(
   outer: ReadonlyArray<readonly [number, number]>,
-  upright: ReadonlyArray<readonly [number, number]>,
+  joints: JointOpts,
   end: 0 | 1,
 ): Field {
   const y = component(position(), 1);
   const w = sub(ramp(y, outer), CHORD);
-  const sine = max(component(attribute(END_SINE, 2), end), 0.25);
+  const sine = endSineAt(joints, end, joints.kinks === true);
   const cosine = sqrt(sub(1, mul(sine, sine)));
-  return div(add(add(ramp(y, upright), CLEAR), mul(add(w, CHORD), cosine)), sine);
+  const r = joints.uprightAt ?? ramp(y, joints.upright);
+  return div(add(add(r, CLEAR), mul(add(w, CHORD), cosine)), sine);
+}
+
+/**
+ * A member's end sine at one end, clamped to its set's minimum: against
+ * the column's bisector, or with `least` against the closest of the lines
+ * the column runs along there.
+ */
+function endSineAt(joints: JointOpts, end: 0 | 1, least = false): Field {
+  const sine = component(attribute(least ? END_SINE_MIN : END_SINE, 2), end);
+  return max(sine, joints.minSine ?? 0.25);
 }
 
 /**
@@ -184,7 +278,7 @@ function trimToJoints(
   id: string,
   paths: NodeHandle,
   outer: ReadonlyArray<readonly [number, number]>,
-  upright: ReadonlyArray<readonly [number, number]>,
+  joints: JointOpts,
 ): NodeHandle {
   const own = g.add(pathResample, { mode: "count", count: 2 }, `${id}Own`);
   const first = lt(attribute("curveU"), 0.5);
@@ -194,8 +288,8 @@ function trimToJoints(
     {
       translate: select(
         first,
-        mul(T, jointStart(outer, upright, 0)),
-        mul(T, mul(jointStart(outer, upright, 1), -1)),
+        mul(T, jointStart(outer, joints, 0)),
+        mul(T, mul(jointStart(outer, joints, 1), -1)),
       ),
     },
     `${id}Trimmed`,
@@ -208,14 +302,23 @@ function trimToJoints(
 /**
  * THE JOINTS. Every web member ends on an upright, and at each end a pair
  * of gusset plates takes it: one either side of the member's face plane,
- * just outside the chords on that side, starting clear of the upright's
- * face and reaching PLATE_REACH half-widths along the member. The plates
- * of the members meeting at a node overlap into the irregular gusset a
- * real joint has, without the node needing to know who meets it: each
- * member brings its own.
+ * just outside the chords on that side. A plate runs from the upright's
+ * face to `reach` half-widths past the joint start (where the strut itself
+ * begins): on PL-IX's Gousset A the plate is riveted over the upright's
+ * flange and fills the wedge between it and the members, out to 1.298 m
+ * from the upright's axis along a flat diagonal and 1.423 m along the
+ * horizontal [sourced]. A rectangle cannot follow the face, so its near
+ * edge is placed where its obtuse corner meets the upright's face: the
+ * rest of that edge is inside the upright's box, and the plate's inner
+ * face lies within the box's face (the strut is no wider than the upright)
+ * or flush on it. The plates of the members meeting at a node overlap
+ * into the irregular gusset a real joint has, without the node needing to
+ * know who meets it: each member brings its own.
  *
  * On each plate, the two chords that lie against it are riveted to it in
- * a row along the chord, every JOINT_PITCH over the plate's reach. The
+ * a row along the chord, every JOINT_PITCH from the joint start over the
+ * plate's reach — never nearer the upright than the joint start, which is
+ * what keeps every joint rivet out of the upright's box. The
  * members' ends are found by field, not by table: a resample reports each
  * sample's arc position and the member's length, and a sample is a joint
  * rivet when it is within reach of EITHER end.
@@ -225,13 +328,13 @@ function memberJoints(
   id: string,
   paths: NodeHandle,
   outer: ReadonlyArray<readonly [number, number]>,
-  upright: ReadonlyArray<readonly [number, number]>,
+  joints: JointOpts,
   riveted: boolean,
 ): { gussets: NodeHandle; jointRivets?: NodeHandle } {
   const y = component(position(), 1);
   const w = sub(ramp(y, outer), CHORD);
-  const clearAt = (end: 0 | 1): Field => jointStart(outer, upright, end);
-  const reach = mul(w, PLATE_REACH);
+  const clearAt = (end: 0 | 1): Field => jointStart(outer, joints, end);
+  const reach = mul(w, joints.reach ?? PLATE_REACH);
   const T = attribute("tangent", 3);
   const F = attribute(FACE_NORMAL, 3);
   const N = normalize(sub(F, mul(T, dot(F, T))));
@@ -244,21 +347,47 @@ function memberJoints(
   g.connect(paths, "out", tips, "in");
   const into = mul(T, sub(1, mul(attribute("curveU"), 2)));
   // curveU is 0 at a member's first end and 1 at its second.
-  const start = select(lt(attribute("curveU"), 0.5), clearAt(0), clearAt(1));
+  const first = lt(attribute("curveU"), 0.5);
+  const start = select(first, clearAt(0), clearAt(1));
+  // The plate's near edge, along the member from the node: where a point
+  // `across` off the axis on the obtuse side reaches the upright's face,
+  // (r - across cos t) / sin t, and never behind the node.
+  const across = add(off, 0.08);
+  const faceAt = (end: 0 | 1): Field => {
+    const sine = endSineAt(joints, end);
+    const cosine = sqrt(sub(1, mul(sine, sine)));
+    const r = joints.uprightAt ?? ramp(y, joints.upright);
+    return max(div(sub(r, mul(across, cosine)), sine), 0);
+  };
+  // The span (near edge, far edge, width) is fixed at the tips, before the
+  // plates move: their size is set after the move, where position() is no
+  // longer the member's end and would read the tables elsewhere.
+  const span = g.add(
+    setAttribute,
+    {
+      name: GUSSET_SPAN,
+      type: "f32",
+      tupleSize: 3,
+      value: vec(select(first, faceAt(0), faceAt(1)), add(start, reach), mul(across, 2)),
+    },
+    `${id}PlateSpan`,
+  );
+  g.connect(tips, "out", span, "in");
+  const spanOf = attribute(GUSSET_SPAN, 3);
   const plateSides = [1, -1].map((side) => {
     const name = `${id}Plate${side > 0 ? "Out" : "In"}`;
     const at = g.add(
       transformPoints,
       {
         translate: add(
-          mul(into, add(start, mul(reach, 0.5))),
+          mul(into, mul(add(component(spanOf, 0), component(spanOf, 1)), 0.5)),
           mul(N, mul(add(off, PLATE / 2), side)),
         ),
       },
       name,
     );
     const aim = g.add(orientAlongVector, { direction: into, up: N, axis: "+x" }, `${name}Aim`);
-    g.connect(tips, "out", at, "in");
+    g.connect(span, "out", at, "in");
     g.connect(at, "out", aim, "in");
     return aim;
   });
@@ -270,7 +399,7 @@ function memberJoints(
       name: "scale",
       type: "f32",
       tupleSize: 3,
-      value: vec(reach, PLATE, mul(add(off, 0.08), 2)),
+      value: vec(sub(component(spanOf, 1), component(spanOf, 0)), PLATE, component(spanOf, 2)),
     },
     `${id}PlateSize`,
   );
@@ -282,6 +411,30 @@ function memberJoints(
   if (!riveted) return { gussets: plates };
 
   // Rivets: samples within reach of either end, on both plates' chords.
+  // Each end's window [joint start, + reach] is read ONCE, at that end (the
+  // tips), and lifted onto the member: read at every sample instead, a
+  // table that steps along the member (the upright's at XVII, the merge at
+  // XI) slid the window off the strut's trimmed start, leaving heads on
+  // the plate with no chord under them.
+  const windowAt = g.add(
+    setAttribute,
+    {
+      name: JOINT_WINDOW,
+      type: "f32",
+      tupleSize: 4,
+      value: select(
+        first,
+        vec(clearAt(0), add(clearAt(0), reach), 0, 0),
+        vec(0, 0, clearAt(1), add(clearAt(1), reach)),
+      ),
+    },
+    `${id}JointWindowAt`,
+  );
+  const window = g.add(
+    promoteAttribute,
+    { name: JOINT_WINDOW, from: "point", to: "primitive", mode: "max" },
+    `${id}JointWindow`,
+  );
   const samples = g.add(
     pathResample,
     { mode: "spacing", spacing: JOINT_PITCH, sampleArcAttr: "arc", lengthAttr: "memberLen" },
@@ -294,13 +447,23 @@ function memberJoints(
   );
   const arc = attribute("arc");
   const fromEnd = sub(attribute("memberLen"), arc);
-  const within = (a: Field, from: Field) => mul(ge(a, from), le(a, add(from, reach)));
+  const win = attribute(JOINT_WINDOW, 4);
+  const within = (a: Field, lo: Field, hi: Field) => mul(ge(a, lo), le(a, hi));
   const near = g.add(
     filterByExpression,
-    { predicate: max(within(arc, clearAt(0)), within(fromEnd, clearAt(1))) },
+    {
+      predicate: max(
+        within(arc, component(win, 0), component(win, 1)),
+        within(fromEnd, component(win, 2), component(win, 3)),
+      ),
+    },
     `${id}JointNear`,
   );
-  g.connect(paths, "out", samples, "in");
+  // The tips are the members' own two ends, so resampling them is
+  // resampling the members.
+  g.connect(tips, "out", windowAt, "in");
+  g.connect(windowAt, "out", window, "in");
+  g.connect(window, "out", samples, "in");
   g.connect(samples, "out", len, "in");
   g.connect(len, "out", near, "in");
   const heads = [1, -1].flatMap((side) =>
@@ -339,12 +502,15 @@ export function gussetMeshes(sets: readonly WebMembers[]): NodeHandle[] {
 }
 
 /**
- * The uprights' seam rows: a rivet every 0.10 m [estimated — no source
- * found gives a pitch; about 4.5 diameters of a 22 mm rivet, a common
- * 19th-century spacing], 55 mm in from the corner, the middle of a
- * 100 mm angle's leg [derived from the 100 x 100 corner angles].
+ * The uprights' seam rows: a rivet every 0.125 m [estimated, measured on
+ * PL-IX's Gousset A at 1:50, scaled by its printed 800 and 1.423 (310-318
+ * px/m): the arbalétrier's flange rows repeat every 40.4 px, 0.127-0.130,
+ * and a histogram of the same sheet's rings clusters at 37.8 px, 0.122;
+ * the printed "88,5" is drawn too wide to scale by], 55 mm in from the
+ * corner, the middle of a 100 mm angle's leg [derived from the 100 x 100
+ * corner angles].
  */
-export const UPRIGHT_SEAMS = { pitch: 0.1, inset: 0.055 } as const;
+export const UPRIGHT_SEAMS = { pitch: 0.125, inset: 0.055 } as const;
 
 /**
  * Seam rivets along closed box members — the uprights, which are plate
@@ -356,6 +522,10 @@ export const UPRIGHT_SEAMS = { pitch: 0.1, inset: 0.055 } as const;
  * member, and B = T x N): rivets and plates cannot disagree. `up` is a
  * constant for the uprights and a field for members squared to their own
  * leaning faces (the girder chords pass their face normal).
+ *
+ * `skipStart` drops each path's first row: a member that stands on a wider
+ * one (the 0.50 upright on the 0.87 below node XVII) starts at the plane
+ * where the wider one ends, so its first row would sit half inside it.
  */
 export function seamRivets(
   g: Graph,
@@ -363,14 +533,30 @@ export function seamRivets(
   paths: NodeHandle,
   halfWidth: ReadonlyArray<readonly [number, number]> | number,
   up: readonly [number, number, number] | Field,
-  opts: { readonly pitch: number; readonly inset: number },
+  opts: {
+    readonly pitch: number;
+    readonly inset: number;
+    readonly skipStart?: boolean;
+    /** A predicate over the samples: rows only where it holds. */
+    readonly keep?: Field;
+  },
 ): NodeHandle {
-  const samples = g.add(
+  const resampled = g.add(
     pathResample,
     { mode: "spacing", spacing: opts.pitch },
     `${id}SeamSamples`,
   );
-  g.connect(paths, "out", samples, "in");
+  g.connect(paths, "out", resampled, "in");
+  let samples: NodeHandle = resampled;
+  const afterStart = opts.skipStart === true ? ge(attribute("curveU"), 1e-6) : undefined;
+  const predicate =
+    afterStart !== undefined && opts.keep !== undefined
+      ? mul(afterStart, opts.keep)
+      : (afterStart ?? opts.keep);
+  if (predicate !== undefined) {
+    samples = g.add(filterByExpression, { predicate }, `${id}SeamSamplesKept`);
+    g.connect(resampled, "out", samples, "in");
+  }
   const r: FieldLike =
     typeof halfWidth === "number" ? halfWidth : ramp(component(position(), 1), halfWidth);
   const T = attribute("tangent", 3);
@@ -437,9 +623,18 @@ export interface StrutOpts {
    * lacing bar at 45 degrees across its face.
    */
   readonly pitch: number;
+  /**
+   * The lacing step in metres by the strut's CHORD half-width: (w, step)
+   * stops, read once per member from its own section at its mean height.
+   * Given, it replaces `pitch`, whose step is one per call.
+   */
+  readonly step?: ReadonlyArray<readonly [number, number]>;
   /** Also spawn a rivet wherever a lacing bar meets a chord. */
   readonly rivets?: boolean;
 }
+
+/** The primitive attribute a member's mean height rides on to its step. */
+const STRUT_Y = "strutY";
 
 /** The four section corners in ring order, as (sN, sB) sign pairs. */
 const CORNERS = [
@@ -462,15 +657,38 @@ export function latticeStruts(
 ): { chords: NodeHandle; lacing: NodeHandle; rivets?: NodeHandle } {
   const y = component(position(), 1);
   const w = ramp(y, o.halfWidth);
-  // The resample step is uniform per call, so it takes the strut's widest
-  // section: 2 * max w * pitch.
+  // Without a step table the resample step is uniform per call, so it
+  // takes the strut's widest section: 2 * max w * pitch. With one, the
+  // step is a field on the PATHS (a resample reads its spacing once per
+  // path): each member's mean height is lifted onto its primitive, and the
+  // step read from its own section there.
   const widest = Math.max(...o.halfWidth.map((s) => s[1]));
-  const samples = g.add(
-    pathResample,
-    { mode: "spacing", spacing: 2 * widest * o.pitch },
-    `${id}Samples`,
-  );
-  g.connect(paths, "out", samples, "in");
+  let source = paths;
+  let spacing: FieldLike = 2 * widest * o.pitch;
+  if (o.step !== undefined) {
+    const tag = g.add(
+      setAttribute,
+      { name: STRUT_Y, type: "f32", value: component(position(), 1) },
+      `${id}StrutY`,
+    );
+    const lift = g.add(
+      promoteAttribute,
+      { name: STRUT_Y, from: "point", to: "primitive", mode: "average" },
+      `${id}StrutYLift`,
+    );
+    const drop = g.add(
+      removeAttribute,
+      { names: [STRUT_Y], domain: "point" },
+      `${id}StrutYDone`,
+    );
+    g.connect(paths, "out", tag, "in");
+    g.connect(tag, "out", lift, "in");
+    g.connect(lift, "out", drop, "in");
+    source = drop;
+    spacing = max(ramp(ramp(attribute(STRUT_Y), o.halfWidth), o.step), 0.05);
+  }
+  const samples = g.add(pathResample, { mode: "spacing", spacing }, `${id}Samples`);
+  g.connect(source, "out", samples, "in");
 
   const T = attribute("tangent", 3);
   const F = attribute(FACE_NORMAL, 3);
