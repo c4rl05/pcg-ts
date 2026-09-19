@@ -345,6 +345,96 @@ describe("worley cell output", () => {
   });
 });
 
+/**
+ * WHICH STRING THE OUTPUT WAS SPELLED WITH CANNOT CHANGE THE BYTES.
+ *
+ * `worleyNoise` used to ask `output === "cell"` inside the closure that
+ * runs once per sampled element, and on Node 22.20.0 V8 sometimes took
+ * the wrong branch there in a warm process: about one sample in 22500
+ * came back as that point's `f2-f1` instead of its cell hash, on the
+ * FIRST cook only. It depended on what the string was MADE of — a source
+ * literal never failed, a `JSON.parse` result nearly always did — which
+ * is what makes it an optimizer fault and not a logic error, and what
+ * makes this test compare three spellings of the same option rather than
+ * three different options.
+ *
+ * Two fixes ship, and this covers both: the comparison is hoisted out of
+ * the sampler (`src/noise/worley.ts`), which is what the COMPUTED case
+ * below exercises, since nothing canonicalizes a string a caller hands
+ * straight to the factory; and the grammar re-interns an accepted
+ * `output` against `WORLEY_OUTPUTS`, which is what the PARSED case
+ * covers.
+ */
+describe("worley's output is decided once, not per sample", () => {
+  // 37^3 = 50653 samples: over the 50k the fault's ~1-in-22500 rate needs
+  // to be worth looking for, and enough work to get the sampler compiled.
+  const POSITIONS = gridPositions(37, 0.31);
+  const SEED = 1091;
+  const FREQUENCY = 0.11;
+
+  /** The same field, with `output` spelled as an interned source literal. */
+  const fromLiteral = (): Field =>
+    worleyNoise({ seed: SEED, frequency: FREQUENCY, output: "cell" });
+
+  /**
+   * The same field, with `output` arriving the way a corpus graph's does:
+   * through `JSON.parse`, as a freshly allocated string. `JSON.stringify`
+   * first, so nothing here can hand the parser a literal by accident.
+   */
+  const fromJson = (output: string): Field => {
+    const text = JSON.stringify({
+      fn: "worleyNoise",
+      opts: { seed: SEED, frequency: FREQUENCY, output },
+    });
+    return fieldFromJson(JSON.parse(text) as FieldSpec);
+  };
+
+  /**
+   * The same field, with `output` COMPUTED and handed straight to the
+   * factory. No JSON boundary, so no canonicalization touches it: this is
+   * the case only the hoist can answer, and the case a host writing
+   * TypeScript can actually produce.
+   */
+  const fromComputed = (): Field =>
+    worleyNoise({
+      seed: SEED,
+      frequency: FREQUENCY,
+      output: ["ce", "ll"].join("") as WorleyNoiseOpts["output"],
+    });
+
+  /** How many f32 lanes differ by their BITS, not by their value. */
+  function bitsDiffer(a: Float32Array, b: Float32Array): number {
+    const ua = new Uint32Array(a.buffer, a.byteOffset, a.length);
+    const ub = new Uint32Array(b.buffer, b.byteOffset, b.length);
+    let n = 0;
+    for (let i = 0; i < ua.length; i++) if (ua[i] !== ub[i]) n++;
+    return n;
+  }
+
+  it("agrees byte for byte however the option was spelled", () => {
+    // Warm every path before the comparison. The fault is a JIT one and a
+    // cold interpreter never showed it, so a cold comparison would be
+    // green for the wrong reason.
+    for (let i = 0; i < 3; i++) {
+      sample(fromLiteral(), POSITIONS);
+      sample(fromJson("cell"), POSITIONS);
+      sample(fromComputed(), POSITIONS);
+    }
+    const literal = sample(fromLiteral(), POSITIONS);
+    expect(literal.length).toBeGreaterThanOrEqual(50_000);
+    expect(bitsDiffer(literal, sample(fromJson("cell"), POSITIONS))).toBe(0);
+    expect(bitsDiffer(literal, sample(fromComputed(), POSITIONS))).toBe(0);
+
+    // CONTROL. `bitsDiffer` must be able to say "different", and the
+    // difference it has to be able to see is exactly the one the fault
+    // produced: the same seed's `f2-f1` in place of its cell hash. Without
+    // this the two zeros above would pass on a comparator that always
+    // returns 0.
+    const asF2F1 = sample(fromJson("f2-f1"), POSITIONS);
+    expect(bitsDiffer(literal, asF2F1)).toBeGreaterThan(literal.length / 2);
+  });
+});
+
 describe("fbm", () => {
   const positions = gridPositions(20, 0.43); // 8000 samples
 

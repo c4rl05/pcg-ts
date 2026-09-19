@@ -126,6 +126,31 @@ export function worleyNoise(opts: WorleyNoiseOpts = {}): Field<1> {
         kind: "ungrammatical",
         detail: `worleyNoise's \`output\` must be one of ${WORLEY_OUTPUTS.map((o) => `"${o}"`).join(", ")}, got ${JSON.stringify(output)}`,
       };
+  // WHICH output, decided ONCE here rather than per sampled element. The
+  // sampler below runs once per point — millions of times in a warm
+  // process — and asking it `output === "cell"` each time put a string
+  // comparison in the hottest loop the library has. Measured on Node
+  // 22.20.0: with the comparisons inside the closure, one sample in about
+  // 22500 took the WRONG branch (the `cell` output returned f2-f1 for that
+  // one point) in 15 of 15 warm processes, and never in a cold one. It
+  // depended on the string's REPRESENTATION, not its value — a source
+  // literal never failed, a `JSON.parse`d one nearly always did — so it is
+  // an optimizer fault and not a logic error, and the fix is to not ask
+  // the question per element. Three booleans and a flat comparison are
+  // what the closure sees instead. The out-of-union case keeps its old
+  // meaning: all three are false, so the tail returns f2 - f1 exactly as
+  // the chained ternary did. See also the canonicalization in
+  // `src/fields/fieldJson.ts`, which re-interns the parsed string so the
+  // two halves of the belt-and-braces hold independently.
+  const isCell = output === "cell";
+  const isF1 = output === "f1";
+  const isF2 = output === "f2";
+  // Which distance has to settle before the ring bound proves the answer.
+  // Named positively rather than as `!== "f1"` so that a later output
+  // defaults to the f1 bound instead of silently demanding f2: `cell`
+  // needs only the WINNER settled, and f2 settling is a strictly stronger
+  // (so slower) condition.
+  const needsF2 = isF2 || output === "f2-f1";
   return makeNoiseField(kind, WORLEY_SALT, opts, range, (seed) => (x, y, z) => {
     const cx = Math.floor(x);
     const cy = Math.floor(y);
@@ -173,12 +198,7 @@ export function worleyNoise(opts: WorleyNoiseOpts = {}): Field<1> {
       // and only strictly closer features can change f1 or f2 — so the
       // result is exact. D is bounded (f1 <= √3, f2 <= √6), so the loop
       // ends by r = 3.
-      // Which distance has to settle before the ring bound proves the
-      // answer. Named positively rather than as `!== "f1"` so that a
-      // later output defaults to the f1 bound instead of silently
-      // demanding f2: `cell` needs only the WINNER settled, and f2
-      // settling is a strictly stronger (so slower) condition.
-      const needsF2 = output === "f2" || output === "f2-f1";
+      // `needsF2` is decided once at construction (see above), not here.
       let r = 1; // rings 0..1 (the 3x3x3 block) are already searched
       // The r < 3 cap is unreachable for finite inputs: after the 3x3x3
       // block f1 <= √3 and f2 <= √6 < 3, so the distance condition always
@@ -220,7 +240,7 @@ export function worleyNoise(opts: WorleyNoiseOpts = {}): Field<1> {
         }
       }
     }
-    if (output === "cell") {
+    if (isCell) {
       // GIGO guard: a non-finite query makes every candidate distance
       // NaN, which never beats the initial Infinity, so no cell ever
       // won and wx/wy/wz are still their initial zeros. Hashing those
@@ -231,7 +251,7 @@ export function worleyNoise(opts: WorleyNoiseOpts = {}): Field<1> {
       // Index 3: 0/1/2 draw the feature point's x/y/z jitter above.
       return hashFloat(hash5(seed, wx, wy, wz, 3));
     }
-    return output === "f1" ? f1 : output === "f2" ? f2 : f2 - f1;
+    return isF1 ? f1 : isF2 ? f2 : f2 - f1;
   }, spec);
 }
 
