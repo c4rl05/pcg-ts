@@ -44,6 +44,75 @@ waiting for anything. Its body stays because the analysis under it is
 what the outcome tested — several of these scored badly, and a survey
 that guessed wrong is worth more to the next survey than a deleted one.
 
+### The GPU `ramp` lowering has no bound on its stop count — found 2026-09-19
+
+Left behind by 8030557, which made the CPU `ramp` bisect above 16 stops.
+The device path did not change: `rampHelperBody` in `src/gpu/compile.ts`
+emits one unrolled `if (t <= stop)` per stop, so it is linear per element
+AND in shader source, and nothing caps the count. A 5,946-stop ramp — the
+eiffel demo's largest `indexTable` — compiles on its own to 523,517 bytes
+of WGSL with 5,946 `if`s, and the vec3 value it is one axis of to 1.6 MB. A
+per-point table is now cheap on the CPU and exactly the input that makes
+the device path worst.
+
+Two shapes, for when a device consumer carries a long ramp:
+
+- A cap, past which the lowering refuses with a machine-readable reason
+  and the run falls back to the CPU — the runtime's existing contract for
+  anything it cannot lower, so it costs nothing new to explain.
+- Stops in a storage buffer and a bisection loop in WGSL. It has to find
+  the segment the CPU finds — the first stop at or above t, so an input ON
+  an interior stop is the top of the segment below — or knife-edge inputs
+  move by more than the published ramp tolerance allows for.
+
+### A one-stop ramp reads past its arrays on a NaN input — found 2026-09-19
+
+Found by the byte test 5533be3 had to fix. With one stop and a NaN
+input, both clamps compare false, so the evaluator falls through to the
+walk at j = 1 and interpolates with `ts[1]` and `vs[1]` — `undefined`,
+past the end of one-element arrays. The VALUE is right (NaN in, NaN out,
+which ramp.test.ts pins), but which NaN comes out — sign and payload —
+varies with how far V8 has optimized the function: the test failed 3 of
+25 fresh runs, always on the sign-bit NaN 0xffc00000, before its
+comparator was made to treat every NaN alike. Probed on the built
+library, a one-stop ramp returns 0xffc00000 for that input for about its
+first hundred evaluations and 0x7fc00000 after; with the optimizing tiers
+off it stays 0xffc00000, and a two-stop ramp never moves. Only the NaN's
+bits move, never whether it is NaN, but "same path, same bytes" is a
+promise about bytes, and here the same path re-run can write different
+ones.
+
+The fix is a guard before the search, so a one-stop ramp never reaches
+the interpolation. What it writes needs a decision, not just a patch:
+ECMAScript lets a Float32Array store of NaN pick any NaN encoding
+(NumericToRawBytes), so "one chosen NaN" should be checked across the
+tiers before anything stronger than "NaN" is promised.
+
+### The eiffel `PRISM_RUN` split is vestigial — found 2026-09-19
+
+`prisms()` in `demos/eiffel/platforms.ts` cooks each prism list in runs of
+at most `PRISM_RUN` = 1024 points and merges them, and its comment gives
+the reason: an index table is a ramp whose lookup scans its stops, so a
+table's cost grows with the square of its length [measured then: 0.80 s
+unsplit, 0.31 s in runs of 1024]. Since 8030557 that is no longer true.
+Measured 2026-09-19 at plain depth, i9-13900KF pinned to the P-cores,
+5 processes of 7 fresh cooks per arm, the arms interleaved: split 310 ms,
+unsplit (`PRISM_RUN` patched to Infinity at bundle time) 291 ms, an
+identical copy of the split build as control 312 ms (pooled medians).
+Read that as "no slower", not as 19 ms saved: the unsplit cooks fall in
+two clusters, near 285 and near 310-340 ms, so its per-process medians
+(289-312) overlap the split ones (306-315), and the means differ by
+8 ms (304 against 313). Unsplit is 194 nodes smaller at every depth
+(1,608 / 1,893 / 2,648 → 1,414 / 1,699 / 2,454).
+
+It is not a free clean-up, which is why it waits for the demo's own
+pass. Removing the split changes the graph's nodes and therefore the
+per-point `seed` column: at plain depth every output hashes the same
+except `platforms`, where `point.seed` and `point.prism` (the prism key,
+counted per run today) differ, and positions, normals and topology do
+not. The guide's node counts and cost table (`docs/guides/eiffel.html`)
+and the stale comment in `prisms()` move with it.
+
 ### A mesh with no `normal`, merged with one that has it, renders black — found 2026-09-19
 
 The consumer is the Eiffel demo (`demos/eiffel/`), and it hit this twice:
@@ -3084,6 +3153,41 @@ deliberately planned host-side with no device-side sort
 on-brand pitch and is exactly the thing the GPU path has never done.
 
 ## Stretch — surveyed and NOT scheduled
+
+- **Hoisting the eiffel rivet rows' shared section frame.** Measured
+  2026-09-19. At rivets depth every rivet row and its aim re-derive their
+  member's section frame, `N = normalize(up - T (up . T))`, from the same
+  samples; a `sectionFrame` node in `demos/eiffel/strut.ts` writes N onto
+  the samples once, as a point attribute, and the rows read it back.
+  Built as 95dbcec on branch `worktree-agent-a76716962ba6d01bb`, kept
+  unmerged. **Recommendation: do not merge; go after the cost it
+  exposed instead.**
+
+  It is correct and it is small. Byte-identical at all three depths (every
+  declared output's raw bytes, capacity slack and the per-point `seed`
+  column included, at seeds 1889 and 1890, with controls that report a
+  one-ULP change). Rivets depth grows from 2,648 to 2,682 nodes; plain and
+  laced build the same graph. The rivets cook ran about 150 ms (a little
+  over 3%) faster in a blind interleaved A/B with a control arm: the
+  median paired difference against the two base arms was -150 ms where
+  the control's was +35 ms, and the new arm was fastest of the three in
+  22 of 24 rounds.
+  Unpinned, so those cooks ran ~4.5 s; the ratio travels, the
+  milliseconds do not.
+
+  What killed it is what it measured. The anatomy pass had put 556 ms
+  (22% of the rivets cook) on 47 such fan-outs, inferred from their
+  structure. Measured, the frame is a fifth to a quarter of those nodes'
+  time: most of a row is cloning the ~29 scalars per point its samples
+  carry (11 point columns on the commonest rows), and attribute storage — resize, default fill, grow,
+  copy — is ~40% of the rivets CPU profile. A hoist removes arithmetic
+  and leaves every clone in place. Extending it to every row, the
+  mesh-bound ones included, measured no faster than the rivet rows alone,
+  with 58 more nodes: a stored column rides through every clone
+  downstream and must be removed before a sweep, which clones the merged
+  set again. Dropped in favour of investigating copy-on-write attribute
+  columns, which would attack that cost in every graph rather than in
+  one demo's rows.
 
 - **A lap-periodic density envelope for placement density along a
   track.** Measured 2026-08-20 to 08-22 in the retired racetrack demo.
