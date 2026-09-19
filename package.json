@@ -120,6 +120,7 @@
     "examples:pages": "node scripts/clean-pages.mjs && vite build --base=./",
     "capture": "node scripts/capture-demos.mjs",
     "capture:gallery": "node scripts/capture-gallery.mjs",
+    "capture:guides": "node scripts/capture-guides.mjs",
     "preview": "node scripts/preview.mjs",
     "docs": "npm run docs:nodes && npm run docs:primitives && npm run docs:schema && npm run docs:graphs && npm run docs:gallery && npm run docs:errors && npm run docs:llms && npm run docs:site",
     "docs:nodes": "node scripts/gen-node-reference.mjs",

@@ -217,6 +217,11 @@ a parent — these are three different kinds of thing and the old single
   sidecar. Opens a real browser; see `scripts/preview.mjs` for why it is a
   repo script rather than a `pcg` subcommand
 - `npm run capture` — regenerate the committed demo screenshots
+- `npm run capture:guides` — regenerate the renders the long-form guides
+  embed (`docs/guides/<guide>/<shot>.jpg`). Each shot's depth and camera
+  pose is data at the top of `scripts/capture-guides.mjs`, so after a
+  lighting or material change this is the whole update: rerun it, never
+  retouch an output. `--only=eiffel` or `--only=eiffel/panel` for a subset
 - `npm run capture:gallery` — reshoot the corpus gallery's frames: every
   graph opened in the editor, shot as its cooked scene and as its node
   graph, then encoded and folded into `docs/gallery.html`. Opens a real
