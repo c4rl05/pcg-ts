@@ -562,6 +562,51 @@ Whether a fresh agent, given only the installed package,
 can author graphs that meet an outcome brief — with noise, drift and
 contamination controlled so before/after comparisons mean something.
 
+> ### MEASURED OUTCOME, 2026-09-19 — BUILT, RUN, NULL RESULT
+>
+> Three campaigns ran: a pilot (54 runs), a calibration (8 + 2), and the
+> comparison `v2` (96 runs — 8 held-out tasks x 3 runs x 4 arms). Results
+> are committed under `evals/results/`. **The gate says STOP, and no arm is
+> distinguishable from any other.**
+>
+> Solved: A 23/24, A-prime 24/24, candidate-U1 21/21, stripped-all 22/22.
+> One genuine failure in 96 (`quarry-terraces` missed `benches-wander` on
+> A). Turns, paired by task, against an A/A noise floor of +0.2%
+> [-11.7, +13.7]:
+>
+> | contrast | turns | 95% CI | sign p |
+> |---|---|---|---|
+> | candidate-U1 vs A | +5.3% | [-18.0, +26.8] | 1.00 |
+> | stripped-all vs A | -2.9% | [-27.1, +24.9] | 0.73 |
+> | stripped-all vs candidate-U1 | -3.2% | [-25.2, +27.3] | 0.29 |
+>
+> Every contrast is inside the noise, and the two that would have meant
+> something point the WRONG WAY: the candidate cost slightly more turns
+> than the baseline, and stripping `llms.txt`, `docs/`, `skills/` AND the
+> 95-graph corpus cost slightly fewer. Both are zero wearing a sign.
+>
+> **WHAT THIS DOES NOT SAY.** It is not a refutation of U1-U6. With 8 tasks
+> the interval on turns is about +/-25%, so anything short of a large
+> effect was never visible, and limb (c) found 7 of 8 tasks at ceiling on
+> solved, so that axis could not move at all. This is a null with a known
+> detection floor. Do not cite it as "documentation does not matter".
+>
+> **WHAT IT DOES SAY**, and why a third harder task set is not the obvious
+> next move: no strip set can remove the registry, because `listNodeTypes()`
+> IS the library. The stripped-arm agents demonstrably noticed the absence —
+> two went hunting with `find /` for the package contents, and were
+> correctly flagged as contaminated for it — and then solved at the same
+> cost anyway. They routed around it. For prose to show a benefit the
+> registry would have to be insufficient, and across 96 runs it never was.
+> That is the fourth design pillar working as intended, and it argues for
+> spending on machine-readable surfaces rather than more prose.
+>
+> The harness is the durable asset: resumable, allowance-funded, pausing
+> and resuming at the usage limit, with a contamination classifier that
+> caught two real sandbox escapes. Its next use is diagnostic rather than
+> comparative — the 96 transcripts record where agents actually struggle,
+> which needs no control group. See `evals/README.md`.
+
 **Layout.** `evals/` in this repo, outside `files` and outside vitest.
 `evals/tasks/<id>/` holds `brief.md` (outcome in world terms plus the
 output contract), `task.json` (tier, checks, seeds `[graphSeed, 1, 2]`,
