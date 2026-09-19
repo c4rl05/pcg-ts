@@ -504,7 +504,11 @@ npm install three
 
 <span class="c"># optional: only for WebGPU cooking under Node (browsers need nothing)</span>
 npm install -D webgpu</code></pre></div>
-    <p class="caption">Node 18 or newer, or any modern browser bundler. ESM only — there is no CommonJS build.</p>
+    <p class="caption">Node 18 or newer, or any modern browser bundler. ESM only — there is no CommonJS
+    build, and there will not be one: node types and primitives register into module-level maps, so a
+    second copy would be a second registry. <code>require("pcg-ts")</code> still works from CommonJS on
+    Node 20.19+ and 22.12+, which load the ES module through <code>require()</code> and share the one
+    instance with <code>import</code>. On older Node, use <code>await import("pcg-ts")</code>.</p>
 
     <h3>A graph that cooks</h3>
     <p>A graph is built in code by adding node instances, connecting typed pins, declaring which pins are terminal outputs, and then cooking. Cooking is pull-based: it walks back from the declared outputs and evaluates only what they need.</p>

@@ -113,7 +113,12 @@ npm install pcg-ts
 npm install three
 ```
 
-Requires Node 18+ (or any modern browser bundler). ESM only.
+Requires Node 18+ (or any modern browser bundler). ESM only — there is no
+CommonJS build, and there will not be one: this library registers node types
+and primitives into module-level maps, so a second copy would be a second
+registry. `require("pcg-ts")` still works from CommonJS on Node 20.19+ and
+22.12+, which load the ES module through `require()` and share the one
+instance with `import`. On older Node, reach it with `await import("pcg-ts")`.
 
 ## Quickstart
 
