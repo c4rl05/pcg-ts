@@ -194,6 +194,7 @@ import {
   errorDiagnostics,
 } from "../diagnostics/index.js";
 // By path: the phrasing helper is internal plumbing the barrel does not carry.
+import { canonicalOneOf } from "../diagnostics/canonical.js";
 import { suggestNames } from "../diagnostics/didYouMean.js";
 
 /**
@@ -2366,7 +2367,12 @@ register(
     const { opts, raw } = parseNoiseOpts(spec, path, ["output", "exact"]);
     const worleyOpts: WorleyNoiseOpts = { ...opts };
     if (raw.output !== undefined) {
-      if (typeof raw.output !== "string" || !WORLEY_OUTPUTS.includes(raw.output)) {
+      // WORLEY_OUTPUTS' own string, not the one `JSON.parse` allocated —
+      // see `canonicalOneOf`. It doubles as the membership test, so there
+      // is no second list walk and no cast over a value the type system
+      // cannot see is present.
+      const output = canonicalOneOf(WORLEY_OUTPUTS, raw.output);
+      if (output === undefined) {
         const near =
           typeof raw.output === "string" ? suggestNames(raw.output, WORLEY_OUTPUTS) : suggestNames("", []);
         fail(`${path}.opts.output`, `${near.clause}output must be one of: ${WORLEY_OUTPUTS.join(", ")}`, {
@@ -2376,19 +2382,7 @@ register(
           ...(near.only !== undefined ? { fix: `replace "${String(raw.output)}" with "${near.only}"` } : {}),
         });
       }
-      // WORLEY_OUTPUTS' own string, not the one `JSON.parse` allocated.
-      // `includes` above already proved it is in the list, so this is the
-      // same value by definition; what it changes is which string OBJECT
-      // `worleyNoise` ends up holding. The factory used to compare that
-      // string per sampled element and V8 miscompiled the comparison for
-      // a freshly parsed string in a warm process — see the note in
-      // `src/noise/worley.ts` and `canonicalEnumValue` in
-      // `src/graph/params.ts`, which does this for node params. The
-      // comparison has been hoisted out of the sampler as well; these are
-      // two independent halves of the same guarantee, not one fix twice.
-      worleyOpts.output = WORLEY_OUTPUTS[
-        WORLEY_OUTPUTS.indexOf(raw.output)
-      ] as WorleyNoiseOpts["output"];
+      worleyOpts.output = output as WorleyNoiseOpts["output"];
     }
     if (raw.exact !== undefined) {
       if (typeof raw.exact !== "boolean") {

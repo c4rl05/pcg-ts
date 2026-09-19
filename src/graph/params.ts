@@ -17,6 +17,7 @@
  * `node "n" param "p": ...`, `exposed param "count": ...`) and raises its
  * own error type.
  */
+import { canonicalOneOf } from "../diagnostics/canonical.js";
 import type { DataItem } from "./data.js";
 
 /**
@@ -356,35 +357,20 @@ export function paramSchemaError(schema: ParamSchema): string | undefined {
 }
 
 /**
- * THE SCHEMA'S OWN COPY of an enum value, for a string that came from
- * somewhere else — `JSON.parse`, a concatenation, a host's computation.
- * Anything not an enum string in the list is handed back untouched, so a
- * misspelling still reaches the caller's diagnostic (and its did-you-mean
- * suggestion) exactly as before.
+ * @internal THE SCHEMA'S OWN COPY of an enum value, for a string that
+ * came from somewhere else — `JSON.parse`, a concatenation, a host's
+ * computation. {@link canonicalOneOf} states why the identity matters at
+ * all; the note in `src/noise/worley.ts` states what went wrong without
+ * it.
  *
- * WHY IDENTITY AND NOT EQUALITY. `"cell" === "cell"` is true whatever the
- * two strings are made of, so this changes no value and no comparison
- * result. What it changes is the OBJECT a node ends up holding. A param
- * string is compared against a source literal somewhere downstream, and
- * on Node 22.20.0 that comparison was miscompiled in a warm process when
- * the string was a fresh `JSON.parse` result rather than the interned
- * literal: `src/noise/worley.ts` returned the wrong branch's value for
- * about one sampled point in 22500, on the first cook only (see that
- * file). The real fix is not to compare strings per element — that hoist
- * shipped with this — and this is the second, independent half: a value
- * that arrives as a recognised enum member becomes the very string the
- * schema declares, so the miscompiled shape never forms in the first
- * place. Measured clean over 10 runs of the repro with this alone.
- *
- * Cheap enough to do unconditionally: one `indexOf` over a list of at
- * most a handful of names, once per param written, never per element.
+ * Anything that is not a recognised enum string — a misspelling, a
+ * non-string, a param of another type — is handed back UNTOUCHED, so the
+ * caller's own refusal and its did-you-mean suggestion still fire exactly
+ * as before. Canonicalizing is never a validation step.
  */
 export function canonicalEnumValue(schema: ParamSchema, value: unknown): unknown {
-  if (schema.type !== "enum" || typeof value !== "string") return value;
-  const valid = schema.enum;
-  if (valid === undefined) return value;
-  const at = valid.indexOf(value);
-  return at < 0 ? value : valid[at];
+  if (schema.type !== "enum" || schema.enum === undefined) return value;
+  return canonicalOneOf(schema.enum, value) ?? value;
 }
 
 /**

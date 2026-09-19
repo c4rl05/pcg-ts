@@ -646,18 +646,27 @@ export class Graph {
       } while (this._nodes.has(nodeId));
       advanceTo = n;
     }
-    // Checked and canonicalized in one pass, into a record of this node's
-    // own: `given` carries the same keys and the same values as `params`,
-    // with each enum string replaced by its schema's (see
-    // `canonicalParamValue`). The caller's object is never written to.
+    // `given` is this node's own record of what the caller passed, and it
+    // is not quite a copy of `params`:
+    //
+    // - each string key is read ONCE, and the value that is checked is the
+    //   value that is stored. Reading twice — once to check, once to
+    //   merge — lets a param defined as a getter return one value to the
+    //   validator and another to the node;
+    // - own SYMBOL keys are dropped. `Object.keys` never saw them, so they
+    //   were never validated, and no schema names one;
+    // - an own `__proto__` key is dropped, because assigning it goes
+    //   through the prototype setter rather than creating a property. JSON
+    //   does produce that key; no schema names it either, so losing it
+    //   keeps it out of a node's params, which is the safer of the two.
+    const d = def as unknown as NodeDef<Record<string, unknown>>;
     let given: Record<string, unknown> | undefined;
     if (params !== undefined) {
-      const d = def as unknown as NodeDef<Record<string, unknown>>;
       given = {};
       for (const key of Object.keys(params as object)) {
         const value = (params as Record<string, unknown>)[key];
         checkParamValue(nodeId, d, key, value, "add");
-        given[key] = canonicalParamValue(d, key, value);
+        given[key] = value;
       }
     }
     if (advanceTo !== undefined) this.typeCounts.set(def.type, advanceTo);
@@ -665,6 +674,18 @@ export class Graph {
       ...(def.defaultParams as object),
       ...given,
     } as Record<string, unknown>;
+    // Canonicalized AFTER the merge, so the DEFAULTS are covered too. A
+    // standard node's defaults are source literals and this is a no-op on
+    // them, but a subgraph wrapper's are not: an exposed param's `default`
+    // is read from the graph file and lands in `defaultParams`, so a
+    // wrapper added without an explicit value would otherwise hold the
+    // parsed string. Written only when the value actually changes, which
+    // is also what keeps a `__proto__` key (never an enum param, so never
+    // changed) from being assigned through.
+    for (const key of Object.keys(merged)) {
+      const canon = canonicalParamValue(d, key, merged[key]);
+      if (canon !== merged[key]) merged[key] = canon;
+    }
     this._nodes.set(nodeId, {
       id: nodeId,
       def: def as unknown as NodeDef<Record<string, unknown>>,

@@ -54,10 +54,13 @@ export {
   type ValueItem,
 } from "./data.js";
 export * from "./node.js";
-// `paramSchemaError` and `paramValueError` are deliberately absent: both
-// are @internal message builders the library calls while VALIDATING a
-// param, and a caller has no way to reach the validation they belong to.
-// `liveParamValueError` — the editor-facing one — stays.
+// `paramSchemaError`, `paramValueError` and `canonicalEnumValue` are
+// deliberately absent. The first two are @internal message builders the
+// library calls while VALIDATING a param, and a caller has no way to
+// reach the validation they belong to; the third is an @internal step the
+// library takes on a value it has already accepted, and it is an identity
+// on every value a caller could observe. `liveParamValueError` — the
+// editor-facing one — stays.
 export {
   type GraphParam,
   graphParamBindings,
