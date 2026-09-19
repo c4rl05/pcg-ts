@@ -127,6 +127,20 @@ param's own description:
 - NO DEVICE OR FORMAT PATH to follow: `copyToPoints` has no GPU lowering,
   and a stringList param serializes as `targetNames` always has.
 
+The consumer switched in the next commit: `copyMembersToQuadrants` is one
+`copyToPoints` with `rotateAttrs: [FACE_NORMAL]`. Cooked at full detail
+it matches the chain it replaced in every output's counts, and the turned
+face normals to one f32 ulp (5.96e-8) — the chain rounded to f32 at every
+field op, `rotateVec` rounds once. Positions and the normals the skins
+derive from the face normal move by at most 7.6e-6 and 1.6e-5. Two more
+turns of the same shape remain in the demo, in `strut.ts` and `lifts.ts`:
+a box's `boxN` turned after `copyToPoints` by
+`normalize(rotateByQuat(rot, boxN))` (in `lifts.ts` after two copies, by
+the composed `rot`). Each `copyToPoints` on the way could name `boxN` in
+`rotateAttrs` instead, and rotation-only is exact there despite the
+non-uniform scale, because a box's face normals lie along its scale axes.
+Left for the demo's own pass.
+
 ### ~~Building edges from a parent-pointer column~~ — SHIPPED 2026-09-08
 
 Wanted: a node that reads a per-point index column and emits one

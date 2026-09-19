@@ -35,7 +35,6 @@ import {
   pointGrid,
   pointsToPath,
   position,
-  promoteAttribute,
   ramp,
   removeAttribute,
   select,
@@ -631,7 +630,7 @@ export function quadrants(g: Graph, id: string): NodeHandle {
 
 /**
  * Copy PATHS onto the quadrant targets. Copy before skinning: copyToPoints
- * turns positions, not a mesh's `normal` attribute.
+ * turns positions, and a mesh's `normal` only when `rotateAttrs` names it.
  */
 export function copyToQuadrants(
   g: Graph,
@@ -647,9 +646,13 @@ export function copyToQuadrants(
 
 /**
  * Copy edge-rule MEMBERS onto the quadrant targets, turning their face
- * normals with them. copyToPoints composes a copy's position and `rot`,
- * but a vector attribute rides along unturned, so the copies' `rot` is
- * lifted onto their primitives and applied to {@link FACE_NORMAL} there.
+ * normals with them: copyToPoints composes a copy's position and `rot`,
+ * and `rotateAttrs` turns the primitive {@link FACE_NORMAL} by the same
+ * quadrant rotation.
+ *
+ * The node keeps the id `${id}RotDone`, which named the last of the
+ * three-node chain (lift `rot`, turn, drop `rot`) this replaced, because
+ * tests/eiffelSkeleton.test.ts cooks the copied members by that id.
  */
 export function copyMembersToQuadrants(
   g: Graph,
@@ -657,34 +660,10 @@ export function copyMembersToQuadrants(
   source: NodeHandle,
   targets: NodeHandle,
 ): NodeHandle {
-  const copied = copyToQuadrants(g, id, source, targets);
-  const lifted = g.add(
-    promoteAttribute,
-    { name: "rot", from: "point", to: "primitive", mode: "first" },
-    `${id}Rot`,
-  );
-  const turned = g.add(
-    setAttribute,
-    {
-      name: FACE_NORMAL,
-      domain: "primitive",
-      type: "f32",
-      tupleSize: 3,
-      value: rotateByQuat(attribute("rot", 4), attribute(FACE_NORMAL, 3)),
-    },
-    `${id}Faces`,
-  );
-  // The lifted `rot` goes again: a resample carries primitive attributes
-  // onto its samples and refuses one named like a point attribute it writes.
-  const dropped = g.add(
-    removeAttribute,
-    { names: ["rot"], domain: "primitive" },
-    `${id}RotDone`,
-  );
-  g.connect(copied, "out", lifted, "in");
-  g.connect(lifted, "out", turned, "in");
-  g.connect(turned, "out", dropped, "in");
-  return dropped;
+  const node = g.add(copyToPoints, { topology: "keep", rotateAttrs: [FACE_NORMAL] }, `${id}RotDone`);
+  g.connect(source, "out", node, "source");
+  g.connect(targets, "out", node, "target");
+  return node;
 }
 
 /**
