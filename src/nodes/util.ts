@@ -5,12 +5,12 @@
  */
 import {
   AttributeNotFoundError,
-  AttributeSet,
   Geometry,
   PRIMTYPE_ATTR,
   type AttrData,
   type AttrType,
   type Attribute,
+  type AttributeSet,
 } from "../data/index.js";
 // By path: the no-copy topology hand-over and the overwrite sizing are
 // internal to the library and no barrel re-exports them (see the module
@@ -675,7 +675,14 @@ export function copyElements(
   // doubling for a cloud that grew), so bounding by it would let an index
   // past the last element read a dead slot on one source and throw on
   // another. A set knows its count; an array of columns is handed it.
-  const srcCount = from instanceof AttributeSet ? from.count : sourceCount;
+  //
+  // Which of the two it is, asked as `"count" in from` rather than
+  // `instanceof`: two copies of this library in one process (a duplicate
+  // in a dependency tree, a bundle beside a dist import) have two
+  // `AttributeSet` classes, and a set from the other one is not an
+  // instance of this one — while an array of columns has no `count`
+  // under any of them.
+  const srcCount = "count" in from ? from.count : sourceCount;
   if (srcCount === undefined) {
     throw new Error(
       "copyElements: internal — an array of columns must state its source element count",

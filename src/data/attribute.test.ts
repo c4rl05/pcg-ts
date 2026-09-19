@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Attribute, AttributeSet } from "./attribute.js";
-import type { AttrType } from "./types.js";
+import type { AttrDefault, AttrType } from "./types.js";
 
 const NUMERIC_VALUES: Record<Exclude<AttrType, "string">, number[]> = {
   f32: [1.5, -2.25, 1024.5, 0.125],
@@ -478,6 +478,70 @@ describe("Attribute.fill fast paths", () => {
     naive.fill(Number.NaN, 0, 8);
     expect(sameBytes(naive, expected)).toBe(false);
     expect(Array.from(naive.subarray(0, 2), (v) => f32Bits(v))).toEqual(["7fc00000", "7fc00000"]);
+  });
+
+  it("treats a scalar exactly as the one-value tuple, NaN included", () => {
+    // Two spellings of one fill, which used to take different paths
+    // through this method: the scalar went straight to the typed array's
+    // own `fill`, which broadcasts one NaN's bits.
+    for (const [ts, tuple] of [
+      [1, [NEG_NAN]],
+      [3, [NEG_NAN, NEG_NAN, NEG_NAN]],
+    ] as const) {
+      const set = new AttributeSet();
+      const viaScalar = set.add("scalar", "f32", ts);
+      const viaTuple = set.add("tuple", "f32", ts);
+      const viaLoop = set.add("loop", "f32", ts);
+      set.resize(5);
+      viaScalar.fill(NEG_NAN, 1, 4);
+      viaTuple.fill(tuple, 1, 4);
+      referenceFill(viaLoop.data, ts, tuple, 1, 4);
+      expect(sameBytes(viaScalar.data, viaLoop.data)).toBe(true);
+      expect(sameBytes(viaTuple.data, viaLoop.data)).toBe(true);
+      expect(f32Bits(viaScalar.get(2))).toBe("ffc00000");
+    }
+  });
+
+  it("truncates a fractional bound and reads NaN as zero, for every kind of value", () => {
+    // ONE RANGE RULE, stated by comparing each fractional or NaN bound
+    // with the whole-number bound it stands for. No caller passes such a
+    // range; the rule exists so the three kinds of value cannot disagree.
+    const cases: Array<[AttrDefault, number, number, number, number]> = [
+      [[1, 2], 1, 3.5, 1, 3],
+      [[1, 2], 1.9, 4, 1, 4],
+      [[1, 2], 0, Number.NaN, 0, 0],
+      [[1, 2], Number.NaN, 3, 0, 3],
+      [[1, 2], -2, 2, 0, 2],
+      [[1, 2], 0, 99, 0, 8],
+      [[1, 2], 0, Number.POSITIVE_INFINITY, 0, 8],
+      [7, 1, 3.5, 1, 3],
+      [7, 0, Number.NaN, 0, 0],
+      [7, -2, 2, 0, 2],
+    ];
+    for (const [value, start, end, plainStart, plainEnd] of cases) {
+      const set = new AttributeSet();
+      const loose = set.add("loose", "f32", 2);
+      const plain = set.add("plain", "f32", 2);
+      set.resize(5); // capacity 8
+      loose.fill(value, start, end);
+      plain.fill(value, plainStart, plainEnd);
+      expect(sameBytes(loose.data, plain.data), `[${start}, ${end}) vs [${plainStart}, ${plainEnd})`).toBe(true);
+    }
+    // The same rule on a string column, where the value cannot be a tuple.
+    const set = new AttributeSet();
+    const loose = set.add("loose", "string", 1, "none");
+    const plain = set.add("plain", "string", 1, "none");
+    set.resize(4);
+    loose.fill("x", 1, 3.5);
+    plain.fill("x", 1, 3);
+    expect(Array.from(loose.data)).toEqual(Array.from(plain.data));
+    expect(loose.getString(3)).toBe("none");
+    // And the word is interned even when the range comes out empty, so a
+    // column's table does not depend on the bounds it was filled over.
+    const empty = set.add("empty", "string", 1, "none");
+    empty.fill("late", 2, Number.NaN);
+    expect(empty.stringTable).toEqual(["none", "late"]);
+    expect(empty.getString(2)).toBe("none");
   });
 
   it("clamps a negative start and clips an end past capacity, as the loop did", () => {

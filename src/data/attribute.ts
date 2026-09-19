@@ -2,6 +2,18 @@ import { ATTR_CTORS, type AttrDefault, type AttrType, type AttrTypeMap } from ".
 
 const MIN_CAPACITY = 8;
 
+/**
+ * One bound of {@link Attribute.fill} as an element index: truncated toward
+ * zero, NaN read as 0 (what `ToIntegerOrInfinity` does for the language's
+ * own `fill`), and clamped into `[0, capacity]` rather than counted back
+ * from the end.
+ */
+function fillBound(index: number, capacity: number): number {
+  const whole = Math.trunc(index);
+  if (!(whole > 0)) return 0;
+  return whole < capacity ? whole : capacity;
+}
+
 function normalizeDefault(
   type: AttrType,
   tupleSize: number,
@@ -152,37 +164,49 @@ export class Attribute<T extends AttrType = AttrType> {
     return this.stringIndices.get(value);
   }
 
-  /** Fill elements [start, end) with a value (scalar broadcast, tuple, or string). */
+  /**
+   * Fill elements `[start, end)` with a value (scalar broadcast, tuple, or
+   * string).
+   *
+   * THE BOUNDS ARE ELEMENT INDICES, TRUNCATED TOWARD ZERO and clamped to
+   * `[0, capacity]`, whatever the value is: a fractional bound drops its
+   * fraction (`end` 3.5 is `end` 3, so element 3 is not written and no
+   * element is written in part), NaN reads as 0 the way the language's own
+   * `fill` reads it, and a negative bound clamps to 0 rather than counting
+   * back from the end. One rule for all three kinds of value, rather than
+   * the three the typed-array `fill` and a per-element loop would each have
+   * brought.
+   */
   fill(value: AttrDefault, start = 0, end = this.capacity): void {
     const ts = this.tupleSize;
+    const data = this.data;
+    const cap = this.capacity;
+    const lo = fillBound(start, cap) * ts;
+    const hi = fillBound(end, cap) * ts;
     if (this.type === "string") {
       if (typeof value !== "string") {
         throw new Error(`attribute "${this._name}": fill value must be a string`);
       }
-      this.data.fill(this.internString(value), start * ts, end * ts);
+      // Interned before the range is looked at, so an empty range still
+      // leaves the table holding the word the caller named — which is what
+      // it did when the interning was this call's argument.
+      data.fill(this.internString(value), lo, hi);
       return;
     }
     if (typeof value === "string") {
       throw new Error(`attribute "${this._name}": fill value must be numeric`);
     }
-    if (typeof value === "number") {
-      this.data.fill(value, start * ts, end * ts);
-      return;
-    }
-    if (value.length !== ts) {
+    const scalar = typeof value === "number";
+    if (!scalar && value.length !== ts) {
       throw new Error(`attribute "${this._name}": fill tuple length ${value.length} !== ${ts}`);
     }
-    // Clipped at both ends the way the per-element loop clipped it: that
-    // loop wrote nothing at a negative index, where `fill` and `copyWithin`
-    // count back from the end, and nothing past the storage either.
-    const data = this.data;
-    const lo = Math.max(start, 0) * ts;
-    const hi = Math.min(end * ts, data.length);
     if (hi <= lo) return;
     // SEED ONE TUPLE WITH INDEXED STORES — the very writes this replaces,
     // component for component — and spread those STORED BYTES over the
-    // rest of the range.
-    for (let k = 0; k < ts; k++) data[lo + k] = value[k];
+    // rest of the range. A scalar is the same thing with every component
+    // the same number, and takes this path too so that `fill(NaN)` and
+    // `fill([NaN])` cannot disagree about one method's bytes.
+    for (let k = 0; k < ts; k++) data[lo + k] = scalar ? value : value[k];
     // One `fill` when every component came back from storage as the same
     // number: every scalar default (defaults are tuples even at tupleSize
     // 1) and the uniform vectors ([0, 0, 0], [1, 1, 1]). The test is on
