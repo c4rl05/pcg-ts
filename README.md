@@ -803,7 +803,8 @@ Naming the attribute is what states the intent — `color`, or a
 `setAttribute("color", ...)` upstream, never name it here, and you get
 silence rather than a warning.
 **A spawn is budgeted.** One cook may spawn at most 1 048 576 instances
-(one per input point — 64 MiB of matrices), checked before anything is
+(one per input point — 64 MiB in the batch's `transforms` array, which is
+what the packed 4x4s are called), checked before anything is
 allocated, so a density typo is a diagnostic naming the count and the
 fix instead of an allocation failure. The ceiling is per **cook**, never
 per world: a global "instances alive" limit would depend on which cells

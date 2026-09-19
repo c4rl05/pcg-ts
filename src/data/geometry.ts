@@ -8,11 +8,20 @@ export const PRIMTYPE_ATTR = "primtype";
 export type PrimType = "poly" | "polyline";
 
 /**
- * Geometry container: one {@link AttributeSet} per domain plus topology.
- * The detail domain always has exactly one element. Topology is
- * range-based: vertex `i` references point `vertexToPoint[i]`, and
- * primitive `p` spans vertices
+ * Geometry container: one {@link AttributeSet} per domain, under `attrs`,
+ * plus the topology arrays. The detail domain always has exactly one
+ * element. Topology is range-based: vertex `i` references point
+ * `vertexToPoint[i]`, and primitive `p` spans vertices
  * `[primVertexStart[p], primVertexStart[p] + primVertexCount[p])`.
+ *
+ * THE THREE TOPOLOGY ARRAYS SIT FLAT ON THE OBJECT. There is no
+ * `topology` member holding them — `geo.topology` is `undefined`, and the
+ * arrays are reached by their own names. `attrs` is a plain record keyed
+ * by domain name (`geo.attrs.point`, or `geo.attrs[domain]`), not a Map.
+ *
+ * Properties, in full: `attrs`, `pointCount`, `primVertexCount`,
+ * `primVertexStart`, `primitiveCount`, `vertexCount`, `vertexToPoint` —
+ * the three counts are getters over the matching {@link AttributeSet}.
  */
 export class Geometry {
   readonly attrs: Record<Domain, AttributeSet>;

@@ -55,7 +55,9 @@ export interface BuildInstanceBatchesOptions {
 
 /**
  * Ceiling on the instances one call may spawn — one per input point, at
- * 16 floats of transform each, so 2^20 is 64 MiB of matrices. Same value
+ * 16 floats of transform each, so 2^20 is 64 MiB in a batch's
+ * `transforms` array — the property is `transforms`, never `matrices`,
+ * though each 16-float block is a 4x4 matrix. Same value
  * and same shape as `MAX_EDGES` (`src/nodes/topology.ts`) and
  * `MAX_RESAMPLE_POINTS` (`src/nodes/paths.ts`): a density or a radius is
  * a number an author typed, but the count it implies is not, and an
@@ -172,10 +174,10 @@ export function buildInstanceBatches(
     throw new Error(
       `buildInstanceBatches: this cook would spawn ${points.count} instances (one per input ` +
         `point), over the budget of ${MAX_INSTANCES} — each instance costs 16 floats of ` +
-        `transform, so the budget is 64 MiB of matrices. Thin the cloud upstream (a lower ` +
-        `density or count on the scatter, filterByDensity, selfPrune), or cook the region in ` +
-        `cells with a World level: the budget is per COOK, not per world, so a streamed world ` +
-        `may hold many times this across its resident cells.`,
+        `transform, so the budget is 64 MiB in the batch's "transforms" array. Thin the cloud ` +
+        `upstream (a lower density or count on the scatter, filterByDensity, selfPrune), or ` +
+        `cook the region in cells with a World level: the budget is per COOK, not per world, ` +
+        `so a streamed world may hold many times this across its resident cells.`,
     );
   }
   const rotAttr = points.get("rot");

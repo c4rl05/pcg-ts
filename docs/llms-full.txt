@@ -99,18 +99,30 @@ whatever `VERSION` says.
   That constancy is also the payoff — a broadcast branch whose inputs did
   not change serves its cache instead of cooking again.
 - A `Geometry` holds four attribute domains: point, vertex, primitive,
-  detail (always 1 element), plus topology (vertex->point map, primitive
-  vertex ranges). Point-only clouds are the common fast path. `DOMAINS`
-  is those four names as a runtime array in canonical order — read it
-  rather than hardcoding the list, so a "for every domain" walk cannot
-  disagree with the library about what the domains are or what order
-  they come in.
-- Each domain is an `AttributeSet`: an ordered collection of attributes
-  sharing one element count, which is what `geo.attrs.point` (and
-  `.vertex` / `.primitive` / `.detail`) IS. Iteration is insertion
-  order — stable and deterministic, and `rename` keeps an attribute's
-  position rather than moving it to the end, so nothing that walks a
-  domain depends on when a column was added.
+  detail (always 1 element), plus the topology arrays: `vertexToPoint`
+  (vertex → point), and `primVertexStart` / `primVertexCount` (each
+  primitive's vertex range). THE THREE SIT FLAT ON THE GEOMETRY OBJECT,
+  not nested under a `topology` property — `geo.topology` is
+  `undefined`; reach them directly as `geo.vertexToPoint`,
+  `geo.primVertexStart`, `geo.primVertexCount`. Point-only clouds are
+  the common fast path. `DOMAINS` is those four names as a runtime array
+  in canonical order — read it rather than hardcoding the list, so a
+  "for every domain" walk cannot disagree with the library about what
+  the domains are or what order they come in.
+- Each domain is an `AttributeSet`, reached as `geo.attrs[domain]` (a
+  plain record keyed by domain name — `geo.attrs.point`, `.vertex`,
+  `.primitive`, `.detail` — NOT a Map, so `geo.attrs.get("point")` is
+  wrong). `AttributeSet` ITSELF IS NOT A MAP EITHER, despite carrying
+  `get`/`has`: iterating it yields each `Attribute` directly, never a
+  `[name, attribute]` pair, and there is no `set`, `entries`, `keys`,
+  `values` or `forEach`. `names()` returns the attribute names, `size`
+  is the number of attributes, `count` is the element count. A column
+  is created with `add(name, type, tupleSize, defaultValue?)`, which
+  THROWS if the name is already taken, or replaced in place with
+  `replace(...)`; one attribute is `geo.attrs[domain].get(name)`.
+  Iteration is insertion order — stable and deterministic, and `rename`
+  keeps an attribute's position rather than moving it to the end, so
+  nothing that walks a domain depends on when a column was added.
 - Attributes are named typed-array columns (f32/i32/u32/bool/string)
   with a tuple size. Standard point attributes: P (f32x3), rot (quat
   f32x4, xyzw), scale (f32x3), density (f32), boundsMin/boundsMax
