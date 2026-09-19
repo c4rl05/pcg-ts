@@ -643,6 +643,44 @@ export interface CopyToPointsParams {
    */
   targetIndexAttr: string;
   /**
+   * SOURCE direction attributes (f32, tuple size 3) to turn with each copy — a mesh's
+   * `normal`, a path's `tangent` or `curveNormal`, any axis the graph wrote. Without this
+   * every attribute but the composed transform rides onto the copies unchanged, so a
+   * direction comes out pointing the SOURCE's way on every copy even though the copy's
+   * positions and `rot` turned: a box copied onto a target turned 90 degrees is lit as if it
+   * had not turned. Each named column is rotated by its copy's TARGET rotation — the
+   * target's `rot`, identity when the target has none — which is exactly the rotation P goes
+   * through (P = targetP + targetRot * (targetScale * sourceP)), so the direction stays in
+   * the frame the copy's positions are in. The SOURCE point's own `rot` is not applied,
+   * because source P is not turned by it either. ROTATION ONLY: the length is kept (up to
+   * f32 rounding; nothing is renormalized, a zero vector stays zero) and the target's
+   * `scale` is NOT applied. Under a uniform target scale that is exact for any direction.
+   * Under a NON-UNIFORM target scale it is not: a surface normal would need the
+   * inverse-transpose of that scale (and a tangent the scale itself), then a renormalize,
+   * and this param applies neither — scale uniformly, or recompute the directions
+   * downstream. DOMAINS: a name is looked up on the source's point, vertex and primitive
+   * domains and turned on every one of them that carries it, each copy of an element by the
+   * target its block landed on. The vertex and primitive domains reach the output only under
+   * `topology "keep"`, so under "drop" (the default) only the point domain is searched, and
+   * a name the source carries ONLY on its vertex or primitive domain is an error rather than
+   * a silent no-op — the likely intent was `topology "keep"`. The detail domain is never
+   * carried, so never searched, and neither is a `targetNames` column: that is the target's
+   * own value, already in the target's frame. Refused rather than resolved silently: "P",
+   * "rot", "scale" and "seed" (composed per copy — P and rot already carry the target's
+   * rotation, so naming one would apply it twice, and scale and seed are not directions);
+   * "boundsMin" and "boundsMax" (extents in the point's own frame, which the composed `rot`
+   * already turns); a name repeated in the list; a name no searched domain carries; and a
+   * column of that name that is not f32 with tuple size 3 — including one on a dropped
+   * domain, so the fix offered is never "keep" when "keep" would fail next. Every refusal
+   * but the repeat lists the source's f32 tuple-3 attributes per domain. Nothing is added,
+   * renamed or reordered — the named columns keep their place, type and default, and only
+   * their values turn — so an empty list, the default, leaves every output byte-identical to
+   * what this node produced before the param existed.
+   *
+   * @defaultValue `[]`
+   */
+  rotateAttrs: readonly string[];
+  /**
    * Name of a scalar SOURCE point attribute holding each source point's group key — the half
    * of per-target source selection that says what each source point IS. Set it together with
    * `targetGroupAttr` (the key each target ASKS FOR) and a target receives only the source

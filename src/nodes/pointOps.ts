@@ -705,6 +705,177 @@ function buildKeepPlan(src: Geometry, indices: Uint32Array, nS: number): KeepPla
   return { primSrc: prims, vertexSrc, vertexToPoint, primVertexStart, primVertexCount };
 }
 
+/**
+ * The source domains `rotateAttrs` can reach, in the order a name is looked
+ * up and an error lists them. The DETAIL domain is not here because this
+ * node never carries it (see `topology`), so a detail direction has no
+ * copy to turn.
+ */
+const ROTATE_DOMAINS = ["point", "vertex", "primitive"] as const;
+type RotateDomain = (typeof ROTATE_DOMAINS)[number];
+
+/** Which output columns `rotateAttrs` turns, per domain. */
+type RotatePlan = Record<RotateDomain, string[]>;
+
+const isDirectionColumn = (attr: Attribute): boolean => attr.type === "f32" && attr.tupleSize === 3;
+
+/**
+ * Why a name `rotateAttrs` refuses outright is refused, or `undefined`
+ * when it is not one of them. Two groups. The composed standards: P and
+ * rot already hold the target's rotation, so turning one would apply it a
+ * SECOND time, and scale and seed are not directions at all. And the
+ * bounds, which are f32 tuple-3 and would otherwise pass the shape check,
+ * but are extents in the point's OWN frame, which the composed `rot`
+ * already turns — rotating them would double the turn and could leave a
+ * min above its max.
+ */
+function rotateRefusal(name: string): string | undefined {
+  const composed = "P, rot, scale and seed are composed per copy";
+  if (name === "P" || name === "rot") {
+    return `${composed}, and P and rot already carry the target's rotation, so turning one here would apply it twice`;
+  }
+  if (name === "scale") {
+    return `${composed}, and scale is a per-axis size (targetScale * sourceScale), not a direction, so there is nothing to turn`;
+  }
+  if (name === "seed") {
+    return `${composed}, and seed is an identity (hashCombine(sourceSeed, targetSeed)), not a direction, so there is nothing to turn`;
+  }
+  if (name === "boundsMin" || name === "boundsMax") {
+    return (
+      "boundsMin and boundsMax are extents in the point's OWN frame, which the composed rot " +
+      "already turns, so turning one here would apply the target's rotation twice and could leave " +
+      "a min above its max"
+    );
+  }
+  return undefined;
+}
+
+/**
+ * The names a `rotateAttrs` error offers as valid, per domain: every f32
+ * tuple-3 source column that is not refused outright. Listed
+ * per domain rather than flat because the domain is the other half of the
+ * fix — a name that is right but lives on the primitive domain needs
+ * `topology "keep"`, not a different name.
+ */
+function rotateCandidates(src: Geometry): string {
+  return ROTATE_DOMAINS.map((domain) => {
+    const names: string[] = [];
+    for (const attr of src.attrs[domain]) {
+      if (isDirectionColumn(attr) && rotateRefusal(attr.name) === undefined) names.push(attr.name);
+    }
+    return `${domain}: ${names.join(", ") || "(none)"}`;
+  }).join("; ");
+}
+
+/** The refusal for a column of the right name and the wrong shape. */
+function rotateShapeError(src: Geometry, domain: RotateDomain, attr: Attribute): Error {
+  return new Error(
+    `copyToPoints: param "rotateAttrs" names ${domain} attribute "${attr.name}", which is ` +
+      `${attr.type} with tupleSize ${attr.tupleSize}; only an f32 tuple-3 DIRECTION (a normal, ` +
+      "a tangent, an axis) can be rotated. The source's f32 tuple-3 attributes are " +
+      `${rotateCandidates(src)}.`,
+  );
+}
+
+/**
+ * Resolve `rotateAttrs` against the SOURCE before anything is sized, so a
+ * bad name fails by name rather than halfway through a cook. Under
+ * `topology "drop"` only the point domain reaches the output, so only the
+ * point domain is searched — a vertex or primitive column of the name is
+ * not rotated when it is about to be dropped anyway. A name that exists
+ * ONLY on a dropped domain is refused rather than skipped: the author
+ * asked for a turn that would silently do nothing, and the likely intent
+ * is `topology "keep"` — unless that column has the wrong shape too, in
+ * which case the shape is reported, because "keep" would only move the
+ * refusal one step on.
+ */
+function planRotateAttrs(src: Geometry, names: readonly string[], keepTopology: boolean): RotatePlan {
+  const plan: RotatePlan = { point: [], vertex: [], primitive: [] };
+  const searched: readonly RotateDomain[] = keepTopology ? ROTATE_DOMAINS : ["point"];
+  const listed = new Set<string>();
+  for (const name of names) {
+    const refusal = rotateRefusal(name);
+    if (refusal !== undefined) {
+      throw new Error(
+        `copyToPoints: param "rotateAttrs" cannot rotate "${name}" — ${refusal}. Name a direction ` +
+          `attribute instead; the source's f32 tuple-3 attributes are ${rotateCandidates(src)}.`,
+      );
+    }
+    if (listed.has(name)) {
+      throw new Error(
+        `copyToPoints: param "rotateAttrs" lists "${name}" twice; name each attribute once.`,
+      );
+    }
+    listed.add(name);
+    let found = false;
+    for (const domain of searched) {
+      const attr = src.attrs[domain].get(name);
+      if (!attr) continue;
+      if (!isDirectionColumn(attr)) throw rotateShapeError(src, domain, attr);
+      plan[domain].push(name);
+      found = true;
+    }
+    if (found) continue;
+    const dropped = keepTopology ? [] : ROTATE_DOMAINS.filter((d) => d !== "point" && src.attrs[d].has(name));
+    for (const domain of dropped) {
+      const attr = src.attrs[domain].require(name);
+      if (!isDirectionColumn(attr)) throw rotateShapeError(src, domain, attr);
+    }
+    if (dropped.length > 0) {
+      throw new Error(
+        `copyToPoints: param "rotateAttrs" names "${name}", which the source carries only on its ` +
+          `${dropped.join(" and ")} domain, and topology "drop" (the default) discards those domains, ` +
+          'so there would be nothing to rotate. Set topology "keep" to carry the source\'s primitives ' +
+          `and their attributes onto the copies, or remove "${name}" from rotateAttrs. The source's ` +
+          `f32 tuple-3 attributes are ${rotateCandidates(src)}.`,
+      );
+    }
+    const where = keepTopology
+      ? "which the source carries on none of its point, vertex and primitive domains"
+      : 'which the source\'s point domain does not carry (under topology "drop" only the point domain is searched)';
+    throw new Error(
+      `copyToPoints: param "rotateAttrs" names "${name}", ${where}; the source's f32 tuple-3 ` +
+        `attributes are ${rotateCandidates(src)}. Only SOURCE columns are rotated — a target ` +
+        'attribute carried by "targetNames" is the target\'s own value and already in its frame.',
+    );
+  }
+  return plan;
+}
+
+/**
+ * Turn one f32 tuple-3 OUTPUT column in place by each target's rotation,
+ * block by block: elements `[starts[t], starts[t + 1])` are target t's
+ * copies, on whichever domain `starts` indexes. The same `rotateVec` the
+ * transform loop turns P with, so a direction and the positions it
+ * describes go through one rotation. A target whose `rot` is exactly the
+ * identity is skipped rather than multiplied through, which keeps its
+ * copies byte-for-byte what the source held (`-0 + 0` is `+0`, so even an
+ * identity product is not a no-op on the bits).
+ */
+function rotateBlocks(
+  data: Float32Array,
+  starts: Uint32Array,
+  tRot: Float32Array | undefined,
+  v: number[],
+): void {
+  if (!tRot) return;
+  const nT = starts.length - 1;
+  for (let t = 0; t < nT; t++) {
+    const qx = tRot[t * 4];
+    const qy = tRot[t * 4 + 1];
+    const qz = tRot[t * 4 + 2];
+    const qw = tRot[t * 4 + 3];
+    if (qx === 0 && qy === 0 && qz === 0 && qw === 1) continue;
+    for (let i = starts[t], end = starts[t + 1]; i < end; i++) {
+      const o = i * 3;
+      rotateVec(v, qx, qy, qz, qw, data[o], data[o + 1], data[o + 2]);
+      data[o] = v[0];
+      data[o + 1] = v[1];
+      data[o + 2] = v[2];
+    }
+  }
+}
+
 /** Copy a source cloud onto every target point, composing transforms. */
 export const copyToPoints = standardNode<
   CopyToPointsParams,
@@ -714,7 +885,7 @@ export const copyToPoints = standardNode<
   type: "copyToPoints",
   category: "point op",
   description:
-    "Copies the source point cloud onto every target point (output count = source points * target points, grouped by target). Set `sourceGroupAttr` and `targetGroupAttr` and each target instead takes only the source points whose group key it asks for, which is the same node stamping a DIFFERENT subset per target rather than the whole cloud. Transforms compose per copy: P = targetP + targetRot * (targetScale * sourceP), rot = targetRot * sourceRot (quaternion product), scale = targetScale * sourceScale (componentwise), and each copied seed is hashCombine(sourceSeed, targetSeed). All other source point attributes are carried through unchanged; missing transform attributes are treated as identity. `targetNames` additionally carries named TARGET point attributes onto the copies: every copy in a target's block receives that target's value, in a column keeping the target's type, tuple size and default. That is what lets copies vary by what the author computed on the target cloud — a species tag, an age, a noise sampled per target — since the copies are otherwise identical in everything but placement. The composed transform attributes cannot be carried, a name the source already carries is refused rather than silently overwritten, a name repeated in the list is refused, and a name absent from the target is an error. `targetIndexAttr` writes the target's INDEX rather than one of its attributes, which is what makes \"one thing per target\" — one path per anchor, one group per instance — expressible without an upstream setAttribute whose only job was to give this node something to carry. `sourceGroupAttr` and `targetGroupAttr` are PER-TARGET SOURCE SELECTION, the pair that turns \"every target takes every source point\" into \"every target takes the source points it names\": without them a vocabulary in which each target wants a different subset has to stamp the whole cloud and filter the wrong copies away, which is quadratic in a library nobody uses all of. The source's TOPOLOGY is dropped by default — an array of a path comes out a bare cloud — and `topology \"keep\"` re-emits every source primitive once per target instead, which is what makes the array of paths a set of paths without rebuilding them downstream.",
+    "Copies the source point cloud onto every target point (output count = source points * target points, grouped by target). Set `sourceGroupAttr` and `targetGroupAttr` and each target instead takes only the source points whose group key it asks for, which is the same node stamping a DIFFERENT subset per target rather than the whole cloud. Transforms compose per copy: P = targetP + targetRot * (targetScale * sourceP), rot = targetRot * sourceRot (quaternion product), scale = targetScale * sourceScale (componentwise), and each copied seed is hashCombine(sourceSeed, targetSeed). All other source point attributes are carried through unchanged — including a DIRECTION such as a mesh's `normal` or a path's `tangent`, which therefore keeps pointing the source's way on every copy unless `rotateAttrs` names it, and then it turns by the copy's target rotation on the point, vertex or primitive domain; missing transform attributes are treated as identity. `targetNames` additionally carries named TARGET point attributes onto the copies: every copy in a target's block receives that target's value, in a column keeping the target's type, tuple size and default. That is what lets copies vary by what the author computed on the target cloud — a species tag, an age, a noise sampled per target — since the copies are otherwise identical in everything but placement. The composed transform attributes cannot be carried, a name the source already carries is refused rather than silently overwritten, a name repeated in the list is refused, and a name absent from the target is an error. `targetIndexAttr` writes the target's INDEX rather than one of its attributes, which is what makes \"one thing per target\" — one path per anchor, one group per instance — expressible without an upstream setAttribute whose only job was to give this node something to carry. `sourceGroupAttr` and `targetGroupAttr` are PER-TARGET SOURCE SELECTION, the pair that turns \"every target takes every source point\" into \"every target takes the source points it names\": without them a vocabulary in which each target wants a different subset has to stamp the whole cloud and filter the wrong copies away, which is quadratic in a library nobody uses all of. The source's TOPOLOGY is dropped by default — an array of a path comes out a bare cloud — and `topology \"keep\"` re-emits every source primitive once per target instead, which is what makes the array of paths a set of paths without rebuilding them downstream.",
   inputs: [
     { name: "source", kind: "geometry" },
     { name: "target", kind: "geometry" },
@@ -732,6 +903,12 @@ export const copyToPoints = standardNode<
       default: "",
       description:
         'Name of an i32 point attribute to write the TARGET INDEX into — 0 for every copy that landed on the first target point, 1 for the second, and so on. Empty (the default) writes nothing. This is the key downstream nodes group by: pointsToPath\'s `groupAttr` turns "the copies of one target" into one path per target, and partitionByAttribute turns them into one item each. The node already computes this index to place the copies, so naming it here replaces the setAttribute writing `{"fn":"index"}` on the target purely so `targetNames` had something to carry. The column is i32, tuple size 1, default -1 (which no copy ever gets, so an element appended later reads as belonging to no target). That stays true under `sourceGroupAttr`/`targetGroupAttr` selection, and it is worth saying why, because selection is exactly what could have broken it: a target that matches no source group contributes ZERO copies rather than a copy carrying some placeholder, so its index is simply a value this column never holds — -1 still means "no target" and not "the target that took nothing". What selection does change is that a target index can be MISSING from the output entirely, so a downstream grouping on this column sees fewer groups than the target cloud has points (pointsToPath\'s `shortGroups "skip"` is the setting that expects exactly that). Refused for the same three reasons `targetNames` refuses a name: "P", "rot", "scale" and "seed" are composed per copy, a name the source already carries would have two writers, and so would a name `targetNames` is carrying.',
+    },
+    rotateAttrs: {
+      type: "stringList",
+      default: [],
+      description:
+        'SOURCE direction attributes (f32, tuple size 3) to turn with each copy — a mesh\'s `normal`, a path\'s `tangent` or `curveNormal`, any axis the graph wrote. Without this every attribute but the composed transform rides onto the copies unchanged, so a direction comes out pointing the SOURCE\'s way on every copy even though the copy\'s positions and `rot` turned: a box copied onto a target turned 90 degrees is lit as if it had not turned. Each named column is rotated by its copy\'s TARGET rotation — the target\'s `rot`, identity when the target has none — which is exactly the rotation P goes through (P = targetP + targetRot * (targetScale * sourceP)), so the direction stays in the frame the copy\'s positions are in. The SOURCE point\'s own `rot` is not applied, because source P is not turned by it either. ROTATION ONLY: the length is kept (up to f32 rounding; nothing is renormalized, a zero vector stays zero) and the target\'s `scale` is NOT applied. Under a uniform target scale that is exact for any direction. Under a NON-UNIFORM target scale it is not: a surface normal would need the inverse-transpose of that scale (and a tangent the scale itself), then a renormalize, and this param applies neither — scale uniformly, or recompute the directions downstream. DOMAINS: a name is looked up on the source\'s point, vertex and primitive domains and turned on every one of them that carries it, each copy of an element by the target its block landed on. The vertex and primitive domains reach the output only under `topology "keep"`, so under "drop" (the default) only the point domain is searched, and a name the source carries ONLY on its vertex or primitive domain is an error rather than a silent no-op — the likely intent was `topology "keep"`. The detail domain is never carried, so never searched, and neither is a `targetNames` column: that is the target\'s own value, already in the target\'s frame. Refused rather than resolved silently: "P", "rot", "scale" and "seed" (composed per copy — P and rot already carry the target\'s rotation, so naming one would apply it twice, and scale and seed are not directions); "boundsMin" and "boundsMax" (extents in the point\'s own frame, which the composed `rot` already turns); a name repeated in the list; a name no searched domain carries; and a column of that name that is not f32 with tuple size 3 — including one on a dropped domain, so the fix offered is never "keep" when "keep" would fail next. Every refusal but the repeat lists the source\'s f32 tuple-3 attributes per domain. Nothing is added, renamed or reordered — the named columns keep their place, type and default, and only their values turn — so an empty list, the default, leaves every output byte-identical to what this node produced before the param existed.',
     },
     sourceGroupAttr: {
       type: "string",
@@ -757,6 +934,11 @@ export const copyToPoints = standardNode<
     const src = requireGeometry(inputs, "source", "copyToPoints");
     const tgt = requireGeometry(inputs, "target", "copyToPoints");
     const keepTopology = requireCopyTopologyRule(params.topology);
+    // Settled against the source's columns before anything is sized. An
+    // empty list (the default) plans nothing, and every rotate pass below
+    // then loops over zero names — so the default output is the bytes this
+    // node produced before the param existed, by construction.
+    const rotate = planRotateAttrs(src, params.rotateAttrs, keepTopology);
     const srcSet = src.attrs.point;
     const tgtSet = tgt.attrs.point;
     const nS = srcSet.count;
@@ -1018,6 +1200,13 @@ export const copyToPoints = standardNode<
       }
     }
 
+    // DIRECTIONS turn with their copy, by the target rotation P just went
+    // through. The columns were gathered verbatim above, so this rotates
+    // them in place, one target block at a time.
+    for (const name of rotate.point) {
+      rotateBlocks(outSet.require(name).data as Float32Array, starts, tRot, v);
+    }
+
     // TOPOLOGY, opt-in and strictly additive. It runs LAST because
     // `setTopology` validates the renumbered vertex references against the
     // point count, and the point domain is only final here. Nothing above
@@ -1067,6 +1256,11 @@ export const copyToPoints = standardNode<
       // did — one flat array per domain, one `gatherInto` per attribute.
       const vertexSrc = new Uint32Array(totalVerts);
       const primSrc = new Uint32Array(totalPrims);
+      // Where each target's re-emitted vertices and primitives begin — the
+      // vertex/primitive twins of `starts`, which is what `rotateAttrs`
+      // needs to turn every copy of an element by ITS target.
+      const vertexStarts = new Uint32Array(nT + 1);
+      const primStarts = new Uint32Array(nT + 1);
       // One block per target. `starts[t]` is the point base — the same
       // number the transform loop above wrote its copies at, which is
       // exactly why this is a re-emission and not a rebuild: the copies
@@ -1076,6 +1270,8 @@ export const copyToPoints = standardNode<
       let primBase = 0;
       for (let t = 0; t < nT; t++) {
         const plan = planAt(t);
+        vertexStarts[t] = vertexBase;
+        primStarts[t] = primBase;
         if (!plan) continue;
         appendTopologyBlock(
           plan.vertexToPoint,
@@ -1093,6 +1289,8 @@ export const copyToPoints = standardNode<
         vertexBase += plan.vertexSrc.length;
         primBase += plan.primSrc.length;
       }
+      vertexStarts[nT] = vertexBase;
+      primStarts[nT] = primBase;
       // Runs even when the source has NO primitives (the common case, and
       // an empty topology either way): what the output IS must depend on
       // the graph and never on the data — the rule the point filters'
@@ -1114,6 +1312,12 @@ export const copyToPoints = standardNode<
         for (const attr of from) {
           const dst = to.add(attr.name, attr.type, attr.tupleSize, attr.defaultValue as AttrDefault);
           gatherInto(dst, attr, gathered);
+        }
+        // The same in-place turn the point directions took, over this
+        // domain's per-target blocks.
+        const blockStarts = domain === "vertex" ? vertexStarts : primStarts;
+        for (const name of rotate[domain]) {
+          rotateBlocks(to.require(name).data as Float32Array, blockStarts, tRot, v);
         }
       }
     }

@@ -22,6 +22,7 @@ import {
   copyToPoints,
   type CopyToPointsParams,
   deserializeGraph,
+  extrudePolygon,
   fieldFromJson,
   getNodeType,
   jitterPoints,
@@ -476,6 +477,330 @@ describe("copyToPoints", () => {
     const bare = firstGeo((await call("")).out);
     expect(bare.attrs.point.names()).toEqual(source.attrs.point.names());
     expect(snapshotGeometry(firstGeo((await call("")).out))).toEqual(snapshotGeometry(bare));
+  });
+
+  describe("rotateAttrs", () => {
+    const H = Math.SQRT1_2;
+    /** 90 degrees about +z: (x, y, z) -> (-y, x, z). */
+    const RZ90 = [0, 0, H, H];
+    /** 90 degrees about +y: (x, y, z) -> (z, y, -x). */
+    const RY90 = [0, H, 0, H];
+    const turnZ = ([x, y, z]: number[]) => [-y, x, z];
+    const turnY = ([x, y, z]: number[]) => [z, y, -x];
+
+    interface RotateParams {
+      rotateAttrs?: string[];
+      topology?: CopyToPointsParams["topology"];
+      targetNames?: string[];
+      sourceGroupAttr?: string;
+      targetGroupAttr?: string;
+    }
+
+    const SOURCE_P = [
+      [1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1],
+    ];
+    const VDIR = [
+      [1, 0, 0],
+      [0, 1, 0],
+      [1, 1, 0],
+    ];
+    const PDIR = [1, 2, 3];
+
+    /**
+     * One 3-point polyline carrying a direction on each copied domain:
+     * `dir` on the points (equal to P, so a turned copy can be checked
+     * against its own turned position), `vdir` on the vertices, `pdir` on
+     * the primitive, and a `tint` decoy of the same shape nobody names.
+     */
+    function directedSource(): Geometry {
+      const geo = seededCloudAt(SOURCE_P);
+      setPolylineTopology(geo, [0, 1, 2], [0], [3]);
+      const dir = geo.attrs.point.add("dir", "f32", 3, [0, 0, 0]);
+      SOURCE_P.forEach((p, i) => dir.setTuple(i, p));
+      const tint = geo.attrs.point.add("tint", "f32", 3, [0, 0, 0]);
+      SOURCE_P.forEach((p, i) => tint.setTuple(i, p));
+      const vdir = geo.attrs.vertex.add("vdir", "f32", 3, [0, 0, 0]);
+      VDIR.forEach((d, i) => vdir.setTuple(i, d));
+      geo.attrs.primitive.add("pdir", "f32", 3, [0, 0, 0]).setTuple(0, PDIR);
+      return geo;
+    }
+
+    /** Two targets: the first unturned, the second turned 90 degrees about +z and moved. */
+    function turnedTargets(): Geometry {
+      const target = seededCloudAt([
+        [0, 0, 0],
+        [5, 0, 0],
+      ]);
+      target.attrs.point.require("rot").setTuple(1, RZ90);
+      return target;
+    }
+
+    async function copy(
+      params: RotateParams,
+      source: Geometry = directedSource(),
+      target: Geometry = turnedTargets(),
+    ): Promise<Geometry> {
+      return firstGeo(
+        (
+          await runNode(copyToPoints, params, {
+            source: [makeGeometryItem(source)],
+            target: [makeGeometryItem(target)],
+          })
+        ).out,
+      );
+    }
+
+    const tuples = (geo: Geometry, domain: "point" | "vertex" | "primitive", name: string) => {
+      const attr = geo.attrs[domain].require(name);
+      return Array.from({ length: geo.attrs[domain].count }, (_, i) => attr.getTuple(i));
+    };
+
+    function expectClose(actual: number[][], expected: number[][]): void {
+      expect(actual.length).toBe(expected.length);
+      actual.forEach((a, i) =>
+        a.forEach((c, k) => expect(c, `element ${i} component ${k}`).toBeCloseTo(expected[i][k], 6)),
+      );
+    }
+
+    it("turns a point direction by its copy's target rotation, in step with P", async () => {
+      const source = directedSource();
+      // The SOURCE point's own rot is not applied — source P is not turned
+      // by it either — so giving one a rot must change nothing here.
+      source.attrs.point.require("rot").setTuple(1, RY90);
+      const geo = await copy({ rotateAttrs: ["dir"] }, source);
+      const dir = tuples(geo, "point", "dir");
+      // The unturned target's block is the source's bytes exactly.
+      expect(dir.slice(0, 3)).toEqual(SOURCE_P);
+      expectClose(dir.slice(3), SOURCE_P.map(turnZ));
+      // `dir` was P on the source, so on every copy it is P minus its
+      // target's position: the direction and the positions turned together.
+      const P = positionsOf(geo);
+      expectClose(dir, P.map((p, i) => (i < 3 ? p : [p[0] - 5, p[1], p[2]])));
+      // A column of the same shape nobody named is carried untouched.
+      expect(tuples(geo, "point", "tint")).toEqual([...SOURCE_P, ...SOURCE_P]);
+    });
+
+    it('turns vertex and primitive directions per target block under topology "keep"', async () => {
+      const geo = await copy({ topology: "keep", rotateAttrs: ["vdir", "pdir"] });
+      expect(geo.vertexCount).toBe(6);
+      expect(geo.primitiveCount).toBe(2);
+      const vdir = tuples(geo, "vertex", "vdir");
+      expect(vdir.slice(0, 3)).toEqual(VDIR);
+      expectClose(vdir.slice(3), VDIR.map(turnZ));
+      const pdir = tuples(geo, "primitive", "pdir");
+      expect(pdir[0]).toEqual(PDIR);
+      expectClose([pdir[1]], [turnZ(PDIR)]);
+      // Naming vertex and primitive columns leaves the point domain alone.
+      expect(tuples(geo, "point", "dir")).toEqual([...SOURCE_P, ...SOURCE_P]);
+    });
+
+    it("turns one name on every domain that carries it, and only the point domain under drop", async () => {
+      const source = directedSource();
+      source.attrs.primitive.add("dir", "f32", 3, [0, 0, 0]).setTuple(0, PDIR);
+      const kept = await copy({ topology: "keep", rotateAttrs: ["dir"] }, source);
+      expectClose(tuples(kept, "point", "dir").slice(3), SOURCE_P.map(turnZ));
+      expectClose(tuples(kept, "primitive", "dir"), [PDIR, turnZ(PDIR)]);
+      // Under "drop" the primitive column is gone anyway; the point one
+      // still turns and nothing complains.
+      const dropped = await copy({ rotateAttrs: ["dir"] }, source);
+      expect(dropped.primitiveCount).toBe(0);
+      expectClose(tuples(dropped, "point", "dir").slice(3), SOURCE_P.map(turnZ));
+    });
+
+    it("rotates only: the target's scale is not applied and the length is kept", async () => {
+      const target = turnedTargets();
+      target.attrs.point.require("scale").setTuple(1, [2, 3, 4]);
+      const geo = await copy({ rotateAttrs: ["dir"] }, directedSource(), target);
+      expectClose(tuples(geo, "point", "dir").slice(3), SOURCE_P.map(turnZ));
+    });
+
+    it("turns each copy by ITS target under per-target selection", async () => {
+      // Two polylines keyed 0 (points 0-1) and 1 (points 2-4); three
+      // targets asking 1, 0, 1 under three different rotations, so the
+      // blocks differ in size on every domain and a stride would misplace
+      // them.
+      const source = seededCloudAt([
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+        [1, 1, 0],
+        [0, 1, 1],
+      ]);
+      setPolylineTopology(source, [0, 1, 2, 3, 4], [0, 2], [2, 3]);
+      const key = source.attrs.point.add("key", "i32", 1, 0);
+      [0, 0, 1, 1, 1].forEach((k, i) => key.set(i, k));
+      const vdirs = [
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+        [1, 2, 3],
+        [3, 2, 1],
+      ];
+      const vdir = source.attrs.vertex.add("vdir", "f32", 3, [0, 0, 0]);
+      vdirs.forEach((d, i) => vdir.setTuple(i, d));
+      const pdirs = [
+        [1, 0, 0],
+        [0, 0, 1],
+      ];
+      const pdir = source.attrs.primitive.add("pdir", "f32", 3, [0, 0, 0]);
+      pdirs.forEach((d, i) => pdir.setTuple(i, d));
+      const target = seededCloudAt([
+        [0, 0, 0],
+        [10, 0, 0],
+        [20, 0, 0],
+      ]);
+      const want = target.attrs.point.add("want", "i32", 1, 0);
+      [1, 0, 1].forEach((k, i) => want.set(i, k));
+      target.attrs.point.require("rot").setTuple(1, RZ90);
+      target.attrs.point.require("rot").setTuple(2, RY90);
+      const geo = await copy(
+        {
+          topology: "keep",
+          rotateAttrs: ["vdir", "pdir"],
+          sourceGroupAttr: "key",
+          targetGroupAttr: "want",
+        },
+        source,
+        target,
+      );
+      // Blocks in target order: primitive 1 unturned, primitive 0 about z,
+      // primitive 1 about y.
+      expectClose(tuples(geo, "vertex", "vdir"), [
+        ...vdirs.slice(2),
+        ...vdirs.slice(0, 2).map(turnZ),
+        ...vdirs.slice(2).map(turnY),
+      ]);
+      expectClose(tuples(geo, "primitive", "pdir"), [pdirs[1], turnZ(pdirs[0]), turnY(pdirs[1])]);
+    });
+
+    it("an empty list is the default path, byte for byte", async () => {
+      for (const topology of ["drop", "keep"] as const) {
+        const bare = snapshotGeometry(await copy({ topology }));
+        expect(snapshotGeometry(await copy({ topology, rotateAttrs: [] }))).toEqual(bare);
+        // THE CONTROL: the same comparison must be able to say "different".
+        expect(snapshotGeometry(await copy({ topology, rotateAttrs: ["dir"] }))).not.toEqual(bare);
+      }
+      // A target with no `rot` column at all turns nothing, byte for byte.
+      const unrotated = seededCloudAt([
+        [0, 0, 0],
+        [5, 0, 0],
+      ]);
+      unrotated.attrs.point.remove("rot");
+      const params = { topology: "keep" as const, rotateAttrs: ["dir", "vdir", "pdir"] };
+      expect(snapshotGeometry(await copy(params, directedSource(), unrotated))).toEqual(
+        snapshotGeometry(await copy({ topology: "keep" }, directedSource(), unrotated)),
+      );
+    });
+
+    it("refuses composed standards, repeats, missing names, wrong shapes and dropped domains", async () => {
+      // The standard bounds are f32 tuple-3 too, and refused, so the list
+      // does not offer them.
+      const listed = "point: dir, tint; vertex: vdir; primitive: pdir";
+      const run = (params: RotateParams, source?: Geometry, target?: Geometry) =>
+        copy(params, source, target);
+      for (const name of ["P", "rot", "scale", "seed"]) {
+        await expect(run({ rotateAttrs: [name] })).rejects.toThrow(
+          `copyToPoints: param "rotateAttrs" cannot rotate "${name}" — P, rot, scale and seed are composed per copy`,
+        );
+      }
+      for (const name of ["boundsMin", "boundsMax"]) {
+        await expect(run({ rotateAttrs: [name] })).rejects.toThrow(
+          `copyToPoints: param "rotateAttrs" cannot rotate "${name}" — boundsMin and boundsMax are extents in the point's OWN frame`,
+        );
+      }
+      await expect(run({ rotateAttrs: ["P"] })).rejects.toThrow(`attributes are ${listed}.`);
+      await expect(run({ rotateAttrs: ["dir", "dir"] })).rejects.toThrow(
+        'copyToPoints: param "rotateAttrs" lists "dir" twice',
+      );
+      // Each composed standard is refused for its own reason.
+      await expect(run({ rotateAttrs: ["rot"] })).rejects.toThrow("would apply it twice");
+      await expect(run({ rotateAttrs: ["scale"] })).rejects.toThrow("scale is a per-axis size");
+      await expect(run({ rotateAttrs: ["seed"] })).rejects.toThrow("seed is an identity");
+      await expect(run({ rotateAttrs: ["height"] })).rejects.toThrow(
+        `copyToPoints: param "rotateAttrs" names "height", which the source's point domain does not carry (under topology "drop" only the point domain is searched); the source's f32 tuple-3 attributes are ${listed}.`,
+      );
+      await expect(run({ topology: "keep", rotateAttrs: ["height"] })).rejects.toThrow(
+        "which the source carries on none of its point, vertex and primitive domains",
+      );
+      // Wrong shape, on the point domain and on a kept primitive domain.
+      const shaped = directedSource();
+      shaped.attrs.point.add("uv", "f32", 2, [0, 0]);
+      shaped.attrs.primitive.add("ids", "i32", 3, [0, 0, 0]);
+      await expect(run({ rotateAttrs: ["uv"] }, shaped)).rejects.toThrow(
+        'copyToPoints: param "rotateAttrs" names point attribute "uv", which is f32 with tupleSize 2; only an f32 tuple-3 DIRECTION',
+      );
+      await expect(run({ topology: "keep", rotateAttrs: ["ids"] }, shaped)).rejects.toThrow(
+        'names primitive attribute "ids", which is i32 with tupleSize 3',
+      );
+      // A name only a dropped domain carries is refused, and says why.
+      await expect(run({ rotateAttrs: ["pdir"] })).rejects.toThrow(
+        'names "pdir", which the source carries only on its primitive domain, and topology "drop" (the default) discards those domains',
+      );
+      await expect(run({ rotateAttrs: ["vdir"] })).rejects.toThrow(
+        `Set topology "keep" to carry the source's primitives and their attributes onto the copies, or remove "vdir" from rotateAttrs. The source's f32 tuple-3 attributes are ${listed}.`,
+      );
+      // ...but not when "keep" would only fail next, on the column's shape.
+      await expect(run({ rotateAttrs: ["ids"] }, shaped)).rejects.toThrow(
+        'names primitive attribute "ids", which is i32 with tupleSize 3',
+      );
+      // A TARGET column carried across is not a source column.
+      const target = turnedTargets();
+      target.attrs.point.add("aim", "f32", 3, [0, 0, 1]);
+      await expect(
+        run({ targetNames: ["aim"], rotateAttrs: ["aim"] }, directedSource(), target),
+      ).rejects.toThrow(/names "aim", which the source's point domain does not carry.*"targetNames" is the target's own value/);
+    });
+
+    it("a mesh's normal, copied and turned, matches the mesh built in place", async () => {
+      // A square footprint extruded along its own normal, so the extrusion
+      // is defined by the footprint alone and turns with it.
+      const footprint = () => createPolyline([0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1], { closed: true });
+      const place = { translate: [3, -1, 2], rotateEuler: [30, 50, 70] };
+      const extrude = async (geo: Geometry) =>
+        firstGeo(
+          (
+            await runNode(extrudePolygon, { direction: "polygonNormal", distance: 2 }, {
+              in: [makeGeometryItem(geo)],
+            })
+          ).out,
+        );
+      const transform = async (geo: Geometry) =>
+        firstGeo((await runNode(transformPoints, place, { in: [makeGeometryItem(geo)] })).out);
+
+      // Built in place: turn the footprint, then extrude it there.
+      const inPlace = await extrude(await transform(footprint()));
+      // Built at the origin and copied onto a target carrying the same turn.
+      const target = await transform(cloudAt([[0, 0, 0]]));
+      const origin = await extrude(footprint());
+      const copied = async (rotateAttrs: string[]) =>
+        copy({ topology: "keep", rotateAttrs }, origin, target);
+      const turned = await copied(["normal"]);
+
+      expect(turned.pointCount).toBe(inPlace.pointCount);
+      expect(Array.from(turned.vertexToPoint)).toEqual(Array.from(inPlace.vertexToPoint));
+      expectClose(positionsOf(turned), positionsOf(inPlace));
+      expectClose(tuples(turned, "point", "normal"), tuples(inPlace, "point", "normal"));
+      // THE CONTROL: without the param the copy's normals point the
+      // origin mesh's way, and the same comparison must see it.
+      const unturned = tuples(await copied([]), "point", "normal");
+      const worst = Math.max(
+        ...unturned.flatMap((n, i) => n.map((c, k) => Math.abs(c - tuples(inPlace, "point", "normal")[i][k]))),
+      );
+      expect(worst).toBeGreaterThan(0.5);
+    });
+
+    it("serializes and round-trips through graph JSON", () => {
+      const g = new Graph(5);
+      const n = g.add(copyToPoints, { topology: "keep", rotateAttrs: ["normal", "faceN"] }, "copy");
+      g.output(n, "out", "result");
+      const json = serializeGraph(g);
+      const rebuilt = deserializeGraph(JSON.parse(JSON.stringify(json)));
+      expect(serializeGraph(rebuilt)).toEqual(json);
+      const node = json.nodes.find((entry) => entry.id === "copy");
+      expect(node?.params.rotateAttrs).toEqual(["normal", "faceN"]);
+    });
   });
 
   describe("topology", () => {

@@ -69,10 +69,63 @@ is why it is here and not done:
   through the cook report, rather than zero-fill. Zero is never a valid
   normal, so unlike other attributes there is no default that means
   "absent" here.
-- `copyToPoints` turning `normal` with each copy (the `rotateAttrs`
-  work in progress on branch `copy-rotate-attrs`) is the other half:
+- `copyToPoints` turning `normal` with each copy is the other half:
   without it, a box that DOES carry normals is lit wrong on every turned
-  copy.
+  copy. **SHIPPED 2026-09-19** as `copyToPoints`' `rotateAttrs` — see the
+  entry below. The first two bullets are still open.
+
+### ~~`copyToPoints` turns positions and `rot`, but no other direction~~ — SHIPPED 2026-09-19
+
+Found by the same consumer. `copyToPoints` composes each copy's position
+and `rot` from its target (P = tP + tRot·(tScale·sP), rot = tRot·sRot),
+but every OTHER column rides along unturned: a mesh's `normal`, a path's
+`tangent` or `curveNormal`, any direction the graph wrote, on the point,
+vertex or primitive domain, comes out pointing the SOURCE's way on every
+copy. The Eiffel demo's `copyMembersToQuadrants` (`demos/eiffel/lattice.ts`)
+worked round it in the graph: promote the copy's `rot` onto the
+primitives, turn the face normal by it with a hand-written quaternion
+rotation in the field grammar, then remove the lifted `rot` again because
+a later resample refuses a primitive attribute named like a point one it
+writes. Three nodes, and exactly the hand-written quaternion algebra that
+"Stretch: quaternion field functions" below warns against licensing. It
+was also only right by circumstance: the copy's `rot` is tRot·sRot, not
+tRot, so the chain turns by the wrong quaternion the moment the source's
+points carry a `rot` of their own.
+
+SHIPPED as `rotateAttrs` (stringList, default []): each named f32
+tuple-3 SOURCE column turns by its copy's TARGET rotation — the rotation P
+goes through, through the same `rotateVec`, so a direction stays in the
+frame its copy's positions are in. The decisions, each stated in the
+param's own description:
+
+- DOMAINS: point, vertex and primitive, every one that carries the name.
+  Vertex and primitive reach the output only under `topology "keep"`, so
+  under "drop" only the point domain is searched, and a name that only a
+  dropped domain carries is an ERROR rather than a silent no-op — the
+  likely intent was "keep". The detail domain (never carried) and
+  `targetNames` columns (the target's own values, already in its frame)
+  are never searched.
+- ROTATION ONLY. The length is kept and the target's `scale` is not
+  applied, which is exact under a uniform scale and NOT under a
+  non-uniform one, where a surface normal needs the inverse-transpose
+  (and a tangent the scale itself) and a renormalize. The description says
+  so rather than half-applying it.
+- REFUSED BY NAME: P and rot (composed per copy — turning them would
+  apply the rotation twice), scale and seed (composed, and not
+  directions); boundsMin and boundsMax (f32 tuple-3, so they would pass a
+  shape check, but they are extents in the point's own frame, which the
+  composed `rot` already turns); a repeat; a name no searched domain
+  carries; a column that is not f32 tuple-3, checked on a dropped domain
+  too so the error never offers "keep" as a fix that would fail next.
+  Every error names the node, the param and the name, and every one but
+  the repeat lists the source's f32 tuple-3 columns per domain.
+- THE DEFAULT IS THE SHIPPED BYTES. An empty list adds, renames and
+  reorders nothing, and the rotate passes loop over zero names; the
+  corpus golden did not move. A target whose `rot` is exactly the
+  identity is skipped rather than multiplied through, because `-0 + 0` is
+  `+0` and even an identity product is not a no-op on the bits.
+- NO DEVICE OR FORMAT PATH to follow: `copyToPoints` has no GPU lowering,
+  and a stringList param serializes as `targetNames` always has.
 
 ### ~~Building edges from a parent-pointer column~~ — SHIPPED 2026-09-08
 
