@@ -592,20 +592,89 @@ contamination controlled so before/after comparisons mean something.
 > detection floor. Do not cite it as "documentation does not matter".
 >
 > **WHAT IT DOES SAY**, and why a third harder task set is not the obvious
-> next move: no strip set can remove the registry, because `listNodeTypes()`
-> IS the library. The stripped-arm agents demonstrably noticed the absence —
-> two went hunting with `find /` for the package contents, and were
-> correctly flagged as contaminated for it — and then solved at the same
-> cost anyway. They routed around it. For prose to show a benefit the
-> registry would have to be insufficient, and across 96 runs it never was.
-> That is the fourth design pillar working as intended, and it argues for
-> spending on machine-readable surfaces rather than more prose.
+> next move: a docs strip cannot remove the package itself. The transcripts
+> settle the mechanism, and it is NOT the one first written here — an
+> earlier draft of this entry said `listNodeTypes()` IS the library and the
+> registry carried it. The measured orientation ranking says otherwise:
+>
+> | source | runs that used it |
+> |---|---|
+> | `llms.txt` (where present) | 94% — and 59% of FIRST actions |
+> | `graphs/` corpus | 88% |
+> | `dist/` source | 76% |
+> | `.d.ts` | 72% |
+> | `docs/` | 70% |
+> | CLI validate/cook | 55% |
+> | `skills/` | 54% |
+> | `pcg nodes` | 51% |
+> | `listNodeTypes()` | **12%** |
+>
+> Prose opens the door; the CLI is the working source of truth; `.d.ts` is
+> ground truth for output shape but is read REACTIVELY, after a crash. On
+> the stripped arm the fallback was README 100% and `dist/` source 64%,
+> with the CLI carrying the rest — agents read the shipped SOURCE AND TYPES,
+> which no documentation strip removes. So the arm never tested "an agent
+> without documentation"; it tested "an agent whose documentation is the
+> package". That is why difficulty alone may not rescue this design.
 >
 > The harness is the durable asset: resumable, allowance-funded, pausing
 > and resuming at the usage limit, with a contamination classifier that
-> caught two real sandbox escapes. Its next use is diagnostic rather than
+> caught a real sandbox escape. Its next use is diagnostic rather than
 > comparative — the 96 transcripts record where agents actually struggle,
 > which needs no control group. See `evals/README.md`.
+>
+> ### What the transcripts found, ranked by runs hit (U8 candidates)
+>
+> Read across all 108 records; full report in the session scratchpad. The
+> comparison could not see any of this, because every arm shares it.
+>
+> 1. **99 runs — the library cannot read back a cooked result.** Every run
+>    writes its own measurement harness. `pcg inspect` gives per-attribute
+>    min/max; anything relational (is this inside that, how far is each
+>    point from its neighbour, does this count scale with that length) is
+>    hand-rolled. 78 runs fell back to `Object.keys()`. THIS IS THE FINDING.
+> 2. **~25 — the cooked-output shape is undocumented and guessed wrong.**
+>    `.topology` (17), `.matrices` vs `.transforms` (10), `GeometryItem` vs
+>    `Geometry` (6), `AttributeSet` read as a Map (4), and typed arrays
+>    being CAPACITY-padded rather than count-sized (3, silently — one run
+>    measured a 300 m wall as 600 m and never noticed).
+> 3. **17 — `Geometry` has no `.topology`**, yet the class's own doc
+>    comment says "plus topology" three times while the three arrays sit
+>    flat. A doc comment causing real failures.
+> 4. **12 — `add`/`mul` are binary-only**; six tasks across all four arms
+>    independently wrote the same reduce wrapper.
+> 5. **10 — shipped primitives unregistered under a plain `import "pcg-ts"`**
+>    (`shape/path-loop`, `shape/ring`, `shape/disc` are all real). Two runs
+>    rebuilt them from scratch, 25-33% of the run. ALREADY FIXED in
+>    `65faedd`; no v2 tarball carried it.
+> 6. **8 — `require("pcg-ts")`** fails as `Cannot find module
+>    './dist/index.cjs'`, a path that never existed: no `require` condition
+>    in `exports`.
+> 7. **5, plus 53 pre-emptive workarounds — `graph.seed = n`** throws a bare
+>    V8 TypeError that never names `setSeed()`.
+> 8. **4 — `pcg cook --output/--outputs`** guessed for `--out`. **4** — an
+>    error advising "reinstall pcg-ts" on a stripped tarball, which caused
+>    the campaign's only `find /`.
+> 9. **3** — `arcTile`/`pathResample` refuse on hairline float overrun.
+>    **3** — `examples-facade.json` (810 KB) exceeds the agent Read cap and
+>    was never reused.
+> 10. **2 — a shared `Field` object resolves to different numbers in two
+>    nodes** (node id folds into the seed), silently, costing ~8 turns.
+>    **1** — `position()` reads current P, not original.
+>
+> **Why `quarry-terraces` cost 2x everything else:** with no way to evaluate
+> an expression at an OFFSET position, agents hand-unroll a 24-tap stencil,
+> each tap a full copy of the height function, ANDed together with binary
+> `mul`. Its graphs run 233 KB median at depth 96 against the campaign's
+> 11.7 KB and depth 15 — on half the nodes. The remaining turns go to blind
+> numeric sweeps, because finding 1 means nothing can measure the result.
+>
+> **The one real failure was a measurement failure.** `benches-wander` on
+> `r0.quarry-terraces.A-a1`: the agent's self-written check quantised its
+> line fit to 18 fixed angles instead of least-squares, read 1.7% where the
+> scorer read 13.6%, and then swept 35 seeds measuring the wrong thing. Its
+> final "add more wiggle" edit was CORRECT and it could not tell. Finding 1
+> is what cost it the run.
 
 **Layout.** `evals/` in this repo, outside `files` and outside vitest.
 `evals/tasks/<id>/` holds `brief.md` (outcome in world terms plus the
