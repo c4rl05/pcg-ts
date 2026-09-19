@@ -199,7 +199,22 @@ describe("pcg agents", () => {
       // skills" from "this install is broken", and it is the version the
       // reader is told to install.
       expect(r.err).toContain(`pcg-ts ${VERSION}`);
-      expect(r.err).toContain("npm ls pcg-ts");
+      // `npm explain`, not `npm ls`: `ls` prints the version, `explain`
+      // prints the LOCATION and what required it — the question a reader
+      // holding a path actually has. Both stay inside the project.
+      expect(r.err).toContain("npm explain pcg-ts");
+      expect(r.err).not.toContain("npm ls pcg-ts");
+    });
+
+    it("does not blame an older install, which this code path cannot produce", async () => {
+      // `packagePath` resolves from the CLI's OWN module (src/cli/nodeIo.ts
+      // walks up from import.meta.url to the nearest pcg-ts package.json),
+      // so the copy it reads IS the running CLI's own package. It cannot be
+      // a different, older pcg-ts. An error that offers a cause the code
+      // cannot reach sends the reader to fix something that is not broken.
+      const r = await fail();
+      expect(r.err).not.toMatch(/older than this CLI|it is older/);
+      expect(r.err).toContain("incomplete one");
     });
 
     it("never tells the reader to reinstall, or to go looking outside the project", async () => {

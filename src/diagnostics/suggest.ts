@@ -27,12 +27,14 @@ function codeUnitCompare(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-/** The shortest prefix relationship worth calling a near miss. */
-const MIN_PREFIX = 3;
+/** The shortest stub that may stand in for a longer name. */
+const MIN_PREFIX = 2;
+/** How much longer the full name may be than the stub, as a multiple. */
+const MAX_GROWTH = 3;
 
 /**
- * Is one of these names a whole prefix of the other, by at least
- * {@link MIN_PREFIX} characters?
+ * Is one of these names a whole prefix of the other, close enough in length
+ * that the shorter reads as a stand-in for the longer?
  *
  * The case Levenshtein cannot see. `--out` typed as `--output` is a SUFFIX
  * SLIP — the writer remembered a longer word for the same thing — and edit
@@ -42,14 +44,26 @@ const MIN_PREFIX = 3;
  * suggested none of them, and four eval runs guessed `--output`/`--outputs`
  * without ever being pointed at `--out`.
  *
- * Three characters is the floor because a one- or two-letter stub is a
- * prefix of half the registry, and a suggestion list assembled that way
- * says nothing. Both names must clear it, so `--in` is still matched by
- * distance alone and never by this rule.
+ * THE LENGTH CAP IS WHAT KEEPS THIS HONEST, and a bare character floor did
+ * not. A prefix on its own makes `"exp"` a suggestion for `"expression"` —
+ * an author who writes "expression" means an expression, not the
+ * exponential — and `"attributeRemap"` a suggestion for `"att"`, eleven
+ * edits away and presented as a did-you-mean. Requiring the full name to be
+ * at most {@link MAX_GROWTH}x the stub drops both while keeping every case
+ * this rule exists for: out/output, in/input, max/maximum, min/minimum,
+ * mul/multiply, sub/subtract, abs/absolute, exp/exponent,
+ * perlinNoise/perlin. Two characters is then a safe floor, because a
+ * two-letter stub can only reach a six-letter name — `in` finds `input`,
+ * and cannot reach `inbound`.
  */
 function prefixSlip(a: string, b: string): boolean {
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
-  return short.length >= MIN_PREFIX && short.length < long.length && long.startsWith(short);
+  return (
+    short.length >= MIN_PREFIX &&
+    short.length < long.length &&
+    long.length <= short.length * MAX_GROWTH &&
+    long.startsWith(short)
+  );
 }
 
 /**

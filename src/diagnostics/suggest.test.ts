@@ -67,11 +67,18 @@ describe("closestNames", () => {
     expect(closestNames("scatter", ["scatterPoints"])).toEqual(["scatterPoints"]);
   });
 
-  it("needs three shared characters, so a short stub does not match everything", () => {
-    // "in" is a prefix of "inbound" but only two characters long; admitting
-    // it would make every two-letter name a near miss for half the registry.
-    expect(closestNames("inbound", ["in"])).toEqual([]);
-    expect(closestNames("inbound", ["inb"])).toEqual(["inb"]);
+  it("caps how much longer the full name may be than the stub", () => {
+    // The cap, not a character floor, is what keeps this rule honest.
+    // MEASURED against the real registries: a bare prefix rule made "exp"
+    // a suggestion for "expression" — an author who writes "expression"
+    // means an expression, not the exponential — and let "att" reach
+    // "attributeRemap", eleven edits away, as a did-you-mean.
+    expect(closestNames("expression", ["exp"])).toEqual([]);
+    expect(closestNames("att", ["attributeRemap"])).toEqual([]);
+    // 3x is the line, and it keeps every case the rule exists for.
+    expect(closestNames("exponent", ["exp"])).toEqual(["exp"]); // 8 <= 3*3
+    expect(closestNames("input", ["in"])).toEqual(["in"]); // 5 <= 3*2
+    expect(closestNames("inbound", ["in"])).toEqual([]); // 7 > 3*2
     // A prefix of equal length is the same name, handled by distance 0.
     expect(closestNames("out", ["out"])).toEqual(["out"]);
   });

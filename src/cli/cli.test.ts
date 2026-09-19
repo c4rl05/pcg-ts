@@ -882,6 +882,13 @@ describe("pcg cli — the command line itself", () => {
       expect(await runCli(["cook", GRAPH, wrong, "report.json"], io.io)).toBe(EXIT_USAGE);
       expect(io.stderr()).toContain(`cook: unknown flag "${wrong}"; did you mean "--out"? valid flags: `);
     }
+
+    // `pcg run --in` is the same slip on a two-letter flag, and the first
+    // cut of this rule missed it: a three-character floor cannot see a
+    // two-character name. The length cap is what let the floor come down.
+    const sibling = fakeIo();
+    expect(await runCli(["run", "shape/disc", "--input", "data.json"], sibling.io)).toBe(EXIT_USAGE);
+    expect(sibling.stderr()).toContain('run: unknown flag "--input"; did you mean "--in"? valid flags: ');
   });
 
   it("a missing argument and a missing flag value are both misuses", async () => {
