@@ -57,7 +57,7 @@ import {
   transformPoints,
   vec,
 } from "pcg-ts";
-import { END_SINE, END_SINE_MIN, FACE_NORMAL, merge, skin } from "./lattice.js";
+import { END_SINE, END_SINE_MIN, FACE_NORMAL, type Vec3, indexTable, merge, rotateByQuat, skin } from "./lattice.js";
 import { type Detail, RIVET_ASSET } from "./parts.js";
 
 /** A corner angle's half-width: 80-100 mm angles (Plate XXXI) [derived]. */
@@ -86,6 +86,111 @@ export function faceSkin(
   const own = g.add(pathResample, { mode: "count", count: 2 }, `${id}Ends`);
   g.connect(paths, "out", own, "in");
   return skin(g, `${id}Skin`, own, halfWidth, attribute(FACE_NORMAL, 3));
+}
+
+/**
+ * The unit box's outward face normals, point by point: meshPrimitive's box
+ * lays its faces out as blocks of 4 points (one quad each at the default
+ * subdivisions) in the order +x, -x, +y, -y, +z, -z.
+ */
+const BOX_NORMALS: readonly Vec3[] = (
+  [
+    [1, 0, 0],
+    [-1, 0, 0],
+    [0, 1, 0],
+    [0, -1, 0],
+    [0, 0, 1],
+    [0, 0, -1],
+  ] as const
+).flatMap((n): Vec3[] => [n, n, n, n]);
+
+/**
+ * Flat bars and plates: a box per member, its length along the member,
+ * `width` across it in its face and `thickness` along the face's normal.
+ *
+ * The boxes carry a `normal`: every box's local face normal turned by its
+ * copy's `rot` (a box scaled along its own axes keeps its face normals).
+ * Without one, a merge with the swept members of the same class (which do
+ * carry normals) filled these with zeros, and the Masque rendered black.
+ */
+export function flatBars(g: Graph, id: string, members: NodeHandle, width: number, thickness: number): NodeHandle {
+  const tips = g.add(pathResample, { mode: "count", count: 2, lengthAttr: "barLen" }, `${id}Tips`);
+  const len = g.add(
+    promoteAttribute,
+    { name: "barLen", from: "primitive", to: "point", mode: "first" },
+    `${id}Len`,
+  );
+  const first = g.add(filterByExpression, { predicate: lt(attribute("curveU"), 0.5) }, `${id}First`);
+  const T = attribute("tangent", 3);
+  const Fn = attribute(FACE_NORMAL, 3);
+  const N = normalize(sub(Fn, mul(T, dot(Fn, T))));
+  const mid = g.add(
+    transformPoints,
+    { translate: mul(T, mul(attribute("barLen"), 0.5)) },
+    `${id}Mid`,
+  );
+  const aim = g.add(orientAlongVector, { direction: T, up: N, axis: "+x" }, `${id}Aim`);
+  const sized = g.add(
+    setAttribute,
+    { name: "scale", type: "f32", tupleSize: 3, value: vec(attribute("barLen"), thickness, width) },
+    `${id}Size`,
+  );
+  const unit = g.add(meshPrimitive, { shape: "box", size: [1, 1, 1] }, `${id}Unit`);
+  const unitN = g.add(
+    setAttribute,
+    {
+      name: "boxN",
+      type: "f32",
+      tupleSize: 3,
+      value: vec(
+        indexTable(BOX_NORMALS.map((n) => n[0])),
+        indexTable(BOX_NORMALS.map((n) => n[1])),
+        indexTable(BOX_NORMALS.map((n) => n[2])),
+      ),
+    },
+    `${id}UnitN`,
+  );
+  const boxes = g.add(copyToPoints, { topology: "keep" }, `${id}Boxes`);
+  const lit = g.add(
+    setAttribute,
+    {
+      name: "normal",
+      type: "f32",
+      tupleSize: 3,
+      value: normalize(rotateByQuat(attribute("rot", 4), attribute("boxN", 3))),
+    },
+    `${id}Normals`,
+  );
+  const done = g.add(removeAttribute, { names: ["boxN"], domain: "point" }, `${id}Lit`);
+  g.connect(members, "out", tips, "in");
+  g.connect(tips, "out", len, "in");
+  g.connect(len, "out", first, "in");
+  g.connect(first, "out", mid, "in");
+  g.connect(mid, "out", aim, "in");
+  g.connect(aim, "out", sized, "in");
+  g.connect(unit, "out", unitN, "in");
+  g.connect(unitN, "out", boxes, "source");
+  g.connect(sized, "out", boxes, "target");
+  g.connect(boxes, "out", lit, "in");
+  g.connect(lit, "out", done, "in");
+  return done;
+}
+
+/**
+ * Solid members of a RECTANGULAR section squared to their faces (a web
+ * set's plain form when `WebOpts.halfB` is given): a box per member,
+ * `outer` across the face plane's normal N and `halfB` along B, each read
+ * at its widest (the sets that take one are constant).
+ */
+function faceBox(
+  g: Graph,
+  id: string,
+  paths: NodeHandle,
+  outer: ReadonlyArray<readonly [number, number]>,
+  halfB: ReadonlyArray<readonly [number, number]>,
+): NodeHandle {
+  const widest = (t: ReadonlyArray<readonly [number, number]>) => Math.max(...t.map((s) => s[1]));
+  return flatBars(g, id, paths, 2 * widest(halfB), 2 * widest(outer));
 }
 
 /** Web members at some detail: their meshes, and their rivets when asked. */
@@ -163,6 +268,18 @@ export interface WebOpts {
    * `LEG_LACING_500` in spec.ts).
    */
   readonly lacingBands?: ReadonlyArray<LacingBand>;
+  /**
+   * A RECTANGULAR section: the outer half-width along B (the section's
+   * axis in the member's face plane, square to the member), by height,
+   * where it differs from `outer` (which then gives the half-width along
+   * N, out of that plane). Default: `outer`, a square. The joints read it
+   * too: the plates cover the chords' B extent, the joint rivets sit on the
+   * chords where they are, and the clearance at an upright is solved with
+   * the section's extent in the face plane, the plane the upright's axis
+   * and the member share (the entretoises: 1.20 wide in plan, 0.7156
+   * deep).
+   */
+  readonly halfB?: ReadonlyArray<readonly [number, number]>;
 }
 
 /** A lacing step for the members whose mean height lies in [from, to). */
@@ -216,19 +333,25 @@ export function webMembers(
   opts: WebOpts = {},
 ): WebMembers {
   const riveted = detail.rivets === true;
-  if (detail.lacedWeb !== true && !riveted) return { meshes: [faceSkin(g, id, paths, outer)] };
+  const alongB = opts.halfB ?? outer;
+  if (detail.lacedWeb !== true && !riveted) {
+    return {
+      meshes: [opts.halfB === undefined ? faceSkin(g, id, paths, outer) : faceBox(g, id, paths, outer, opts.halfB)],
+    };
+  }
   const ends =
     joints === undefined
       ? {}
-      : memberJoints(g, id, paths, outer, joints, riveted);
+      : memberJoints(g, id, paths, outer, joints, riveted, alongB);
   // A member with joints is a strut only between them: its ends stop where
   // its joint starts, just clear of the upright, and the gusset plates
   // cover the rest. Running it axis to axis put its lacing (and lacing
   // rivets) inside the upright's box — up to 15% of them in the shaft.
   const members =
-    joints === undefined ? paths : trimToJoints(g, id, paths, outer, joints);
+    joints === undefined ? paths : trimToJoints(g, id, paths, alongB, joints);
   const struts = latticeStruts(g, id, members, {
     halfWidth: outer.map(([y, w]) => [y, w - CHORD] as const),
+    ...(opts.halfB === undefined ? {} : { halfWidthB: opts.halfB.map(([y, w]) => [y, w - CHORD] as const) }),
     chord: CHORD,
     lacing: LACE,
     pitch: 1,
@@ -363,10 +486,13 @@ function memberJoints(
   outer: ReadonlyArray<readonly [number, number]>,
   joints: JointOpts,
   riveted: boolean,
+  /** The outer half-width along B (`WebOpts.halfB`); `outer` for a square. */
+  alongB: ReadonlyArray<readonly [number, number]> = outer,
 ): { gussets: NodeHandle; jointRivets?: NodeHandle } {
   const y = component(position(), 1);
   const w = sub(ramp(y, outer), CHORD);
-  const clearAt = (end: 0 | 1): Field => jointStart(outer, joints, end);
+  const wB = sub(ramp(y, alongB), CHORD);
+  const clearAt = (end: 0 | 1): Field => jointStart(alongB, joints, end);
   const reach = mul(w, joints.reach ?? PLATE_REACH);
   const T = attribute("tangent", 3);
   const F = attribute(FACE_NORMAL, 3);
@@ -395,7 +521,8 @@ function memberJoints(
   // The plate's near edge, along the member from the node: where a point
   // `across` off the axis on the obtuse side reaches the upright's face,
   // (r - across cos t) / sin t, and never behind the node.
-  const across = add(off, 0.08);
+  // The plate covers the chords' extent along B (a square's is its width).
+  const across = add(add(wB, CHORD), 0.08);
   const faceAt = (end: 0 | 1): Field => {
     const sine = endSineAt(joints, end);
     const cosine = sqrt(sub(1, mul(sine, sine)));
@@ -521,7 +648,7 @@ function memberJoints(
       const name = `${id}Joint${side > 0 ? "Out" : "In"}${chord > 0 ? "P" : "M"}`;
       const at = g.add(
         transformPoints,
-        { translate: add(mul(B, mul(w, chord)), mul(out, add(off, PLATE))) },
+        { translate: add(mul(B, mul(wB, chord)), mul(out, add(off, PLATE))) },
         name,
       );
       const aim = g.add(orientAlongVector, { direction: out, up: T, axis: "+y" }, `${name}Aim`);
@@ -663,6 +790,11 @@ function rivetSpawn(g: Graph, id: string, sets: readonly NodeHandle[]): NodeHand
 export interface StrutOpts {
   /** Half-width of the strut, to its chords' axes, by height: (y, w) stops. */
   readonly halfWidth: ReadonlyArray<readonly [number, number]>;
+  /**
+   * The chords' half-width along B, by height, for a rectangular strut
+   * (`halfWidth` is then the half-width along N). Default `halfWidth`.
+   */
+  readonly halfWidthB?: ReadonlyArray<readonly [number, number]>;
   /** Half-width of a chord angle's square section. */
   readonly chord: number;
   /** Half-width of a lacing bar's square section. */
@@ -708,6 +840,7 @@ export function latticeStruts(
 ): { chords: NodeHandle; lacing: NodeHandle; rivets?: NodeHandle } {
   const y = component(position(), 1);
   const w = ramp(y, o.halfWidth);
+  const wB = o.halfWidthB === undefined ? w : ramp(y, o.halfWidthB);
   // Without a step table the resample step is uniform per call, so it
   // takes the strut's widest section: 2 * max w * pitch. With one, the
   // step is a field on the PATHS (a resample reads its spacing once per
@@ -754,7 +887,7 @@ export function latticeStruts(
   const B = cross(N, T);
   const corner = (c: number): Field => {
     const [sn, sb] = CORNERS[c % 4]!;
-    return mul(w, add(mul(N, sn), mul(B, sb)));
+    return add(mul(N, mul(w, sn)), mul(B, mul(wB, sb)));
   };
   const shifted = (name: string, offset: Field): NodeHandle => {
     const node = g.add(transformPoints, { translate: offset }, `${id}${name}`);

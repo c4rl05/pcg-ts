@@ -26,32 +26,50 @@
  *    to the apartment's floor [PL-VII Fig. 4].
  * 2. THE GALLERY: a glazed octagon ("paroi vitrée") 16.56 m across the
  *    flats with 10.90 m straight sides and 45-degree chamfers [sourced
- *    PL-XIX Fig. 9], 2.58 m tall [sourced PL-XIX Fig. 3: 309.63 to the
- *    apartment floor at 312.21]: a 1.20 lattice parapet ("treillis
- *    40 x 40 x 4") and glazing above it, built as its frame — sills,
- *    mullions, the parapet's X — with the panes left open. Its roof is
- *    Eiffel's BALCONY, 17.6 m across [estimated: PL-VII draws it about
- *    0.5 proud of the glass], with a 1.00 railing [sourced PL-VII] on the
+ *    PL-XIX Fig. 9], glazed from the floor to Eiffel's BALCONY, whose deck
+ *    top is 2.430 over the floor [sourced on three plates: PL-VII 1.200 +
+ *    1.030 + 0.200, PL-XIV Fig. 2 1.200 + 1.230, PL-XIX Fig. 3 "1.20" +
+ *    "1.23"] on "Fer I 120" joists [sourced PL-VII]: a 1.20 lattice
+ *    parapet ("treillis 40 x 40 x 4") and glazing above it, built as its
+ *    frame — sills, mullions, the parapet's X — with the panes left open.
+ *    The balcony is 17.6 m across [estimated: PL-VII draws it about 0.5
+ *    proud of the glass], with a 1.00 railing [sourced PL-VII] on the
  *    glass line, its posts over the mullions [PL-XIV Fig. 2].
  * 3. THE APARTMENT: a box 10.68 m square [sourced PL-XIX Fig. 5, "Toiture
- *    du logement de Monsieur Eiffel"] and 2.27 m tall [sourced PL-XIX
- *    Fig. 3], standing on the core. 2.58 + 2.27 closes on the chain's
- *    printed 4.850 to y 280.98 [derived].
- * 4. THE LATTICE BOX ("cylindre"): 4.500 tall [sourced] to y 285.48. Its
- *    corner columns are 0.83 m wide face-on and 10.24 m axis to axis, so
- *    11.07 overall [measured PL-VII, PL-XIX Fig. 3]; the dome's ribs,
- *    7.435 out on the diagonals [sourced PL-XIX Fig. 5], spring on them.
- *    PL-VII's "10,00" inside the box runs between the columns' laced parts,
- *    inside which each column carries a plain band 0.27 wide; the model
- *    builds the two as one member. Its faces are a diamond mesh of flat
- *    bars [measured PL-VII: 0.825 m apart along the face, 53 degrees;
- *    about 0.09 wide, estimated], between a plate at the foot and one at
- *    the head, in two panels either side of one post on the face's axis
- *    [measured PL-VII: 0.38 wide; no posts at the 2.50 m bays].
+ *    du logement de Monsieur Eiffel"], its floor 2.58 over the 3rd floor,
+ *    a step of 0.15 above the balcony [sourced PL-XIX Fig. 3, "Niveau du
+ *    plancher (312.21) du logement"], and 2.27 m tall [sourced PL-XIX
+ *    Fig. 3]. 2.58 + 2.27 closes on the chain's printed 4.850 to y 280.98
+ *    [derived]. The model's block stands on the balcony deck, so it holds
+ *    the step too.
+ * 4. THE TWO GRANDES POUTRES DIAGONALES, 4.500 deep [sourced PL-XIX
+ *    Fig. 3: "Parties droites des poutres en diagonale 4.50"] to y 285.48.
+ *    In plan they are an X [PL-XIX Fig. 5, coupe GH, and Fig. 8, coupe EF]:
+ *    two lattice girders on the diagonals, 14.870 end to end and 1.130
+ *    broad over the flanges, with webs 0.770 apart [sourced], crossing on
+ *    the tower's axis. Nothing runs along the square's sides. The one that
+ *    carries the Edoux pulleys is continuous and the other butts against
+ *    it [sourced PL-XIX Figs 5, 8: "Gde poutre diagonale continue" /
+ *    "discontinue"]; the continuous one lies on the N-S diagonal, the Edoux
+ *    cars' line (lifts.ts), since PL-XIV Fig. 4 names the cars' spaces
+ *    under it. Each web, in its own plane [PL-XIV Fig. 4, 1:50]: chords
+ *    "Âme 400 x 10" under 360 flanges, a diamond mesh of angles between
+ *    them, a plain end plate "750" wide, a light vertical, and on the
+ *    continuous girder a pulley post "1.250" wide 4.064 from the centre
+ *    and a plate at the centre, both with windows. At each end the tower's
+ *    corner upright (arbalétrier c) stands between the webs, "364" in from
+ *    the end, and an X-laced end frame ("Plats 50 x 8" at "884") closes
+ *    them [PL-XIV Figs 2, 3]. The top is plated over ("Tôle 540 x 4"
+ *    between the flanges), the bottom open with cross angles [PL-XIV
+ *    Figs 5, 5 bis]. The dome's arches are these girders' upper parts. Seen
+ *    face-on at 45 degrees, the end plates, uprights and end frames are
+ *    PL-VII's "corner columns" and the webs its diamond mesh.
  *    On the tower's axis the LADDER CYLINDER, a sheet-iron tube 0.70 m
- *    across [sourced PL-XIX Figs 5, 13], stands on the apartment's roof
- *    and rises through the box and the dome's opening to the lantern
- *    terrace [PL-VII Fig. 4].
+ *    across [sourced PL-XIX Figs 5, 13], stands on the girders' crossing
+ *    and rises through the dome's opening to the lantern terrace [PL-VII
+ *    Fig. 4 draws it from the girders' top up, not inside them, where
+ *    PL-XIV Fig. 1 puts the Edoux pulleys between the continuous girder's
+ *    webs].
  * 5. THE DOME: four half-arches along the diagonals, two full SEMICIRCLES
  *    crossing over the axis: 7.435 m out in plan on each half-diagonal
  *    ("14.870" across) and 7.435 m high [sourced PL-XIX Fig. 5, PL-VII:
@@ -84,17 +102,19 @@
  * everything from the gallery up is the "summit" class.
  *
  * DETAIL, as for the legs and the shaft (`Detail`). With `lacedWeb` panel
- * 29's posts and the box's posts and plates become laced struts
- * (`webMembers`), the box's with gusset plates at the corner columns. The
- * flat bars stay flat bars. With `rivets`: seam rows on the corner uprights
- * and the box's corner columns (the uprights' pitch and inset, strut.ts);
- * the laced members' lacing and joint rivets; two rivets through each end
- * of every flat bar of panel 29, just clear of the post or girder it lands
- * on; two rows along each face of panel 29's band plate girder, between
- * the posts; and on the dome, seam rows along every chord and one rivet on
- * each OUTER face of a chord at every node its lacing meets [estimated].
- * Every rivet set is its own output, `rivets.summit.<part>`. The defaults
- * build solid members and no rivets.
+ * 29's posts become laced struts (`webMembers`). The flat bars stay flat
+ * bars, and the diagonal girders have no member that `lacedWeb` changes:
+ * their end frames are laced at every detail, as the plates draw them.
+ * With `rivets`: seam rows on the corner uprights, in panel 29 and inside
+ * the girders' ends (the uprights' pitch and inset, strut.ts); the laced
+ * members' lacing and joint rivets; two rivets through each end of every
+ * flat bar of panel 29 and of the girders' mesh, just clear of the post,
+ * plate or chord it lands on; two rows along each face of panel 29's band
+ * plate girder, between the posts, and of every girder chord; one rivet at
+ * each node of the end frames' lacing; and on the dome, seam rows along
+ * every chord and one rivet on each OUTER face of a chord at every node
+ * its lacing meets [estimated]. Every rivet set is its own output,
+ * `rivets.summit.<part>`. The defaults build solid members and no rivets.
  */
 import type { Graph, NodeHandle } from "pcg-ts";
 import {
@@ -110,7 +130,6 @@ import {
   setAttribute,
   spawnInstances,
   sweepProfile,
-  transformPoints,
   vec,
 } from "pcg-ts";
 import {
@@ -118,7 +137,6 @@ import {
   type Lattice,
   type StationMask,
   type Vec3,
-  box,
   chains,
   edges,
   indexTable,
@@ -135,7 +153,7 @@ import {
   UPRIGHT_SEAMS,
   type WebMembers,
   faceSkin,
-  gussetMeshes,
+  flatBars,
   rivetOutputs,
   seamRivets,
   webMembers,
@@ -172,43 +190,109 @@ const P29 = {
   floorDepth: 0.85,
 } as const;
 
-/** The glazed gallery [sourced PL-XIX Figs 3, 9]: half across the flats, half its straight side, height. */
+/**
+ * The glazed gallery [sourced PL-XIX Figs 3, 9]: half across the flats,
+ * half its straight side, the apartment's floor over the 3rd floor
+ * ("312.21" - "309.63"), the parapet.
+ */
 const GALLERY = { flat: 8.28, straight: 5.45, height: 2.58, parapet: 1.2 } as const;
 /** Its bays: per straight side, per chamfer [estimated from PL-XIX Fig. 3's mullions, about 1.35]. */
 const GALLERY_BAYS = { straight: 8, chamfer: 3 } as const;
 /** Its frame, as half-widths [estimated]: mullions and sills, the parapet's 40 x 40 lattice. */
 const GALLERY_MEMBERS = { frame: 0.05, lattice: 0.02 } as const;
 /**
- * Eiffel's balcony: its deck overhangs the glass [estimated; PL-VII and
- * PL-XIV draw 0.45-0.6], its railing, on the glass line [sourced PL-VII
- * "1.000"].
+ * Eiffel's balcony: its deck's top over the 3rd floor [sourced 2.430 on
+ * PL-VII, PL-XIV Fig. 2 and PL-XIX Fig. 3; PL-XIX's "312.21", 2.58, is
+ * the APARTMENT's floor, a step higher]; the deck overhangs the glass
+ * [estimated; PL-VII and PL-XIV draw 0.45-0.6]; its depth, the joists
+ * [sourced PL-VII "Fer I 120"; PL-XIV draws 0.12 at the mullion]; its
+ * railing, on the glass line [sourced PL-VII "1.000"].
  */
-const BALCONY = { overhang: 0.52, deck: 0.2, railing: 1.0, member: 0.03 } as const;
+const BALCONY = { level: 2.43, overhang: 0.52, deck: 0.12, railing: 1.0, member: 0.03 } as const;
 
 /** The apartment [sourced PL-XIX: 10.680 square roof, 2.270 tall]. */
 const APARTMENT = { side: 10.68, height: 2.27 } as const;
 
 /**
- * The lattice box above the apartment: height [sourced]; its corner
- * columns' axes 10.24 apart [measured PL-VII Fig. 4: outer lines at
- * +-5.50, the columns' inner edges at +-4.70; PL-XIX Fig. 3 and PL-VII
- * both give 10.24-10.25 axis to axis].
+ * The two diagonal girders' sections, in a girder's own frame: `d` along
+ * it from the tower's axis, `w` across it (PL-XIV Figs 1-5, 1:50; PL-XIX
+ * Figs 3, 5, 8, 1:200).
  */
-const CAGE = { height: 4.5, half: 5.12 } as const;
+const GIRDER = {
+  /** Depth [sourced "4.500"]. */
+  height: 4.5,
+  /** Half the length, axis to end [sourced "14.870", "7.435"]. */
+  half: 7.435,
+  /** Each web's plane off the girder's axis [sourced "770" between them; PL-XIV Fig. 5 "385" + "385"]. */
+  web: 0.385,
+  /** Over the flanges [sourced "1.130"]. */
+  breadth: 1.13,
+  /**
+   * The chords' depth: "Âme 400 x 10" under its flange [sourced]; PL-XIV
+   * Fig. 4 draws them 0.41 and 0.38 to the "4.500" datum lines, 0.44 and
+   * 0.43 overall [measured; PL-VII's 1:200 draws the head and foot bands
+   * 0.34-0.35].
+   */
+  chord: 0.4,
+  /** A chord across its web: the web and its two "Corn. 90 x 90 x 10" [derived 0.19; 0.20 estimated]. */
+  chordThick: 0.2,
+  /** The flanges, "Semelle 360 x 10" [sourced]. */
+  flange: 0.36,
+  /** The top's plating (the flanges and the "Tôle 540 x 4" between them) and the bottom flanges: thickness [estimated]. */
+  cover: 0.02,
+  /** The web's plates ("Âme de 6 m/m") with their edge angles: thickness [estimated]. */
+  webPlate: 0.03,
+} as const;
+
+/** Where the members stand along a girder, as distances `d` from the tower's axis or from the girder's end. */
+const GIRDER_AT = {
+  /**
+   * The web's end plate, "Âme de 750 x 6", its width in from the end
+   * [sourced "750"]; the mesh runs on across it [PL-XIV Fig. 4].
+   */
+  endPlate: 0.75,
+  /** The bottom flanges start this far in from the end [sourced "464", PL-XIV Fig. 5 bis]. */
+  flangeIn: 0.464,
+  /** The light vertical, "Corn. 70 x 70 x 8", in from the end [measured PL-XIV Fig. 4: 1.25]. */
+  light: 1.25,
+  /**
+   * The continuous girder's pulley posts: axis from the tower's axis
+   * [sourced "4.064", "3.371" in from the end], width [sourced "1.250"],
+   * windows over its foot, the upper one open to the top chord [measured
+   * PL-XIV Fig. 4, +-0.05; 0.50 wide, sourced "500"].
+   */
+  pulley: { at: 4.064, width: 1.25, windows: [[2.04, 2.62], [3.47, 4.11]] },
+  /**
+   * Its central plate, where the discontinuous girder's webs land: width
+   * [measured PL-XIV Fig. 4: 1.36], windows [sourced "500" x "600", "800"
+   * apart], round the pulleys' centres "650" and "650" + "1.370" over the
+   * foot [sourced; heights measured]. The lower one reaches down to 0.32,
+   * into the bottom chord's depth; the model stops it at the chord.
+   */
+  centre: { width: 1.36, windows: [[0.32, 0.93], [1.72, 2.32]] },
+  /** The windows' width [sourced "500"]. */
+  window: 0.5,
+  /** The bottom's cross angles, "70 x 70 x 8", in from the end [measured PL-XIV Fig. 5 bis: 1.94]. */
+  cross: 1.94,
+  /** The angles (light verticals, end frames' posts, cross angles), as square members: half-width [sourced 70 mm legs; 0.08 estimated]. */
+  angle: 0.04,
+  /**
+   * The end frame's lacing, "Plats 50 x 8" [sourced PL-XIV Fig. 3], over
+   * the whole depth in panels of about "884" [sourced; five on the plate].
+   */
+  lacing: { width: 0.05, thick: 0.008, panel: 0.884 },
+} as const;
+
 /**
- * The box's members, as half-widths: the corner columns 0.83 face-on
- * [measured PL-VII: a laced part 0.55 and a plain band 0.27 inside it, one
- * member here]; the plates [estimated]; the one face post, on the axis,
- * which the mesh stops on [measured PL-VII: 0.38]; the flat bars
- * [estimated].
+ * The webs' diamond mesh, in the web's own plane: bars 1.21 apart along
+ * the girder, at 43 degrees, so diamonds 1.13 tall [measured PL-XIV Fig. 4
+ * by 2D autocorrelation and by a blind second reading: 1.21, 42.9-43.2
+ * degrees]. Seen face-on at 45 degrees that is 0.856 x 1.13 at 52.9
+ * degrees [derived]: PL-VII's mesh (52.6-52.9 degrees; read 0.825 and
+ * 0.846 wide) and PL-XIV Fig. 2's hidden lines (0.83) are these webs. The
+ * bars are angles ("Corn. 60 x 60 x 7"), built square [0.09 estimated].
  */
-const CAGE_MEMBERS = { corner: 0.415, horizontal: 0.15, post: 0.19, bar: 0.045 } as const;
-/**
- * Its diamond mesh: bars this far apart along the face, at this angle to
- * the horizontal [measured PL-VII by 2D autocorrelation: repeat (0.41,
- * +-0.54), so diamonds 0.825 wide and 1.09 tall].
- */
-const CAGE_MESH = { spacing: 0.825, angle: Math.atan2(1.09, 0.825) } as const;
+const GIRDER_MESH = { spacing: 1.21, rise: 1.21 * Math.tan((43 * Math.PI) / 180), bar: 0.045 } as const;
 
 /**
  * The dome: the extrados radius, which is also the rise and the plan's
@@ -398,6 +482,65 @@ function faceBars(g: Graph, id: string, half: number, bars: readonly FaceBar[], 
   );
 }
 
+/**
+ * Plates and other flat-sided members as boxes that carry a `normal`
+ * (`flatBars`): one box per piece, `from` to `to` its length, `thick`
+ * along the piece's face normal `n` and `width` across it. meshPrimitive's
+ * box writes no normal, and a merge with the swept members zero-fills it
+ * (the trap that drew the apartment and the decks black).
+ */
+function plates(
+  g: Graph,
+  id: string,
+  pieces: ReadonlyArray<{ readonly from: Vec3; readonly to: Vec3; readonly n: Vec3 }>,
+  width: number,
+  thick: number,
+): NodeHandle {
+  const paths = members(
+    g,
+    `${id}Paths`,
+    pieces.map((p) => [p.from, p.to] as const),
+    pieces.map((p) => p.n),
+  );
+  return flatBars(g, id, paths, width, thick);
+}
+
+/**
+ * Level boxes that carry a `normal`: each `size` = [length along `along`
+ * (a level unit vector), height, width across], centred on `c`. Boxes of
+ * one height and width share a `plates` call.
+ */
+function levelBoxes(
+  g: Graph,
+  id: string,
+  boxes: ReadonlyArray<{ readonly c: Vec3; readonly along: Vec3; readonly size: Vec3 }>,
+): NodeHandle {
+  const groups = new Map<string, Array<(typeof boxes)[number]>>();
+  for (const b of boxes) {
+    const key = `${b.size[1]}|${b.size[2]}`;
+    const list = groups.get(key) ?? [];
+    list.push(b);
+    groups.set(key, list);
+  }
+  const parts = [...groups.values()].map((list, i) =>
+    plates(
+      g,
+      `${id}${i}`,
+      list.map(({ c, along, size }) => {
+        const h = size[0] / 2;
+        return {
+          from: [c[0] - along[0] * h, c[1], c[2] - along[2] * h] as Vec3,
+          to: [c[0] + along[0] * h, c[1], c[2] + along[2] * h] as Vec3,
+          n: [0, 1, 0] as Vec3,
+        };
+      }),
+      list[0]!.size[2],
+      list[0]!.size[1],
+    ),
+  );
+  return parts.length === 1 ? parts[0]! : merge(g, id, parts);
+}
+
 /** Rivets at explicit points, each aimed (its +y) along its own direction. */
 function aimedPoints(g: Graph, id: string, at: readonly Vec3[], dirs: readonly Vec3[]): NodeHandle {
   const lat = placedLattice(g, id, [at]);
@@ -485,7 +628,10 @@ function outside(u: number, y: number, r: Rect): number {
  * The rivets through the ends of flat bars: at each end, the first point
  * along the bar at least END_CLEAR outside every rectangle it could hide
  * in (the post, upright or girder the end lands on), and one END_PITCH
- * further; a head on each face of the bar, aimed out of it.
+ * further; a head on each face of the bar, aimed out of it (`sides`: +1
+ * the face out along the face normal, -1 the other). With `apart`, a head
+ * closer than that to one already placed is left out: where two bars end
+ * across each other, one rivet takes both.
  */
 function barEndRivets(
   g: Graph,
@@ -494,6 +640,8 @@ function barEndRivets(
   planeHalf: number,
   barHalf: number,
   keepOff: readonly Rect[],
+  apart = 0,
+  sides: readonly number[] = [1, -1],
 ): NodeHandle | undefined {
   const at: Vec3[] = [];
   const dirs: Vec3[] = [];
@@ -511,8 +659,10 @@ function barEndRivets(
       while (a < len / 2 && !clear(a)) a += 0.005;
       for (const d of [a, a + END_PITCH]) {
         if (d + RIVET_HEAD > len / 2 || !clear(d)) continue;
-        for (const side of [1, -1]) {
-          at.push(onFace(b.f, planeHalf, u0 + s * du * d, y0 + s * dy * d, side * barHalf));
+        for (const side of sides) {
+          const p = onFace(b.f, planeHalf, u0 + s * du * d, y0 + s * dy * d, side * barHalf);
+          if (apart > 0 && at.some((q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) < apart)) continue;
+          at.push(p);
           dirs.push([b.f.n[0] * side, 0, b.f.n[2] * side]);
         }
       }
@@ -550,13 +700,6 @@ function boxLattice(g: Graph, id: string, half: number, ys: readonly number[]): 
 
 /** The square ring's corners: squareRing(4) puts one at every 4th station. */
 const isCorner = (s: number) => s % 4 === 0;
-
-/** Each kept station's column, bottom to top, as one piece of axis. */
-function columns(lat: Lattice, keep: (s: number) => boolean): Array<readonly [Vec3, Vec3]> {
-  const P = lat.positions;
-  const top = P[P.length - 1]!;
-  return P[0]!.flatMap((p, s) => (keep(s) ? [[p, top[s]!] as const] : []));
-}
 
 /**
  * Posts: one member up a lattice's non-corner columns (over the levels
@@ -606,8 +749,11 @@ function cornerSeams(
   return [{ name, spawn: seamRivets(g, id, runs, halfWidth, [1, 0, 0], UPRIGHT_SEAMS) }];
 }
 
-/** The gallery's height: from the floor to the apartment's floor. */
-const galleryTop = FLOORS.third + GALLERY.height;
+/** The apartment's floor, 2.58 over the 3rd floor, where the core's columns stop. */
+const apartmentFloor = FLOORS.third + GALLERY.height;
+/** The balcony deck's top and underside; the glazing runs from the floor to the underside. */
+const balconyTop = FLOORS.third + BALCONY.level;
+const balconyUnder = balconyTop - BALCONY.deck;
 
 /** Panel 29: the shaft's last panel, a braced 10 m box, and its core carried up through the gallery. */
 function panel29(g: Graph, detail: Detail): Parts {
@@ -619,7 +765,7 @@ function panel29(g: Graph, detail: Detail): Parts {
   // The core's columns, three levels: the panel, then on up through the
   // gallery. The corners are the uprights; the posts at the face centres
   // (the merged b/d) go up with them, the others stop at the floor.
-  const core = boxLattice(g, "p29", half, [bottom, top, galleryTop]);
+  const core = boxLattice(g, "p29", half, [bottom, top, apartmentFloor]);
   const isMid = (s: number) => s % 4 === 2;
   const corners = chains(core, "Corners", (s) => isCorner(s));
   const postWeb = posts(g, core, "p29Post", P29.post, detail, (s, k) => !isCorner(s) && (isMid(s) || k < 2));
@@ -681,22 +827,26 @@ function panel29(g: Graph, detail: Detail): Parts {
     [bandTop - P29.plateDepth, bandTop],
     [top - P29.floorDepth, top - P29.floorDepth + P29.plateDepth],
   ];
-  const plateBoxes = plates.flatMap(([y0, y1], i) =>
-    FACES.map((f, j) => {
-      const c = onFace(f, half, 0, (y0 + y1) / 2);
-      const along = 2 * half;
-      const thick = 2 * P29.plateHalf;
-      const size: Vec3 = f.n[0] !== 0 ? [thick, y1 - y0, along] : [along, y1 - y0, thick];
-      return box(g, `p29Plate${i}${j}`, c, size);
-    }),
-  );
+  const plateBoxes = [
+    levelBoxes(
+      g,
+      "p29Plate",
+      plates.flatMap(([y0, y1]) =>
+        FACES.map((f) => ({
+          c: onFace(f, half, 0, (y0 + y1) / 2),
+          along: f.t,
+          size: [2 * half, y1 - y0, 2 * P29.plateHalf] as Vec3,
+        })),
+      ),
+    ),
+  ];
 
   const rivets: RivetSet[] = [];
   if (riveted) {
     // What a flat bar's end rivet keeps off: the node columns, the plate
     // girders, the shaft's 0.60 horizontal at the base, the light angles.
     const heavy: Rect[] = [
-      ...bays.map((u) => ({ u0: u - P29.post, u1: u + P29.post, y0: bottom - 1, y1: galleryTop })),
+      ...bays.map((u) => ({ u0: u - P29.post, u1: u + P29.post, y0: bottom - 1, y1: apartmentFloor })),
       ...plates.map(([y0, y1]) => ({ u0: -half, u1: half, y0, y1 })),
       { u0: -half, u1: half, y0: bottom - MEMBERS.horizontal[3]![1], y1: bottom + MEMBERS.horizontal[3]![1] },
     ];
@@ -749,7 +899,7 @@ function panel29(g: Graph, detail: Detail): Parts {
   const floorUnder = top - 0.6;
   const uprightPieces = [
     ...cornerAt(bottom).map((p, i) => [p, cornerAt(floorUnder)[i]!] as const),
-    ...cornerAt(top).map((p, i) => [p, cornerAt(galleryTop - BALCONY.deck)[i]!] as const),
+    ...cornerAt(top).map((p, i) => [p, cornerAt(balconyUnder)[i]!] as const),
   ];
 
   return {
@@ -809,8 +959,8 @@ function sideNormal(poly: readonly Vec3[], i: number): Vec3 {
 /**
  * A solid slab whose plan is an octagon — a square `2 flatHalf` wide with
  * its corners cut at 45 degrees to straight sides of `2 straightHalf`:
- * two crossed boxes, and one box turned onto each chamfer that reaches in
- * past the cross.
+ * two crossed boxes, and one box on each chamfer that reaches in past the
+ * cross, all carrying normals (`levelBoxes`).
  */
 function octagonSlab(
   g: Graph,
@@ -824,23 +974,29 @@ function octagonSlab(
   const cut = flatHalf + straightHalf; // |x| + |z| on a chamfer
   const depth = (2 * flatHalf - cut) / Math.SQRT2;
   const length = Math.SQRT2 * (flatHalf - straightHalf);
-  const parts = [
-    box(g, `${id}A`, [0, yc, 0], [2 * flatHalf, height, 2 * straightHalf]),
-    box(g, `${id}B`, [0, yc, 0], [2 * straightHalf, height, 2 * flatHalf]),
-    ...[-45, 45, 135, -135].map((deg, i) => {
-      const b = box(g, `${id}C${i}`, [cut / Math.SQRT2 - depth / 2, yc, 0], [depth, height, length]);
-      const turned = g.add(transformPoints, { rotateEuler: [0, deg, 0] }, `${id}C${i}Turn`);
-      g.connect(b, "out", turned, "in");
-      return turned;
-    }),
-  ];
-  return merge(g, id, parts);
+  const r = cut / Math.SQRT2 - depth / 2;
+  const s = Math.SQRT1_2;
+  return levelBoxes(g, id, [
+    { c: [0, yc, 0], along: [1, 0, 0], size: [2 * flatHalf, height, 2 * straightHalf] },
+    { c: [0, yc, 0], along: [0, 0, 1], size: [2 * flatHalf, height, 2 * straightHalf] },
+    // Each chamfer's box: `depth` out along its diagonal, `length` along it.
+    ...[
+      [s, s],
+      [-s, s],
+      [-s, -s],
+      [s, -s],
+    ].map(([dx, dz]) => ({
+      c: [dx! * r, yc, dz! * r] as Vec3,
+      along: [-dz!, 0, dx!] as Vec3,
+      size: [length, height, depth] as Vec3,
+    })),
+  ]);
 }
 
 /** The glazed gallery, the balcony on its roof, and the apartment. */
 function gallery(g: Graph): NodeHandle[] {
   const y0 = FLOORS.third;
-  const deckUnder = galleryTop - BALCONY.deck;
+  const deckUnder = balconyUnder;
   const glass = octagon(GALLERY.flat, GALLERY.straight, y0);
   const bays = (i: number) => (i % 2 === 0 ? GALLERY_BAYS.straight : GALLERY_BAYS.chamfer);
   const at = bayPoints(glass, bays);
@@ -892,7 +1048,7 @@ function gallery(g: Graph): NodeHandle[] {
   const bFlat = GALLERY.flat + grow;
   const bStraight = GALLERY.straight + grow * Math.tan(Math.PI / 8);
   const deck = octagonSlab(g, "balconyDeck", bFlat, bStraight, deckUnder, BALCONY.deck);
-  const rail = octagon(GALLERY.flat, GALLERY.straight, galleryTop);
+  const rail = octagon(GALLERY.flat, GALLERY.straight, balconyTop);
   const railAt = bayPoints(rail, bays);
   const m = BALCONY.member;
   const railPosts = faceSkin(
@@ -901,7 +1057,7 @@ function gallery(g: Graph): NodeHandle[] {
     members(
       g,
       "balconyPostPaths",
-      railAt.map(({ p }) => [p, [p[0], galleryTop + BALCONY.railing - m, p[2]]] as const),
+      railAt.map(({ p }) => [p, [p[0], balconyTop + BALCONY.railing - m, p[2]]] as const),
       railAt.map(({ side }) => sideNormal(rail, side)),
     ),
     m,
@@ -912,7 +1068,7 @@ function gallery(g: Graph): NodeHandle[] {
     loops(
       g,
       "balconyRails",
-      [galleryTop + BALCONY.railing / 2, galleryTop + BALCONY.railing - m].map((y) =>
+      [balconyTop + BALCONY.railing / 2, balconyTop + BALCONY.railing - m].map((y) =>
         rail.map((p) => [p[0], y, p[2]] as Vec3),
       ),
     ),
@@ -920,89 +1076,377 @@ function gallery(g: Graph): NodeHandle[] {
     [0, 1, 0],
   );
 
-  const apartment = box(
-    g,
-    "apartment",
-    [0, galleryTop + APARTMENT.height / 2, 0],
-    [APARTMENT.side, APARTMENT.height, APARTMENT.side],
-  );
+  // The apartment, from the balcony deck (its floor's 0.15 step included)
+  // to its roof.
+  const roof = apartmentFloor + APARTMENT.height;
+  const apartment = levelBoxes(g, "apartment", [
+    {
+      c: [0, (balconyTop + roof) / 2, 0],
+      along: [1, 0, 0],
+      size: [APARTMENT.side, roof - balconyTop, APARTMENT.side],
+    },
+  ]);
   return [mullions, rails, parapet, deck, railPosts, railRails, apartment];
 }
 
-/** The lattice box above the apartment; its meshes are all "summit". */
-function cage(g: Graph, y0: number, detail: Detail): Parts {
-  const y1 = y0 + CAGE.height;
-  const half = CAGE.half;
-  // The plates lie inside the box's height, the foot's on the apartment's
-  // roof and the head's under the springing, so the lattice has a level at
-  // each plate's axis between its two ends.
-  const h = CAGE_MEMBERS.horizontal;
-  const lat = boxLattice(g, "cage", half, [y0, y0 + h, y1 - h, y1]);
-  const joints = { upright: flat(CAGE_MEMBERS.corner) };
-  // The one face post, at the face's centre: squareRing(4)'s station 2 of
-  // each side. The plates run corner to post to corner, so a laced plate
-  // breaks only where a post meets it.
-  const isMid = (s: number) => s % 4 === 2;
-  const postWeb = posts(g, lat, "cagePost", CAGE_MEMBERS.post, detail, (s) => isMid(s));
-  const horizontals = webMembers(
-    g,
-    "cageHorizontal",
-    edges(lat, "Horizontals", 2, 0, (s, k) => s % 2 === 0 && (k === 1 || k === 2)),
-    flat(h),
-    detail,
-    joints,
-  );
-  const corners = chains(lat, "Corners", (s) => isCorner(s));
+/**
+ * One of the two diagonal girders: `a` along it, `p` across it (level unit
+ * vectors). The continuous one, which carries the Edoux pulleys, runs on
+ * the N-S diagonal, the Edoux cars' line in lifts.ts (+x -z toward pile 3):
+ * PL-XIV Fig. 4 draws the cars' spaces under it. The discontinuous one
+ * crosses it at right angles and butts against its webs.
+ */
+interface Diagonal {
+  readonly id: string;
+  readonly continuous: boolean;
+  readonly a: Vec3;
+  readonly p: Vec3;
+}
+const DIAGONALS: readonly Diagonal[] = [
+  { id: "girderNS", continuous: true, a: [Math.SQRT1_2, 0, -Math.SQRT1_2], p: [Math.SQRT1_2, 0, Math.SQRT1_2] },
+  { id: "girderEW", continuous: false, a: [Math.SQRT1_2, 0, Math.SQRT1_2], p: [-Math.SQRT1_2, 0, Math.SQRT1_2] },
+];
 
-  // The diamond mesh: two families of flat bars, each line clipped to one
-  // of the face's two panels, between a corner column and the post and
-  // between the two plates. The lines run on across the post, so the
-  // pattern is one over the face.
-  const panels = [
-    [-half + CAGE_MEMBERS.corner, -CAGE_MEMBERS.post],
-    [CAGE_MEMBERS.post, half - CAGE_MEMBERS.corner],
-  ] as const;
-  const ta = 2 * h;
-  const tb = CAGE.height - 2 * h;
-  const slope = Math.tan(CAGE_MESH.angle);
-  // A diamond's centre sits on the face's axis at the box's foot, and every
-  // spacing x slope above it, so the families cross on the axis half a
-  // diamond higher [measured PL-VII: 281.52 + 1.09 n]. The lines are
-  // u = (k + 1/2) spacing + dir t / slope, t = y - y0, one per whole k whose
-  // line crosses the face; the pattern mirrors about the axis.
-  const kMax = Math.ceil((half + tb / slope) / CAGE_MESH.spacing);
+/** A point in a girder's frame: `d` along it from the tower's axis, `w` across it, at height `y`. */
+function inGirder(G: Diagonal, d: number, w: number, y: number): Vec3 {
+  return [G.a[0] * d + G.p[0] * w, y, G.a[2] * d + G.p[2] * w];
+}
+
+const neg = (v: Vec3): Vec3 => [-v[0], -v[1], -v[2]];
+
+/** A span along a girder and its mirror across the tower's axis. */
+const both = (lo: number, hi: number): Array<readonly [number, number]> => [
+  [lo, hi],
+  [-hi, -lo],
+];
+
+/**
+ * A vertical plate in a web, [d0, d1] along the girder and [y0, y1] high,
+ * as pieces round its windows: the windows are `GIRDER_AT.window` wide on
+ * the plate's centre line, each [from, to] over the girder's foot `foot`.
+ */
+function platePieces(
+  d0: number,
+  d1: number,
+  y0: number,
+  y1: number,
+  foot: number,
+  windows: ReadonlyArray<readonly [number, number]> = [],
+): Array<{ d: number; width: number; y0: number; y1: number }> {
+  if (windows.length === 0) return [{ d: (d0 + d1) / 2, width: d1 - d0, y0, y1 }];
+  const m = (d0 + d1) / 2;
+  const hw = GIRDER_AT.window / 2;
+  const out = [
+    { d: (d0 + m - hw) / 2, width: m - hw - d0, y0, y1 },
+    { d: (m + hw + d1) / 2, width: d1 - m - hw, y0, y1 },
+  ];
+  let from = y0;
+  for (const [a, b] of windows) {
+    out.push({ d: m, width: 2 * hw, y0: from, y1: Math.max(y0, foot + a) });
+    from = Math.min(y1, foot + b);
+  }
+  out.push({ d: m, width: 2 * hw, y0: from, y1 });
+  // A window open to the plate's edge leaves no piece there.
+  return out.filter((p) => p.y1 - p.y0 > 1e-6);
+}
+
+/**
+ * The two grandes poutres diagonales, from the apartment's roof `y0` up
+ * (header, item 4); their meshes are all "summit".
+ */
+function diagonalGirders(g: Graph, y0: number, detail: Detail): Parts {
+  const G = GIRDER;
+  const A = GIRDER_AT;
+  const y1 = y0 + G.height;
+  const half = G.half;
+  const web = G.web;
+  // The clear web, between the chords.
+  const ya = y0 + G.chord;
+  const yb = y1 - G.chord;
+  const endIn = half - A.endPlate;
+  const up: Vec3 = [0, 1, 0];
+  // The corner upright's axis, "364" in from the end: 7.435 - 0.364 =
+  // 7.071, panel 29's corner at (+-5, +-5) [derived].
+  const uprightAt = PANEL29.half * Math.SQRT2;
+  // Where the discontinuous girder meets the continuous one: its webs land
+  // on the continuous girder's web plates, its chords on that girder's
+  // chords, its cover plate at the edge of that girder's.
+  const meetWeb = web + G.webPlate / 2;
+  const meetChord = web + G.chordThick / 2;
+  const meetCover = G.breadth / 2;
+  const innerEnd = meetWeb + 2 * A.angle;
+  const pulley0 = A.pulley.at - A.pulley.width / 2;
+  const pulley1 = A.pulley.at + A.pulley.width / 2;
+  const centreHalf = A.centre.width / 2;
+
+  const webFaces = (D: Diagonal): Face[] => [
+    { n: D.p, t: D.a },
+    { n: neg(D.p), t: D.a },
+  ];
+  // Spans along a girder: the chords', the cover's, the clear mesh panels.
+  const chordSpans = (D: Diagonal) => (D.continuous ? [[-half, half] as const] : both(meetChord, half));
+  const coverSpans = (D: Diagonal) => (D.continuous ? [[-half, half] as const] : both(meetCover, half));
+  const panels = (D: Diagonal) =>
+    D.continuous ? [...both(centreHalf, pulley0), ...both(pulley1, endIn)] : both(innerEnd, endIn);
+  // The mesh runs on across the end plates, on their outer faces, to the
+  // end frame's posts [PL-XIV Fig. 4].
+  const L = A.lacing;
+  const endStop = half - L.thick - 2 * A.angle;
+  const endPlane = web + G.webPlate / 2 + GIRDER_MESH.bar;
+  const flangeEnd = half - A.flangeIn;
+
+  const chords: Array<{ from: Vec3; to: Vec3; n: Vec3 }> = [];
+  const covers: Array<{ from: Vec3; to: Vec3; n: Vec3 }> = [];
+  const flanges: Array<{ from: Vec3; to: Vec3; n: Vec3 }> = [];
+  const webPlates = new Map<string, Array<{ from: Vec3; to: Vec3; n: Vec3 }>>();
+  const angles: Array<readonly [Vec3, Vec3]> = [];
+  const angleN: Vec3[] = [];
   const mesh: FaceBar[] = [];
-  for (const f of FACES) {
-    for (const dir of [1, -1]) {
-      for (let k = -kMax - 1; k <= kMax; k++) {
-        const c = (k + 0.5) * CAGE_MESH.spacing;
-        // Clipped to [u0, u1] x [ta, tb]: u is monotonic in t.
-        for (const [u0, u1] of panels) {
-          const tu0 = ((u0 - c) * slope) / dir;
-          const tu1 = ((u1 - c) * slope) / dir;
-          const t0 = Math.max(ta, Math.min(tu0, tu1));
-          const t1 = Math.min(tb, Math.max(tu0, tu1));
-          if (t1 - t0 < 0.2) continue;
-          const uAt = (t: number) => c + (dir * t) / slope;
-          mesh.push({ f, u0: uAt(t0), y0: y0 + t0, u1: uAt(t1), y1: y0 + t1 });
+  const endMesh: FaceBar[] = [];
+  const lacing: Array<{ from: Vec3; to: Vec3; n: Vec3 }> = [];
+  const lacingNodes: Vec3[] = [];
+  const lacingDirs: Vec3[] = [];
+
+  const s = GIRDER_MESH.spacing;
+  const run = s / GIRDER_MESH.rise; // along the girder per unit of height
+  const kMax = Math.ceil((half + G.height * run) / s) + 1;
+
+  for (const D of DIAGONALS) {
+    // The top's plating, over the whole breadth, and the chords under it.
+    for (const [da, db] of coverSpans(D)) {
+      covers.push({ from: inGirder(D, da, 0, y1 - G.cover / 2), to: inGirder(D, db, 0, y1 - G.cover / 2), n: up });
+    }
+    // The cross angles at the bottom, between the chords' inner faces.
+    for (const d of [half - A.cross, -(half - A.cross)]) {
+      const w = web - G.chordThick / 2;
+      const y = y0 + G.cover + A.angle;
+      angles.push([inGirder(D, d, -w, y), inGirder(D, d, w, y)]);
+      angleN.push(up);
+    }
+    for (const f of webFaces(D)) {
+      const w = f.n === D.p ? web : -web;
+      const chordMid = (G.chord - G.cover) / 2 + G.cover;
+      for (const [da, db] of chordSpans(D)) {
+        for (const y of [y1 - chordMid, y0 + chordMid]) {
+          chords.push({ from: inGirder(D, da, w, y), to: inGirder(D, db, w, y), n: f.n });
+        }
+      }
+      for (const [da, db] of D.continuous ? [[-flangeEnd, flangeEnd] as const] : both(meetCover, flangeEnd)) {
+        flanges.push({ from: inGirder(D, da, w, y0 + G.cover / 2), to: inGirder(D, db, w, y0 + G.cover / 2), n: up });
+      }
+      // The web's plates: the end plates, and on the continuous girder the
+      // pulley posts and the central plate, round their windows.
+      const pieces = [
+        ...both(endIn, half).flatMap(([p0, p1]) => platePieces(p0, p1, ya, yb, y0)),
+        ...(D.continuous
+          ? [
+              ...both(pulley0, pulley1).flatMap(([p0, p1]) => platePieces(p0, p1, ya, yb, y0, A.pulley.windows)),
+              ...platePieces(-centreHalf, centreHalf, ya, yb, y0, A.centre.windows),
+            ]
+          : []),
+      ];
+      for (const pc of pieces) {
+        const key = pc.width.toFixed(4);
+        const list = webPlates.get(key) ?? [];
+        list.push({ from: inGirder(D, pc.d, w, pc.y0), to: inGirder(D, pc.d, w, pc.y1), n: f.n });
+        webPlates.set(key, list);
+      }
+      // The light verticals, and the discontinuous girder's end angles where
+      // it lands on the continuous one.
+      const verticals = [half - A.light, -(half - A.light), ...(D.continuous ? [] : [innerEnd - A.angle, -(innerEnd - A.angle)])];
+      for (const d of verticals) {
+        angles.push([inGirder(D, d, w, ya), inGirder(D, d, w, yb)]);
+        angleN.push(f.n);
+      }
+      // The diamond mesh: lines d = c +- run t, t = y - y0, through the foot
+      // at c = (k + 1/2) s, so a diamond's centre sits on the tower's axis
+      // at the foot (PL-VII's phase, and PL-XIV Fig. 4's: its nodes on the
+      // foot straddle the axis) and the pattern mirrors about the axis.
+      // Each line is clipped to each clear panel, and to the end plates.
+      for (const dir of [1, -1]) {
+        for (let k = -kMax; k <= kMax; k++) {
+          const c = (k + 0.5) * s;
+          for (const [spans, into, min] of [
+            [panels(D), mesh, 0.25],
+            [both(endIn, endStop), endMesh, 0.1],
+          ] as const) {
+            for (const [da, db] of spans) {
+              const ta = (da - c) / (dir * run);
+              const tb = (db - c) / (dir * run);
+              const t0 = Math.max(G.chord, Math.min(ta, tb));
+              const t1 = Math.min(G.height - G.chord, Math.max(ta, tb));
+              if (t1 <= t0) continue;
+              const dAt = (t: number) => c + dir * run * t;
+              if (Math.hypot(dAt(t1) - dAt(t0), t1 - t0) < min) continue;
+              into.push({ f, u0: dAt(t0), y0: y0 + t0, u1: dAt(t1), y1: y0 + t1 });
+            }
+          }
+        }
+      }
+    }
+    // The end frames [PL-XIV Fig. 3, "Vue par bout"]: a post on each web's
+    // end, the whole depth, and an X of flats in each panel between them, on
+    // the posts' outer faces, so the flats' outer face is the girder's end.
+    // The nodes keep an angle and half a flat off the bottom and the plating,
+    // so the flats, which run past them, stay inside the girder's depth.
+    const lo0 = y0 + A.angle + L.width / 2;
+    const hi0 = y1 - G.cover - A.angle - L.width / 2;
+    const panelsUp = Math.max(1, Math.round((hi0 - lo0) / L.panel));
+    const step = (hi0 - lo0) / panelsUp;
+    for (const sign of [1, -1]) {
+      const n: Vec3 = sign > 0 ? D.a : neg(D.a);
+      const post = half - L.thick - A.angle;
+      for (const w of [web, -web]) {
+        angles.push([inGirder(D, sign * post, w, y0), inGirder(D, sign * post, w, y1 - G.cover)]);
+        angleN.push(n);
+      }
+      // Each flat runs a little past its two nodes, over the posts, so the
+      // node's rivet sits on it.
+      const plane = sign * (half - L.thick / 2);
+      const past = A.angle / Math.hypot(2 * web, step);
+      for (let k = 0; k < panelsUp; k++) {
+        const lo = lo0 + k * step;
+        const hi = lo + step;
+        for (const s0 of [-1, 1]) {
+          const [w0, w1] = [s0 * web * (1 + 2 * past), -s0 * web * (1 + 2 * past)];
+          const [l0, l1] = [lo - step * past, hi + step * past];
+          lacing.push({ from: inGirder(D, plane, w0, l0), to: inGirder(D, plane, w1, l1), n });
+        }
+      }
+      for (let k = 0; k <= panelsUp; k++) {
+        for (const w of [web, -web]) {
+          lacingNodes.push(inGirder(D, sign * half, w, lo0 + k * step));
+          lacingDirs.push(n);
         }
       }
     }
   }
+
+  // The corner uprights inside the girders' ends, square to the tower's faces.
+  const corners: Array<readonly [Vec3, Vec3]> = DIAGONALS.flatMap((D) =>
+    [uprightAt, -uprightAt].map((d) => [inGirder(D, d, 0, y0), inGirder(D, d, 0, y1 - G.cover)] as const),
+  );
+  const summit: NodeHandle[] = [
+    skin(g, "girderUprightSkin", members(g, "girderUprights", corners), MEMBERS.upright, [1, 0, 0]),
+    plates(g, "girderChord", chords, G.chord - G.cover, G.chordThick),
+    plates(g, "girderCover", covers, G.breadth, G.cover),
+    plates(g, "girderFlange", flanges, G.flange, G.cover),
+    ...[...webPlates.entries()].map(([key, list], i) => plates(g, `girderPlate${i}`, list, Number(key), G.webPlate)),
+    faceSkin(g, "girderAngle", members(g, "girderAnglePaths", angles, angleN), A.angle),
+    faceBars(g, "girderMesh", GIRDER_MESH.bar, mesh, web),
+    faceBars(g, "girderEndMesh", GIRDER_MESH.bar, endMesh, endPlane),
+    plates(g, "girderLacing", lacing, A.lacing.width, A.lacing.thick),
+  ];
+  if (detail.rivets !== true) return { summit };
+
+  // RIVETS. The mesh bars' ends, clear of the chords, the plates and the
+  // verticals they land on or pass.
+  const all = { y0: y0 - 1, y1: y1 + 1 };
+  const chordRects: Rect[] = [
+    { u0: -half - 1, u1: half + 1, y0: y0 - 1, y1: ya },
+    { u0: -half - 1, u1: half + 1, y0: yb, y1: y1 + 1 },
+  ];
+  const commonRects: Rect[] = [
+    ...chordRects,
+    ...both(endIn, half + 1).map(([u0, u1]) => ({ u0, u1, ...all })),
+    ...both(half - A.light - A.angle, half - A.light + A.angle).map(([u0, u1]) => ({ u0, u1, ...all })),
+  ];
+  const keepOff = (D: Diagonal): Rect[] =>
+    D.continuous
+      ? [
+          ...commonRects,
+          { u0: -centreHalf, u1: centreHalf, ...all },
+          ...both(pulley0, pulley1).map(([u0, u1]) => ({ u0, u1, ...all })),
+        ]
+      : [...commonRects, { u0: -innerEnd, u1: innerEnd, ...all }];
+  const barRivets = DIAGONALS.map((D) =>
+    barEndRivets(
+      g,
+      `${D.id}BarEnds`,
+      mesh.filter((b) => b.f.t === D.a),
+      web,
+      GIRDER_MESH.bar,
+      keepOff(D),
+      2 * RIVET_HEAD,
+    ),
+  ).filter((h): h is NodeHandle => h !== undefined);
+  // The bars on the end plates: the outer head only (the inner one would be
+  // in the plate), clear of the chords, the end frame's post and the jog
+  // where the bar leaves the web's plane for the plate's face.
+  const endRects: Rect[] = [
+    ...chordRects,
+    { u0: -endIn, u1: endIn, ...all },
+    ...both(endStop, half + 1).map(([u0, u1]) => ({ u0, u1, ...all })),
+  ];
+  for (const D of DIAGONALS) {
+    const h = barEndRivets(
+      g,
+      `${D.id}EndBarEnds`,
+      endMesh.filter((b) => b.f.t === D.a),
+      endPlane,
+      GIRDER_MESH.bar,
+      endRects,
+      2 * RIVET_HEAD,
+      [1],
+    );
+    if (h !== undefined) barRivets.push(h);
+  }
+
+  // Two rows along each face of every chord [estimated, as panel 29's plate
+  // girder], clear of the discontinuous girder's chords where they land, of
+  // the corner upright inside the end, and of the end frame.
+  const clear = END_CLEAR;
+  const rowPieces: Array<readonly [Vec3, Vec3]> = [];
+  const rowNormals: Vec3[] = [];
+  const outerStop = half - A.lacing.thick - 2 * A.angle - clear;
+  // The upright's section is square to the tower's faces, so it reaches
+  // across the girder its half-diagonal, and meets a chord's inner face
+  // that much short of its axis.
+  const uprightHalf = MEMBERS.upright[MEMBERS.upright.length - 1]![1];
+  const innerStop = uprightAt - (uprightHalf * Math.SQRT2 - (web - G.chordThick / 2)) - clear;
+  for (const D of DIAGONALS) {
+    for (const f of webFaces(D)) {
+      const w = f.n === D.p ? web : -web;
+      for (const side of [1, -1]) {
+        const offW = w + Math.sign(w) * side * (G.chordThick / 2);
+        const n: Vec3 = side > 0 ? f.n : neg(f.n);
+        const spans: Array<readonly [number, number]> = D.continuous
+          ? side > 0
+            ? [
+                ...both(meetChord + clear, outerStop),
+                [-(web - G.chordThick / 2) + clear, web - G.chordThick / 2 - clear] as const,
+              ]
+            : [[-innerStop, innerStop] as const]
+          : both(meetChord + clear, side > 0 ? outerStop : innerStop);
+        const chordMid = (G.chord - G.cover) / 2 + G.cover;
+        for (const yc of [y1 - chordMid, y0 + chordMid]) {
+          for (const y of [yc - 0.08, yc + 0.08]) {
+            for (const [da, db] of spans) {
+              rowPieces.push([inGirder(D, da, offW, y), inGirder(D, db, offW, y)]);
+              rowNormals.push(n);
+            }
+          }
+        }
+      }
+    }
+  }
+  // The uprights' seams, between the chords.
+  const seamPieces = corners.map(([a, b]) => [[a[0], ya, a[2]] as Vec3, [b[0], yb, b[2]] as Vec3] as const);
   return {
-    summit: [
-      skin(g, "cageCornerSkin", corners, CAGE_MEMBERS.corner, [1, 0, 0]),
-      ...horizontals.meshes,
-      ...postWeb.meshes,
-      faceBars(g, "cageMesh", CAGE_MEMBERS.bar, mesh, half),
-    ],
-    gussets: gussetMeshes([horizontals]),
+    summit,
     rivets: [
-      ...cornerSeams(g, "cageCorner", "summit.cage.corners", columns(lat, isCorner), CAGE_MEMBERS.corner, detail),
-      ...rivetOutputs({
-        "summit.cage.posts": postWeb,
-        "summit.cage.horizontals": horizontals,
-      }),
+      ...cornerSeams(g, "girderUpright", "summit.diagonals.uprights", seamPieces, MEMBERS.upright, detail),
+      { name: "summit.diagonals.bars", spawn: rivetSpawn(g, "girderBar", barRivets) },
+      {
+        name: "summit.diagonals.chords",
+        spawn: rivetSpawn(g, "girderChordR", [
+          faceRows(g, "girderChordRow", seamRuns(g, "girderChordSeam", rowPieces, rowNormals)),
+        ]),
+      },
+      {
+        name: "summit.diagonals.lacing",
+        spawn: rivetSpawn(g, "girderLacingR", [aimedPoints(g, "girderLacingNodes", lacingNodes, lacingDirs)]),
+      },
     ],
   };
 }
@@ -1347,33 +1791,26 @@ function lantern(g: Graph, crownY: number): NodeHandle[] {
 
 /** Build panel 29, the 3rd-floor gallery and apartment, and the campanile, at the given detail. */
 export function buildSummit(g: Graph, detail: Detail = {}): Parts {
-  const roomTop = galleryTop + APARTMENT.height;
-  const cageTop = roomTop + CAGE.height;
-  const { mesh: ribs, crownY, rivets: ribRivets } = dome(g, cageTop, detail);
-  const cageParts = cage(g, roomTop, detail);
+  const roomTop = apartmentFloor + APARTMENT.height;
+  const girderTop = roomTop + GIRDER.height;
+  const { mesh: ribs, crownY, rivets: ribRivets } = dome(g, girderTop, detail);
+  const girders = diagonalGirders(g, roomTop, detail);
 
-  // The ladder cylinder, from the apartment's roof up the box and through
-  // the dome's opening to the lantern terrace's deck, where the lantern's
-  // base takes it on [PL-VII Fig. 4 draws it from the box's top up, through
-  // the ribs' crown; inside the box the face hides it, and PL-XIX Fig. 5
-  // names it at the box's centre].
+  // The ladder cylinder, from the girders' crossing up through the dome's
+  // opening to the lantern terrace's deck, where the lantern's base takes
+  // it on [PL-VII Fig. 4 draws it from the girders' top up, through the
+  // ribs' crown, and not between them; PL-XIX Fig. 5 names it at the
+  // crossing].
   const ladder = prism(
     g,
     "ladderCylinder",
     LADDER.sides,
-    [roomTop, FLOORS.lanternTerrace],
+    [girderTop, FLOORS.lanternTerrace],
     circum(LADDER.diameter, LADDER.sides),
   );
-  const summit: NodeHandle[] = [
-    ...gallery(g),
-    ...(cageParts.summit ?? []),
-    ribs,
-    ladder,
-    ...lantern(g, crownY),
-  ];
+  const summit: NodeHandle[] = [...gallery(g), ...(girders.summit ?? []), ribs, ladder, ...lantern(g, crownY)];
   return joinParts(panel29(g, detail), {
     summit,
-    gussets: cageParts.gussets ?? [],
-    rivets: [...(cageParts.rivets ?? []), ...ribRivets],
+    rivets: [...(girders.rivets ?? []), ...ribRivets],
   });
 }

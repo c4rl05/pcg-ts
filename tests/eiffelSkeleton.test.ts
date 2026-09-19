@@ -22,6 +22,7 @@ import { UPRIGHT_KINK } from "../demos/eiffel/legs.js";
 import {
   EDOUX_PLAN,
   ENTRETOISE,
+  LEG_GAP_LACING_500,
   LEG_LACING_500,
   MEMBERS,
   NODES,
@@ -29,7 +30,7 @@ import {
   node,
   profileAt,
 } from "../demos/eiffel/spec.js";
-import { planBracingLines } from "../demos/eiffel/shaft.js";
+import { planBracingBandLines, planBracingLines, planPattern } from "../demos/eiffel/shaft.js";
 import { UPRIGHT_SEAMS } from "../demos/eiffel/strut.js";
 
 type Vec3 = readonly [number, number, number];
@@ -387,13 +388,64 @@ describe("eiffel skeleton", () => {
     }
   });
 
+  it("draws the Masque's bars at the plate's angles, its lower V's at both chords, and fills its top corners", async () => {
+    const got = await cookWith(["masqueUpABars", "masqueUpBBars", "masqueLowABars", "masqueLowBBars", "masqueFillet0Bars", "masqueFillet1Bars"]);
+    const s4 = (node("XXV").outer - node("XXIV").outer) / 11;
+    const F4 = Math.hypot(1, s4);
+    // A face-0 member (z = outer + the standoff), in the face's (u, v): u is
+    // x, and v the height in the plane, from the member's lean.
+    const face0 = (lines: Vec3[][]) => lines.filter(([a, b]) => a![2] > a![0] && b![2] > b![0]);
+    const angle = ([a, b]: Vec3[]) =>
+      (Math.atan2(Math.hypot(b![1] - a![1], b![2] - a![2]), Math.abs(b![0] - a![0])) * 180) / Math.PI;
+    // The upper X's at 47.5 degrees in the plane ("\" 48.5, "/" 46.5 read).
+    for (const id of ["masqueUpABars", "masqueUpBBars"]) {
+      const bars = face0(polylines(got[id]!));
+      expect(bars.length, id).toBeGreaterThan(3);
+      for (const l of bars) expect(angle(l)).toBeCloseTo(47.5, 3);
+    }
+    // The lower lattice: each bar 1.5 half-pitches along over the 2.746
+    // clear, plus 0.23 into the 750 and less 0.05 short of the 630, so
+    // V's meet at both chords; the 750's on the post grid (3.8825 / 2
+    // from the tower's axis).
+    const p = 3.8825 / 2;
+    const rise = 2.746 + 0.23 - 0.05;
+    const low = [...face0(polylines(got.masqueLowABars!)), ...face0(polylines(got.masqueLowBBars!))];
+    expect(low.length).toBeGreaterThan(12);
+    const midLo = 0.45 + 0.63 + 2.746;
+    let apexes = 0;
+    for (const [a, b] of low) {
+      const [lo, hi] = a![1] < b![1] ? [a!, b!] : [b!, a!];
+      const dir = Math.sign(hi[0] - lo[0]);
+      expect(Math.abs(hi[0] - lo[0]) / Math.hypot(hi[1] - lo[1], hi[2] - lo[2])).toBeCloseTo((1.5 * p) / rise, 3);
+      // Its upper end on the 750 chord's lower edge: the V's apex is 0.23
+      // further along its line, on the grid. (The screen stands out along
+      // the face's normal, which lifts it: back onto the plane first.)
+      let yPlane = hi[1];
+      for (let i = 0; i < 12; i++) yPlane = hi[1] - s4 * (hi[2] - profileAt(yPlane).outer);
+      const v = (yPlane - node("XXV").y) * F4;
+      if (Math.abs(v - midLo) > 0.02) continue;
+      const apex = hi[0] + dir * ((1.5 * p) / rise) * 0.23;
+      expect(Math.abs(apex / p - Math.round(apex / p)), `apex at ${apex.toFixed(3)}`).toBeLessThan(0.01);
+      apexes++;
+    }
+    expect(apexes).toBeGreaterThan(6);
+    // The rounded top corners, on both faces of every leg that carry it.
+    for (const id of ["masqueFillet0Bars", "masqueFillet1Bars"]) {
+      const f = polylines(got[id]!);
+      expect(f.length, id).toBeGreaterThan(8);
+      expect(face0(f).length * 2).toBe(f.length);
+    }
+  });
+
   it("builds the members the plates add: central posts, panel 10's two X's, the gap bracing", async () => {
     const ids = ["legPosts4RotDone", "legBracing4RotDone", "legGapBracing4RotDone", "legGapHorizontals4RotDone"];
     const got = await cookWith(ids);
     const [posts, bracing, gapX, gapH] = ids.map((id) => polylines(got[id]!));
-    // A post on every face of every leg: the base tie, panels 1-4, 6-9 and
-    // panel 10 above its band [PL-IX Fig. 8, PL-VII Figs 1, 2, 5].
-    expect(posts).toHaveLength(4 * 4 * 10);
+    // A post on every face of every leg: the base tie and panel 1 (one
+    // stretch: no horizontal at XXVIII, only the ties' top chord plate),
+    // panels 2-4, 6-9 and panel 10 above its band [PL-IX Fig. 8, PL-VII
+    // Figs 1, 2, 5].
+    expect(posts).toHaveLength(4 * 4 * 9);
     for (const [a, b] of posts as [Vec3, Vec3][]) {
       // On the face's centre line: one coordinate is the outer or inner
       // half-width, the other their mean, at both ends.
@@ -449,8 +501,15 @@ describe("eiffel skeleton", () => {
     const got = await cookWith([
       "legHorizontals4RotDone",
       "legBelt11Chords4RotDone",
-      "belt1Lattice",
-      "belt2Lattice",
+      "legBelt5Posts",
+      "legBelt5BarsUp",
+      "legBelt5BarsDown",
+      "legBelt5Gussets",
+      "legBelt11Posts",
+      "legBelt11BarsUp",
+      "legBelt11BarsDown",
+      "legBelt11Gussets",
+      "tieTopChord",
       "tieAChord",
       "tieBChord",
       "tieABarsA",
@@ -460,9 +519,12 @@ describe("eiffel skeleton", () => {
     const slope = (lo: string, hi: string, key: "outer" | "inner" = "outer") =>
       (node(lo)[key] - node(hi)[key]) / (node(hi).y - node(lo).y);
     // Panel 11: "450 x 8" plates on the node lines replace the XVIII and
-    // XVII horizontals; their axes 0.225 in the plane inside the lines.
+    // XVII horizontals; their axes 0.225 in the plane inside the lines. No
+    // horizontal at XXVIII either: the ties' top chord plate is the only one.
     const hs = polylines(got.legHorizontals4RotDone!).map(([a]) => a![1]);
-    for (const y of [node("XVIII").y, node("XVII").y]) expect(hs.filter((v) => Math.abs(v - y) < 1e-3)).toHaveLength(0);
+    for (const y of [node("XXVIII").y, node("XVIII").y, node("XVII").y]) {
+      expect(hs.filter((v) => Math.abs(v - y) < 1e-3)).toHaveLength(0);
+    }
     const F11 = Math.hypot(1, slope("XVIII", "XVII"));
     const chordYs = polylines(got.legBelt11Chords4RotDone!).map(([a, b]) => (a![1] + b![1]) / 2);
     expect(chordYs.filter((y) => Math.abs(y - (node("XVIII").y + 0.225 / F11)) < 1e-3)).toHaveLength(16);
@@ -470,47 +532,89 @@ describe("eiffel skeleton", () => {
     // Posts square to the chords (one coordinate constant along each) on
     // the grids from the tower's axis: 3.36268 in panel 11 (three to an
     // outer face), 3.8825 in panel 5 (four).
-    const posts = (lines: Vec3[][]) =>
-      lines.filter(([a, b]) => Math.abs(a![0] - b![0]) < 1e-6 || Math.abs(a![2] - b![2]) < 1e-6);
+    const onFace0 = (p: Vec3, tol = 1e-3) => Math.abs(p[2] - profileAt(p[1]).outer) < tol;
     const onGrid = (lines: Vec3[][], pitch: number, count: number) => {
-      const ps = posts(lines);
+      for (const [a, b] of lines) expect(Math.abs(a![0] - b![0]) < 1e-6 || Math.abs(a![2] - b![2]) < 1e-6).toBe(true);
       // The leg is built in the +x+z quadrant: a post on face 0 (z = outer) keeps x.
-      const face0 = ps.filter(([a, b]) => Math.abs(a![0] - b![0]) < 1e-6 && a![2] > profileAt(a![1]).outer - 1e-3);
+      const face0 = lines.filter(([a, b]) => Math.abs(a![0] - b![0]) < 1e-6 && onFace0(a!));
       expect(face0).toHaveLength(count);
       for (const [a] of face0) expect(Math.abs(a![0] / pitch - Math.round(a![0] / pitch))).toBeLessThan(1e-4);
     };
-    onGrid(polylines(got.belt2Lattice!), 3.36268, 3);
-    onGrid(polylines(got.belt1Lattice!), 3.8825, 4);
+    onGrid(polylines(got.legBelt11Posts!), 3.36268, 3);
+    onGrid(polylines(got.legBelt5Posts!), 3.8825, 4);
     // Panel 11's lattice is an X in every bay AND the diamond: at the
     // belt's mid-depth the bars cross at every post and every bay centre.
-    const mid = (node("XVIII").y + node("XVII").y) / 2;
-    const onFace0 = (p: Vec3) => Math.abs(p[2] - profileAt(p[1]).outer) < 1e-3;
-    const face0Bars = polylines(got.belt2Lattice!).filter(
-      ([a, b]) => Math.abs(a![0] - b![0]) > 1e-6 && onFace0(a!) && onFace0(b!),
+    // The two families stand 5 mm either side of the face plane.
+    const mid11 = (node("XVIII").y + node("XVII").y) / 2;
+    const bars11 = [...polylines(got.legBelt11BarsUp!), ...polylines(got.legBelt11BarsDown!)].filter(
+      ([a, b]) => onFace0(a!, 0.01) && onFace0(b!, 0.01),
     );
-    const xs = face0Bars.map(([a, b]) => a![0] + ((b![0] - a![0]) * (mid - a![1])) / (b![1] - a![1]));
+    const xs = bars11.map(([a, b]) => a![0] + ((b![0] - a![0]) * (mid11 - a![1])) / (b![1] - a![1]));
     for (const k of [2, 2.5, 3, 3.5, 4]) {
-      expect(xs.filter((x) => Math.abs(x - k * 3.36268) < 1e-3), `bars at ${k} pitches`).toHaveLength(2);
+      expect(xs.filter((x) => Math.abs(x - k * 3.36268) < 3e-3), `bars at ${k} pitches`).toHaveLength(2);
+    }
+    // Their working lines run node line to node line: in the plane, the
+    // panel's height over one pitch (panel 11, "55°49′49″") or two (panel
+    // 5, 44 degrees).
+    const riseOverRun = ([a, b]: Vec3[]) => Math.hypot(b![1] - a![1], b![2] - a![2]) / Math.abs(b![0] - a![0]);
+    for (const [lo, hi, run, ids] of [
+      ["XVIII", "XVII", 3.36268, ["legBelt11BarsUp", "legBelt11BarsDown"]],
+      ["XXIV", "XXIII", 2 * 3.8825, ["legBelt5BarsUp", "legBelt5BarsDown"]],
+    ] as const) {
+      const H = (node(hi).y - node(lo).y) * Math.hypot(1, slope(lo, hi));
+      const face0 = ids.flatMap((id) => polylines(got[id]!)).filter(([a, b]) => onFace0(a!, 0.01) && onFace0(b!, 0.01));
+      expect(face0.length).toBeGreaterThan(4);
+      for (const l of face0) expect(riseOverRun(l)).toBeCloseTo(H / run, 3);
+    }
+    // A gusset plate either side of the lattice at the mid-height of every
+    // post (each reaches it), as tall as drawn.
+    for (const [id, posts, lo, hi, height] of [
+      ["legBelt5Gussets", "legBelt5Posts", "XXIV", "XXIII", 0.88],
+      ["legBelt11Gussets", "legBelt11Posts", "XVIII", "XVII", 1.01],
+    ] as const) {
+      const gs = polylines(got[id]!);
+      expect(gs).toHaveLength(2 * polylines(got[posts]!).length);
+      const F = Math.hypot(1, slope(lo, hi));
+      for (const [a, b] of gs) {
+        expect(Math.hypot(b![0] - a![0], b![1] - a![1], b![2] - a![2])).toBeCloseTo(height, 4);
+        expect(((a![1] + b![1]) / 2 - (node(lo).y + node(hi).y) / 2) * F).toBeCloseTo(0, 1);
+      }
     }
     // The base ties' bottom chords: "2,987" below XXVIII in the plane (A)
-    // and "2,765" over the support line (B) [PL-VII Figs 1, 5].
+    // and "2,765" over the support line (B) [PL-VII Figs 1, 5]; the top
+    // chord, on all four faces, 0.29 above XXVIII.
     const F1 = Math.hypot(1, slope("XXVIII", "XXVII"));
-    for (const [id, y] of [
-      ["tieAChord", node("XXVIII").y - 2.987 / F1],
-      ["tieBChord", 2.5 + 2.765 / F1],
+    for (const [id, y, count] of [
+      ["tieAChord", node("XXVIII").y - 2.987 / F1, 2],
+      ["tieBChord", 2.5 + 2.765 / F1, 2],
+      ["tieTopChord", node("XXVIII").y + 0.29 / F1, 4],
     ] as const) {
-      for (const [a, b] of polylines(got[id]!)) {
+      const lines = polylines(got[id]!);
+      expect(lines).toHaveLength(count);
+      for (const [a, b] of lines) {
         expect(a![1]).toBeCloseTo(y, 3);
         expect(b![1]).toBeCloseTo(y, 3);
       }
     }
-    // Tie A: an X in every bay, so as many rising bars as falling ones,
-    // and six bays to a face (two of 3.05 each side of the post, and the
-    // short end bays).
+    // Tie A: an X in every bay but the one across the central post, whose
+    // joints flank it 0.55 either side; so as many rising bars as falling
+    // ones, and six X'd bays to a face (two of 3.05 each side of the post,
+    // and the short end bays). No bar up a joint.
     const rising = polylines(got.tieABarsA!);
     const falling = polylines(got.tieABarsB!);
     expect(rising).toHaveLength(falling.length);
     expect(rising).toHaveLength(2 * 6);
+    for (const [a, b] of [...rising, ...falling]) {
+      const hi = a![1] > b![1] ? a! : b!;
+      const p = profileAt(hi[1]);
+      // On face 0 (z = outer) a station keeps x; on face 3 (x = outer), z.
+      const u = Math.abs(hi[2] - p.outer) < 1e-3 ? hi[0] : hi[2];
+      // Its upper joint: 0.55 + k 3.05 off the centre line, or an upright.
+      const fromCentre = Math.abs(u - (p.outer + p.inner) / 2);
+      const k = (fromCentre - 0.55) / 3.05;
+      const onUpright = Math.abs(u - p.inner) < 1e-3 || Math.abs(u - p.outer) < 1e-3;
+      expect(onUpright || Math.abs(k - Math.round(k)) < 1e-3, `joint ${fromCentre.toFixed(3)} off the centre`).toBe(true);
+    }
     // Panel 10's band: flats every 1.59 along the chords, from the XIX
     // horizontal's top edge.
     const F10 = Math.hypot(1, slope("XIX", "XVIII"));
@@ -529,7 +633,8 @@ describe("eiffel skeleton", () => {
 
   it("laces the legs' 500s in panels 12-17 at the plate's steps, the shaft's at 0.68", async () => {
     const g = buildEiffel(1889, { lacedWeb: true });
-    for (const id of ["legBracingSamples", "shaftBracingSamples"]) g.output({ id } as NodeHandle, "out", `probe:${id}`);
+    const probes = ["legBracingSamples", "shaftBracingSamples", "legGapBracingSamples", "legEntretoiseSamples", "legEntretoiseChords"];
+    for (const id of probes) g.output({ id } as NodeHandle, "out", `probe:${id}`);
     const { outputs } = await cook(g);
     // A strut's samples are its lacing stations: every step, bar the last.
     const steps = (id: string) =>
@@ -546,34 +651,83 @@ describe("eiffel skeleton", () => {
     }
     for (const s of leg.filter((x) => x.y < node("XIX").y)) expect(s.step).toBeCloseTo(1.0, 4);
     for (const s of steps("shaftBracingSamples")) expect(s.step).toBeCloseTo(0.68, 4);
+    // The gap X's, panels 12-16, laced as openly as the legs' own 500s
+    // (PL-VII: 0.70-1.13 read), not at the shaft's 0.68: two arms of four
+    // tower faces' X's a panel.
+    const gap = steps("legGapBracingSamples");
+    for (const [lo, hi, step] of LEG_GAP_LACING_500) {
+      const inPanel = gap.filter((s) => s.y > node(lo).y && s.y < node(hi).y);
+      expect(inPanel, `gap panel ${lo}-${hi}`).toHaveLength(8);
+      for (const s of inPanel) expect(s.step).toBeCloseTo(step, 4);
+    }
+    // The entretoises: laced at 0.79 (Fig. 8's 0.556 over cos 45), a
+    // 1.20 x 0.7156 section ("600" +
+    // "600", "715.6"): their chords 0.555 either side of the girder's
+    // vertical plane and 0.3128 above and below its node (inside 0.045).
+    for (const s of steps("legEntretoiseSamples")) expect(s.step).toBeCloseTo(ENTRETOISE.step, 4);
+    const chords = polylines(firstGeometry(outputs["probe:legEntretoiseChords"]!)!);
+    expect(chords.length).toBeGreaterThan(0);
+    for (const l of chords) {
+      const [a, b] = [l[0]!, l[l.length - 1]!];
+      const n = NODES.find((m) => Math.abs(Math.abs(a[1] - m.y) - 0.3128) < 1e-3);
+      expect(n && (ENTRETOISE.nodes as readonly string[]).includes(n.name), `chord at y ${a[1].toFixed(3)}`).toBe(true);
+      // Off the leg's d-b line (x + z = inner + outer in the +x+z leg, and
+      // its copies): the other legs are the same line turned, so measure
+      // across the member in plan from the chord's own direction.
+      const t = [b[0] - a[0], b[2] - a[2]];
+      const L = Math.hypot(t[0]!, t[1]!);
+      const across = Math.abs((a[0] * t[1]! - a[2] * t[0]!) / L);
+      // The d-b line passes (outer, inner) and (inner, outer): its distance
+      // from the tower's axis is (inner + outer) / sqrt 2.
+      expect(Math.abs(across - (n!.inner + n!.outer) / Math.SQRT2)).toBeCloseTo(0.555, 3);
+    }
   });
 
   it("braces the tower in plan at every node from XVI up, and each leg across its diagonal below", async () => {
-    const { planBracingChordPaths, legEntretoises4RotDone } = await cookWith([
+    const { planBracingChordPaths, legEntretoises4 } = await cookWith([
       "planBracingChordPaths",
-      "legEntretoises4RotDone",
+      "legEntretoises4",
     ]);
     const chords = polylines(planBracingChordPaths!);
     const from = NODES.findIndex((n) => n.name === PLAN_BRACING.from);
-    const d = PLAN_BRACING.depth;
+    // Members by pattern (PL-VIII Figs 13-22): A, then 8 girders + H' + the
+    // K bracket's stub and two struts up to XII; the lozenge + H' + H + K's
+    // two struts at XI and X; the lozenge + E, F, H at VIII-VI; the lozenge
+    // + E, H at V-II; E, two G's and H at I and top28; nothing at IX.
+    const expected: Record<string, number> = { hash: 13, lozengeH: 9, lozengeEF: 8, lozengeE: 7, corner: 5 };
     for (const n of NODES.slice(from)) {
-      const at = chords.filter(([a]) => Math.abs(a![1] - (n.y - d / 2)) < 1e-3);
-      // Each girder (or stretch of one) has its top chord right above its bottom one.
-      expect(chords.filter(([a]) => Math.abs(a![1] - (n.y + d / 2)) < 1e-3), `node ${n.name}`).toHaveLength(at.length);
-      // Every stretch lies on one of the node's plan lines (PL-VIII Figs
-      // 13-22): 9 girders up to XII, 5 at XI-II, A alone at I and top28.
       const w = n.inner > 0.5 ? n.inner : 0;
       const lines = planBracingLines(n.name, n.outer, w, 0.25);
-      expect(lines, `node ${n.name}`).toHaveLength(w > 0 ? 9 : (PLAN_BRACING.aOnly as readonly string[]).includes(n.name) ? 1 : 5);
+      const pattern = planPattern(n.name);
+      if (pattern === undefined) {
+        // IX: the plancher intermédiaire, no plan bracing [PL-VIII Fig. 17].
+        expect(lines, `node ${n.name}`).toHaveLength(0);
+        expect(chords.filter(([a]) => Math.abs(a![1] - n.y) < 1), `node ${n.name}`).toHaveLength(0);
+        continue;
+      }
+      expect(lines, `node ${n.name}`).toHaveLength(expected[pattern]!);
       const onLine = ([x, , z]: Vec3, [p, q]: (typeof lines)[number]) =>
         Math.abs((q[0] - p[0]) * (z - p[1]) - (q[1] - p[1]) * (x - p[0])) / Math.hypot(q[0] - p[0], q[1] - p[1]) < 1e-3;
-      for (const [a, b] of at) expect(lines.some((l) => onLine(a!, l) && onLine(b!, l)), `node ${n.name}`).toBe(true);
-      // Every line keeps at least one stretch, and A (along x = z) is cut in
-      // two by the Edoux's central guide post, which it frames into.
-      for (const l of lines) expect(at.some(([a, b]) => onLine(a!, l) && onLine(b!, l))).toBe(true);
-      expect(at.filter(([a, b]) => Math.abs(a![0] - a![2]) < 1e-4 && Math.abs(b![0] - b![2]) < 1e-4)).toHaveLength(2);
-      // Every girder in the tower's section.
-      for (const [a, b] of at) for (const p of [a!, b!]) expect(Math.max(Math.abs(p[0]), Math.abs(p[2]))).toBeLessThanOrEqual(n.outer);
+      // A is "1.000" deep, the rest "599.3" [PL-VIII Figs 16, 17, 24]: each
+      // girder (or stretch of one) has its top chord right above its bottom
+      // one, at its own depth, and lies on one of the node's lines of that depth.
+      for (const d of [PLAN_BRACING.depthA, PLAN_BRACING.depth]) {
+        const at = chords.filter(([a]) => Math.abs(a![1] - (n.y - d / 2)) < 1e-3);
+        expect(chords.filter(([a]) => Math.abs(a![1] - (n.y + d / 2)) < 1e-3), `node ${n.name}`).toHaveLength(at.length);
+        const ofDepth = lines.filter((l) => l[4] === d);
+        for (const [a, b] of at) expect(ofDepth.some((l) => onLine(a!, l) && onLine(b!, l)), `node ${n.name}`).toBe(true);
+        // Every line keeps at least one stretch.
+        for (const l of ofDepth) expect(at.some(([a, b]) => onLine(a!, l) && onLine(b!, l)), `${n.name} ${l[5]}`).toBe(true);
+        // Every girder in the tower's section.
+        for (const [a, b] of at) for (const p of [a!, b!]) expect(Math.max(Math.abs(p[0]), Math.abs(p[2]))).toBeLessThanOrEqual(n.outer);
+      }
+      // A runs corner to corner along x = z, cut in two by the Edoux's
+      // central guide post, which it frames into from both sides.
+      const a1 = chords.filter(([a, b]) => Math.abs(a![1] - (n.y - 0.5)) < 1e-3 && Math.abs(a![0] - a![2]) < 1e-4 && Math.abs(b![0] - b![2]) < 1e-4);
+      expect(a1, `node ${n.name}`).toHaveLength(2);
+      const reach = Math.max(...a1.flatMap(([a, b]) => [Math.abs(a![0]), Math.abs(b![0])]));
+      expect(n.outer - reach, `A short of c at ${n.name}`).toBeLessThan(0.45);
+      expect(n.outer - reach).toBeGreaterThan(0.25);
     }
     // No chord enters the Edoux: its posts, its columns or its cars' runs.
     for (const [a, b] of chords) {
@@ -592,30 +746,86 @@ describe("eiffel skeleton", () => {
     // Nothing below XVI.
     expect(chords.filter(([a]) => a![1] < node(PLAN_BRACING.from).y - 1)).toHaveLength(0);
     // The entretoises: d to b of every leg at the tops of panels 1-3, 6, 7;
-    // where the lift runs through (XXVII-XXV), two, each from its upright
-    // to `openHalf` short of the leg's diagonal.
-    const ent = polylines(legEntretoises4RotDone!);
-    const open = ENTRETOISE.openAt as readonly string[];
-    expect(ent).toHaveLength(4 * (ENTRETOISE.nodes.length + open.length));
+    // where something of the lifts crosses their line, two, each from its
+    // upright to `openHalf` short of the leg's diagonal: at XXVII-XXV and
+    // XXI in the two Otis legs, where their car crosses it. Whole in the
+    // Roux legs.
+    const ent = polylines(legEntretoises4!);
+    const halves = new Map<string, number>();
+    const wholes = new Map<string, number>();
     for (const [a, b] of ent as [Vec3, Vec3][]) {
       const n = NODES.find((m) => Math.abs(m.y - a[1]) < 1e-4);
       expect(n && (ENTRETOISE.nodes as readonly string[]).includes(n.name)).toBe(true);
       expect(b[1]).toBeCloseTo(a[1], 6);
       const full = (n!.outer - n!.inner) * Math.SQRT2;
       const L = Math.hypot(b[0] - a[0], b[2] - a[2]);
-      if (open.includes(n!.name)) {
+      if (Math.abs(L - full) < 1e-3) {
+        wholes.set(n!.name, (wholes.get(n!.name) ?? 0) + 1);
+      } else {
         expect(L).toBeCloseTo(full / 2 - ENTRETOISE.openHalf, 3);
         // The free end stands openHalf off the leg's diagonal (|x| = |z|).
         const off = (p: Vec3) => Math.abs(Math.abs(p[0]) - Math.abs(p[2])) / Math.SQRT2;
         expect(Math.min(off(a), off(b))).toBeCloseTo(ENTRETOISE.openHalf, 3);
-      } else {
-        expect(L).toBeCloseTo(full, 3);
+        halves.set(n!.name, (halves.get(n!.name) ?? 0) + 1);
       }
+    }
+    for (const name of ENTRETOISE.nodes) {
+      const open = (ENTRETOISE.openAt as readonly string[]).includes(name);
+      expect([wholes.get(name) ?? 0, halves.get(name) ?? 0], name).toEqual(open ? [2, 4] : [4, 0]);
     }
   });
 
+  it("bands the plan bracing's corner bays at XVI-XII in the planes of its chords", async () => {
+    const { planBracingBandPaths } = await cookWith(["planBracingBandPaths"]);
+    const bands = polylines(planBracingBandPaths!);
+    const d = PLAN_BRACING.depth;
+    let total = 0;
+    for (const n of NODES) {
+      const w = n.inner > 0.5 ? n.inner : 0;
+      const lines = planBracingBandLines(n.name, n.outer, w);
+      const here = bands.filter(([a]) => Math.abs(a![1] - n.y) < d);
+      // Top and bottom: one member per line in each chord plane.
+      expect(here, `node ${n.name}`).toHaveLength(2 * lines.length);
+      if (planPattern(n.name) !== "hash") {
+        expect(lines, `node ${n.name}`).toHaveLength(0);
+        continue;
+      }
+      // PL-VIII Figs 13-15: a sparse net at XVI, a grid at XIV, dense at XIII.
+      expect(lines.length, `node ${n.name}`).toBeGreaterThan(0);
+      total += here.length;
+      for (const [a, b] of here as [Vec3, Vec3][]) {
+        // Level, in a chord plane, parallel to a tower face.
+        expect(a[1]).toBeCloseTo(b[1], 6);
+        expect(Math.abs(Math.abs(a[1] - n.y) - d / 2)).toBeLessThan(1e-4);
+        expect(Math.min(Math.abs(a[0] - b[0]), Math.abs(a[2] - b[2]))).toBeLessThan(1e-6);
+        // Inside its leg's band: between the corner girder (|x| + |z| =
+        // W + w) and the long girder (W - w), and within |x - z| <= W - w.
+        for (const [x, , z] of [a, b]) {
+          const [u, v] = [Math.abs(x), Math.abs(z)];
+          expect(u + v).toBeGreaterThan(n.outer - w - 1e-6);
+          expect(u + v).toBeLessThan(n.outer + w + 1e-6);
+          expect(Math.abs(u - v)).toBeLessThan(n.outer - w + 1e-6);
+        }
+      }
+    }
+    expect(total).toBeGreaterThan(0);
+  });
+
   it("lights its flat bars: unit normals, out of every box, the way its triangles wind", async () => {
-    const ids = ["legMasque0Lit", "legMasque1Lit", "legBelt5ChordsLit", "legBelt11ChordsLit", "legBand10UpLit"];
+    const ids = [
+      "legMasque0Lit",
+      "legMasque1Lit",
+      "legMasque8Lit",
+      "legBelt5ChordsLit",
+      "legBelt11ChordsLit",
+      "legBelt5PostsLit",
+      "legBelt11BarsUpLit",
+      "legBelt5GussetsLit",
+      "tieTopChordLit",
+      "tieAChordLit",
+      "legBand10UpLit",
+      "legEntretoiseLit",
+    ];
     const got = await cookWith(ids);
     for (const id of ids) {
       const geo = got[id]!;

@@ -26,7 +26,8 @@
  *   girder belts instead of a cross, framed by solid chord plates ("500 x
  *   10", "450 x 8") whose outer edges lie on the node lines, with posts
  *   square to them on grids measured from the tower's axis (3.8825,
- *   3.36268) and a double lattice between (PL-VII Figs 1-2);
+ *   3.36268), a double lattice between and a gusset at each post's
+ *   mid-height, all flats as wide as drawn (PL-VII Figs 1-2);
  * - over panel 4 of the faces in the tower's faces, the "Masque" (PL-VII
  *   Fig. 6), a screen that carries the decorative girder's band across;
  * - panel 10: a band "3,6071" deep at its base, "300 x 5" flats every
@@ -38,10 +39,12 @@
  *   next) is braced too, an X per panel in 12-16 and a horizontal across
  *   it at every node, until b and d close on XI (PL-VII Figs 2-3);
  * - inside the leg, the "entretoise diagonale" from d to b at the tops of
- *   panels 1-3, 6 and 7 (PL-VIII Figs 1, 8);
+ *   panels 1-3, 6 and 7, 1.20 wide and 0.7156 deep (PL-VIII Figs 1, 8),
+ *   opened where the lifts cross its line;
  * - below panel 1, the base ties ("entretoises inférieures"), X-braced: A
  *   on the outer faces, its bottom chord 2.987 below XXVIII in the plane,
- *   B on the inner faces, 1.600 (PL-VII Figs 1, 5).
+ *   B on the inner faces, 1.600; their chords are 0.22 plates, the top one
+ *   just above XXVIII, where no horizontal is (PL-VII Figs 1, 5).
  *
  * The uprights change section at XVII (0.87 -> 0.50) as a STEP, so each is
  * two chains, split there, each skinned and riveted from its own table.
@@ -50,31 +53,19 @@ import {
   type Field,
   type Graph,
   type NodeHandle,
-  attribute,
   component,
-  copyToPoints,
-  dot,
   filterByExpression,
   ge,
+  index,
   lt,
-  meshPrimitive,
+  mod,
   mul,
-  normalize,
-  orientAlongVector,
-  pathResample,
   position,
-  promoteAttribute,
   ramp,
-  removeAttribute,
-  setAttribute,
-  sub,
-  transformPoints,
-  vec,
 } from "pcg-ts";
 import {
   END_SINE,
   END_SINE_MIN,
-  FACE_NORMAL,
   type Lattice,
   type Level,
   type SegmentMember,
@@ -83,10 +74,8 @@ import {
   copyMembersToQuadrants,
   copyToQuadrants,
   edges,
-  indexTable,
   merge,
   placedLattice,
-  rotateByQuat,
   segmentMembers,
   skin,
   squareRing,
@@ -96,6 +85,7 @@ import type { Detail, Parts } from "./parts.js";
 import {
   ENTRETOISE,
   LEG_BELTS,
+  LEG_GAP_LACING_500,
   LEG_LACING_500,
   MASQUE,
   MEMBERS,
@@ -110,6 +100,7 @@ import {
   LACING_STEP,
   UPRIGHT_SEAMS,
   faceSkin,
+  flatBars,
   gussetMeshes,
   rivetOutputs,
   seamRivets,
@@ -262,12 +253,16 @@ function faceRing(faces: readonly number[], ts: readonly number[]): Array<readon
 }
 
 /**
- * A base tie under panel 1 on the given faces (PL-VII Figs 1, 5), from its
- * bottom chord up to node XXVIII, whose horizontal is its top chord: joints
- * on both chords every `pitch` from the face's centre line, the central
- * post's line, and an X in every bay between them and in the two short end
- * bays against the uprights. The stations are fractions of the face, so
- * the bays lean with the leg and the X's read skewed, as drawn.
+ * A base tie under panel 1 on the given faces (PL-VII Figs 1, 5): X-braced
+ * bays between its bottom chord, `depth` below node XXVIII, and its top
+ * chord, whose axis stands `LEG_BELTS.tieTopChordAxis` above XXVIII in the
+ * plane (both chords are plates: `tieChords`). Joints on both chords every
+ * `pitch` from the face's centre line, or, with a `phase`, `phase` either
+ * side of it and every `pitch` beyond (tie A's flank the central post, and
+ * the bay across the post carries no X); an X in every other bay and in
+ * the two short end bays against the uprights. The stations are fractions
+ * of the face, so the bays lean with the leg and the X's read skewed, as
+ * drawn. No bar up a joint: PL-VII draws none.
  */
 function tie(
   g: Graph,
@@ -275,19 +270,19 @@ function tie(
   faces: readonly number[],
   pitch: number,
   depth: number,
-  /**
-   * Also a bar up every joint, parallel to the uprights (tie A: PL-VII
-   * Fig. 1 draws its steep bars as V's, each joint's post and the next
-   * bay's steep diagonal; tie B's steep bars are all parallel, no posts).
-   */
-  posts = false,
+  phase = 0,
 ): NodeHandle {
   const top = node("XXVIII");
   const width = top.outer - top.inner;
+  const offsets: number[] = [];
+  for (let k = -20; k <= 20; k++) {
+    if (phase <= 0) offsets.push(k * pitch);
+    else if (k >= 0) offsets.push(phase + k * pitch, -(phase + k * pitch));
+  }
   // Joints at least 0.3 m clear of the uprights' axes.
   const ts = [0];
-  for (let k = -20; k <= 20; k++) {
-    const t = 0.5 + (k * pitch) / width;
+  for (const o of offsets) {
+    const t = 0.5 + o / width;
     if (t > 0.3 / width && t < 1 - 0.3 / width) ts.push(t);
   }
   ts.sort((a, b) => a - b);
@@ -295,18 +290,48 @@ function tie(
     id,
     ring: faceRing(faces, ts),
     closed: false,
-    levels: [legLevel(levelAt(top.y - depth)), legLevel(top)],
+    levels: [legLevel(levelAt(top.y - depth)), legLevel(levelAt(tieTop()))],
   });
-  // Joints are every station but the corners (the uprights) and the face's
-  // centre line, where the central post runs through.
+  // The bay across the face's centre line, when the joints flank it: rule
+  // A's bar leaves its left joint, rule B's its right one.
   const perFace = ts.length;
-  const joint = (s: number) => s % perFace !== 0 && Math.abs((ts[s % perFace] ?? 0) - 0.5) > 1e-9;
+  const left = phase > 0 ? ts.findIndex((t) => Math.abs(t - (0.5 - phase / width)) < 1e-9) : -2;
   return merge(g, `${id}All`, [
-    edges(lat, "BarsA", 1, 1),
-    edges(lat, "BarsB", -1, 1),
-    edges(lat, "Chord", 1, 0, (_s, k) => k === 0),
-    ...(posts ? [edges(lat, "Posts", 0, 1, (s, k) => k === 0 && joint(s))] : []),
+    edges(lat, "BarsA", 1, 1, (s) => s % perFace !== left),
+    edges(lat, "BarsB", -1, 1, (s) => s % perFace !== left + 1),
   ]);
+}
+
+/** The ties' top chord's axis: `tieTopChordAxis` above XXVIII in the plane. */
+function tieTop(): number {
+  const y = node("XXVIII").y;
+  return y + vertical(LEG_BELTS.tieTopChordAxis, faceSlopes(y - 1).outer);
+}
+
+/**
+ * The ties' chords, as plates in the face planes butting against the
+ * uprights' faces (PL-VII Figs 1, 5): the top chord on all four faces (A's
+ * and B's are the same plate, "200 x 8" / "200 x 9" with an angle), and
+ * each tie's bottom chord on its own two faces, A's 2.987 and B's 1.600
+ * below XXVIII in the plane.
+ */
+function tieChords(): { top: SegmentMember[]; a: SegmentMember[]; b: SegmentMember[] } {
+  const xxviii = node("XXVIII").y;
+  const s1 = faceSlopes(xxviii - 1);
+  const yA = xxviii - vertical(LEG_BELTS.tieOuterDepth, s1.outer);
+  const yB = xxviii - vertical(LEG_BELTS.tieInnerDepth, s1.inner);
+  const yT = tieTop();
+  const at = (faces: readonly number[], y0: number, bottom: boolean): SegmentMember[] => {
+    const out: SegmentMember[] = [];
+    for (const f of faces) {
+      const pl = facePlane(f, y0, yT);
+      const v = bottom ? 0 : pl.H;
+      const seg = pl.clip([0, v], [1, 0], v - 1e-6, v + 1e-6, tableAt(MEMBERS.upright, xxviii));
+      if (seg !== undefined) out.push({ a: pl.world(seg[0]), b: pl.world(seg[1]), n: pl.n });
+    }
+    return out;
+  };
+  return { top: at([0, 1, 2, 3], yA, false), a: at([3, 0], yA, true), b: at([1, 2], yB, true) };
 }
 
 /** A point in a face's own coordinates: (u, v). */
@@ -407,13 +432,36 @@ const uprightHalf = (y0: number, y1: number) =>
   Math.max(tableAt(MEMBERS.upright, y0 + 0.01), tableAt(MEMBERS.upright, y1 - 0.01));
 
 /**
+ * How far each of a belt's two bar families stands off the face plane, one
+ * each way, so that no two crossing flats share a plane [estimated].
+ */
+const BAR_LAYER = 0.005;
+/** A belt gusset's clearance past an upright's face, where it is slid clear [estimated]. */
+const GUSSET_CLEAR = 0.02;
+
+/** A girder belt's members: posts, the two bar families, chords, gussets (both sides). */
+interface GirderBelt {
+  readonly posts: SegmentMember[];
+  readonly up: SegmentMember[];
+  readonly down: SegmentMember[];
+  readonly chords: SegmentMember[];
+  readonly gussets: SegmentMember[];
+}
+
+/**
  * A girder belt filling a panel between two chord plates `chord` wide whose
  * outer edges lie on the panel's node lines: posts square to the chords
  * every `pitch` from the tower's axis, standing between the chords' inner
- * edges, and a double lattice whose bars start every `barPitch` along the
- * chords and each run `span` along them from one chord's axis to the
- * other's. Everything is clipped short of the uprights; a post shorter
- * than half the depth is dropped.
+ * edges; a double lattice whose bars start every `barPitch` and each run
+ * `span` along the chords, their working lines node line to node line
+ * (PL-VII prints panel 11's angle "55°49′49″", atan(4.95368 / 3.36268)),
+ * the bars themselves ending on the chords' axes, the rivet lines; and at
+ * each post's mid-height a gusset plate `gusset` (width, height) either
+ * side of the lattice, slid along the chords clear of an upright it would
+ * reach. Everything is clipped short of the uprights; a post shorter than
+ * half the depth is dropped, and a post that does not reach mid-height
+ * takes no gusset. The two bar families stand `BAR_LAYER` off the plane,
+ * one each way; the posts in it.
  */
 function girderBelt(
   y0: number,
@@ -422,31 +470,61 @@ function girderBelt(
   pitch: number,
   barPitch: number,
   span: number,
-): { posts: SegmentMember[]; bars: SegmentMember[]; chords: SegmentMember[] } {
+  gusset: readonly [number, number],
+): GirderBelt {
   const r = uprightHalf(y0, y1);
   const margin = r + POST_CLEAR;
   const inside = (pl: FacePlane) => ({ lo: chord, hi: pl.H - chord, D: pl.H - 2 * chord });
-  const posts = onFaces(y0, y1, (pl) => {
+  const postsOf = (pl: FacePlane) => {
     const { lo, hi, D } = inside(pl);
     return family(pitch, lo, [0, 1]).map((l) => pl.clip(l.p, l.d, lo, hi, margin, D / 2));
-  });
-  // The bars run to the chords' axes, the rivet lines they are fastened on:
-  // panel 11's then meet the chords at 53.5 degrees ("53°49′43″" printed),
-  // panel 5's at 42.
-  const bars = onFaces(y0, y1, (pl) => {
-    const lo = chord / 2;
-    const hi = pl.H - chord / 2;
-    const D = hi - lo;
-    return [
-      ...family(barPitch, lo, [span, D]).map((l) => pl.clip(l.p, l.d, lo, hi, margin)),
-      ...family(barPitch, hi, [span, -D]).map((l) => pl.clip(l.p, l.d, lo, hi, margin)),
-    ];
-  });
+  };
+  const posts = onFaces(y0, y1, postsOf);
+  const bars = (dir: 1 | -1) =>
+    onFaces(
+      y0,
+      y1,
+      (pl) =>
+        family(barPitch, dir > 0 ? 0 : pl.H, [span, dir * pl.H]).map((l) =>
+          pl.clip(l.p, l.d, chord / 2, pl.H - chord / 2, margin),
+        ),
+      dir * BAR_LAYER,
+    );
   // The chords butt against the uprights' faces.
   const chords = onFaces(y0, y1, (pl) =>
     [chord / 2, pl.H - chord / 2].map((v) => pl.clip([0, v], [1, 0], v - 1e-6, v + 1e-6, r)),
   );
-  return { posts, bars, chords };
+  const [gw, gh] = gusset;
+  const gussetOff = LEG_BELTS.beltFlatThickness / 2 + BAR_LAYER + LEG_BELTS.beltGussetThickness / 2 + 0.001;
+  const gussets = (side: 1 | -1) =>
+    onFaces(
+      y0,
+      y1,
+      (pl) => {
+        const mid = pl.H / 2;
+        return postsOf(pl).map((post) => {
+          if (post === undefined || post[0][1] > mid || post[1][1] < mid) return undefined;
+          const u = post[0][0];
+          // How far the plate must slide off each upright: its edge
+          // GUSSET_CLEAR past the upright's face at both its ends.
+          let away = 0;
+          let back = 0;
+          for (const v of [mid - gh / 2, mid + gh / 2]) {
+            const across = pl.clip([0, v], [1, 0], v - 1e-6, v + 1e-6, 0);
+            if (across === undefined) continue;
+            away = Math.max(away, gw / 2 + r + GUSSET_CLEAR - (u - across[0][0]));
+            back = Math.max(back, gw / 2 + r + GUSSET_CLEAR - (across[1][0] - u));
+          }
+          const c = u + away - back;
+          return [
+            [c, mid - gh / 2],
+            [c, mid + gh / 2],
+          ] as [UV, UV];
+        });
+      },
+      side * gussetOff,
+    );
+  return { posts, up: bars(1), down: bars(-1), chords, gussets: [...gussets(1), ...gussets(-1)] };
 }
 
 /**
@@ -457,9 +535,9 @@ function girderBelt(
  * quarter depths between). The chords take the place of the node
  * horizontals at XXIV and XXIII.
  */
-function belt1(): ReturnType<typeof girderBelt> {
+function belt1(): GirderBelt {
   const P = LEG_BELTS.belt1PostPitch;
-  return girderBelt(node("XXIV").y, node("XXIII").y, LEG_BELTS.belt1Chord, P, P, 2 * P);
+  return girderBelt(node("XXIV").y, node("XXIII").y, LEG_BELTS.belt1Chord, P, P, 2 * P, LEG_BELTS.belt1Gusset);
 }
 
 /**
@@ -470,9 +548,9 @@ function belt1(): ReturnType<typeof girderBelt> {
  * mid-heights (the diamond). The chords take the place of the node
  * horizontals at XVIII and XVII.
  */
-function belt2(): ReturnType<typeof girderBelt> {
+function belt2(): GirderBelt {
   const P = LEG_BELTS.belt2PostPitch;
-  return girderBelt(node("XVIII").y, node("XVII").y, LEG_BELTS.belt2Chord, P, P / 2, P);
+  return girderBelt(node("XVIII").y, node("XVII").y, LEG_BELTS.belt2Chord, P, P / 2, P, LEG_BELTS.belt2Gusset);
 }
 
 /** The top of panel 10's base band [derived: its printed depth over the outer faces' slope]. */
@@ -607,13 +685,15 @@ function centralPosts(g: Graph): NodeHandle {
     hw1: h(b),
   });
   const stretches: Stretch[] = [
+    // From the tie's bottom chord straight up through its top chord (a
+    // plate, no horizontal at XXVIII: PL-VII Figs 1, 5 draw the "877" post
+    // continuous there) to XXVII.
     {
       y0: (f) => node("XXVIII").y - tieDepth(f),
-      y1: node("XXVIII").y,
-      hw0: MEMBERS.beltBar,
-      hw1: h("XXVIII"),
+      y1: node("XXVII").y,
+      hw0: LEG_BELTS.tieChord / 2,
+      hw1: h("XXVII"),
     },
-    between("XXVIII", "XXVII"),
     between("XXVII", "XXVI"),
     between("XXVI", "XXV"),
     between("XXV", "XXIV"),
@@ -643,14 +723,14 @@ function centralPosts(g: Graph): NodeHandle {
 
 /**
  * The "entretoises diagonales" of one leg (ENTRETOISE; PL-VIII Figs 1, 8):
- * at each of their nodes a horizontal from d to b, or, where the lift runs
- * through (`openAt`), two, each from its upright to `openHalf` short of the
+ * at each of their nodes a horizontal from d to b, or, at the nodes in
+ * `openAt`, two, each from its upright to `openHalf` short of the
  * leg's diagonal, ending free. They carry what an edge rule would write
  * for their joints (the end sines against b's and d's columns) and which
  * of their ends are joints (JOINT_ENDS); their section is squared to the
  * vertical plane through them.
  */
-function entretoiseMembers(): {
+function entretoiseMembers(openAt: readonly string[]): {
   members: SegmentMember[];
   extra: Array<{ name: string; values: number[][] }>;
 } {
@@ -676,7 +756,7 @@ function entretoiseMembers(): {
     const u = unit3(sub3(b, d));
     const [sd, md] = ends(3, y, u);
     const [sb, mb] = ends(1, y, scale3(u, -1));
-    if ((ENTRETOISE.openAt as readonly string[]).includes(name)) {
+    if (openAt.includes(name)) {
       const c = scale3(add3(d, b), 0.5);
       members.push({ a: d, b: sub3(c, scale3(u, ENTRETOISE.openHalf)), n });
       sines.push([sd, 1]);
@@ -706,6 +786,65 @@ function entretoiseMembers(): {
 /** How far the Masque stands out from the face plane: clear of the uprights' 0.41 faces and their rivet heads (0.429) [estimated]. */
 const MASQUE_STANDOFF = 0.44;
 
+/** The width of each band that fills a Masque corner [estimated: fine against its 1.0 radius]. */
+const FILLET_BAND = 0.1;
+
+/**
+ * The Masque's rounded top corners (PL-VII Fig. 6), in its face's (u, v):
+ * the frame is solid between the top band's lower edge (v = `top`), the
+ * screen's side (u = u0 - q v on the inner side, u1 - q v on the outer)
+ * and an arc of radius `r` tangent to both. It is filled with concentric
+ * bands `band` wide about the arc's centre, the first on the arc, each a
+ * polyline of short straight pieces from one edge to the other: the
+ * model's flats are boxes, and rings of them follow a curve one plate
+ * could not. The corners differ: the uprights lean in the face, so one is
+ * acute (about 66 degrees) and the other obtuse.
+ */
+function masqueFillets(
+  u0: number,
+  u1: number,
+  q: number,
+  top: number,
+  r: number,
+  band: number,
+): Array<{ band: number; seg: [UV, UV] }> {
+  const out: Array<{ band: number; seg: [UV, UV] }> = [];
+  for (const side of [0, 1] as const) {
+    const uSide = (v: number) => (side === 0 ? u0 : u1) - q * v;
+    const K: UV = [uSide(top), top];
+    // Along the top edge into the screen, and down the side.
+    const d1: UV = side === 0 ? [1, 0] : [-1, 0];
+    const L = Math.hypot(q, 1);
+    const d2: UV = [q / L, -1 / L];
+    const phi = Math.acos(d1[0] * d2[0] + d1[1] * d2[1]);
+    const bl = Math.hypot(d1[0] + d2[0], d1[1] + d2[1]);
+    const dK = r / Math.sin(phi / 2);
+    const C: UV = [K[0] + ((d1[0] + d2[0]) / bl) * dK, K[1] + ((d1[1] + d2[1]) / bl) * dK];
+    const inside = ([u, v]: UV) =>
+      v <= top + 1e-9 && (side === 0 ? u >= uSide(v) - 1e-9 : u <= uSide(v) + 1e-9);
+    const thK = Math.atan2(K[1] - C[1], K[0] - C[0]);
+    for (let k = 0; r + k * band < dK; k++) {
+      // The last band stops just short of the corner, so the corner is filled.
+      const rho = Math.min(r + (k + 0.5) * band, dK - 0.005);
+      const at = (th: number): UV => [C[0] + rho * Math.cos(th), C[1] + rho * Math.sin(th)];
+      if (!inside(at(thK))) continue;
+      // The run of that circle inside the corner, walked out from the corner's direction.
+      const step = 0.002;
+      let a = thK;
+      let b = thK;
+      while (inside(at(a - step)) && thK - a < Math.PI) a -= step;
+      while (inside(at(b + step)) && b - thK < Math.PI) b += step;
+      // A run too short to hold a flat (the corner's last sliver) is left.
+      if (rho * (b - a) < 0.02) continue;
+      const n = Math.max(1, Math.ceil((rho * (b - a)) / 0.12));
+      for (let i = 0; i < n; i++) {
+        out.push({ band: k, seg: [at(a + ((b - a) * i) / n), at(a + ((b - a) * (i + 1)) / n)] });
+      }
+    }
+  }
+  return out;
+}
+
 /**
  * "Masque placé sur le panneau 4" (PL-VII Fig. 6; numbers in `MASQUE`):
  * on each leg face that lies in a tower face (faces 0 and 3), over the
@@ -714,13 +853,17 @@ const MASQUE_STANDOFF = 0.44;
  * - a "630" bottom chord just clear of the foot's horizontal, a "750" chord
  *   2.746 clear above it,
  *   a top band under XXIV;
- * - between those two chords a 45-degree double lattice of flats;
+ * - between those two chords a double lattice of flats whose V's meet at
+ *   both chords, the 750's on the post grid and the 630's half a pitch
+ *   off, each bar spanning 1.5 pitches (45.1 degrees);
  * - above, posts on the decorative girder's 3.8825 rhythm from the tower's
- *   axis, and heavy bars crossing at the posts' mid-heights, each spanning
- *   two post pitches, as panel 5's belt does.
- * Everything is clipped to the face, 0.45 short of the uprights' axes. The
- * rounded top corners are not drawn. Flat bars in four layers, so that no
- * two crossing plates share a plane; returned as member paths by width.
+ *   axis, and heavy bars crossing at the posts' mid-heights at 47.5
+ *   degrees, each spanning about 1.7 post pitches;
+ * - the rounded top corners: the frame filled between the top band, the
+ *   screen's side and an arc of `MASQUE.fillet`, as concentric flat bands.
+ * Everything is clipped to the face, 0.45 short of the uprights' axes. Flat
+ * bars in layers, so that no two crossing plates share a plane; returned
+ * as member paths by width.
  */
 function masque(g: Graph): Array<{ paths: NodeHandle; width: number; thickness: number }> {
   const foot = node("XXV");
@@ -758,13 +901,20 @@ function masque(g: Graph): Array<{ paths: NodeHandle; width: number; thickness: 
   const horizontal = (v: number) => clip([0, v], [1, 0], v - 1e-6, v + 1e-6);
   const post = M.postPitch;
   const ks = Array.from({ length: 12 }, (_, i) => i + 3);
-  const slopeUp = (topLo - midHi) / (2 * post);
+  const slopeUp = Math.tan((M.upperAngle * Math.PI) / 180);
   const upper = (dir: 1 | -1) =>
     ks.map((k) => clip([k * post, (midHi + topLo) / 2], [1, dir * slopeUp], midHi, topLo));
+  // The lower lattice's working lines: from a V half a pitch off the grid,
+  // `lowerApexBottom` inside the 630 chord (so just short of it), 1.5
+  // pitches along to a V on the grid `lowerApexTop` inside the 750.
   const js = Array.from({ length: 30 }, (_, j) => j + 4);
+  const rise = M.lowClear + M.lowerApexBottom + M.lowerApexTop;
   const lower = (dir: 1 | -1) =>
-    js.map((j) => clip([j * M.lowerPitch, lowTop], [1, dir], lowTop, midLo));
+    js.map((j) =>
+      clip([(j + 0.5) * M.lowerPitch, lowTop - M.lowerApexBottom], [dir * 1.5 * M.lowerPitch, rise], lowTop, midLo),
+    );
   const posts = ks.map((k) => clip([k * post, midHi], [0, 1], midHi, topLo));
+  const fillets = masqueFillets(foot.inner + margin, foot.outer - margin, q, topLo, M.fillet, FILLET_BAND);
   const n: Vec3 = [0, s / F, 1 / F];
   // Face 0 of the +x+z leg: x = u, the plane z = outer(y), `off` out along n.
   const world = ([u, v]: UV, off: number): Vec3 => {
@@ -781,6 +931,16 @@ function masque(g: Graph): Array<{ paths: NodeHandle; width: number; thickness: 
     { id: "Low", segs: [horizontal(M.lowLift + M.lowChord / 2)], off: layer(3, M.plate), width: M.lowChord, thickness: M.plate },
     { id: "Mid", segs: [horizontal((midLo + midHi) / 2)], off: layer(3, M.plate), width: M.midChord, thickness: M.plate },
     { id: "Top", segs: [horizontal(topLo + M.topBand / 2)], off: layer(3, M.plate), width: M.topBand, thickness: M.plate },
+    // The corners' bands, just behind the top band (which hides their ends
+    // above it) and in front of the bars they end: alternate bands 1 mm
+    // apart, so neighbours never share a plane.
+    ...[0, 1].map((parity) => ({
+      id: `Fillet${parity}`,
+      segs: fillets.filter((f) => f.band % 2 === parity).map((f) => f.seg),
+      off: layer(3, M.plate) - 0.003 - 0.001 * parity,
+      width: FILLET_BAND * 1.02,
+      thickness: M.plate,
+    })),
   ];
   return groups.map(({ id, segs, off, width, thickness }) => {
     const rows: Vec3[][] = [];
@@ -800,94 +960,6 @@ function masque(g: Graph): Array<{ paths: NodeHandle; width: number; thickness: 
     // lies in the screen's plane.
     return { paths: edges(lat, "Bars", 0, 1, (s0, k) => s0 === 0 && k % 2 === 0), width, thickness };
   });
-}
-
-/**
- * The unit box's outward face normals, point by point: meshPrimitive's box
- * lays its faces out as blocks of 4 points (one quad each at the default
- * subdivisions) in the order +x, -x, +y, -y, +z, -z.
- */
-const BOX_NORMALS: readonly Vec3[] = (
-  [
-    [1, 0, 0],
-    [-1, 0, 0],
-    [0, 1, 0],
-    [0, -1, 0],
-    [0, 0, 1],
-    [0, 0, -1],
-  ] as const
-).flatMap((n): Vec3[] => [n, n, n, n]);
-
-/**
- * Flat bars and plates: a box per member, its length along the member,
- * `width` across it in its face and `thickness` along the face's normal.
- *
- * The boxes carry a `normal`: every box's local face normal turned by its
- * copy's `rot` (a box scaled along its own axes keeps its face normals).
- * Without one, a merge with the swept members of the same class (which do
- * carry normals) filled these with zeros, and the Masque rendered black.
- */
-function flatBars(g: Graph, id: string, members: NodeHandle, width: number, thickness: number): NodeHandle {
-  const tips = g.add(pathResample, { mode: "count", count: 2, lengthAttr: "barLen" }, `${id}Tips`);
-  const len = g.add(
-    promoteAttribute,
-    { name: "barLen", from: "primitive", to: "point", mode: "first" },
-    `${id}Len`,
-  );
-  const first = g.add(filterByExpression, { predicate: lt(attribute("curveU"), 0.5) }, `${id}First`);
-  const T = attribute("tangent", 3);
-  const Fn = attribute(FACE_NORMAL, 3);
-  const N = normalize(sub(Fn, mul(T, dot(Fn, T))));
-  const mid = g.add(
-    transformPoints,
-    { translate: mul(T, mul(attribute("barLen"), 0.5)) },
-    `${id}Mid`,
-  );
-  const aim = g.add(orientAlongVector, { direction: T, up: N, axis: "+x" }, `${id}Aim`);
-  const sized = g.add(
-    setAttribute,
-    { name: "scale", type: "f32", tupleSize: 3, value: vec(attribute("barLen"), thickness, width) },
-    `${id}Size`,
-  );
-  const unit = g.add(meshPrimitive, { shape: "box", size: [1, 1, 1] }, `${id}Unit`);
-  const unitN = g.add(
-    setAttribute,
-    {
-      name: "boxN",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(
-        indexTable(BOX_NORMALS.map((n) => n[0])),
-        indexTable(BOX_NORMALS.map((n) => n[1])),
-        indexTable(BOX_NORMALS.map((n) => n[2])),
-      ),
-    },
-    `${id}UnitN`,
-  );
-  const boxes = g.add(copyToPoints, { topology: "keep" }, `${id}Boxes`);
-  const lit = g.add(
-    setAttribute,
-    {
-      name: "normal",
-      type: "f32",
-      tupleSize: 3,
-      value: normalize(rotateByQuat(attribute("rot", 4), attribute("boxN", 3))),
-    },
-    `${id}Normals`,
-  );
-  const done = g.add(removeAttribute, { names: ["boxN"], domain: "point" }, `${id}Lit`);
-  g.connect(members, "out", tips, "in");
-  g.connect(tips, "out", len, "in");
-  g.connect(len, "out", first, "in");
-  g.connect(first, "out", mid, "in");
-  g.connect(mid, "out", aim, "in");
-  g.connect(aim, "out", sized, "in");
-  g.connect(unit, "out", unitN, "in");
-  g.connect(unitN, "out", boxes, "source");
-  g.connect(sized, "out", boxes, "target");
-  g.connect(boxes, "out", lit, "in");
-  g.connect(lit, "out", done, "in");
-  return done;
 }
 
 /**
@@ -974,18 +1046,42 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     1,
     0,
     // Not at XXIV and XXIII, nor at XVIII and XVII: the belts' chord
-    // plates of panels 5 and 11 stand there, inside them.
+    // plates of panels 5 and 11 stand there, inside them. Nor at XXVIII,
+    // where the ties' top chord, a plate above the node line, is the only
+    // horizontal (PL-VII Figs 1, 5).
     (s, k) =>
       k >= at("XXVIII") &&
       k < kMerge &&
-      !["XXIV", "XXIII", "XVIII", "XVII"].includes(levels[k]?.name ?? "") &&
+      !["XXVIII", "XXIV", "XXIII", "XVIII", "XVII"].includes(levels[k]?.name ?? "") &&
       !(k > kA && touchesA(s)),
   );
 
   // Inside the leg, the "entretoise diagonale" from d to b at the tops of
   // panels 1-3 and 6-7 (PL-VIII Figs 1, 8), open where the lift runs.
-  const ent = entretoiseMembers();
-  const entretoises = segmentMembers(g, "legEntretoiseMembers", ent.members, ent.extra);
+  // Whole in the Roux legs, whose car and stair clear it; open where the
+  // Otis car crosses its line, at XXVII-XXV and XXI (ENTRETOISE.openAt).
+  // The quadrant targets split as lifts.ts splits them: even = Roux (piles
+  // 4, 2), odd = Otis (piles 3, 1).
+  const entRoux = entretoiseMembers([]);
+  const entOtis = entretoiseMembers(ENTRETOISE.openAt);
+  const rouxQuads = g.add(filterByExpression, { predicate: lt(mod(index(), 2), 0.5) }, "legQuadsRoux");
+  const otisQuads = g.add(filterByExpression, { predicate: ge(mod(index(), 2), 0.5) }, "legQuadsOtis");
+  g.connect(quads, "out", rouxQuads, "in");
+  g.connect(quads, "out", otisQuads, "in");
+  const entretoises4 = merge(g, "legEntretoises4", [
+    copyMembersToQuadrants(
+      g,
+      "legEntretoisesRoux4",
+      segmentMembers(g, "legEntretoiseMembersRoux", entRoux.members, entRoux.extra),
+      rouxQuads,
+    ),
+    copyMembersToQuadrants(
+      g,
+      "legEntretoisesOtis4",
+      segmentMembers(g, "legEntretoiseMembersOtis", entOtis.members, entOtis.extra),
+      otisQuads,
+    ),
+  ]);
 
   // Crosses. Rule "A" draws face f's rising diagonal from station f,
   // rule "B" its falling one from station f + 1, so each face gets both.
@@ -1017,17 +1113,24 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
   ]);
   const p10Chord = edges(p10, "BandChord", 2, 0, (s, k) => k === 0 && s % 2 === 0);
 
-  // The girder belts: the base ties under panel 1, panels 5 and 11 (bars
-  // and posts here, their chord plates below), and panel 10's base band.
+  // The girder belts: the base ties under panel 1 (bars here, their chord
+  // plates below), panels 5 and 11 (posts, bars, chords and gussets, all
+  // plates below), and panel 10's base band.
   const s1 = faceSlopes(node("XXVIII").y - 1);
   const panel5 = belt1();
   const panel11 = belt2();
   const band = band10();
+  const ties = tieChords();
   const belts = merge(g, "legBelts", [
-    tie(g, "tieA", [3, 0], LEG_BELTS.tieOuterPitch, vertical(LEG_BELTS.tieOuterDepth, s1.outer), true),
+    tie(
+      g,
+      "tieA",
+      [3, 0],
+      LEG_BELTS.tieOuterPitch,
+      vertical(LEG_BELTS.tieOuterDepth, s1.outer),
+      LEG_BELTS.tieOuterPhase,
+    ),
     tie(g, "tieB", [1, 2], LEG_BELTS.tieInnerPitch, vertical(LEG_BELTS.tieInnerDepth, s1.inner)),
-    segmentMembers(g, "belt1Lattice", [...panel5.posts, ...panel5.bars]),
-    segmentMembers(g, "belt2Lattice", [...panel11.posts, ...panel11.bars]),
   ]);
 
   // Above the 2nd floor, the gap between this leg and the next.
@@ -1056,13 +1159,15 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     across,
     laced,
   );
-  // The entretoises: "600" [sourced PL-VIII Fig. 1], laced as the 600s.
-  // They meet b and d along the leg's diagonal, square to neither face of
-  // the box: its corner stands r sqrt 2 out from the axis that way.
+  // The entretoises: "600" + "600" wide in plan and "715.6" deep [sourced
+  // PL-VIII Figs 1, 8], a rectangular strut: N, its face's normal, is
+  // horizontal (across the girder in plan), B vertical. They meet b and d
+  // along the leg's diagonal, square to neither face of the box: its corner
+  // stands r sqrt 2 out from the axis that way.
   const entretoiseWeb = webMembers(
     g,
     "legEntretoise",
-    fourMembers("legEntretoises4", entretoises),
+    entretoises4,
     [
       [0, ENTRETOISE.width / 2],
       [320, ENTRETOISE.width / 2],
@@ -1073,7 +1178,13 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
       uprightAt: mul(ramp(component(position(), 1), MEMBERS.upright), Math.SQRT2),
       endFlags: true,
     },
-    laced,
+    {
+      lacingStep: [[ENTRETOISE.width / 2, ENTRETOISE.step]],
+      halfB: [
+        [0, ENTRETOISE.depth / 2],
+        [320, ENTRETOISE.depth / 2],
+      ],
+    },
   );
   // The legs' 500 diagonals in panels 12-17 are laced by panel, more
   // openly than the shaft's (LEG_LACING_500).
@@ -1099,7 +1210,8 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     laced,
   );
   // The gap X of panel 16 meets b and d at a sine of about 0.17; the
-  // default clamp (0.25) would leave its joint rivets inside them.
+  // default clamp (0.25) would leave its joint rivets inside them. Laced
+  // by panel as openly as the legs' own 500s (LEG_GAP_LACING_500).
   const gapBracingWeb = webMembers(
     g,
     "legGapBracing",
@@ -1107,7 +1219,10 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     MEMBERS.web,
     detail,
     { ...diagonals, minSine: 0.1 },
-    laced,
+    {
+      ...laced,
+      lacingBands: LEG_GAP_LACING_500.map(([lo, hi, step]) => ({ from: node(lo).y, to: node(hi).y, step })),
+    },
   );
   const gapHorizontalWeb = webMembers(
     g,
@@ -1159,10 +1274,28 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     horizontals: [...horizontalWeb.meshes, ...entretoiseWeb.meshes, ...gapHorizontalWeb.meshes],
     bracing: [...bracingWeb.meshes, ...postWeb.meshes, ...gapBracingWeb.meshes],
     girders: [
+      // The ties' bars, "70 x 70 x 8".
       faceSkin(g, "legBelt", fourMembers("legBelts4", belts), MEMBERS.beltBar),
+      // The ties' chords: plates 0.22 deep, the top one on all four faces.
+      plates("tieTopChord", ties.top, LEG_BELTS.tieChord, LEG_BELTS.tieChordThickness),
+      plates("tieAChord", ties.a, LEG_BELTS.tieChord, LEG_BELTS.tieChordThickness),
+      plates("tieBChord", ties.b, LEG_BELTS.tieChord, LEG_BELTS.tieChordThickness),
       // The belts' chord plates: panel 5's "500 x 10", panel 11's "450 x 8".
       plates("legBelt5Chords", panel5.chords, LEG_BELTS.belt1Chord, LEG_BELTS.belt1ChordThickness),
       plates("legBelt11Chords", panel11.chords, LEG_BELTS.belt2Chord, LEG_BELTS.belt2ChordThickness),
+      // Their posts and bars, flats as wide as drawn, and the gussets at
+      // the posts' mid-heights.
+      ...(
+        [
+          ["legBelt5", panel5, LEG_BELTS.belt1Post, LEG_BELTS.belt1Bar, LEG_BELTS.belt1Gusset[0]],
+          ["legBelt11", panel11, LEG_BELTS.belt2Post, LEG_BELTS.belt2Bar, LEG_BELTS.belt2Gusset[0]],
+        ] as const
+      ).flatMap(([id, belt, post, bar, gusset]) => [
+        plates(`${id}Posts`, belt.posts, post, LEG_BELTS.beltFlatThickness),
+        plates(`${id}BarsUp`, belt.up, bar, LEG_BELTS.beltFlatThickness),
+        plates(`${id}BarsDown`, belt.down, bar, LEG_BELTS.beltFlatThickness),
+        plates(`${id}Gussets`, belt.gussets, gusset, LEG_BELTS.beltGussetThickness),
+      ]),
       // Panel 10's band: "300 x 5" flats, one layer each way.
       plates("legBand10Up", band.up, LEG_BELTS.band10Flat, LEG_BELTS.band10FlatThickness),
       plates("legBand10Down", band.down, LEG_BELTS.band10Flat, LEG_BELTS.band10FlatThickness),

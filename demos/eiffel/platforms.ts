@@ -37,13 +37,14 @@
  *   on two curved consoles a face (see `THIRD`, `CONSOLE`). Plate I's
  *   "côté extérieur 18m65" matches nothing drawn there, so no deck is
  *   18.65 wide.
- * - PEDESTALS: the four decorative masonry "soubassements", 4 m high from
- *   the ground [sourced], their outer faces 62.453 from the axis on both x
- *   and z [derived from Plate I's ground chain 25.334 + 74.238 + 25.334;
- *   see `PEDESTAL`], their inner faces battered back from the arch's pier,
- *   38.17 at the ground to 40.30 at the top (`PEDESTAL_BATTER`), where
- *   the chain's 74.238 is the arch's own feet. One per leg, copied onto the
- *   quadrant targets.
+ * - PEDESTALS: the four decorative masonry "soubassements", hollow skirts
+ *   round the legs' feet, 5.55 high to where the uprights come out of them
+ *   [measured PL-I, PL-VII; SOURCES.md §24]: a battered block, a cornice at
+ *   2.00-2.72, five steps and a top slab, their outer faces' foot 62.453
+ *   from the axis on both x and z [derived from Plate I's ground chain
+ *   25.334 + 74.238 + 25.334], their inner faces' foot 38.17, at the arch's
+ *   pier, where the chain's 74.238 is the arch's own feet (see `PEDESTAL`,
+ *   `PEDESTAL_SKIRT`). One per leg, copied onto the quadrant targets.
  *
  * THE 1889 FIT-OUT (SOURCES.md §10; Plates XIII, XVI, XVIII, XIX, XXIX,
  * XXX of Eiffel's album, and his text volume). Everything below is laid
@@ -100,8 +101,9 @@
  *   carries a glazed ridge lantern: 2.65 wide, a gable 3.80 eave to eave
  *   rising 0.70 to a ridge at altitude 99.37 [sourced PL-XXX; the others
  *   print 99.39 and 99.40], its length [estimated from the roof plan].
- *   In front of each, along its outer bays, the terrace balustrade
- *   (`TERRACE_RAIL`).
+ *   In front of each, along the terrace's edge to the mid-bay columns at
+ *   ±15.53, the terrace balustrade, open over the centre bay on the
+ *   Français and the Russe (`TERRACE_RAIL`).
  * - BALUSTRADES: rails and posts, their infill (terracotta balusters, X
  *   panels) left out. The gallery's: 1.150 tall, cast-iron pilasters every
  *   1.74125, mid-arch, where the columns do not stand [sourced PL-XIII].
@@ -626,19 +628,67 @@ const LANDING = {
 
 /**
  * Where `lifts.ts`'s stairs come up through the 1st and 2nd floors
- * (SOURCES.md §20), as wells in the diagonals' frame on pile 4's leg (+t),
- * turned onto the others by `turnWell`. e1's last flight, 15 risers up the
- * diagonal in every leg, passes through the 2nd floor's deck at t 16.00 to
- * 17.11, 0.35 either side of it; the ground stair's last flight and its
- * landing, in piles 4 and 2, pass through the 1st floor's at t 28.29 to
- * 30.61, s 2.07 to 3.13, T3's lane [measured on the cooked stairs]. Each
- * opening is 0.05 larger all round [estimated]; neither is on the plates
- * read.
+ * (SOURCES.md §21), as wells in the diagonals' frame on pile 4's leg (+t),
+ * turned onto the others by `turnWell`. e1's last flight, up the diagonal
+ * in every leg to 115.73, passes through the 2nd floor's deck at t 15.23
+ * to 19.09, 0.35 either side of it; opened from 15.12 and 0.40 either
+ * side, since its stringers start at 15.18 and graze 0.35 (§24). The
+ * ground stair's last flight, in piles 4 and 2, straddling the diagonal,
+ * through the 1st floor's at t
+ * 31.34 to 36.91, s -1.58 to -0.52 [measured on the cooked stairs by the
+ * lifts unit, §21]. Neither is on the plates read.
  */
 const STAIR_OPENINGS = {
-  e1: { s: 0, t: 16.5525, along: 0.8, across: 1.205 },
-  ground: { s: 2.6, t: 29.4475, along: 1.16, across: 2.415 },
+  e1: { s: 0, t: 17.105, along: 0.8, across: 3.97 },
+  ground: { s: -1.05, t: 34.125, along: 1.06, across: 5.57 },
 } as const satisfies Record<string, Well>;
+
+/** A well centred on pile 4's diagonal, from t0 to t1 along it, `half` either side. */
+const slot = (t0: number, t1: number, half: number): Well => ({
+  s: 0,
+  t: (t0 + t1) / 2,
+  along: 2 * half,
+  across: t1 - t0,
+});
+
+/**
+ * Where the inclined lifts pass through the decks (SOURCES.md §24), as
+ * wells on pile 4's diagonal, turned onto the others by `turnWell`; t runs
+ * out along the diagonal from the tower's axis. Each opening is a run of
+ * rectangles inside its framed outline on the plates:
+ *
+ * - 1ST DECK, every leg: « plancher entre les arbalétriers » (PL-XVI Fig. 9,
+ *   1:500, on its printed 16.35 to corner a; Fig. 10's joists) leaves a slot
+ *   on the diagonal from the V where the leg's two inner faces meet at a,
+ *   its edges on t - |s| = 23.9, 0.8 past a's axis, out to an end member at
+ *   32.25 ± 0.3, 1.5 short of the leg's centre; its sides girders on ±2.70
+ *   (5.24 clear) from 26.6 to 31.3, chamfered to ±1.9 at the end [measured].
+ *   PL-XVIII Fig. 3 (1:250) puts every lift station there, the Roux's and
+ *   the Otis's alike: t 24.5-32.5, the car within ±2.2 [measured]. The V is
+ *   stepped in three, the chamfers left decked.
+ * - 2ND DECK, the Otis legs (quadrant targets 1 and 3) only: PL-XVI Fig. 12
+ *   (1:200, on its printed column chain) marks piles 1 and 3 « Ascenseur
+ *   inférieur » and leaves them open, piles 2 and 4 joisted: a neck 3.800
+ *   wide between the track's girders from a header « 2.8048 » past a
+ *   (10.765) to 12.117, 45° struts out to girders 5.500 apart (5.33 clear)
+ *   from 12.9, chamfers « 0.9017 × 0.526 » to ±2.1, and the end girder at
+ *   10.765 + « 6.1452 » = 16.910 [sourced; measured]. The model's track
+ *   crosses this floor from 10.38, 0.4 nearer a than the plate's header
+ *   (its rail line is itself estimated there, `lifts.ts`), so the neck runs
+ *   on into the triangle between the header and a, which the plate leaves
+ *   without joists, and stands ±2.02, clear of the girders' flanges
+ *   (±1.985) where the plate's deck meets their webs [derived].
+ */
+const LIFT_OPENINGS = {
+  first: [
+    slot(24.6, 25.3, 0.7),
+    slot(25.3, 26.0, 1.4),
+    slot(26.0, 26.52, 2.1),
+    slot(26.52, 31.3, 2.62),
+    slot(31.3, 32.1, 1.9),
+  ],
+  second: [slot(10.3, 12.55, 2.02), slot(12.55, 12.97, 2.33), slot(12.97, 16.25, 2.665), slot(16.25, 16.83, 2.1)],
+} as const satisfies Record<string, readonly Well[]>;
 
 /** The 1st floor's cross girders [sourced pitch, depth, drop; the rest estimated]. */
 const CROSS_GIRDER = {
@@ -687,19 +737,33 @@ const STEP = { thickness: 0.3 } as const;
 
 /**
  * The restaurants' terrace balustrade (PL-XXIX Figs 15-17, « Balustrade
- * des Terrasses des Restaurants », 1:40): 0.90 tall [sourced], its axis
- * 1.524 in front of the restaurant's post axis [sourced], so 0.16 inside
- * the step; posts 0.10 square every 0.7765 [sourced "0.7765", "10/10"], a
- * 0.10 plinth, a rail at 0.43 and a 0.08 handrail [sourced], the
- * balusters between left out. It runs along each pavilion's two outer
- * bays: the centre bay is the entrance, the paired flights of steps up
- * from the gallery [sourced PL-XVIII "Entrée"], which are not built.
+ * des Terrasses des Restaurants », 1:40): 0.90 tall [sourced]; posts 0.10
+ * square every 0.7765 [sourced "0.7765", "10/10"], a 0.10 plinth, a rail
+ * at 0.43 and a 0.08 handrail [sourced], the balusters between left out.
+ * It stands on the terrace's edge, over the step: PL-XVIII Fig. 3 prints
+ * « 2.60 » from it to the gallery's column axis on every face [sourced;
+ * measured 2.52-2.70, SOURCES.md §24], and « 1.52 » from the pavilion's
+ * front, which is PL-XXIX's 1.524 in front of the Russe's 4.124 front; the
+ * Bar's 4.2865 front would set it 0.16 back. Its outer face is flush with
+ * the step's. It runs past each pavilion's side walls (±11.648) to the
+ * gallery's mid-bay single columns at ±15.53, two bays from the face's
+ * middle, on all four faces [measured PL-XVIII: ends at ±15.48-15.67]. On
+ * the Français (face 2, -z) and the Russe (face 3, -x) it breaks over the
+ * centre bay, ±3.8825, the « Entrée », where paired curved flights come up
+ * from the gallery [sourced PL-XVIII; the flights are not built]; on the
+ * Bar (face 1, +x) it runs unbroken from -15.53 to +15.53, and so on the
+ * +z face, which PL-XVIII draws as the Théâtre that replaced the Flamand
+ * after 1889 [measured; the Flamand's own 1889 front estimated from it].
  */
 const TERRACE_RAIL = {
   spec: { height: 0.9, plinth: 0.1, cap: 0.08, rail: 0.1, post: 0.1 } satisfies RailSpec,
   mid: 0.43,
   pitch: 0.7765,
-  axis: 1.524,
+  /** Where it ends, either side of the face's middle: two bays out, 2 × 7.765. */
+  end: 15.53,
+  /** The faces with the centre-bay entrance, and those without. */
+  entrance: [2, 3],
+  closed: [0, 1],
 } as const;
 
 /**
@@ -817,10 +881,10 @@ function onFace(f: number, [a, y, r]: Vec3): Vec3 {
   return [-r, y, a];
 }
 
-/** Face-frame blocks, turned onto all four faces. */
-function allFaces(list: readonly Block[]): Block[] {
+/** Face-frame blocks, turned onto all four faces (or onto the `faces` given). */
+function allFaces(list: readonly Block[], faces: readonly number[] = [0, 1, 2, 3]): Block[] {
   const out: Block[] = [];
-  for (let f = 0; f < 4; f++) {
+  for (const f of faces) {
     const yaw = turn(1, (f * Math.PI) / 2);
     for (const b of list) {
       out.push({ at: onFace(f, b.at), size: b.size, rot: qmul(yaw, b.rot ?? [0, 0, 0, 1]) });
@@ -1600,7 +1664,11 @@ function secondDeck(): Prism[] {
     [-d, 0],
     [0, -d],
   ];
-  const wells = [0, 1, 2, 3].map((k) => turnWell(STAIR_OPENINGS.e1, k));
+  const wells = [
+    ...[0, 1, 2, 3].map((k) => turnWell(STAIR_OPENINGS.e1, k)),
+    // The Otis lifts come up through it in piles 3 and 1.
+    ...[1, 3].flatMap((k) => LIFT_OPENINGS.second.map((w) => turnWell(w, k))),
+  ];
   return floorWithWells(plan, wells, FLOORS.second - DECK, FLOORS.second);
 }
 
@@ -1914,17 +1982,24 @@ function railAlong(
   return out;
 }
 
-/** The terrace balustrade in front of the +z face's pavilion (see `TERRACE_RAIL`). */
-function terraceRail(): Block[] {
+/**
+ * The terrace balustrade in the +z face's frame (see `TERRACE_RAIL`):
+ * broken over the centre bay when `entrance`, else one run.
+ */
+function terraceRail(entrance: boolean): Block[] {
   const T = TERRACE_RAIL;
   const S = T.spec;
-  const r = EDGE - PAVILION.front + T.axis;
+  // On the terrace's edge: its outer face flush with the step's.
+  const r = EDGE - GALLERY.width - S.rail / 2;
   const y0 = FLOORS.first;
   const out: Block[] = [];
-  for (const [lo, hi] of [
-    [-PAVILION.length / 2, -GALLERY.module / 2],
-    [GALLERY.module / 2, PAVILION.length / 2],
-  ] as const) {
+  const runs: ReadonlyArray<readonly [number, number]> = entrance
+    ? [
+        [-T.end, -GALLERY.module / 2],
+        [GALLERY.module / 2, T.end],
+      ]
+    : [[-T.end, T.end]];
+  for (const [lo, hi] of runs) {
     out.push(
       onLine(lo, hi, y0, y0 + S.plinth, r, S.rail),
       onLine(lo, hi, y0 + T.mid, y0 + T.mid + S.cap, r, S.rail),
@@ -2070,67 +2145,149 @@ function skirtOrnament(): Piece {
 }
 
 /**
- * The pedestals' inner faces batter (SOURCES.md §17.2, re-read here on
- * PL-VII Fig. 1 and PL-I Fig. 1; tags as in the file comment). The masonry
- * recedes from the arch's pier, which stands in front of it: its inner
- * face is 38.17 from the axis at the ground, where it meets the pier's
- * base flush with the pier's shaft [derived: 37.419 + 0.75; PL-VII
- * 38.1-38.4, PL-I 38.4-39.0], and 40.30 at its 4.00 top [measured: PL-VII
- * 40.3-40.4, twice; PL-I 39.7-40.5], so 39.63 at the model pier's capital
- * (PL-VII: 39.2 at the capital's foot, 39.7 at its head). The plates draw
- * the edge moulded, an ogee under a cornice; the plane follows PL-VII's
- * profile within 0.1, and its round moulding halfway up within 0.35
- * [measured]. Both inner faces, over their whole length [estimated: the
- * plates show the profile at the ends only]; the outer faces stay upright
- * at `PEDESTAL.outer`. So the arch's foot, its pier and the member's inner
- * face at 37.119 are clear of the masonry.
+ * The pedestals (`PEDESTAL`, SOURCES.md §24; tags as in the file comment):
+ * a hollow masonry skirt round each leg's foot, stepped as PL-I draws it,
+ * its top only where the uprights come out of it. Each tier's four faces
+ * (battered or upright) and the ring between one tier and the next (a
+ * tread where the tier above steps back, a soffit under the cornice's
+ * projection) are plates extruded into the masonry, `shell` thick or less:
+ * never so thick that they reach the HOLE the leg stands in, the leg's own
+ * footprint at every height (its uprights' outer faces, which lean out
+ * toward the ground) plus `margin`. A leaning upright's horizontal section
+ * is wider than its square one: `lean` times its half-width [measured on
+ * the cooked skin at the supports: 0.542 across x and 0.459 across z for
+ * the 0.41 upright, 1.32 and 1.12 times]. At the top a coping ring closes the
+ * skirt onto that hole. So the uprights, the base ties, the central posts
+ * and everything in the leg's interior (the lift tracks' feet, the ground
+ * stair's start) rise out of the skirt without passing through masonry,
+ * as PL-VII draws the ties inside it; and the arch's pier stands in front
+ * of the inner faces, touching them only at the ground (38.17, the pier
+ * base's back face) [derived].
  */
-const PEDESTAL_BATTER = { foot: PEDESTAL.innerFoot, top: PEDESTAL.innerTop, shell: 0.4 } as const;
+const PEDESTAL_SKIRT = { shell: 0.4, margin: 0.03, coping: 0.05, lean: 1.33 } as const;
+
+/** Wound so a planar outline's normal (Newell's) points along `into`: it then extrudes that way. */
+function towards(outline: readonly Vec3[], into: Vec3): Vec3[] {
+  const n = [0, 0, 0];
+  for (let i = 0; i < outline.length; i++) {
+    const [x0, y0, z0] = outline[i] as Vec3;
+    const [x1, y1, z1] = outline[(i + 1) % outline.length] as Vec3;
+    n[0] += (y0 - y1) * (z0 + z1);
+    n[1] += (z0 - z1) * (x0 + x1);
+    n[2] += (x0 - x1) * (y0 + y1);
+  }
+  const along = n[0]! * into[0] + n[1]! * into[1] + n[2]! * into[2] > 0;
+  return along ? [...outline] : [...outline].reverse();
+}
 
 /**
- * One pedestal, in the +x +z quadrant (see `PEDESTAL_BATTER`): a frustum
- * battered on its two inner faces, as its six faces, each a plate extruded
- * into the solid from its outer surface.
+ * The ring between two nested plan squares [a0, a1]² ⊇ [b0, b1]² at height
+ * y, as its four mitred trapezoids (the +x +z quadrant's plan: x and z both
+ * run from the inner faces, a0, to the outer, a1). Pieces narrower than a
+ * millimetre are left out.
+ */
+function squareRing(a0: number, a1: number, b0: number, b1: number, y: number): Vec3[][] {
+  const p = (x: number, z: number): Vec3 => [x, y, z];
+  const pieces: Array<[Vec3[], number]> = [
+    [[p(a0, a0), p(a1, a0), p(b1, b0), p(b0, b0)], b0 - a0],
+    [[p(a1, a0), p(a1, a1), p(b1, b1), p(b1, b0)], a1 - b1],
+    [[p(a1, a1), p(a0, a1), p(b0, b1), p(b1, b1)], a1 - b1],
+    [[p(a0, a1), p(a0, a0), p(b0, b0), p(b0, b1)], b0 - a0],
+  ];
+  return pieces.filter(([, w]) => w > 1e-3).map(([o]) => o);
+}
+
+/**
+ * One pedestal, in the +x +z quadrant (see `PEDESTAL_SKIRT`): per tier its
+ * four faces, then the rings between tiers, then the coping.
  */
 function pedestalFaces(): Prism[] {
-  const { foot, top, shell } = PEDESTAL_BATTER;
-  const o = PEDESTAL.outer;
-  const h = PEDESTAL.height;
-  const b: Vec3[] = [
-    [foot, 0, foot],
-    [o, 0, foot],
-    [o, 0, o],
-    [foot, 0, o],
-  ];
-  const t: Vec3[] = [
-    [top, h, top],
-    [o, h, top],
-    [o, h, o],
-    [top, h, o],
-  ];
-  const faces: Vec3[][] = [
-    b,
-    t,
-    [b[1], b[2], t[2], t[1]],
-    [b[2], b[3], t[3], t[2]],
-    [b[0], b[3], t[3], t[0]],
-    [b[0], b[1], t[1], t[0]],
-  ] as Vec3[][];
-  const mid = (foot + o) / 2;
-  return faces.map((f) => {
-    // Wound so the outline's normal (Newell's) points into the solid.
-    const n = [0, 0, 0];
-    for (let i = 0; i < f.length; i++) {
-      const [x0, y0, z0] = f[i] as Vec3;
-      const [x1, y1, z1] = f[(i + 1) % f.length] as Vec3;
-      n[0] += (y0 - y1) * (z0 + z1);
-      n[1] += (z0 - z1) * (x0 + x1);
-      n[2] += (x0 - x1) * (y0 + y1);
+  const { shell, margin, coping, lean } = PEDESTAL_SKIRT;
+  const tiers = PEDESTAL.tiers;
+  // The hole: the leg's footprint at y, out to its uprights' outer faces.
+  const hole = (y: number): [number, number] => {
+    const { inner, outer } = profileAt(y);
+    const w = uprightAt(y) * lean + margin;
+    return [inner - w, outer + w];
+  };
+  const out: Prism[] = [];
+  for (const t of tiers) {
+    const [i0, i1] = t.inner;
+    const [o0, o1] = t.outer;
+    const b = (x: number, z: number): Vec3 => [x, t.y0, z];
+    const h = (x: number, z: number): Vec3 => [x, t.y1, z];
+    // Each face and the direction into the masonry behind it; its depth is
+    // the least horizontal room between it and the hole, over its height.
+    const room = (d0: number, d1: number, side: 0 | 1) =>
+      Math.min(
+        ...[t.y0, t.y1].map((y, k) => {
+          const d = k === 0 ? d0 : d1;
+          const [hi, ho] = hole(y);
+          return side === 0 ? hi - d : d - ho;
+        }),
+      );
+    const faces: Array<[Vec3[], Vec3, number]> = [
+      [[b(i0, i0), b(o0, i0), h(o1, i1), h(i1, i1)], [0, 0, 1], room(i0, i1, 0)],
+      [[b(o0, i0), b(o0, o0), h(o1, o1), h(o1, i1)], [-1, 0, 0], room(o0, o1, 1)],
+      [[b(o0, o0), b(i0, o0), h(i1, o1), h(o1, o1)], [0, 0, -1], room(o0, o1, 1)],
+      [[b(i0, o0), b(i0, i0), h(i1, i1), h(i1, o1)], [1, 0, 0], room(i0, i1, 0)],
+    ];
+    for (const [f, into, space] of faces) {
+      const depth = Math.min(shell, space - 0.02);
+      if (!(depth > 0.01)) {
+        throw new Error(
+          `platforms.ts pedestalFaces: the tier ${t.y0}-${t.y1} leaves ${space.toFixed(3)} m between its face and the leg's uprights; ` +
+            "move that tier's face out in PEDESTAL.tiers (spec.ts), or the skirt reaches into the leg",
+        );
+      }
+      out.push({ outline: towards(f, into), depth });
     }
-    const [px, py, pz] = f[0] as Vec3;
-    const inward = n[0]! * (mid - px) + n[1]! * (h / 2 - py) + n[2]! * (mid - pz) > 0;
-    return { outline: inward ? f : [...f].reverse(), depth: shell };
-  });
+  }
+  // Between tiers: a tread where the one above steps back (into the tier
+  // below), a soffit where it projects (into the tier above).
+  for (let k = 0; k + 1 < tiers.length; k++) {
+    const lo = tiers[k] as (typeof tiers)[number];
+    const hi = tiers[k + 1] as (typeof tiers)[number];
+    const y = lo.y1;
+    const [li, lo1] = [lo.inner[1], lo.outer[1]];
+    const [ui, uo] = [hi.inner[0], hi.outer[0]];
+    const tread = ui >= li && uo <= lo1;
+    const soffit = ui <= li && uo >= lo1;
+    if (!tread && !soffit) {
+      throw new Error(
+        `platforms.ts pedestalFaces: the tiers meeting at ${y} neither step back nor project on both faces; ` +
+          "make PEDESTAL.tiers (spec.ts) nest there",
+      );
+    }
+    const ring = tread ? squareRing(li, lo1, ui, uo, y) : squareRing(ui, uo, li, lo1, y);
+    // A tread hangs down into the tier below, where the uprights lean
+    // further out: it stops 0.02 short of the height at which the hole
+    // reaches its inner edge.
+    let depth = Math.min(shell, tread ? lo.y1 - lo.y0 : hi.y1 - hi.y0);
+    if (tread) {
+      for (let d = 0.01; d <= depth; d += 0.01) {
+        const [hIn, hOut] = hole(y - d);
+        if (hIn - ui < 0.02 || uo - hOut < 0.02) {
+          depth = d - 0.02;
+          break;
+        }
+      }
+    }
+    if (!(depth > 0.01)) {
+      throw new Error(
+        `platforms.ts pedestalFaces: the tread at ${y} has no room above the leg's uprights; ` +
+          "move the tier above it out in PEDESTAL.tiers (spec.ts)",
+      );
+    }
+    for (const f of ring) out.push({ outline: towards(f, [0, tread ? -1 : 1, 0]), depth });
+  }
+  // The coping: the top tier's head closed onto the hole.
+  const top = tiers[tiers.length - 1] as (typeof tiers)[number];
+  const [hi, ho] = hole(top.y1 - coping);
+  for (const f of squareRing(top.inner[1], top.outer[1], hi, ho, top.y1)) {
+    out.push({ outline: towards(f, [0, -1, 0]), depth: coping });
+  }
+  return out;
 }
 
 /**
@@ -2341,7 +2498,6 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
       ...pavilion.walls,
       ...galleryRail,
       ...voidRail,
-      ...terraceRail(),
       step,
       ...ornament.blocks,
       ...crossGirders(),
@@ -2350,10 +2506,18 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
       ...panelling.blocks,
       ...consolesFace(),
       ringSide(terrace, EDGE + GALLERY.gutter, GALLERY.floor),
-    ]).concat(landingBlocks()),
+    ]).concat(
+      allFaces(terraceRail(true), TERRACE_RAIL.entrance),
+      allFaces(terraceRail(false), TERRACE_RAIL.closed),
+      landingBlocks(),
+    ),
   );
   // The ground stair arrives in piles 4 and 2: quadrant targets 0 and 2.
-  const arrivals = [0, 2].map((k) => turnWell(STAIR_OPENINGS.ground, k));
+  const arrivals = [
+    ...[0, 2].map((k) => turnWell(STAIR_OPENINGS.ground, k)),
+    // Every leg's lift passes through it: the Roux to it, the Otis on up.
+    ...[0, 1, 2, 3].flatMap((k) => LIFT_OPENINGS.first.map((w) => turnWell(w, k))),
+  ];
   const fitPrisms = prisms(g, "fitOutCurved", [
     ...cutWells(allFacesPrisms(firstDeck()), arrivals),
     ...secondDeck(),

@@ -46,19 +46,17 @@
  *   B]. That arc turns vertical 37.119 off the axis at y 3.90 — the
  *   74.238 clear span of PL-I [derived; the closure is to 0.2 mm, which is
  *   how the junction is placed at the parallel point rather than lower].
- *   The member runs on straight down the plane below that and ends at
- *   y 2.95, about a metre under the pedestal's top, in the collar of a
- *   stone pier [estimated: PL-XI Fig. 1, PL-VII Fig. 1, PL-I; see
- *   `ARCH_END`]. The pier stands upright under the member's end, in front
- *   of the pedestal: the plates draw the pedestal's inner face battered
- *   back from the pier's foot to 2.5-3 m outboard of its axis at the top
- *   [sourced drawing PL-I, PL-VII], which `platforms.ts`'s plain box does
- *   not (SOURCES.md §17).
- * - a small bracket ties the lower arch to b: a tie on the panel's mid
- *   horizontal (11.9), a short X-braced box down to a tie at 11.0, an X
- *   down to a tie at 8.55, and a strut from b down to the arch at 6.0
- *   [sourced drawing PL-XI Fig. 1 and PL-VII Fig. 1, which agree; heights
- *   estimated off PL-XI].
+ *   The member comes down to y 4.30, 1.25 under the pedestal's 5.55 top,
+ *   into the collar of a stone pier [measured: PL-I Fig. 1, PL-VII Fig. 1;
+ *   see `ARCH_END`], within 2° of vertical there. The pier stands upright
+ *   under the member's end, in front of the pedestal, whose inner faces
+ *   step back from the pier's foot to 3 m outboard of its axis at the top
+ *   [sourced drawing PL-I, PL-VII; `platforms.ts`, SOURCES.md §24].
+ * - a small bracket ties the lower arch to b: a tie at 12.52, 0.6 above
+ *   the panel's mid horizontal, a short X-braced box down to a tie at
+ *   11.45, an X down to a tie at 9.11, and a strut from b down to the arch
+ *   at 6.68 [sourced drawing PL-XI Fig. 1 and PL-VII Fig. 1, which agree;
+ *   heights measured on both, see `BRACKET_TIES`].
  * - FANS: the ornament in each band panel, a half-disc of radiating bars
  *   on the intrados [sourced drawing PL-VII, PL-XI; reduced to a rim and
  *   three spokes], on the decorated side.
@@ -220,17 +218,20 @@ const FILLET_BAR = 0.12;
 /** The lower arch's bracket to b: 80 x 80 x 8 angles [sourced], squared [estimated]. */
 const BRACKET_BAR = 0.06;
 /**
- * The bracket's ties, top down: on panel 1's mid horizontal, then 11.0 and
- * 8.55 [estimated, PL-XI Fig. 1 at 31.75 px/m from the crown's 39.40:
- * 12.1, 11.0, 8.57; PL-VII Fig. 1 draws the same three, its second a third
- * of the way down]. An X in each of the two panels between them.
+ * The bracket's ties, top down [measured, SOURCES.md §24, twice each and
+ * blind the second time: PL-XI Fig. 1 12.51 / 11.50 / 9.07 and 12.48 /
+ * 11.50 / 9.05; PL-VII Fig. 1 12.45 / 11.32 / 9.13 and 12.65 / 11.48 /
+ * 9.20; each read against the leg's own node line N1 (6.40) or panel 1's
+ * mid line (11.90) a few metres off, so no long-range scale enters. These
+ * are the means]. The top tie stands 0.6 above panel 1's mid horizontal,
+ * not on it. An X in each of the two panels between them.
  */
-const BRACKET_TIES = [(node("XXVIII").y + node("XXVII").y) / 2, 11.0, 8.55] as const;
+const BRACKET_TIES = [12.52, 11.45, 9.11] as const;
 /**
- * Where the strut from b's lowest tie lands on the arch [estimated: PL-XI
- * 5.9-6.05; PL-VII 6.1-6.2, scaled between its ties].
+ * Where the strut from b's lowest tie lands on the arch [measured, §24:
+ * PL-XI 6.70 and 6.62, PL-VII 6.74 and 6.66].
  */
-const BRACKET_FOOT = 6.0;
+const BRACKET_FOOT = 6.68;
 /** Entretoises: latticed cross members and light diagonals [estimated, PL-XI Fig. 2]. */
 const ENTRETOISE_WEB = [
   [0, 0.2],
@@ -240,31 +241,44 @@ const ENTRETOISE_BAR = 0.05;
 /** The GHIJ frames' posts on the decorative girders [sourced PL-XI "1' ... 5'"]. */
 const GHIJ = [-2 * BAY * 2, -2 * BAY, 0, 2 * BAY, 2 * BAY * 2] as const;
 /**
- * Where the arch member ends, on its pier: the height of its highest
- * corner, which the collar's top meets [estimated: PL-XI Fig. 1 draws the
- * end 2.8-3.0 above the ground, 31.75 px/m from the crown's 39.40; PL-VII
- * Fig. 1 draws it 0.24-0.26 of the pedestal's drawn height under the
- * pedestal's top and PL-I 0.2-0.3, 0.8-1.2 under the model's 4.00]. Below
- * the lower arc's vertical point (y 3.90) the member runs straight down
- * the plane.
+ * Where the arch member comes out of its pier: the height of its highest
+ * corner, which the collar's top meets [measured, SOURCES.md §24, each
+ * plate on its own vertical scale: PL-I 3.96 / 4.27 at the two feet (15.27
+ * px/m, its « 39m40 »), PL-VII 4.36 read as the pier is drawn (4.58 by the
+ * rabattement's ÷1.119; 89.05 px per vertical metre on the leg's node
+ * lines); 1.25 under the 5.55 pedestal (`PEDESTAL`)]. PL-XI Fig. 1 ends the
+ * iron itself at 3.42 (its node lines, 32.17 px/m), at PL-VII's shaft top:
+ * the member runs on about a metre down inside the collar and capital,
+ * hidden, and is not built there. The 2.95 this replaces came from PL-XI
+ * read with its horizontal scale (31.75) carried 36 m down from the crown.
+ * The lower arc turns vertical at y 3.90, so over its last metres the
+ * member stands within 2° of vertical, as all three plates draw it.
  */
-const ARCH_END = 2.95;
+const ARCH_END = 4.3;
 /**
  * The pier, upright under the member's end, from the ground up: a moulded
- * base, a rusticated shaft, a capital, and the collar the member stands in
- * [estimated, PL-VII Fig. 1 at 80 px/m: base 1.93, shaft 1.45-1.50,
- * capital 1.59-1.61, collar 0.88-0.90 round the 0.60 member, the collar,
- * capital and shaft centred on it within 0.03; heights in its proportions,
- * the pier drawn three quarters of the pedestal's height. PL-I Fig. 1
- * agrees within its 0.1 m line]. Each part is `side` square and reaches
- * `top`; the base is flush with the shaft on the pedestal's side and flares
- * 0.43 toward the opening, so it sits `inboard` of the pier's axis [sourced
- * drawing PL-VII, PL-I, both feet].
+ * base, a rusticated shaft, a neck band, the capital's block, its flared
+ * neck, and the collar the member stands in [measured, PL-VII Fig. 1 (§24),
+ * at 80 px/m across: base 1.81-1.93, shaft 1.35 at its drafted margins and
+ * 1.51 over the bosses, band 1.31-1.43, capital 1.57, neck 0.70, collar
+ * 0.86-0.90 round the 0.60 member, all centred on it within 0.03; tops as
+ * drawn (1.09, 3.05, 3.37, 3.92, 4.24, 4.36), scaled by 0.986 to the
+ * collar's `ARCH_END`]. The collar reaches down to 4.00, not the neck's
+ * 4.18: the member's end is square to it and it leans with the face, so
+ * its lowest corner is 0.27 under its highest, at 4.03, and the collar
+ * holds all of it [derived; checked in `buildFirstFloor`]. PL-I draws the
+ * capital about a metre lower, a schematic 65 px pier. Each part is `side`
+ * square and reaches `top`; the
+ * base is flush with the shaft on the pedestal's side and flares 0.43
+ * toward the opening (PL-VII 0.50), so it sits `inboard` of the pier's axis
+ * [sourced drawing PL-VII, PL-I, both feet].
  */
 const PIER = [
-  { side: 1.93, top: 0.75, inboard: 0.215 },
-  { side: 1.5, top: 2.2, inboard: 0 },
-  { side: 1.6, top: 2.75, inboard: 0 },
+  { side: 1.93, top: 1.07, inboard: 0.215 },
+  { side: 1.5, top: 3.01, inboard: 0 },
+  { side: 1.37, top: 3.32, inboard: 0 },
+  { side: 1.6, top: 3.87, inboard: 0 },
+  { side: 0.72, top: 4.0, inboard: 0 },
   { side: 0.9, top: ARCH_END, inboard: 0 },
 ] as const;
 /**
@@ -724,16 +738,14 @@ function plates(g: Graph, id: string, outlines: readonly Vec3[][], quads: NodeHa
   g.connect(key, "out", paths, "in");
   g.connect(paths, "out", bare, "in");
   const four = copyToQuadrants(g, `${id}4`, bare, quads);
-  const solid = g.add(
-    extrudePolygon,
-    { direction: "polygonNormal", distance: PLATE, caps: "both" },
-    `${id}Solid`,
-  );
-  // As for the platforms' prisms: the extrusion's reporting normal goes.
-  const out = g.add(removeAttribute, { names: ["normal"], domain: "point" }, id);
+  // The extrusion writes a flat `normal` for every wall and cap, and it
+  // runs after the copies, so each is right on every face: kept, as the
+  // platforms' prisms keep theirs, since the arches class merges these with
+  // skins that carry one and would fill a missing one with zeros, which
+  // the page shades black (PLAN.md).
+  const solid = g.add(extrudePolygon, { direction: "polygonNormal", distance: PLATE, caps: "both" }, id);
   g.connect(four, "out", solid, "in");
-  g.connect(solid, "out", out, "in");
-  return out;
+  return solid;
 }
 
 /** The two planes: the face (the outer arch and girders) and 15.00 inboard. */
@@ -1132,6 +1144,13 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}
   if (ARCH_END >= PEDESTAL.height) {
     throw new Error(
       `firstFloor: the arch ends at ${ARCH_END}, on or above the ${PEDESTAL.height} m pedestal's top; the plates end it about a metre under it (PL-I, PL-VII) — lower ARCH_END`,
+    );
+  }
+  const collarFoot = (PIER[PIER.length - 2] as (typeof PIER)[number]).top;
+  const endLow = ARCH_END - 2 * ARCH_CHORD * SIN;
+  if (collarFoot >= endLow) {
+    throw new Error(
+      `firstFloor: the pier's collar starts at ${collarFoot}, above the arch member's lowest corner at ${endLow.toFixed(3)}, so the member's end would stand out of the neck — lower the neck's top in PIER below ${endLow.toFixed(3)}`,
     );
   }
   const piers = ar.piers.map((p, i) => box(g, `ffPier${i}`, p.c, p.size));

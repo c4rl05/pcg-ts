@@ -51,14 +51,17 @@
  * THE CARS. Both systems ran double-deck cars: Otis 50 passengers, Roux
  * 100 [sourced PL-XX, PL-XXI]. Otis (PL-XXII ter Figs 1-2): decks 4.670
  * long [sourced], 3.169 across [sourced], 2.13 floor to roof top [sourced
- * chain 205 + 275 + 1.00 + 0.65], floor to floor 2.37 and the upper deck
- * 0.54 further up the slope [measured, Fig. 1 at 316 px/m], wheelbase
- * « 8m109 » [sourced]. Roux (PL-XXIII Fig. 4): 3.27 across, decks about
- * 2.1 high [measured]; the deck length is lost in the plate's gutter
- * [estimated]. The floors are level and the upper deck sits further up the
- * slope, the stepped car of PL-XX, and the car rides BETWEEN its girders,
- * dipping into the trough they make above the ties [estimated]. Where each
- * car stands is a chosen moment [estimated].
+ * chain 205 + 275 + 1.00 + 0.65], floor to floor 2.376 [measured, Fig. 1
+ * at 315.7 px/m] and the upper floor « 1,080 » further in [sourced], so
+ * the decks stack on 65.6°, the slope the plate draws the car level on;
+ * wheelbase « 8m109 » [sourced]. Roux (PL-XXIII): 3.27 across, decks about
+ * 2.1 high (Fig. 4), 3.9 long (Fig. 11's dotted cabin) [measured]. The
+ * floors are level and the upper deck sits further up the slope, the
+ * stepped car of PL-XX, and the car rides BETWEEN its girders, each deck's
+ * inner end 1.1 into the trough they make above the ties [measured on the
+ * Otis]. Where each car stands is a chosen moment [estimated]: on the
+ * 54.6° run, where the Otis car's 65.6° stack leaves its upper deck 0.6
+ * into the trough, not 1.1.
  *
  * THE EDOUX [sourced PL-XX, PL-XXIII ter]. Two cars counterbalanced by four
  * cables over pulleys at the top: the upper car, lifted by two pistons 80.20
@@ -87,10 +90,10 @@
  *   marches » of 0.250 inward, « 5.750 » each, with the landing Pm 1.00
  *   between, the landing Pa 1.300, then T4, « 19 marches », back out to the
  *   next P4; risers « 0.15933 » [sourced]. Each panel's P4 stands 7.820 in
- *   from the one below, the leg's own lean, « pente de 1m407 pour 1m00 »
- *   [sourced Fig. 1]. T3 and T4 run in two lanes side by side (Fig. 1 bis).
- *   The plate straddles the diagonal with them; here they stand beside the
- *   car instead (see `groundToFirst`).
+ *   from the one below, the leg's own lean, « pente de 1m407 pour 1m00 »,
+ *   its outer end 2.05 in from c [sourced Fig. 1]. T3 and T4 run in two
+ *   lanes side by side straddling the diagonal, over the car's path (Fig.
+ *   1 bis); one flight starts it from the ground (see `groundToFirst`).
  * - 1st → 2nd floor: « Escalier tournant de 1m60 de diamètre … il y en a
  *   quatre semblables, un dans chaque pile ». One helix per panel near the
  *   outer corner c, one through panels 10 and 11 (PL-XX Figs 3–4), joined
@@ -107,25 +110,29 @@
  *   well, shifted toward the axis at an « escalier de raccord » in panels
  *   26-27 where the shaft grows too narrow for it (see `shaftStairs`).
  *
- * Everything here is boxes (no `normal`, so copying the meshes onto the
- * quadrant targets is safe) except the helices' hand rails, which are paths
- * copied BEFORE they are skinned. Tracks and the Edoux guides go in
- * "girders"; cars, the Edoux cars and the stairs in "platforms".
+ * Everything here is boxes except the helices' hand rails, which are paths
+ * copied BEFORE they are skinned. The boxes carry their local face normals
+ * through every copy and get their `normal` from the composed `rot` after
+ * the last one (`lit`). Tracks and the Edoux guides go in "girders"; cars,
+ * the Edoux cars and the stairs in "platforms".
  */
 import type { Graph, NodeHandle } from "pcg-ts";
 import {
+  attribute,
   copyToPoints,
   filterByExpression,
   ge,
   index,
   lt,
   mod,
+  normalize,
   pointGrid,
   pointsToPath,
+  removeAttribute,
   setAttribute,
   vec,
 } from "pcg-ts";
-import { type Vec3, box, copyToQuadrants, indexTable, merge, skin } from "./lattice.js";
+import { type Vec3, box, copyToQuadrants, indexTable, merge, rotateByQuat, skin } from "./lattice.js";
 import type { Detail, Parts } from "./parts.js";
 import { FLOORS, NODES, profileAt } from "./spec.js";
 
@@ -346,27 +353,45 @@ interface CarSpec {
 /**
  * Otis (PL-XXII ter): decks 4.670 long [sourced Fig. 1], 3.169 across
  * [sourced Fig. 2], 2.13 floor to roof top [sourced chain "205", "275",
- * "1.00", "0.65", Fig. 1]; floor to floor 2.37, the upper deck 0.54
- * further in [measured, Fig. 1 at 316 px/m on its printed 4.670]; the
- * wheelbase « D'axe en axe des Roues = 8m109 » [sourced Fig. 2].
+ * "1.00", "0.65", Fig. 1]; floor to floor 2.376 [measured, Fig. 1 at 315.7
+ * px/m on its printed 4.670]; the upper floor's outer end « 1,080 » further
+ * in than the lower's [sourced Fig. 1: the dimension runs from one floor's
+ * outer end to the other's, and the inner ends and inner walls agree to
+ * 0.02], so the decks stack on atan(2.376 / 1.08) = 65.6°, the slope the
+ * plate draws the car level on (its track 64.75° under the level floors);
+ * the wheelbase « D'axe en axe des Roues = 8m109 » [sourced Fig. 2].
  */
 const OTIS_CAR: CarSpec = {
   deck: [4.67, 2.13, 3.169],
   gauge: OTIS.gauge,
   top: OTIS.top,
-  step: 2.37,
-  setback: 0.54,
+  step: 2.376,
+  setback: 1.08,
   chassis: 8.109,
 };
 /**
  * Roux (PL-XXIII Fig. 4, 1:50): 3.27 across and about 2.1 floor to roof,
  * the decks about 2.5 apart [measured, at 309.8 px/m; the heights near
- * the plate's gutter]; 5.8 long, 50 a deck [estimated: the length is lost
- * in the gutter].
+ * the plate's gutter]. 3.9 long: Fig. 11, the plan at 1:50, draws the
+ * cabin « au bas de sa course » dotted, 3.94 × 3.21 at 313 px/m on its
+ * printed 5.200 and 2.850 [measured; read as one deck, the width being the
+ * car's 3.27 — whether the outline is a deck or the car's whole plan is not
+ * settled, and Fig. 3's elevation hides the car's inner end behind the
+ * girders]. A second reading closes the outline further out, 4.4-4.5; at
+ * that length the car would reach 3.75 above the rail line, into the
+ * plate's own stair (its landings Pa 3.71 above it), so PL-XXVIII bounds
+ * the deck under 4.4 and the shorter reading stands. Stacked along the
+ * slope, both decks dip alike.
  */
-const ROUX_CAR: CarSpec = { deck: [5.8, 2.1, 3.27], gauge: ROUX.gauge, top: ROUX.top, step: 2.5 };
+const ROUX_CAR: CarSpec = { deck: [3.9, 2.1, 3.27], gauge: ROUX.gauge, top: ROUX.top, step: 2.5 };
 
-/** How far the car may dip below its rails, into the girders' trough [estimated]. */
+/**
+ * How far a deck's floor dips at its inner end below the rail line, square
+ * to the track, into the girders' trough: 1.1 [measured, PL-XXII ter Fig.
+ * 1 made track-horizontal: both Otis decks' inner walls, parallel to the
+ * track, 1.07-1.16 below the girders' top; the Roux taken the same
+ * (estimated)]. It clears the ties and the lateral bracing at 1.13-1.15.
+ */
 const TROUGH = 1.1;
 
 /**
@@ -378,9 +403,10 @@ function car(spec: CarSpec, floorY: number): Block[] {
   const line = railLine(spec.top);
   const [len, high, wide] = spec.deck;
   const slope = railAt(line, floorY).tan;
-  // Level floors on a slope: the deck's inner end dips below the rails,
-  // at most TROUGH, which sets the floor's centre above the rail line.
-  const lift = Math.max(0.3, (len / 2) * slope - TROUGH);
+  // Level floors on a slope: the lower deck's inner end dips TROUGH below
+  // the rail line, square to the track (TROUGH √(1 + slope²) vertically),
+  // which sets the floor's centre above the rail line.
+  const lift = Math.max(0.3, (len / 2) * slope - TROUGH * Math.hypot(1, slope));
   const yRail = floorY - lift;
   const r1 = railAt(line, yRail).r;
   const back = spec.setback ?? spec.step / slope;
@@ -456,12 +482,45 @@ function blockOnLeg(k: number, b: Block): Block {
 }
 
 /**
+ * The unit box's outward face normals, point by point: meshPrimitive's box
+ * lays its faces out as blocks of 4 points (one quad each at the default
+ * subdivisions) in the order +x, -x, +y, -y, +z, -z (as `legs.ts` reads it).
+ */
+const BOX_NORMALS: readonly Vec3[] = (
+  [
+    [1, 0, 0],
+    [-1, 0, 0],
+    [0, 1, 0],
+    [0, -1, 0],
+    [0, 0, 1],
+    [0, 0, -1],
+  ] as const
+).flatMap((n): Vec3[] => [n, n, n, n]);
+
+/**
  * Many boxes as one mesh: a unit box copied onto one target per block,
  * each carrying its size as `scale` and its turn as `rot` (copyToPoints
- * scales, then turns, then places).
+ * scales, then turns, then places). The unit box carries its local face
+ * normals as `boxN`, which ride along every copy unturned; {@link lit}
+ * turns them by the composed `rot` once the last copy is made.
  */
 function blocks(g: Graph, id: string, list: readonly Block[]): NodeHandle {
-  const unit = box(g, `${id}Unit`, [0, 0, 0], [1, 1, 1]);
+  const bare = box(g, `${id}Bare`, [0, 0, 0], [1, 1, 1]);
+  const unit = g.add(
+    setAttribute,
+    {
+      name: "boxN",
+      type: "f32",
+      tupleSize: 3,
+      value: vec(
+        indexTable(BOX_NORMALS.map((n) => n[0])),
+        indexTable(BOX_NORMALS.map((n) => n[1])),
+        indexTable(BOX_NORMALS.map((n) => n[2])),
+      ),
+    },
+    `${id}Unit`,
+  );
+  g.connect(bare, "out", unit, "in");
   const slots = g.add(
     pointGrid,
     { countX: list.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
@@ -502,6 +561,30 @@ function blocks(g: Graph, id: string, list: readonly Block[]): NodeHandle {
   g.connect(unit, "out", out, "source");
   g.connect(rot, "out", out, "target");
   return out;
+}
+
+/**
+ * Write a `normal` onto boxes from {@link blocks}, after every copy: each
+ * box's local face normal turned by its composed `rot` (copyToPoints
+ * composes the quadrant's turn onto the block's, and a box scaled along its
+ * own axes keeps its face normals). Without it the class merge zero-fills
+ * the normals and a lit material shades the boxes black.
+ */
+function lit(g: Graph, id: string, boxes: NodeHandle): NodeHandle {
+  const turned = g.add(
+    setAttribute,
+    {
+      name: "normal",
+      type: "f32",
+      tupleSize: 3,
+      value: normalize(rotateByQuat(attribute("rot", 4), attribute("boxN", 3))),
+    },
+    `${id}Normals`,
+  );
+  const done = g.add(removeAttribute, { names: ["boxN"], domain: "point" }, id);
+  g.connect(boxes, "out", turned, "in");
+  g.connect(turned, "out", done, "in");
+  return done;
 }
 
 /** Polylines as paths, one per list, in order. */
@@ -641,12 +724,12 @@ function turnsBetween(steps: number, start: number, end: number): number {
 /** e1's joining flights: 11 risers of 0.207, treads 0.255 [sourced E1900-TXT p. 81]. */
 const E1_FLIGHT = { risers: 11, riser: 0.207, tread: 0.255 } as const;
 /**
- * e1's last helix runs through panels 10 and 11 to about 113 (PL-XX Fig.
- * 3: from node XIX to 3.8 m or so under the 2nd floor), and a straight
- * flight takes it on to the floor [measured]: 15 of the helices' 0.178
- * risers.
+ * e1's last helix runs through panels 10 and 11 to about 112.3 (PL-XX Fig.
+ * 3), and a straight flight takes it on inward to the 2nd floor, drawn
+ * 3.2-3.4 high and about 5 long at 81.5 px/m [measured]: 19 of the
+ * helices' 0.178 risers, 3.38, on the joining flights' 0.255 treads, 4.85.
  */
-const E1_TOP_RISERS = 15;
+const E1_TOP_RISERS = 19;
 
 /**
  * The 1st → 2nd floor stair in one leg (e1, the same in all four): a helix
@@ -719,20 +802,33 @@ function firstToSecond(): { blocks: Block[]; rails: Vec3[][] } {
  * marches », back out « 5.220 » and up « 3.3268 » to the next node's P4,
  * 7.820 further in (Fig. 1). Risers « 0.15933 »: 24, 24 and 21 of them
  * fill the panel [derived]. The running part is « comprise entre … (39.90)
- * et … (83.90) », nodes XXVIII to XXIV. Below it the start (Fig. 1): up
- * from the ground inward to a Pa-like landing and back out by a T4 to the
- * first P4 [the split of its « 4.82 » estimated]; above it a T3 to a Pm
- * and one flight on inward to the 1st floor (Fig. 2's 45-degree turns are
- * not built).
+ * et … (83.90) », nodes XXVIII to XXIV; above it a T3 to a Pm and one
+ * flight on inward to the 1st floor (Fig. 2's 45-degree turns are not
+ * built).
  *
- * Across the diagonal the plate puts T3's lane 1.16 to one side and T4's
- * 0.81 to the other (Fig. 1 bis, at 77.9 px/m), over the car's path, which
- * leaves a band about 2.9 deep (square to the slope) between the stair's
- * inner landings and the rail line. The model's cars ride higher than that
- * above their rails, so the lanes stand beside the car instead, both on
- * one side, T3's 2.1-3.1 off the diagonal clear of the girders, T4's
- * 3.15-4.15 [estimated]; the P4 landings 5.1 in from c along the diagonal,
- * so T4's outer corner stays 0.65 inside the outer faces [derived].
+ * WHERE IN THE LEG. Along the diagonal each P4's outer end stands « 2.05 »
+ * in from c's axis (Fig. 1, Fig. 5 « 2.050 »; « 12.642 » closes on it).
+ * Across it the lanes straddle the diagonal (Fig. 1 bis, the section RS at
+ * 1:200, 77.9 px/m on its « 3.927 »): T3's axis 1.05 to one side, T4's
+ * 0.92 to the other, 1.00 wide each, over the car's path [measured]. Which
+ * side is which follows the section read as a plan from above with c to
+ * the left, pile 2 Est: T3 toward pile 3 Sud, T4 toward pile 1 Nord
+ * [estimated hand]; pile 4 takes the same, turned (the Nota: « la
+ * disposition dans la pile 4 est la même, le départ au Rez-de-Ch.
+ * excepté », sending pile 4's start to PL-XVIII Fig. 5, not read here: its
+ * start is pile 2's [estimated]). The innermost landing Pa then
+ * stands 3.8 above the rail line, square to it (3.71 under its plate), and
+ * the car (see `ROUX_CAR`, `TROUGH`) reaches 3.30.
+ *
+ * THE START (Fig. 1): ONE straight flight from « Sol du Rez-de-Chaussée
+ * (35.08) » up to the first P4, at « (39.90) », rise « 4.82 » [sourced],
+ * coming up outward to it: 30 risers of 0.1607. The elevation along the
+ * diagonal draws its run about 5.0-5.3 [measured, 78.6 px/m], where 29 or
+ * 30 of the stair's 0.250 treads need 7.25-7.5: so in plan it runs at 45°
+ * to the diagonal, parallel to a face, 7.5 long and 5.30 in the elevation
+ * [derived]. It lands on P4's inner edge in T4's lane, from the T4 side
+ * [estimated side]. The masonry pedestal of `platforms.ts` covers its
+ * foot: the plate starts it at 1.58, under the pedestal's top.
  */
 function groundToFirst(): Block[] {
   const S = {
@@ -741,18 +837,41 @@ function groundToFirst(): Block[] {
     pa: 1.3,
     t3: { risers: 24, rise: 3.8366, run: 6.02 },
     t4: { risers: 21, rise: 3.3268, run: 5.22 },
-    fromC: 5.1,
-    laneT3: 2.6,
-    laneT4: 3.65,
+    fromC: 2.05,
+    laneT3: -1.05,
+    laneT4: 0.92,
     width: 1.0,
+    ground: 1.58,
+    start: { risers: 30, going: 0.25 },
   } as const;
-  const l0 = S.laneT3 - S.width / 2;
-  const l1 = S.laneT4 + S.width / 2;
+  const l0 = Math.min(S.laneT3, S.laneT4) - S.width / 2;
+  const l1 = Math.max(S.laneT3, S.laneT4) + S.width / 2;
   const out: Block[] = [];
-  // A landing from rOut inward by `along`, over one lane or both.
+  // A landing from rOut inward by `along`, over both lanes or T3's alone.
+  // Near c the leg's faces close in at 45°, and at a node their horizontal
+  // struts with them: 0.80 square on the faces' planes, leaning with the
+  // face, they reach 0.44 in from the plane at a landing's top. A landing
+  // keeps 0.50 clear of those planes (in plan, square to them), so a P4
+  // loses the two corners the faces take, 0.08 of T4's lane and 0.21 of
+  // T3's at its outer end [derived]; the plate's P4 hangs from its own
+  // « Poutre P4 » there.
+  const FACE = 0.5 * SQ2;
+  const box2 = (rIn: number, rOut: number, y: number, lo: number, hi: number) => {
+    if (rOut - rIn > 1e-6 && hi - lo > 1e-6) {
+      out.push(pad(onDiag((rIn + rOut) / 2, y, (lo + hi) / 2), U, rOut - rIn, hi - lo));
+    }
+  };
   const landing = (rOut: number, y: number, along: number, both: boolean) => {
+    const lo = both ? l0 : S.laneT3 - S.width / 2;
     const hi = both ? l1 : S.laneT3 + S.width / 2;
-    out.push(pad(onDiag(rOut - along / 2, y, (l0 + hi) / 2), U, along, hi - l0));
+    const c = cornerC(y);
+    // The half-width the faces leave at a distance d in from c.
+    const room = (r: number) => c - r - FACE;
+    const rIn = rOut - along;
+    const w = room(rOut);
+    box2(rIn, rOut, y, Math.max(lo, -w), Math.min(hi, w));
+    if (lo < -w) box2(rIn, Math.min(rOut, c - FACE + lo), y, lo, -w);
+    if (hi > w) box2(rIn, Math.min(rOut, c - FACE - hi), y, w, hi);
   };
   const t3 = (rFrom: number, y: number) =>
     flight(rFrom, y, rFrom - S.t3.run, y + S.t3.rise, S.laneT3, S.width, S.t3.risers);
@@ -760,14 +879,19 @@ function groundToFirst(): Block[] {
     flight(rFrom, y, rFrom + S.t4.run, y + S.t4.rise, S.laneT4, S.width, S.t4.risers);
   const nodes = NODES.map((n) => n.y).filter((y) => y >= 6.4 - 1e-6 && y <= 50.4 + 1e-6);
   const first = nodes[0] as number;
-  const r0First = cornerC(first) - S.fromC;
-  // The start: the virtual repeat below the first node's Pa and T4.
-  const yPa0 = first - S.t4.rise;
-  const rPa0 = r0First + 7.82 - (S.p4 + 2 * S.t3.run + S.pm);
-  const startRisers = Math.round((yPa0 - 1.58) / 0.15933);
-  out.push(...flight(rPa0 + startRisers * 0.25, 1.58, rPa0, yPa0, S.laneT3, S.width, startRisers));
-  landing(rPa0, yPa0, S.pa, true);
-  out.push(...t4(rPa0, yPa0));
+  // The start: one flight at 45° in plan, up and out onto the first P4's
+  // inner edge in T4's lane.
+  const rLand = cornerC(first) - S.fromC - S.p4;
+  const reach = (S.start.risers * S.start.going) / SQ2;
+  const lSide = Math.sign(S.laneT4);
+  out.push(
+    ...run(
+      onDiag(rLand - reach, S.ground, S.laneT4 + lSide * reach),
+      onDiag(rLand, first, S.laneT4),
+      S.width,
+      S.start.risers,
+    ),
+  );
   // The running part: one repeat per panel.
   for (let k = 0; k < nodes.length; k++) {
     const y = nodes[k] as number;
@@ -1002,9 +1126,10 @@ function shaftStairs(): { blocks: Block[]; rails: Vec3[][] } {
  * Where each car stands: its lower floor's height, per quadrant target
  * [estimated moment]. Target 0 is pile 4 (Ouest, Roux), 1 pile 3 (Sud,
  * Otis), 2 pile 2 (Est, Roux), 3 pile 1 (Nord, Otis). All on the straight
- * run below node XXIV: above it the rail line steepens to about 70° with
- * the leg, and a rigid car built level for 54.6° no longer sits level
- * there, which the model does not attempt.
+ * 54.6° run below node XXIV, with level floors: above it the rail line
+ * steepens to about 70° with the leg, which the model's cars do not ride.
+ * The Otis car is drawn level on a ~65° track (PL-XXII ter Fig. 1); a
+ * rigid one would tip about 11° on the 54.6° run, which is not modelled.
  */
 const CAR_AT = [30, 42, 12, 22] as const;
 
@@ -1018,11 +1143,15 @@ export function buildLifts(g: Graph, quads: NodeHandle, detail: Detail = {}): Pa
   g.connect(quads, "out", even, "in");
   g.connect(quads, "out", odd, "in");
 
-  const tracks = merge(g, "liftTracks", [
-    copyToQuadrants(g, "liftOtisTracks", blocks(g, "liftOtisTrack", track(OTIS)), odd),
-    copyToQuadrants(g, "liftRouxTracks", blocks(g, "liftRouxTrack", track(ROUX)), even),
-  ]);
-  const guides = blocks(g, "liftEdouxGuides", edouxGuides());
+  const tracks = lit(
+    g,
+    "liftTracks",
+    merge(g, "liftTracksBoxes", [
+      copyToQuadrants(g, "liftOtisTracks", blocks(g, "liftOtisTrack", track(OTIS)), odd),
+      copyToQuadrants(g, "liftRouxTracks", blocks(g, "liftRouxTrack", track(ROUX)), even),
+    ]),
+  );
+  const guides = lit(g, "liftEdouxGuides", blocks(g, "liftEdouxGuideBoxes", edouxGuides()));
 
   // Cars stand at a different moment in each leg, so they are laid out
   // per leg here rather than copied.
@@ -1035,11 +1164,15 @@ export function buildLifts(g: Graph, quads: NodeHandle, detail: Detail = {}): Pa
 
   const e1 = firstToSecond();
   const shaft = shaftStairs();
-  const stairs = merge(g, "liftStairs", [
-    copyToQuadrants(g, "liftStairE1", blocks(g, "liftStairE1Leg", e1.blocks), quads),
-    copyToQuadrants(g, "liftStairGround", blocks(g, "liftStairGroundLeg", groundToFirst()), even),
-    blocks(g, "liftStairShaft", shaft.blocks),
-  ]);
+  const stairs = lit(
+    g,
+    "liftStairs",
+    merge(g, "liftStairsBoxes", [
+      copyToQuadrants(g, "liftStairE1", blocks(g, "liftStairE1Leg", e1.blocks), quads),
+      copyToQuadrants(g, "liftStairGround", blocks(g, "liftStairGroundLeg", groundToFirst()), even),
+      blocks(g, "liftStairShaft", shaft.blocks),
+    ]),
+  );
   // Hand rails: paths copied before they are skinned.
   const rails = merge(g, "liftRails", [
     copyToQuadrants(g, "liftRailsE1", polylines(g, "liftRailsE1Leg", e1.rails), quads),
@@ -1047,6 +1180,10 @@ export function buildLifts(g: Graph, quads: NodeHandle, detail: Detail = {}): Pa
   ]);
   return {
     girders: [tracks, guides],
-    platforms: [blocks(g, "liftCars", cars), stairs, skin(g, "liftRailSkin", rails, 0.025)],
+    platforms: [
+      lit(g, "liftCars", blocks(g, "liftCarBoxes", cars)),
+      stairs,
+      skin(g, "liftRailSkin", rails, 0.025),
+    ],
   };
 }
