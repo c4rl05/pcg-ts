@@ -4,22 +4,33 @@
  * The nodes switched to it hand the arrays they built straight to their
  * output, so a node's cached geometry now holds the very arrays its execute
  * allocated. That is safe exactly as long as nothing ELSE holds them: not
- * the node (it must not keep or write them), and not any other node (none
- * may adopt an input's arrays, nor write an input's topology in place).
- * Break either rule and a DOWNSTREAM re-cook silently rewrites an UPSTREAM
- * cache entry, which only shows on the next cook that is served from it.
+ * the node (it must not keep or write them, nor build them in a buffer it
+ * reuses), and not any other node (none may adopt an input's arrays, nor
+ * write an input's topology in place). Break any of those and a DOWNSTREAM
+ * re-cook silently rewrites an UPSTREAM cache entry, which only shows on
+ * the next cook that is served from it.
  *
- * So the guard cooks a graph whose upstream is every switched site, edits a
- * downstream param (re-cooking only downstream nodes, several of which
- * read the upstream outputs and adopt arrays of their own), cooks again,
- * and compares every upstream output — the cached object the second cook
- * served — against a fresh cook of the upstream alone. The controls plant
- * the two ways the rule can be broken and require the guard to see them.
+ * So the guard cooks a graph whose upstream covers all eight switched
+ * sites — createTriangleMesh (meshPrimitive), setPolylineTopology
+ * (pointsToPath, connectPoints), meshFromField, sweepProfile,
+ * extrudePolygon, mergePrimitives, copyToPoints "keep" and gatherPrimitives
+ * (filterPrimitivesByBounds) — edits a downstream param (re-cooking only
+ * downstream nodes, several of which read the upstream outputs and adopt
+ * arrays of their own), cooks again, SNAPSHOTS every upstream output — the
+ * cached object the second cook served — and only then compares the
+ * snapshots against a fresh cook of the upstream alone.
+ *
+ * The snapshot has to come first: a node that builds its topology in a
+ * buffer shared across calls is rewritten by the fresh cook itself, back
+ * to the expected bytes, so a comparison that reads the cache AFTER the
+ * fresh cook is blind to it. The controls plant that pooled buffer and the
+ * two other ways the rule can be broken, and require the guard to see each.
  */
 import { describe, expect, it } from "vitest";
 
 import { adoptTopology } from "../data/adoptTopology.js";
-import { Geometry } from "../data/index.js";
+import { Geometry, createPolyline } from "../data/index.js";
+import { constant, length, position, sub } from "../fields/index.js";
 import {
   type DataCollection,
   Graph,
@@ -30,11 +41,14 @@ import {
   makeGeometryItem,
 } from "../graph/index.js";
 import { defineNode } from "../graph/node.js";
+import { dataInput } from "../runtime/index.js";
 import {
   connectPoints,
   copyToPoints,
+  extrudePolygon,
   filterPrimitivesByBounds,
   mergePrimitives,
+  meshFromField,
   meshPrimitive,
   pointGrid,
   pointsToPath,
@@ -72,22 +86,50 @@ const vandal = defineNode<{ shift: number; mode: "write" | "adopt" }>({
 });
 
 /**
- * The upstream outputs: every node that now adopts, directly (sweepProfile,
- * mergePrimitives, copyToPoints "keep", filterPrimitivesByBounds through
- * gatherPrimitives, meshPrimitive through createTriangleMesh) or through
- * setPolylineTopology (pointsToPath, connectPoints).
+ * The third planted bug: ONE module-level buffer every instance of this
+ * node type builds its `vertexToPoint` in and adopts a view of — the
+ * "own buffer of exact length" rule broken. Each cook of any instance
+ * rewrites every other instance's cached topology.
  */
-const UPSTREAM = ["path", "links", "tube", "plate", "merged", "copies", "kept"] as const;
+const POOL = new Uint32Array(4096);
+const pooled = defineNode<{ offset: number }>({
+  type: "test.pooledTopology",
+  inputs: [{ name: "in", kind: "geometry" }],
+  outputs: [{ name: "out", kind: "geometry" }],
+  defaultParams: { offset: 0 },
+  execute({ inputs, params }) {
+    const src = firstGeometry(inputs.in as DataCollection);
+    if (!src) throw new Error("test.pooledTopology: no geometry on pin in");
+    const n = src.pointCount;
+    const v2p = POOL.subarray(0, n);
+    for (let i = 0; i < n; i++) v2p[i] = (i + params.offset) % n;
+    const out = new Geometry();
+    out.attrs.point.resize(n);
+    adoptTopology(out, v2p, Uint32Array.of(0), Uint32Array.of(n));
+    return { out: [makeGeometryItem(out)] };
+  },
+});
+
+/** The upstream outputs every build declares, one per switched site. */
+const UPSTREAM = ["path", "links", "tube", "plate", "blob", "block", "merged", "copies", "kept"] as const;
+
+interface BuildOptions {
+  downstream: boolean;
+  vandal?: "write" | "adopt";
+  pooled?: boolean;
+}
 
 interface Built {
   g: Graph;
+  /** Upstream output names: {@link UPSTREAM}, plus `pooled` when planted. */
+  upstream: string[];
   /** Re-cooks downstream only: `moved` and everything below it. */
   edit: () => void;
   /** How many nodes the edit re-cooks. */
   downstreamCount: number;
 }
 
-function build(opts: { downstream: boolean; vandal?: "write" | "adopt" }): Built {
+function build(opts: BuildOptions): Built {
   const g = new Graph(7);
   const grid = g.add(pointGrid, { countX: 5, countY: 1, countZ: 3, spacing: [1, 1, 1] }, "grid");
   const path = g.add(pointsToPath, {}, "path");
@@ -97,10 +139,26 @@ function build(opts: { downstream: boolean; vandal?: "write" | "adopt" }): Built
   const tube = g.add(sweepProfile, { sides: 4, radius: 0.1 }, "tube");
   g.connect(path, "out", tube, "in");
   const plate = g.add(meshPrimitive, { shape: "plane", size: [4, 4, 4], subdivisions: [2, 1, 2] }, "plate");
+  const blob = g.add(
+    meshFromField,
+    {
+      field: sub(length(position()), constant(1.5)) as never,
+      cellSize: 0.5,
+      boundsMin: [-2, -2, -2],
+      boundsMax: [2, 2, 2],
+    },
+    "blob",
+  );
+  // A closed square footprint, the one input extrudePolygon extrudes.
+  const footprint = g.add(
+    dataInput,
+    { items: [makeGeometryItem(createPolyline([0, 0, 0, 2, 0, 0, 2, 0, 2, 0, 0, 2], { closed: true }))] },
+    "footprint",
+  );
+  const block = g.add(extrudePolygon, { distance: 1.5 }, "block");
+  g.connect(footprint, "out", block, "in");
   const merged = g.add(mergePrimitives, {}, "merged");
-  g.connect(tube, "out", merged, "in");
-  g.connect(plate, "out", merged, "in");
-  g.connect(links, "out", merged, "in");
+  for (const h of [tube, plate, links, blob, block]) g.connect(h, "out", merged, "in");
   const targets = g.add(pointGrid, { countX: 3, countY: 1, countZ: 1, spacing: [20, 1, 1] }, "targets");
   const copies = g.add(copyToPoints, { topology: "keep" }, "copies");
   g.connect(merged, "out", copies, "source");
@@ -111,22 +169,36 @@ function build(opts: { downstream: boolean; vandal?: "write" | "adopt" }): Built
     "kept",
   );
   g.connect(copies, "out", kept, "in");
-  const handles: Record<(typeof UPSTREAM)[number], NodeHandle> = { path, links, tube, plate, merged, copies, kept };
+  const handles: Record<(typeof UPSTREAM)[number], NodeHandle> = {
+    path,
+    links,
+    tube,
+    plate,
+    blob,
+    block,
+    merged,
+    copies,
+    kept,
+  };
   for (const name of UPSTREAM) g.output(handles[name], "out", name);
+  const upstream: string[] = [...UPSTREAM];
+  if (opts.pooled) {
+    const pool = g.add(pooled, { offset: 0 }, "pooled");
+    g.connect(grid, "out", pool, "in");
+    g.output(pool, "out", "pooled");
+    upstream.push("pooled");
+  }
 
-  if (!opts.downstream) return { g, edit: () => {}, downstreamCount: 0 };
+  if (!opts.downstream) return { g, upstream, edit: () => {}, downstreamCount: 0 };
 
   // Downstream: a copying node (transformPoints clones), then two adopting
   // nodes that READ upstream outputs while they build their own arrays —
-  // mergePrimitives appends links/tube/plate, and copyToPoints "keep" with
-  // no selection plans straight off its source's own arrays.
+  // mergePrimitives appends links/tube/plate/blob/block, and copyToPoints
+  // "keep" with no selection plans straight off its source's own arrays.
   const moved = g.add(transformPoints, { translate: [0, 0, 0] }, "moved");
   g.connect(kept, "out", moved, "in");
   const again = g.add(mergePrimitives, {}, "again");
-  g.connect(moved, "out", again, "in");
-  g.connect(links, "out", again, "in");
-  g.connect(tube, "out", again, "in");
-  g.connect(plate, "out", again, "in");
+  for (const h of [moved, links, tube, plate, blob, block]) g.connect(h, "out", again, "in");
   const copied = g.add(copyToPoints, { topology: "keep" }, "copied");
   g.connect(again, "out", copied, "source");
   g.connect(targets, "out", copied, "target");
@@ -139,11 +211,22 @@ function build(opts: { downstream: boolean; vandal?: "write" | "adopt" }): Built
     g.output(bad, "out", "vandal");
     downstreamCount++;
   }
+  let pooledDown: NodeHandle<{ offset: number }> | undefined;
+  if (opts.pooled) {
+    // A second instance of the pooled node, downstream: re-cooking it with a
+    // new offset rewrites the buffer the upstream instance's cache holds.
+    pooledDown = g.add(pooled, { offset: 0 }, "pooledDown");
+    g.connect(grid, "out", pooledDown, "in");
+    g.output(pooledDown, "out", "pooledDown");
+    downstreamCount++;
+  }
   return {
     g,
+    upstream,
     edit: () => {
       g.setParam(moved, "translate", [1, 2, 3]);
       if (bad) g.setParam(bad, "shift", 1);
+      if (pooledDown) g.setParam(pooledDown, "offset", 1);
     },
     downstreamCount,
   };
@@ -151,6 +234,7 @@ function build(opts: { downstream: boolean; vandal?: "write" | "adopt" }): Built
 
 type Topology = { v: number[]; s: number[]; c: number[]; points: number };
 
+/** A COPY of an output's topology — a snapshot, not a view of the cache. */
 function topologyOf(coll: DataCollection | undefined, name: string): Topology {
   const geo = coll ? firstGeometry(coll) : undefined;
   if (!geo) throw new Error(`no geometry on output ${name}`);
@@ -162,43 +246,59 @@ function topologyOf(coll: DataCollection | undefined, name: string): Topology {
   };
 }
 
+const sameTopology = (a: Topology, b: Topology): boolean => JSON.stringify(a) === JSON.stringify(b);
+
 /**
- * Cook, edit downstream, cook again; return the upstream outputs whose
- * CACHED topology no longer matches a fresh cook of the upstream alone.
+ * Cook, edit downstream, cook again, snapshot the upstream cache, then
+ * cook the upstream alone from scratch. `caught` names the upstream outputs
+ * whose snapshot differs from the fresh cook — the guard's verdict.
+ * `lateRead` repeats the comparison reading the cache AFTER the fresh cook,
+ * which is what the guard must not do; it is returned so a control can show
+ * what that ordering misses.
  */
-async function guard(vandalMode?: "write" | "adopt"): Promise<string[]> {
-  const built = build({ downstream: true, vandal: vandalMode });
+async function guard(opts: Omit<BuildOptions, "downstream"> = {}): Promise<{ caught: string[]; lateRead: string[] }> {
+  const built = build({ downstream: true, ...opts });
   const first = await cook(built.g);
   built.edit();
   const second = await cook(built.g);
   // The edit re-cooked the downstream nodes and nothing upstream: every
   // upstream output is the same object the first cook produced.
   expect(second.stats.cooked).toBe(built.downstreamCount);
-  for (const name of UPSTREAM) {
+  for (const name of built.upstream) {
     expect(firstGeometry(second.outputs[name])).toBe(firstGeometry(first.outputs[name]));
   }
-  const fresh = await cook(build({ downstream: false }).g);
-  const differ: string[] = [];
-  for (const name of UPSTREAM) {
-    const cached = topologyOf(second.outputs[name], name);
+  // SNAPSHOT BEFORE THE FRESH COOK (see the module doc).
+  const cached = new Map(built.upstream.map((name) => [name, topologyOf(second.outputs[name], name)]));
+  const fresh = await cook(build({ downstream: false, pooled: opts.pooled }).g);
+  const caught: string[] = [];
+  const lateRead: string[] = [];
+  for (const name of built.upstream) {
     const want = topologyOf(fresh.outputs[name], name);
     // Nothing degenerate would make "same" vacuous.
     expect(want.v.length).toBeGreaterThan(0);
-    if (JSON.stringify(cached) !== JSON.stringify(want)) differ.push(name);
+    if (!sameTopology(cached.get(name) as Topology, want)) caught.push(name);
+    if (!sameTopology(topologyOf(second.outputs[name], name), want)) lateRead.push(name);
   }
-  return differ;
+  return { caught, lateRead };
 }
 
 describe("adopted topology is never rewritten by a downstream re-cook", () => {
   it("every upstream cache entry still matches a fresh cook after a downstream edit", async () => {
-    expect(await guard()).toEqual([]);
+    expect(await guard()).toEqual({ caught: [], lateRead: [] });
   });
 
   it("control: a downstream node writing its input's topology in place is caught", async () => {
-    expect(await guard("write")).toEqual(["links"]);
+    expect((await guard({ vandal: "write" })).caught).toEqual(["links"]);
   });
 
   it("control: a downstream node adopting its input's arrays and writing them is caught", async () => {
-    expect(await guard("adopt")).toEqual(["links"]);
+    expect((await guard({ vandal: "adopt" })).caught).toEqual(["links"]);
+  });
+
+  it("control: a node building its topology in a shared pooled buffer is caught", async () => {
+    // The snapshot sees the downstream instance's rewrite; reading the cache
+    // after the fresh cook would not, because that cook rewrote the pool
+    // back to the expected bytes.
+    expect(await guard({ pooled: true })).toEqual({ caught: ["pooled"], lateRead: [] });
   });
 });

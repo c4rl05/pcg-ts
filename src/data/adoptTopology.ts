@@ -2,10 +2,12 @@
  * Handing topology to a {@link Geometry} WITHOUT the defensive copy.
  *
  * LIBRARY-INTERNAL, AND DELIBERATELY UNREACHABLE FROM EVERY ENTRY POINT.
- * No barrel re-exports this module: `src/data/index.ts` names what it
- * publishes module by module and this one is not in the list, and nothing
- * else re-exports `src/data` at all, so neither `import "pcg-ts"` nor any
- * subpath can name `adoptTopology`. It is imported by path, from inside
+ * No barrel re-exports this module. `src/index.ts` does re-export the
+ * whole of `src/data/index.ts` (`export *`), so what keeps this module out
+ * of `import "pcg-ts"` is that `src/data/index.ts` names what it publishes
+ * module by module and this one is not in its list; no other barrel names
+ * it either, so neither the root nor any subpath can name
+ * `adoptTopology`. It is imported by path, from inside
  * `src/`, by code that built the arrays itself. Publishing it would hand
  * every caller a way to share a buffer with a cached geometry, which is
  * exactly what `setTopology`'s copy exists to prevent — so exporting it is
@@ -24,6 +26,11 @@
  * The validation is the SAME function on both paths ({@link checkTopology}),
  * so an adopting caller throws the identical `setTopology:` message a
  * copying one would. Only the copy is skipped.
+ *
+ * This is not the only path that installs topology without the copy:
+ * `decodeGeometry` in `src/worker/protocol.ts` assigns the three arrays it
+ * received through a transfer list straight onto a new geometry, skipping
+ * the validation as well, on the grounds that it owns them exclusively.
  */
 import type { Geometry } from "./geometry.js";
 
@@ -86,9 +93,13 @@ export function installTopology(
  * - NOT RETAINED: the caller neither writes them nor hands them anywhere
  *   else after this call, because from here on they ARE the geometry's
  *   topology, and the geometry is what the graph caches;
- * - OWN BUFFERS of exact length, preferably: a `subarray` view is
- *   correct but keeps its whole parent buffer alive for as long as the
- *   geometry lives, where `setTopology`'s slice would have compacted it.
+ * - THE CALLER'S OWN BUFFERS, OF EXACT LENGTH: each array must be the
+ *   whole of a buffer the caller allocated for it — never a `subarray` of
+ *   a larger one, and above all never a view of a pool or scratch buffer
+ *   shared across calls, which the next call would rewrite under this
+ *   geometry's cache entry. (An exact-length own buffer is also what
+ *   `setTopology`'s slice would have produced, so nothing is kept alive
+ *   that the copy would have released.)
  *
  * When any of that is not plainly true at the call site, use
  * `setTopology`: the copy is the price of not having to prove it.
