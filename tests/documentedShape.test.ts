@@ -27,15 +27,60 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { AttributeSet, Geometry } from "../src/data/index.js";
+import type { GeometryItem, InstanceBatch } from "../src/graph/data.js";
 import { makeGeometryItem, makeInstanceBatch } from "../src/graph/data.js";
+
+/**
+ * `true` only when `Names` is exactly the key set of `T`.
+ *
+ * An interface's OPTIONAL members cannot be read off a value — a batch
+ * that omits `residency` is still a batch — so for the two payload
+ * interfaces the documented list is pinned to `keyof T` at compile time
+ * instead, and `npm run check` is what fails when a member is added.
+ * Without this the runtime half would pass a list that is merely what
+ * some factory happened to produce.
+ */
+type KeysAre<T, Names extends string> = [Names] extends [keyof T & string]
+  ? [keyof T & string] extends [Names]
+    ? true
+    : never
+  : never;
+
+/** Every key of `GeometryItem`, checked against the interface. */
+const GEOMETRY_ITEM_KEYS = ["geo", "kind", "rev", "tags"] as const;
+const _geometryItemKeysAreComplete: KeysAre<
+  GeometryItem,
+  (typeof GEOMETRY_ITEM_KEYS)[number]
+> = true;
+
+/** Every key of `InstanceBatch`, optional members included. */
+const INSTANCE_BATCH_KEYS = [
+  "assetId",
+  "attributes",
+  "colors",
+  "count",
+  "residency",
+  "transforms",
+] as const;
+const _instanceBatchKeysAreComplete: KeysAre<
+  InstanceBatch,
+  (typeof INSTANCE_BATCH_KEYS)[number]
+> = true;
 
 /** Read a repo-relative source file, from this suite's own location. */
 function readSource(file: string): string {
   return readFileSync(fileURLToPath(new URL(`../${file}`, import.meta.url)), "utf8");
 }
 
-/** The marker a shape-describing doc comment ends with. */
-const MARKER = "Properties, in full:";
+/**
+ * The marker a shape-describing doc comment ends with. It says "not
+ * methods" because the check reads properties off a value and a method is
+ * not one: a comment claiming to list everything would be false for any
+ * class. The marker's paragraph carries the list and NOTHING else — every
+ * backticked name after it is read as a claim — so anything a comment
+ * wants to add about those properties goes above it.
+ */
+const MARKER = "Properties (not methods), in full:";
 
 interface ShapeCase {
   /** The declaration this suite reads the doc comment above. */
@@ -52,10 +97,13 @@ interface ShapeCase {
    */
   readonly internal?: readonly string[];
   /**
-   * Optional members no value can be made to carry, so they cannot be
-   * enumerated and are asserted to be documented instead.
+   * For an interface, its complete key set as the compile-time assertions
+   * above pin it. The runtime value still has to be a subset of this, so
+   * neither half can drift alone: the type check catches a member the
+   * factory never produces, the value check catches a name the interface
+   * does not declare.
    */
-  readonly optional?: readonly string[];
+  readonly declaredKeys?: readonly string[];
   /** Names readers have guessed that are NOT members, and must stay absent. */
   readonly absent: readonly string[];
 }
@@ -85,13 +133,14 @@ const CASES: readonly ShapeCase[] = [
     declaration: "export interface GeometryItem {",
     file: "src/graph/data.ts",
     value: makeGeometryItem(new Geometry()),
+    declaredKeys: GEOMETRY_ITEM_KEYS,
     absent: ["geometry"],
   },
   {
     declaration: "export interface InstanceBatch {",
     file: "src/graph/data.ts",
     value: maximalBatch(),
-    optional: ["residency"],
+    declaredKeys: INSTANCE_BATCH_KEYS,
     absent: ["matrices"],
   },
 ];
@@ -149,11 +198,28 @@ describe("doc comments that describe a shape", () => {
         expect(block as string).toContain(MARKER);
       });
 
+      it("hides nothing real behind its internal list", () => {
+        const own = new Set(Object.keys(c.value));
+        for (const name of c.internal ?? []) {
+          expect(own.has(name), `${label}: "${name}" is declared internal but is not a property`)
+            .toBe(true);
+        }
+      });
+
       it("names exactly the properties the real value carries", () => {
         const region = (block as string).slice((block as string).indexOf(MARKER) + MARKER.length);
         const documented = backtickedNames(region);
         const actual = publicProperties(c.value, c.internal ?? []);
-        const expected = [...new Set([...actual, ...(c.optional ?? [])])].sort();
+        // A declared key set (an interface) is the authority, since its
+        // optional members are absent from any one value; the value must
+        // still be a subset of it, so neither can drift alone.
+        if (c.declaredKeys !== undefined) {
+          expect(
+            actual.filter((n) => !c.declaredKeys?.includes(n)),
+            `${label}: the value carries properties the interface does not declare`,
+          ).toEqual([]);
+        }
+        const expected = [...(c.declaredKeys ?? actual)].sort();
         expect(
           documented,
           `${c.file}: the "${MARKER}" line of ${label} disagrees with the object — ` +

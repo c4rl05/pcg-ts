@@ -258,7 +258,7 @@ export class Attribute<T extends AttrType = AttrType> {
  * `geo.attrs[domain]`, an ordinary record keyed by domain name, so one
  * attribute is `geo.attrs[domain].get(name)`.
  *
- * Properties, in full: `capacity`, `count`, `size`.
+ * Properties (not methods), in full: `capacity`, `count`, `size`.
  */
 export class AttributeSet implements Iterable<Attribute> {
   private readonly map = new Map<string, Attribute>();

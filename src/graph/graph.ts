@@ -1036,7 +1036,7 @@ const GRAPH_READ_ONLY_DETAIL: Readonly<Record<string, string>> = Object.freeze({
     "version bumps on its own with every mutating call (add, connect, disconnect, setParam, setSeed, output)",
 });
 
-/** The value as a diagnostic can quote it, or `undefined` when it cannot. */
+/** The value as a diagnostic can quote it back, or `undefined` when it cannot. */
 function quotableValue(value: unknown): JsonValue | undefined {
   if (value === null || typeof value === "boolean" || typeof value === "string") return value;
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -1047,15 +1047,29 @@ function quotableValue(value: unknown): JsonValue | undefined {
  * The error a refused assignment throws.
  *
  * The fix is spelled as a call the caller can paste — carrying their own
- * value when a literal can hold it, so `graph.seed = 7` is answered with
- * `graph.setSeed(7)` rather than with a shape to fill in.
+ * value only when that value would still be a VALID argument, so
+ * `graph.seed = 7` is answered with `graph.setSeed(7)` while
+ * `graph.seed = "7"` gets `graph.setSeed(seed)` rather than a call that
+ * would fail in turn. `got` quotes the refused value either way; that is
+ * data about what happened, not advice.
+ *
+ * The record carries the route as `expected` rather than as `valid` or
+ * `didYouMean`: those two are for the accepted values (or near spellings)
+ * of the offending KEY, and a consumer that renders them would print
+ * "setSeed" as a permitted name for the property. What was expected here
+ * is a call, which is exactly what `expected` says.
  */
 function readOnlyPropertyError(property: string, value: unknown): GraphValidationError {
   const route = GRAPH_WRITE_ROUTES[property] ?? null;
   const got = quotableValue(value);
-  const argument = got === undefined ? property : JSON.stringify(got);
+  const argument = typeof value === "number" && Number.isFinite(value) ? String(value) : property;
   const call = route === null ? undefined : `graph.${route}(${argument})`;
-  const detail = GRAPH_READ_ONLY_DETAIL[property] ?? "there is no write route";
+  // Never the no-route wording for a property that HAS one: the two
+  // tables are written side by side and a gap in the second must not turn
+  // into a sentence that contradicts the first.
+  const detail =
+    GRAPH_READ_ONLY_DETAIL[property] ??
+    (route === null ? "there is no write route" : `it is the supported way to change ${property}`);
   const message =
     call === undefined
       ? `Graph.${property} is read-only and derived; assigning to it changes nothing — ${detail}.`
@@ -1067,7 +1081,7 @@ function readOnlyPropertyError(property: string, value: unknown): GraphValidatio
       message,
       key: property,
       ...(got !== undefined ? { got } : {}),
-      ...(route !== null ? { valid: [route], didYouMean: [route], fix: `call ${call}` } : {}),
+      ...(call !== undefined ? { expected: `a call to ${call}`, fix: `call ${call}` } : {}),
     },
   ]);
 }

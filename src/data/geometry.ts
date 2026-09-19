@@ -15,13 +15,17 @@ export type PrimType = "poly" | "polyline";
  * `[primVertexStart[p], primVertexStart[p] + primVertexCount[p])`.
  *
  * THE THREE TOPOLOGY ARRAYS SIT FLAT ON THE OBJECT. There is no
- * `topology` member holding them — `geo.topology` is `undefined`, and the
- * arrays are reached by their own names. `attrs` is a plain record keyed
- * by domain name (`geo.attrs.point`, or `geo.attrs[domain]`), not a Map.
+ * `topology` member holding them — `geo.topology` is `undefined`, and each
+ * array is READ by its own name. Writing them is
+ * {@link Geometry.setTopology}, which validates every reference and
+ * resizes the vertex and primitive sets to match; assigning one of the
+ * three directly leaves the other two and both attribute sets describing
+ * elements that no longer exist. `attrs` is a plain record keyed by domain
+ * name (`geo.attrs.point`, or `geo.attrs[domain]`), not a Map.
  *
- * Properties, in full: `attrs`, `pointCount`, `primVertexCount`,
- * `primVertexStart`, `primitiveCount`, `vertexCount`, `vertexToPoint` —
- * the three counts are getters over the matching {@link AttributeSet}.
+ * Properties (not methods), in full: `attrs`, `pointCount`,
+ * `primVertexCount`, `primVertexStart`, `primitiveCount`, `vertexCount`,
+ * `vertexToPoint`.
  */
 export class Geometry {
   readonly attrs: Record<Domain, AttributeSet>;

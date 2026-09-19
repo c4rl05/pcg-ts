@@ -12,7 +12,7 @@ export type DataValue = number | readonly number[] | string | boolean;
  * `requireGeometry(...)` hand back that unwrapped geometry directly;
  * `geometryItems(...)` and `requireGeometryItem(...)` hand back this.
  *
- * Properties, in full: `geo`, `kind`, `rev`, `tags`.
+ * Properties (not methods), in full: `geo`, `kind`, `rev`, `tags`.
  */
 export interface GeometryItem {
   readonly kind: "geometry";
@@ -104,10 +104,14 @@ export const INSTANCE_COLOR_CHANNEL = "color";
  * The packed 4x4s are `transforms`. There is no `matrices` member, on
  * this batch or on the device one.
  *
- * Properties, in full: `assetId`, `attributes`, `colors`, `count`,
- * `residency`, `transforms`. Three of those are optional and simply
- * absent when they do not apply: `attributes` and `colors` when the spawn
- * named no channels, `residency` on a CPU batch.
+ * Three of the six below are optional, and a batch this library builds
+ * simply omits each where it does not apply: `attributes` when the spawn
+ * named no channels, `colors` when none of those channels was the
+ * reserved colour, and `residency`, which a CPU batch may carry as
+ * `"cpu"` but never has to (see its own entry).
+ *
+ * Properties (not methods), in full: `assetId`, `attributes`, `colors`,
+ * `count`, `residency`, `transforms`.
  */
 export interface InstanceBatch {
   /**
