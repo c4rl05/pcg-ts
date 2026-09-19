@@ -82,10 +82,11 @@ function baseName(path: string): string {
  * this message by running `find /` across the whole machine, which in a
  * sandboxed harness is an escape that got the run thrown out and re-run.
  *
- * So the message names the one file, the one place it is read from, and
- * the two commands that answer the question without leaving the working
- * directory — and says outright that there is nowhere else to look, since
- * this command never falls back to another copy.
+ * So the message names the one file, the one place it is read from, the
+ * version this CLI is, and `npm ls pcg-ts` — which answers "which copy,
+ * and how old" without leaving the working directory. And it says outright
+ * that there is nowhere else to look, since this command never falls back
+ * to another copy.
  */
 function readShipped(io: CliIo, rel: string): string {
   const path = io.packagePath?.(rel) ?? `${PACKAGE_PREFIX}${rel}`;
