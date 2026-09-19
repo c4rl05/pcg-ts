@@ -60,8 +60,13 @@ Core (reachable from `import "pcg-ts"`):
 - `src/spawn` — spawner protocol: render-agnostic instance batches and the
   `spawnInstances` terminal
 - `src/diagnostics` — the structured error record (`Diagnostic`), the
-  additive-only `DIAGNOSTIC_CODES`, and the did-you-mean suggester. A leaf:
-  it imports nothing from the rest of the library, so every layer can use it
+  additive-only `DIAGNOSTIC_CODES`, the did-you-mean suggester, and
+  `canonicalOneOf`, which returns the schema's OWN string for an accepted
+  enum value. That last one is not a niceness: a param string parsed from
+  JSON and compared per element is the shape that miscompiled under V8 in
+  `src/noise/worley.ts`, so every seam that accepts an enum canonicalizes
+  it. A leaf: it imports nothing from the rest of the library, so every
+  layer can use it
 
 Internal to the core (deliberately NOT re-exported from `src/index.ts`;
 see the comment there before adding one):
