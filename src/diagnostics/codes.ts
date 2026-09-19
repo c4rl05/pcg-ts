@@ -28,6 +28,7 @@ export const DIAGNOSTIC_CODES = Object.freeze({
   "not-serializable": "A live graph or field holds something the JSON format cannot represent, so it cannot be written.",
 
   // Keys.
+  "read-only-property": "A read-only property of a live object was assigned to; a method is its write route.",
   "unknown-key": "An object carries a key its schema does not define.",
   "unauthorable-key": "A key whose value the format derives itself was authored by hand.",
 

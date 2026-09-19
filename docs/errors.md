@@ -6,7 +6,7 @@ Every failure the library and the `pcg` CLI report carries one or more `Diagnost
 
 Codes are additive-only: a published code is never renamed, removed or given a different meaning, so it is safe to branch on. Match on `code`, never on `message`, which is prose and gets reworded.
 
-66 codes:
+67 codes:
 
 | Code | Meaning |
 |---|---|
@@ -19,6 +19,7 @@ Codes are additive-only: a published code is never renamed, removed or given a d
 | `invalid-section` | A section or entry has the wrong JSON shape: not an array or object where one is required. |
 | `invalid-meta` | The graph's meta block is malformed: not an object, an unknown key, or a title, description or tag of the wrong type. |
 | `not-serializable` | A live graph or field holds something the JSON format cannot represent, so it cannot be written. |
+| `read-only-property` | A read-only property of a live object was assigned to; a method is its write route. |
 | `unknown-key` | An object carries a key its schema does not define. |
 | `unauthorable-key` | A key whose value the format derives itself was authored by hand. |
 | `invalid-node-id` | A node id is missing, not a string, empty, or not a valid id. |
