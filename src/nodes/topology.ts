@@ -182,6 +182,13 @@ export const connectPoints = standardNode<
     const pd = view.data;
     const ps = view.stride;
     const wantLength = params.lengthAttr !== "";
+    // Which witness test the candidate walk runs, settled here rather
+    // than asked per CANDIDATE PAIR below (n * average degree times). A
+    // param string compared inside a per-element loop is the shape that
+    // miscompiled in `src/noise/worley.ts`; both are positive tests, so
+    // `radius` still runs neither, exactly as before.
+    const wantLune = mode === "relativeNeighborhood";
+    const wantGabriel = mode === "gabriel";
 
     // A FIELD radius is a per-point REACH, and a pair is an edge when it
     // is closer than the LARGER of the two — the rule selfPrune already
@@ -316,10 +323,10 @@ export const connectPoints = standardNode<
             const r2j = reach2[j];
             if (!(d2 < (r2i > r2j ? r2i : r2j))) continue;
           }
-          if (mode === "relativeNeighborhood" && hasLuneWitness(adj, pd, ps, i, j, d2)) {
+          if (wantLune && hasLuneWitness(adj, pd, ps, i, j, d2)) {
             continue;
           }
-          if (mode === "gabriel" && hasGabrielWitness(adj, pd, ps, i, j, d2)) {
+          if (wantGabriel && hasGabrielWitness(adj, pd, ps, i, j, d2)) {
             continue;
           }
           edgeA[count] = i;

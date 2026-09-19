@@ -308,6 +308,12 @@ export const pathShift = standardNode<PathShiftParams, PathShiftInputs, PathShif
     // decision here lets a later walk overwrite an earlier one with -1,
     // which a copy-as-you-go loop cannot express without undoing work.
     const srcOf = new Int32Array(n).fill(-1);
+    // The range policy, settled before the walks rather than asked per
+    // POLYLINE POINT. A param string compared inside a per-element loop
+    // is the shape that miscompiled in `src/noise/worley.ts`; both tests
+    // are positive, so the trailing arm is still "miss".
+    const isWrap = mode === "wrap";
+    const isClamp = mode === "clamp";
     let step = 0;
     for (const walk of walks) {
       const pts = walk.points;
@@ -319,13 +325,13 @@ export const pathShift = standardNode<PathShiftParams, PathShiftInputs, PathShif
       for (let k = 0; k < m; k++) {
         if ((step++ & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
         let r = k + offset;
-        if (mode === "wrap") {
+        if (isWrap) {
           // Euclidean, not JavaScript's truncated remainder: -1 % 5 is -1,
           // which is not a position. The correction runs on the remainder,
           // so it is one branch rather than a loop however far out `r` is.
           r = r % m;
           if (r < 0) r += m;
-        } else if (mode === "clamp") {
+        } else if (isClamp) {
           if (r < 0) r = 0;
           else if (r >= m) r = m - 1;
         } else if (r < 0 || r >= m) {

@@ -408,7 +408,12 @@ export const pointScatterInWorld = standardNode<
         `pointScatterInWorld: latticeMode must be "xz" or "xyz", got ${JSON.stringify(mode)}`,
       );
     }
-    const dims = mode === "xyz" ? 3 : 2;
+    // Settled here, once. The per-point loop below asks which mode it is
+    // for every candidate point in the window, and a param string
+    // compared inside a per-element loop is the shape that miscompiled in
+    // `src/noise/worley.ts`.
+    const is3d = mode === "xyz";
+    const dims = is3d ? 3 : 2;
     const cellSize = params.cellSize;
     if (!Number.isFinite(cellSize) || cellSize <= 0) {
       throw new Error(
@@ -468,9 +473,9 @@ export const pointScatterInWorld = standardNode<
     // The 2D lattice still hashes a Y coordinate, pinned to 0, so the two
     // modes share one hashing scheme; `dims` in the seed keeps their point
     // sets independent anyway.
-    const my = mode === "xyz" ? f32ClipMargin(minY, maxY) : 0;
-    const c0y = mode === "xyz" ? latticeLo(minY - my, cellSize) : 0;
-    const c1y = mode === "xyz" ? latticeHi(maxY + my, cellSize) : 0;
+    const my = is3d ? f32ClipMargin(minY, maxY) : 0;
+    const c0y = is3d ? latticeLo(minY - my, cellSize) : 0;
+    const c1y = is3d ? latticeHi(maxY + my, cellSize) : 0;
     const nx = c1x - c0x + 1;
     const ny = c1y - c0y + 1;
     const nz = c1z - c0z + 1;
@@ -552,7 +557,7 @@ export const pointScatterInWorld = standardNode<
             const z = Math.fround((cz + hashFloat(hashCombine(h, j, 2))) * cellSize);
             if (x < minX || x >= maxX || z < minZ || z >= maxZ) continue;
             let y = Math.fround(params.height);
-            if (mode === "xyz") {
+            if (is3d) {
               y = Math.fround((cy + hashFloat(hashCombine(h, j, 1))) * cellSize);
               if (y < minY || y >= maxY) continue;
             }

@@ -459,6 +459,15 @@ export function transferUv(
   const srcUv = requireF32(src.attrs[srcUvDomain], uvName, 2, fn, `source ${srcUvDomain}-domain UV`);
 
   const perPrim = attrDomain === "primitive";
+  // Both settled here rather than asked per SOURCE TRIANGLE below — six
+  // string comparisons a triangle, over the whole source mesh. A param
+  // string compared inside a per-element loop is the shape that
+  // miscompiled in `src/noise/worley.ts`. Both are POSITIVE tests, so an
+  // `attrDomain` outside the union still falls through to the point
+  // branch exactly as it did (`perPrim` above is positive for the same
+  // reason); `srcUvDomain` was narrowed to two values just above.
+  const uvIsVertex = srcUvDomain === "vertex";
+  const attrIsVertex = attrDomain === "vertex";
   const v2p = src.vertexToPoint;
   const us = srcUv.tupleSize;
   const ud = srcUv.data;
@@ -473,9 +482,9 @@ export function transferUv(
   let nt = 0;
   for (let t = 0; t < ntAll; t++) {
     const v = triStart[t];
-    const c0 = (srcUvDomain === "vertex" ? v : v2p[v]) * us;
-    const c1 = (srcUvDomain === "vertex" ? v + 1 : v2p[v + 1]) * us;
-    const c2 = (srcUvDomain === "vertex" ? v + 2 : v2p[v + 2]) * us;
+    const c0 = (uvIsVertex ? v : v2p[v]) * us;
+    const c1 = (uvIsVertex ? v + 1 : v2p[v + 1]) * us;
+    const c2 = (uvIsVertex ? v + 2 : v2p[v + 2]) * us;
     const u0 = ud[c0];
     const v0 = ud[c0 + 1];
     const u1 = ud[c1];
@@ -501,9 +510,9 @@ export function transferUv(
       triCorner[o3 + 1] = p;
       triCorner[o3 + 2] = p;
     } else {
-      triCorner[o3] = attrDomain === "vertex" ? v : v2p[v];
-      triCorner[o3 + 1] = attrDomain === "vertex" ? v + 1 : v2p[v + 1];
-      triCorner[o3 + 2] = attrDomain === "vertex" ? v + 2 : v2p[v + 2];
+      triCorner[o3] = attrIsVertex ? v : v2p[v];
+      triCorner[o3 + 1] = attrIsVertex ? v + 1 : v2p[v + 1];
+      triCorner[o3 + 2] = attrIsVertex ? v + 2 : v2p[v + 2];
     }
     const bu0 = Math.min(u0, u1, u2);
     const bu1 = Math.max(u0, u1, u2);
@@ -730,6 +739,9 @@ function compactRaycastTriangles(
 ): CompactedTriangles {
   const { start: triStart, prim: triPrim } = collectTriangles(src, fn);
   const perPrim = attrDomain === "primitive";
+  // Positive, and settled before the per-triangle walk, for the reason
+  // `transferUv` gives above its own pair.
+  const attrIsVertex = attrDomain === "vertex";
   const v2p = src.vertexToPoint;
   const ntAll = triStart.length;
   const triGeo = new Float64Array(ntAll * 9);
@@ -774,9 +786,9 @@ function compactRaycastTriangles(
       triCorner[o3 + 1] = p;
       triCorner[o3 + 2] = p;
     } else {
-      triCorner[o3] = attrDomain === "vertex" ? v : v2p[v];
-      triCorner[o3 + 1] = attrDomain === "vertex" ? v + 1 : v2p[v + 1];
-      triCorner[o3 + 2] = attrDomain === "vertex" ? v + 2 : v2p[v + 2];
+      triCorner[o3] = attrIsVertex ? v : v2p[v];
+      triCorner[o3 + 1] = attrIsVertex ? v + 1 : v2p[v + 1];
+      triCorner[o3 + 2] = attrIsVertex ? v + 2 : v2p[v + 2];
     }
     const bx0 = Math.min(ax, ax + e1x, ax + e2x);
     const by0 = Math.min(ay, ay + e1y, ay + e2y);

@@ -927,8 +927,15 @@ export const attributeReduce = standardNode<
     // sum does not lose the tail.
     const acc = new Float64Array(ts);
     const kept = new Uint32Array(ts);
-    if (mode === "min") acc.fill(Number.POSITIVE_INFINITY);
-    else if (mode === "max") acc.fill(Number.NEGATIVE_INFINITY);
+    // Which aggregate, settled before the walk rather than asked per
+    // element per component below. A param string compared inside a
+    // per-element loop is the shape that miscompiled in
+    // `src/noise/worley.ts`. Both tests are POSITIVE, so anything outside
+    // the union still falls through to the summing arm exactly as it did.
+    const isMin = mode === "min";
+    const isMax = mode === "max";
+    if (isMin) acc.fill(Number.POSITIVE_INFINITY);
+    else if (isMax) acc.fill(Number.NEGATIVE_INFINITY);
     for (let i = 0; i < n; i++) {
       const o = i * ts;
       for (let k = 0; k < ts; k++) {
@@ -937,9 +944,9 @@ export const attributeReduce = standardNode<
         // does not depend on Number.isNaN's argument coercion.
         if (v !== v) continue;
         kept[k]++;
-        if (mode === "min") {
+        if (isMin) {
           if (v < acc[k]) acc[k] = v;
-        } else if (mode === "max") {
+        } else if (isMax) {
           if (v > acc[k]) acc[k] = v;
         } else {
           acc[k] += v;

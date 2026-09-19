@@ -40,14 +40,29 @@ function forEachContribution(
   const starts = geo.primVertexStart;
   const counts = geo.primVertexCount;
   const nPrim = geo.primitiveCount;
+  // Which of the four primitive-crossing pairs this is, decided ONCE
+  // rather than re-derived from two strings per VERTEX below (four string
+  // comparisons each, over the whole vertex count). A param string
+  // compared inside a per-element loop is the shape that miscompiled in
+  // `src/noise/worley.ts`.
+  //
+  // The refusal stays INSIDE the loop deliberately. It fires today only
+  // once the first vertex of the first non-empty primitive is reached, so
+  // an unsupported pair on a geometry with no primitives (or with only
+  // empty ones) promotes nothing and says nothing. Throwing eagerly here
+  // would be defensible and is not this change's business.
+  const vertexToPrim = from === "vertex" && to === "primitive";
+  const primToVertex = from === "primitive" && to === "vertex";
+  const pointToPrim = from === "point" && to === "primitive";
+  const primToPoint = from === "primitive" && to === "point";
   for (let p = 0; p < nPrim; p++) {
     const start = starts[p];
     const end = start + counts[p];
     for (let v = start; v < end; v++) {
-      if (from === "vertex" && to === "primitive") fn(v, p);
-      else if (from === "primitive" && to === "vertex") fn(p, v);
-      else if (from === "point" && to === "primitive") fn(v2p[v], p);
-      else if (from === "primitive" && to === "point") fn(p, v2p[v]);
+      if (vertexToPrim) fn(v, p);
+      else if (primToVertex) fn(p, v);
+      else if (pointToPrim) fn(v2p[v], p);
+      else if (primToPoint) fn(p, v2p[v]);
       else throw new Error(`promote: unsupported domain pair ${from} -> ${to}`);
     }
   }
@@ -108,9 +123,17 @@ export function promote(
     return dst;
   }
 
+  // Which aggregate, settled before the walk. The closure below runs once
+  // per CONTRIBUTION and the comparison sat in its innermost loop, so it
+  // ran contributions * tupleSize times — the same shape that miscompiled
+  // in `src/noise/worley.ts`. Both tests are POSITIVE, so anything
+  // outside the union still falls through to the summing arm exactly as
+  // it did (`divide` below is positive for the same reason).
+  const isMin = mode === "min";
+  const isMax = mode === "max";
   const acc = new Float64Array(n * ts);
-  if (mode === "min") acc.fill(Infinity);
-  else if (mode === "max") acc.fill(-Infinity);
+  if (isMin) acc.fill(Infinity);
+  else if (isMax) acc.fill(-Infinity);
 
   forEachContribution(geo, from, to, (s, d) => {
     counts[d]++;
@@ -121,10 +144,10 @@ export function promote(
       // NaN contributions propagate in every aggregate mode (sum/average
       // do so arithmetically; min/max need it made explicit because NaN
       // comparisons are always false).
-      if (mode === "min") {
+      if (isMin) {
         if (Number.isNaN(v)) acc[dofs + k] = NaN;
         else if (v < acc[dofs + k]) acc[dofs + k] = v;
-      } else if (mode === "max") {
+      } else if (isMax) {
         if (Number.isNaN(v)) acc[dofs + k] = NaN;
         else if (v > acc[dofs + k]) acc[dofs + k] = v;
       } else {

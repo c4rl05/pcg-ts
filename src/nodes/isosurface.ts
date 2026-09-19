@@ -240,6 +240,13 @@ export const meshFromField = standardNode<
     if (inside !== "below" && inside !== "above") {
       throw new Error(`meshFromField: unknown inside "${inside}"; valid values: below, above`);
     }
+    // Settled here, once, because the corner classification below asks it
+    // per CORNER — cubes * 6 tetrahedra * 4 corners, the hottest loop in
+    // this file. A param string compared inside a per-element loop is the
+    // shape that miscompiled in `src/noise/worley.ts`; this keeps the
+    // string comparison at the seam where the value arrives. `sign` below
+    // already did the same thing.
+    const below = inside === "below";
     const h = params.cellSize;
     if (!(h > 0) || !Number.isFinite(h)) {
       throw new Error(
@@ -467,7 +474,7 @@ export const meshFromField = standardNode<
     // toward INCREASING field, which is the raw gradient. `above` flips
     // both the classification and the normal, which is why the surface is
     // the same set either way and only its facing changes.
-    const sign = inside === "below" ? 1 : -1;
+    const sign = below ? 1 : -1;
     const corner = new Int32Array(8);
 
     /**
@@ -606,7 +613,7 @@ export const meshFromField = standardNode<
               // classification a total function of the stored sample:
               // there is no tie to break and no epsilon to pick.
               const v = value[s] as number;
-              if (inside === "below" ? v < iso : v > iso) mask |= 1 << c;
+              if (below ? v < iso : v > iso) mask |= 1 << c;
             }
             if (mask === 0 || mask === 15) continue;
             // Four corners, sixteen masks, and only three shapes: one

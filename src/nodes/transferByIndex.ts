@@ -329,15 +329,21 @@ export const transferByIndex = standardNode<
       // output's shape does not depend on this branch.
       missCount = n;
     } else {
+      // The range policy, settled before the walk rather than asked per
+      // DESTINATION POINT. A param string compared inside a per-element
+      // loop is the shape that miscompiled in `src/noise/worley.ts`; both
+      // tests are positive, so the trailing arm is still "miss".
+      const isClamp = mode === "clamp";
+      const isWrap = mode === "wrap";
       for (let i = 0; i < n; i++) {
         if ((i & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
         // Truncation toward zero, then the range policy — in that order, so
         // -0.5 is index 0 (and lands) rather than -1 (and wraps to the end).
         let s = Math.trunc(idx[i]);
-        if (mode === "clamp") {
+        if (isClamp) {
           if (s < 0) s = 0;
           else if (s >= m) s = m - 1;
-        } else if (mode === "wrap") {
+        } else if (isWrap) {
           // Euclidean, not JavaScript's truncated remainder: -1 % 5 is -1,
           // which is not a point. The correction runs on the remainder, so
           // it is one branch rather than a loop however far out `s` is.

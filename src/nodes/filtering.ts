@@ -729,6 +729,14 @@ export const filterPrimitivesByBounds = standardNode<
     const starts = geo.primVertexStart;
     const counts = geo.primVertexCount;
     const keep: number[] = [];
+    // Which rule, settled before the walk rather than asked per PRIMITIVE
+    // — `wantAll` was even being built inside the loop body. A param
+    // string compared inside a per-element loop is the shape that
+    // miscompiled in `src/noise/worley.ts`; the `else` arm is still the
+    // all/any pair, because the four values were checked above.
+    const ruleIsFirst = vertexRule === "first";
+    const ruleIsLast = vertexRule === "last";
+    const wantAll = vertexRule === "all";
     const nPrims = geo.primitiveCount;
     for (let p = 0; p < nPrims; p++) {
       const c = counts[p];
@@ -738,12 +746,11 @@ export const filterPrimitivesByBounds = standardNode<
         // Nothing to test: not inside under every rule, including the
         // vacuous-truth reading of "all", so the four rules agree.
         inside = false;
-      } else if (vertexRule === "first") {
+      } else if (ruleIsFirst) {
         inside = insidePoint(v2p[s], p);
-      } else if (vertexRule === "last") {
+      } else if (ruleIsLast) {
         inside = insidePoint(v2p[s + c - 1], p);
       } else {
-        const wantAll = vertexRule === "all";
         inside = wantAll;
         for (let j = 0; j < c; j++) {
           if (insidePoint(v2p[s + j], p) !== wantAll) {
