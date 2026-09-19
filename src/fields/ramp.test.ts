@@ -79,15 +79,30 @@ function rampShipped(data: Float32Array, stops: Stops): Float32Array {
   return col.data as Float32Array;
 }
 
+/** A copy with every NaN rewritten to the one quiet NaN, 0x7fc00000. */
+function canonicalNaNs(a: Float32Array): Float32Array {
+  const out = a.slice();
+  const bits = new Uint32Array(out.buffer);
+  for (let k = 0; k < out.length; k++) if (Number.isNaN(out[k])) bits[k] = 0x7fc00000;
+  return out;
+}
+
 /**
- * The first element whose BYTES differ, or -1 when every byte matches.
- * Bytes rather than values, because values hide exactly what this file
- * is about: NaN is never equal to itself, and -0 is always equal to 0.
+ * The first element whose BYTES differ, or -1 when every byte matches —
+ * once every NaN is the same NaN. Bytes rather than values, because -0
+ * and 0 are equal as values and must not be here. NaNs are canonical
+ * because their sign and payload bits are not a promise the walk kept
+ * even against itself: where both operands of an operation are NaN (a
+ * one-stop ramp reads past its arrays, for one), which of them survives
+ * depends on how far V8 has optimized the function, and the shipped ramp
+ * and this file's copy of the walk warm up at different times.
  */
 function firstByteDifference(a: Float32Array, b: Float32Array): number {
   if (a.length !== b.length) return Math.min(a.length, b.length);
-  const ba = new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
-  const bb = new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
+  const ca = canonicalNaNs(a);
+  const cb = canonicalNaNs(b);
+  const ba = new Uint8Array(ca.buffer);
+  const bb = new Uint8Array(cb.buffer);
   for (let k = 0; k < ba.length; k++) if (ba[k] !== bb[k]) return k >> 2;
   return -1;
 }
@@ -233,7 +248,7 @@ function randomStops(rng: Pcg32, n: number, style: Style): Array<[number, number
 // -- the tests ------------------------------------------------------------------
 
 describe("ramp: the byte comparison can fail", () => {
-  it("reports a one-ulp change, a -0 against 0, and two different NaNs", () => {
+  it("reports a one-ulp change and a -0 against 0, and no NaN against another", () => {
     const rng = new Pcg32(11);
     const stops = randomStops(rng, 200, "f32");
     const data = probeColumn(stops, rng, 200, 50);
@@ -251,12 +266,13 @@ describe("ramp: the byte comparison can fail", () => {
     expect(firstByteDifference(shipped, perturbed)).toBe(k);
 
     expect(firstByteDifference(new Float32Array([0]), new Float32Array([-0]))).toBe(0);
+    expect(firstByteDifference(new Float32Array([1, 0]), new Float32Array([1, Number.NaN]))).toBe(1);
+    // Payload and sign bits are not compared; see `firstByteDifference`.
     const nanA = new Float32Array(1);
     const nanB = new Float32Array(1);
     new Uint32Array(nanA.buffer)[0] = 0x7fc00000;
-    new Uint32Array(nanB.buffer)[0] = 0x7fc00001;
-    expect(firstByteDifference(nanA, nanB)).toBe(0);
-    expect(firstByteDifference(nanA, nanA.slice())).toBe(-1);
+    new Uint32Array(nanB.buffer)[0] = 0xffc00001;
+    expect(firstByteDifference(nanA, nanB)).toBe(-1);
   });
 });
 
@@ -566,5 +582,49 @@ describe("ramp: byte-identical to the scan", () => {
     expect(firstByteDifference(got.data as Float32Array, reference)).toBe(-1);
     // Exact at every integer, which is what the table is for.
     expect(Array.from(got.data)).toEqual(values.map(Math.fround));
+  });
+});
+
+describe("ramp: the search is logarithmic, counted rather than timed", () => {
+  /**
+   * How many stops the shipped ramp compares each input with, one input
+   * in the middle of every segment. The inputs are objects whose `valueOf`
+   * counts, so this is the real loop, unchanged, counting its own reads:
+   * an input strictly inside the stops is read twice by the two clamps
+   * and once by the interpolation, and every other read is a probe of the
+   * search. (It relies on the loop comparing `t` as it reads it; a loop
+   * that converted `t` to a number first would count 1 and fail here.)
+   */
+  function probes(n: number): number[] {
+    const stops = Array.from({ length: n }, (_, k) => [k, k % 7] as const);
+    const counts = new Array<number>(n - 1).fill(0);
+    const column = counts.map((_, k) => ({
+      valueOf: () => {
+        counts[k] = counts[k]! + 1;
+        return k + 0.5;
+      },
+    }));
+    const input = makeField<1>(`rampProbeColumn(${columnSerial++})`, 1, () => ({
+      data: column as unknown as Float32Array,
+      tupleSize: 1,
+    }));
+    evaluateField(ramp(input, stops), { geo: createPointCloud(n - 1), domain: "point", seed: 0 });
+    return counts.map((c) => c - 3);
+  }
+
+  it("walks up to 16 stops: the input in segment j costs j probes", () => {
+    for (const n of [2, 3, 16]) {
+      expect(probes(n), `${n} stops`).toEqual(Array.from({ length: n - 1 }, (_, k) => k + 1));
+    }
+  });
+
+  it("bisects from 17 stops on: at most ceil(log2 n) + 1 probes an input", () => {
+    for (const n of [17, 1024, 65536]) {
+      const p = probes(n);
+      const most = p.reduce((a, b) => Math.max(a, b), 0);
+      const least = p.reduce((a, b) => Math.min(a, b), Infinity);
+      expect(most, `${n} stops`).toBeLessThanOrEqual(Math.ceil(Math.log2(n)) + 1);
+      expect(least, `${n} stops`).toBeGreaterThan(0);
+    }
   });
 });

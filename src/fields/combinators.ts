@@ -829,12 +829,10 @@ export function randomFrom(value: FieldLike, key: number | string = 0): Field<1>
 const RAMP_WALK_MAX = 16;
 
 /**
- * Whether every stop position is a number other than NaN, which is what
- * lets {@link ramp} bisect. A plain loop, not `every`: `every` skips the
- * holes of a sparse array, and a hole is exactly a position that is not a
- * number.
+ * Whether every position is a number other than NaN. A loop, not `every`,
+ * which would skip the holes of a sparse array.
  */
-function rampPositionsOrdered(ts: readonly unknown[]): boolean {
+function positionsAreNonNaNNumbers(ts: readonly unknown[]): boolean {
   for (let k = 0; k < ts.length; k++) {
     const p = ts[k];
     if (typeof p !== "number" || Number.isNaN(p)) return false;
@@ -876,7 +874,7 @@ export function ramp(
   // the case that shows: a `t` ON interior stop k is segment k, the TOP
   // of the segment below (u = 1), not the bottom of the one above, and
   // `vs[k-1] + (vs[k] - vs[k-1])` need not round to `vs[k]`.
-  const bisect = ts.length > RAMP_WALK_MAX && rampPositionsOrdered(ts);
+  const bisect = ts.length > RAMP_WALK_MAX && positionsAreNonNaNNumbers(ts);
   const fa = resolveField(input);
   const stopsKey = stops.map((s) => `${keyNum(s[0])}:${keyNum(s[1])}`).join(",");
   const key = `ramp(${keyRef(fa.key)};${stopsKey})`;
