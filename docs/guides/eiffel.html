@@ -256,7 +256,7 @@
     <div class="stat"><b>29</b><span>panels, from Plate XXXI</span></div>
     <div class="stat"><b>3.28 M</b><span>triangles, laced and rivets</span></div>
     <div class="stat"><b>859,816</b><span>rivet instances</span></div>
-    <div class="stat"><b>2.32 s</b><span>cook, full detail</span></div>
+    <div class="stat"><b>2.21 s</b><span>cook, full detail</span></div>
     <div class="stat"><b>467</b><span>[sourced] tags in the spec</span></div>
   </div>
 
@@ -730,9 +730,13 @@
       <p>A per-point table becomes a field through one helper, <code>indexTable</code>:
       <code>ramp(index(), stops)</code>, exact at every integer because a ramp interpolates only between
       stops and no point reads a fractional index. Runs of equal values collapse to their two ends,
-      which keeps long tables short. A ramp scans its stops, so a very long table is slow: the
-      platforms module cooks its prism lists in runs of at most 1,024 points, which took its cook from
-      0.80 s to 0.31 s. Other tables are not split; the largest has 5,946 stops.</p>
+      which keeps long tables short; the largest has 5,946 stops. A ramp of more than 16 stops finds
+      each point's segment by bisection, so a table with a stop per point costs n log n, not n². It
+      used to scan its stops from the first, which is why the platforms module cooks its prism lists
+      in runs of at most 1,024 points: splitting took its cook from 0.80 s to 0.31 s then. The runs
+      are still in the graph and no longer needed: cooked as one list, with 194 fewer nodes, the
+      skeleton depth is no slower (in an interleaved A/B of 35 fresh cooks a side, pinned as in the
+      note below the table, it averaged 3% faster).</p>
 
       <p>Each module returns meshes grouped by <strong>part class</strong>, and the graph declares one
       output per class: uprights, bracing, horizontals, girders, arches, platforms, masonry, summit,
@@ -743,13 +747,13 @@
         <table class="data">
           <thead><tr><th>Depth</th><th class="n">Graph nodes</th><th class="n">Outputs</th><th class="n">Triangles</th><th class="n">Instances</th><th class="n">Cook</th><th class="n">Graph JSON</th></tr></thead>
           <tbody>
-            <tr><td class="k">skeleton</td><td class="n">1,608</td><td class="n">9</td><td class="n">409,196</td><td class="n">0</td><td class="n">368 ms</td><td class="n">4.1 MB</td></tr>
-            <tr><td class="k">laced</td><td class="n">1,893</td><td class="n">10</td><td class="n">3,283,836</td><td class="n">0</td><td class="n">1.46 s</td><td class="n">4.6 MB</td></tr>
-            <tr><td class="k">rivets</td><td class="n">2,648</td><td class="n">51</td><td class="n">3,283,836</td><td class="n">859,816</td><td class="n">2.32 s</td><td class="n">5.6 MB</td></tr>
+            <tr><td class="k">skeleton</td><td class="n">1,608</td><td class="n">9</td><td class="n">409,196</td><td class="n">0</td><td class="n">298 ms</td><td class="n">4.1 MB</td></tr>
+            <tr><td class="k">laced</td><td class="n">1,893</td><td class="n">10</td><td class="n">3,283,836</td><td class="n">0</td><td class="n">1.38 s</td><td class="n">4.6 MB</td></tr>
+            <tr><td class="k">rivets</td><td class="n">2,648</td><td class="n">51</td><td class="n">3,283,836</td><td class="n">859,816</td><td class="n">2.21 s</td><td class="n">5.6 MB</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="note">Measured 2026-09-19 on an Intel i9-13900KF under Node 22.20: a CPU cook of a freshly built graph, median of seven after a warmup, the depths interleaved, the process pinned to the performance cores (on the efficiency cores the same cooks take 1.75 to 1.9 times as long). Graph JSON is the compact serialized form. Four cooks per depth, in three separate processes, hashed identically.</p>
+      <p class="note">Measured 2026-09-19 on an Intel i9-13900KF under Node 22.20: a CPU cook of a freshly built graph, median of seven after a warmup, the depths interleaved, the process pinned to the performance cores (on the efficiency cores the same cooks take 1.9 to 2 times as long). Graph JSON is the compact serialized form. Four cooks per depth, in three separate processes, hashed identically.</p>
 
       <figure>
         <div class="plate"><svg viewBox="0 0 1000 438" role="img" aria-label="Horizontal bar chart of triangles per part class at the skeleton and laced depths: girders and bracing grow from about 0.1 million and 16 thousand to 1.37 and 1.15 million when laced; the classes without web members do not change."><line x1="150.0" y1="48" x2="150.0" y2="392" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="150.0" y="408" text-anchor="middle">0.0M</text><line x1="227.1" y1="48" x2="227.1" y2="392" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="227.1" y="408" text-anchor="middle">0.2M</text><line x1="304.3" y1="48" x2="304.3" y2="392" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="304.3" y="408" text-anchor="middle">0.4M</text><line x1="381.4" y1="48" x2="381.4" y2="392" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="381.4" y="408" text-anchor="middle">0.6M</text><line x1="458.6" y1="48" x2="458.6" y2="392" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="458.6" y="408" text-anchor="middle">0.8M</text><line x1="535.7" y1="48" x2="535.7" y2="392" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="535.7" y="408" text-anchor="middle">1.0M</text><line x1="612.9" y1="48" x2="612.9" y2="392" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="612.9" y="408" text-anchor="middle">1.2M</text><line x1="690.0" y1="48" x2="690.0" y2="392" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="690.0" y="408" text-anchor="middle">1.4M</text><rect x="150" y="14" width="12" height="8" fill="var(--faint)"/><text class="s-lbl" x="168" y="22">skeleton</text><rect x="250" y="14" width="12" height="8" fill="var(--ink)"/><text class="s-lbl" x="268" y="22">laced and rivets</text><text class="s-lbl-s" x="980" y="22" text-anchor="end">triangles per output</text><text class="s-name" x="138" y="71" text-anchor="end">girders</text><rect x="150" y="58" width="527.6" height="9" fill="var(--ink)"/><rect x="150" y="69" width="40.3" height="6" fill="var(--faint)"/><text class="s-lbl" x="685.6" y="71">1,367,980  ·  104,492 skeleton</text><text class="s-name" x="138" y="105" text-anchor="end">bracing</text><rect x="150" y="92" width="443.6" height="9" fill="var(--ink)"/><rect x="150" y="103" width="6.1" height="6" fill="var(--faint)"/><text class="s-lbl" x="601.6" y="105">1,150,080  ·  15,712 skeleton</text><text class="s-name" x="138" y="139" text-anchor="end">horizontals</text><rect x="150" y="126" width="167.9" height="9" fill="var(--ink)"/><rect x="150" y="137" width="2.5" height="6" fill="var(--faint)"/><text class="s-lbl" x="325.9" y="139">435,296  ·  6,512 skeleton</text><text class="s-name" x="138" y="173" text-anchor="end">platforms</text><rect x="150" y="160" width="59.3" height="9" fill="var(--ink)"/><rect x="150" y="171" width="59.3" height="6" fill="var(--faint)"/><text class="s-lbl" x="217.3" y="173">153,860</text><text class="s-name" x="138" y="207" text-anchor="end">arches</text><rect x="150" y="194" width="36.9" height="9" fill="var(--ink)"/><rect x="150" y="205" width="36.9" height="6" fill="var(--faint)"/><text class="s-lbl" x="194.9" y="207">95,680</text><text class="s-name" x="138" y="241" text-anchor="end">gussets</text><rect x="150" y="228" width="18.5" height="9" fill="var(--ink)"/><rect x="150" y="239" width="0.0" height="6" fill="var(--faint)"/><text class="s-lbl" x="176.5" y="241">48,000  ·  absent at skeleton</text><text class="s-name" x="138" y="275" text-anchor="end">summit</text><rect x="150" y="262" width="8.6" height="9" fill="var(--ink)"/><rect x="150" y="273" width="8.6" height="6" fill="var(--faint)"/><text class="s-lbl" x="166.6" y="275">22,284</text><text class="s-name" x="138" y="309" text-anchor="end">uprights</text><rect x="150" y="296" width="2.1" height="9" fill="var(--ink)"/><rect x="150" y="307" width="2.1" height="6" fill="var(--faint)"/><text class="s-lbl" x="160.1" y="309">5,568</text><text class="s-name" x="138" y="343" text-anchor="end">masonry</text><rect x="150" y="330" width="1.6" height="9" fill="var(--ink)"/><rect x="150" y="341" width="1.6" height="6" fill="var(--faint)"/><text class="s-lbl" x="159.6" y="343">4,224</text><text class="s-name" x="138" y="377" text-anchor="end">names</text><rect x="150" y="364" width="0.8" height="9" fill="var(--ink)"/><rect x="150" y="375" width="0.8" height="6" fill="var(--faint)"/><text class="s-lbl" x="158.3" y="377">864</text></svg></div>
