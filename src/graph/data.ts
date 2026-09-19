@@ -4,7 +4,16 @@ import type { DeviceInstanceBatch } from "../fields/gpuResolver.js";
 /** Plain values a value item can carry. */
 export type DataValue = number | readonly number[] | string | boolean;
 
-/** A geometry payload flowing through the graph. */
+/**
+ * A geometry payload flowing through the graph.
+ *
+ * The item is the WRAPPER, and the {@link Geometry} it carries is under
+ * `geo` — there is no `geometry` member. `firstGeometry(collection)` and
+ * `requireGeometry(...)` hand back that unwrapped geometry directly;
+ * `geometryItems(...)` and `requireGeometryItem(...)` hand back this.
+ *
+ * Properties (not methods), in full: `geo`, `kind`, `rev`, `tags`.
+ */
 export interface GeometryItem {
   readonly kind: "geometry";
   readonly geo: Geometry;
@@ -91,6 +100,18 @@ export const INSTANCE_COLOR_CHANNEL = "color";
  * `DeviceInstanceBatch` is the same protocol with the transforms left in
  * a device buffer; the two are discriminated by `residency`, which is
  * absent (or `"cpu"`) here and `"device"` there.
+ *
+ * The packed 4x4s are `transforms`. There is no `matrices` member, on
+ * this batch or on the device one.
+ *
+ * Three of the six below are optional, and a batch this library builds
+ * simply omits each where it does not apply: `attributes` when the spawn
+ * named no channels, `colors` when none of those channels was the
+ * reserved colour, and `residency`, which a CPU batch may carry as
+ * `"cpu"` but never has to (see its own entry).
+ *
+ * Properties (not methods), in full: `assetId`, `attributes`, `colors`,
+ * `count`, `residency`, `transforms`.
  */
 export interface InstanceBatch {
   /**

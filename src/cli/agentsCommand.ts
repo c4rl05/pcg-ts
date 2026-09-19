@@ -71,6 +71,35 @@ function baseName(path: string): string {
  * `io.packagePath` (which finds the installed package from the CLI's own
  * module), falling back to `node_modules/pcg-ts/<rel>` from the working
  * directory for an io without it.
+ *
+ * THE FAILURE MESSAGE IS THE POINT OF THIS FUNCTION, and it used to end
+ * "reinstall pcg-ts" — advice that named nothing. A reader told to
+ * reinstall a package it cannot see goes LOOKING for it: one eval agent
+ * answered this message by running `find /` across the whole machine,
+ * which in a sandboxed harness is an escape that got the run thrown out
+ * and re-run.
+ *
+ * WHAT THE CONDITION ACTUALLY IS, which decides the wording: `packagePath`
+ * resolves from the CLI's OWN module (`nodeIo.ts` walks up from
+ * `import.meta.url` to the nearest package.json named pcg-ts), so this
+ * reads `skills/` out of the very package the running CLI is part of. That
+ * rules out the obvious guess — the copy cannot be a different, older
+ * pcg-ts than this one, because it IS this one, and every pcg-ts that
+ * renders these rules ships the files they quote. What is left is a copy
+ * that arrived incomplete: a pruned image layer, a vendored subset, a
+ * partial extract. So the message says THAT, and names the directory.
+ *
+ * It is careful about two things it would be easy to overstate. There IS a
+ * fallback path (the `??` below, for an io with no `packagePath`), so it
+ * says "does not retry anywhere else" rather than claiming there is no
+ * fallback. And the remedy points at the printed location rather than at
+ * "this project", because `displayPackagePath` prints an ABSOLUTE path
+ * when the package is outside the working directory — a global or `npx`
+ * install, where installing into the project would fix nothing.
+ *
+ * `npm explain pcg-ts`, not `npm ls`: `ls` prints the version, `explain`
+ * prints the location and who required it, which is the question a reader
+ * standing in front of a path actually has. Neither leaves the project.
  */
 function readShipped(io: CliIo, rel: string): string {
   const path = io.packagePath?.(rel) ?? `${PACKAGE_PREFIX}${rel}`;
@@ -79,7 +108,18 @@ function readShipped(io: CliIo, rel: string): string {
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     throw new CliError(
-      `agents: cannot read the shipped ${rel} (looked at ${path}): ${reason}. The block quotes each skill's description, so the installed package must be readable; reinstall pcg-ts (Yarn PnP, which has no node_modules, is not supported)`,
+      `agents: cannot read the shipped ${rel} (looked at ${path}): ${reason}. ` +
+        "The block quotes each skill's frontmatter description, so this command reads the " +
+        "SKILL.md files out of the pcg-ts package the running CLI is itself part of. That " +
+        "path above is where it looked; it does not retry anywhere else, so there is nothing " +
+        `to search the filesystem for. Every pcg-ts that renders these rules ships skills/ ` +
+        `beside its dist/, and this CLI is pcg-ts ${VERSION} — so that copy is not an older ` +
+        "pcg-ts, it is an incomplete one (a pruned image layer, a vendored subset, a partial " +
+        "extract), unless the error above is a permission or file-type error rather than a " +
+        "missing file. Install pcg-ts again at the location the path names — " +
+        "`npm explain pcg-ts` prints which copy resolves here and what required it. (Under " +
+        "Yarn PnP, run the CLI through the PnP runtime, e.g. `yarn pcg agents`; a bare " +
+        "node_modules path cannot exist there.)",
       { code: "file-unreadable", path },
     );
   }

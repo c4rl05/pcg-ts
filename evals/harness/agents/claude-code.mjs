@@ -351,6 +351,11 @@ export function tokenPath(token, cwd, { bareRoot = true } = {}) {
     if (win && /^\/[a-zA-Z]$/.test(t)) return bareRoot ? resolve(msysToWin(t)) : null; // `sed '/x/,/y/p'` ends in `/p`
     if (!POSIX_ROOTS.test(t)) return null;
     if (!win) return resolve(t);
+    // `/tmp` is the machine's temp directory even when the run has its own:
+    // Git Bash resolves `/tmp` from its OWN fstab mount, not from TMP/TMPDIR.
+    // Measured on r0.quarry-terraces.candidate-U1-a1, which wrote
+    // `--out /tmp/terrace.png` and then read C:\Users\...\Temp\terrace.png
+    // back successfully: same file, so `/tmp` was the machine's.
     if (t === "/tmp" || t.startsWith("/tmp/")) return resolve(tmpdir(), t.slice(5) || ".");
     return `msys:${t}`;
   }
@@ -425,7 +430,7 @@ const RECURSIVE_VERBS = new Set(["find", "tree", "du", "rg"]);
 
 /** The body of a script the agent wrote, reduced to what can name a path. */
 export function scriptPathText(file, body) {
-  if (/\.(?:js|mjs|cjs|ts|mts|cts|py)$/i.test(file)) {
+  if (/\.(?:js|mjs|cjs|ts|mts|cts|py|pl|rb|php)$/i.test(file)) {
     // Code: only string literals can name a path; regexes, comments and operators cannot.
     const literals = [...String(body).matchAll(/"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g)].map((m) => m[1] ?? m[2] ?? m[3]);
     return { text: literals.join("\n"), bareRoot: false };
@@ -450,6 +455,29 @@ const SCRIPT_EXT = /\.(?:sh|bash|zsh|ps1|psm1|bat|cmd|js|mjs|cjs|ts|mts|py)$/i;
  * body with the file it was redirected into (a heredoc body is a script the
  * agent wrote, not a sequence of shell clauses).
  */
+/**
+ * The name a heredoc body is scanned under when nothing redirects it to a
+ * file. The EXTENSION is what `scriptPathText` reads to decide whether the
+ * body is code (string literals only) or shell (every token), so a body fed
+ * to an interpreter must not be called `heredoc.sh`.
+ */
+export const HEREDOC_NAMES = {
+  node: "heredoc.mjs",
+  deno: "heredoc.mjs",
+  bun: "heredoc.mjs",
+  python: "heredoc.py",
+  python3: "heredoc.py",
+  py: "heredoc.py",
+  perl: "heredoc.pl",
+  ruby: "heredoc.rb",
+  php: "heredoc.php",
+};
+
+/** What to call a heredoc body so it is read the way its consumer reads it. */
+export function heredocName(h) {
+  return h?.target ?? HEREDOC_NAMES[h?.interpreter] ?? "heredoc.sh";
+}
+
 export function splitHeredocs(command) {
   const heredocs = [];
   const lines = String(command).split("\n");
@@ -464,10 +492,14 @@ export function splitHeredocs(command) {
     const redir = /(?:^|[^<>&0-9])(>>?)\s*("[^"]*"|'[^']*'|[^\s;&|<>]+)/.exec(line.replace(m[0], " "));
     const target = redir?.[2];
     const shell = /^\s*(?:\S*[\\/])?(?:bash|sh|zsh|dash|ksh|pwsh|powershell)(?:\.exe)?\b/i.test(line);
+    // Which interpreter eats the body decides how to READ it. A heredoc fed
+    // to `node` or `python3` is CODE, and scanning code as shell turns every
+    // division and every regex literal into a bare `/` — the filesystem root.
+    const interp = /^\s*(?:\S*[\\/])?(node|deno|bun|python3?|py|perl|ruby|php)(?:\.exe)?\b/i.exec(line);
     const body = [];
     let j = i + 1;
     for (; j < lines.length && lines[j].trim() !== m[2]; j++) body.push(lines[j]);
-    heredocs.push({ target: target ? unquote(target) : null, append: redir?.[1] === ">>", shell, body: body.join("\n") });
+    heredocs.push({ target: target ? unquote(target) : null, append: redir?.[1] === ">>", shell, interpreter: interp ? interp[1].toLowerCase() : null, body: body.join("\n") });
     kept.push(line.replace(m[0], ` __PCGHEREDOC${heredocs.length - 1}__ `));
     i = j;
   }
@@ -782,7 +814,7 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
         if (h.target) touch(h.target, { write: h.append ? "append" : "create", base: vcwd });
         // A body fed to a shell is a script of shell clauses, cd and all; any other body is a file's content.
         if (h.shell && !h.target && depth < 3) scanShell(h.body, depth + 1, { cwd: vcwd, prev: prevCwd, stack: dirStack });
-        else scanScript(h.target ?? "heredoc.sh", h.body, vcwd);
+        else scanScript(heredocName(h), h.body, vcwd);
       }
       const flagless = words.slice(1).filter((x) => !x.startsWith("-"));
       for (const t of targets) touch(t, { write: "create", base: vcwd });

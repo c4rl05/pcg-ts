@@ -56,6 +56,39 @@ describe("closestNames", () => {
     expect(closestNames("abcd", candidates, 0)).toEqual([]);
   });
 
+  it("keeps a whole-prefix near miss that edit distance throws away", () => {
+    // The `--out` / `--output` case. Three edits is outside the limit for a
+    // six-letter name (max(2, 6/3) = 2), so without the prefix rule these
+    // all come back empty and the reader is told only what IS valid.
+    expect(editDistance("output", "out")).toBe(3);
+    expect(closestNames("output", ["out", "seed", "stats"])).toEqual(["out"]);
+    expect(closestNames("outputs", ["out"])).toEqual(["out"]);
+    // Either direction: the refused name may be the shorter one.
+    expect(closestNames("scatter", ["scatterPoints"])).toEqual(["scatterPoints"]);
+  });
+
+  it("caps how much longer the full name may be than the stub", () => {
+    // The cap, not a character floor, is what keeps this rule honest.
+    // MEASURED against the real registries: a bare prefix rule made "exp"
+    // a suggestion for "expression" — an author who writes "expression"
+    // means an expression, not the exponential — and let "att" reach
+    // "attributeRemap", eleven edits away, as a did-you-mean.
+    expect(closestNames("expression", ["exp"])).toEqual([]);
+    expect(closestNames("att", ["attributeRemap"])).toEqual([]);
+    // 3x is the line, and it keeps every case the rule exists for.
+    expect(closestNames("exponent", ["exp"])).toEqual(["exp"]); // 8 <= 3*3
+    expect(closestNames("input", ["in"])).toEqual(["in"]); // 5 <= 3*2
+    expect(closestNames("inbound", ["in"])).toEqual([]); // 7 > 3*2
+    // A prefix of equal length is the same name, handled by distance 0.
+    expect(closestNames("out", ["out"])).toEqual(["out"]);
+  });
+
+  it("ranks a prefix near miss by its real distance, behind any true typo", () => {
+    // The prefix rule admits a candidate; it never promotes one. A
+    // one-letter slip still leads, and `suggestNames` keeps only that tier.
+    expect(closestNames("output", ["out", "outputs"])).toEqual(["outputs", "out"]);
+  });
+
   it("accepts any iterable and is stable across calls", () => {
     const set = new Set(["fbm", "fract", "floor"]);
     const first = closestNames("fmb", set.keys());

@@ -24,7 +24,8 @@
     "wakeAfterInfraHours": 12,
     "maxContaminatedReschedules": 1,
     "contaminationRateWindow": 6,
-    "contaminationRateMax": 0.5
+    "contaminationRateMax": 0.5,
+    "$contaminationRateMaxWhy": "RESTORED to 0.5 on 2026-09-19 once v2 finished 96/96. It was raised to 1 (off) with v2 at 86/96, after the guard fired twice in a row on the same diagnosed FALSE POSITIVE. Every flag in the cluster is one bug: a heredoc piped to `node -` was named heredoc.sh whatever consumed it, so JavaScript was scanned as shell and a division or a regex literal read as a filesystem root. quarry-terraces trips it because it is the most code-heavy task. The fix is written and tested on branch v2-msys-falsepos (765a2bf), but agents/claude-code.mjs IS part of the campaign identity, so merging it before the campaign ends would strand the last slots -- and `limits` is NOT part of the identity, which is why this knob can move and that one cannot. The guard is worth having: it exists so a systematically compromised campaign stops instead of burning allowance, and earlier in this same campaign it was two GENUINE escapes (`find /` hunting the arm's own tarball) that the classifier caught correctly. What is turned off here is the halt, not the detection: per-run flagging and the one reschedule both still apply, every flag is still recorded, and the records are re-derived from their transcripts with `reclassify --write` once the fix lands. Restore 0.5 immediately after v2 finishes. Do not read a clean contamination rate in this campaign as evidence of anything until that re-derivation has run and its before/after table has been read."
   },
   "selftest": {
     "isolationProbe": { "leakCwd": null, "turns": 2, "wallMinutes": 5 }

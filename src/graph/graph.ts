@@ -10,6 +10,7 @@ import { hashCombine, hashString } from "../random/index.js";
 import type { DataCollection } from "./data.js";
 // By path: the phrasing helper is internal plumbing the diagnostics barrel does not carry.
 import { suggestNames } from "../diagnostics/didYouMean.js";
+import type { JsonValue } from "../diagnostics/index.js";
 import { GraphCycleError, GraphValidationError } from "./errors.js";
 import type { NodeDef, PinDef } from "./node.js";
 import { paramScan, refLabel } from "./paramScan.js";
@@ -420,7 +421,12 @@ export class Graph {
     this._seed = seed >>> 0;
   }
 
-  /** The graph seed all node seeds derive from. */
+  /**
+   * The graph seed all node seeds derive from. Read-only: write it with
+   * {@link Graph.setSeed}, which normalises it to a uint32, marks every
+   * node dirty and bumps {@link Graph.version}. Assigning to it is refused
+   * with that route named (see `GRAPH_WRITE_ROUTES` below).
+   */
   get seed(): number {
     return this._seed;
   }
@@ -992,4 +998,115 @@ export class Graph {
     }
     return false;
   }
+}
+
+/**
+ * The method that writes each read-only property of a {@link Graph}, or
+ * `null` for one that is derived and nothing writes.
+ *
+ * `graph.seed = 1234` is the assignment callers reach for, and a
+ * getter-only accessor answers it with the engine's own `TypeError` — a
+ * sentence naming neither the property's purpose nor `setSeed`. The guards
+ * below replace that bare failure with a diagnostic that names the route,
+ * because an error message is part of this library's API.
+ *
+ * Exhaustive by test: `readOnly.test.ts` walks every accessor on
+ * `Graph.prototype` and fails when one has no entry here, so a read-only
+ * property added later cannot quietly keep the bare `TypeError`.
+ */
+const GRAPH_WRITE_ROUTES: Readonly<Record<string, string | null>> = Object.freeze({
+  seed: "setSeed",
+  meta: "setMeta",
+  graphParams: "setGraphParams",
+  version: null,
+});
+
+/**
+ * What a refused assignment says per property: the consequence the write
+ * route carries, or why there is no route. Written out per property rather
+ * than assembled from a template, because that consequence is the useful
+ * half of the message and no two of them are alike.
+ */
+const GRAPH_READ_ONLY_DETAIL: Readonly<Record<string, string>> = Object.freeze({
+  seed: "it normalises the seed to a uint32, marks every node dirty and bumps graph.version",
+  meta: "it validates the block by the rules the JSON reader applies, and deliberately leaves graph.version alone",
+  graphParams:
+    "it replaces the whole declared set; to change one and rebind its readers, call graph.setGraphParam(name, value)",
+  version:
+    "version bumps on its own with every mutating call (add, connect, disconnect, setParam, setSeed, output)",
+});
+
+/** The value as a diagnostic can quote it back, or `undefined` when it cannot. */
+function quotableValue(value: unknown): JsonValue | undefined {
+  if (value === null || typeof value === "boolean" || typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  return undefined;
+}
+
+/**
+ * The error a refused assignment throws.
+ *
+ * The fix is spelled as a call the caller can paste — carrying their own
+ * value only when that value would still be a VALID argument, so
+ * `graph.seed = 7` is answered with `graph.setSeed(7)` while
+ * `graph.seed = "7"` gets `graph.setSeed(seed)` rather than a call that
+ * would fail in turn. `got` quotes the refused value either way; that is
+ * data about what happened, not advice.
+ *
+ * The record carries the route as `expected` rather than as `valid` or
+ * `didYouMean`: those two are for the accepted values (or near spellings)
+ * of the offending KEY, and a consumer that renders them would print
+ * "setSeed" as a permitted name for the property. What was expected here
+ * is a call, which is exactly what `expected` says.
+ */
+function readOnlyPropertyError(property: string, value: unknown): GraphValidationError {
+  const route = GRAPH_WRITE_ROUTES[property] ?? null;
+  const got = quotableValue(value);
+  const argument = typeof value === "number" && Number.isFinite(value) ? String(value) : property;
+  const call = route === null ? undefined : `graph.${route}(${argument})`;
+  // Never the no-route wording for a property that HAS one: the two
+  // tables are written side by side and a gap in the second must not turn
+  // into a sentence that contradicts the first.
+  const detail =
+    GRAPH_READ_ONLY_DETAIL[property] ??
+    (route === null ? "there is no write route" : `it is the supported way to change ${property}`);
+  const message =
+    call === undefined
+      ? `Graph.${property} is read-only and derived; assigning to it changes nothing — ${detail}.`
+      : `Graph.${property} is read-only; assigning to it cannot work. Call ${call} instead — ${detail}.`;
+  return new GraphValidationError(message, undefined, [
+    {
+      code: "read-only-property",
+      severity: "error",
+      message,
+      key: property,
+      ...(got !== undefined ? { got } : {}),
+      ...(call !== undefined ? { expected: `a call to ${call}`, fix: `call ${call}` } : {}),
+    },
+  ]);
+}
+
+/**
+ * Give every read-only property named above a setter that throws that
+ * error, in place of the engine's bare `TypeError`.
+ *
+ * Installed on the prototype rather than declared as a `set` accessor in
+ * the class body ON PURPOSE. A declared setter needs a parameter type, and
+ * the narrowest one available (`never`) would replace TypeScript's own
+ * "Cannot assign to 'seed' because it is a read-only property" — which
+ * already names the fault at compile time — with "Type 'number' is not
+ * assignable to type 'never'", which names nothing. Installing it here
+ * leaves the compile-time message alone and improves only the RUNTIME one,
+ * which is the half a JavaScript caller, a `pcg` script and an agent
+ * reading a stack trace actually reach.
+ */
+for (const property of Object.keys(GRAPH_WRITE_ROUTES)) {
+  const descriptor = Object.getOwnPropertyDescriptor(Graph.prototype, property);
+  if (descriptor?.get === undefined || descriptor.set !== undefined) continue;
+  Object.defineProperty(Graph.prototype, property, {
+    ...descriptor,
+    set(value: unknown): never {
+      throw readOnlyPropertyError(property, value);
+    },
+  });
 }

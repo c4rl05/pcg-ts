@@ -247,6 +247,18 @@ export class Attribute<T extends AttrType = AttrType> {
  * An ordered collection of attributes sharing one element count (one domain
  * of a geometry). Iteration order is insertion order — stable and
  * deterministic; rename keeps the attribute's position.
+ *
+ * NOT A `Map`, despite carrying `get` and `has`. Iterating yields each
+ * {@link Attribute} itself, never a `[name, attribute]` pair; there is no
+ * `set`, `entries`, `keys`, `values` or `forEach`; `names()` is the list of
+ * names and `size` the number of attributes. A column is created with
+ * {@link AttributeSet.add}, which THROWS on a name already taken — the
+ * collision a `Map.set` would silently overwrite — or replaced outright
+ * with {@link AttributeSet.replace}. A geometry's sets are reached as
+ * `geo.attrs[domain]`, an ordinary record keyed by domain name, so one
+ * attribute is `geo.attrs[domain].get(name)`.
+ *
+ * Properties (not methods), in full: `capacity`, `count`, `size`.
  */
 export class AttributeSet implements Iterable<Attribute> {
   private readonly map = new Map<string, Attribute>();

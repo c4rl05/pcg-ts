@@ -854,7 +854,7 @@ describe.skipIf(testDevice === null)(
       expect(b.deviceMessage).toBe(b.cpuMessage);
       expect(b.deviceMessage).toMatch(/would spawn 1048577 instances/);
       expect(b.deviceMessage).toMatch(/over the budget of 1048576/);
-      expect(b.deviceMessage).toMatch(/64 MiB of matrices/);
+      expect(b.deviceMessage).toMatch(/64 MiB in the batch's "transforms" array/);
       expect(b.deviceMessage).toMatch(/per COOK, not per world/);
       // And nothing device-flavoured leaked into it.
       expect(b.deviceMessage).not.toMatch(/resident run|GpuFieldEvaluator|PlanFail/);
