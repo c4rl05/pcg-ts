@@ -65,39 +65,48 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
     },
     "./three": {
       "types": "./dist/three/index.d.ts",
-      "import": "./dist/three/index.js"
+      "import": "./dist/three/index.js",
+      "require": "./dist/three/index.js"
     },
     "./gpu": {
       "types": "./dist/gpu/index.d.ts",
-      "import": "./dist/gpu/index.js"
+      "import": "./dist/gpu/index.js",
+      "require": "./dist/gpu/index.js"
     },
     "./cli": {
       "types": "./dist/cli/index.d.ts",
-      "import": "./dist/cli/index.js"
+      "import": "./dist/cli/index.js",
+      "require": "./dist/cli/index.js"
     },
     "./primitives": {
       "types": "./dist/primitives/index.d.ts",
-      "import": "./dist/primitives/index.js"
+      "import": "./dist/primitives/index.js",
+      "require": "./dist/primitives/index.js"
     },
     "./worker": {
       "types": "./dist/worker/index.d.ts",
-      "import": "./dist/worker/index.js"
+      "import": "./dist/worker/index.js",
+      "require": "./dist/worker/index.js"
     },
     "./worker/node": {
       "types": "./dist/worker/entryNode.d.ts",
-      "import": "./dist/worker/entryNode.js"
+      "import": "./dist/worker/entryNode.js",
+      "require": "./dist/worker/entryNode.js"
     },
     "./worker/browser": {
       "types": "./dist/worker/entryBrowser.d.ts",
-      "import": "./dist/worker/entryBrowser.js"
+      "import": "./dist/worker/entryBrowser.js",
+      "require": "./dist/worker/entryBrowser.js"
     },
     "./panels": {
       "types": "./dist/panels/index.d.ts",
-      "import": "./dist/panels/index.js"
+      "import": "./dist/panels/index.js",
+      "require": "./dist/panels/index.js"
     },
     "./package.json": "./package.json"
   },

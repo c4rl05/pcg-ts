@@ -77,8 +77,10 @@ const read = (path: string): string => readFileSync(join(ROOT, path), "utf8");
 
 interface Manifest {
   version: string;
+  type?: string;
+  main?: string;
   sideEffects?: unknown;
-  exports: Record<string, { types: string; import: string } | string>;
+  exports: Record<string, { types: string; import: string; require?: string } | string>;
   peerDependencies: Record<string, string>;
 }
 const pkg = JSON.parse(read("package.json")) as Manifest;
@@ -329,12 +331,114 @@ describe("the built output the sideEffects array describes", () => {
     expect(pkg.exports["./panels"]).toEqual({
       types: "./dist/panels/index.d.ts",
       import: "./dist/panels/index.js",
+      // The same file, on purpose — see "require() from CommonJS" above.
+      require: "./dist/panels/index.js",
     });
     expect(
       read("tsup.config.ts"),
       'package.json exports "./panels" but tsup has no "src/panels/index.ts" entry, so ' +
         "dist/panels/ is never built.",
     ).toContain('"src/panels/index.ts"');
+  });
+});
+
+/**
+ * `require("pcg-ts")` from CommonJS, which 8 of 96 fresh-agent eval runs
+ * tried and none completed.
+ *
+ * The package is ESM-only and stays that way. Every build entry is ESM
+ * (`tsup.config.ts` says `format: ["esm"]`), and a second CommonJS build
+ * would be worse here than in most packages: this library REGISTERS at
+ * module scope — node types, primitives, GPU handlers, field-grammar
+ * constructors — into module-level maps. Two copies of those modules is two
+ * registries, so a consumer that reached one half through `import` and the
+ * other through `require` would get "unknown node type" for a type it can
+ * see in the other half's listing. The dual-package hazard is a correctness
+ * bug in this package, not a packaging inconvenience.
+ *
+ * What was actually wrong was the absence of a `require` condition, and it
+ * cost twice. Node resolves `require("pcg-ts")` against the `require`
+ * condition; with none declared it never reaches a file and throws
+ * `ERR_PACKAGE_PATH_NOT_EXPORTED: No "exports" main defined`, which names
+ * neither the situation (the package is ESM) nor the fix. And agents read
+ * that as an invitation to guess: the transcripts show them `cd`-ing into
+ * `node_modules/pcg-ts` and trying `require("./dist/index.cjs")` and
+ * `require("./dist/index.cjs.js")` — paths this package has never shipped —
+ * whose "Cannot find module './dist/index.cjs'" is the error the campaign
+ * recorded. It was never Node's answer about pcg-ts; it was Node's answer
+ * about a filename the agent invented.
+ *
+ * The fix is one line per subpath: point `require` at THE SAME ESM FILE
+ * `import` points at. Node >= 20.19 / >= 22.12 then loads it through
+ * `require(esm)` — the eval sandboxes all ran v22.20.0, so this turns those
+ * runs from failing into working — and because it is one file there is one
+ * module instance and no hazard. Below that, Node throws `ERR_REQUIRE_ESM`,
+ * which names the file, the requiring file and the fix ("change the require
+ * ... to a dynamic import()"). Truthful either way, which is the bar.
+ *
+ * This only holds while no entry's module graph has a top-level await:
+ * `require(esm)` throws `ERR_REQUIRE_ASYNC_MODULE` on one. Verified against
+ * the built output, and `scripts/smoke-dist.mjs` requires every entry in a
+ * fresh subprocess so a TLA cannot be added without it failing.
+ */
+describe("require() from CommonJS", () => {
+  /** Every subpath with an object entry, i.e. everything but `./package.json`. */
+  const subpaths = Object.entries(pkg.exports).filter(
+    (entry): entry is [string, { types: string; import: string; require?: string }] =>
+      typeof entry[1] !== "string",
+  );
+
+  it("stays ESM-only: no `main`, and type module", () => {
+    // Deleting this test is the deliberate way to introduce a CommonJS
+    // build. Doing it by adding a field is the accidental way, and the
+    // registries above are what pay for it.
+    expect(pkg.type).toBe("module");
+    expect(
+      pkg.main,
+      "package.json grew a `main`. This package is ESM-only and `exports` is the whole resolution " +
+        "story; a `main` is either dead weight or a second, divergent entry. See this block's header.",
+    ).toBeUndefined();
+  });
+
+  it("declares a `require` condition for every subpath", () => {
+    expect(subpaths.length).toBeGreaterThan(5);
+    for (const [subpath, entry] of subpaths) {
+      expect(
+        entry.require,
+        `package.json exports "${subpath}" has no \`require\` condition, so \`require("pcg-ts${subpath.slice(1)}")\` ` +
+          'fails with ERR_PACKAGE_PATH_NOT_EXPORTED ("No \\"exports\\" main defined") — a message that names ' +
+          "neither the cause nor the fix, and that agents answer by guessing at .cjs filenames inside " +
+          "node_modules. See this block's header.",
+      ).toBeDefined();
+    }
+  });
+
+  it("points `require` at the very same file as `import`, never a second build", () => {
+    for (const [subpath, entry] of subpaths) {
+      expect(
+        entry.require,
+        `package.json exports "${subpath}" resolves \`require\` to ${entry.require} and \`import\` to ` +
+          `${entry.import}. Two files is two module instances and two copies of every module-level ` +
+          "registry in this library. One file, loaded through require(esm), is the whole point.",
+      ).toBe(entry.import);
+      expect(entry.require?.endsWith(".cjs"), `${subpath} points require at a .cjs the build does not emit`).toBe(
+        false,
+      );
+    }
+  });
+
+  it("requires what tsup actually built, when there is a build to check", () => {
+    // The `.cjs` the transcripts show agents reaching for does not exist,
+    // and this is where a future `exports` entry claiming one gets caught
+    // before a consumer does.
+    if (!existsSync(join(ROOT, "dist"))) return;
+    for (const [subpath, entry] of subpaths) {
+      const target = entry.require as string;
+      expect(
+        existsSync(join(ROOT, target)),
+        `package.json exports "${subpath}" requires ${target}, which is not in dist/`,
+      ).toBe(true);
+    }
   });
 });
 

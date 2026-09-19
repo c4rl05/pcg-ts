@@ -161,6 +161,58 @@ const importCases = [
     `,
   },
   {
+    // package.json's `require` condition points every subpath at the SAME
+    // ESM file `import` does. That is deliberate — one file is one module
+    // instance, so the dual-package hazard cannot split this library's
+    // module-level registries — and it works because Node >= 20.19 / >=
+    // 22.12 can require() an ES module.
+    //
+    // It works only while no entry's module graph contains a TOP-LEVEL
+    // AWAIT. Add one anywhere beneath any of these entries and every
+    // CommonJS consumer's `require("pcg-ts")` becomes
+    // ERR_REQUIRE_ASYNC_MODULE, with nothing in `npm test` to notice: the
+    // suite runs against src/ through an ESM loader that is perfectly happy
+    // with a TLA. This case is the notice.
+    name: "require() of every published entry from CommonJS (require(esm))",
+    code: `
+      const { createRequire } = await import("node:module");
+      const { fileURLToPath } = await import("node:url");
+      const require = createRequire(import.meta.url);
+      const targets = [
+        ["pcg-ts", ${INDEX}],
+        ["pcg-ts/three", ${THREE}],
+        ["pcg-ts/gpu", ${GPU}],
+        ["pcg-ts/cli", ${CLI}],
+        ["pcg-ts/primitives", ${PRIMITIVES}],
+        ["pcg-ts/worker", ${WORKER}],
+        ["pcg-ts/panels", ${PANELS}],
+      ];
+      for (const [subpath, url] of targets) {
+        let mod;
+        try {
+          mod = require(fileURLToPath(url));
+        } catch (err) {
+          const code = err && err.code;
+          if (code === "ERR_REQUIRE_ASYNC_MODULE") {
+            throw new Error(
+              "require(\\"" + subpath + "\\") threw ERR_REQUIRE_ASYNC_MODULE: something under this " +
+                "entry now uses a top-level await, so package.json's \`require\` condition no longer " +
+                "resolves for any CommonJS consumer. Remove the TLA, or stop promising require().",
+            );
+          }
+          throw err;
+        }
+        if (!mod || Object.keys(mod).length === 0) {
+          throw new Error("require(\\"" + subpath + "\\") returned an empty namespace");
+        }
+      }
+      const pcg = require(fileURLToPath(${INDEX}));
+      if (typeof pcg.listNodeTypes !== "function") {
+        throw new Error("require(\\"pcg-ts\\") has no listNodeTypes");
+      }
+    `,
+  },
+  {
     name: "pooled cook through dist/worker/entryNode.js in a real Worker",
     code: `
       const { CookWorkerPool } = await import(${WORKER});

@@ -32,6 +32,9 @@ describe("pcg bin", () => {
     expect(pkg.exports["./cli"]).toEqual({
       types: "./dist/cli/index.d.ts",
       import: `./${CLI_DIST}`,
+      // `require` resolves to the SAME file, never a second CommonJS build.
+      // tests/packaging.test.ts, "require() from CommonJS", has the why.
+      require: `./${CLI_DIST}`,
     });
     expect(read("tsup.config.ts")).toContain(`"${CLI_ENTRY}"`);
 
@@ -66,6 +69,9 @@ describe("pcg bin", () => {
     expect(pkg.exports["./primitives"]).toEqual({
       types: "./dist/primitives/index.d.ts",
       import: "./dist/primitives/index.js",
+      // The same file under `require` — two builds would be two registries,
+      // which for THIS subpath is the whole failure mode it exists to avoid.
+      require: "./dist/primitives/index.js",
     });
     expect(read("tsup.config.ts")).toContain('"src/primitives/index.ts"');
     // Importing it is what fills the registry `pcg run` reads; a CLI that
