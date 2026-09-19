@@ -37,12 +37,13 @@ export interface Detail {
   /**
    * Build the web bars and horizontal struts as laced lattice struts
    * (four corner angles and X lacing) instead of solid square members.
-   * About 1.5M triangles more.
+   * About 2.9M triangles more (0.41M to 3.28M).
    */
   readonly lacedWeb?: boolean;
   /**
    * Rivets as instances (asset id {@link RIVET_ASSET}): one wherever a
-   * lacing bar meets a chord. Implies `lacedWeb`. Around 1.5M instances.
+   * lacing bar meets a chord, along the box members' seams, and over the
+   * gusset plates. Implies `lacedWeb`. About 860,000 instances.
    */
   readonly rivets?: boolean;
 }
@@ -57,8 +58,9 @@ export const RIVET_ASSET = "rivet";
 
 /**
  * What a module returns: its finished mesh nodes, by class, and any rivet
- * spawners, each named (a spawn call is capped at about a million
- * instances, so rivets come out as several outputs, `rivets.<name>`).
+ * spawners, each named. Every rivet set builds its own spawner, so rivets
+ * come out as several outputs, `rivets.<name>` (41 at full detail); one
+ * spawn is also capped at MAX_INSTANCES, 1,048,576.
  */
 export type Parts = Partial<Record<PartClass, NodeHandle[]>> & {
   rivets?: Array<{ name: string; spawn: NodeHandle }>;

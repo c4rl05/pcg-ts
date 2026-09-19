@@ -12,8 +12,8 @@
  * writes its face's normal (`FACE_NORMAL`, see lattice.ts), and the
  * section axes are that normal made perpendicular to the member, N, and
  * B = N x T. An up hint of +y would square it to the vertical instead,
- * which in panel 1, where the faces lean 26.7 degrees, is up to 30 degrees
- * off.
+ * which in panel 1, where the faces lean 26.7 degrees, rolls one diagonal
+ * 30 degrees off its face and the other 40.
  *
  * Built like the truss in the corpus rig graph: resample, then displace
  * copies of the same paths — each chord or zigzag is one transformPoints

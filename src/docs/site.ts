@@ -36,6 +36,7 @@ export const SITE_PAGES = [
   "manual.html",
   "guides/racetrack.html",
   "guides/lanterns.html",
+  "guides/eiffel.html",
 ] as const;
 
 /* ------------------------------------------------------------------ *

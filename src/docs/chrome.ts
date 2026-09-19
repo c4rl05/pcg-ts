@@ -78,6 +78,7 @@ export const SITE_INDEX: readonly ChromeGroup[] = [
     items: [
       { label: "Dressing a roadside", href: "guides/racetrack.html" },
       { label: "One number per lantern", href: "guides/lanterns.html" },
+      { label: "The tower from its plates", href: "guides/eiffel.html" },
     ],
   },
   {

@@ -17,16 +17,18 @@
  * ONE MATERIAL PER CLASS, all in one family. The iron is painted one
  * colour on the real tower, and a render that gave every class its own hue
  * would read as a diagram, not a structure. The classes are nudged apart
- * just enough to tell them apart up close; the stone and the decks step
- * out of the family because they are different materials.
+ * just enough to tell them apart up close. The stone leaves the family
+ * because it is a different material, the decks take its lightest paint,
+ * and the names are gilded.
  *
  * THE RIVETS ARE INSTANCES, not mesh. `?rivets` (which implies `?laced`)
- * makes the cook put out `rivets*` outputs of instance batches — millions
+ * makes the cook put out `rivets*` outputs of instance batches — about 860,000
  * of them — and the page draws each batch as one instanced unit-size dome
  * whose instance matrix carries the rivet's true size. They receive the
- * sun's shadow but do not cast it: a head a few centimetres high throws
- * nothing a 4096 map over 600 m could resolve, and casting would put
- * millions of instances into every shadow pass.
+ * sun's shadow but do not cast it: a head 13 mm high throws nothing a
+ * 4096 map over the fitted 180 x 342 m frustum (4-8 cm a texel) could
+ * resolve, and casting would put
+ * all of those instances into every shadow pass.
  *
  * Offline quality first: this page does not try to be fast yet.
  */
@@ -115,7 +117,7 @@ const UNCLASSED = new MeshStandardMaterial({
  * y = 0 and rising 0.7 along +y, the rivet's axis out of the plate. Each
  * instance matrix carries the rivet's true size, so this is the shape
  * only. Open at the base, which lies against the plate and is never seen;
- * 16 around and 3 rings is 80 triangles, and there are millions of these.
+ * 16 around and 3 rings is 80 triangles, and there are about 860,000 of these.
  */
 function rivetHead(): BufferGeometry {
   const base = 1;
@@ -156,7 +158,7 @@ const NOMINAL = new Box3(new Vector3(-90, 0, -90), new Vector3(90, 320, 90));
 
 /**
  * Where the sun is, as a direction TOWARD it. From behind the camera's
- * left shoulder and about 48 degrees up: the faces toward the camera split
+ * left shoulder and about 49 degrees up: the faces toward the camera split
  * into a lit side and a shaded one, and the tower's shadow falls back and
  * to the right, onto ground the opening view can see.
  */
@@ -236,7 +238,7 @@ scene.add(ground);
  * Fit the sun and its shadow camera to a box.
  *
  * The shadow camera has to hold two things: the tower, and the ground its
- * shadow falls on — which, at this elevation, reaches some 280 m past the
+ * shadow falls on — which, at this elevation, reaches some 270 m past the
  * foot. Every point of that shadow lies on a ray from a point of the
  * tower away from the sun, so the frustum is the light-space bounds of the
  * box's eight corners plus where each corner's ray meets the ground.
@@ -499,7 +501,7 @@ function draw(
 async function main(): Promise<void> {
   const problems: string[] = [];
   statCook("cooking…");
-  // `?laced` builds the web bars as laced lattice struts (about 1.5M
+  // `?laced` builds the web bars as laced lattice struts (about 2.9M
   // triangles more): the second of the tower's self-similar scales.
   // `?rivets` sets rivets on them as instances, and so implies `?laced`.
   const params = new URLSearchParams(location.search);
