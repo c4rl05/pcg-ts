@@ -1363,7 +1363,8 @@ interface Field<N extends number = number> {
   live attribute storage (`attribute(name)` returns a `subarray`), so
   treat them as read-only and re-evaluate after mutating the geometry.
   Index the COLUMN, not the attribute behind it: an attribute's own
-  `data` is `capacity * tupleSize` long and capacity grows by doubling.
+  `data` is `capacity * tupleSize` long — exact for a clone, merge or
+  gather, doubled only on appends, never the live count.
 - `makeField(key, tupleSize, evaluate)` is the ONLY constructor. It
   stamps the brand `isField` reads. A plain `{ key, tupleSize, evaluate }`
   literal type-checks as a `Field` (the interface does not declare the

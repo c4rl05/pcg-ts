@@ -351,6 +351,29 @@ function referenceFill(
   }
 }
 
+/**
+ * A NaN with chosen bits, built through a DataView because the literal
+ * `NaN` is one particular encoding and `-NaN` is not a thing the language
+ * spells. Stored into an f32 column, 0xfff8... comes out 0xffc00000 and
+ * plain `NaN` 0x7fc00000: two NaNs that compare equal and are different
+ * bytes, which is the case a uniform `fill` cannot serve.
+ */
+function nanBits(hi: bigint): number {
+  const view = new DataView(new ArrayBuffer(8));
+  view.setBigUint64(0, hi);
+  return view.getFloat64(0);
+}
+
+const NEG_NAN = nanBits(0xfff8000000000000n);
+const PAYLOAD_NAN = nanBits(0x7ff4000000000000n);
+
+/** The f32 bits of `value`, as eight hex digits. */
+function f32Bits(value: number): string {
+  const f = new Float32Array(1);
+  f[0] = value;
+  return new Uint32Array(f.buffer)[0].toString(16).padStart(8, "0");
+}
+
 function bytesOf(data: ArrayBufferView): Uint8Array {
   return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
 }
@@ -375,6 +398,12 @@ describe("Attribute.fill fast paths", () => {
     nan: (ts) => Array.from({ length: ts }, (_, k) => (k === 0 ? Number.NaN : 2)),
     // Converted on store: truncated by the integer types, wrapped by u32.
     converted: (ts) => Array.from({ length: ts }, (_, k) => -1.75 + k * 300.5),
+    // NaNs, which compare equal to each other however their bits differ:
+    // one encoding throughout, two alternating, and one in the last slot
+    // of an otherwise ordinary tuple.
+    nanUniform: (ts) => new Array<number>(ts).fill(NEG_NAN),
+    nanMixed: (ts) => Array.from({ length: ts }, (_, k) => (k % 2 === 0 ? Number.NaN : NEG_NAN)),
+    nanLast: (ts) => Array.from({ length: ts }, (_, k) => (k === ts - 1 ? PAYLOAD_NAN : 0.5)),
   };
   const RANGES: Array<[number, number]> = [
     [0, 0],
@@ -428,6 +457,29 @@ describe("Attribute.fill fast paths", () => {
     expect(sameBytes(a.data, again)).toBe(false);
   });
 
+  it("keeps each component's NaN encoding, which one broadcast value cannot", () => {
+    const set = new AttributeSet();
+    const a = set.add("a", "f32", 2, [Number.NaN, NEG_NAN]);
+    set.resize(4);
+    const expected = a.data.slice();
+    referenceFill(expected, 2, [Number.NaN, NEG_NAN], 0, 4);
+    a.fillDefault(0, 4);
+    expect(sameBytes(a.data, expected)).toBe(true);
+    // What the bytes are, stated rather than implied: the two NaNs differ,
+    // so a fill that broadcast one of them would be visible here. (If a
+    // platform ever canonicalized every NaN to one encoding, this is the
+    // assertion that would say so.)
+    const bits = Array.from(a.data.subarray(0, 8), (v) => f32Bits(v));
+    expect(bits).toEqual(["7fc00000", "ffc00000", "7fc00000", "ffc00000", "7fc00000", "ffc00000", "7fc00000", "ffc00000"]);
+    // CONTROL: the uniform fast path over this pattern — `fill(value[0])`,
+    // which is what the first cut of this code did — writes one encoding
+    // over both components and does NOT match the loop.
+    const naive = a.data.slice();
+    naive.fill(Number.NaN, 0, 8);
+    expect(sameBytes(naive, expected)).toBe(false);
+    expect(Array.from(naive.subarray(0, 2), (v) => f32Bits(v))).toEqual(["7fc00000", "7fc00000"]);
+  });
+
   it("clamps a negative start and clips an end past capacity, as the loop did", () => {
     for (const value of [[4, 4, 4], [1, 2, 3]]) {
       const set = new AttributeSet();
@@ -439,133 +491,5 @@ describe("Attribute.fill fast paths", () => {
       expect(sameBytes(a.data, expected)).toBe(true);
       expect(Array.from(a.data.subarray(0, 3))).toEqual(value);
     }
-  });
-});
-
-describe("AttributeSet._resizeForOverwrite", () => {
-  it("allocates exactly the count, where resize rounds up by doubling", () => {
-    const exact = new AttributeSet();
-    const e = exact.add("P", "f32", 3);
-    exact._resizeForOverwrite(5);
-    expect(exact.count).toBe(5);
-    expect(exact.capacity).toBe(5);
-    expect(e.capacity).toBe(5);
-    expect(e.data.length).toBe(15);
-    // CONTROL: the ordinary path, same count.
-    const doubled = new AttributeSet();
-    doubled.add("P", "f32", 3);
-    doubled.resize(5);
-    expect(doubled.capacity).toBe(8);
-  });
-
-  it("does not default-initialize: a non-zero default left unwritten reads as zero", () => {
-    // What the contract says a caller must never leave behind — shown here
-    // so the "default honoured" tests below demonstrably have teeth.
-    const set = new AttributeSet();
-    const scale = set.add("scale", "f32", 3, [1, 1, 1]);
-    set._resizeForOverwrite(4);
-    expect(Array.from(scale.data)).toEqual(new Array<number>(12).fill(0));
-    // CONTROL: resize over the same count gives the default.
-    const ref = new AttributeSet();
-    const refScale = ref.add("scale", "f32", 3, [1, 1, 1]);
-    ref.resize(4);
-    expect(Array.from(refScale.data.subarray(0, 12))).toEqual(new Array<number>(12).fill(1));
-  });
-
-  it("honours a non-zero default on a partially written range when the caller fills the rest", () => {
-    // The merge shape: blocks written by copy, a block an input lacked
-    // filled with the column's default, all into a set sized with no fill.
-    const set = new AttributeSet();
-    const color = set.add("color", "f32", 4, [1, 0.5, 0.25, 1]);
-    const scale = set.add("scale", "f32", 3, [1, 1, 1]);
-    const tag = set.add("tag", "string", 1, "none");
-    set._resizeForOverwrite(6);
-    color.fill([0, 0, 1, 1], 0, 2);
-    color.fillDefault(2, 5);
-    color.fill([0, 1, 0, 1], 5, 6);
-    scale.fillDefault(0, 3);
-    scale.fill(2, 3, 6);
-    tag.setString(0, "a");
-    tag.fillDefault(1, 6);
-    expect(Array.from(color.data.subarray(0, 24))).toEqual([
-      0, 0, 1, 1, 0, 0, 1, 1, 1, 0.5, 0.25, 1, 1, 0.5, 0.25, 1, 1, 0.5, 0.25, 1, 0, 1, 0, 1,
-    ]);
-    expect(Array.from(scale.data.subarray(0, 18))).toEqual([
-      1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-    ]);
-    expect([0, 1, 5].map((i) => tag.getString(i))).toEqual(["a", "none", "none"]);
-    // The default string kept table slot 0, as `add` gives it.
-    expect(tag.stringTable).toEqual(["none", "a"]);
-  });
-
-  it("takes the count as capacity outright on a set with no columns, shrinking it", () => {
-    const set = new AttributeSet();
-    set.resize(3);
-    expect(set.capacity).toBe(8);
-    set._resizeForOverwrite(3);
-    expect(set.capacity).toBe(3);
-    // A column added afterwards is allocated at that capacity and, through
-    // `add`, still initialized to its default.
-    const a = set.add("a", "f32", 2, 4);
-    expect(a.data.length).toBe(6);
-    expect(Array.from(a.data)).toEqual([4, 4, 4, 4, 4, 4]);
-  });
-
-  it("keeps existing elements and never shrinks a set that holds columns", () => {
-    const set = new AttributeSet();
-    const a = set.add("a", "i32", 1, 9);
-    set.resize(5); // capacity 8
-    a.data.set([1, 2, 3, 4, 5]);
-    set._resizeForOverwrite(3);
-    expect(set.capacity).toBe(8);
-    expect(set.count).toBe(3);
-    set._resizeForOverwrite(10);
-    expect(set.capacity).toBe(10);
-    expect(Array.from(a.data.subarray(0, 3))).toEqual([1, 2, 3]);
-  });
-
-  it("grows by doubling from an exact capacity once appended to", () => {
-    const set = new AttributeSet();
-    const a = set.add("a", "f32", 1, 3);
-    set._resizeForOverwrite(9);
-    a.data.set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    set.resize(10);
-    expect(set.capacity).toBe(18);
-    expect(Array.from(a.data.subarray(0, 10))).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 3]);
-  });
-
-  it("rejects a count that is not a non-negative integer", () => {
-    const set = new AttributeSet();
-    expect(() => set._resizeForOverwrite(-1)).toThrow(/non-negative integer/);
-    expect(() => set._resizeForOverwrite(1.5)).toThrow(/non-negative integer/);
-  });
-});
-
-describe("AttributeSet._addForOverwrite", () => {
-  it("creates a column without filling the existing elements", () => {
-    const set = new AttributeSet();
-    set._resizeForOverwrite(3);
-    const a = set._addForOverwrite("a", "f32", 2, 7);
-    expect(a.data.length).toBe(6);
-    expect(Array.from(a.data)).toEqual([0, 0, 0, 0, 0, 0]);
-    expect(a.defaultValue).toEqual([7, 7]);
-    // CONTROL: `add` on the same set fills.
-    expect(Array.from(set.add("b", "f32", 2, 7).data)).toEqual([7, 7, 7, 7, 7, 7]);
-  });
-
-  it("interns a string column's default at slot 0, as add does", () => {
-    const set = new AttributeSet();
-    set._resizeForOverwrite(2);
-    const s = set._addForOverwrite("s", "string", 1, "none");
-    expect(s.stringTable).toEqual(["none"]);
-    s.setString(0, "x");
-    s.setString(1, "none");
-    expect(s.stringTable).toEqual(["none", "x"]);
-  });
-
-  it("refuses a name already taken", () => {
-    const set = new AttributeSet();
-    set.add("a", "f32");
-    expect(() => set._addForOverwrite("a", "f32")).toThrow(/already exists/);
   });
 });

@@ -5,16 +5,18 @@
  */
 import {
   AttributeNotFoundError,
+  AttributeSet,
   Geometry,
   PRIMTYPE_ATTR,
   type AttrData,
   type AttrType,
   type Attribute,
-  type AttributeSet,
 } from "../data/index.js";
-// By path: the no-copy topology hand-over is internal to the library and no
-// barrel re-exports it (see the module doc there).
+// By path: the no-copy topology hand-over and the overwrite sizing are
+// internal to the library and no barrel re-exports them (see the module
+// docs there).
 import { adoptTopology } from "../data/adoptTopology.js";
+import { addForOverwrite, resizeForOverwrite } from "../data/overwrite.js";
 import {
   type Column,
   type Field,
@@ -616,16 +618,19 @@ function copyRangeError(name: string): Error {
  * `undefined` means the identity, which is one bulk copy per column rather
  * than one call per element.
  *
- * `from` is an `AttributeSet` at nearly every call site, and is typed as
- * an iterable only so a caller can hand over a FILTERED SUBSET of one
- * without copying any data — {@link carryPrimitiveAttributes} passes the
- * primitive columns minus `primtype`. It is iterated twice (create, then
- * fill), so a one-shot generator is not a valid argument; pass an array.
+ * `from` is an `AttributeSet` at nearly every call site, and an ARRAY of
+ * columns is accepted only so a caller can hand over a FILTERED SUBSET of
+ * one without copying any data — {@link carryPrimitiveAttributes} passes
+ * the primitive columns minus `primtype`. That form states its source's
+ * element count as `sourceCount`, which a set carries itself; every source
+ * index is checked against it. It is iterated twice (create, then fill), so
+ * a one-shot generator is not a valid argument; pass an array.
  *
  * `to` is resized only when it is not already the right size — the vertex
- * and primitive sets are sized by `setTopology`, and resizing them again
- * would be a no-op at best. When `to` holds no columns yet its capacity is
- * set to exactly `count`, since the result is built once at a known size.
+ * and primitive sets are sized when the topology is installed, and resizing
+ * them again would be a no-op at best. When `to` holds no columns yet its
+ * capacity is set to exactly `count`, since the result is built once at a
+ * known size.
  *
  * Every column this creates is written whole, so the columns are NOT
  * default-initialized first. Columns `to` already held are none of this
@@ -645,11 +650,37 @@ function copyRangeError(name: string): Error {
  * attribute owns.
  */
 export function copyElements(
-  from: Iterable<Attribute>,
+  from: AttributeSet,
   to: AttributeSet,
   indices: ArrayLike<number> | undefined,
   count: number,
+): void;
+export function copyElements(
+  from: readonly Attribute[],
+  to: AttributeSet,
+  indices: ArrayLike<number> | undefined,
+  count: number,
+  sourceCount: number,
+): void;
+export function copyElements(
+  from: AttributeSet | readonly Attribute[],
+  to: AttributeSet,
+  indices: ArrayLike<number> | undefined,
+  count: number,
+  sourceCount?: number,
 ): void {
+  // Every source index is bounded by the source's ELEMENT COUNT, never by
+  // its capacity: capacity is allocation and depends on how the source was
+  // built (exactly its count for a clone or a merge, rounded up by
+  // doubling for a cloud that grew), so bounding by it would let an index
+  // past the last element read a dead slot on one source and throw on
+  // another. A set knows its count; an array of columns is handed it.
+  const srcCount = from instanceof AttributeSet ? from.count : sourceCount;
+  if (srcCount === undefined) {
+    throw new Error(
+      "copyElements: internal — an array of columns must state its source element count",
+    );
+  }
   // SIZED BEFORE THE COLUMNS EXIST, and the columns created uninitialized,
   // because every column created here is written whole below: the
   // identity is one `copyFrom` over `[0, count)`, and a gather writes slot
@@ -660,36 +691,40 @@ export function copyElements(
   // handed to `carryPrimitiveAttributes`) goes through `resize`, which
   // gives THOSE the default over any new range, since nothing here writes
   // them.
-  if (to.size === 0) to._resizeForOverwrite(count);
+  if (to.size === 0) resizeForOverwrite(to, count);
   else if (to.count !== count) to.resize(count);
   for (const attr of from) {
-    to._addForOverwrite(attr.name, attr.type, attr.tupleSize, attr.defaultValue);
+    addForOverwrite(to, attr.name, attr.type, attr.tupleSize, attr.defaultValue);
   }
   for (const attr of from) {
     const dst = to.require(attr.name);
     if (indices === undefined) {
+      if (count > srcCount) throw copyRangeError(dst.name);
       dst.copyFrom(attr, 0, 0, count);
       continue;
     }
     if (attr.type === "string") {
-      for (let j = 0; j < count; j++) dst.copyFrom(attr, indices[j], j, 1);
+      for (let j = 0; j < count; j++) {
+        const s = indices[j];
+        if (s < 0 || s >= srcCount) throw copyRangeError(dst.name);
+        dst.copyFrom(attr, s, j, 1);
+      }
       continue;
     }
     const src = attr.data;
     const out = dst.data;
     const ts = attr.tupleSize;
-    const cap = attr.capacity;
     if (ts === 1) {
       for (let j = 0; j < count; j++) {
         const s = indices[j];
-        if (s < 0 || s >= cap) throw copyRangeError(dst.name);
+        if (s < 0 || s >= srcCount) throw copyRangeError(dst.name);
         out[j] = src[s];
       }
       continue;
     }
     for (let j = 0; j < count; j++) {
       const s = indices[j];
-      if (s < 0 || s >= cap) throw copyRangeError(dst.name);
+      if (s < 0 || s >= srcCount) throw copyRangeError(dst.name);
       const so = s * ts;
       const dof = j * ts;
       for (let k = 0; k < ts; k++) out[dof + k] = src[so + k];
@@ -779,7 +814,7 @@ export function carryPrimitiveAttributes(
     carried.push(attr);
   }
   if (carried.length === 0) return;
-  copyElements(carried, to, srcPrim, srcPrim.length);
+  copyElements(carried, to, srcPrim, srcPrim.length, from.count);
 }
 
 /**

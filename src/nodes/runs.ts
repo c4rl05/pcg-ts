@@ -1062,7 +1062,9 @@ export const arcTile = standardNode<ArcTileParams, ArcTileInputs, ArcTileOutputs
         w++;
       }
     }
-    if (carried.length > 0) copyElements(carried, out.attrs.point, tileRange, total);
+    if (carried.length > 0) {
+      copyElements(carried, out.attrs.point, tileRange, total, ranges.attrs.point.count);
+    }
     carryPrimitiveAttributes(path.attrs.primitive, out.attrs.point, tilePrim, "arcTile", "point");
     return { out: [makeGeometryItem(out)] };
   },

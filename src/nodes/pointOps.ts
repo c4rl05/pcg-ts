@@ -13,6 +13,7 @@ import {
   createPointCloud,
 } from "../data/index.js";
 import { adoptTopology } from "../data/adoptTopology.js";
+import { resizeForOverwrite } from "../data/overwrite.js";
 import { pointIdentities } from "../data/identity.js";
 import { type GeometryItem, cloneGeometry, makeGeometryItem } from "../graph/index.js";
 import { hashCombine, hashFloat } from "../random/index.js";
@@ -1085,7 +1086,7 @@ export const copyToPoints = standardNode<
     // through `pointSrc` (one source per slot), a carried target column is
     // broadcast per target, and a standard the source lacks (P, rot, scale,
     // seed) is composed per copy in the transform loop.
-    outSet._resizeForOverwrite(total);
+    resizeForOverwrite(outSet, total);
 
     // Written per TARGET, not per copy: one fill over the block of copies
     // that landed on it, at the same offsets the transform loop below
@@ -1390,7 +1391,7 @@ function unionColumns(
 
 /**
  * Write one input's block `[offset, offset + n)` of every column of `into`,
- * for a merge that sized `into` with `_resizeForOverwrite` and so skipped
+ * for a merge that sized `into` with `resizeForOverwrite` and so skipped
  * the default fill. A column the input carries is copied over the block; a
  * column it lacks gets its default over the block — exactly what the fill
  * over the whole result used to leave there, now written once instead of
@@ -1432,7 +1433,7 @@ export const mergePoints = standardNode<MergePointsParams, MergePointsInputs, Me
     unionColumns("mergePoints", items, "point", outSet);
     let total = 0;
     for (const item of items) total += item.geo.pointCount;
-    outSet._resizeForOverwrite(total);
+    resizeForOverwrite(outSet, total);
     let offset = 0;
     for (const item of items) {
       appendBlock(outSet, item.geo.attrs.point, offset, item.geo.pointCount);
@@ -1492,14 +1493,14 @@ export const mergePrimitives = standardNode<
     // without the default fill, because the copy loop at the end writes
     // every element of every column input by input (`appendBlock`: a
     // column an input lacks gets its default over that input's block).
-    // Sizing the vertex and primitive sets BEFORE `setTopology` is what
-    // lets its resize find them already the right size and do nothing,
-    // where it used to grow them by doubling and fill them with defaults
-    // this node then copied over; the point `resize` beside it is a no-op
-    // for the same reason.
-    out.attrs.point._resizeForOverwrite(totalPoints);
-    out.attrs.vertex._resizeForOverwrite(totalVerts);
-    out.attrs.primitive._resizeForOverwrite(totalPrims);
+    // Sizing the vertex and primitive sets BEFORE the topology goes on is
+    // what lets the resize inside `adoptTopology` find them already the
+    // right size and do nothing, where it used to grow them by doubling
+    // and fill them with defaults this node then copied over. The point
+    // domain is sized here too, which is why nothing sizes it below.
+    resizeForOverwrite(out.attrs.point, totalPoints);
+    resizeForOverwrite(out.attrs.vertex, totalVerts);
+    resizeForOverwrite(out.attrs.primitive, totalPrims);
 
     // THE ASSEMBLER IS LOCAL ON PURPOSE, and is not `gatherPrimitives`
     // (util.ts) with more sources. That one GATHERS a chosen subset of one
@@ -1540,12 +1541,11 @@ export const mergePrimitives = standardNode<
       primBase += geo.primVertexStart.length;
     }
 
-    // Points first: the topology check validates the renumbered vertex
-    // references against the point count they are meant to index. The
-    // three arrays were allocated above and only `appendTopologyBlock`
-    // wrote them (reading the inputs' arrays, never handing them on), so
-    // the output adopts them rather than a copy.
-    out.attrs.point.resize(totalPoints);
+    // The topology check validates the renumbered vertex references
+    // against the point count they are meant to index, which the sizing
+    // above settled. The three arrays were allocated above and only
+    // `appendTopologyBlock` wrote them (reading the inputs' arrays, never
+    // handing them on), so the output adopts them rather than a copy.
     adoptTopology(out, vertexToPoint, primVertexStart, primVertexCount);
 
     let pointOffset = 0;

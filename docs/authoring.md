@@ -1523,8 +1523,9 @@ live attribute storage — `attribute(name)` returns a `subarray` of the
 attribute, not a copy — which is why callers treat every column as
 read-only, and why a held column is valid only until the geometry is
 mutated or resized. Index the `Column`, not the attribute behind it: an
-attribute's own `data` is `capacity * tupleSize` long and capacity grows
-by doubling, so reading it directly runs past the live elements.
+attribute's own `data` is `capacity * tupleSize` long — exact only for a
+clone, a merge or a gather, else doubled by appends — so reading it
+directly can run past the live elements.
 
 `makeField(key, tupleSize, evaluate)` builds one and stamps the brand
 `isField` reads. **It is the only constructor.** A plain object literal

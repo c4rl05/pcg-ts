@@ -274,6 +274,48 @@ describe("copyElements", () => {
     ]);
   });
 
+  it("refuses a source index past the last element, though the storage has room", () => {
+    // The bound is the source's COUNT. Before it was the source's
+    // capacity, which made the answer depend on how the source had been
+    // built: a cloud grown by doubling had dead slots to read, an
+    // exact-sized clone of it did not.
+    const src = new AttributeSet();
+    const a = src.add("a", "f32", 1, 9);
+    src.resize(3);
+    expect(src.capacity).toBe(8); // slots 3..7 are allocated and dead
+    a.data.set([1, 2, 3]);
+    a.data[3] = 42; // something plausible in one of them
+    expect(() => copyElements(src, new AttributeSet(), [0, 3], 2)).toThrow(
+      /copyFrom range out of bounds/,
+    );
+    // The identity copy takes the same bound.
+    expect(() => copyElements(src, new AttributeSet(), undefined, 4)).toThrow(
+      /copyFrom range out of bounds/,
+    );
+    // CONTROL: inside the count, the same gather copies what is there.
+    const to = new AttributeSet();
+    copyElements(src, to, [0, 2], 2);
+    expect(Array.from(to.require("a").data)).toEqual([1, 3]);
+  });
+
+  it("takes the source count from the caller when the columns come as an array", () => {
+    const src = new AttributeSet();
+    const a = src.add("a", "f32", 1, 9);
+    const b = src.add("b", "f32", 1, 0);
+    src.resize(3);
+    a.data.set([1, 2, 3]);
+    b.data.set([4, 5, 6]);
+    // The `carryPrimitiveAttributes` shape: a filtered subset of one set,
+    // handed over with the count that set carries.
+    const to = new AttributeSet();
+    copyElements([a], to, [2, 1], 2, src.count);
+    expect(to.names()).toEqual(["a"]);
+    expect(Array.from(to.require("a").data)).toEqual([3, 2]);
+    expect(() => copyElements([a], new AttributeSet(), [2, 3], 2, src.count)).toThrow(
+      /copyFrom range out of bounds/,
+    );
+  });
+
   it("gives a column the destination already held its default over the new range", () => {
     const to = new AttributeSet();
     const keep = to.add("keep", "f32", 3, [1, 2, 3]);

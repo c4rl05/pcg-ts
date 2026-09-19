@@ -858,8 +858,15 @@ describe("eiffel skeleton", () => {
     const again = deserializeGraph(JSON.parse(JSON.stringify(serializeGraph(g))));
     const [a, b] = await Promise.all([cook(g), cook(again)]);
     for (const name of Object.keys(a.outputs)) {
-      const pa = firstGeometry(a.outputs[name]!)!.attrs.point.get("P")!.data;
-      const pb = firstGeometry(b.outputs[name]!)!.attrs.point.get("P")!.data;
+      const ga = firstGeometry(a.outputs[name]!)!;
+      const gb = firstGeometry(b.outputs[name]!)!;
+      const attrA = ga.attrs.point.get("P")!;
+      const attrB = gb.attrs.point.get("P")!;
+      // Capacity is not content: a column allocated at exactly its count and
+      // one grown by doubling can hold the same elements, so compare only
+      // the logical range, not whatever slack follows it.
+      const pa = attrA.data.subarray(0, ga.attrs.point.count * attrA.tupleSize);
+      const pb = attrB.data.subarray(0, gb.attrs.point.count * attrB.tupleSize);
       expect(Buffer.from(pb.buffer, pb.byteOffset, pb.byteLength).equals(Buffer.from(pa.buffer, pa.byteOffset, pa.byteLength)), name).toBe(true);
     }
   });

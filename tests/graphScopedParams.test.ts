@@ -69,7 +69,11 @@ async function positions(graph: Graph): Promise<number[]> {
   const result = await cook(graph);
   const items = [...result.outputs.points];
   const geo = (items[0] as { kind: "geometry"; geo: Geometry }).geo;
-  return [...(geo.attrs.point.require("P").data as Float32Array)];
+  const P = geo.attrs.point.require("P");
+  // Capacity is not content: an exact-sized result and a doubled one hold
+  // the same elements, so read only the logical range, not the slack.
+  const data = P.data.subarray(0, geo.attrs.point.count * P.tupleSize) as Float32Array;
+  return [...data];
 }
 
 describe("a graph-scoped param is the literal it stands for", () => {

@@ -1,9 +1,10 @@
 // NOTE: this helper lives in src/graph for now to keep module ownership
 // clean during parallel development; it may move to src/data later.
 import { DOMAINS, Geometry, type Domain } from "../data/index.js";
+import { addForOverwrite, resizeForOverwrite } from "../data/overwrite.js";
 
 // ONE PASS PER COLUMN. `to` is a fresh geometry's set and holds no
-// columns yet — the point set is empty, and `setTopology` and the
+// columns yet — the point set is empty, and the topology install and the
 // constructor only SIZE the vertex, primitive and detail sets — so it is
 // sized first, at exactly `from.count`, while that is still just a number.
 // Each column is then created uninitialized and written whole by one
@@ -13,9 +14,9 @@ function copyDomain(src: Geometry, dst: Geometry, domain: Domain): void {
   const from = src.attrs[domain];
   const to = dst.attrs[domain];
   const n = from.count;
-  to._resizeForOverwrite(n);
+  resizeForOverwrite(to, n);
   for (const attr of from) {
-    to._addForOverwrite(attr.name, attr.type, attr.tupleSize, attr.defaultValue).copyFrom(
+    addForOverwrite(to, attr.name, attr.type, attr.tupleSize, attr.defaultValue).copyFrom(
       attr,
       0,
       0,

@@ -55,6 +55,7 @@
  * node's field on ONE path for a given world.
  */
 import { adoptTopology } from "../data/adoptTopology.js";
+import { resizeForOverwrite } from "../data/overwrite.js";
 import { Geometry, PRIMTYPE_ATTR, type PrimType } from "../data/index.js";
 import { createPointCloud } from "../data/index.js";
 import { type FieldSpec, paramSpecOf, peekFieldSpec, specChildEntries } from "../fields/spec.js";
@@ -688,7 +689,7 @@ export const meshFromField = standardNode<
     out.attrs.point.add("normal", "f32", 3, 0);
     // Exact and uninitialized: P and normal are the set's only columns, and
     // the loop below assigns all three components of both for every point.
-    out.attrs.point._resizeForOverwrite(nPoints);
+    resizeForOverwrite(out.attrs.point, nPoints);
     const P = out.attrs.point.require("P").data;
     const N = out.attrs.point.require("normal").data;
     for (let v = 0; v < nPoints; v++) {

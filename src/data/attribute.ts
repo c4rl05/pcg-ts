@@ -172,38 +172,37 @@ export class Attribute<T extends AttrType = AttrType> {
     if (value.length !== ts) {
       throw new Error(`attribute "${this._name}": fill tuple length ${value.length} !== ${ts}`);
     }
-    // Clamped at 0 because the per-element loop this replaced wrote
-    // nothing at a negative index, where `fill` and `copyWithin` would
-    // count back from the end. A range past the end is clipped by both
-    // forms alike.
-    const first = Math.max(start, 0);
-    if (end <= first) return;
+    // Clipped at both ends the way the per-element loop clipped it: that
+    // loop wrote nothing at a negative index, where `fill` and `copyWithin`
+    // count back from the end, and nothing past the storage either.
     const data = this.data;
-    const lo = first * ts;
-    const hi = end * ts;
-    // A tuple whose components are all the same number — every scalar
-    // default, since defaults are stored as tuples even at tupleSize 1, and
-    // most vector ones ([0, 0, 0], [1, 1, 1]) — is ONE typed-array fill.
-    // `Object.is` rather than `===` so 0 and -0 stay apart: they are
-    // different f32 bits, and a pattern holding both must take the copy
-    // below. Either way each slot holds the bits one assignment of that
-    // component would have stored, because `fill` converts its value
-    // exactly as an indexed store does.
-    let uniform = true;
-    for (let k = 1; k < ts; k++) {
-      if (!Object.is(value[k], value[0])) {
-        uniform = false;
-        break;
-      }
-    }
+    const lo = Math.max(start, 0) * ts;
+    const hi = Math.min(end * ts, data.length);
+    if (hi <= lo) return;
+    // SEED ONE TUPLE WITH INDEXED STORES — the very writes this replaces,
+    // component for component — and spread those STORED BYTES over the
+    // rest of the range.
+    for (let k = 0; k < ts; k++) data[lo + k] = value[k];
+    // One `fill` when every component came back from storage as the same
+    // number: every scalar default (defaults are tuples even at tupleSize
+    // 1) and the uniform vectors ([0, 0, 0], [1, 1, 1]). The test is on
+    // what was STORED, not on what was asked for, so 1 and 1 + 1e-9
+    // collapse in f32 while 0 and -0 stay apart (`Object.is`), and filling
+    // with the value read back stores those same bits again. A NaN is
+    // excluded outright: every NaN reads back equal to every other however
+    // its bits differ ([NaN, -NaN] is 7fc00000 then ffc00000 in f32), and
+    // what `fill` writes for one is not specified to be what an indexed
+    // store of it writes — the copy below moves the seeded bytes instead.
+    const seed = data[lo];
+    let uniform = seed === seed;
+    for (let k = 1; uniform && k < ts; k++) uniform = Object.is(data[lo + k], seed);
     if (uniform) {
-      data.fill(value[0], lo, hi);
+      data.fill(seed, lo + ts, hi);
       return;
     }
-    // Otherwise write the tuple once and double it with `copyWithin`, which
-    // moves stored bytes: log2(elements) native copies instead of one JS
-    // store per component.
-    for (let k = 0; k < ts; k++) data[lo + k] = value[k];
+    // Otherwise double the seeded tuple with `copyWithin`, which moves
+    // stored bytes: log2(elements) native copies instead of one JS store
+    // per component, whatever those bytes are.
     let filled = ts;
     while (lo + filled < hi) {
       const n = Math.min(filled, hi - lo - filled);
@@ -222,6 +221,19 @@ export class Attribute<T extends AttrType = AttrType> {
    * is handled) starting at `srcStart` into this attribute at `dstStart`.
    * Types and tuple sizes must match; string values are re-interned into
    * this attribute's table.
+   *
+   * BOTH RANGES ARE CHECKED AGAINST CAPACITY, NOT AGAINST THE ELEMENT
+   * COUNT, and cannot be anything else: an {@link Attribute} is storage
+   * and does not know the {@link AttributeSet} it belongs to or how many
+   * of its slots are live. So a range that reaches past the last element
+   * but stays inside the allocation is accepted here, and what it reads is
+   * a dead slot — zeros, a default, or what a shrink left behind — which
+   * also means whether such a range is accepted depends on how the source
+   * was built (capacity is exactly the count for a clone, a merge or a
+   * gather, and rounded up by doubling for a column that was appended to).
+   * A caller holding the set bounds by `count` itself before calling, which
+   * is what the library's own gather (`copyElements`, src/nodes/util.ts)
+   * does.
    */
   copyFrom(src: Attribute, srcStart: number, dstStart: number, count: number): void {
     if (src.type !== this.type || src.tupleSize !== this.tupleSize) {
@@ -340,34 +352,6 @@ export class AttributeSet implements Iterable<Attribute> {
   }
 
   /**
-   * @internal {@link add} WITHOUT initializing the existing elements: the
-   * new column's storage is fresh, so it reads as zeros, not as
-   * `defaultValue`, until the caller writes it. Only for a
-   * caller that writes EVERY element in `[0, count)` of this column before
-   * anything can read it — a copy of a whole column, or a gather with one
-   * source per destination slot. Anything less must use {@link add}: a
-   * non-zero default (scale 1, a colour, a string that is not the table's
-   * first entry) left unwritten would read as 0.
-   *
-   * A string column still interns its default at table index 0, exactly as
-   * {@link add} does, so the table a full copy builds is the one it built
-   * before.
-   */
-  _addForOverwrite<T extends AttrType>(
-    name: string,
-    type: T,
-    tupleSize = 1,
-    defaultValue?: AttrDefault,
-  ): Attribute<T> {
-    if (this.map.has(name)) {
-      throw new Error(`attribute "${name}" already exists`);
-    }
-    const attr = new Attribute(name, type, tupleSize, this._capacity, defaultValue);
-    this.map.set(name, attr);
-    return attr;
-  }
-
-  /**
    * Create the attribute, or reset an existing one of the same shape in
    * place (keeping storage and insertion order). All element values are
    * reset to `defaultValue`; a shape mismatch replaces the attribute.
@@ -441,40 +425,6 @@ export class AttributeSet implements Iterable<Attribute> {
     }
     if (count > this._count) {
       for (const attr of this.map.values()) attr.fillDefault(this._count, count);
-    }
-    this._count = count;
-  }
-
-  /**
-   * @internal {@link resize} for a caller that knows the FINAL count and
-   * writes every element in `[previous count, count)` of every column
-   * before anything reads it. Two things differ, and nothing else:
-   *
-   * - New elements are NOT initialized to the default. They hold zeros
-   *   when storage grows, and whatever an earlier, longer count left there
-   *   when it does not, so a range the caller does not overwrite reads as
-   *   neither. A caller that leaves any element of any column unwritten
-   *   must use {@link resize}, or fill that range with
-   *   {@link Attribute.fillDefault} itself.
-   * - Capacity is EXACT rather than doubled: storage that has to grow grows
-   *   to `count` elements, and a set holding no columns — whose capacity is
-   *   only a number until a column is added — takes `count` as its capacity
-   *   outright, shrinking it if need be. That is right for a result built
-   *   once at a size known up front (a clone, a merge of known inputs, a
-   *   gather of a known index list); a column that keeps growing should
-   *   grow through {@link resize}, whose doubling keeps appends amortized.
-   *   A later {@link resize} past an exact capacity doubles from there as
-   *   usual.
-   */
-  _resizeForOverwrite(count: number): void {
-    if (!Number.isInteger(count) || count < 0) {
-      throw new Error(`resize: count must be a non-negative integer, got ${count}`);
-    }
-    if (this.map.size === 0) {
-      this._capacity = count;
-    } else if (count > this._capacity) {
-      for (const attr of this.map.values()) attr._grow(count);
-      this._capacity = count;
     }
     this._count = count;
   }
