@@ -23,7 +23,19 @@ function errno(code: string, path: string): Error {
   return Object.assign(new Error(`${code}: cannot open '${path}'`), { code });
 }
 
-async function run(argv: readonly string[], start: Record<string, string> = {}, unreadable: readonly string[] = []) {
+/**
+ * `unreadable` is EACCES (there, but refused) and `missing` is ENOENT (not
+ * there). The two are separate injectors because the command treats them
+ * differently: ENOENT on the AGENTS.md file means "create it", while ENOENT
+ * on a SHIPPED file — which is what an install without `skills/` looks
+ * like — is a hard failure with its own message.
+ */
+async function run(
+  argv: readonly string[],
+  start: Record<string, string> = {},
+  unreadable: readonly string[] = [],
+  missing: readonly string[] = [],
+) {
   const fs: Fs = { files: new Map(Object.entries(start)), writes: [] };
   const out: string[] = [];
   const err: string[] = [];
@@ -31,8 +43,12 @@ async function run(argv: readonly string[], start: Record<string, string> = {}, 
     out: (t) => void out.push(t),
     err: (t) => void err.push(t),
     readFile: (p) => {
-      if (p.startsWith("pkg:")) return readFileSync(join(ROOT, p.slice(4)), "utf8");
+      // Both injectors are consulted BEFORE the `pkg:` branch, so a test can
+      // also take away a SHIPPED file — the case that produces the "cannot
+      // read the shipped ..." message.
+      if (missing.includes(p)) throw errno("ENOENT", p);
       if (unreadable.includes(p)) throw errno("EACCES", p);
+      if (p.startsWith("pkg:")) return readFileSync(join(ROOT, p.slice(4)), "utf8");
       const text = fs.files.get(p);
       if (text === undefined) throw errno("ENOENT", p);
       return text;
@@ -167,5 +183,38 @@ describe("pcg agents", () => {
     expect((await run(["agents", "--write", "--check"])).code).toBe(EXIT_USAGE);
     expect((await run(["agents", "--file", "X.md"])).code).toBe(EXIT_USAGE);
     expect((await run(["agents", "--claude"])).code).toBe(EXIT_USAGE);
+  });
+
+  describe("a shipped skill file that is not there", () => {
+    const SKILL = "pkg:skills/graph-authoring/SKILL.md";
+    const fail = () => run(["agents"], {}, [], [SKILL]);
+
+    it("fails naming the file, the one path it looked at, and the version it is", async () => {
+      const r = await fail();
+      expect(r.code).toBe(EXIT_FAILURE);
+      expect(r.err).toContain("agents: cannot read the shipped skills/graph-authoring/SKILL.md");
+      expect(r.err).toContain(`(looked at ${SKILL})`);
+      expect(r.err).toContain("ENOENT");
+      // The version is what distinguishes "this install predates the
+      // skills" from "this install is broken", and it is the version the
+      // reader is told to install.
+      expect(r.err).toContain(`pcg-ts ${VERSION}`);
+      expect(r.err).toContain("npm ls pcg-ts");
+    });
+
+    it("never tells the reader to reinstall, or to go looking outside the project", async () => {
+      // MEASURED, and the reason this test exists: an eval agent answered
+      // the old "reinstall pcg-ts" advice by running `find /` over the whole
+      // machine — in a sandboxed harness, an escape that invalidated the run.
+      // Reinstalling was never the remedy either: the conditions that
+      // produce this are an install older than the CLI, a pruned or vendored
+      // copy, or no node_modules at all, and a reinstall of the same
+      // specifier fixes none of them.
+      const r = await fail();
+      expect(r.err.toLowerCase()).not.toContain("reinstall");
+      // Say outright that there is nowhere else to look, so the reader has
+      // no reason to start searching.
+      expect(r.err).toContain("nothing to search the filesystem for");
+    });
   });
 });

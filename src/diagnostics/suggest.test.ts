@@ -56,6 +56,32 @@ describe("closestNames", () => {
     expect(closestNames("abcd", candidates, 0)).toEqual([]);
   });
 
+  it("keeps a whole-prefix near miss that edit distance throws away", () => {
+    // The `--out` / `--output` case. Three edits is outside the limit for a
+    // six-letter name (max(2, 6/3) = 2), so without the prefix rule these
+    // all come back empty and the reader is told only what IS valid.
+    expect(editDistance("output", "out")).toBe(3);
+    expect(closestNames("output", ["out", "seed", "stats"])).toEqual(["out"]);
+    expect(closestNames("outputs", ["out"])).toEqual(["out"]);
+    // Either direction: the refused name may be the shorter one.
+    expect(closestNames("scatter", ["scatterPoints"])).toEqual(["scatterPoints"]);
+  });
+
+  it("needs three shared characters, so a short stub does not match everything", () => {
+    // "in" is a prefix of "inbound" but only two characters long; admitting
+    // it would make every two-letter name a near miss for half the registry.
+    expect(closestNames("inbound", ["in"])).toEqual([]);
+    expect(closestNames("inbound", ["inb"])).toEqual(["inb"]);
+    // A prefix of equal length is the same name, handled by distance 0.
+    expect(closestNames("out", ["out"])).toEqual(["out"]);
+  });
+
+  it("ranks a prefix near miss by its real distance, behind any true typo", () => {
+    // The prefix rule admits a candidate; it never promotes one. A
+    // one-letter slip still leads, and `suggestNames` keeps only that tier.
+    expect(closestNames("output", ["out", "outputs"])).toEqual(["outputs", "out"]);
+  });
+
   it("accepts any iterable and is stable across calls", () => {
     const set = new Set(["fbm", "fract", "floor"]);
     const first = closestNames("fmb", set.keys());

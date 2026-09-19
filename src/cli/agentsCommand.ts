@@ -71,6 +71,21 @@ function baseName(path: string): string {
  * `io.packagePath` (which finds the installed package from the CLI's own
  * module), falling back to `node_modules/pcg-ts/<rel>` from the working
  * directory for an io without it.
+ *
+ * THE FAILURE MESSAGE IS THE POINT OF THIS FUNCTION, and it used to end
+ * "reinstall pcg-ts". That was wrong twice over. Reinstalling is not the
+ * remedy for any of the conditions that actually produce this — the
+ * package's own `skills/` is simply not beside the CLI that is running,
+ * because the install predates the skills, or is a pruned or vendored
+ * subset, or has no `node_modules` at all. And a reader told to reinstall
+ * a package it cannot see goes LOOKING for it: one eval agent answered
+ * this message by running `find /` across the whole machine, which in a
+ * sandboxed harness is an escape that got the run thrown out and re-run.
+ *
+ * So the message names the one file, the one place it is read from, and
+ * the two commands that answer the question without leaving the working
+ * directory — and says outright that there is nowhere else to look, since
+ * this command never falls back to another copy.
  */
 function readShipped(io: CliIo, rel: string): string {
   const path = io.packagePath?.(rel) ?? `${PACKAGE_PREFIX}${rel}`;
@@ -79,7 +94,16 @@ function readShipped(io: CliIo, rel: string): string {
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     throw new CliError(
-      `agents: cannot read the shipped ${rel} (looked at ${path}): ${reason}. The block quotes each skill's description, so the installed package must be readable; reinstall pcg-ts (Yarn PnP, which has no node_modules, is not supported)`,
+      `agents: cannot read the shipped ${rel} (looked at ${path}): ${reason}. ` +
+        "The block quotes each skill's frontmatter description, so this command reads the " +
+        "SKILL.md files out of the pcg-ts package it is itself running from — it never falls " +
+        "back to a copy elsewhere, so there is nothing to search the filesystem for. " +
+        `This CLI is pcg-ts ${VERSION}, and every pcg-ts that ships these rules ships skills/ ` +
+        `beside its dist/. Check which copy the project resolves, and its version, with ` +
+        "`npm ls pcg-ts`; if that copy has no skills/ directory it is older than this CLI, or " +
+        "a partial one (a pruned image layer, a vendored subset), and installing " +
+        `pcg-ts@${VERSION} in this project is what restores it. Under Yarn PnP there is no ` +
+        "node_modules directory for this path to be in at all.",
       { code: "file-unreadable", path },
     );
   }

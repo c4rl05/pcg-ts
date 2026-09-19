@@ -27,13 +27,44 @@ function codeUnitCompare(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
+/** The shortest prefix relationship worth calling a near miss. */
+const MIN_PREFIX = 3;
+
+/**
+ * Is one of these names a whole prefix of the other, by at least
+ * {@link MIN_PREFIX} characters?
+ *
+ * The case Levenshtein cannot see. `--out` typed as `--output` is a SUFFIX
+ * SLIP — the writer remembered a longer word for the same thing — and edit
+ * distance scores it 3, which for a six-letter name is the same budget two
+ * unrelated names get. Measured: `closestNames("output", ["out", …])` kept
+ * nothing at all, so `pcg cook --output x.json` named the valid flags and
+ * suggested none of them, and four eval runs guessed `--output`/`--outputs`
+ * without ever being pointed at `--out`.
+ *
+ * Three characters is the floor because a one- or two-letter stub is a
+ * prefix of half the registry, and a suggestion list assembled that way
+ * says nothing. Both names must clear it, so `--in` is still matched by
+ * distance alone and never by this rule.
+ */
+function prefixSlip(a: string, b: string): boolean {
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  return short.length >= MIN_PREFIX && short.length < long.length && long.startsWith(short);
+}
+
 /**
  * The candidates closest to `name`, nearest first, at most `max`.
  *
  * Distance is measured case-insensitively, so a candidate that differs
  * only in case is at distance zero and always leads. A candidate is kept
  * when its distance is at most a third of `name`'s length, and never less
- * than 2 — a short name still gets a suggestion for a two-letter slip.
+ * than 2 — a short name still gets a suggestion for a two-letter slip —
+ * or when it is a {@link prefixSlip} of it, which is the near miss edit
+ * distance is blind to.
+ *
+ * A prefix slip keeps its REAL distance for ranking, so it never displaces
+ * an ordinary one-letter typo, and it stays far enough away that
+ * `suggestNames` will not offer it as a mechanical fix.
  *
  * Ties break by code-unit order, NOT `localeCompare`: collation depends on
  * the host's locale data, and a suggestion list that reorders between two
@@ -45,8 +76,9 @@ export function closestNames(name: string, candidates: Iterable<string>, max = 3
   const limit = Math.max(2, Math.floor(name.length / 3));
   const scored: { readonly candidate: string; readonly d: number }[] = [];
   for (const candidate of candidates) {
-    const d = editDistance(lower, candidate.toLowerCase());
-    if (d <= limit) scored.push({ candidate, d });
+    const other = candidate.toLowerCase();
+    const d = editDistance(lower, other);
+    if (d <= limit || prefixSlip(lower, other)) scored.push({ candidate, d });
   }
   return scored
     .sort((a, b) => a.d - b.d || codeUnitCompare(a.candidate, b.candidate))

@@ -1461,7 +1461,7 @@ GraphSerializationError: node <span class="s">"a"</span> param <span class="s">"
 
     <div class="code-label">Wiring — the connection index, the node, and the valid pins</div>
     <div class="codeblock"><pre><code>GraphSerializationError: connections[0]: node <span class="s">"a"</span> has no output pin
-<span class="s">"output"</span>; valid output pins: out
+<span class="s">"output"</span>; did you mean <span class="s">"out"</span>? valid output pins: out
 
 GraphCycleError: connecting jitterPoints_1.out to jitterPoints_0.in
 would create a cycle
@@ -1472,7 +1472,8 @@ input pins: <span class="s">"in"</span>
 GraphValidationError: unknown output <span class="s">"pts"</span>; declared outputs: <span class="s">"points"</span></code></pre></div>
 
     <div class="code-label">Field grammar — the fn list and the exact arity</div>
-    <div class="codeblock"><pre><code>FieldJsonError: $: unknown field fn <span class="s">"perlin"</span>; valid fns: abs, acos, add, asin,
+    <div class="codeblock"><pre><code>FieldJsonError: $: unknown field fn <span class="s">"perlin"</span>; did you mean
+<span class="s">"perlinNoise"</span>? valid fns: abs, acos, add, asin,
 atan, atan2, attribute, attributeIs, byAttribute, clamp, component, constant,
 cos, cross, distance, div, dot, eq, exp, exp2, fbm, floor, fract, fraction, ge, gt,
 index, le, length, lerp, log, log2, lookup, lt, max, min, mod, mul, ne, nodeSeed,

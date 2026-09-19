@@ -913,7 +913,10 @@ describe("named subgraph registry", () => {
 
   it("refuses an unknown key on an exposed-param declaration", () => {
     expect(() => deserializeGraph(withExposedParams({ maximum: 5 }))).toThrow(
-      /node "sub" subgraph params\[0\] \("amount"\): unknown key "maximum"; valid keys: name, targets, description, default, min, max\..*Prose about this param belongs in its "description"/s,
+      // "maximum" is four edits from "max" and a whole prefix of it, so the
+      // typo budget alone never reached it. See `prefixSlip` in
+      // src/diagnostics/suggest.ts.
+      /node "sub" subgraph params\[0\] \("amount"\): unknown key "maximum"; did you mean "max"\? valid keys: name, targets, description, default, min, max\..*Prose about this param belongs in its "description"/s,
     );
   });
 

@@ -212,7 +212,11 @@ describe("pcg cli — catalogs", () => {
 
     const bad = withGraph();
     expect(await runCli(["fields", "perlin"], bad.io)).toBe(EXIT_FAILURE);
-    expect(bad.stderr()).toContain('unknown field fn "perlin"; valid fns: ');
+    // "perlin" is the family name, four edits from the constructor that
+    // implements it — far outside the typo budget, and a whole prefix of
+    // it. It used to get the bare list of 60-odd fns; it now gets the one
+    // that was meant. See `prefixSlip` in src/diagnostics/suggest.ts.
+    expect(bad.stderr()).toContain('unknown field fn "perlin"; did you mean "perlinNoise"? valid fns: ');
   });
 
   /**
@@ -865,6 +869,19 @@ describe("pcg cli — the command line itself", () => {
     const flag = withGraph();
     expect(await runCli(["cook", GRAPH, "--stat"], flag.io)).toBe(EXIT_USAGE);
     expect(flag.stderr()).toContain('cook: unknown flag "--stat"; did you mean "--stats"? valid flags: ');
+  });
+
+  it("suggests --out for the longer word an agent reaches for instead", async () => {
+    // Measured, not imagined: four eval runs wrote `--output`/`--outputs`
+    // for `--out` and got the valid-flag list with no suggestion in it,
+    // because Levenshtein scores a suffix slip (3 edits) as far from "out"
+    // as two unrelated names. `--stat` above is the typo case and already
+    // worked; this is the other half, and it is the half agents hit.
+    for (const wrong of ["--output", "--outputs"]) {
+      const io = withGraph();
+      expect(await runCli(["cook", GRAPH, wrong, "report.json"], io.io)).toBe(EXIT_USAGE);
+      expect(io.stderr()).toContain(`cook: unknown flag "${wrong}"; did you mean "--out"? valid flags: `);
+    }
   });
 
   it("a missing argument and a missing flag value are both misuses", async () => {
