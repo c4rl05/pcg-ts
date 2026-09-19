@@ -846,7 +846,7 @@ parens are accepted. `P` is NOT sugar for `position()`; the error says so.
 Proven rather than asserted: `parseFieldText(printFieldSpec(s))`
 deep-equals `s` for every corpus spec, and printing is idempotent.
 
-WHICH PARAMS ACCEPT ONE — 69 of the standard library's 287, across 35
+WHICH PARAMS ACCEPT ONE — 69 of the standard library's 288, across 35
 node types, after the rule was swept over every numeric param rather
 than applied case by case (it started at 20; SIX numeric params on
 nodes that take an input are refused today, and they no longer share

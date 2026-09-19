@@ -136,6 +136,7 @@ export default defineConfig({
         road: here("demos/road/index.html"),
         lanterns: here("demos/lanterns/index.html"),
         cave: here("demos/cave/index.html"),
+        eiffel: here("demos/eiffel/index.html"),
       },
     },
   },

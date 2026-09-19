@@ -118,15 +118,28 @@ a parent — these are three different kinds of thing and the old single
   edits it live. It carried a `01-` prefix once, which is exactly what
   made it read as the first demo
 - `demos/` — `infinite-world`, `galaxy`, `gpu-world`, `racetrack`,
-  `road`, `lanterns`. Unnumbered on purpose: they encode no order. Each
-  exists because what it shows needs a host — a streamed world, a
-  device-resident renderer, a spline the page was handed rather than
-  made, a material to read a per-instance channel with. `lanterns` is
-  that last one: a `u32` `seed` channel drives hue, pulse phase and rate
-  through a `ShaderMaterial`, so the graph settles structure while the
-  host owns the clock — which no corpus graph can show. `racetrack` is
-  the one the placement rules run on. `road` BEGAN as a copy of it, kept as
-  the version with no placement rules in it, and the claim used to be that
+  `road`, `lanterns`, `cave`, `eiffel`. Unnumbered on purpose: they
+  encode no order. Each exists because what it shows needs a host — a
+  streamed world, a device-resident renderer, a spline the page was handed
+  rather than made, a material to read a per-instance channel with, a sun
+  to judge a structure by. `lanterns` is the material: a `u32` `seed`
+  channel drives hue, pulse phase and rate through a `ShaderMaterial`, so
+  the graph settles structure while the host owns the clock — which no
+  corpus graph can show. `eiffel` is the sun: the tower as built in 1889,
+  its large structure Eiffel's own plates (Plate XXXI's 29 panels,
+  carried verbatim in `spec.ts`) and everything below the panel scale
+  placed by rule, built by a TypeScript module per part rather than
+  written as corpus JSON. The graph hands back one output per part class;
+  the page gives each class a material in one painted-iron family, lights
+  it with a low sun whose shadow camera is fitted to what was actually
+  built — a braced panel flat-lit is a hatched silhouette, and its
+  shadows are how the lattice reads — and supplies the unit rivet head
+  the rivet batches resolve against. The page also picks the depth, by
+  building a different graph: plain, `?laced` (the web bars as laced
+  struts) or `?rivets` (which implies `?laced` and adds the rivets as
+  instances). `racetrack` is the one the placement rules run on. `road`
+  BEGAN as a copy of it, kept as the version with no placement rules in
+  it, and the claim used to be that
   their identical module names made the diff between them read as what the
   rules added. THAT IS NO LONGER TRUE and the two are independent demos:
   `main.ts` shares not one line (532 against 2167), `graph.ts` and `lap.ts`

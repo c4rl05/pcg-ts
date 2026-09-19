@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * capture-demos.mjs — regenerate docs/manual-assets/*.jpg and docs/thumbs/*.jpg
- * from the editor (`editor/`) and the six hosted demos under `demos/`.
+ * from the editor (`editor/`) and the eight hosted demos under `demos/`.
  * (Spelling that second path as a glob would end this comment early — the
  * star-slash closes it — and the file stops parsing. It did once.)
  *
@@ -59,9 +59,11 @@
  *          demo's own non-volatile counters holding steady over several samples.
  *      Neither converging inside the budget is a hard failure.
  *
- * DETERMINISM. Every demo hard-codes its seed (1, or 42 for the galaxy), and
- * the only URL parameter any of them reads is the editor's `?graph=`, which
- * this script sets deliberately — so content is already reproducible. What is
+ * DETERMINISM. Every demo hard-codes its seed (1, or 42 for the galaxy, or
+ * 1889 for eiffel), and the only URL parameters any of them read are the
+ * editor's `?graph=`, which this script sets deliberately, and eiffel's
+ * `?laced` / `?rivets` / `?cam=`, of which it sets only the pose — so
+ * content is already reproducible. What is
  * not reproducible is the camera: infinite-world flies forward at 18 u/s from
  * t=0, gpu-world has autopilot on, and the galaxy cruises. Each is stopped
  * through its own UI
@@ -129,6 +131,7 @@ const SIZES = {
   road: { css: [1454, 783], out: [1454, 783] },
   lanterns: { css: [1454, 783], out: [1454, 783] },
   cave: { css: [1454, 783], out: [1454, 783] },
+  eiffel: { css: [1454, 783], out: [1454, 783] },
 };
 
 /**
@@ -450,6 +453,31 @@ const DEMOS = [
     settleWait: () => !!window.__capRow("pause"),
     settle: () => setCheckboxByLabel("pause", true),
   },
+  {
+    id: "eiffel",
+    // The plain detail level, which is what the bare path loads: `?laced`
+    // and `?rivets` add millions of triangles and instances and are the
+    // close-up levels, while a thumbnail shows the whole tower, where the
+    // lacing is below a pixel anyway.
+    //
+    // THE POSE IS NAMED rather than inherited. `?cam=eye,target` is the
+    // page's own hook for a scripted pose, and these six numbers are its
+    // opening view — the 3/4 view from about 600 m out with the base
+    // square on its diagonal, so all four legs and the lantern are in
+    // frame. Naming them means a later change to the page's opening view
+    // does not quietly reframe the committed thumbnail.
+    path: "demos/eiffel/?cam=360,140,470,0,110,0",
+    // One cook, no streaming, no clock: the page sets `data-ready` on the
+    // body two frames after the scene is complete (the first of the two
+    // draws the shadow map, which is only redrawn when the scene changes).
+    // "failed" is accepted here too, so a cook that threw ends the wait at
+    // once, and `failed` below turns it into an error instead of a picture
+    // of an empty ground plane.
+    ready: (s, has) =>
+      document.body.dataset.ready === "failed" ||
+      (document.body.dataset.ready === "1" && has(s["triangles"]) && s["triangles"] !== "0"),
+    failed: () => document.body.dataset.ready === "failed",
+  },
 ];
 
 // Stats that change every frame or every 500 ms and therefore can never be
@@ -673,6 +701,16 @@ async function captureDemo(browser, encPage, origin, demo, log) {
 
     // (2) the demo's own instrumentation says the cook is done
     await waitForPredicate(page, demo.ready, 180_000);
+
+    // A page that publishes a failure state is asked for it, so a cook
+    // that threw fails here, named, instead of being photographed.
+    if (demo.failed && (await page.evaluate(demo.failed))) {
+      const cook = (await page.evaluate(() => window.__capStats()))["cook"] ?? "?";
+      throw new Error(
+        `${demo.id}: the page reports that its cook failed (cook: ${cook}). ` +
+          `Open ${demo.path ?? `${demo.id}/`} and read its problems section.`,
+      );
+    }
 
     // Every page this script drives carries readings — that is the whole
     // premise of `pageInstrumentation`. So an EMPTY set here does not mean

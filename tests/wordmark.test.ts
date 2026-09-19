@@ -69,7 +69,8 @@ describe("the wordmark", () => {
   it("is drawn by every demo and by the editor", () => {
     for (const demo of [
       "cave",
-  "galaxy",
+      "eiffel",
+      "galaxy",
       "gpu-world",
       "infinite-world",
       "lanterns",

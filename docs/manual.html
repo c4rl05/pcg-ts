@@ -417,6 +417,7 @@
       <li><a href="./demos/road/">Road</a></li>
       <li><a href="./demos/lanterns/">Lanterns</a></li>
       <li><a href="./demos/cave/">Cave</a></li>
+      <li><a href="./demos/eiffel/">Eiffel</a></li>
     </ul>
   </div>
   <div class="rail-grp">
@@ -770,7 +771,7 @@ graph.<span class="n">output</span>(spawn, <span class="s">"instances"</span>, <
   <section>
     <p class="eyebrow">Chapter 4</p>
     <h2 id="examples">The examples tour</h2>
-    <p class="lead">Six demos ship in <code>demos/</code> and the editor in <code>editor/</code>, each a real cook of a real graph rather than a recording. Every screenshot below was captured from the running demo. Run them all locally with <code>npm run examples</code>, or click through to the hosted build. The tour stops at three of the six; the other three are <a href="./demos/racetrack/">racetrack</a> and <a href="./demos/road/">road</a>, which have <a href="./guides/racetrack.html">a guide of their own</a>, and <a href="./demos/lanterns/">lanterns</a>, which has <a href="./guides/lanterns.html">a guide of its own</a> and is the worked example behind <a href="#ex-04">the per-instance channel note below</a>.</p>
+    <p class="lead">Eight demos ship in <code>demos/</code> and the editor in <code>editor/</code>, each a real cook of a real graph rather than a recording. Every screenshot below was captured from the running demo. Run them all locally with <code>npm run examples</code>, or click through to the hosted build. The tour stops at three of the eight; the other five are <a href="./demos/racetrack/">racetrack</a> and <a href="./demos/road/">road</a>, which have <a href="./guides/racetrack.html">a guide of their own</a>, and <a href="./demos/lanterns/">lanterns</a>, which has <a href="./guides/lanterns.html">a guide of its own</a> and is the worked example behind <a href="#ex-04">the per-instance channel note below</a>, <a href="./demos/cave/">cave</a>, a world contoured from a noise and streamed in cube cells, and <a href="./demos/eiffel/">eiffel</a>, the tower as built in 1889 from Eiffel’s own plates and rules, at three depths of detail.</p>
     <p>Each one needs a host to exist — a streamed world, a renderer that draws from device buffers, a rig whose topology is a function of its params, a material to read a per-instance channel with. The recipes that were only a graph are not demos any more: they are files in <code>graphs/</code>, opened and edited in the editor. The scatter is <a href="./editor/?graph=basics-compose-primitives">basics-compose-primitives</a>, the fence is <a href="./editor/?graph=basics-props-along-a-path">basics-props-along-a-path</a>, the field playground is <a href="./editor/?graph=basics-attribute-from-noise">basics-attribute-from-noise</a>, the forest is <a href="./editor/?graph=examples-forest">examples-forest</a> — the same recipe, now tunable, because its terrain comes from a primitive instead of host code — the three-way GPU comparison that had its own page is <a href="./editor/?graph=examples-gpu-fields">examples-gpu-fields</a>, since what that demo varied was never the graph, and the rig is <a href="./editor/?graph=examples-rig">examples-rig</a> — the last one to move, because until <code>forEach</code> its cable branch needed one hand-built node pair per cable and its node count was a param.</p>
 
     <h3 id="ex-01">Editor — the registry as a user interface</h3>
@@ -1843,7 +1844,7 @@ graph.<span class="n">describe</span>().outputs;          <span class="c">// [ {
         <tr><td><a href="https://github.com/C4RL05/pcg-ts/blob/main/README.md">README.md</a></td><td>The human API tour.</td><td>A second angle on anything in Part I.</td></tr>
         <tr><td><a href="./index.html">Project overview</a></td><td>Architecture and pipeline diagrams, roadmap.</td><td>How the modules layer, and what shipped when.</td></tr>
         <tr><td><a href="./editor/">Graph editor</a></td><td>The authoring tool, hosted. Opens any corpus graph with <code>?graph=&lt;name&gt;</code>, edits it live, and exports the JSON your application loads. <a href="#editor">Chapter 5</a> drives it.</td><td>Building or tuning a graph without writing code.</td></tr>
-        <tr><td><a href="./index.html#demos">Live demos</a></td><td>The editor and the six demos, running.</td><td>Seeing it before reading about it.</td></tr>
+        <tr><td><a href="./index.html#demos">Live demos</a></td><td>The editor and the eight demos, running.</td><td>Seeing it before reading about it.</td></tr>
       </tbody>
     </table>
     </div>

@@ -84,7 +84,7 @@ All of this runs in a browser. Nothing to check out, nothing to build.
   through the mental model, the JSON format, the field grammar, errors as
   an API, and a full agent loop.
 
-And six demos, each one something a single graph cannot be on its own:
+And seven demos, each one something a single graph cannot be on its own:
 
 <table>
 <tr>
@@ -102,6 +102,12 @@ And six demos, each one something a single graph cannot be on its own:
 <td><b><a href="https://c4rl05.github.io/pcg-ts/demos/racetrack/">racetrack</a></b><br>Roadside art placed along a spline the page was handed, to six legibility rules. Every repair says how much it had to do.</td>
 <td><b><a href="https://c4rl05.github.io/pcg-ts/demos/road/">road</a></b><br>The same page with the rules taken out — one evenly spaced row per side. Shot at the same station, so the diff is what the rules added.</td>
 <td><b><a href="https://c4rl05.github.io/pcg-ts/demos/lanterns/">lanterns</a></b><br>One u32 per instance, drawn. The graph settles where each lantern hangs and the seed it carries; the shader makes colour, pulse and bob out of that integer.</td>
+</tr>
+<tr>
+<td width="16%"><a href="https://c4rl05.github.io/pcg-ts/demos/eiffel/"><img alt="The eiffel demo, shown small: a brown iron lattice tower on four pale stone pedestals under a pale grey-blue sky, seen three-quarters on, its shadow thrown back and to the right across sand-coloured ground. A controls-and-readout panel fills the left edge, too small at this size to read." src="./docs/thumbs/eiffel.jpg" width="100%"></a></td>
+</tr>
+<tr>
+<td><b><a href="https://c4rl05.github.io/pcg-ts/demos/eiffel/">eiffel</a></b><br>The tower as built in 1889: Eiffel's own plates for the large structure, rules for everything smaller, lit by a low sun. Three depths — skeleton, laced, riveted — each a different graph.</td>
 </tr>
 </table>
 
