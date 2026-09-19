@@ -126,22 +126,33 @@ export function worleyNoise(opts: WorleyNoiseOpts = {}): Field<1> {
         kind: "ungrammatical",
         detail: `worleyNoise's \`output\` must be one of ${WORLEY_OUTPUTS.map((o) => `"${o}"`).join(", ")}, got ${JSON.stringify(output)}`,
       };
-  // WHICH output, decided ONCE here rather than per sampled element. The
-  // sampler below runs once per point — millions of times in a warm
-  // process — and asking it `output === "cell"` each time put a string
-  // comparison in the hottest loop the library has. Measured on Node
-  // 22.20.0: with the comparisons inside the closure, one sample in about
-  // 22500 took the WRONG branch (the `cell` output returned f2-f1 for that
-  // one point) in 15 of 15 warm processes, and never in a cold one. It
-  // depended on the string's REPRESENTATION, not its value — a source
-  // literal never failed, a `JSON.parse`d one nearly always did — so it is
-  // an optimizer fault and not a logic error, and the fix is to not ask
-  // the question per element. Three booleans and a flat comparison are
-  // what the closure sees instead. The out-of-union case keeps its old
-  // meaning: all three are false, so the tail returns f2 - f1 exactly as
-  // the chained ternary did. See also the canonicalization in
-  // `src/fields/fieldJson.ts`, which re-interns the parsed string so the
-  // two halves of the belt-and-braces hold independently.
+  // WHICH output, decided ONCE here rather than per sampled element. THE
+  // CANONICAL NOTE ON WHY A PARAM STRING MUST NOT BE COMPARED INSIDE A
+  // PER-ELEMENT LOOP — nine other sites in the library point here.
+  //
+  // The sampler below runs once per point. Asking it `output === "cell"`
+  // each time put a string comparison in a per-element loop, and V8
+  // miscompiled it: in a warm process one sample took the WRONG branch,
+  // so the `cell` output returned that point's f2-f1. It turned on the
+  // string's REPRESENTATION rather than its value — a source literal
+  // never failed, a `JSON.parse`d one usually did — which is what makes
+  // it an optimizer fault and not a logic error.
+  //
+  // It is a JIT fault, so the rate is a property of the machine and its
+  // load, not of the code. Two harnesses that showed it on Node 22.20.0,
+  // for whoever has to reproduce it next: cook the corpus graphs that
+  // precede `graphs/basics-worley-cells.json`, then parse and cook that
+  // one (about one wrong f32 in 22500, first cook only, most runs); and
+  // `tests/graphs.test.ts`, which now compares the first cook. Neither
+  // ever showed it in a cold process. Treat any count as evidence that it
+  // happens, not as a rate.
+  //
+  // Three booleans and a flat comparison are what the closure sees
+  // instead. The out-of-union case keeps its old meaning: all three are
+  // false, so the tail returns f2 - f1 exactly as the chained ternary
+  // did. The grammar re-interns the parsed string as well
+  // (`src/fields/fieldJson.ts`), which is an independent second half —
+  // neither fix relies on the other.
   const isCell = output === "cell";
   const isF1 = output === "f1";
   const isF2 = output === "f2";

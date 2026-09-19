@@ -408,10 +408,8 @@ export const pointScatterInWorld = standardNode<
         `pointScatterInWorld: latticeMode must be "xz" or "xyz", got ${JSON.stringify(mode)}`,
       );
     }
-    // Settled here, once. The per-point loop below asks which mode it is
-    // for every candidate point in the window, and a param string
-    // compared inside a per-element loop is the shape that miscompiled in
-    // `src/noise/worley.ts`.
+    // Settled here, once, rather than for every candidate point in the
+    // window — see the note in `src/noise/worley.ts`.
     const is3d = mode === "xyz";
     const dims = is3d ? 3 : 2;
     const cellSize = params.cellSize;

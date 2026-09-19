@@ -329,10 +329,9 @@ export const transferByIndex = standardNode<
       // output's shape does not depend on this branch.
       missCount = n;
     } else {
-      // The range policy, settled before the walk rather than asked per
-      // DESTINATION POINT. A param string compared inside a per-element
-      // loop is the shape that miscompiled in `src/noise/worley.ts`; both
-      // tests are positive, so the trailing arm is still "miss".
+      // The range policy, settled before the per-point walk below rather
+      // than asked inside it — see the note in `src/noise/worley.ts`.
+      // Both tests are positive, so the trailing arm is still "miss".
       const isClamp = mode === "clamp";
       const isWrap = mode === "wrap";
       for (let i = 0; i < n; i++) {

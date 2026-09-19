@@ -183,9 +183,8 @@ export const connectPoints = standardNode<
     const ps = view.stride;
     const wantLength = params.lengthAttr !== "";
     // Which witness test the candidate walk runs, settled here rather
-    // than asked per CANDIDATE PAIR below (n * average degree times). A
-    // param string compared inside a per-element loop is the shape that
-    // miscompiled in `src/noise/worley.ts`; both are positive tests, so
+    // than asked per candidate pair below (n * average degree times) —
+    // see the note in `src/noise/worley.ts`. Both are positive tests, so
     // `radius` still runs neither, exactly as before.
     const wantLune = mode === "relativeNeighborhood";
     const wantGabriel = mode === "gabriel";

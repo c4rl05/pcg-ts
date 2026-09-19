@@ -459,10 +459,9 @@ export function transferUv(
   const srcUv = requireF32(src.attrs[srcUvDomain], uvName, 2, fn, `source ${srcUvDomain}-domain UV`);
 
   const perPrim = attrDomain === "primitive";
-  // Both settled here rather than asked per SOURCE TRIANGLE below — six
-  // string comparisons a triangle, over the whole source mesh. A param
-  // string compared inside a per-element loop is the shape that
-  // miscompiled in `src/noise/worley.ts`. Both are POSITIVE tests, so an
+  // Both settled here rather than asked per source triangle below — six
+  // string comparisons a triangle, over the whole source mesh. See the
+  // note in `src/noise/worley.ts`. Both are POSITIVE tests, so an
   // `attrDomain` outside the union still falls through to the point
   // branch exactly as it did (`perPrim` above is positive for the same
   // reason); `srcUvDomain` was narrowed to two values just above.

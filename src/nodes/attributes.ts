@@ -927,11 +927,10 @@ export const attributeReduce = standardNode<
     // sum does not lose the tail.
     const acc = new Float64Array(ts);
     const kept = new Uint32Array(ts);
-    // Which aggregate, settled before the walk rather than asked per
-    // element per component below. A param string compared inside a
-    // per-element loop is the shape that miscompiled in
-    // `src/noise/worley.ts`. Both tests are POSITIVE, so anything outside
-    // the union still falls through to the summing arm exactly as it did.
+    // Which aggregate, settled before the per-element walk below rather
+    // than asked inside it — see the note in `src/noise/worley.ts`. Both
+    // tests are POSITIVE, so anything outside the union still falls
+    // through to the summing arm exactly as it did.
     const isMin = mode === "min";
     const isMax = mode === "max";
     if (isMin) acc.fill(Number.POSITIVE_INFINITY);

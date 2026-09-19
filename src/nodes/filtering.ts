@@ -729,10 +729,9 @@ export const filterPrimitivesByBounds = standardNode<
     const starts = geo.primVertexStart;
     const counts = geo.primVertexCount;
     const keep: number[] = [];
-    // Which rule, settled before the walk rather than asked per PRIMITIVE
-    // — `wantAll` was even being built inside the loop body. A param
-    // string compared inside a per-element loop is the shape that
-    // miscompiled in `src/noise/worley.ts`; the `else` arm is still the
+    // Which rule, settled before the per-primitive walk below rather than
+    // asked inside it — `wantAll` was even being built in the loop body.
+    // See the note in `src/noise/worley.ts`. The `else` arm is still the
     // all/any pair, because the four values were checked above.
     const ruleIsFirst = vertexRule === "first";
     const ruleIsLast = vertexRule === "last";

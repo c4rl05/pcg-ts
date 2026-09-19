@@ -41,10 +41,8 @@ function forEachContribution(
   const counts = geo.primVertexCount;
   const nPrim = geo.primitiveCount;
   // Which of the four primitive-crossing pairs this is, decided ONCE
-  // rather than re-derived from two strings per VERTEX below (four string
-  // comparisons each, over the whole vertex count). A param string
-  // compared inside a per-element loop is the shape that miscompiled in
-  // `src/noise/worley.ts`.
+  // rather than re-derived from two strings per vertex below — see the
+  // note in `src/noise/worley.ts`.
   //
   // The refusal stays INSIDE the loop deliberately. It fires today only
   // once the first vertex of the first non-empty primitive is reached, so
@@ -124,11 +122,10 @@ export function promote(
   }
 
   // Which aggregate, settled before the walk. The closure below runs once
-  // per CONTRIBUTION and the comparison sat in its innermost loop, so it
-  // ran contributions * tupleSize times — the same shape that miscompiled
-  // in `src/noise/worley.ts`. Both tests are POSITIVE, so anything
-  // outside the union still falls through to the summing arm exactly as
-  // it did (`divide` below is positive for the same reason).
+  // per contribution and the comparison sat in its innermost loop — see
+  // the note in `src/noise/worley.ts`. Both tests are POSITIVE, so
+  // anything outside the union still falls through to the summing arm
+  // exactly as it did (`divide` below is positive for the same reason).
   const isMin = mode === "min";
   const isMax = mode === "max";
   const acc = new Float64Array(n * ts);

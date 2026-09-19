@@ -308,10 +308,9 @@ export const pathShift = standardNode<PathShiftParams, PathShiftInputs, PathShif
     // decision here lets a later walk overwrite an earlier one with -1,
     // which a copy-as-you-go loop cannot express without undoing work.
     const srcOf = new Int32Array(n).fill(-1);
-    // The range policy, settled before the walks rather than asked per
-    // POLYLINE POINT. A param string compared inside a per-element loop
-    // is the shape that miscompiled in `src/noise/worley.ts`; both tests
-    // are positive, so the trailing arm is still "miss".
+    // The range policy, settled before the per-point walks below rather
+    // than asked inside them — see the note in `src/noise/worley.ts`.
+    // Both tests are positive, so the trailing arm is still "miss".
     const isWrap = mode === "wrap";
     const isClamp = mode === "clamp";
     let step = 0;

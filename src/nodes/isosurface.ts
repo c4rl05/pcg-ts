@@ -240,12 +240,10 @@ export const meshFromField = standardNode<
     if (inside !== "below" && inside !== "above") {
       throw new Error(`meshFromField: unknown inside "${inside}"; valid values: below, above`);
     }
-    // Settled here, once, because the corner classification below asks it
-    // per CORNER — cubes * 6 tetrahedra * 4 corners, the hottest loop in
-    // this file. A param string compared inside a per-element loop is the
-    // shape that miscompiled in `src/noise/worley.ts`; this keeps the
-    // string comparison at the seam where the value arrives. `sign` below
-    // already did the same thing.
+    // Settled here, once, rather than in the corner classification below,
+    // which asks it cubes * 6 tetrahedra * 4 corners times — the hottest
+    // loop in this file. See the note in `src/noise/worley.ts`. `sign`
+    // below already did the same thing.
     const below = inside === "below";
     const h = params.cellSize;
     if (!(h > 0) || !Number.isFinite(h)) {

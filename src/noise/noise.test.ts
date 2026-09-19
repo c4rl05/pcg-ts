@@ -349,14 +349,13 @@ describe("worley cell output", () => {
  * WHICH STRING THE OUTPUT WAS SPELLED WITH CANNOT CHANGE THE BYTES.
  *
  * `worleyNoise` used to ask `output === "cell"` inside the closure that
- * runs once per sampled element, and on Node 22.20.0 V8 sometimes took
- * the wrong branch there in a warm process: about one sample in 22500
- * came back as that point's `f2-f1` instead of its cell hash, on the
- * FIRST cook only. It depended on what the string was MADE of — a source
- * literal never failed, a `JSON.parse` result nearly always did — which
- * is what makes it an optimizer fault and not a logic error, and what
- * makes this test compare three spellings of the same option rather than
- * three different options.
+ * runs once per sampled element, and V8 sometimes took the wrong branch
+ * there in a warm process, so a sample came back as that point's `f2-f1`
+ * instead of its cell hash. It depended on what the string was MADE of —
+ * a source literal never failed, a `JSON.parse` result usually did —
+ * which is what makes it an optimizer fault and not a logic error, and
+ * what makes this test compare three spellings of the same option rather
+ * than three different options. `src/noise/worley.ts` carries the note.
  *
  * Two fixes ship, and this covers both: the comparison is hoisted out of
  * the sampler (`src/noise/worley.ts`), which is what the COMPUTED case
@@ -364,10 +363,16 @@ describe("worley cell output", () => {
  * straight to the factory; and the grammar re-interns an accepted
  * `output` against `WORLEY_OUTPUTS`, which is what the PARSED case
  * covers.
+ *
+ * A SPECIFICATION CHECK, NOT A TRIGGER. It states what must hold and
+ * would catch a hoist undone in a way that changes the values; it did not
+ * fire on the unfixed code, whose fault needs a differently warmed
+ * process. `tests/graphs.test.ts` is the gate that caught that one.
  */
 describe("worley's output is decided once, not per sample", () => {
-  // 37^3 = 50653 samples: over the 50k the fault's ~1-in-22500 rate needs
-  // to be worth looking for, and enough work to get the sampler compiled.
+  // 37^3 = 50653 samples: comfortably more than the tens of thousands a
+  // single miscompiled sample hid among when this was found, and enough
+  // work to get the sampler compiled.
   const POSITIONS = gridPositions(37, 0.31);
   const SEED = 1091;
   const FREQUENCY = 0.11;

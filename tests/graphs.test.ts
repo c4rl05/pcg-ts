@@ -42,9 +42,12 @@
  * change for this file to see it: the golden test now records its cook's
  * fingerprint and the determinism test compares against that, and every
  * cook takes a fresh `JSON.parse` the way a host does rather than sharing
- * one parsed object (see `freshJson`). Measured on Node 22.20.0 against
- * the unfixed worley: 0 failures in 7 runs before both changes, 4 in 6
- * after, and 0 in 6 with the fix in place.
+ * one parsed object (see `freshJson`). With the fault put back in on Node
+ * 22.20.0, this file never caught it before those two changes and caught
+ * it in most runs after — a JIT fault has no fixed rate, so read that as
+ * the difference between a gate that can see it and one that cannot,
+ * never as a percentage. The determinism test's own comment says what it
+ * still does not cover.
  *
  * If the golden test fails on a change you meant to make, re-derive it
  * and read the diff: `npm run build && npm run graphs:golden`.
@@ -52,7 +55,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { type DataCollection, cook, deserializeGraph, listNodeTypes } from "../src/index.js";
+import { DOMAINS, type DataCollection, cook, deserializeGraph, listNodeTypes } from "../src/index.js";
 import {
   GRAPHS_TIME_LIMIT_MS,
   type GraphsGolden,
@@ -63,7 +66,7 @@ import {
   graphStats,
   diffGraphStats,
 } from "../src/docs/graphGolden.js";
-import { describeExample, loadGraphs } from "../src/docs/graphIndex.js";
+import { type GraphFile, describeExample, loadGraphs } from "../src/docs/graphIndex.js";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const GOLDEN_PATH = fileURLToPath(new URL("./graphs.golden.json", import.meta.url));
@@ -157,20 +160,32 @@ function fingerprintText(outputs: Record<string, DataCollection>): string {
  * later one by a handful of floats therefore passed the whole suite —
  * and that is exactly the shape a JIT miscompile has: `src/noise/worley.ts`
  * compared a param string inside its per-sample closure, and in a warm
- * process one sample in ~22500 took the wrong branch, on the FIRST cook
- * only.
+ * process one sample took the wrong branch, on the FIRST cook only.
  *
- * Recorded in a map rather than cooked again here because the first cook
- * is by definition unrepeatable: cooking a fourth time would only produce
- * another warm cook. Empty when the golden test was filtered out, in
- * which case the determinism test's own first cook is the process's.
+ * Recorded rather than cooked again here because the first cook is by
+ * definition unrepeatable: cooking a fourth time would only produce
+ * another warm cook. The OUTPUTS ride along with the fingerprint, so a
+ * failure can name the element that moved and not just the column — one
+ * entry at a time, dropped by the determinism test that reads it, so the
+ * peak is one extra cook's worth of memory and not the whole corpus.
  */
-const firstCookFingerprint = new Map<string, string>();
+interface FirstCook {
+  readonly text: string;
+  readonly outputs: Record<string, DataCollection>;
+}
+const firstCook = new Map<string, FirstCook>();
 
-/** Each corpus file's raw text, read once; see {@link freshJson}. */
-const graphText = new Map<string, string>(
-  corpus.map((entry) => [entry.file, readFileSync(entry.absolutePath, "utf8")]),
-);
+/**
+ * How many golden tests have run. The determinism test uses it to tell
+ * "the golden test was filtered out" (0, so its own first cook is the
+ * process's) from "the golden test ran but not before me" (> 0 with no
+ * entry recorded), which is what turning on shuffle or concurrency would
+ * do — silently degrading this file back to comparing two warm cooks.
+ */
+let goldenCooks = 0;
+
+/** Each corpus file's raw text, read on first use; see {@link freshJson}. */
+const graphText = new Map<string, string>();
 
 /**
  * A FRESH PARSE of one corpus graph, and every cook below takes one.
@@ -182,17 +197,74 @@ const graphText = new Map<string, string>(
  * call, and the strings a graph's params are made of are what a node
  * compares against its literals. Reusing one parsed object hands every
  * cook the same string objects, which is the case V8 optimizes cleanly;
- * parsing afresh is the case it got wrong. Measured on Node 22.20.0
- * against the unfixed `src/noise/worley.ts`: with a shared parsed object,
- * a warm process's first cook of `basics-worley-cells.json` agreed with
- * its second 6 times out of 6; with a fresh parse per cook it disagreed
- * 5 times out of 5, by one f32 in 22500. The suite could not see the bug
- * because it was not loading graphs the way anything else does.
+ * parsing afresh is the case it got wrong.
+ *
+ * Measured on Node 22.20.0 against the unfixed `src/noise/worley.ts`, by
+ * cooking `basics-worley-cells.json` three times in a warm process: with
+ * one shared parsed object the first cook agreed with the second in every
+ * run, and with a fresh parse per cook it disagreed in every run, by one
+ * f32. Being a JIT fault the rate is a property of the machine, so read
+ * that as a difference in KIND and not as two percentages. The suite
+ * could not see the bug because it was not loading graphs the way
+ * anything else does.
  */
-function freshJson(entry: { readonly file: string }): unknown {
-  const text = graphText.get(entry.file);
-  if (text === undefined) throw new Error(`${entry.file}: not in the corpus text map`);
+function freshJson(entry: GraphFile): unknown {
+  let text = graphText.get(entry.file);
+  if (text === undefined) {
+    text = readFileSync(entry.absolutePath, "utf8");
+    graphText.set(entry.file, text);
+  }
   return JSON.parse(text);
+}
+
+/**
+ * WHERE two cooks first differ, as an element and a lane rather than a
+ * column hash — the line a fingerprint difference cannot give you, and
+ * the one whoever reads the failure actually wants.
+ *
+ * Walks outputs, items and attribute columns in the order
+ * `graphFingerprint` hashes them, so the element it names belongs to the
+ * column the fingerprint difference named. Compares by BITS, so a NaN
+ * that moved is a difference and -0 against 0 is one too. Returns
+ * `undefined` when it finds nothing an attribute column explains — the
+ * caller still has the fingerprint difference, which covers topology,
+ * instance transforms and item shape.
+ */
+function firstDifferingElement(
+  left: Record<string, DataCollection>,
+  right: Record<string, DataCollection>,
+): string | undefined {
+  for (const name of Object.keys(left).sort()) {
+    const a = left[name] ?? [];
+    const b = right[name] ?? [];
+    for (let i = 0; i < Math.min(a.length, b.length); i++) {
+      const ia = a[i];
+      const ib = b[i];
+      if (ia?.kind !== "geometry" || ib?.kind !== "geometry") continue;
+      for (const domain of DOMAINS) {
+        const setA = ia.geo.attrs[domain];
+        const setB = ib.geo.attrs[domain];
+        for (const attr of setA) {
+          const other = setB.get(attr.name);
+          if (!other || other.tupleSize !== attr.tupleSize) continue;
+          const ts = attr.tupleSize;
+          const used = Math.min(setA.count, setB.count) * ts;
+          const ua = new Uint8Array(attr.data.buffer, attr.data.byteOffset, used * attr.data.BYTES_PER_ELEMENT);
+          const ub = new Uint8Array(other.data.buffer, other.data.byteOffset, used * other.data.BYTES_PER_ELEMENT);
+          for (let k = 0; k < ua.length; k++) {
+            if (ua[k] === ub[k]) continue;
+            const lane = Math.floor(k / attr.data.BYTES_PER_ELEMENT);
+            return (
+              `output "${name}" item ${i} ${domain} attribute "${attr.name}" ` +
+              `element ${Math.floor(lane / ts)} lane ${lane % ts}: ` +
+              `${String(attr.data[lane])} vs ${String(other.data[lane])}`
+            );
+          }
+        }
+      }
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -364,8 +436,12 @@ describe("example corpus", () => {
         const cooked = await cookGraph(freshJson(entry));
         // Taken before any assertion below can throw: this is the
         // process's first cook of this graph and there is no second
-        // chance at it. See `firstCookFingerprint`.
-        firstCookFingerprint.set(entry.file, fingerprintText(cooked.outputs));
+        // chance at it. See `firstCook`.
+        firstCook.set(entry.file, {
+          text: fingerprintText(cooked.outputs),
+          outputs: cooked.outputs,
+        });
+        goldenCooks++;
         expect(cooked.cooked).toBeGreaterThan(0);
         if (cooked.elapsedMs > GRAPHS_TIME_LIMIT_MS) {
           throw new Error(
@@ -410,15 +486,54 @@ describe("example corpus", () => {
         // here — the golden test above already did it, and recorded it.
         // Comparing only the cooks this test performs compares two WARM
         // cooks against each other, which is the one pairing a
-        // first-cook-only fault cannot show up in. See
-        // `firstCookFingerprint` for the fault that hid there.
+        // first-cook-only fault cannot show up in. See `firstCook` for
+        // the fault that hid there.
+        //
+        // WHAT THIS GATE DOES NOT COVER, so nobody reads it as a proof:
+        // it is probabilistic, because the fault it was built for is a
+        // JIT one that does not fire on every run — on the injected fault
+        // it caught it in most runs, not all, so a green run is weaker
+        // evidence than a red one is. And it can only exercise the param
+        // values the corpus actually contains: at the time of writing no
+        // corpus graph sets `transferByIndex`/`pathShift` `outOfRange` to
+        // "wrap" or "clamp", `filterPrimitivesByBounds` `vertex`, or
+        // `meshFromField` `inside: "above"`, so four of the ten sites
+        // whose per-element string comparisons were hoisted have no
+        // coverage here at all. Adding a graph that uses them is how that
+        // changes; nothing about this test can.
         const runs: [string, string][] = [];
-        const first = firstCookFingerprint.get(entry.file);
-        if (first !== undefined) runs.push(["cook 1 (the process's first)", first]);
-        runs.push([`cook ${runs.length + 1}`, fingerprintText((await cookGraph(freshJson(entry))).outputs)]);
-        runs.push([`cook ${runs.length + 1}`, fingerprintText((await cookGraph(freshJson(entry))).outputs)]);
+        const outs: Record<string, DataCollection>[] = [];
+        const first = firstCook.get(entry.file);
+        firstCook.delete(entry.file);
+        if (first !== undefined) {
+          runs.push(["cook 1 (the process's first)", first.text]);
+          outs.push(first.outputs);
+        } else if (goldenCooks > 0) {
+          throw new Error(
+            [
+              `${entry.path}: the golden test has run for ${goldenCooks} graph(s) but recorded`,
+              "nothing for this one, so this file's tests are no longer running in",
+              "declaration order. This test compares the golden test's cook — the",
+              "process's FIRST cook of this graph — against two of its own, and without",
+              "it the comparison silently weakens to two warm cooks, which is the one",
+              "pairing that cannot see a first-cook-only fault. Turn off shuffle or",
+              "concurrency for this file, or make each test perform its own first cook.",
+            ].join("\n"),
+          );
+        }
+        for (let k = 0; k < 2; k++) {
+          const { outputs } = await cookGraph(freshJson(entry));
+          runs.push([`cook ${runs.length + 1}`, fingerprintText(outputs)]);
+          outs.push(outputs);
+        }
         for (let i = 1; i < runs.length; i++) {
           if (runs[0][1] === runs[i][1]) continue;
+          const left = outs[0];
+          const right = outs[i];
+          const element =
+            left !== undefined && right !== undefined
+              ? firstDifferingElement(left, right)
+              : undefined;
           throw new Error(
             [
               `${entry.path}: two cooks of the same graph produced different bytes.`,
@@ -426,6 +541,7 @@ describe("example corpus", () => {
               "cook order — so this is a bug in a node, not a golden to update.",
               "",
               firstDifference(runs[0][1], runs[i][1], runs[0][0], runs[i][0]),
+              ...(element !== undefined ? ["", `first differing element: ${element}`] : []),
             ].join("\n"),
           );
         }
