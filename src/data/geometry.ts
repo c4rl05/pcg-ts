@@ -1,3 +1,4 @@
+import { adoptTopology, checkTopology, installTopology } from "./adoptTopology.js";
 import { AttributeSet } from "./attribute.js";
 import type { Domain } from "./types.js";
 
@@ -70,26 +71,11 @@ export class Geometry {
     primVertexStart: Uint32Array,
     primVertexCount: Uint32Array,
   ): void {
-    if (primVertexStart.length !== primVertexCount.length) {
-      throw new Error("setTopology: primVertexStart and primVertexCount lengths differ");
-    }
-    const np = this.pointCount;
-    const nv = vertexToPoint.length;
-    for (let v = 0; v < nv; v++) {
-      if (vertexToPoint[v] >= np) {
-        throw new Error(`setTopology: vertex ${v} references point ${vertexToPoint[v]} >= ${np}`);
-      }
-    }
-    for (let p = 0; p < primVertexStart.length; p++) {
-      if (primVertexStart[p] + primVertexCount[p] > nv) {
-        throw new Error(`setTopology: primitive ${p} vertex range exceeds ${nv} vertices`);
-      }
-    }
-    this.vertexToPoint = vertexToPoint.slice();
-    this.primVertexStart = primVertexStart.slice();
-    this.primVertexCount = primVertexCount.slice();
-    this.attrs.vertex.resize(nv);
-    this.attrs.primitive.resize(primVertexStart.length);
+    // The checks and the install are shared with the library's internal
+    // no-copy path (`adoptTopology.ts`), so the two cannot drift apart;
+    // the slices are the only thing this public method adds.
+    checkTopology(this.pointCount, vertexToPoint, primVertexStart, primVertexCount);
+    installTopology(this, vertexToPoint.slice(), primVertexStart.slice(), primVertexCount.slice());
   }
 }
 
@@ -153,7 +139,8 @@ export function createTriangleMesh(
     primVertexStart[t] = t * 3;
     primVertexCount[t] = 3;
   }
-  geo.setTopology(vertexToPoint, primVertexStart, primVertexCount);
+  // All three were allocated just above and nothing keeps them.
+  adoptTopology(geo, vertexToPoint, primVertexStart, primVertexCount);
   geo.attrs.primitive.add(PRIMTYPE_ATTR, "string", 1, "poly" satisfies PrimType);
   return geo;
 }
@@ -218,7 +205,11 @@ export function setPolylineTopology(
     const set = geo.attrs[domain];
     for (const name of set.names()) set.remove(name);
   }
-  geo.setTopology(
+  // THE COPY HAPPENS HERE, ONCE, not in setTopology: `vertexToPoint` was
+  // allocated above and the two `from`s are fresh arrays, so the caller's
+  // scratch never reaches the geometry and adopting these loses nothing.
+  adoptTopology(
+    geo,
     vertexToPoint,
     Uint32Array.from(primVertexStart),
     Uint32Array.from(primVertexCount),

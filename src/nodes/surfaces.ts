@@ -24,6 +24,7 @@
  * because a segment has no element of its own. A ring IS at a point, so a
  * field-capable radius resolves there exactly.
  */
+import { adoptTopology } from "../data/adoptTopology.js";
 import { Geometry, PRIMTYPE_ATTR, type PrimType } from "../data/index.js";
 import { type Column, isField } from "../fields/index.js";
 import { makeGeometryItem } from "../graph/index.js";
@@ -846,7 +847,9 @@ export const sweepProfile = standardNode<
       }
     }
 
-    out.setTopology(v2p, primStart, primCount);
+    // Allocated for this output in the layout pass above and written only
+    // there; nothing keeps them, so the output adopts them, not a copy.
+    adoptTopology(out, v2p, primStart, primCount);
     out.attrs.primitive.add(PRIMTYPE_ATTR, "string", 1, "poly" satisfies PrimType);
     carryPrimitiveAttributes(
       src.attrs.primitive,
@@ -1440,7 +1443,9 @@ export const extrudePolygon = standardNode<
       done += m;
     }
 
-    out.setTopology(v2p, primStart, primCount);
+    // Allocated for this output in the layout pass above and written only
+    // there; nothing keeps them, so the output adopts them, not a copy.
+    adoptTopology(out, v2p, primStart, primCount);
     out.attrs.primitive.add(PRIMTYPE_ATTR, "string", 1, "poly" satisfies PrimType);
     carryPrimitiveAttributes(
       src.attrs.primitive,

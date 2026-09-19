@@ -12,6 +12,9 @@ import {
   type Attribute,
   type AttributeSet,
 } from "../data/index.js";
+// By path: the no-copy topology hand-over is internal to the library and no
+// barrel re-exports it (see the module doc there).
+import { adoptTopology } from "../data/adoptTopology.js";
 import {
   type Column,
   type Field,
@@ -1031,8 +1034,8 @@ export function gatherPrimitives(
   }
 
   const out = new Geometry();
-  // Points first, so setTopology validates the new vertex references
-  // against the right point count.
+  // Points first, so the topology check validates the new vertex
+  // references against the right point count.
   copyElements(src.attrs.point, out.attrs.point, pointSrc, pointSrc?.length ?? np);
   const newV2P = new Uint32Array(nv);
   for (let v = 0; v < nv; v++) {
@@ -1045,7 +1048,9 @@ export function gatherPrimitives(
     if (to === GATHER_NO_POINT) throw gatherSelectionError(newStart, newCount, prims, v, pt);
     newV2P[v] = to;
   }
-  out.setTopology(newV2P, newStart, newCount);
+  // All three were allocated in this call and are not used past this line
+  // (`newStart`/`newCount` feed only the error above), so `out` adopts them.
+  adoptTopology(out, newV2P, newStart, newCount);
   copyElements(src.attrs.vertex, out.attrs.vertex, vertexSrc, nv);
   copyElements(src.attrs.primitive, out.attrs.primitive, prims, nPrim);
   copyElements(src.attrs.detail, out.attrs.detail, undefined, src.attrs.detail.count);

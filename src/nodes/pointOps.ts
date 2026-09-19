@@ -12,6 +12,7 @@ import {
   PRIMTYPE_ATTR,
   createPointCloud,
 } from "../data/index.js";
+import { adoptTopology } from "../data/adoptTopology.js";
 import { pointIdentities } from "../data/identity.js";
 import { type GeometryItem, cloneGeometry, makeGeometryItem } from "../graph/index.js";
 import { hashCombine, hashFloat } from "../random/index.js";
@@ -1207,15 +1208,15 @@ export const copyToPoints = standardNode<
       rotateBlocks(outSet.require(name).data as Float32Array, starts, tRot, v);
     }
 
-    // TOPOLOGY, opt-in and strictly additive. It runs LAST because
-    // `setTopology` validates the renumbered vertex references against the
+    // TOPOLOGY, opt-in and strictly additive. It runs LAST because the
+    // topology check validates the renumbered vertex references against the
     // point count, and the point domain is only final here. Nothing above
     // is re-derived: `topology "drop"` skips this block entirely rather
     // than routing through a rebuild, so the default is byte-identical to
     // what shipped by construction, not by argument.
     //
     // `targetNames` and `targetIndexAttr` cannot collide with any of this:
-    // they write POINT columns, while `setTopology` only sizes the vertex
+    // they write POINT columns, while installing topology only sizes the vertex
     // and primitive sets and leaves the point domain untouched.
     if (keepTopology) {
       requireTopologySized(src, "copyToPoints", 'the source on pin "source"');
@@ -1295,12 +1296,17 @@ export const copyToPoints = standardNode<
       // an empty topology either way): what the output IS must depend on
       // the graph and never on the data — the rule the point filters'
       // `topology "keep"` states at selfPrune's off switch.
-      out.setTopology(vertexToPoint, primVertexStart, primVertexCount);
+      //
+      // ADOPTED, not copied: the three arrays were allocated above for this
+      // output and filled only by `appendTopologyBlock`, which READS each
+      // plan (a plan may be the source's own arrays — `wholeSourceKeepPlan`
+      // — and that is why nothing here may hand a plan's arrays over).
+      adoptTopology(out, vertexToPoint, primVertexStart, primVertexCount);
       // Vertex and primitive columns are gathered per block, exactly as
       // the source POINT columns are above: every copy of a primitive
       // carries the original's values. `add` cannot collide here — both
       // sets are fresh, and only the point domain has other writers — and
-      // `setTopology` has already sized them. With no selection the
+      // `adoptTopology` has already sized them. With no selection the
       // gather coalesces to one ranged write per block, which is the copy
       // this loop used to make by hand. String columns (`primtype`)
       // re-intern through `copyFrom`, since a table index means nothing in
@@ -1500,10 +1506,13 @@ export const mergePrimitives = standardNode<
       primBase += geo.primVertexStart.length;
     }
 
-    // Points first: setTopology validates the renumbered vertex
-    // references against the point count they are meant to index.
+    // Points first: the topology check validates the renumbered vertex
+    // references against the point count they are meant to index. The
+    // three arrays were allocated above and only `appendTopologyBlock`
+    // wrote them (reading the inputs' arrays, never handing them on), so
+    // the output adopts them rather than a copy.
     out.attrs.point.resize(totalPoints);
-    out.setTopology(vertexToPoint, primVertexStart, primVertexCount);
+    adoptTopology(out, vertexToPoint, primVertexStart, primVertexCount);
 
     let pointOffset = 0;
     let vertexOffset = 0;

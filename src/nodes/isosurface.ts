@@ -54,6 +54,7 @@
  * therefore disagree about its sign and crack the seam. Resolve this
  * node's field on ONE path for a given world.
  */
+import { adoptTopology } from "../data/adoptTopology.js";
 import { Geometry, PRIMTYPE_ATTR, type PrimType } from "../data/index.js";
 import { createPointCloud } from "../data/index.js";
 import { type FieldSpec, paramSpecOf, peekFieldSpec, specChildEntries } from "../fields/spec.js";
@@ -704,7 +705,8 @@ export const meshFromField = standardNode<
       primStart[t] = t * 3;
       primCount[t] = 3;
     }
-    out.setTopology(v2p, primStart, primCount);
+    // Allocated just above for this output alone; nothing keeps them.
+    adoptTopology(out, v2p, primStart, primCount);
     out.attrs.primitive.add(PRIMTYPE_ATTR, "string", 1, "poly" satisfies PrimType);
     return { out: [makeGeometryItem(out)] };
   },
