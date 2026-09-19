@@ -317,6 +317,58 @@ overlay.addCheckbox("rotate", false, (on) => {
   controls.autoRotate = on;
 });
 
+// THE DETAIL LEVELS, as links rather than a control: each is a plain URL
+// (the page reads it once, at load, and cooks at that depth), so a level
+// can be bookmarked or sent, and each link carries the current camera pose
+// in `cam`, so moving between levels keeps the view — the point of having
+// them side by side is to compare the same spot at each depth.
+const DETAILS = [
+  { key: "", label: "skeleton", title: "solid members: the panels and their rules" },
+  { key: "laced", label: "laced", title: "every web member as four angles laced in X" },
+  { key: "rivets", label: "rivets", title: "laced, and every rivet as an instance" },
+] as const;
+
+function currentDetail(): string {
+  const params = new URLSearchParams(location.search);
+  return params.has("rivets") ? "rivets" : params.has("laced") ? "laced" : "";
+}
+
+const detailSlot = overlay.addSlot();
+const detailRow = document.createElement("div");
+detailRow.style.cssText = "display:flex;gap:0.9em;align-items:baseline";
+const detailLabel = document.createElement("span");
+detailLabel.textContent = "detail";
+detailLabel.style.opacity = "0.7";
+detailRow.append(detailLabel);
+const detailLinks = DETAILS.map((d) => {
+  const a = document.createElement("a");
+  a.textContent = d.label;
+  a.title = d.title;
+  a.style.cssText = "color:inherit;text-underline-offset:3px";
+  detailRow.append(a);
+  return { d, a };
+});
+detailSlot.append(detailRow);
+
+/** Point every level's link at the current view. */
+function refreshDetailLinks(): void {
+  const p = camera.position;
+  const t = controls.target;
+  const cam = [p.x, p.y, p.z, t.x, t.y, t.z].map((v) => v.toFixed(2)).join(",");
+  const here = currentDetail();
+  for (const { d, a } of detailLinks) {
+    const query = d.key === "" ? `cam=${cam}` : `${d.key}&cam=${cam}`;
+    a.href = `?${query}`;
+    const current = d.key === here;
+    a.style.fontWeight = current ? "600" : "400";
+    a.style.opacity = current ? "1" : "0.75";
+    if (current) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  }
+}
+controls.addEventListener("end", refreshDetailLinks);
+refreshDetailLinks();
+
 // Claimed here, where the panel is built, so the graph sits under the
 // readouts.
 const graphSlot = overlay.addSlot();
