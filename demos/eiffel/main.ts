@@ -69,8 +69,8 @@ const SKY = 0xc4d0da;
 
 /**
  * The palette. The iron is the tower's brown family throughout, each class
- * a step lighter or darker than its neighbours; the decks are darker still
- * (they are seen edge-on and in their own shade), and the pedestals are
+ * a step lighter or darker than its neighbours; the floors' fit-out takes
+ * the family's lighter end, the names are gilded, and the pedestals are
  * pale stone.
  */
 const LOOK: Record<PartClass, { color: number; roughness: number; metalness: number }> = {
@@ -79,7 +79,10 @@ const LOOK: Record<PartClass, { color: number; roughness: number; metalness: num
   horizontals: { color: 0x735441, roughness: 0.64, metalness: 0.12 },
   girders: { color: 0x654736, roughness: 0.62, metalness: 0.15 },
   arches: { color: 0x846550, roughness: 0.6, metalness: 0.12 },
-  platforms: { color: 0x4a3a2f, roughness: 0.8, metalness: 0.05 },
+  // The floors' fit-out — arcades, pavilions, skirts, railings — is the
+  // same painted iron as the lattice, so it takes the family's lighter end:
+  // it sits in its own shade, and a darker paint read as solid black.
+  platforms: { color: 0x7d5e48, roughness: 0.7, metalness: 0.1 },
   masonry: { color: 0xcdc3ae, roughness: 0.93, metalness: 0 },
   summit: { color: 0x72533f, roughness: 0.62, metalness: 0.15 },
   gussets: { color: 0x684a39, roughness: 0.6, metalness: 0.15 },

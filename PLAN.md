@@ -44,6 +44,36 @@ waiting for anything. Its body stays because the analysis under it is
 what the outcome tested — several of these scored badly, and a survey
 that guessed wrong is worth more to the next survey than a deleted one.
 
+### A mesh with no `normal`, merged with one that has it, renders black — found 2026-09-19
+
+The consumer is the Eiffel demo (`demos/eiffel/`), and it hit this twice:
+the first-floor fit-out and then panel 4's Masque both drew near-black on
+the page. The mechanism is two documented behaviours meeting.
+`meshPrimitive` writes `P`, `uv` and `poly` primitives but NO `normal`;
+`sweepProfile` and `extrudePolygon` write one. `mergePrimitives` carries
+the union of point attributes and fills an attribute missing on an input
+with its default — for `normal`, (0, 0, 0). `toBufferGeometry` then hands
+three.js those zero normals as given, and a lit material shades them
+black. Neither node is wrong by its own contract; the combination is a
+trap any graph that merges a box with a sweep falls into, and nothing
+warns.
+
+The demo worked round it at the source (its flat bars and fit-out write
+their own normals). The library fix wants a decision, not a patch, which
+is why it is here and not done:
+
+- `meshPrimitive` writing `normal` (per-face, corners split, as the square
+  sweep does) is the obvious half: every mesh source would then carry one.
+  It changes `meshPrimitive`'s output, so the corpus golden moves.
+- A merge that meets `normal` on some inputs only could refuse, or warn
+  through the cook report, rather than zero-fill. Zero is never a valid
+  normal, so unlike other attributes there is no default that means
+  "absent" here.
+- `copyToPoints` turning `normal` with each copy (the `rotateAttrs`
+  work in progress on branch `copy-rotate-attrs`) is the other half:
+  without it, a box that DOES carry normals is lit wrong on every turned
+  copy.
+
 ### ~~Building edges from a parent-pointer column~~ — SHIPPED 2026-09-08
 
 Wanted: a node that reads a per-point index column and emits one

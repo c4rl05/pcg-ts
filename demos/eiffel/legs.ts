@@ -23,19 +23,25 @@
  *   face, a laced 800 strut parallel to the uprights through the crossing
  *   (PL-IX Fig. 8 prints "800" on it; PL-VII Figs 1-2);
  * - panel 5 (below the 1st floor) and panel 11 (below the 2nd): lattice
- *   girder belts instead of a cross; panel 5's hangs like the grande
- *   poutre it meets at b, its "500 x 10" chords' outer faces on the node lines;
+ *   girder belts instead of a cross, framed by solid chord plates ("500 x
+ *   10", "450 x 8") whose outer edges lie on the node lines, with posts
+ *   square to them on grids measured from the tower's axis (3.8825,
+ *   3.36268) and a double lattice between (PL-VII Figs 1-2);
  * - over panel 4 of the faces in the tower's faces, the "Masque" (PL-VII
  *   Fig. 6), a screen that carries the decorative girder's band across;
- * - panel 10: a lattice band "3,6071" deep at its base, then two X's per
- *   face either side of the post, all 600 (PL-VII Fig. 2);
+ * - panel 10: a band "3,6071" deep at its base, "300 x 5" flats every
+ *   1.59, then two X's per face either side of the post, all 600 (PL-VII
+ *   Fig. 2);
  * - above the 2nd floor (node XVII) the inner upright a stops, and panels
- *   12-17 are braced on the two outer faces; the gap between adjacent legs
- *   (b of one, d of the next) is braced too, an X per panel in 12-16 and a
- *   horizontal across it at every node, until b and d close on XI
- *   (PL-VII Figs 2-3);
- * - below panel 1, the base ties ("entretoises inférieures"): A on the
- *   outer faces, 3.187 deep, B on the inner faces, 2.000 (PL-VII Figs 1, 5).
+ *   12-17 are braced on the two outer faces, their 500s laced by panel
+ *   (`LEG_LACING_500`); the gap between adjacent legs (b of one, d of the
+ *   next) is braced too, an X per panel in 12-16 and a horizontal across
+ *   it at every node, until b and d close on XI (PL-VII Figs 2-3);
+ * - inside the leg, the "entretoise diagonale" from d to b at the tops of
+ *   panels 1-3, 6 and 7 (PL-VIII Figs 1, 8);
+ * - below panel 1, the base ties ("entretoises inférieures"), X-braced: A
+ *   on the outer faces, its bottom chord 2.987 below XXVIII in the plane,
+ *   B on the inner faces, 1.600 (PL-VII Figs 1, 5).
  *
  * The uprights change section at XVII (0.87 -> 0.50) as a STEP, so each is
  * two chains, split there, each skinned and riveted from its own table.
@@ -59,29 +65,47 @@ import {
   position,
   promoteAttribute,
   ramp,
+  removeAttribute,
   setAttribute,
   sub,
   transformPoints,
   vec,
 } from "pcg-ts";
 import {
+  END_SINE,
+  END_SINE_MIN,
   FACE_NORMAL,
   type Lattice,
   type Level,
+  type SegmentMember,
   type Vec3,
   chains,
   copyMembersToQuadrants,
   copyToQuadrants,
   edges,
+  indexTable,
   merge,
   placedLattice,
+  rotateByQuat,
+  segmentMembers,
   skin,
   squareRing,
   stationLattice,
 } from "./lattice.js";
 import type { Detail, Parts } from "./parts.js";
-import { LEG_BELTS, MASQUE, MEMBERS, NODES, type NodeLevel, node, profileAt } from "./spec.js";
 import {
+  ENTRETOISE,
+  LEG_BELTS,
+  LEG_LACING_500,
+  MASQUE,
+  MEMBERS,
+  NODES,
+  type NodeLevel,
+  node,
+  profileAt,
+} from "./spec.js";
+import {
+  JOINT_ENDS,
   JOINT_REACH,
   LACING_STEP,
   UPRIGHT_SEAMS,
@@ -218,18 +242,19 @@ function seamKeep(): Field {
 const CORNER_UV = LEG_RING;
 
 /**
- * An open ring along consecutive faces of the leg (`faces` in ring order),
- * `perFace` stations to a face, ending on the last face's far corner.
+ * An open ring along consecutive faces of the leg (`faces` in ring order):
+ * on each face a station at every fraction `ts` of the way from its first
+ * corner to its second (0 included, 1 not), ending on the last face's far
+ * corner. A station at a fraction lies at that fraction of the face's
+ * width at every level, so on a face that leans in its own plane (panels
+ * 1-4) a column of stations leans with the uprights.
  */
-function faceRing(faces: readonly number[], perFace: number): Array<readonly [number, number]> {
+function faceRing(faces: readonly number[], ts: readonly number[]): Array<readonly [number, number]> {
   const out: Array<readonly [number, number]> = [];
   for (const f of faces) {
     const [u0, v0] = CORNER_UV[f]!;
     const [u1, v1] = CORNER_UV[(f + 1) % 4]!;
-    for (let i = 0; i < perFace; i++) {
-      const t = i / perFace;
-      out.push([u0 + (u1 - u0) * t, v0 + (v1 - v0) * t]);
-    }
+    for (const t of ts) out.push([u0 + (u1 - u0) * t, v0 + (v1 - v0) * t]);
   }
   const last = faces[faces.length - 1]!;
   out.push(CORNER_UV[(last + 1) % 4]!);
@@ -237,98 +262,217 @@ function faceRing(faces: readonly number[], perFace: number): Array<readonly [nu
 }
 
 /**
- * A base tie: a Warren girder under panel 1 on the given faces, from its
- * bottom chord up to node XXVIII, whose horizontal is its top chord. Bottom
- * joints at even stations, top joints at odd, and no posts.
+ * A base tie under panel 1 on the given faces (PL-VII Figs 1, 5), from its
+ * bottom chord up to node XXVIII, whose horizontal is its top chord: joints
+ * on both chords every `pitch` from the face's centre line, the central
+ * post's line, and an X in every bay between them and in the two short end
+ * bays against the uprights. The stations are fractions of the face, so
+ * the bays lean with the leg and the X's read skewed, as drawn.
  */
-function tie(g: Graph, id: string, faces: readonly number[], bays: number, depth: number): NodeHandle {
+function tie(
+  g: Graph,
+  id: string,
+  faces: readonly number[],
+  pitch: number,
+  depth: number,
+  /**
+   * Also a bar up every joint, parallel to the uprights (tie A: PL-VII
+   * Fig. 1 draws its steep bars as V's, each joint's post and the next
+   * bay's steep diagonal; tie B's steep bars are all parallel, no posts).
+   */
+  posts = false,
+): NodeHandle {
   const top = node("XXVIII");
+  const width = top.outer - top.inner;
+  // Joints at least 0.3 m clear of the uprights' axes.
+  const ts = [0];
+  for (let k = -20; k <= 20; k++) {
+    const t = 0.5 + (k * pitch) / width;
+    if (t > 0.3 / width && t < 1 - 0.3 / width) ts.push(t);
+  }
+  ts.sort((a, b) => a - b);
   const lat = stationLattice(g, {
     id,
-    ring: faceRing(faces, 2 * bays),
+    ring: faceRing(faces, ts),
     closed: false,
     levels: [legLevel(levelAt(top.y - depth)), legLevel(top)],
   });
-  const even = (s: number) => s % 2 === 0;
+  // Joints are every station but the corners (the uprights) and the face's
+  // centre line, where the central post runs through.
+  const perFace = ts.length;
+  const joint = (s: number) => s % perFace !== 0 && Math.abs((ts[s % perFace] ?? 0) - 0.5) > 1e-9;
   return merge(g, `${id}All`, [
-    edges(lat, "BarsA", 1, 1, (s) => even(s)),
-    edges(lat, "BarsB", -1, 1, (s) => even(s)),
+    edges(lat, "BarsA", 1, 1),
+    edges(lat, "BarsB", -1, 1),
     edges(lat, "Chord", 1, 0, (_s, k) => k === 0),
+    ...(posts ? [edges(lat, "Posts", 0, 1, (s, k) => k === 0 && joint(s))] : []),
   ]);
 }
 
-/**
- * Panel 5's belt chords, as a half-width: PL-VII labels them "500 x 10"
- * chord plates [sourced] — lighter than the grande poutre's 800 x 12
- * flanges they meet at b, and lighter than the 0.80 node horizontals
- * elsewhere in panels 1-4 whose place they take at XXIV and XXIII.
- */
-const BELT1_CHORD = 0.25;
+/** A point in a face's own coordinates: (u, v). */
+type UV = readonly [number, number];
 
 /**
- * How far in from a node line panel 5's belt chords sit, vertically: the
- * belt hangs like the grande poutre it meets at b, "Entre semelles 7,5309"
- * = the panel's 7.00 x 1.07584, so its chords' OUTER faces lie on the node
- * lines XXIV and XXIII and their axes half a chord inside, in the plane
- * [sourced PL-VII Fig. 1; SOURCES.md §14.1]. With the axes on the nodes
- * the belt stepped against the girder at b.
+ * A leg face's plane over part of one panel, [y0, y1], in its own
+ * coordinates: u the distance from the tower's axis along the face's
+ * horizontal (world x on faces 0 and 2, z on 1 and 3), which is the chords'
+ * direction and a true length in the plane; v up the plane from y0. The
+ * uprights bound the face at u = inner(y) and u = outer(y), both straight
+ * within a panel, so a clip against them is exact.
  */
-function belt1Inset(): number {
-  return vertical(BELT1_CHORD, faceSlopes(node("XXIV").y + 1).outer);
+interface FacePlane {
+  /** The plane's height, in the plane. */
+  readonly H: number;
+  /** Its unit normal (out of the leg on faces 0 and 3). */
+  readonly n: Vec3;
+  /** A face point, `off` out along the normal. */
+  world(p: UV, off?: number): Vec3;
+  /**
+   * The line p + t d clipped to vlo <= v <= vhi and to `margin` inside both
+   * uprights' axes; undefined when less than `min` of it is left.
+   */
+  clip(p: UV, d: UV, vlo: number, vhi: number, margin: number, min?: number): [UV, UV] | undefined;
 }
 
-/**
- * Panel 5's belt: posts every bay, and a double lattice whose bars run
- * from a post's foot through the next post's mid-height to the top of the
- * one after (PL-VII Fig. 1). Three levels, so every bar is two members.
- * Its chords are laced 0.80 struts, a face long, between the levels'
- * corners: they replace the node horizontals at XXIV and XXIII.
- */
-function belt1(g: Graph): { bars: NodeHandle; chords: NodeHandle } {
-  const bays = LEG_BELTS.belt1Bays;
-  const inset = belt1Inset();
-  const lo = node("XXIV").y + inset;
-  const hi = node("XXIII").y - inset;
-  const lat = stationLattice(g, {
-    id: "belt1",
-    ring: squareRing(bays),
-    closed: true,
-    levels: [lo, (lo + hi) / 2, hi].map((y) => legLevel(levelAt(y))),
-  });
+function facePlane(f: number, y0: number, y1: number): FacePlane {
+  const key = f === 0 || f === 3 ? "outer" : "inner";
+  const p0 = profileAt(y0);
+  const p1 = profileAt(y1);
+  const s = (p0[key] - p1[key]) / (y1 - y0);
+  const F = Math.hypot(1, s);
+  const H = (y1 - y0) * F;
+  const n: Vec3 = f === 0 || f === 2 ? [0, s / F, 1 / F] : [1 / F, s / F, 0];
+  // The uprights' axes as u = u0 + k v.
+  const ki = (p1.inner - p0.inner) / H;
+  const ko = (p1.outer - p0.outer) / H;
   return {
-    bars: merge(g, "belt1All", [
-      edges(lat, "Posts", 0, 2, (s, k) => k === 0 && s % bays !== 0),
-      edges(lat, "BarsA", 1, 1),
-      edges(lat, "BarsB", -1, 1),
-    ]),
-    chords: edges(lat, "Chords", bays, 0, (s, k) => s % bays === 0 && k !== 1),
+    H,
+    n,
+    world: ([u, v], off = 0) => {
+      const y = y0 + v / F;
+      const w = profileAt(y)[key];
+      const p: Vec3 = f === 0 || f === 2 ? [u, y, w] : [w, y, u];
+      return add3(p, scale3(n, off));
+    },
+    clip: (p, d, vlo, vhi, margin, min = 0.3) => {
+      let t0 = -Infinity;
+      let t1 = Infinity;
+      // Keep a + t b >= 0.
+      const keep = (a: number, b: number) => {
+        if (Math.abs(b) < 1e-12) {
+          if (a < 0) t0 = Infinity;
+        } else if (b > 0) t0 = Math.max(t0, -a / b);
+        else t1 = Math.min(t1, -a / b);
+      };
+      keep(p[1] - vlo, d[1]);
+      keep(vhi - p[1], -d[1]);
+      keep(p[0] - p0.inner - ki * p[1] - margin, d[0] - ki * d[1]);
+      keep(p0.outer + ko * p[1] - margin - p[0], ko * d[1] - d[0]);
+      if (!(t1 - t0 > min / Math.hypot(d[0], d[1]))) return undefined;
+      return [
+        [p[0] + t0 * d[0], p[1] + t0 * d[1]],
+        [p[0] + t1 * d[0], p[1] + t1 * d[1]],
+      ];
+    },
   };
 }
 
+/** Members on all four faces of the leg, each face's segments from `build`, `off` out of the plane. */
+function onFaces(
+  y0: number,
+  y1: number,
+  build: (pl: FacePlane) => ReadonlyArray<[UV, UV] | undefined>,
+  off = 0,
+): SegmentMember[] {
+  const out: SegmentMember[] = [];
+  for (let f = 0; f < 4; f++) {
+    const pl = facePlane(f, y0, y1);
+    for (const seg of build(pl)) {
+      if (seg !== undefined) out.push({ a: pl.world(seg[0], off), b: pl.world(seg[1], off), n: pl.n });
+    }
+  }
+  return out;
+}
+
+/** Lines through (k * pitch, v0) along d, for every k whose line can reach a leg face. */
+function family(pitch: number, v0: number, d: UV): Array<{ p: UV; d: UV }> {
+  const reach = Math.abs(d[0]) + 1;
+  const k0 = Math.floor(-reach / pitch) - 1;
+  const k1 = Math.ceil((NODES[0]!.outer + reach) / pitch) + 1;
+  return Array.from({ length: k1 - k0 + 1 }, (_, i) => ({ p: [(k0 + i) * pitch, v0] as UV, d }));
+}
+
+/** The uprights' half-width across a band [y0, y1] (its widest). */
+const uprightHalf = (y0: number, y1: number) =>
+  Math.max(tableAt(MEMBERS.upright, y0 + 0.01), tableAt(MEMBERS.upright, y1 - 0.01));
+
 /**
- * Panel 11's belt: posts every bay, and a diamond lattice (PL-VII Fig. 2):
- * stations at posts (even) and mid-bays (odd); each bar runs from a
- * mid-bay on one chord through a post's mid-height to the next mid-bay on
- * the other chord, so the bars cross at the posts and meet in V's at the
- * chords.
+ * A girder belt filling a panel between two chord plates `chord` wide whose
+ * outer edges lie on the panel's node lines: posts square to the chords
+ * every `pitch` from the tower's axis, standing between the chords' inner
+ * edges, and a double lattice whose bars start every `barPitch` along the
+ * chords and each run `span` along them from one chord's axis to the
+ * other's. Everything is clipped short of the uprights; a post shorter
+ * than half the depth is dropped.
  */
-function belt2(g: Graph): NodeHandle {
-  const bays = LEG_BELTS.belt2Bays;
-  const per = 2 * bays;
-  const lo = node("XVIII");
-  const hi = node("XVII");
-  const lat = stationLattice(g, {
-    id: "belt2",
-    ring: squareRing(per),
-    closed: true,
-    levels: [legLevel(lo), legLevel(levelAt((lo.y + hi.y) / 2)), legLevel(hi)],
+function girderBelt(
+  y0: number,
+  y1: number,
+  chord: number,
+  pitch: number,
+  barPitch: number,
+  span: number,
+): { posts: SegmentMember[]; bars: SegmentMember[]; chords: SegmentMember[] } {
+  const r = uprightHalf(y0, y1);
+  const margin = r + POST_CLEAR;
+  const inside = (pl: FacePlane) => ({ lo: chord, hi: pl.H - chord, D: pl.H - 2 * chord });
+  const posts = onFaces(y0, y1, (pl) => {
+    const { lo, hi, D } = inside(pl);
+    return family(pitch, lo, [0, 1]).map((l) => pl.clip(l.p, l.d, lo, hi, margin, D / 2));
   });
-  const odd = (s: number) => s % 2 === 1;
-  return merge(g, "belt2All", [
-    edges(lat, "Posts", 0, 2, (s, k) => k === 0 && !odd(s) && s % per !== 0),
-    edges(lat, "BarsA", 1, 1, (s, k) => (k === 0 ? odd(s) : !odd(s))),
-    edges(lat, "BarsB", -1, 1, (s, k) => (k === 0 ? odd(s) : !odd(s))),
-  ]);
+  // The bars run to the chords' axes, the rivet lines they are fastened on:
+  // panel 11's then meet the chords at 53.5 degrees ("53°49′43″" printed),
+  // panel 5's at 42.
+  const bars = onFaces(y0, y1, (pl) => {
+    const lo = chord / 2;
+    const hi = pl.H - chord / 2;
+    const D = hi - lo;
+    return [
+      ...family(barPitch, lo, [span, D]).map((l) => pl.clip(l.p, l.d, lo, hi, margin)),
+      ...family(barPitch, hi, [span, -D]).map((l) => pl.clip(l.p, l.d, lo, hi, margin)),
+    ];
+  });
+  // The chords butt against the uprights' faces.
+  const chords = onFaces(y0, y1, (pl) =>
+    [chord / 2, pl.H - chord / 2].map((v) => pl.clip([0, v], [1, 0], v - 1e-6, v + 1e-6, r)),
+  );
+  return { posts, bars, chords };
+}
+
+/**
+ * Panel 5's belt (PL-VII Fig. 1): "500 x 10" chord plates on the node lines
+ * XXIV and XXIII, posts square to them on the grande poutre's 3.8825 grid,
+ * and bars from a post's foot through the next post's mid-height to the
+ * top of the one after (so crossing at the posts' mid-heights and at the
+ * quarter depths between). The chords take the place of the node
+ * horizontals at XXIV and XXIII.
+ */
+function belt1(): ReturnType<typeof girderBelt> {
+  const P = LEG_BELTS.belt1PostPitch;
+  return girderBelt(node("XXIV").y, node("XXIII").y, LEG_BELTS.belt1Chord, P, P, 2 * P);
+}
+
+/**
+ * Panel 11's belt (PL-VII Fig. 2): "450 x 8" chord plates on the node lines
+ * XVIII and XVII, posts square to them every 3.36268 from the tower's axis,
+ * and bars every half pitch, each spanning one pitch: post foot to the next
+ * post's top (an X in every bay) and mid-bay to mid-bay through the posts'
+ * mid-heights (the diamond). The chords take the place of the node
+ * horizontals at XVIII and XVII.
+ */
+function belt2(): ReturnType<typeof girderBelt> {
+  const P = LEG_BELTS.belt2PostPitch;
+  return girderBelt(node("XVIII").y, node("XVII").y, LEG_BELTS.belt2Chord, P, P / 2, P);
 }
 
 /** The top of panel 10's base band [derived: its printed depth over the outer faces' slope]. */
@@ -337,18 +481,35 @@ function band10Top(): number {
   return y + vertical(LEG_BELTS.band10Depth, faceSlopes(y + 1).outer);
 }
 
-/** Panel 10's base band: a 45-degree double lattice, no posts (PL-VII Fig. 2). */
-function band10(g: Graph): NodeHandle {
-  const lo = node("XIX").y;
-  const hi = band10Top();
-  const n = LEG_BELTS.band10Levels;
-  const lat = stationLattice(g, {
-    id: "band10",
-    ring: squareRing(LEG_BELTS.band10Bays),
-    closed: true,
-    levels: Array.from({ length: n + 1 }, (_, j) => legLevel(levelAt(lo + ((hi - lo) * j) / n))),
-  });
-  return merge(g, "band10All", [edges(lat, "BarsA", 1, 1), edges(lat, "BarsB", -1, 1)]);
+/**
+ * Panel 10's base band (PL-VII Fig. 2): "300 x 5" flats from the XIX
+ * horizontal's axis to the band's 600 top chord's, their rivet lines, a
+ * family each way every 1.59 from the tower's axis, V's at both chords,
+ * each flat spanning two pitches over the band's 3.6071, 48 degrees
+ * (drawn 49-51). No posts. The two families lie in two layers, `off`
+ * either side of the face plane, so no two crossing flats share one.
+ */
+function band10(): { up: SegmentMember[]; down: SegmentMember[] } {
+  const y0 = node("XIX").y;
+  const y1 = band10Top();
+  const lo = 0;
+  const hi = 0;
+  const p = LEG_BELTS.band10Pitch;
+  const margin = uprightHalf(y0, y1) + POST_CLEAR;
+  const off = LEG_BELTS.band10FlatThickness;
+  const side = (dir: 1 | -1) =>
+    onFaces(
+      y0,
+      y1,
+      (pl) => {
+        const D = pl.H - hi - lo;
+        return family(p, dir > 0 ? lo : pl.H - hi, [2 * p, dir * D]).map((l) =>
+          pl.clip(l.p, l.d, lo, pl.H - hi, margin),
+        );
+      },
+      dir * off,
+    );
+  return { up: side(1), down: side(-1) };
 }
 
 /** Linear read of a (y, w) table, clamped: what `ramp` does, before the cook. */
@@ -427,10 +588,10 @@ function postStretch(
  */
 function centralPosts(g: Graph): NodeHandle {
   // The member a post stands on reaches this far past the node line: a
-  // node horizontal is centred on it, but panel 5's belt chords only touch
-  // it (their outer faces lie on XXIV and XXIII).
+  // node horizontal is centred on it, but the belts' chord plates only
+  // touch it (their outer edges lie on XXIV and XXIII, XVIII and XVII).
   const h = (name: string) =>
-    name === "XXIV" || name === "XXIII" ? 0 : tableAt(MEMBERS.horizontal, node(name).y);
+    ["XXIV", "XXIII", "XVIII", "XVII"].includes(name) ? 0 : tableAt(MEMBERS.horizontal, node(name).y);
   const tieDepth = (f: number) => {
     const s = faceSlopes(node("XXVIII").y - 1);
     const outerFace = f === 0 || f === 3;
@@ -478,6 +639,68 @@ function centralPosts(g: Graph): NodeHandle {
   }
   const lat = placedLattice(g, "postLat", rows, true);
   return edges(lat, "Posts", 0, 1, (s, k) => s % 2 === 1 && k % 2 === 0);
+}
+
+/**
+ * The "entretoises diagonales" of one leg (ENTRETOISE; PL-VIII Figs 1, 8):
+ * at each of their nodes a horizontal from d to b, or, where the lift runs
+ * through (`openAt`), two, each from its upright to `openHalf` short of the
+ * leg's diagonal, ending free. They carry what an edge rule would write
+ * for their joints (the end sines against b's and d's columns) and which
+ * of their ends are joints (JOINT_ENDS); their section is squared to the
+ * vertical plane through them.
+ */
+function entretoiseMembers(): {
+  members: SegmentMember[];
+  extra: Array<{ name: string; values: number[][] }>;
+} {
+  const n: Vec3 = [Math.SQRT1_2, 0, Math.SQRT1_2];
+  const members: SegmentMember[] = [];
+  const sines: number[][] = [];
+  const least: number[][] = [];
+  const flags: number[][] = [];
+  const sine = (p: Vec3, q: Vec3) => Math.hypot(...cross3(unit3(p), unit3(q)));
+  // At upright i and height y, the member's sine against the column's
+  // bisector, and the least against the bisector and the two segments.
+  const ends = (i: number, y: number, m: Vec3): [number, number] => {
+    const below = sub3(corner(i, y), corner(i, y - 1));
+    const above = sub3(corner(i, y + 1), corner(i, y));
+    const bis = add3(unit3(below), unit3(above));
+    const s = sine(bis, m);
+    return [s, Math.min(s, sine(below, m), sine(above, m))];
+  };
+  for (const name of ENTRETOISE.nodes) {
+    const y = node(name).y;
+    const d = corner(3, y);
+    const b = corner(1, y);
+    const u = unit3(sub3(b, d));
+    const [sd, md] = ends(3, y, u);
+    const [sb, mb] = ends(1, y, scale3(u, -1));
+    if ((ENTRETOISE.openAt as readonly string[]).includes(name)) {
+      const c = scale3(add3(d, b), 0.5);
+      members.push({ a: d, b: sub3(c, scale3(u, ENTRETOISE.openHalf)), n });
+      sines.push([sd, 1]);
+      least.push([md, 1]);
+      flags.push([1, 0]);
+      members.push({ a: add3(c, scale3(u, ENTRETOISE.openHalf)), b, n });
+      sines.push([1, sb]);
+      least.push([1, mb]);
+      flags.push([0, 1]);
+    } else {
+      members.push({ a: d, b, n });
+      sines.push([sd, sb]);
+      least.push([md, mb]);
+      flags.push([1, 1]);
+    }
+  }
+  return {
+    members,
+    extra: [
+      { name: END_SINE, values: sines },
+      { name: END_SINE_MIN, values: least },
+      { name: JOINT_ENDS, values: flags },
+    ],
+  };
 }
 
 /** How far the Masque stands out from the face plane: clear of the uprights' 0.41 faces and their rivet heads (0.429) [estimated]. */
@@ -580,8 +803,29 @@ function masque(g: Graph): Array<{ paths: NodeHandle; width: number; thickness: 
 }
 
 /**
+ * The unit box's outward face normals, point by point: meshPrimitive's box
+ * lays its faces out as blocks of 4 points (one quad each at the default
+ * subdivisions) in the order +x, -x, +y, -y, +z, -z.
+ */
+const BOX_NORMALS: readonly Vec3[] = (
+  [
+    [1, 0, 0],
+    [-1, 0, 0],
+    [0, 1, 0],
+    [0, -1, 0],
+    [0, 0, 1],
+    [0, 0, -1],
+  ] as const
+).flatMap((n): Vec3[] => [n, n, n, n]);
+
+/**
  * Flat bars and plates: a box per member, its length along the member,
  * `width` across it in its face and `thickness` along the face's normal.
+ *
+ * The boxes carry a `normal`: every box's local face normal turned by its
+ * copy's `rot` (a box scaled along its own axes keeps its face normals).
+ * Without one, a merge with the swept members of the same class (which do
+ * carry normals) filled these with zeros, and the Masque rendered black.
  */
 function flatBars(g: Graph, id: string, members: NodeHandle, width: number, thickness: number): NodeHandle {
   const tips = g.add(pathResample, { mode: "count", count: 2, lengthAttr: "barLen" }, `${id}Tips`);
@@ -606,16 +850,44 @@ function flatBars(g: Graph, id: string, members: NodeHandle, width: number, thic
     `${id}Size`,
   );
   const unit = g.add(meshPrimitive, { shape: "box", size: [1, 1, 1] }, `${id}Unit`);
+  const unitN = g.add(
+    setAttribute,
+    {
+      name: "boxN",
+      type: "f32",
+      tupleSize: 3,
+      value: vec(
+        indexTable(BOX_NORMALS.map((n) => n[0])),
+        indexTable(BOX_NORMALS.map((n) => n[1])),
+        indexTable(BOX_NORMALS.map((n) => n[2])),
+      ),
+    },
+    `${id}UnitN`,
+  );
   const boxes = g.add(copyToPoints, { topology: "keep" }, `${id}Boxes`);
+  const lit = g.add(
+    setAttribute,
+    {
+      name: "normal",
+      type: "f32",
+      tupleSize: 3,
+      value: normalize(rotateByQuat(attribute("rot", 4), attribute("boxN", 3))),
+    },
+    `${id}Normals`,
+  );
+  const done = g.add(removeAttribute, { names: ["boxN"], domain: "point" }, `${id}Lit`);
   g.connect(members, "out", tips, "in");
   g.connect(tips, "out", len, "in");
   g.connect(len, "out", first, "in");
   g.connect(first, "out", mid, "in");
   g.connect(mid, "out", aim, "in");
   g.connect(aim, "out", sized, "in");
-  g.connect(unit, "out", boxes, "source");
+  g.connect(unit, "out", unitN, "in");
+  g.connect(unitN, "out", boxes, "source");
   g.connect(sized, "out", boxes, "target");
-  return boxes;
+  g.connect(boxes, "out", lit, "in");
+  g.connect(lit, "out", done, "in");
+  return done;
 }
 
 /**
@@ -701,14 +973,19 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     "Horizontals",
     1,
     0,
-    // Not at XXIV and XXIII: panel 5's belt chords stand there, inside it.
+    // Not at XXIV and XXIII, nor at XVIII and XVII: the belts' chord
+    // plates of panels 5 and 11 stand there, inside them.
     (s, k) =>
       k >= at("XXVIII") &&
       k < kMerge &&
-      k !== at("XXIV") &&
-      k !== at("XXIII") &&
+      !["XXIV", "XXIII", "XVIII", "XVII"].includes(levels[k]?.name ?? "") &&
       !(k > kA && touchesA(s)),
   );
+
+  // Inside the leg, the "entretoise diagonale" from d to b at the tops of
+  // panels 1-3 and 6-7 (PL-VIII Figs 1, 8), open where the lift runs.
+  const ent = entretoiseMembers();
+  const entretoises = segmentMembers(g, "legEntretoiseMembers", ent.members, ent.extra);
 
   // Crosses. Rule "A" draws face f's rising diagonal from station f,
   // rule "B" its falling one from station f + 1, so each face gets both.
@@ -740,16 +1017,17 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
   ]);
   const p10Chord = edges(p10, "BandChord", 2, 0, (s, k) => k === 0 && s % 2 === 0);
 
-  // The girder belts: the base ties under panel 1, panels 5 and 11, and
-  // panel 10's base band.
+  // The girder belts: the base ties under panel 1, panels 5 and 11 (bars
+  // and posts here, their chord plates below), and panel 10's base band.
   const s1 = faceSlopes(node("XXVIII").y - 1);
-  const panel5 = belt1(g);
+  const panel5 = belt1();
+  const panel11 = belt2();
+  const band = band10();
   const belts = merge(g, "legBelts", [
-    tie(g, "tieA", [3, 0], LEG_BELTS.tieOuterBays, vertical(LEG_BELTS.tieOuterDepth, s1.outer)),
-    tie(g, "tieB", [1, 2], LEG_BELTS.tieInnerBays, vertical(LEG_BELTS.tieInnerDepth, s1.inner)),
-    panel5.bars,
-    band10(g),
-    belt2(g),
+    tie(g, "tieA", [3, 0], LEG_BELTS.tieOuterPitch, vertical(LEG_BELTS.tieOuterDepth, s1.outer), true),
+    tie(g, "tieB", [1, 2], LEG_BELTS.tieInnerPitch, vertical(LEG_BELTS.tieInnerDepth, s1.inner)),
+    segmentMembers(g, "belt1Lattice", [...panel5.posts, ...panel5.bars]),
+    segmentMembers(g, "belt2Lattice", [...panel11.posts, ...panel11.bars]),
   ]);
 
   // Above the 2nd floor, the gap between this leg and the next.
@@ -778,18 +1056,27 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     across,
     laced,
   );
-  const belt5ChordWeb = webMembers(
+  // The entretoises: "600" [sourced PL-VIII Fig. 1], laced as the 600s.
+  // They meet b and d along the leg's diagonal, square to neither face of
+  // the box: its corner stands r sqrt 2 out from the axis that way.
+  const entretoiseWeb = webMembers(
     g,
-    "legBelt5Chord",
-    fourMembers("legBelt5Chords4", panel5.chords),
+    "legEntretoise",
+    fourMembers("legEntretoises4", entretoises),
     [
-      [0, BELT1_CHORD],
-      [320, BELT1_CHORD],
+      [0, ENTRETOISE.width / 2],
+      [320, ENTRETOISE.width / 2],
     ],
     detail,
-    across,
+    {
+      ...across,
+      uprightAt: mul(ramp(component(position(), 1), MEMBERS.upright), Math.SQRT2),
+      endFlags: true,
+    },
     laced,
   );
+  // The legs' 500 diagonals in panels 12-17 are laced by panel, more
+  // openly than the shaft's (LEG_LACING_500).
   const bracingWeb = webMembers(
     g,
     "legBracing",
@@ -797,7 +1084,10 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     MEMBERS.web,
     detail,
     diagonals,
-    laced,
+    {
+      ...laced,
+      lacingBands: LEG_LACING_500.map(([lo, hi, step]) => ({ from: node(lo).y, to: node(hi).y, step })),
+    },
   );
   const postWeb = webMembers(
     g,
@@ -853,21 +1143,29 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
       : [];
   const webs = [
     horizontalWeb,
-    belt5ChordWeb,
+    entretoiseWeb,
     bracingWeb,
     postWeb,
     gapBracingWeb,
     gapHorizontalWeb,
   ];
+  const plates = (id: string, list: readonly SegmentMember[], width: number, thickness: number) =>
+    flatBars(g, id, fourMembers(`${id}4`, segmentMembers(g, id, list)), width, thickness);
   return {
     uprights: [
       skin(g, "legUprightSkin", lower4, MEMBERS.uprightBelow, [1, 0, 0]),
       skin(g, "legUprightUpperSkin", upper4, MEMBERS.uprightAbove, [1, 0, 0]),
     ],
-    horizontals: [...horizontalWeb.meshes, ...belt5ChordWeb.meshes, ...gapHorizontalWeb.meshes],
+    horizontals: [...horizontalWeb.meshes, ...entretoiseWeb.meshes, ...gapHorizontalWeb.meshes],
     bracing: [...bracingWeb.meshes, ...postWeb.meshes, ...gapBracingWeb.meshes],
     girders: [
       faceSkin(g, "legBelt", fourMembers("legBelts4", belts), MEMBERS.beltBar),
+      // The belts' chord plates: panel 5's "500 x 10", panel 11's "450 x 8".
+      plates("legBelt5Chords", panel5.chords, LEG_BELTS.belt1Chord, LEG_BELTS.belt1ChordThickness),
+      plates("legBelt11Chords", panel11.chords, LEG_BELTS.belt2Chord, LEG_BELTS.belt2ChordThickness),
+      // Panel 10's band: "300 x 5" flats, one layer each way.
+      plates("legBand10Up", band.up, LEG_BELTS.band10Flat, LEG_BELTS.band10FlatThickness),
+      plates("legBand10Down", band.down, LEG_BELTS.band10Flat, LEG_BELTS.band10FlatThickness),
       // Panel 4's Masque, on the faces that lie in the tower's faces.
       ...masque(g).map(({ paths, width, thickness }, i) =>
         flatBars(g, `legMasque${i}`, fourMembers(`legMasque${i}x4`, paths), width, thickness),
@@ -878,7 +1176,7 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
       ...seams,
       ...rivetOutputs({
         "leg.horizontals": horizontalWeb,
-        "leg.belt5.chords": belt5ChordWeb,
+        "leg.entretoises": entretoiseWeb,
         "leg.bracing": bracingWeb,
         "leg.posts": postWeb,
         "leg.gap.bracing": gapBracingWeb,

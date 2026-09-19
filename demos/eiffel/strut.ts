@@ -132,7 +132,18 @@ export interface JointOpts {
    * leg boxes 0.50 apart). Read for the clearance only.
    */
   readonly uprightAt?: Field;
+  /**
+   * The members carry {@link JOINT_ENDS} (primitive, f32 x 2): 1 where that
+   * end lands on an upright and takes a joint, 0 where it stops free, at an
+   * opening left for something that passes (a lift's run). A free end is
+   * not trimmed and gets no plates and no joint rivets. Default false:
+   * every end is a joint.
+   */
+  readonly endFlags?: boolean;
 }
+
+/** The primitive attribute {@link JointOpts.endFlags} reads: which ends are joints. */
+export const JOINT_ENDS = "jointEnds";
 
 /** How a laced web member is laced: options beyond its size. */
 export interface WebOpts {
@@ -144,6 +155,21 @@ export interface WebOpts {
    * (lacing bars at 45 degrees).
    */
   readonly lacingStep?: ReadonlyArray<readonly [number, number]>;
+  /**
+   * Steps by height band, overriding `lacingStep` for a member whose mean
+   * height lies in [from, to): for members the plates lace differently
+   * from others of the same section (the legs' 500s in panels 12-17 are
+   * laced more openly than the shaft's, and not evenly; see
+   * `LEG_LACING_500` in spec.ts).
+   */
+  readonly lacingBands?: ReadonlyArray<LacingBand>;
+}
+
+/** A lacing step for the members whose mean height lies in [from, to). */
+export interface LacingBand {
+  readonly from: number;
+  readonly to: number;
+  readonly step: number;
 }
 
 /**
@@ -210,6 +236,7 @@ export function webMembers(
     ...(opts.lacingStep === undefined
       ? {}
       : { step: opts.lacingStep.map(([w, s]) => [w - CHORD, s] as const) }),
+    ...(opts.lacingBands === undefined ? {} : { stepBands: opts.lacingBands }),
   });
   return {
     meshes: [struts.chords, struts.lacing],
@@ -267,6 +294,11 @@ function endSineAt(joints: JointOpts, end: 0 | 1, least = false): Field {
   return max(sine, joints.minSine ?? 0.25);
 }
 
+/** 1 where a member's end `end` takes a joint, 0 where it stops free ({@link JOINT_ENDS}). */
+function endFlag(end: 0 | 1): Field {
+  return component(attribute(JOINT_ENDS, 2), end);
+}
+
 /**
  * Shorten every member to the stretch between its joints: each end moves
  * in along the member to where its joint starts. The members of an edge
@@ -283,14 +315,15 @@ function trimToJoints(
   const own = g.add(pathResample, { mode: "count", count: 2 }, `${id}Own`);
   const first = lt(attribute("curveU"), 0.5);
   const T = attribute("tangent", 3);
+  // A free end (JointOpts.endFlags) is not trimmed.
+  const at = (end: 0 | 1): Field =>
+    joints.endFlags === true
+      ? mul(jointStart(outer, joints, end), endFlag(end))
+      : jointStart(outer, joints, end);
   const moved = g.add(
     transformPoints,
     {
-      translate: select(
-        first,
-        mul(T, jointStart(outer, joints, 0)),
-        mul(T, mul(jointStart(outer, joints, 1), -1)),
-      ),
+      translate: select(first, mul(T, at(0)), mul(T, mul(at(1), -1))),
     },
     `${id}Trimmed`,
   );
@@ -348,6 +381,16 @@ function memberJoints(
   const into = mul(T, sub(1, mul(attribute("curveU"), 2)));
   // curveU is 0 at a member's first end and 1 at its second.
   const first = lt(attribute("curveU"), 0.5);
+  // Plates only at the ends that take a joint (JointOpts.endFlags).
+  let plateTips: NodeHandle = tips;
+  if (joints.endFlags === true) {
+    plateTips = g.add(
+      filterByExpression,
+      { predicate: ge(select(first, endFlag(0), endFlag(1)), 0.5) },
+      `${id}PlateTipsJoined`,
+    );
+    g.connect(tips, "out", plateTips, "in");
+  }
   const start = select(first, clearAt(0), clearAt(1));
   // The plate's near edge, along the member from the node: where a point
   // `across` off the axis on the obtuse side reaches the upright's face,
@@ -372,7 +415,7 @@ function memberJoints(
     },
     `${id}PlateSpan`,
   );
-  g.connect(tips, "out", span, "in");
+  g.connect(plateTips, "out", span, "in");
   const spanOf = attribute(GUSSET_SPAN, 3);
   const plateSides = [1, -1].map((side) => {
     const name = `${id}Plate${side > 0 ? "Out" : "In"}`;
@@ -416,18 +459,24 @@ function memberJoints(
   // table that steps along the member (the upright's at XVII, the merge at
   // XI) slid the window off the strut's trimmed start, leaving heads on
   // the plate with no chord under them.
+  // With free ends, the other end's slots and a free end's own window are
+  // -1: the max below keeps a joined end's window and leaves a free end's
+  // at [-1, -1], which no arc position reaches.
+  const windowValue =
+    joints.endFlags === true
+      ? select(
+          first,
+          select(ge(endFlag(0), 0.5), vec(clearAt(0), add(clearAt(0), reach), -1, -1), vec(-1, -1, -1, -1)),
+          select(ge(endFlag(1), 0.5), vec(-1, -1, clearAt(1), add(clearAt(1), reach)), vec(-1, -1, -1, -1)),
+        )
+      : select(
+          first,
+          vec(clearAt(0), add(clearAt(0), reach), 0, 0),
+          vec(0, 0, clearAt(1), add(clearAt(1), reach)),
+        );
   const windowAt = g.add(
     setAttribute,
-    {
-      name: JOINT_WINDOW,
-      type: "f32",
-      tupleSize: 4,
-      value: select(
-        first,
-        vec(clearAt(0), add(clearAt(0), reach), 0, 0),
-        vec(0, 0, clearAt(1), add(clearAt(1), reach)),
-      ),
-    },
+    { name: JOINT_WINDOW, type: "f32", tupleSize: 4, value: windowValue },
     `${id}JointWindowAt`,
   );
   const window = g.add(
@@ -629,6 +678,8 @@ export interface StrutOpts {
    * Given, it replaces `pitch`, whose step is one per call.
    */
   readonly step?: ReadonlyArray<readonly [number, number]>;
+  /** Steps by the member's mean height, overriding `step` (or `pitch`) inside each band. */
+  readonly stepBands?: ReadonlyArray<LacingBand>;
   /** Also spawn a rivet wherever a lacing bar meets a chord. */
   readonly rivets?: boolean;
 }
@@ -665,7 +716,7 @@ export function latticeStruts(
   const widest = Math.max(...o.halfWidth.map((s) => s[1]));
   let source = paths;
   let spacing: FieldLike = 2 * widest * o.pitch;
-  if (o.step !== undefined) {
+  if (o.step !== undefined || (o.stepBands !== undefined && o.stepBands.length > 0)) {
     const tag = g.add(
       setAttribute,
       { name: STRUT_Y, type: "f32", value: component(position(), 1) },
@@ -685,7 +736,14 @@ export function latticeStruts(
     g.connect(tag, "out", lift, "in");
     g.connect(lift, "out", drop, "in");
     source = drop;
-    spacing = max(ramp(ramp(attribute(STRUT_Y), o.halfWidth), o.step), 0.05);
+    const Y = attribute(STRUT_Y);
+    let base: FieldLike =
+      o.step === undefined ? spacing : max(ramp(ramp(Y, o.halfWidth), o.step), 0.05);
+    // Later bands win where they overlap; outside every band, the base.
+    for (const band of o.stepBands ?? []) {
+      base = select(mul(ge(Y, band.from), lt(Y, band.to)), band.step, base);
+    }
+    spacing = base;
   }
   const samples = g.add(pathResample, { mode: "spacing", spacing }, `${id}Samples`);
   g.connect(source, "out", samples, "in");

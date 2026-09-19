@@ -44,14 +44,21 @@
  *   [sourced PL-XI Fig. 10, section AB] and changes to R 44.5258, tangent,
  *   whose centre lies on that normal [sourced: "R-36.4064 / R=44.5258" at
  *   B]. That arc turns vertical 37.119 off the axis at y 3.90 — the
- *   pedestals' inner faces, the 74.238 clear span of PL-I [derived; the
- *   closure is to 0.2 mm, which is how the junction is placed at the
- *   parallel point rather than lower]. The member stops on a small pier
- *   at y 5.10 [estimated from PL-VII Fig. 1 and the PL-XI trace] standing
- *   at the pedestal's inner edge.
- * - a small bracket ties the lower arch to b: ties at the panel's mid
- *   horizontal (11.9) and 9.4, an X between them and a strut down to the
- *   arch at 7.1 [sourced PL-VII Fig. 1 drawing; heights estimated].
+ *   74.238 clear span of PL-I [derived; the closure is to 0.2 mm, which is
+ *   how the junction is placed at the parallel point rather than lower].
+ *   The member runs on straight down the plane below that and ends at
+ *   y 2.95, about a metre under the pedestal's top, in the collar of a
+ *   stone pier [estimated: PL-XI Fig. 1, PL-VII Fig. 1, PL-I; see
+ *   `ARCH_END`]. The pier stands upright under the member's end, in front
+ *   of the pedestal: the plates draw the pedestal's inner face battered
+ *   back from the pier's foot to 2.5-3 m outboard of its axis at the top
+ *   [sourced drawing PL-I, PL-VII], which `platforms.ts`'s plain box does
+ *   not (SOURCES.md §17).
+ * - a small bracket ties the lower arch to b: a tie on the panel's mid
+ *   horizontal (11.9), a short X-braced box down to a tie at 11.0, an X
+ *   down to a tie at 8.55, and a strut from b down to the arch at 6.0
+ *   [sourced drawing PL-XI Fig. 1 and PL-VII Fig. 1, which agree; heights
+ *   estimated off PL-XI].
  * - FANS: the ornament in each band panel, a half-disc of radiating bars
  *   on the intrados [sourced drawing PL-VII, PL-XI; reduced to a rim and
  *   three spokes], on the decorated side.
@@ -119,14 +126,18 @@
  * montant carries seam rows along its corner angles.
  */
 import {
+  type Field,
   type Graph,
   type NodeHandle,
   attribute,
+  component,
   extrudePolygon,
+  ge,
   index,
   mul,
   pointGrid,
   pointsToPath,
+  position,
   removeAttribute,
   setAttribute,
   vec,
@@ -208,9 +219,18 @@ const FILLET_R = 1.5;
 const FILLET_BAR = 0.12;
 /** The lower arch's bracket to b: 80 x 80 x 8 angles [sourced], squared [estimated]. */
 const BRACKET_BAR = 0.06;
-/** Heights of the bracket's ties and of its strut's foot [estimated, PL-VII Fig. 1]. */
-const BRACKET_TIES = [(node("XXVIII").y + node("XXVII").y) / 2, 9.4] as const;
-const BRACKET_FOOT = 7.1;
+/**
+ * The bracket's ties, top down: on panel 1's mid horizontal, then 11.0 and
+ * 8.55 [estimated, PL-XI Fig. 1 at 31.75 px/m from the crown's 39.40:
+ * 12.1, 11.0, 8.57; PL-VII Fig. 1 draws the same three, its second a third
+ * of the way down]. An X in each of the two panels between them.
+ */
+const BRACKET_TIES = [(node("XXVIII").y + node("XXVII").y) / 2, 11.0, 8.55] as const;
+/**
+ * Where the strut from b's lowest tie lands on the arch [estimated: PL-XI
+ * 5.9-6.05; PL-VII 6.1-6.2, scaled between its ties].
+ */
+const BRACKET_FOOT = 6.0;
 /** Entretoises: latticed cross members and light diagonals [estimated, PL-XI Fig. 2]. */
 const ENTRETOISE_WEB = [
   [0, 0.2],
@@ -220,12 +240,33 @@ const ENTRETOISE_BAR = 0.05;
 /** The GHIJ frames' posts on the decorative girders [sourced PL-XI "1' ... 5'"]. */
 const GHIJ = [-2 * BAY * 2, -2 * BAY, 0, 2 * BAY, 2 * BAY * 2] as const;
 /**
- * The arch's pier: its top, where the arch stops [estimated: PL-VII Fig.
- * 1's capital, and PL-XI's trace ending at 5.1], and its side [estimated,
- * 1.3 on PL-VII]. It stands from the ground at the pedestal's inner edge.
+ * Where the arch member ends, on its pier: the height of its highest
+ * corner, which the collar's top meets [estimated: PL-XI Fig. 1 draws the
+ * end 2.8-3.0 above the ground, 31.75 px/m from the crown's 39.40; PL-VII
+ * Fig. 1 draws it 0.24-0.26 of the pedestal's drawn height under the
+ * pedestal's top and PL-I 0.2-0.3, 0.8-1.2 under the model's 4.00]. Below
+ * the lower arc's vertical point (y 3.90) the member runs straight down
+ * the plane.
  */
-const PIER_TOP = 5.1;
-const PIER_SIDE = 1.3;
+const ARCH_END = 2.95;
+/**
+ * The pier, upright under the member's end, from the ground up: a moulded
+ * base, a rusticated shaft, a capital, and the collar the member stands in
+ * [estimated, PL-VII Fig. 1 at 80 px/m: base 1.93, shaft 1.45-1.50,
+ * capital 1.59-1.61, collar 0.88-0.90 round the 0.60 member, the collar,
+ * capital and shaft centred on it within 0.03; heights in its proportions,
+ * the pier drawn three quarters of the pedestal's height. PL-I Fig. 1
+ * agrees within its 0.1 m line]. Each part is `side` square and reaches
+ * `top`; the base is flush with the shaft on the pedestal's side and flares
+ * 0.43 toward the opening, so it sits `inboard` of the pier's axis [sourced
+ * drawing PL-VII, PL-I, both feet].
+ */
+const PIER = [
+  { side: 1.93, top: 0.75, inboard: 0.215 },
+  { side: 1.5, top: 2.2, inboard: 0 },
+  { side: 1.6, top: 2.75, inboard: 0 },
+  { side: 0.9, top: ARCH_END, inboard: 0 },
+] as const;
 /**
  * The arcade plates: 3 mm [sourced PL-VII "3m/m"], drawn 10 mm so they
  * render, on the decorated side against the montants' faces.
@@ -353,30 +394,36 @@ function angles(end: number, step: number, from = 0): number[] {
   return out;
 }
 
-/** The intrados member's axis, crown to pier: the circle, then the lower arc. */
+/**
+ * The member's end, on its axis: its end is square to it and it leans with
+ * the face, so the axis stops half its depth's rise under `ARCH_END`,
+ * where its highest corner meets the collar's top.
+ */
+const END_Y = ARCH_END - ARCH_CHORD * SIN;
+
+/**
+ * The intrados member's axis, crown to pier: the circle, then the lower
+ * arc, then straight down the plane from where that turns vertical.
+ */
 function intradosAxis(): InPlane[] {
   const r = R_IN + ARCH_CHORD;
   const upper = angles(PHI_H, THETA / 2).map((phi) => polar(r, phi));
   const r2 = R_FOOT + ARCH_CHORD;
-  const tPier = planeT(PIER_TOP);
-  if (tPier < C2[1]) {
-    throw new Error(
-      `firstFloor: the arch's pier top (y ${PIER_TOP}) is below the point where the lower arc turns vertical; raise PIER_TOP`,
-    );
-  }
-  const psiEnd = Math.acos((tPier - C2[1]) / r2);
+  const tEnd = planeT(END_Y);
+  const psiEnd = tEnd < C2[1] ? Math.PI / 2 : Math.acos((tEnd - C2[1]) / r2);
   const step = 1.3 / r2;
   const lower = angles(psiEnd, step, PHI_H + step).map((psi): InPlane => {
     const [dx, dt] = polar(r2, psi);
     return [C2[0] + dx, C2[1] + dt];
   });
-  return [...upper, ...lower];
+  const straight: InPlane[] = tEnd < C2[1] ? [[C2[0] + r2, tEnd]] : [];
+  return [...upper, ...lower, ...straight];
 }
 
-/** The x of the lower arch member's axis at height y. */
+/** The x of the lower arch member's axis at height y: the arc, then straight. */
 function lowerArchX(y: number): number {
   const r2 = R_FOOT + ARCH_CHORD;
-  const dt = planeT(y) - C2[1];
+  const dt = Math.max(0, planeT(y) - C2[1]);
   return C2[0] + Math.sqrt(r2 * r2 - dt * dt);
 }
 
@@ -703,7 +750,7 @@ function arches(): {
   fans: Member[];
   bracket: Member[];
   plates: Vec3[][];
-  piers: Vec3[];
+  piers: Array<{ c: Vec3; size: Vec3 }>;
 } {
   const h = archHalves();
   const out = {
@@ -713,7 +760,7 @@ function arches(): {
     fans: [] as Member[],
     bracket: [] as Member[],
     plates: [] as Vec3[][],
-    piers: [] as Vec3[],
+    piers: [] as Array<{ c: Vec3; size: Vec3 }>,
   };
   for (const { dz, decorated } of PLANES) {
     const at = (p: InPlane) => fromPlane(p, dz);
@@ -740,17 +787,26 @@ function arches(): {
     for (const side of [1, -1]) {
       const b = (y: number) => onFace(side * profileAt(y).inner, y, dz);
       const arch = (y: number) => onFace(side * lowerArchX(y), y, dz);
-      const [hi, lo] = BRACKET_TIES;
-      out.bracket.push(
-        { a: arch(hi), b: b(hi), n: N4 },
-        { a: arch(lo), b: b(lo), n: N4 },
-        { a: arch(hi), b: b(lo), n: N4 },
-        { a: b(hi), b: arch(lo), n: N4 },
-        { a: b(lo), b: arch(BRACKET_FOOT), n: N4 },
-      );
-      // Centred under the arch's landing: the pier is upright, the face leans.
-      const foot = onFace(side * lowerArchX(PIER_TOP), PIER_TOP, dz);
-      out.piers.push([foot[0], PIER_TOP / 2, foot[2]]);
+      // The ties, and an X in each panel between two of them.
+      BRACKET_TIES.forEach((hi, i) => {
+        out.bracket.push({ a: arch(hi), b: b(hi), n: N4 });
+        const lo = BRACKET_TIES[i + 1];
+        if (lo !== undefined) {
+          out.bracket.push({ a: arch(hi), b: b(lo), n: N4 }, { a: b(hi), b: arch(lo), n: N4 });
+        }
+      });
+      const last = BRACKET_TIES[BRACKET_TIES.length - 1]!;
+      out.bracket.push({ a: b(last), b: arch(BRACKET_FOOT), n: N4 });
+      // Centred under the member's end: the pier is upright, the face leans.
+      const foot = onFace(side * lowerArchX(ARCH_END), ARCH_END, dz);
+      let from = 0;
+      for (const { side: w, top, inboard } of PIER) {
+        out.piers.push({
+          c: [foot[0] - side * inboard, (from + top) / 2, foot[2]],
+          size: [w, top - from, w],
+        });
+        from = top;
+      }
     }
   }
   return out;
@@ -1009,13 +1065,17 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}
     copyMembersToQuadrants(g, `${id}4`, members(g, id, list), quads);
   const up = attribute(FACE_NORMAL, 3);
   const rivets: Array<{ name: string; spawn: NodeHandle }> = [];
-  /** Solid members, with seam rows when riveted. */
-  const solid = (id: string, paths: NodeHandle, half: number, seams: string | null) => {
+  /** Solid members, with seam rows when riveted (only where `keep` holds, if given). */
+  const solid = (id: string, paths: NodeHandle, half: number, seams: string | null, keep?: Field) => {
     if (riveted && seams !== null) {
-      rivets.push({ name: seams, spawn: seamRivets(g, id, paths, half, up, SEAMS) });
+      const opts = keep === undefined ? SEAMS : { ...SEAMS, keep };
+      rivets.push({ name: seams, spawn: seamRivets(g, id, paths, half, up, opts) });
     }
     return faceSkin(g, id, paths, half);
   };
+  // The arch's rows stop where the member enters its pier's collar: a row
+  // below this would sit inside the stone.
+  const aboveCollar = ge(component(position(), 1), ARCH_END + ARCH_CHORD * SIN);
 
   const gd = girders();
   const ar = arches();
@@ -1054,7 +1114,13 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}
   );
 
   const archMeshes = [
-    solid("ffArchChords", four("ffArchChordPaths", ar.chords), ARCH_CHORD, "ff.arches.chords"),
+    solid(
+      "ffArchChords",
+      four("ffArchChordPaths", ar.chords),
+      ARCH_CHORD,
+      "ff.arches.chords",
+      aboveCollar,
+    ),
     solid("ffMontants", four("ffMontantPaths", ar.montants), MONTANT, "ff.arches.montants"),
     solid("ffHeads", four("ffHeadPaths", ar.heads), HEAD_EDGE, null),
     solid("ffFans", four("ffFanPaths", ar.fans), FAN_BAR, null),
@@ -1062,13 +1128,13 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}
     plates(g, "ffArcadePlates", ar.plates, quads),
   ];
 
-  // The piers, from the ground to the arch, at the pedestals' inner edges.
-  if (PEDESTAL.height >= PIER_TOP) {
+  // The piers, from the ground to the arch's end, in front of the pedestals.
+  if (ARCH_END >= PEDESTAL.height) {
     throw new Error(
-      `firstFloor: the arch's pier top (${PIER_TOP}) must rise above the ${PEDESTAL.height} m pedestal it stands against`,
+      `firstFloor: the arch ends at ${ARCH_END}, on or above the ${PEDESTAL.height} m pedestal's top; the plates end it about a metre under it (PL-I, PL-VII) — lower ARCH_END`,
     );
   }
-  const piers = ar.piers.map((c, i) => box(g, `ffPier${i}`, c, [PIER_SIDE, PIER_TOP, PIER_SIDE]));
+  const piers = ar.piers.map((p, i) => box(g, `ffPier${i}`, p.c, p.size));
   const pierFour = copyToQuadrants(g, "ffPiers4", merge(g, "ffPiers", piers), quads);
 
   return {

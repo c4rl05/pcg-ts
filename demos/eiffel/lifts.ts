@@ -25,8 +25,9 @@
  * (Plate XXII ter labels the beam's centre line "Diagonale de la Tour"), so
  * a track lies in the vertical plane through the tower's axis and the leg's
  * diagonal, between the inner corner a and the leg's centre. Each is two
- * plate girders 1.300 deep, 3.800 apart axis to axis, 0.235 top flanges,
- * the rails on top [sourced PL-XXII ter, "Coupe verticale CD"]; the car
+ * plate girders 1.300 deep, 3.800 apart axis to axis, top chord plates
+ * « 285 × 8 » reaching 85 outboard of the web and 200 inboard, the rails on
+ * top [sourced PL-XXII ter, "Coupe verticale CD"]; the car
  * rolls on their upper side, which faces up and OUT, away from the axis.
  * The Otis base slope is the leg's: « composante … suivant l'inclinaison de
  * la voie … 0.815 » = sin 54.6° [sourced PL-XXI], the leg's diagonal lean
@@ -35,24 +36,29 @@
  * 1:200 the rail line stands about 3.3 m out from a (along the diagonal)
  * below the 1st floor, 4.6 m at nodes XXI-XX, 4.0 m at the 2nd floor
  * [estimated, ±0.5]. Below the 1st floor that reading puts the girders'
- * feet through the inner faces, so there the rail stands 4.2 out, the
- * least that clears them (see `RAIL_OFFSET`). The table is read at every
+ * feet through the inner faces, so there the rail stands 4.35 out, the
+ * least that clears the faces' struts (see `RAIL_OFFSET`). The table is read at every
  * node, so the track bends where the leg bends. The Otis beam runs on
  * about 9.9 m above the 2nd floor to its pulleys [estimated, PL-XX Fig. 3],
  * past the line of b and d into the open middle, where a has ended and the
  * leg's inner faces carry no members;
  * the Roux circuit's top pulleys stand at the top of panel 6, node XXII
  * [sourced label, PL-XXIII Fig. 2]. The Roux track's gauge is not printed:
- * its two chain casings are about 2.8 apart on PL-XXIII Fig. 11
- * [estimated].
+ * its running wheels are 3.57 apart axis to axis on PL-XXIII Fig. 4, the
+ * transverse section [measured at 309.8 px/m on its printed 4.080; the
+ * plan, Fig. 11, reads 3.70].
  *
  * THE CARS. Both systems ran double-deck cars: Otis 50 passengers, Roux
- * 100 [sourced PL-XX, PL-XXI]. Otis decks 4.670 long [sourced PL-XXII ter
- * Fig. 1], 3.169 inside across [sourced Fig. 2], on a 3.800 frame; heights
- * and the Roux decks [estimated]. The floors are level and the upper deck
- * sits back up the slope, the stepped car of PL-XX, and the car rides
- * BETWEEN its girders, dipping into the trough they make above the ties
- * [estimated]. Where each car stands is a chosen moment [estimated].
+ * 100 [sourced PL-XX, PL-XXI]. Otis (PL-XXII ter Figs 1-2): decks 4.670
+ * long [sourced], 3.169 across [sourced], 2.13 floor to roof top [sourced
+ * chain 205 + 275 + 1.00 + 0.65], floor to floor 2.37 and the upper deck
+ * 0.54 further up the slope [measured, Fig. 1 at 316 px/m], wheelbase
+ * « 8m109 » [sourced]. Roux (PL-XXIII Fig. 4): 3.27 across, decks about
+ * 2.1 high [measured]; the deck length is lost in the plate's gutter
+ * [estimated]. The floors are level and the upper deck sits further up the
+ * slope, the stepped car of PL-XX, and the car rides BETWEEN its girders,
+ * dipping into the trough they make above the ties [estimated]. Where each
+ * car stands is a chosen moment [estimated].
  *
  * THE EDOUX [sourced PL-XX, PL-XXIII ter]. Two cars counterbalanced by four
  * cables over pulleys at the top: the upper car, lifted by two pistons 80.20
@@ -76,25 +82,30 @@
  * THE STAIRS [sourced PL-XX legend, PL-XXVIII, E1900-TXT]:
  * - ground → 1st floor: « Un escalier de 1m00 de large … Il y en a un dans
  *   la pile 2 et un dans la pile 4; les piles 1 et 3 n'ont pas d'escalier
- *   partant du rez-de-chaussée ». Straight flights and landings, drawn "en
- *   diagonale" on PL-XXVIII Fig. 1: landings 1.300, a pattern repeating
- *   every 7.8555 of height and climbing the leg's own lean, « pente de 1m407
- *   pour 1m00 », so it shifts 5.583 inward per repeat [derived]. Two flights
- *   rise inward, the third comes back, « ménager le passage de la cabine »
- *   (E1900-TXT). Here that is three flights of 15 risers per repeat, treads
- *   0.25 [sourced text], the return flight in a second lane beside the
- *   first, both lanes clear of the car beside the diagonal [estimated].
+ *   partant du rez-de-chaussée ». PL-XXVIII Fig. 5 draws one panel of it,
+ *   11.00 high, from the landing P4 at a node: two flights T3 of « 23
+ *   marches » of 0.250 inward, « 5.750 » each, with the landing Pm 1.00
+ *   between, the landing Pa 1.300, then T4, « 19 marches », back out to the
+ *   next P4; risers « 0.15933 » [sourced]. Each panel's P4 stands 7.820 in
+ *   from the one below, the leg's own lean, « pente de 1m407 pour 1m00 »
+ *   [sourced Fig. 1]. T3 and T4 run in two lanes side by side (Fig. 1 bis).
+ *   The plate straddles the diagonal with them; here they stand beside the
+ *   car instead (see `groundToFirst`).
  * - 1st → 2nd floor: « Escalier tournant de 1m60 de diamètre … il y en a
  *   quatre semblables, un dans chaque pile ». One helix per panel near the
- *   outer corner c (PL-XX Figs 3–4), joined by straight flights of 11
- *   risers of 0.207; treads 0.64 wide, risers 0.178 [sourced text]. Their
- *   plan position in the leg [estimated].
+ *   outer corner c, one through panels 10 and 11 (PL-XX Figs 3–4), joined
+ *   by straight flights of 11 risers of 0.207 and treads of 0.255; treads
+ *   0.64 wide, risers 0.178 [sourced text]. Their plan position in the leg
+ *   [estimated].
  * - 2nd → 3rd floor (service only): e2 « escalier tournant conduisant du 2e
  *   étage à l'étage intermédiaire », Ø 1.600, and e3 from the landing to
- *   the 3rd, Ø 1.680 [sourced PL-XX Fig. 2, reading]. They take the halves
- *   of the shaft the cars leave free: e2 under the upper car's run, e3 over
- *   the lower car's. e3 is modelled to the 3rd floor; the plate stops it at
- *   an « escalier de raccord » in panels 26–27, not built.
+ *   the 3rd, Ø 1.680 [sourced PL-XX Fig. 2]. PL-XX's section projects both
+ *   onto the car line; the plans place them beside it, on the Ouest side
+ *   (PL-XIX Figs 7, 9, 14): e2 under the upper car's berth, stopping 3.83
+ *   below the landing and coming up by two straight flights through an
+ *   opening off the car's plan; e3 on the landing beside the lower car's
+ *   well, shifted toward the axis at an « escalier de raccord » in panels
+ *   26-27 where the shaft grows too narrow for it (see `shaftStairs`).
  *
  * Everything here is boxes (no `normal`, so copying the meshes onto the
  * quadrant targets is safe) except the helices' hand rails, which are paths
@@ -179,18 +190,19 @@ function readTable(table: ReadonlyArray<readonly [number, number]>, t: number): 
  * The rail line's distance OUT from the inner corner a, along the diagonal,
  * by height [estimated]. Measured on Plate XX at 1:200 it reads about 3.3
  * below the 1st floor, 3.9 at node XXII, 4.6-4.75 at XXI-XX, 4.0 at the
- * 2nd floor, each ±0.5 or so. Below the 1st floor that cannot be the whole
- * story: a girder 1.9 off the diagonal whose foot sits 1.30 down the
- * track's normal reaches the inner faces' plane unless the rail stands
- * about 4.2 out from a [derived: 1.9 + 0.12 flange + 1.30 sin 54.6°, plus
- * the face's lean over the girder's 0.75 drop, plus 0.4 √2 so the face's
- * struts clear by 0.4: 4.18]. So the table takes the larger of the two at
- * every node.
+ * 2nd floor, each ±0.5 or so; the « Vo » line below the 1st floor reads
+ * 4.67-4.78 (PL-XX Fig. 4). Below the 1st floor the girders set the least
+ * of it: one whose web is 1.9 off the diagonal and whose foot sits 1.30
+ * down the track's normal reaches the inner faces' plane unless the rail
+ * stands about 4.35 out from a [derived: 1.9 + 0.085 flange + 1.30 sin
+ * 54.6°, plus the face's lean over the girder's 0.75 drop, plus 0.55 √2 so
+ * the faces' 0.80 struts clear by 0.15: 4.35]. So the table takes the
+ * larger of the two at every node.
  */
 const RAIL_OFFSET: ReadonlyArray<readonly [number, number]> = [
-  [0, 4.2],
-  [50.4, 4.2],
-  [57.4, 4.3],
+  [0, 4.35],
+  [50.4, 4.35],
+  [57.4, 4.35],
   [68.4, 4.4],
   [79.4, 4.7],
   [90.4, 4.6],
@@ -199,20 +211,31 @@ const RAIL_OFFSET: ReadonlyArray<readonly [number, number]> = [
   [115.5, 4.1],
 ];
 
-/** The lift girders [sourced PL-XXII ter "Coupe verticale CD"]. */
-const GIRDER = { depth: 1.3, flange: 0.235 } as const;
+/** The lift girders' depth [sourced PL-XXII ter "Coupe verticale CD", PL-XXIII Fig. 14]. */
+const GIRDER = { depth: 1.3 } as const;
 
 interface TrackSpec {
-  /** Rail axis to rail axis. */
+  /** Rail axis to rail axis (the girders' webs). */
   readonly gauge: number;
   /** Where the beam ends, up top. */
   readonly top: number;
+  /** The top flange's reach outboard of the web and inboard of it. */
+  readonly flange: { readonly out: number; readonly in: number };
 }
 
-/** Otis: 3.800 [sourced]; the beam ends ~9.9 above the 2nd floor [estimated]. */
-const OTIS: TrackSpec = { gauge: 3.8, top: FLOORS.second + 9.9 };
-/** Roux: ~2.8 [estimated]; the circuit tops out at node XXII [sourced label]. */
-const ROUX: TrackSpec = { gauge: 2.8, top: 68.4 };
+/**
+ * Otis: 3.800 [sourced]; its top chord plate « 285 × 8 », « 85 » outboard
+ * of the web and « 200 » inboard [sourced Coupe CD, Fig. 24]; the beam ends
+ * ~9.9 above the 2nd floor [estimated].
+ */
+const OTIS: TrackSpec = { gauge: 3.8, top: FLOORS.second + 9.9, flange: { out: 0.085, in: 0.2 } };
+/**
+ * Roux: 3.57, the running wheels axis to axis on PL-XXIII Fig. 4 [measured;
+ * the plan, Fig. 11, reads 3.70]; the circuit tops out at node XXII
+ * [sourced label]; flanges 0.235 about the web [estimated], leaving the
+ * 3.27 car 0.03 either side.
+ */
+const ROUX: TrackSpec = { gauge: 3.57, top: 68.4, flange: { out: 0.1175, in: 0.1175 } };
 
 /** The rail line's stations, (r, y), at every node from the ground to `top`. */
 function railLine(top: number): Array<readonly [number, number]> {
@@ -277,11 +300,14 @@ function track(spec: TrackSpec): Block[] {
     const q = line[k + 1] as readonly [number, number];
     const { t, n, len } = segFrame(p, q);
     normals.push(n);
+    const { out: fo, in: fi } = spec.flange;
     for (const side of [-1, 1]) {
       const mid = onDiag((p[0] + q[0]) / 2, (p[1] + q[1]) / 2, side * half);
+      // The girder as one slab the flange's width, off-centre on its web.
+      const slab = onDiag((p[0] + q[0]) / 2, (p[1] + q[1]) / 2, side * (half + (fo - fi) / 2));
       // Each girder overlaps its neighbour by 0.15 at a node, where the
       // line turns by a few degrees.
-      out.push({ at: sub3(mid, mul3(n, GIRDER.depth / 2)), x: t, y: n, size: [len + 0.3, GIRDER.depth, GIRDER.flange] });
+      out.push({ at: sub3(slab, mul3(n, GIRDER.depth / 2)), x: t, y: n, size: [len + 0.3, GIRDER.depth, fo + fi] });
       out.push({ at: add3(mid, mul3(n, 0.075)), x: t, y: n, size: [len + 0.3, 0.15, 0.1] });
     }
     // Lateral bracing in the plane of the girders' bottoms: an X per
@@ -302,23 +328,50 @@ function track(spec: TrackSpec): Block[] {
 }
 
 interface CarSpec {
-  /** Deck length along the diagonal, height, width across. */
+  /** Deck length along the diagonal, height (floor to roof top), width across. */
   readonly deck: Vec3;
   readonly gauge: number;
   readonly top: number;
+  /** Lower floor to upper floor. */
+  readonly step: number;
+  /**
+   * How much further in (up the slope) the upper deck stands, horizontally.
+   * Absent: along the slope, so both decks sit the same height over the rail.
+   */
+  readonly setback?: number;
+  /** The chassis' length along the rails. Absent: from deck end to deck end. */
+  readonly chassis?: number;
 }
 
-/** Otis decks 4.670 [sourced], 2.40 high and 3.40 wide [estimated]. */
-const OTIS_CAR: CarSpec = { deck: [4.67, 2.4, 3.4], gauge: OTIS.gauge, top: OTIS.top };
-/** Roux decks for 50 a deck, inside its narrower gauge [estimated]. */
-const ROUX_CAR: CarSpec = { deck: [5.8, 2.4, 2.4], gauge: ROUX.gauge, top: ROUX.top };
+/**
+ * Otis (PL-XXII ter): decks 4.670 long [sourced Fig. 1], 3.169 across
+ * [sourced Fig. 2], 2.13 floor to roof top [sourced chain "205", "275",
+ * "1.00", "0.65", Fig. 1]; floor to floor 2.37, the upper deck 0.54
+ * further in [measured, Fig. 1 at 316 px/m on its printed 4.670]; the
+ * wheelbase « D'axe en axe des Roues = 8m109 » [sourced Fig. 2].
+ */
+const OTIS_CAR: CarSpec = {
+  deck: [4.67, 2.13, 3.169],
+  gauge: OTIS.gauge,
+  top: OTIS.top,
+  step: 2.37,
+  setback: 0.54,
+  chassis: 8.109,
+};
+/**
+ * Roux (PL-XXIII Fig. 4, 1:50): 3.27 across and about 2.1 floor to roof,
+ * the decks about 2.5 apart [measured, at 309.8 px/m; the heights near
+ * the plate's gutter]; 5.8 long, 50 a deck [estimated: the length is lost
+ * in the gutter].
+ */
+const ROUX_CAR: CarSpec = { deck: [5.8, 2.1, 3.27], gauge: ROUX.gauge, top: ROUX.top, step: 2.5 };
 
 /** How far the car may dip below its rails, into the girders' trough [estimated]. */
 const TROUGH = 1.1;
 
 /**
  * A stepped double-deck car whose lower floor is at `floorY`: two level
- * decks, the upper one set back up the slope by a deck's height, on a
+ * decks, the upper one `step` higher and `setback` further in, on a
  * chassis along the rails, with a hanger under the lower deck's outer end.
  */
 function car(spec: CarSpec, floorY: number): Block[] {
@@ -328,27 +381,38 @@ function car(spec: CarSpec, floorY: number): Block[] {
   // Level floors on a slope: the deck's inner end dips below the rails,
   // at most TROUGH, which sets the floor's centre above the rail line.
   const lift = Math.max(0.3, (len / 2) * slope - TROUGH);
-  const r1 = railAt(line, floorY - lift).r;
-  const step = high + 0.15;
-  const floor2 = floorY + step;
-  const r2 = r1 - step / slope;
+  const yRail = floorY - lift;
+  const r1 = railAt(line, yRail).r;
+  const back = spec.setback ?? spec.step / slope;
+  const r2 = r1 - back;
   const out: Block[] = [
     levelBox(onDiag(r1, floorY + high / 2), len, high, wide),
-    levelBox(onDiag(r2, floor2 + high / 2), len, high, wide),
+    levelBox(onDiag(r2, floorY + spec.step + high / 2), len, high, wide),
   ];
-  // The chassis: along the rails from under the lower deck's outer end to
-  // under the upper deck's inner end.
-  const yLow = floorY - lift - (len / 2) * slope;
-  const yHigh = floor2 - lift + (len / 2) * slope;
+  // The chassis, along the rails: from under the lower deck's outer end to
+  // under the upper deck's inner end, or `chassis` long about their middle.
+  const yOuter = yRail - (len / 2) * slope;
+  const yInner = yRail + (back + len / 2) * slope;
+  let yLow = yOuter;
+  let yHigh = yInner;
+  if (spec.chassis !== undefined) {
+    const rise = (spec.chassis / 2) * (slope / Math.hypot(1, slope));
+    yLow = (yOuter + yInner) / 2 - rise;
+    yHigh = (yOuter + yInner) / 2 + rise;
+  }
   const low = railAt(line, yLow);
   const high2 = railAt(line, yHigh);
   const pLow = add3(onDiag(low.r, yLow), mul3(low.n, 0.2));
   const pHigh = add3(onDiag(high2.r, yHigh), mul3(high2.n, 0.2));
+  // Between the rails (0.10 wide on the webs), 0.05 clear of them.
   const chassis = member(pLow, pHigh, 0.3, low.n);
-  out.push({ ...chassis, size: [chassis.size[0], 0.3, spec.gauge] });
-  // The hanger: from the chassis up to the lower floor at its outer end.
-  const hang = floorY - yLow;
-  if (hang > 0.3) out.push(levelBox(onDiag(r1 + len / 2 - 0.1, yLow + hang / 2), 0.2, hang, wide));
+  out.push({ ...chassis, size: [chassis.size[0], 0.3, spec.gauge - 0.2] });
+  // The hanger: from the chassis up to the lower floor, at its outer end or
+  // at the chassis' end, whichever is further in.
+  const rHang = Math.min(r1 + len / 2 - 0.1, low.r);
+  const yHang = yRail + (r1 - rHang) * slope;
+  const hang = floorY - yHang;
+  if (hang > 0.3) out.push(levelBox(onDiag(rHang, yHang + hang / 2), 0.2, hang, wide));
   return out;
 }
 
@@ -479,33 +543,45 @@ const TREAD = 0.05;
 const LANDING = 0.1;
 
 /**
- * A straight flight from (r0, y0) to (r1, y1) along the diagonal, `l`
- * across it: `steps` treads, each at its riser's top, and two stringers.
+ * A straight flight from `p0` (the foot of its first riser, on its centre
+ * line) to `p1` (its top): `steps` treads, each at its riser's top, the
+ * last level with `p1`, and two stringers.
  */
-function flight(r0: number, y0: number, r1: number, y1: number, l: number, width: number, steps: number): Block[] {
+function run(p0: Vec3, p1: Vec3, width: number, steps: number): Block[] {
+  const h: Vec3 = [p1[0] - p0[0], 0, p1[2] - p0[2]];
+  const x = unit3(h);
+  const across = cross3(x, UP);
+  const going = Math.hypot(h[0], h[2]) / steps;
   const out: Block[] = [];
-  const run = Math.abs(r1 - r0) / steps;
   for (let i = 1; i <= steps; i++) {
-    const r = r0 + ((r1 - r0) * (i - 0.5)) / steps;
-    const y = y0 + ((y1 - y0) * i) / steps;
-    out.push(levelBox(onDiag(r, y - TREAD / 2, l), run + 0.03, TREAD, width));
-  }
-  for (const side of [-1, 1]) {
-    const lat = l + (side * width) / 2;
-    out.push(member(onDiag(r0, y0 - 0.1, lat), onDiag(r1, y1 - 0.1, lat), 0.06, UP));
+    const c = add3(p0, mul3(h, (i - 0.5) / steps));
+    const y = p0[1] + ((p1[1] - p0[1]) * i) / steps;
+    out.push({ at: [c[0], y - TREAD / 2, c[2]], x, y: UP, size: [going + 0.03, TREAD, width] });
   }
   // A stringer is a flat bar 0.25 deep [estimated]: widen the square member.
-  for (let i = out.length - 2; i < out.length; i++) {
-    const s = out[i] as Block;
-    out[i] = { ...s, size: [s.size[0], 0.25, 0.06] };
+  for (const side of [-1, 1]) {
+    const off = add3(mul3(across, (side * width) / 2), [0, -0.1, 0]);
+    const s = member(add3(p0, off), add3(p1, off), 0.06, UP);
+    out.push({ ...s, size: [s.size[0], 0.25, 0.06] });
   }
   return out;
 }
 
+/** A straight flight from (r0, y0) to (r1, y1) along the diagonal, `l` across it. */
+function flight(r0: number, y0: number, r1: number, y1: number, l: number, width: number, steps: number): Block[] {
+  return run(onDiag(r0, y0, l), onDiag(r1, y1, l), width, steps);
+}
+
+/** A landing: its top at `at`, `along` on the horizontal `x`, `across` beside it. */
+function pad(at: Vec3, x: Vec3, along: number, across: number): Block {
+  return { at: [at[0], at[1] - LANDING / 2, at[2]], x, y: UP, size: [along, LANDING, across] };
+}
+
 /**
- * A spiral stair round a vertical axis: `steps` treads of `tread` width
- * radially, from y0 to y1, turning `turns` times from the angle `start`
- * (0 = out along the diagonal), a newel, and the outer hand rail's points.
+ * A spiral stair round a vertical axis: treads of `tread` width radially,
+ * risers of about `riser`, from y0 to y1, turning `turns` times from the
+ * angle `start` (0 = along `frameX`, a quarter turn = along `frameZ`), a
+ * newel, and the outer hand rail's points.
  */
 function helix(
   axis: (y: number) => Vec3,
@@ -517,8 +593,9 @@ function helix(
   tread: number,
   turns: number,
   start: number,
+  riser = 0.178,
 ): { blocks: Block[]; rail: Vec3[] } {
-  const steps = Math.max(1, Math.round((y1 - y0) / 0.178));
+  const steps = Math.max(1, Math.round((y1 - y0) / riser));
   const rise = (y1 - y0) / steps;
   const outer = diameter / 2;
   const dPhi = (turns * 2 * Math.PI) / steps;
@@ -552,89 +629,169 @@ function helix(
   return { blocks: out, rail };
 }
 
-/** Whole turns plus a half: a helix entered on its outer side leaves on its inner. */
-function halfTurns(rise: number): number {
-  return Math.max(0.5, Math.round(rise / 0.178 / 15 - 0.5) + 0.5);
+/**
+ * The turns of a helix of `steps` risers, about 15 to the turn, that starts
+ * at the angle `start` and must end at the angle `end`.
+ */
+function turnsBetween(steps: number, start: number, end: number): number {
+  const frac = ((((end - start) / (2 * Math.PI)) % 1) + 1) % 1;
+  return Math.max(frac === 0 ? 1 : frac, Math.round(steps / 15 - frac) + frac);
 }
+
+/** e1's joining flights: 11 risers of 0.207, treads 0.255 [sourced E1900-TXT p. 81]. */
+const E1_FLIGHT = { risers: 11, riser: 0.207, tread: 0.255 } as const;
+/**
+ * e1's last helix runs through panels 10 and 11 to about 113 (PL-XX Fig.
+ * 3: from node XIX to 3.8 m or so under the 2nd floor), and a straight
+ * flight takes it on to the floor [measured]: 15 of the helices' 0.178
+ * risers.
+ */
+const E1_TOP_RISERS = 15;
 
 /**
  * The 1st → 2nd floor stair in one leg (e1, the same in all four): a helix
- * of Ø 1.60 per panel, set in from the outer corner c by 2.4 along the
- * diagonal at the panel's TOP node, where the leg is narrowest [estimated],
- * each at least 2.4 inside the one below it; straight flights of 11
- * risers join them, inward along the diagonal [sourced counts].
+ * of Ø 1.60 per panel 6-9 and one through panels 10-11 (PL-XX Fig. 3), set
+ * in from the outer corner c by 2.4 along the diagonal where the leg is
+ * narrowest, at the top of the helix's panel [estimated], each at least
+ * 3.0 inside the one below it. Straight flights of 11 risers join them,
+ * inward along the diagonal, with treads of 0.255 [sourced counts]: where
+ * two axes are nearer than the flight's run plus a diameter, it leaves the
+ * lower helix and meets the upper one off the diagonal, at the angle that
+ * makes its run 2.805 [derived].
  */
 function firstToSecond(): { blocks: Block[]; rails: Vec3[][] } {
-  const ys = NODES.map((n) => n.y).filter((y) => y >= 57.4 && y <= 115.5);
-  const RISE = 11 * 0.207;
-  const axes: number[] = [];
+  const ys = NODES.map((n) => n.y).filter((y) => y >= 57.4 && y <= 100.6 + 1e-6);
+  const RISE = E1_FLIGHT.risers * E1_FLIGHT.riser;
+  const RUN = E1_FLIGHT.risers * E1_FLIGHT.tread;
+  const top = FLOORS.second - E1_TOP_RISERS * 0.178;
+  const OUTER = 0.8;
+  // Each helix's rise, and the height where the leg is narrowest for it.
+  const spans: Array<readonly [number, number, number]> = [];
   for (let k = 0; k + 1 < ys.length; k++) {
-    const want = cornerC(ys[k + 1] as number) - 2.4;
-    axes.push(k === 0 ? want : Math.min(want, (axes[k - 1] as number) - 2.4));
+    const y0 = k === 0 ? FLOORS.first : (ys[k] as number) + RISE / 2;
+    spans.push([y0, (ys[k + 1] as number) - RISE / 2, ys[k + 1] as number]);
   }
+  spans.push([(ys[ys.length - 1] as number) + RISE / 2, top, top]);
+  const axes: number[] = [];
+  for (let k = 0; k < spans.length; k++) {
+    const want = cornerC((spans[k] as readonly [number, number, number])[2]) - 2.4;
+    axes.push(k === 0 ? want : Math.min(want, (axes[k - 1] as number) - 3.0));
+  }
+  // The angle off the diagonal at which each joining flight leaves and
+  // meets the helices: 0 when the axes are far enough apart.
+  const beta = axes.slice(1).map((r, k) => {
+    const gap = (axes[k] as number) - r;
+    return Math.acos(Math.min(1, Math.max(0, (gap - RUN) / (2 * OUTER))));
+  });
   const out: Block[] = [];
   const rails: Vec3[][] = [];
   const last = axes.length - 1;
   for (let k = 0; k <= last; k++) {
     const r = axes[k] as number;
-    const y0 = k === 0 ? FLOORS.first : (ys[k] as number) + RISE / 2;
-    const y1 = k === last ? FLOORS.second : (ys[k + 1] as number) - RISE / 2;
-    const h = helix((y) => onDiag(r, y), U, E, y0, y1, 1.6, 0.64, halfTurns(y1 - y0), 0);
+    const [y0, y1] = spans[k] as readonly [number, number, number];
+    const start = k === 0 ? 0 : (beta[k - 1] as number);
+    const end = k === last ? Math.PI : Math.PI - (beta[k] as number);
+    const steps = Math.max(1, Math.round((y1 - y0) / 0.178));
+    const h = helix((y) => onDiag(r, y), U, E, y0, y1, 1.6, 0.64, turnsBetween(steps, start, end), start);
     out.push(...h.blocks);
     rails.push(h.rail);
     if (k < last) {
+      const b = beta[k] as number;
       const rNext = axes[k + 1] as number;
-      out.push(...flight(r - 0.8, y1, rNext + 0.8, y1 + RISE, 0, 0.64, 11));
+      const l = OUTER * Math.sin(b);
+      out.push(
+        ...flight(r - OUTER * Math.cos(b), y1, rNext + OUTER * Math.cos(b), y1 + RISE, l, 0.64, E1_FLIGHT.risers),
+      );
     }
   }
+  // Off the last helix's inner side, straight on to the 2nd floor.
+  const rTop = (axes[last] as number) - OUTER;
+  out.push(...flight(rTop, top, rTop - E1_TOP_RISERS * E1_FLIGHT.tread, FLOORS.second, 0, 0.64, E1_TOP_RISERS));
   return { blocks: out, rails };
 }
 
 /**
- * The ground → 1st floor stair in piles 2 and 4 (PL-XXVIII Fig. 1): every
- * 7.8555 of height a landing, two flights inward with a middle landing, a
- * far landing, and one flight back in a second lane. Lanes 1.00 wide
- * [sourced], centred 2.3 and 3.3 across the diagonal, clear of the car
- * [estimated]; the outer landing 4.7 in from c along the diagonal, so the
- * far lane's corner stays 0.9 inside the leg's outer faces [derived].
+ * The ground → 1st floor stair of piles 2 and 4, PL-XXVIII [sourced unless
+ * noted]. Each 11.00 panel of the leg, node to node, holds one repeat of
+ * Fig. 5: the landing P4 at the node, 1.300; T3, « 23 marches » of 0.250
+ * inward, its run « 6.020 » with the nosing and its rise « 3.8366 »; the
+ * landing Pm, 1.00; T3 again; the landing Pa, 1.300; then T4, « 19
+ * marches », back out « 5.220 » and up « 3.3268 » to the next node's P4,
+ * 7.820 further in (Fig. 1). Risers « 0.15933 »: 24, 24 and 21 of them
+ * fill the panel [derived]. The running part is « comprise entre … (39.90)
+ * et … (83.90) », nodes XXVIII to XXIV. Below it the start (Fig. 1): up
+ * from the ground inward to a Pa-like landing and back out by a T4 to the
+ * first P4 [the split of its « 4.82 » estimated]; above it a T3 to a Pm
+ * and one flight on inward to the 1st floor (Fig. 2's 45-degree turns are
+ * not built).
+ *
+ * Across the diagonal the plate puts T3's lane 1.16 to one side and T4's
+ * 0.81 to the other (Fig. 1 bis, at 77.9 px/m), over the car's path, which
+ * leaves a band about 2.9 deep (square to the slope) between the stair's
+ * inner landings and the rail line. The model's cars ride higher than that
+ * above their rails, so the lanes stand beside the car instead, both on
+ * one side, T3's 2.1-3.1 off the diagonal clear of the girders, T4's
+ * 3.15-4.15 [estimated]; the P4 landings 5.1 in from c along the diagonal,
+ * so T4's outer corner stays 0.65 inside the outer faces [derived].
  */
 function groundToFirst(): Block[] {
-  const PERIOD = 7.8555;
-  const SHIFT = PERIOD / 1.407;
-  const LAND = 1.3;
-  const RISERS = 15;
-  const rise = PERIOD / 3;
-  const run = RISERS * 0.25;
-  const lane1 = 2.3;
-  const lane2 = 3.3;
+  const S = {
+    p4: 1.3,
+    pm: 1.0,
+    pa: 1.3,
+    t3: { risers: 24, rise: 3.8366, run: 6.02 },
+    t4: { risers: 21, rise: 3.3268, run: 5.22 },
+    fromC: 5.1,
+    laneT3: 2.6,
+    laneT4: 3.65,
+    width: 1.0,
+  } as const;
+  const l0 = S.laneT3 - S.width / 2;
+  const l1 = S.laneT4 + S.width / 2;
   const out: Block[] = [];
-  const landing = (rOut: number, y: number, lanes: 1 | 2) => {
-    const l0 = lane1 - 0.5;
-    const l1 = lanes === 2 ? lane2 + 0.5 : lane1 + 0.5;
-    out.push(levelBox(onDiag(rOut - LAND / 2, y - LANDING / 2, (l0 + l1) / 2), LAND, LANDING, l1 - l0));
+  // A landing from rOut inward by `along`, over one lane or both.
+  const landing = (rOut: number, y: number, along: number, both: boolean) => {
+    const hi = both ? l1 : S.laneT3 + S.width / 2;
+    out.push(pad(onDiag(rOut - along / 2, y, (l0 + hi) / 2), U, along, hi - l0));
   };
-  let y = 1.58;
-  let r0 = cornerC(y) - 4.7;
-  while (y + PERIOD <= FLOORS.first + 1e-6) {
-    landing(r0, y, 2);
-    out.push(...flight(r0 - LAND, y, r0 - LAND - run, y + rise, lane1, 1, RISERS));
-    const rMid = r0 - LAND - run;
-    landing(rMid, y + rise, 1);
-    out.push(...flight(rMid - LAND, y + rise, rMid - LAND - run, y + 2 * rise, lane1, 1, RISERS));
-    const rFar = rMid - LAND - run;
-    landing(rFar, y + 2 * rise, 2);
-    // Back out in the second lane, to the next repeat's first landing.
-    const rNext = r0 - SHIFT;
-    out.push(...flight(rFar, y + 2 * rise, rNext - LAND, y + PERIOD, lane2, 1, RISERS));
-    y += PERIOD;
-    r0 = rNext;
+  const t3 = (rFrom: number, y: number) =>
+    flight(rFrom, y, rFrom - S.t3.run, y + S.t3.rise, S.laneT3, S.width, S.t3.risers);
+  const t4 = (rFrom: number, y: number) =>
+    flight(rFrom, y, rFrom + S.t4.run, y + S.t4.rise, S.laneT4, S.width, S.t4.risers);
+  const nodes = NODES.map((n) => n.y).filter((y) => y >= 6.4 - 1e-6 && y <= 50.4 + 1e-6);
+  const first = nodes[0] as number;
+  const r0First = cornerC(first) - S.fromC;
+  // The start: the virtual repeat below the first node's Pa and T4.
+  const yPa0 = first - S.t4.rise;
+  const rPa0 = r0First + 7.82 - (S.p4 + 2 * S.t3.run + S.pm);
+  const startRisers = Math.round((yPa0 - 1.58) / 0.15933);
+  out.push(...flight(rPa0 + startRisers * 0.25, 1.58, rPa0, yPa0, S.laneT3, S.width, startRisers));
+  landing(rPa0, yPa0, S.pa, true);
+  out.push(...t4(rPa0, yPa0));
+  // The running part: one repeat per panel.
+  for (let k = 0; k < nodes.length; k++) {
+    const y = nodes[k] as number;
+    const r0 = cornerC(y) - S.fromC;
+    landing(r0, y, S.p4, true);
+    if (k === nodes.length - 1) break;
+    const rPm = r0 - S.p4 - S.t3.run;
+    out.push(...t3(r0 - S.p4, y));
+    landing(rPm, y + S.t3.rise, S.pm, false);
+    out.push(...t3(rPm - S.pm, y + S.t3.rise));
+    const rPa = rPm - S.pm - S.t3.run;
+    landing(rPa, y + 2 * S.t3.rise, S.pa, true);
+    out.push(...t4(rPa, y + 2 * S.t3.rise));
   }
-  // The last part: a landing, then a short flight to the 1st floor.
-  landing(r0, y, 2);
-  const steps = Math.max(1, Math.round((FLOORS.first - y) / (rise / RISERS)));
-  const rEnd = r0 - LAND - steps * 0.25;
-  out.push(...flight(r0 - LAND, y, rEnd, FLOORS.first, lane1, 1, steps));
-  landing(rEnd, FLOORS.first, 1);
+  // The arrival: a T3 to a Pm, then straight on to the 1st floor.
+  const yTop = nodes[nodes.length - 1] as number;
+  const rTop = cornerC(yTop) - S.fromC - S.p4;
+  out.push(...t3(rTop, yTop));
+  const rPm = rTop - S.t3.run;
+  landing(rPm, yTop + S.t3.rise, S.pm, false);
+  const lastRisers = Math.round((FLOORS.first - yTop - S.t3.rise) / 0.15933);
+  const rEnd = rPm - S.pm - lastRisers * 0.25;
+  out.push(...flight(rPm - S.pm, yTop + S.t3.rise, rEnd, FLOORS.first, S.laneT3, S.width, lastRisers));
+  landing(rEnd, FLOORS.first, S.p4, false);
   return out;
 }
 
@@ -703,31 +860,140 @@ function edouxCars(): Block[] {
   ];
 }
 
-/** e2 and e3: the service helices in the halves of the shaft the cars leave free. */
+/**
+ * The service stairs in the shaft, placed from the plans (PL-XIX Fig. 14,
+ * the landing, 1:200 at 81.3 px/m on its printed 11.337; Fig. 7, the 2nd
+ * floor; Fig. 9, the 3rd floor at 79 px/m on its 16.560), as (s, t): s
+ * toward pile 3 Sud, t toward pile 4 Ouest.
+ */
+const SHAFT_STAIRS = {
+  /**
+   * e2, Ø 1.600 with 0.600 treads [sourced PL-XX Figs 2-3], at (-2.8, 1.3):
+   * under the upper car's berth, between its cylinders, the same on three
+   * plans within 0.3 [measured]. Its helix stops at (225.60), 3.83 under
+   * the landing, where « 16 marches 2.92 » and « 5 marches 0.91 » take over
+   * [sourced PL-XX Fig. 2]. PL-XX draws the first flight end-on, so it runs
+   * across the car line, Ouest; Fig. 14 has the landing open there, « 2.62 »
+   * × « 2.45 », at s -2.73 … -0.11, t 3.40 … 5.85, labelled « Escalier de
+   * l'étage intermédiaire au 2e étage » [sourced; measured]. So the 16 run
+   * Ouest under the floor, turn on a landing by the edge girder, and the 5
+   * come back up into that opening [the dog-leg and its 0.184 and 0.2
+   * treads estimated].
+   */
+  e2: { s: -2.8, t: 1.3, diameter: 1.6, tread: 0.6, top: FLOORS.landing - 3.83 },
+  e2Flights: { up: 16, upRise: 2.92, upGoing: 0.184, back: 5, backGoing: 0.2, turn: 0.9, width: 0.6 },
+  /**
+   * e3, Ø 1.680 [sourced PL-XX Figs 1-2], at (3.0, 3.3) on the landing,
+   * beside the lower car's well and 0.36 clear of it [measured, Fig. 14;
+   * PL-XX's section draws it over the car only because it projects onto the
+   * car line]. Built at t 3.2, inside the reading's ±0.1: at node III the
+   * plan bracing's diamond side stands at t 4.175, and 3.3 would put its
+   * hand rail on the chord [derived]. « 314 marches sur une hauteur de
+   * 54m88 » to the « escalier de raccord (Panneau 26-27) », « 13 marches »,
+   * « 2.327 » [sourced PL-XX Figs 1-2], which shifts it toward the axis:
+   * to u 1.3 on PL-XX Fig. 1,
+   * and on the 3rd floor's plan the helix stands at (1.36, 1.29)
+   * [measured; Fig. 9 labels that helix for the stair on up to the
+   * apartment, and the model takes e3's upper helix to stand under it].
+   */
+  e3: { s: 3.0, t: 3.2, diameter: 1.68, tread: 0.64, steps: 314, rise: 54.88 },
+  e3Raccord: { risers: 13, rise: 2.327 },
+  e3Upper: { s: 1.36, t: 1.29 },
+} as const;
+
+/** e2 and e3: the service helices in the shaft, and their straight flights. */
 function shaftStairs(): { blocks: Block[]; rails: Vec3[][] } {
-  const e2 = helix(
-    (y) => inShaft(-EDOUX.carAxis, y),
+  const out: Block[] = [];
+  const rails: Vec3[][] = [];
+  // Angle a in the shaft's frame: 0 toward +s, a quarter turn toward +t.
+  const dirAt = (a: number): Vec3 => add3(mul3(S_HAT, Math.cos(a)), mul3(T_HAT, Math.sin(a)));
+
+  // e2: up from the 2nd floor, leaving its helix going Ouest (+t) from
+  // the helix's +s side.
+  const { e2, e2Flights: f } = SHAFT_STAIRS;
+  const e2Steps = Math.round((e2.top - FLOORS.second) / 0.178);
+  const e2Start = Math.PI / 2;
+  const e2Helix = helix(
+    (y) => inShaft(e2.s, y, e2.t),
     S_HAT,
     T_HAT,
     FLOORS.second,
-    FLOORS.landing,
-    1.6,
-    0.64,
-    halfTurns(FLOORS.landing - FLOORS.second),
-    0,
+    e2.top,
+    e2.diameter,
+    e2.tread,
+    turnsBetween(e2Steps, e2Start, 0),
+    e2Start,
   );
-  const e3 = helix(
-    (y) => inShaft(EDOUX.carAxis, y),
+  out.push(...e2Helix.blocks);
+  rails.push(e2Helix.rail);
+  const walk = e2.diameter / 2 - e2.tread / 2;
+  const laneUp = e2.s + walk;
+  const laneBack = laneUp + f.width;
+  const tFoot = e2.t + 0.15;
+  const tTurn = tFoot + f.up * f.upGoing;
+  const yTurn = e2.top + f.upRise;
+  out.push(...run(inShaft(laneUp, e2.top, tFoot), inShaft(laneUp, yTurn, tTurn), f.width, f.up));
+  out.push(pad(inShaft((laneUp + laneBack) / 2, yTurn, tTurn + f.turn / 2), T_HAT, f.turn, 2 * f.width));
+  out.push(
+    ...run(
+      inShaft(laneBack, yTurn, tTurn),
+      inShaft(laneBack, FLOORS.landing, tTurn - f.back * f.backGoing),
+      f.width,
+      f.back,
+    ),
+  );
+
+  // e3: up from the landing, entering on its -s side, to the raccord; the
+  // raccord runs straight along the line of the two axes, tangent to both
+  // helices on their walking line; the upper helix goes on to the 3rd.
+  const { e3, e3Raccord: rc, e3Upper } = SHAFT_STAIRS;
+  const riser = e3.rise / e3.steps;
+  const yRaccord = FLOORS.landing + e3.rise;
+  const yUpper = yRaccord + rc.rise;
+  const ds = e3Upper.s - e3.s;
+  const dt = e3Upper.t - e3.t;
+  // Walking counter-clockwise, the tangent at angle a is (-sin a, cos a):
+  // the angle whose tangent runs from the lower axis toward the upper.
+  const toward = Math.atan2(-ds, dt);
+  const e3Start = Math.PI;
+  const lower = helix(
+    (y) => inShaft(e3.s, y, e3.t),
     S_HAT,
     T_HAT,
     FLOORS.landing,
-    FLOORS.third,
-    1.68,
-    0.64,
-    halfTurns(FLOORS.third - FLOORS.landing),
-    Math.PI,
+    yRaccord,
+    e3.diameter,
+    e3.tread,
+    turnsBetween(e3.steps, e3Start, toward),
+    e3Start,
+    riser,
   );
-  return { blocks: [...e2.blocks, ...e3.blocks], rails: [e2.rail, e3.rail] };
+  const upperSteps = Math.round((FLOORS.third - yUpper) / riser);
+  const upper = helix(
+    (y) => inShaft(e3Upper.s, y, e3Upper.t),
+    S_HAT,
+    T_HAT,
+    yUpper,
+    FLOORS.third,
+    e3.diameter,
+    e3.tread,
+    Math.max(1, Math.round(upperSteps / 15)),
+    toward,
+    riser,
+  );
+  out.push(...lower.blocks, ...upper.blocks);
+  rails.push(lower.rail, upper.rail);
+  const mid = e3.diameter / 2 - e3.tread / 2;
+  const side = mul3(dirAt(toward), mid);
+  out.push(
+    ...run(
+      add3(inShaft(e3.s, yRaccord, e3.t), side),
+      add3(inShaft(e3Upper.s, yUpper, e3Upper.t), side),
+      e3.tread,
+      rc.risers,
+    ),
+  );
+  return { blocks: out, rails };
 }
 
 // ---------------------------------------------------------------------------

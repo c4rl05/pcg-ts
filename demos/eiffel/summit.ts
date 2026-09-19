@@ -2,24 +2,28 @@
  * Panel 29, the 3rd floor, and the 1889 campanile above it.
  *
  * Bottom to top, every level chained from the 3rd floor (PL-VII Fig. 4,
- * PL-XIX Figs 3-13 and Plate I; tags as in `spec.ts`; the readings are in
- * SOURCES.md, "The campanile re-read"):
+ * PL-XIX Figs 3-13, PL-XIV Fig. 2 and Plate I; tags as in `spec.ts`; the
+ * readings are in SOURCES.md, "The campanile re-read" and "The summit
+ * re-read"):
  *
  * 1. PANEL 29 [sourced]: a prismatic box 10.00 m axis to axis, 11.23 m
  *    tall, from the top of panel 28 (y 264.90) to the 3rd floor (276.13),
  *    4 bays of 2.50 m per face. Its rows are a lattice BAND 3.173 at the
- *    base, then 8.057 in three X rows [sourced PL-VII; the rows' split is
- *    estimated even]. On `squareRing(4)` the four corners are the uprights
- *    that continue the shaft's c; the other twelve columns (the merged b/d
- *    among them) are POSTS, 0.50 m wide ["500" printed three times]. The
- *    web is flat bars about 0.09 wide [estimated, drawn as double lines]:
- *    one X per cell in the rows, a PAIR of parallel bars each way in the
- *    band. Horizontals: 0.60 m plate girders ("600 x 6", "600 x 7")
- *    hang from the band's top node and under the floor's 0.25 build-up
- *    ("850" = 0.25 + 0.60) [sourced PL-VII]; the base is the shaft's own
- *    0.60 horizontal at its top node; the two rows between carry light
- *    angles [estimated]. The corner uprights and the b/d posts run on up
- *    through the glazed gallery to the apartment's floor [PL-VII Fig. 4].
+ *    base, then 8.057 in three X rows [sourced PL-VII], split by two light
+ *    horizontals 3.22 and 5.66 below the floor [sourced PL-XIV Fig. 2's
+ *    chain, 0.25 + 2.970 + 2.440 + 2.670 + 2.900 = 11.230]. On
+ *    `squareRing(4)` the four corners are the uprights that continue the
+ *    shaft's c; the other twelve columns (the merged b/d among them) are
+ *    POSTS, 0.50 m wide ["500" printed three times]. The web is flat bars
+ *    0.15 wide [measured PL-XIV], each running between the corners of its
+ *    clear panel: one X per cell in the rows; in the band an X and a
+ *    diamond through the cell's side mid-points [PL-XIV, PL-VII].
+ *    Horizontals: 0.60 m plate girders ("600 x 6", "600 x 7") hang from
+ *    the band's top node and under the floor's 0.25 build-up ("850" = 0.25
+ *    + 0.60) [sourced PL-VII]; the base is the shaft's own 0.60 horizontal
+ *    at its top node; the light horizontals are 0.16 [measured PL-XIV]. The
+ *    corner uprights and the b/d posts run on up through the glazed gallery
+ *    to the apartment's floor [PL-VII Fig. 4].
  * 2. THE GALLERY: a glazed octagon ("paroi vitrée") 16.56 m across the
  *    flats with 10.90 m straight sides and 45-degree chamfers [sourced
  *    PL-XIX Fig. 9], 2.58 m tall [sourced PL-XIX Fig. 3: 309.63 to the
@@ -27,18 +31,27 @@
  *    40 x 40 x 4") and glazing above it, built as its frame — sills,
  *    mullions, the parapet's X — with the panes left open. Its roof is
  *    Eiffel's BALCONY, 17.6 m across [estimated: PL-VII draws it about
- *    0.5 proud of the glass], with a 1.00 railing [sourced PL-VII].
+ *    0.5 proud of the glass], with a 1.00 railing [sourced PL-VII] on the
+ *    glass line, its posts over the mullions [PL-XIV Fig. 2].
  * 3. THE APARTMENT: a box 10.68 m square [sourced PL-XIX Fig. 5, "Toiture
  *    du logement de Monsieur Eiffel"] and 2.27 m tall [sourced PL-XIX
  *    Fig. 3], standing on the core. 2.58 + 2.27 closes on the chain's
  *    printed 4.850 to y 280.98 [derived].
  * 4. THE LATTICE BOX ("cylindre"): 4.500 tall [sourced] to y 285.48. Its
- *    corner columns stand where the dome's ribs spring: 7.435 out on the
- *    diagonals [sourced PL-XIX Fig. 5], so 10.515 m axis to axis
- *    [derived], 0.55 m wide [estimated], which leaves PL-VII's printed
- *    10.00 clear between them. Its faces are a diamond mesh of flat bars
- *    [estimated: about 0.09 wide, 0.75 m apart, 58 degrees], between a
- *    plate at the foot and one at the head, with posts at the 2.50 m bays.
+ *    corner columns are 0.83 m wide face-on and 10.24 m axis to axis, so
+ *    11.07 overall [measured PL-VII, PL-XIX Fig. 3]; the dome's ribs,
+ *    7.435 out on the diagonals [sourced PL-XIX Fig. 5], spring on them.
+ *    PL-VII's "10,00" inside the box runs between the columns' laced parts,
+ *    inside which each column carries a plain band 0.27 wide; the model
+ *    builds the two as one member. Its faces are a diamond mesh of flat
+ *    bars [measured PL-VII: 0.825 m apart along the face, 53 degrees;
+ *    about 0.09 wide, estimated], between a plate at the foot and one at
+ *    the head, in two panels either side of one post on the face's axis
+ *    [measured PL-VII: 0.38 wide; no posts at the 2.50 m bays].
+ *    On the tower's axis the LADDER CYLINDER, a sheet-iron tube 0.70 m
+ *    across [sourced PL-XIX Figs 5, 13], stands on the apartment's roof
+ *    and rises through the box and the dome's opening to the lantern
+ *    terrace [PL-VII Fig. 4].
  * 5. THE DOME: four half-arches along the diagonals, two full SEMICIRCLES
  *    crossing over the axis: 7.435 m out in plan on each half-diagonal
  *    ("14.870" across) and 7.435 m high [sourced PL-XIX Fig. 5, PL-VII:
@@ -130,18 +143,28 @@ import {
 
 /** Panel 29's base band, in-plane = vertical (the panel is prismatic) [sourced PL-VII "3,173"]. */
 const PANEL29_BAND = 3.173;
-/** The X rows above the band, dividing PL-VII's printed 8.057 [estimated even]. */
-const PANEL29_ROWS = 3;
+/**
+ * The light horizontals' centrelines, down from the floor [sourced PL-XIV
+ * Fig. 2's chain: "250" to the top girder's top, then "2.970" and "2.440";
+ * the chain goes on "2.670" to the band girder's centreline and "2.900" to
+ * the base's, 0.25 + 2.97 + 2.44 + 2.67 + 2.90 = 11.230]. So 3.22 and 5.66
+ * below the floor, y 272.91 and 270.47; PL-VII draws them at 272.93 and
+ * 270.52 [measured].
+ */
+const PANEL29_LIGHTS = [0.25 + 2.97, 0.25 + 2.97 + 2.44] as const;
 /** Panel 29's members, as half-widths. */
 const P29 = {
   /** The posts: "500" [sourced PL-VII Fig. 4]. */
   post: 0.25,
-  /** The flat bars of the X and the band [estimated: drawn 0.08-0.11]. */
-  bar: 0.045,
-  /** The light horizontals of the two middle rows [estimated]. */
-  light: 0.05,
-  /** The band's paired bars sit this far either side of the node line, along the face [estimated: 0.30 apart, drawn]. */
-  pair: 0.15,
+  /**
+   * The flat bars of the X and the band [measured PL-XIV Fig. 2, 1:50:
+   * the flats 0.15-0.16 across, the built rising bars 0.18; PL-VII's 1:200
+   * double lines, 0.08-0.09 apart, are the thinner reading and yield to the
+   * detail plate].
+   */
+  bar: 0.075,
+  /** The light horizontals between the X rows [measured PL-XIV Fig. 2: 0.15-0.16]. */
+  light: 0.08,
   /** The plate girders, "600 x 6" and "600 x 7": depth [sourced]; half-thickness with flange angles [estimated]. */
   plateDepth: 0.6,
   plateHalf: 0.1,
@@ -155,7 +178,11 @@ const GALLERY = { flat: 8.28, straight: 5.45, height: 2.58, parapet: 1.2 } as co
 const GALLERY_BAYS = { straight: 8, chamfer: 3 } as const;
 /** Its frame, as half-widths [estimated]: mullions and sills, the parapet's 40 x 40 lattice. */
 const GALLERY_MEMBERS = { frame: 0.05, lattice: 0.02 } as const;
-/** Eiffel's balcony: its deck overhangs the glass [estimated], its railing [sourced PL-VII "1.000"]. */
+/**
+ * Eiffel's balcony: its deck overhangs the glass [estimated; PL-VII and
+ * PL-XIV draw 0.45-0.6], its railing, on the glass line [sourced PL-VII
+ * "1.000"].
+ */
 const BALCONY = { overhang: 0.52, deck: 0.2, railing: 1.0, member: 0.03 } as const;
 
 /** The apartment [sourced PL-XIX: 10.680 square roof, 2.270 tall]. */
@@ -163,13 +190,25 @@ const APARTMENT = { side: 10.68, height: 2.27 } as const;
 
 /**
  * The lattice box above the apartment: height [sourced]; its corner
- * columns on the dome's springing, 7.435 out on the diagonals [derived].
+ * columns' axes 10.24 apart [measured PL-VII Fig. 4: outer lines at
+ * +-5.50, the columns' inner edges at +-4.70; PL-XIX Fig. 3 and PL-VII
+ * both give 10.24-10.25 axis to axis].
  */
-const CAGE = { height: 4.5, half: 7.435 / Math.SQRT2 } as const;
-/** The box's members, as half-widths [estimated]. */
-const CAGE_MEMBERS = { corner: 0.275, horizontal: 0.15, post: 0.1, bar: 0.045 } as const;
-/** Its diamond mesh [estimated from PL-XIX Fig. 3]: bars this far apart along the face, at this angle to the horizontal. */
-const CAGE_MESH = { spacing: 0.75, angle: (58 * Math.PI) / 180 } as const;
+const CAGE = { height: 4.5, half: 5.12 } as const;
+/**
+ * The box's members, as half-widths: the corner columns 0.83 face-on
+ * [measured PL-VII: a laced part 0.55 and a plain band 0.27 inside it, one
+ * member here]; the plates [estimated]; the one face post, on the axis,
+ * which the mesh stops on [measured PL-VII: 0.38]; the flat bars
+ * [estimated].
+ */
+const CAGE_MEMBERS = { corner: 0.415, horizontal: 0.15, post: 0.19, bar: 0.045 } as const;
+/**
+ * Its diamond mesh: bars this far apart along the face, at this angle to
+ * the horizontal [measured PL-VII by 2D autocorrelation: repeat (0.41,
+ * +-0.54), so diamonds 0.825 wide and 1.09 tall].
+ */
+const CAGE_MESH = { spacing: 0.825, angle: Math.atan2(1.09, 0.825) } as const;
 
 /**
  * The dome: the extrados radius, which is also the rise and the plan's
@@ -179,6 +218,13 @@ const CAGE_MESH = { spacing: 0.75, angle: (58 * Math.PI) / 180 } as const;
  * and 0.95 - 2 x 0.09 = 0.770 between the chords].
  */
 const DOME = { radius: 7.435, depth: 1.02, breadth: 0.95, chord: 0.09, lacing: 0.03, segments: 12 } as const;
+
+/**
+ * The campanile's ladder cylinder ("Cylindre en tôle avec échelle à
+ * l'intérieur", PL-XIX Fig. 5), on the axis: its diameter [sourced PL-XIX
+ * Fig. 13 "700"; PL-VII draws it 0.72]; the prism's sides [estimated].
+ */
+const LADDER = { diameter: 0.7, sides: 16 } as const;
 
 /** The lantern stack [sourced heights; widths as in the header]. */
 const LANTERN = {
@@ -531,8 +577,11 @@ function posts(
   const paths = chains(lat, "Posts", keep);
   if (!isLaced(detail)) return { meshes: [skin(g, `${id}Skin`, paths, half, [1, 0, 0])] };
   const ring = lat.positions[0]!;
+  // One normal per path: `chains` makes a path of every station `keep`
+  // holds at two levels or more, and skips the rest.
+  const hasPath = (s: number) => lat.positions.filter((_, k) => keep(s, k)).length >= 2;
   const normals = ring.flatMap((a, s): Vec3[] => {
-    if (isCorner(s)) return [];
+    if (!hasPath(s)) return [];
     const b = ring[(s + 1) % ring.length]!;
     // (b - a) x +y: the segment is level.
     const x = a[2] - b[2];
@@ -564,8 +613,7 @@ const galleryTop = FLOORS.third + GALLERY.height;
 function panel29(g: Graph, detail: Detail): Parts {
   const { half, bottom, top } = PANEL29;
   const bandTop = bottom + PANEL29_BAND;
-  const rowH = (top - bandTop) / PANEL29_ROWS;
-  const ys = [bottom, bandTop, ...Array.from({ length: PANEL29_ROWS }, (_, i) => bandTop + rowH * (i + 1))];
+  const lightYs = PANEL29_LIGHTS.map((d) => top - d);
   const riveted = detail.rivets === true;
 
   // The core's columns, three levels: the panel, then on up through the
@@ -577,24 +625,47 @@ function panel29(g: Graph, detail: Detail): Parts {
   const postWeb = posts(g, core, "p29Post", P29.post, detail, (s, k) => !isCorner(s) && (isMid(s) || k < 2));
 
   // The web, face by face in the face's own coordinates: node columns at
-  // u = -5, -2.5, 0, 2.5, 5.
+  // u = -5, -2.5, 0, 2.5, 5. Every flat bar runs between the corners (and
+  // the band's diamond between the side mid-points) of its CLEAR panel,
+  // from post face to post face and girder to girder [PL-XIV Fig. 2, PL-VII
+  // Fig. 4: the gussets sit in those corners, so the X's lean about 50
+  // degrees, not the 43-47 an axis-to-axis X would].
   const bays = [-half, -half / 2, 0, half / 2, half];
+  const [lightHigh, lightLow] = [lightYs[0]!, lightYs[1]!];
+  // The clear panels' heights, bottom to top: the band between the shaft's
+  // top horizontal and the band's plate girder, then the three X rows
+  // between that girder, the light horizontals and the floor's top girder.
+  const bandClear = [bottom + MEMBERS.horizontal[3]![1], bandTop - P29.plateDepth] as const;
+  const rows: Array<readonly [number, number]> = [
+    [bandTop, lightLow - P29.light],
+    [lightLow + P29.light, lightHigh - P29.light],
+    [lightHigh + P29.light, top - P29.floorDepth],
+  ];
   const crosses: FaceBar[] = [];
   const band: FaceBar[] = [];
   const lights: FaceBar[] = [];
   for (const f of FACES) {
     for (let b = 0; b < 4; b++) {
-      const ua = bays[b]!;
-      const ub = bays[b + 1]!;
-      for (const p of [-P29.pair, P29.pair]) {
-        band.push({ f, u0: ua + p, y0: bottom, u1: ub + p, y1: bandTop });
-        band.push({ f, u0: ub + p, y0: bottom, u1: ua + p, y1: bandTop });
+      const ua = bays[b]! + P29.post;
+      const ub = bays[b + 1]! - P29.post;
+      // The band [PL-XIV Fig. 2, PL-VII]: an X, and a diamond through the
+      // side mid-points, its sides parallel to the X's, five crossings a bay.
+      const [b0, b1] = bandClear;
+      const um = (ua + ub) / 2;
+      const ym = (b0 + b1) / 2;
+      band.push(
+        { f, u0: ua, y0: b0, u1: ub, y1: b1 },
+        { f, u0: ub, y0: b0, u1: ua, y1: b1 },
+        { f, u0: um, y0: b0, u1: ub, y1: ym },
+        { f, u0: ub, y0: ym, u1: um, y1: b1 },
+        { f, u0: um, y0: b1, u1: ua, y1: ym },
+        { f, u0: ua, y0: ym, u1: um, y1: b0 },
+      );
+      for (const [r0, r1] of rows) {
+        crosses.push({ f, u0: ua, y0: r0, u1: ub, y1: r1 });
+        crosses.push({ f, u0: ub, y0: r0, u1: ua, y1: r1 });
       }
-      for (let r = 1; r <= PANEL29_ROWS; r++) {
-        crosses.push({ f, u0: ua, y0: ys[r]!, u1: ub, y1: ys[r + 1]! });
-        crosses.push({ f, u0: ub, y0: ys[r]!, u1: ua, y1: ys[r + 1]! });
-      }
-      for (let r = 2; r <= PANEL29_ROWS; r++) lights.push({ f, u0: ua, y0: ys[r]!, u1: ub, y1: ys[r]! });
+      for (const y of lightYs) lights.push({ f, u0: bays[b]!, y0: y, u1: bays[b + 1]!, y1: y });
     }
   }
   const bracing = merge(g, "p29Bracing", [
@@ -814,13 +885,14 @@ function gallery(g: Graph): NodeHandle[] {
     GALLERY_MEMBERS.lattice,
   );
 
-  // The balcony: the deck overhanging the glass, and its railing.
+  // The balcony: the deck overhanging the glass, and its railing on the
+  // glass line, each post over a mullion [PL-XIV Fig. 2: the rail post
+  // continues the mullion; PL-VII draws the rail's ends at +-8.2-8.3].
   const grow = BALCONY.overhang;
   const bFlat = GALLERY.flat + grow;
   const bStraight = GALLERY.straight + grow * Math.tan(Math.PI / 8);
   const deck = octagonSlab(g, "balconyDeck", bFlat, bStraight, deckUnder, BALCONY.deck);
-  const inset = BALCONY.member;
-  const rail = octagon(bFlat - inset, bStraight - inset * Math.tan(Math.PI / 8), galleryTop);
+  const rail = octagon(GALLERY.flat, GALLERY.straight, galleryTop);
   const railAt = bayPoints(rail, bays);
   const m = BALCONY.member;
   const railPosts = faceSkin(
@@ -867,38 +939,53 @@ function cage(g: Graph, y0: number, detail: Detail): Parts {
   const h = CAGE_MEMBERS.horizontal;
   const lat = boxLattice(g, "cage", half, [y0, y0 + h, y1 - h, y1]);
   const joints = { upright: flat(CAGE_MEMBERS.corner) };
-  const postWeb = posts(g, lat, "cagePost", CAGE_MEMBERS.post, detail);
+  // The one face post, at the face's centre: squareRing(4)'s station 2 of
+  // each side. The plates run corner to post to corner, so a laced plate
+  // breaks only where a post meets it.
+  const isMid = (s: number) => s % 4 === 2;
+  const postWeb = posts(g, lat, "cagePost", CAGE_MEMBERS.post, detail, (s) => isMid(s));
   const horizontals = webMembers(
     g,
     "cageHorizontal",
-    edges(lat, "Horizontals", 1, 0, (_s, k) => k === 1 || k === 2),
+    edges(lat, "Horizontals", 2, 0, (s, k) => s % 2 === 0 && (k === 1 || k === 2)),
     flat(h),
     detail,
     joints,
   );
   const corners = chains(lat, "Corners", (s) => isCorner(s));
 
-  // The diamond mesh: two families of flat bars, each line clipped to the
-  // face between the corner columns and the two plates.
-  const u0 = -half + CAGE_MEMBERS.corner;
-  const u1 = half - CAGE_MEMBERS.corner;
-  const ya = y0 + 2 * h;
-  const yb = y1 - 2 * h;
+  // The diamond mesh: two families of flat bars, each line clipped to one
+  // of the face's two panels, between a corner column and the post and
+  // between the two plates. The lines run on across the post, so the
+  // pattern is one over the face.
+  const panels = [
+    [-half + CAGE_MEMBERS.corner, -CAGE_MEMBERS.post],
+    [CAGE_MEMBERS.post, half - CAGE_MEMBERS.corner],
+  ] as const;
+  const ta = 2 * h;
+  const tb = CAGE.height - 2 * h;
   const slope = Math.tan(CAGE_MESH.angle);
-  const run = (yb - ya) / slope;
+  // A diamond's centre sits on the face's axis at the box's foot, and every
+  // spacing x slope above it, so the families cross on the axis half a
+  // diamond higher [measured PL-VII: 281.52 + 1.09 n]. The lines are
+  // u = (k + 1/2) spacing + dir t / slope, t = y - y0, one per whole k whose
+  // line crosses the face; the pattern mirrors about the axis.
+  const kMax = Math.ceil((half + tb / slope) / CAGE_MESH.spacing);
   const mesh: FaceBar[] = [];
   for (const f of FACES) {
     for (const dir of [1, -1]) {
-      // The line u = c + dir (y - ya) / slope, over every c that crosses
-      // the face, clipped to [u0, u1] x [ya, yb]: u is monotonic in t = y - ya.
-      for (let c = u0 - run + CAGE_MESH.spacing / 2; c < u1 + run; c += CAGE_MESH.spacing) {
-        const tu0 = ((u0 - c) * slope) / dir;
-        const tu1 = ((u1 - c) * slope) / dir;
-        const t0 = Math.max(0, Math.min(tu0, tu1));
-        const t1 = Math.min(yb - ya, Math.max(tu0, tu1));
-        if (t1 - t0 < 0.2) continue;
-        const uAt = (t: number) => c + (dir * t) / slope;
-        mesh.push({ f, u0: uAt(t0), y0: ya + t0, u1: uAt(t1), y1: ya + t1 });
+      for (let k = -kMax - 1; k <= kMax; k++) {
+        const c = (k + 0.5) * CAGE_MESH.spacing;
+        // Clipped to [u0, u1] x [ta, tb]: u is monotonic in t.
+        for (const [u0, u1] of panels) {
+          const tu0 = ((u0 - c) * slope) / dir;
+          const tu1 = ((u1 - c) * slope) / dir;
+          const t0 = Math.max(ta, Math.min(tu0, tu1));
+          const t1 = Math.min(tb, Math.max(tu0, tu1));
+          if (t1 - t0 < 0.2) continue;
+          const uAt = (t: number) => c + (dir * t) / slope;
+          mesh.push({ f, u0: uAt(t0), y0: y0 + t0, u1: uAt(t1), y1: y0 + t1 });
+        }
       }
     }
   }
@@ -1265,10 +1352,23 @@ export function buildSummit(g: Graph, detail: Detail = {}): Parts {
   const { mesh: ribs, crownY, rivets: ribRivets } = dome(g, cageTop, detail);
   const cageParts = cage(g, roomTop, detail);
 
+  // The ladder cylinder, from the apartment's roof up the box and through
+  // the dome's opening to the lantern terrace's deck, where the lantern's
+  // base takes it on [PL-VII Fig. 4 draws it from the box's top up, through
+  // the ribs' crown; inside the box the face hides it, and PL-XIX Fig. 5
+  // names it at the box's centre].
+  const ladder = prism(
+    g,
+    "ladderCylinder",
+    LADDER.sides,
+    [roomTop, FLOORS.lanternTerrace],
+    circum(LADDER.diameter, LADDER.sides),
+  );
   const summit: NodeHandle[] = [
     ...gallery(g),
     ...(cageParts.summit ?? []),
     ribs,
+    ladder,
     ...lantern(g, crownY),
   ];
   return joinParts(panel29(g, detail), {

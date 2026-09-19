@@ -507,6 +507,99 @@ export function chains(lat: Lattice, id: string, keep: StationMask = () => true)
   return paths;
 }
 
+/** One straight member and the unit normal of the plane it lies in. */
+export interface SegmentMember {
+  readonly a: Vec3;
+  readonly b: Vec3;
+  readonly n: Vec3;
+}
+
+/**
+ * Explicit two-point members as paths, each carrying its plane's normal as
+ * the primitive {@link FACE_NORMAL} an edge rule writes — for what no
+ * station grid describes: a lattice clipped by leaning uprights, bars on a
+ * grid measured from the tower's axis, a girder in plan. The toolkit's
+ * copy and skin rules run on them unchanged; they carry no end sines, so
+ * they take no joints.
+ */
+export function segmentMembers(
+  g: Graph,
+  id: string,
+  list: readonly SegmentMember[],
+  /**
+   * Further primitive attributes, f32 tuples, one per member in `list`'s
+   * order: an edge rule's end sines, say, for members that take joints.
+   */
+  extra: ReadonlyArray<{ readonly name: string; readonly values: ReadonlyArray<readonly number[]> }> = [],
+): NodeHandle {
+  if (list.length === 0) throw new Error(`eiffel lattice "${id}": segmentMembers needs at least one member`);
+  const pts = list.flatMap((m) => [m.a, m.b]);
+  const slots = g.add(
+    pointGrid,
+    { countX: pts.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
+    `${id}Slots`,
+  );
+  const place = g.add(
+    setAttribute,
+    {
+      name: "P",
+      type: "f32",
+      tupleSize: 3,
+      value: vec(
+        indexTable(pts.map((p) => p[0])),
+        indexTable(pts.map((p) => p[1])),
+        indexTable(pts.map((p) => p[2])),
+      ),
+    },
+    `${id}Place`,
+  );
+  // Points 2i and 2i + 1 are member i: an i32 truncates index / 2.
+  const key = g.add(setAttribute, { name: "member", type: "i32", value: mul(index(), 0.5) }, `${id}Key`);
+  const paths = g.add(pointsToPath, { groupAttr: "member" }, `${id}Paths`);
+  const faces = g.add(
+    setAttribute,
+    {
+      name: FACE_NORMAL,
+      domain: "primitive",
+      type: "f32",
+      tupleSize: 3,
+      value: vec(
+        indexTable(list.map((m) => m.n[0])),
+        indexTable(list.map((m) => m.n[1])),
+        indexTable(list.map((m) => m.n[2])),
+      ),
+    },
+    `${id}Faces`,
+  );
+  const done = g.add(removeAttribute, { names: ["member"], domain: "point" }, id);
+  g.connect(slots, "out", place, "in");
+  g.connect(place, "out", key, "in");
+  g.connect(key, "out", paths, "in");
+  g.connect(paths, "out", faces, "in");
+  let last: NodeHandle = faces;
+  for (const { name, values } of extra) {
+    const size = values[0]?.length ?? 1;
+    const node = g.add(
+      setAttribute,
+      {
+        name,
+        domain: "primitive",
+        type: "f32",
+        tupleSize: size,
+        value:
+          size === 1
+            ? indexTable(values.map((v) => v[0]!))
+            : vec(...Array.from({ length: size }, (_, c) => indexTable(values.map((v) => v[c]!)))),
+      },
+      `${id}${name}`,
+    );
+    g.connect(last, "out", node, "in");
+    last = node;
+  }
+  g.connect(last, "out", done, "in");
+  return done;
+}
+
 /** Concatenate geometry, keeping topology, in the order given. */
 export function merge(g: Graph, id: string, parts: readonly NodeHandle[]): NodeHandle {
   const node = g.add(mergePrimitives, {}, id);

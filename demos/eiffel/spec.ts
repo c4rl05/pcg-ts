@@ -140,9 +140,19 @@ export const PANEL29 = { half: 5.0, bottom: 264.9, top: 276.13, baysPerFace: 4 }
 /**
  * Masonry pedestals ("soubassements", decorative): 25 m square, 4 m high
  * [sourced], one per leg. Plate I's ground chain 25.334 + 74.238 + 25.334
- * puts their faces at 37.119 and 62.453 from the axis [derived].
+ * puts their plinth lines at 37.119 and 62.453 from the axis [derived].
+ * The inner face does not stand on that line: it batters back from the
+ * arch's pier, 38.17 at the ground to 40.3 at the top [measured on PL-VII,
+ * PL-XI; SOURCES.md §18], clear of the arch's foot; the outer face stands
+ * upright at 62.453.
  */
-export const PEDESTAL = { inner: 37.119, outer: 62.453, height: 4 } as const;
+export const PEDESTAL = {
+  inner: 37.119,
+  outer: 62.453,
+  height: 4,
+  innerFoot: 38.17,
+  innerTop: 40.3,
+} as const;
 
 /** The first-floor girders between the legs, in the tower's face plane. */
 export const FIRST_FLOOR = {
@@ -295,53 +305,184 @@ export const MEMBERS = {
  */
 export const LEG_BELTS = {
   /**
-   * Base tie A, on each leg's two outer faces: "2,987" between its chords'
-   * 200 x 8 plates and "3,387" over them [sourced PL-VII Fig. 1], so 3.187
-   * axis to axis [derived; the drawn chords are 255 px apart at 79.7 px/m,
-   * 3.20]. The earlier 2 m was B's depth read off the wrong figure.
+   * Base tie A, on each leg's two outer faces: its bottom chord's axis
+   * "2,987" in the plane below node XXVIII [sourced PL-VII Fig. 1: the
+   * dimension's upper arrow sits ON the XXVIII dash-dot line, 16 px under
+   * the top chord's top edge at 1:200], so y 3.73. "3,387" is the same
+   * chord measured from the top chord's top edge, 0.40 above XXVIII — the
+   * top edge of the 0.80 node horizontal the model uses as the tie's top
+   * chord [derived]. (The earlier 3.187 took the two numbers for the two
+   * chords' faces, and hung the bottom chord 0.18 m low.)
    */
-  tieOuterDepth: 3.187,
-  /** Base tie B, on the two inner faces: "2.000" [sourced PL-VII Fig. 5]. */
-  tieInnerDepth: 2.0,
+  tieOuterDepth: 2.987,
   /**
-   * The ties are Warren girders of single 70 x 70 x 8 angles with a bottom
-   * chord and no posts but the leg's central one [sourced PL-VII Figs 1,
-   * 5]: A's bottom-chord joints fall about 3.75 m apart, four V's across
-   * the face [estimated], and B is drawn alike. Bars 47-60 degrees off the
-   * chord (A's alternate about 37 and 63 on the plate).
+   * Base tie B, on the two inner faces: "2.000" from the same top edge to
+   * the bottom chord, whose axis is "2,765" over the support line
+   * [sourced PL-VII Fig. 5], so y 4.97 and 1.600 in the plane below XXVIII
+   * [derived: 2.000 - 0.40]. (2.000 below XXVIII hung it 0.36 m low.)
    */
-  tieOuterBays: 4,
-  tieInnerBays: 4,
+  tieInnerDepth: 1.6,
   /**
-   * Panel 5: posts every 3.000 (5 bays in the 15.000 face), and a double
-   * lattice of 80 x 80 x 8 angles crossing at square gussets at each
-   * post's mid-height, each bar spanning two bays over the belt's depth,
-   * about 50 degrees off the chord [sourced PL-VII Fig. 1, panel 5 detail;
-   * the pattern read off the drawing].
+   * The ties are X-braced [sourced PL-VII Figs 1, 5, "70 x 70 x 8"]: the
+   * joints of both chords fall on one pitch measured from the face's
+   * centre line (the central post) at each chord's height, and every bay
+   * between two joints (and the short end bays against the uprights)
+   * carries an X. The face is a parallelogram (the leg leans in it), so
+   * the X's read skewed on the plate, one bar about 62 degrees off the
+   * chord and its partner about 36. Pitch 240 px at 78.7 px/m in A, 3.05,
+   * and 164-171 px at 83 px/m in B, 2.0 [estimated, measured on PL-VII].
    */
-  belt1Bays: 5,
+  tieOuterPitch: 3.05,
+  tieInnerPitch: 2.0,
   /**
-   * Panel 11: posts "3,36268" apart, about 3 bays [sourced PL-VII Fig. 2],
-   * and a diamond lattice of 80 x 80 angles: bars crossing at square
-   * gussets at the posts' mid-heights and meeting the chords at mid-bay
-   * [the pattern read off the drawing], each bar spanning one bay over the
-   * belt's depth, about 55 degrees off the chord (an angle of 53°49'43"
-   * is printed at one of them) [derived].
+   * Panel 5: chords "500 x 10" plates, solid on the plate, their outer
+   * edges on XXIV and XXIII [sourced PL-VII Fig. 1]; posts square to the
+   * chords on the grande poutre's 3.8825 grid from the tower's axis, four
+   * a face with end bays about 1.7 (drawn 324 px apart at 83 px/m, 3.90)
+   * [sourced 3.8825; the positions read off the drawing]; and a double
+   * lattice of 80 x 80 x 8 angles, each bar from a post's foot through the
+   * next post's mid-height to the top of the one after, about 42 degrees
+   * [the pattern read off the drawing].
    */
-  belt2Bays: 3,
+  belt1PostPitch: 3.8825,
+  belt1Chord: 0.5,
+  belt1ChordThickness: 0.01,
+  /**
+   * Panel 11: chords "450 x 8" plates, printed on both, drawn 0.45-0.49
+   * and solid, their outer edges on XVIII and XVII [sourced PL-VII Fig. 2];
+   * posts square to the chords every "3,36268" from the tower's axis
+   * (printed twice), three a leg face at 2, 3 and 4 pitches; and a double
+   * lattice of 80 x 80 angles every half pitch, each bar spanning one
+   * pitch over the depth between the chords: bars from a post's foot to
+   * the next post's top (an X in every bay) and from mid-bay to mid-bay
+   * through the posts' mid-heights (the diamond) [the pattern read off the
+   * drawing; "53°49'43"" printed at one bar].
+   */
+  belt2PostPitch: 3.36268,
+  belt2Chord: 0.45,
+  belt2ChordThickness: 0.008,
   /**
    * Panel 10's base band: "3,6071" deep [sourced PL-VII Fig. 2], a double
-   * lattice of 300 x 5 flats and 30 x 30 x 4 angles at 45 degrees, about
-   * 0.93 m apart [estimated], under a 600 top chord ("600" printed on it)
-   * [sourced]. Above it, "6,564325": two X's per leg face either side of
-   * a central post, all 600 [sourced].
+   * lattice of "300 x 5" flats between its chords, each family every 1.59
+   * along the chords (a row autocorrelates at 127 px at 79.7 px/m), V's at
+   * both chords, so each flat spans two pitches over the depth, about 43
+   * degrees [estimated]; the 30 x 30 x 4 angles between them are not
+   * built. A 600 top chord ("600" printed on it) [sourced]. Above it,
+   * "6,564325": two X's per leg face either side of a central post, all
+   * 600 [sourced].
    */
   band10Depth: 3.6071,
   band10TopChord: 0.3,
-  /** Bars and levels of the band's lattice [estimated, from its 0.93 m]. */
-  band10Bays: 12,
-  band10Levels: 4,
+  band10Pitch: 1.59,
+  band10Flat: 0.3,
+  band10FlatThickness: 0.005,
 } as const;
+
+/**
+ * The legs' 500 diagonals in panels 12-17 are laced more openly than the
+ * shaft's 500s (0.68): the step read on PL-VII, both diagonals of the
+ * outer face averaged, at 78.2-78.4 px/m [estimated, measured]: panel 12
+ * 0.69 (Fig. 2: 51-56 px), 13 1.01 (72-84 px), 14 0.98 (75-80), 15 0.82
+ * (Fig. 3: 63-66), 16 0.96 (72-76), 17 0.91 (66-77; the two diagonals are
+ * drawn 0.85 and 0.98). By panel, as (panel's bottom node, top node, step).
+ */
+export const LEG_LACING_500: ReadonlyArray<readonly [string, string, number]> = [
+  ["XVII", "XVI", 0.69],
+  ["XVI", "XV", 1.01],
+  ["XV", "XIV", 0.98],
+  ["XIV", "XIII", 0.82],
+  ["XIII", "XII", 0.96],
+  ["XII", "XI", 0.91],
+];
+
+/**
+ * The plan bracing ("contreventements", PL-VIII Figs 13-22, 1:1000): a
+ * horizontal truss of lattice girders at every node from XVI up, joining
+ * the face-centre uprights (b and d of adjacent legs up to XII, the merged
+ * bd above). Up to XII: four long girders, each from b (or d) on one face
+ * across to d (or b) on the next, on the lines x +- z = +-(W - w), whose
+ * crossings make a diamond w inside the face centres; four short ones
+ * across each leg's corner, from its own b to its own d (x +- z =
+ * +-(W + w)); and girder A along one diagonal inside the diamond [sourced
+ * Figs 13-15, the pattern; the Nota: XII is like XIII]. From XI to II the
+ * diamond joins the bd's and A crosses it [Figs 18-21; X is like XI]; at I
+ * and under the 3rd floor (top28) only A, corner to corner [Fig. 22].
+ * H' and H, the members from A's middle toward the diamond's sides, are
+ * not built: they cross the Edoux lift's run, which this model places
+ * there. Every girder stops short of the Edoux (`EDOUX_PLAN`): A frames
+ * into its central guide post from both sides, as Fig. 21 marks a joint
+ * at the centre and draws the girders on the car line as stubs from the
+ * corners. Girders B-F: "une corn. haut et bas et un treillis /\ avec
+ * cornières" [sourced text]; drawn about as deep as the 600 face
+ * horizontals in elevation (PL-VIII Fig. 17, "599,3") [estimated].
+ */
+export const PLAN_BRACING = {
+  from: "XVI",
+  /** Chord axis to chord axis [estimated, PL-VIII Fig. 17]. */
+  depth: 0.6,
+  /** The chords' and the web's half-widths: angles [estimated]. */
+  chord: 0.045,
+  web: 0.03,
+  /** Nodes that carry A alone, corner to corner [sourced PL-VIII Fig. 22]. */
+  aOnly: ["I", "top28"],
+} as const;
+
+/**
+ * The "entretoise diagonale" inside each leg (PL-VIII Fig. 1, "Plan de
+ * l'entretoise diagonale des panneaux 1, 2, 3"): a lattice girder in plan
+ * from d to b, "21.2132" long (15.000 x sqrt 2) and "600" wide, "715.6"
+ * deep in elevation [sourced PL-VIII Figs 1, 8]. PL-VIII Fig. 8 draws it
+ * at the tops of panels 1, 2 and 3 (XXVII, XXVI, XXV) and again at XXII
+ * and XXI ("14.100", "13.150": the leg's width there) [sourced].
+ */
+export const ENTRETOISE = {
+  nodes: ["XXVII", "XXVI", "XXV", "XXII", "XXI"],
+  width: 0.6,
+  depth: 0.7156,
+  /**
+   * Where the leg's lift passes through it, the entretoise stops either
+   * side of the car's run: at XXVII-XXV the Otis and Roux cars (lifts.ts),
+   * slid along their tracks, sweep the leg's diagonal out past its centre,
+   * ±1.56-1.61 across it (the Roux cabin 3.27 wide, the Otis 3.169). So an
+   * opening ±1.75 about the diagonal, and each half ends free on its side
+   * of the run [estimated: PL-VIII Fig. 1 draws the girder whole in plan;
+   * PL-XX, the section along the diagonal, projects it onto b and d and
+   * cannot show an opening]. At XXII and XXI the runs stay clear of it.
+   */
+  openAt: ["XXVII", "XXVI", "XXV"],
+  openHalf: 1.75,
+} as const;
+
+/**
+ * What the plan bracing must leave room for in the shaft: the Edoux lift
+ * (its numbers are `lifts.ts`'s, which owns them; sourced there from
+ * PL-XX and PL-XXIII ter), as rectangles in the shaft frame: s along the
+ * N-S diagonal toward pile 3 (Sud), (x - z) / sqrt 2; t across it toward
+ * pile 4 (Ouest), (x + z) / sqrt 2; with the heights each stands over. A
+ * plan girder stops at each one it would cross: at a post or a column it
+ * frames into it, at a car's run it ends free beside it.
+ */
+export const EDOUX_PLAN: ReadonlyArray<{
+  readonly what: string;
+  readonly s: readonly [number, number];
+  readonly t: readonly [number, number];
+  readonly y: readonly [number, number];
+}> = [
+  // The central guide post "890 x 600", 2nd floor to 3rd.
+  { what: "central post", s: [-0.445, 0.445], t: [-0.3, 0.3], y: [115.73, 276.13] },
+  // The outboard guide posts "500 x 600", 5.15 out.
+  { what: "outboard post N", s: [-5.4, -4.9], t: [-0.3, 0.3], y: [115.73, 276.13] },
+  { what: "outboard post S", s: [4.9, 5.4], t: [-0.3, 0.3], y: [115.73, 276.13] },
+  // NORD: the upper car's cylinders to the landing, its piston columns above.
+  { what: "cylinder N1", s: [-4.882, -4.482], t: [-0.2, 0.2], y: [115.73, 276.13] },
+  { what: "cylinder N2", s: [-0.818, -0.418], t: [-0.2, 0.2], y: [115.73, 276.13] },
+  // SUD: the lower car's guide columns, 2nd floor to the landing.
+  { what: "guide S1", s: [0.448, 0.788], t: [-0.17, 0.17], y: [115.73, 195.93] },
+  { what: "guide S2", s: [4.512, 4.852], t: [-0.17, 0.17], y: [115.73, 195.93] },
+  // The cars' runs, 3.57 along the diagonal on axes 2.65 out, 3.90 across.
+  { what: "upper car run", s: [-4.435, -0.865], t: [-1.95, 1.95], y: [195.93, 276.13] },
+  { what: "lower car run", s: [0.865, 4.435], t: [-1.95, 1.95], y: [115.73, 198.83] },
+];
 
 /**
  * "Masque placé sur le panneau 4" (PL-VII Fig. 6): a decorative lattice
@@ -371,10 +512,15 @@ export const MASQUE = {
   plate: 0.004,
   /** Post pitch from the tower's axis: the decorative girder's bay [sourced 3.8825]. */
   postPitch: 3.8825,
-  /** Flat bars' widths, drawn about 0.3-0.4 (posts, upper X's) and 0.2 (lower lattice) [estimated]. */
-  post: 0.32,
+  /**
+   * Flat bars' widths [estimated, PL-VII Fig. 6 at 79.7 px/m]: the posts
+   * 35-38 px between their outer outlines, 0.44-0.47, drawn as two strips
+   * with a double line between (one flat here); the upper X's 0.31-0.33;
+   * the lower lattice 24-26 px, 0.30-0.32, as heavy as the upper bars.
+   */
+  post: 0.45,
   bar: 0.3,
-  lowerBar: 0.2,
+  lowerBar: 0.31,
   /** The lower lattice's bars, 45 degrees, every half post pitch along the chord [estimated]. */
   lowerPitch: 3.8825 / 2,
   /** The bars' thickness [estimated]. */
