@@ -361,6 +361,50 @@ const PARAM_DOC_PROBE = "Number of points along X. Minimum 1.";
   }
 }
 
+// Names that are library-internal BY CONSTRUCTION — no barrel re-exports
+// their module — and must therefore appear in no consumer's typings.
+// `adoptTopology` (with `checkTopology` and `installTopology`) installs
+// topology by reference, and `resizeForOverwrite`/`addForOverwrite` size
+// storage without the default fill: each hands out an obligation the type
+// cannot carry, which is why neither is offered. Their source-level tests
+// check that no module under `src/` re-exports them; only this reads the
+// BUILT typings, where a widened barrel or a d.ts bundler that inlines an
+// internal declaration would actually show up.
+const INTERNAL_TYPE_NAMES = ["adoptTopology", "checkTopology", "installTopology", "ForOverwrite"];
+// The scan must be able to SEE a name before "found none" means anything:
+// `cloneGeometry` is published from the root entry, so it has to turn up.
+const PUBLISHED_TYPE_PROBE = "cloneGeometry";
+{
+  const name = "dist/**/*.d.ts publishes no library-internal name";
+  const typings = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (entry.name.endsWith(".d.ts")) typings.push(path);
+    }
+  };
+  walk(join(root, "dist"));
+  const texts = typings.map((path) => [path, readFileSync(path, "utf8")]);
+  const sawProbe = texts.some(([, text]) => text.includes(PUBLISHED_TYPE_PROBE));
+  const offenders = [];
+  for (const [path, text] of texts) {
+    for (const internal of INTERNAL_TYPE_NAMES) {
+      if (text.includes(internal)) offenders.push(`${path.slice(root.length + 1)}: ${internal}`);
+    }
+  }
+  if (!sawProbe) {
+    fail(
+      name,
+      `the scan read ${typings.length} .d.ts files and found no ${JSON.stringify(PUBLISHED_TYPE_PROBE)}, which IS published — it is not reading the typings, so "no internal name" proves nothing`,
+    );
+  } else if (offenders.length > 0) {
+    fail(name, `internal names in the published typings:\n      ${offenders.join("\n      ")}`);
+  } else {
+    console.log(`ok    ${name} (${typings.length} files, ${INTERNAL_TYPE_NAMES.length} names)`);
+  }
+}
+
 const started = Date.now();
 let ran = 0;
 
