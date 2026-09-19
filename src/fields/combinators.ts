@@ -820,9 +820,34 @@ export function randomFrom(value: FieldLike, key: number | string = 0): Field<1>
 }
 
 /**
+ * Up to this many stops, {@link ramp} walks its segments from the first
+ * rather than bisecting them. Both find the same segment, so this is a
+ * speed choice and nothing else [measured 2026-09-19, Node 22, 65,536
+ * elements: the walk is 10-20% faster at 4 and 8 stops, level at 16, and
+ * 2.2x slower at 64].
+ */
+const RAMP_WALK_MAX = 16;
+
+/**
+ * Whether every stop position is a number other than NaN, which is what
+ * lets {@link ramp} bisect. A plain loop, not `every`: `every` skips the
+ * holes of a sparse array, and a hole is exactly a position that is not a
+ * number.
+ */
+function rampPositionsOrdered(ts: readonly unknown[]): boolean {
+  for (let k = 0; k < ts.length; k++) {
+    const p = ts[k];
+    if (typeof p !== "number" || Number.isNaN(p)) return false;
+  }
+  return true;
+}
+
+/**
  * Piecewise-linear curve through `[t, value]` stops, applied to a scalar
  * field. Stop positions must be strictly ascending; inputs outside the
- * stop range clamp to the first/last value.
+ * stop range clamp to the first/last value. A long ramp finds each
+ * element's segment by bisection, so a table with a stop per element
+ * costs O(n log n), not O(n²).
  */
 export function ramp(
   input: FieldLike,
@@ -836,6 +861,22 @@ export function ramp(
       throw new Error("ramp: stop positions must be strictly ascending");
     }
   }
+  // THE SEGMENT OF A LONG RAMP IS FOUND BY BISECTION, and it has to be the
+  // segment the walk finds: the first j >= 1 with !(ts[j] < t). The walk
+  // alone made a ramp of n stops over n elements O(n²) — exactly the
+  // shape of a literal per-point table, `ramp(index(), [[i, v], ...])`.
+  // The two agree only over positions in order, and the check above does
+  // not quite promise that: every comparison with NaN is false, so a NaN
+  // position passes it and so do its neighbours, compared with nothing
+  // but it. Such a ramp keeps the walk, and so does one whose positions
+  // are not all numbers (a string, or a hole in a sparse array), which
+  // only an untyped caller can build. Every other ramp is strictly
+  // ascending, where `ts[j] < t` is true up to the answer and false from
+  // it on — which is all a lower-bound bisection needs. The exact hit is
+  // the case that shows: a `t` ON interior stop k is segment k, the TOP
+  // of the segment below (u = 1), not the bottom of the one above, and
+  // `vs[k-1] + (vs[k] - vs[k-1])` need not round to `vs[k]`.
+  const bisect = ts.length > RAMP_WALK_MAX && rampPositionsOrdered(ts);
   const fa = resolveField(input);
   const stopsKey = stops.map((s) => `${keyNum(s[0])}:${keyNum(s[1])}`).join(",");
   const key = `ramp(${keyRef(fa.key)};${stopsKey})`;
@@ -857,8 +898,20 @@ export function ramp(
         out[i] = vs[last];
         continue;
       }
+      // Past both clamps, a number `t` lies strictly inside the positions
+      // (so there are at least two), and NaN lands on j = 1 on either
+      // path: every probe of it is false, the walk's first one included.
       let j = 1;
-      while (ts[j] < t) j++;
+      if (bisect) {
+        let hi = last;
+        while (j < hi) {
+          const mid = (j + hi) >>> 1;
+          if (ts[mid] < t) j = mid + 1;
+          else hi = mid;
+        }
+      } else {
+        while (ts[j] < t) j++;
+      }
       const u = (t - ts[j - 1]) / (ts[j] - ts[j - 1]);
       out[i] = vs[j - 1] + (vs[j] - vs[j - 1]) * u;
     }
