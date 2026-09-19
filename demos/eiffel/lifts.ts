@@ -112,27 +112,25 @@
  *
  * Everything here is boxes except the helices' hand rails, which are paths
  * copied BEFORE they are skinned. The boxes carry their local face normals
- * through every copy and get their `normal` from the composed `rot` after
- * the last one (`lit`). Tracks and the Edoux guides go in "girders"; cars,
- * the Edoux cars and the stairs in "platforms".
+ * as `normal`, which `rotateAttrs` turns at every copyToPoints on the way
+ * (the block's own turn, then a quadrant's, where one follows). Tracks and
+ * the Edoux guides go in "girders"; cars, the Edoux cars and the stairs in
+ * "platforms".
  */
 import type { Graph, NodeHandle } from "pcg-ts";
 import {
-  attribute,
   copyToPoints,
   filterByExpression,
   ge,
   index,
   lt,
   mod,
-  normalize,
   pointGrid,
   pointsToPath,
-  removeAttribute,
   setAttribute,
   vec,
 } from "pcg-ts";
-import { type Vec3, box, copyToQuadrants, indexTable, merge, rotateByQuat, skin } from "./lattice.js";
+import { type Vec3, box, copyToQuadrants, indexTable, merge, skin } from "./lattice.js";
 import type { Detail, Parts } from "./parts.js";
 import { FLOORS, NODES, profileAt } from "./spec.js";
 
@@ -501,15 +499,17 @@ const BOX_NORMALS: readonly Vec3[] = (
  * Many boxes as one mesh: a unit box copied onto one target per block,
  * each carrying its size as `scale` and its turn as `rot` (copyToPoints
  * scales, then turns, then places). The unit box carries its local face
- * normals as `boxN`, which ride along every copy unturned; {@link lit}
- * turns them by the composed `rot` once the last copy is made.
+ * normals as `normal`; `rotateAttrs` turns them by that same `rot` (a box
+ * scaled along its own axes keeps its face normals, so rotation alone is
+ * exact). A caller that copies these boxes on again (`copyToQuadrants`)
+ * names `normal` in its own `rotateAttrs` to carry the turn through.
  */
 function blocks(g: Graph, id: string, list: readonly Block[]): NodeHandle {
   const bare = box(g, `${id}Bare`, [0, 0, 0], [1, 1, 1]);
   const unit = g.add(
     setAttribute,
     {
-      name: "boxN",
+      name: "normal",
       type: "f32",
       tupleSize: 3,
       value: vec(
@@ -554,37 +554,13 @@ function blocks(g: Graph, id: string, list: readonly Block[]): NodeHandle {
     { name: "rot", type: "f32", tupleSize: 4, value: vec(q(0), q(1), q(2), q(3)) },
     `${id}Turn`,
   );
-  const out = g.add(copyToPoints, { topology: "keep" }, id);
+  const out = g.add(copyToPoints, { topology: "keep", rotateAttrs: ["normal"] }, id);
   g.connect(slots, "out", place, "in");
   g.connect(place, "out", size, "in");
   g.connect(size, "out", rot, "in");
   g.connect(unit, "out", out, "source");
   g.connect(rot, "out", out, "target");
   return out;
-}
-
-/**
- * Write a `normal` onto boxes from {@link blocks}, after every copy: each
- * box's local face normal turned by its composed `rot` (copyToPoints
- * composes the quadrant's turn onto the block's, and a box scaled along its
- * own axes keeps its face normals). Without it the class merge zero-fills
- * the normals and a lit material shades the boxes black.
- */
-function lit(g: Graph, id: string, boxes: NodeHandle): NodeHandle {
-  const turned = g.add(
-    setAttribute,
-    {
-      name: "normal",
-      type: "f32",
-      tupleSize: 3,
-      value: normalize(rotateByQuat(attribute("rot", 4), attribute("boxN", 3))),
-    },
-    `${id}Normals`,
-  );
-  const done = g.add(removeAttribute, { names: ["boxN"], domain: "point" }, id);
-  g.connect(boxes, "out", turned, "in");
-  g.connect(turned, "out", done, "in");
-  return done;
 }
 
 /** Polylines as paths, one per list, in order. */
@@ -1143,15 +1119,11 @@ export function buildLifts(g: Graph, quads: NodeHandle, detail: Detail = {}): Pa
   g.connect(quads, "out", even, "in");
   g.connect(quads, "out", odd, "in");
 
-  const tracks = lit(
-    g,
-    "liftTracks",
-    merge(g, "liftTracksBoxes", [
-      copyToQuadrants(g, "liftOtisTracks", blocks(g, "liftOtisTrack", track(OTIS)), odd),
-      copyToQuadrants(g, "liftRouxTracks", blocks(g, "liftRouxTrack", track(ROUX)), even),
-    ]),
-  );
-  const guides = lit(g, "liftEdouxGuides", blocks(g, "liftEdouxGuideBoxes", edouxGuides()));
+  const tracks = merge(g, "liftTracks", [
+    copyToQuadrants(g, "liftOtisTracks", blocks(g, "liftOtisTrack", track(OTIS)), odd, ["normal"]),
+    copyToQuadrants(g, "liftRouxTracks", blocks(g, "liftRouxTrack", track(ROUX)), even, ["normal"]),
+  ]);
+  const guides = blocks(g, "liftEdouxGuides", edouxGuides());
 
   // Cars stand at a different moment in each leg, so they are laid out
   // per leg here rather than copied.
@@ -1164,15 +1136,11 @@ export function buildLifts(g: Graph, quads: NodeHandle, detail: Detail = {}): Pa
 
   const e1 = firstToSecond();
   const shaft = shaftStairs();
-  const stairs = lit(
-    g,
-    "liftStairs",
-    merge(g, "liftStairsBoxes", [
-      copyToQuadrants(g, "liftStairE1", blocks(g, "liftStairE1Leg", e1.blocks), quads),
-      copyToQuadrants(g, "liftStairGround", blocks(g, "liftStairGroundLeg", groundToFirst()), even),
-      blocks(g, "liftStairShaft", shaft.blocks),
-    ]),
-  );
+  const stairs = merge(g, "liftStairs", [
+    copyToQuadrants(g, "liftStairE1", blocks(g, "liftStairE1Leg", e1.blocks), quads, ["normal"]),
+    copyToQuadrants(g, "liftStairGround", blocks(g, "liftStairGroundLeg", groundToFirst()), even, ["normal"]),
+    blocks(g, "liftStairShaft", shaft.blocks),
+  ]);
   // Hand rails: paths copied before they are skinned.
   const rails = merge(g, "liftRails", [
     copyToQuadrants(g, "liftRailsE1", polylines(g, "liftRailsE1Leg", e1.rails), quads),
@@ -1180,10 +1148,6 @@ export function buildLifts(g: Graph, quads: NodeHandle, detail: Detail = {}): Pa
   ]);
   return {
     girders: [tracks, guides],
-    platforms: [
-      lit(g, "liftCars", blocks(g, "liftCarBoxes", cars)),
-      stairs,
-      skin(g, "liftRailSkin", rails, 0.025),
-    ],
+    platforms: [blocks(g, "liftCars", cars), stairs, skin(g, "liftRailSkin", rails, 0.025)],
   };
 }

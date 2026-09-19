@@ -25,7 +25,6 @@ import {
   component,
   connectByIndex,
   copyToPoints,
-  cross,
   index,
   lerp,
   meshPrimitive,
@@ -471,16 +470,6 @@ const cross3 = (p: Vec3, q: Vec3): Vec3 => [
 ];
 
 /**
- * Rotate a vector field by a quaternion field [x, y, z, w]:
- * v + w t + q x t with t = 2 (q x v).
- */
-export function rotateByQuat(q: FieldLike, v: FieldLike): Field {
-  const qv = vec(component(q, 0), component(q, 1), component(q, 2));
-  const t = mul(cross(qv, v), 2);
-  return add(add(v, mul(component(q, 3), t)), cross(qv, t));
-}
-
-/**
  * Chains: one path up through each station's column, over the levels the
  * mask keeps (they must be contiguous). A masked-out station gets a key of
  * its own and is dropped as a one-point group.
@@ -630,15 +619,23 @@ export function quadrants(g: Graph, id: string): NodeHandle {
 
 /**
  * Copy PATHS onto the quadrant targets. Copy before skinning: copyToPoints
- * turns positions, and a mesh's `normal` only when `rotateAttrs` names it.
+ * turns positions, and a mesh's `normal` only when `rotateAttrs` names it —
+ * pass the source's direction attributes (a box's `normal`, say) to turn
+ * them by the quadrant rotation too, composing with whatever turn they
+ * already carry from an earlier copy.
  */
 export function copyToQuadrants(
   g: Graph,
   id: string,
   source: NodeHandle,
   targets: NodeHandle,
+  rotateAttrs?: readonly string[],
 ): NodeHandle {
-  const node = g.add(copyToPoints, { topology: "keep" }, id);
+  const node = g.add(
+    copyToPoints,
+    rotateAttrs === undefined ? { topology: "keep" } : { topology: "keep", rotateAttrs: [...rotateAttrs] },
+    id,
+  );
   g.connect(source, "out", node, "source");
   g.connect(targets, "out", node, "target");
   return node;

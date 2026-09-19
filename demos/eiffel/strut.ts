@@ -57,7 +57,7 @@ import {
   transformPoints,
   vec,
 } from "pcg-ts";
-import { END_SINE, END_SINE_MIN, FACE_NORMAL, type Vec3, indexTable, merge, rotateByQuat, skin } from "./lattice.js";
+import { END_SINE, END_SINE_MIN, FACE_NORMAL, type Vec3, indexTable, merge, skin } from "./lattice.js";
 import { type Detail, RIVET_ASSET } from "./parts.js";
 
 /** A corner angle's half-width: 80-100 mm angles (Plate XXXI) [derived]. */
@@ -108,10 +108,11 @@ const BOX_NORMALS: readonly Vec3[] = (
  * Flat bars and plates: a box per member, its length along the member,
  * `width` across it in its face and `thickness` along the face's normal.
  *
- * The boxes carry a `normal`: every box's local face normal turned by its
- * copy's `rot` (a box scaled along its own axes keeps its face normals).
- * Without one, a merge with the swept members of the same class (which do
- * carry normals) filled these with zeros, and the Masque rendered black.
+ * The unit box carries its local face normals as `normal`; `rotateAttrs`
+ * turns them by each copy's `rot` (a box scaled along its own axes keeps
+ * its face normals). Without one, a merge with the swept members of the
+ * same class (which do carry normals) filled these with zeros, and the
+ * Masque rendered black.
  */
 export function flatBars(g: Graph, id: string, members: NodeHandle, width: number, thickness: number): NodeHandle {
   const tips = g.add(pathResample, { mode: "count", count: 2, lengthAttr: "barLen" }, `${id}Tips`);
@@ -139,7 +140,7 @@ export function flatBars(g: Graph, id: string, members: NodeHandle, width: numbe
   const unitN = g.add(
     setAttribute,
     {
-      name: "boxN",
+      name: "normal",
       type: "f32",
       tupleSize: 3,
       value: vec(
@@ -150,18 +151,7 @@ export function flatBars(g: Graph, id: string, members: NodeHandle, width: numbe
     },
     `${id}UnitN`,
   );
-  const boxes = g.add(copyToPoints, { topology: "keep" }, `${id}Boxes`);
-  const lit = g.add(
-    setAttribute,
-    {
-      name: "normal",
-      type: "f32",
-      tupleSize: 3,
-      value: normalize(rotateByQuat(attribute("rot", 4), attribute("boxN", 3))),
-    },
-    `${id}Normals`,
-  );
-  const done = g.add(removeAttribute, { names: ["boxN"], domain: "point" }, `${id}Lit`);
+  const boxes = g.add(copyToPoints, { topology: "keep", rotateAttrs: ["normal"] }, `${id}Lit`);
   g.connect(members, "out", tips, "in");
   g.connect(tips, "out", len, "in");
   g.connect(len, "out", first, "in");
@@ -171,9 +161,7 @@ export function flatBars(g: Graph, id: string, members: NodeHandle, width: numbe
   g.connect(unit, "out", unitN, "in");
   g.connect(unitN, "out", boxes, "source");
   g.connect(sized, "out", boxes, "target");
-  g.connect(boxes, "out", lit, "in");
-  g.connect(lit, "out", done, "in");
-  return done;
+  return boxes;
 }
 
 /**
