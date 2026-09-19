@@ -32,7 +32,7 @@ import {
 // Reached by MODULE, like `../graph/subgraph.js` above: the validator is
 // the graph layer's own, not package API, and the reader needs the same one
 // the live setter uses so a value refused by one is refused by both.
-import { graphParamError, paramValueError } from "../graph/params.js";
+import { canonicalEnumValue, graphParamError, paramValueError } from "../graph/params.js";
 import {
   CARRIED_PIN_NAMES,
   ITERATED_PIN_NAMES,
@@ -1949,7 +1949,15 @@ function readParams(paramsJson: Record<string, unknown>, r: ParamReading, sink: 
       } else {
         const bad = paramValueFault(schema, value, where, { path, nodeId: r.id, param: key });
         if (bad !== undefined) fault(bad);
-        params[key] = Array.isArray(value) ? [...(value as unknown[])] : value;
+        // An accepted enum value is stored as the SCHEMA'S string, not the
+        // one `JSON.parse` just allocated. Same value, same validation,
+        // same refusal above for anything unrecognised — see
+        // `canonicalEnumValue` for the miscompile that makes the identity
+        // worth having. Arrays are copied for the reason they always were:
+        // the caller's JSON must not alias a live graph's param.
+        params[key] = Array.isArray(value)
+          ? [...(value as unknown[])]
+          : canonicalEnumValue(schema, value);
       }
       r.accepted.add(key);
     });

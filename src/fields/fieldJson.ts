@@ -2376,7 +2376,19 @@ register(
           ...(near.only !== undefined ? { fix: `replace "${String(raw.output)}" with "${near.only}"` } : {}),
         });
       }
-      worleyOpts.output = raw.output as WorleyNoiseOpts["output"];
+      // WORLEY_OUTPUTS' own string, not the one `JSON.parse` allocated.
+      // `includes` above already proved it is in the list, so this is the
+      // same value by definition; what it changes is which string OBJECT
+      // `worleyNoise` ends up holding. The factory used to compare that
+      // string per sampled element and V8 miscompiled the comparison for
+      // a freshly parsed string in a warm process — see the note in
+      // `src/noise/worley.ts` and `canonicalEnumValue` in
+      // `src/graph/params.ts`, which does this for node params. The
+      // comparison has been hoisted out of the sampler as well; these are
+      // two independent halves of the same guarantee, not one fix twice.
+      worleyOpts.output = WORLEY_OUTPUTS[
+        WORLEY_OUTPUTS.indexOf(raw.output)
+      ] as WorleyNoiseOpts["output"];
     }
     if (raw.exact !== undefined) {
       if (typeof raw.exact !== "boolean") {

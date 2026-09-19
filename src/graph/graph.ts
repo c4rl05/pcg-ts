@@ -16,6 +16,7 @@ import type { NodeDef, PinDef } from "./node.js";
 import { paramScan, refLabel } from "./paramScan.js";
 import { defParamSchemas } from "./paramSchemaLink.js";
 import {
+  canonicalEnumValue,
   type GraphParam,
   graphParamBindings,
   graphParamError,
@@ -136,6 +137,24 @@ function schemaOf(def: NodeDef<Record<string, unknown>>, key: string): ParamSche
   const declared = defParamSchemas.get(def);
   if (declared !== undefined) return declared[key];
   return subgraphSpecs.get(def)?.params.find((p) => p.name === key)?.schema;
+}
+
+/**
+ * The value a node should HOLD for `key`, given what the caller passed.
+ * Identical in value to what came in; for an enum param it is the
+ * schema's own string rather than whatever the caller's string was made
+ * of. Runs beside {@link checkParamValue}, at `add` and `setParam`, so a
+ * host handing in a computed or parsed name — the editor's mirror does
+ * exactly that — stores what a source literal would have stored. See
+ * {@link canonicalEnumValue} for why the identity matters at all.
+ */
+function canonicalParamValue(
+  def: NodeDef<Record<string, unknown>>,
+  key: string,
+  value: unknown,
+): unknown {
+  const schema = schemaOf(def, key);
+  return schema === undefined ? value : canonicalEnumValue(schema, value);
 }
 
 /**
@@ -627,16 +646,24 @@ export class Graph {
       } while (this._nodes.has(nodeId));
       advanceTo = n;
     }
+    // Checked and canonicalized in one pass, into a record of this node's
+    // own: `given` carries the same keys and the same values as `params`,
+    // with each enum string replaced by its schema's (see
+    // `canonicalParamValue`). The caller's object is never written to.
+    let given: Record<string, unknown> | undefined;
     if (params !== undefined) {
       const d = def as unknown as NodeDef<Record<string, unknown>>;
+      given = {};
       for (const key of Object.keys(params as object)) {
-        checkParamValue(nodeId, d, key, (params as Record<string, unknown>)[key], "add");
+        const value = (params as Record<string, unknown>)[key];
+        checkParamValue(nodeId, d, key, value, "add");
+        given[key] = canonicalParamValue(d, key, value);
       }
     }
     if (advanceTo !== undefined) this.typeCounts.set(def.type, advanceTo);
     const merged = {
       ...(def.defaultParams as object),
-      ...(params as object | undefined),
+      ...given,
     } as Record<string, unknown>;
     this._nodes.set(nodeId, {
       id: nodeId,
@@ -823,7 +850,7 @@ export class Graph {
   setParam<P, K extends keyof P & string>(handle: NodeHandle<P>, key: K, value: P[K]): void {
     const node = this.require(handle.id);
     checkParamValue(node.id, node.def, key, value, "setParam");
-    this._setParamQuiet(handle, key, value);
+    this._setParamQuiet(handle, key, canonicalParamValue(node.def, key, value) as P[K]);
     this._version++;
   }
 
