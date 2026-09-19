@@ -26,12 +26,25 @@
  * `examples-rig.json` survived three rewrites in a row.
  *
  * Float-exactness belongs in the last two tests instead, which cook each
- * graph twice and compare the raw bytes. Those compare a run against
- * itself rather than against a stored constant, so they test determinism —
- * the hard invariant — and no intended change can make them stale. They
- * differ only in what they vary between the two cooks: nothing (same
- * options twice), and the cook budget (straight through vs. fully
+ * graph more than once and compare the raw bytes. Those compare a run
+ * against itself rather than against a stored constant, so they test
+ * determinism — the hard invariant — and no intended change can make them
+ * stale. They differ only in what they vary between the cooks: nothing
+ * (same options twice), and the cook budget (straight through vs. fully
  * partitioned).
+ *
+ * THE FIRST OF THOSE COOKS IS THE GOLDEN TEST'S, AND EVERY COOK PARSES
+ * ITS OWN JSON. A first cook that disagrees with every later one used to
+ * pass this whole file, because the golden compares statistics within a
+ * tolerance and the determinism test compared two WARM cooks to each
+ * other. That is the exact shape a JIT miscompile takes, and one lived in
+ * `src/noise/worley.ts` until it was found by hand. Two things had to
+ * change for this file to see it: the golden test now records its cook's
+ * fingerprint and the determinism test compares against that, and every
+ * cook takes a fresh `JSON.parse` the way a host does rather than sharing
+ * one parsed object (see `freshJson`). Measured on Node 22.20.0 against
+ * the unfixed worley: 0 failures in 7 runs before both changes, 4 in 6
+ * after, and 0 in 6 with the fix in place.
  *
  * If the golden test fails on a change you meant to make, re-derive it
  * and read the diff: `npm run build && npm run graphs:golden`.
@@ -121,9 +134,65 @@ function fingerprintDifference(
   leftLabel: string,
   rightLabel: string,
 ): string | undefined {
-  const a = JSON.stringify(graphFingerprint(left), null, 1);
-  const b = JSON.stringify(graphFingerprint(right), null, 1);
+  const a = fingerprintText(left);
+  const b = fingerprintText(right);
   return a === b ? undefined : firstDifference(a, b, leftLabel, rightLabel);
+}
+
+/** One cook's float-exact fingerprint, rendered for comparison. */
+function fingerprintText(outputs: Record<string, DataCollection>): string {
+  return JSON.stringify(graphFingerprint(outputs), null, 1);
+}
+
+/**
+ * THE PROCESS'S FIRST COOK of each corpus graph, recorded by the golden
+ * test (which performs it) and compared by the determinism test (which
+ * does not).
+ *
+ * The determinism test cooks twice and compares those two to each other.
+ * That left the first cook of the process outside every float-exact
+ * comparison in this file, because the golden test cooks each graph
+ * before it and the golden pins only counts, names, bounds and reduced
+ * statistics within a tolerance. A first cook that differs from every
+ * later one by a handful of floats therefore passed the whole suite —
+ * and that is exactly the shape a JIT miscompile has: `src/noise/worley.ts`
+ * compared a param string inside its per-sample closure, and in a warm
+ * process one sample in ~22500 took the wrong branch, on the FIRST cook
+ * only.
+ *
+ * Recorded in a map rather than cooked again here because the first cook
+ * is by definition unrepeatable: cooking a fourth time would only produce
+ * another warm cook. Empty when the golden test was filtered out, in
+ * which case the determinism test's own first cook is the process's.
+ */
+const firstCookFingerprint = new Map<string, string>();
+
+/** Each corpus file's raw text, read once; see {@link freshJson}. */
+const graphText = new Map<string, string>(
+  corpus.map((entry) => [entry.file, readFileSync(entry.absolutePath, "utf8")]),
+);
+
+/**
+ * A FRESH PARSE of one corpus graph, and every cook below takes one.
+ *
+ * `loadGraphs` parses each file once and every test used to hand that one
+ * parsed object to every cook. That is not what a host does — the CLI, the
+ * editor and each demo parse a graph's text on every load — and the
+ * difference is not cosmetic. `JSON.parse` allocates a fresh string per
+ * call, and the strings a graph's params are made of are what a node
+ * compares against its literals. Reusing one parsed object hands every
+ * cook the same string objects, which is the case V8 optimizes cleanly;
+ * parsing afresh is the case it got wrong. Measured on Node 22.20.0
+ * against the unfixed `src/noise/worley.ts`: with a shared parsed object,
+ * a warm process's first cook of `basics-worley-cells.json` agreed with
+ * its second 6 times out of 6; with a fresh parse per cook it disagreed
+ * 5 times out of 5, by one f32 in 22500. The suite could not see the bug
+ * because it was not loading graphs the way anything else does.
+ */
+function freshJson(entry: { readonly file: string }): unknown {
+  const text = graphText.get(entry.file);
+  if (text === undefined) throw new Error(`${entry.file}: not in the corpus text map`);
+  return JSON.parse(text);
 }
 
 /**
@@ -288,11 +357,15 @@ describe("example corpus", () => {
   for (const entry of corpus) {
     describe(entry.file, () => {
       it("deserializes", () => {
-        expect(() => deserializeGraph(entry.json)).not.toThrow();
+        expect(() => deserializeGraph(freshJson(entry))).not.toThrow();
       });
 
       it("cooks within the time budget and matches the golden", async () => {
-        const cooked = await cookGraph(entry.json);
+        const cooked = await cookGraph(freshJson(entry));
+        // Taken before any assertion below can throw: this is the
+        // process's first cook of this graph and there is no second
+        // chance at it. See `firstCookFingerprint`.
+        firstCookFingerprint.set(entry.file, fingerprintText(cooked.outputs));
         expect(cooked.cooked).toBeGreaterThan(0);
         if (cooked.elapsedMs > GRAPHS_TIME_LIMIT_MS) {
           throw new Error(
@@ -329,20 +402,30 @@ describe("example corpus", () => {
         }
       });
 
-      it("cooks byte-identically twice (determinism)", async () => {
-        // Two separate deserializations, so the second cook re-derives
-        // everything instead of serving one warm memo cache.
-        const first = (await cookGraph(entry.json)).outputs;
-        const second = (await cookGraph(entry.json)).outputs;
-        const diff = fingerprintDifference(first, second, "first cook", "second cook");
-        if (diff !== undefined) {
+      it("cooks byte-identically every time, the first cook included (determinism)", async () => {
+        // Separate deserializations, so each cook re-derives everything
+        // instead of serving one warm memo cache.
+        //
+        // THE FIRST COOK IS THE ONE THAT MATTERS and it is not performed
+        // here — the golden test above already did it, and recorded it.
+        // Comparing only the cooks this test performs compares two WARM
+        // cooks against each other, which is the one pairing a
+        // first-cook-only fault cannot show up in. See
+        // `firstCookFingerprint` for the fault that hid there.
+        const runs: [string, string][] = [];
+        const first = firstCookFingerprint.get(entry.file);
+        if (first !== undefined) runs.push(["cook 1 (the process's first)", first]);
+        runs.push([`cook ${runs.length + 1}`, fingerprintText((await cookGraph(freshJson(entry))).outputs)]);
+        runs.push([`cook ${runs.length + 1}`, fingerprintText((await cookGraph(freshJson(entry))).outputs)]);
+        for (let i = 1; i < runs.length; i++) {
+          if (runs[0][1] === runs[i][1]) continue;
           throw new Error(
             [
               `${entry.path}: two cooks of the same graph produced different bytes.`,
               "Determinism is a hard invariant — same seed, same output, whatever the",
               "cook order — so this is a bug in a node, not a golden to update.",
               "",
-              diff,
+              firstDifference(runs[0][1], runs[i][1], runs[0][0], runs[i][0]),
             ].join("\n"),
           );
         }
@@ -364,8 +447,8 @@ describe("example corpus", () => {
         // subgraph nodes' inner cooks the same way. This is exactly the
         // check `skills/performance-and-budgets/SKILL.md` asks graph
         // authors to run on their own graphs, so the corpus runs it too.
-        const whole = await cookAtBudget(entry.json, undefined);
-        const partitioned = await cookAtBudget(entry.json, 0);
+        const whole = await cookAtBudget(freshJson(entry), undefined);
+        const partitioned = await cookAtBudget(freshJson(entry), 0);
         const diff = fingerprintDifference(whole, partitioned, "unbudgeted", "budgetMs: 0");
         if (diff !== undefined) {
           throw new Error(
