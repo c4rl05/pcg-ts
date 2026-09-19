@@ -1,0 +1,85 @@
+{
+  "state": "done",
+  "completed": 96,
+  "total": 96,
+  "wakeReasons": [],
+  "campaign": "v2",
+  "sleepUntil": null,
+  "blockedSince": null,
+  "infraSince": null,
+  "updatedAt": "2026-09-19T00:14:15.160Z",
+  "pid": 50572,
+  "currentSlot": null,
+  "attempt": 1,
+  "lastSlot": "r2.quay-cranes.A",
+  "wakeDetail": null,
+  "gate": {
+    "decision": "stop",
+    "reasons": [
+      "(a) stripped arm 100.0% is not below its reference candidate-U1 (100.0%) by more than the A/A gap 4.5% and at least 17.0%: the eval may not see documentation",
+      "(a) nor does it cost more: turns paired by task is -8.2% vs candidate-U1 (95% -24.0%–16.7%), needing 25.0% and more than the A/A effort gap 8.3% with the interval clear of zero",
+      "(c) 7 of 8 task(s) at floor or ceiling on solved, replace from reserve: canopy-gaps, cavern-lamps, contour-vines, crater-debris, facade-windows, quay-cranes, twin-quarters",
+      "fix: make the stripped-all arm cost something — harder tasks (limb (c) names the saturated ones), or a stronger strip set — because neither solved rate nor effort separated it from the baselines; replace the floor/ceiling task(s) from the reserve and re-run"
+    ],
+    "replaceTasks": [
+      {
+        "task": "canopy-gaps",
+        "solved": 12,
+        "n": 12,
+        "at": "ceiling"
+      },
+      {
+        "task": "cavern-lamps",
+        "solved": 12,
+        "n": 12,
+        "at": "ceiling"
+      },
+      {
+        "task": "contour-vines",
+        "solved": 12,
+        "n": 12,
+        "at": "ceiling"
+      },
+      {
+        "task": "crater-debris",
+        "solved": 12,
+        "n": 12,
+        "at": "ceiling"
+      },
+      {
+        "task": "facade-windows",
+        "solved": 11,
+        "n": 11,
+        "at": "ceiling"
+      },
+      {
+        "task": "quay-cranes",
+        "solved": 12,
+        "n": 12,
+        "at": "ceiling"
+      },
+      {
+        "task": "twin-quarters",
+        "solved": 12,
+        "n": 12,
+        "at": "ceiling"
+      }
+    ],
+    "proposedReplacement": {
+      "drop": [
+        "canopy-gaps",
+        "cavern-lamps",
+        "contour-vines",
+        "crater-debris",
+        "facade-windows",
+        "quay-cranes",
+        "twin-quarters"
+      ],
+      "add": [
+        "forest-clearing",
+        "spiral-stair"
+      ],
+      "short": 5
+    }
+  }
+}

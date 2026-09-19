@@ -1,0 +1,319 @@
+{
+  "at": "2026-09-19T00:20:55.316Z",
+  "harnessGit": {
+    "sha": "6f0b7cc4d7a216782ade8d144b58641a3cac4048",
+    "dirty": true
+  },
+  "adapter": "dd54191d7448137b49684fe9afdd8be8c867ae47359dd960b1e7de1ce3d99580",
+  "fields": [
+    "contaminated",
+    "outsideContaminating",
+    "outsideBenign",
+    "outsideWrites",
+    "readCounts",
+    "readPaths",
+    "listedPaths",
+    "networkAttempts",
+    "solved"
+  ],
+  "records": 108,
+  "changed": 108,
+  "verdictsMoved": [
+    {
+      "slotId": "r1.twin-quarters.candidate-U1",
+      "attempt": 1,
+      "before": {
+        "contaminated": false,
+        "paths": []
+      },
+      "after": {
+        "contaminated": true,
+        "paths": [
+          "C:\\Users\\c4rl05\\AppData\\Local\\Temp\\pcgtest"
+        ]
+      }
+    },
+    {
+      "slotId": "r1.quarry-terraces.A",
+      "attempt": 2,
+      "before": {
+        "contaminated": true,
+        "paths": [
+          "msys:/"
+        ]
+      },
+      "after": {
+        "contaminated": false,
+        "paths": []
+      }
+    },
+    {
+      "slotId": "r1.canopy-gaps.stripped-all",
+      "attempt": 1,
+      "before": {
+        "contaminated": true,
+        "paths": [
+          "msys:/"
+        ]
+      },
+      "after": {
+        "contaminated": false,
+        "paths": []
+      }
+    },
+    {
+      "slotId": "r1.contour-vines.candidate-U1",
+      "attempt": 2,
+      "before": {
+        "contaminated": false,
+        "paths": []
+      },
+      "after": {
+        "contaminated": true,
+        "paths": [
+          "C:\\Users\\c4rl05\\AppData\\Local\\Temp\\w"
+        ]
+      }
+    },
+    {
+      "slotId": "r2.crater-debris.A",
+      "attempt": 1,
+      "before": {
+        "contaminated": true,
+        "paths": [
+          "msys:/"
+        ]
+      },
+      "after": {
+        "contaminated": false,
+        "paths": []
+      }
+    },
+    {
+      "slotId": "r2.quarry-terraces.stripped-all",
+      "attempt": 1,
+      "before": {
+        "contaminated": true,
+        "paths": [
+          "msys:/"
+        ]
+      },
+      "after": {
+        "contaminated": false,
+        "paths": []
+      }
+    },
+    {
+      "slotId": "r2.quarry-terraces.stripped-all",
+      "attempt": 2,
+      "before": {
+        "contaminated": false,
+        "paths": []
+      },
+      "after": {
+        "contaminated": true,
+        "paths": [
+          "C:\\Users\\c4rl05\\AppData\\Local\\Temp\\d.png",
+          "C:\\Users\\c4rl05\\AppData\\Local\\Temp\\g.json"
+        ]
+      }
+    },
+    {
+      "slotId": "r2.quarry-terraces.candidate-U1",
+      "attempt": 1,
+      "before": {
+        "contaminated": true,
+        "paths": [
+          "msys:/"
+        ]
+      },
+      "after": {
+        "contaminated": false,
+        "paths": []
+      }
+    },
+    {
+      "slotId": "r2.quarry-terraces.A",
+      "attempt": 1,
+      "before": {
+        "contaminated": true,
+        "paths": [
+          "msys:/"
+        ]
+      },
+      "after": {
+        "contaminated": false,
+        "paths": []
+      }
+    },
+    {
+      "slotId": "r2.quarry-terraces.A",
+      "attempt": 2,
+      "before": {
+        "contaminated": true,
+        "paths": [
+          "msys:/"
+        ]
+      },
+      "after": {
+        "contaminated": false,
+        "paths": []
+      }
+    }
+  ],
+  "untouched": [
+    "score",
+    "final",
+    "wallMs",
+    "turns",
+    "toolCalls",
+    "usage",
+    "capsHit"
+  ],
+  "supersededClean": [
+    {
+      "slotId": "r1.canopy-gaps.stripped-all",
+      "task": "canopy-gaps",
+      "arm": "stripped-all",
+      "counting": {
+        "attempt": 2,
+        "turns": 24,
+        "solved": true
+      },
+      "superseded": {
+        "attempt": 1,
+        "turns": 31,
+        "solved": true
+      }
+    },
+    {
+      "slotId": "r2.crater-debris.A",
+      "task": "crater-debris",
+      "arm": "A",
+      "counting": {
+        "attempt": 2,
+        "turns": 23,
+        "solved": true
+      },
+      "superseded": {
+        "attempt": 1,
+        "turns": 30,
+        "solved": true
+      }
+    },
+    {
+      "slotId": "r2.quarry-terraces.stripped-all",
+      "task": "quarry-terraces",
+      "arm": "stripped-all",
+      "counting": {
+        "attempt": 2,
+        "turns": 47,
+        "solved": false
+      },
+      "superseded": {
+        "attempt": 1,
+        "turns": 39,
+        "solved": false
+      }
+    },
+    {
+      "slotId": "r2.quarry-terraces.candidate-U1",
+      "task": "quarry-terraces",
+      "arm": "candidate-U1",
+      "counting": {
+        "attempt": 2,
+        "turns": 42,
+        "solved": false
+      },
+      "superseded": {
+        "attempt": 1,
+        "turns": 49,
+        "solved": true
+      }
+    },
+    {
+      "slotId": "r2.quarry-terraces.A",
+      "task": "quarry-terraces",
+      "arm": "A",
+      "counting": {
+        "attempt": 2,
+        "turns": 42,
+        "solved": true
+      },
+      "superseded": {
+        "attempt": 1,
+        "turns": 39,
+        "solved": true
+      }
+    }
+  ],
+  "comparison": {
+    "metric": "turns",
+    "baselineArms": [
+      "A",
+      "A-prime"
+    ],
+    "strippedArm": "stripped-all",
+    "refArm": "candidate-U1",
+    "latest": {
+      "rule": "latest",
+      "solved": {
+        "A": {
+          "solved": 23,
+          "n": 24
+        },
+        "A-prime": {
+          "solved": 24,
+          "n": 24
+        },
+        "candidate-U1": {
+          "solved": 21,
+          "n": 21
+        },
+        "stripped-all": {
+          "solved": 22,
+          "n": 22
+        }
+      },
+      "median": {
+        "A": 30,
+        "A-prime": 30.5,
+        "candidate-U1": 27,
+        "stripped-all": 23
+      },
+      "aaGap": 0.02924085323278872,
+      "strippedVsRef": -0.031706740146541415
+    },
+    "firstClean": {
+      "rule": "firstClean",
+      "solved": {
+        "A": {
+          "solved": 23,
+          "n": 24
+        },
+        "A-prime": {
+          "solved": 24,
+          "n": 24
+        },
+        "candidate-U1": {
+          "solved": 22,
+          "n": 22
+        },
+        "stripped-all": {
+          "solved": 22,
+          "n": 23
+        }
+      },
+      "median": {
+        "A": 30.5,
+        "A-prime": 30.5,
+        "candidate-U1": 28,
+        "stripped-all": 31
+      },
+      "aaGap": 0.054625750593492534,
+      "strippedVsRef": -0.046330582739134
+    }
+  },
+  "metric": "turns",
+  "note": "The msys:/ cluster was one bug: a heredoc piped to node -/python3 - was scanned as shell, so a division and a regex literal read as filesystem roots. The two find / runs are real and stay contaminated."
+}
