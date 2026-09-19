@@ -663,11 +663,46 @@ contamination controlled so before/after comparisons mean something.
 >    **1** — `position()` reads current P, not original.
 >
 > **Why `quarry-terraces` cost 2x everything else:** with no way to evaluate
-> an expression at an OFFSET position, agents hand-unroll a 24-tap stencil,
-> each tap a full copy of the height function, ANDed together with binary
-> `mul`. Its graphs run 233 KB median at depth 96 against the campaign's
-> 11.7 KB and depth 15 — on half the nodes. The remaining turns go to blind
-> numeric sweeps, because finding 1 means nothing can measure the result.
+> an expression at an OFFSET position, agents hand-unroll a stencil, each
+> tap a full copy of the height function, ANDed together with binary `mul`.
+> The remaining turns go to blind numeric sweeps, because finding 1 means
+> nothing can measure the result.
+>
+> Measure it by the offending param, not by file size. An earlier draft
+> here quoted 233 KB median / 2.9 MB max, which were ON-DISK bytes: indent
+> scales with expression depth, and one 2.94 MB graph is 2.70 MB (92%)
+> leading whitespace. Only this task reaches depth 96-170, so the inflation
+> hit it hardest and flattered the case. Compact, the weight is always in a
+> single `filterByExpression.predicate` — 98.5-99.7% of the whole
+> expression — at 480,771 / 181,605 / 171,253 / 101,474 bytes across four
+> runs in three arms. That is 10-40x a normal predicate, not the ~250x the
+> raw file sizes implied. The mechanism and the ranking are unchanged.
+>
+> The duplication is worse in KIND than in size. Canonicalising conjuncts:
+> 66 taps of which 65 are identical; 51/48; 47/44; 25/24. And within a
+> single tap the height formula is inlined TWICE — once under `floor`, once
+> under `smoothstep(fract(…))` — because there is no way to compute it once
+> even locally. Two offset styles appear (`add(position(), vec(dx,0,dz))`
+> in one run, the offset folded into five separate `component(position,0)`
+> leaves in another), which is why it is easy to miss.
+>
+> **The alternatives are CLOSED, not merely awkward.** The grammar's only
+> reuse construct, `{fn:"param",name}`, is a graph-parameter feature:
+> `ParamValue` is `number|boolean|string|number[]|string[]|DataItem[]` and
+> never a `Field`, and bindings are wired through `Graph.setGraphParam` in
+> TypeScript — so a hand-authored `graph.json` cannot use it at all. And
+> `pointNeighborhood` exposes only `count` and `average`, no min/max/
+> all-satisfy, so even baking height onto a sample grid could not express
+> "every neighbour is within epsilon". The grammar DOES have variadic
+> arity, but exactly one function uses it (`vec`, `fieldJson.ts:1781`); it
+> was never pointed at the arithmetic or logical operators.
+>
+> **Design direction (three pieces that compose; each only half-helps):**
+> a variadic `all`/`any` to flatten the AND-chain; a `let` or named
+> subexpression — the highest-leverage one, since it fixes both cross-tap
+> and intra-tap duplication; and `at(expr, offset)`, useful only once `let`
+> exists to name what is being shifted. Plus min/max/all/any reducers on
+> `pointNeighborhood`.
 >
 > **The one real failure was a measurement failure.** `benches-wander` on
 > `r0.quarry-terraces.A-a1`: the agent's self-written check quantised its
