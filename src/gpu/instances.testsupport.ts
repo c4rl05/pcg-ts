@@ -439,10 +439,15 @@ async function fusedChain(
       const b = bareItem.geo.attrs.point;
       if (a.count !== b.count || a.names().join() !== b.names().join()) return false;
       for (const name of a.names()) {
-        const x = a.require(name).data;
-        const y = b.require(name).data;
-        if (x.length !== y.length) return false;
-        for (let i = 0; i < a.count * a.require(name).tupleSize; i++) {
+        const xa = a.require(name);
+        const ya = b.require(name);
+        // Shape and the elements, never `data.length`: that is capacity,
+        // and the materialized copy is allocated at exactly its count
+        // where `geo` carries doubling slack.
+        if (xa.type !== ya.type || xa.tupleSize !== ya.tupleSize) return false;
+        const x = xa.data;
+        const y = ya.data;
+        for (let i = 0; i < a.count * xa.tupleSize; i++) {
           if (!Object.is(x[i], y[i])) return false;
         }
       }

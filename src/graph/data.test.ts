@@ -94,6 +94,44 @@ describe("cloneGeometry", () => {
     dst.attrs.point.resize(src.pointCount + 1);
     expect(dst.attrs.point.require("density").get(src.pointCount)).toBe(0.5);
   });
+
+  it("allocates every domain at exactly its count, and appends by doubling from there", () => {
+    const src = makeMesh();
+    src.attrs.detail.add("label", "string", 1, "tower").setString(0, "pier");
+    src.attrs.vertex.add("uv", "f32", 2, [0.5, 0.5]);
+    // The source's sets carry the slack of growth by doubling.
+    expect(src.attrs.point.capacity).toBe(8);
+    const dst = cloneGeometry(src);
+    for (const domain of ["point", "vertex", "primitive", "detail"] as const) {
+      const set = dst.attrs[domain];
+      expect(set.capacity).toBe(set.count);
+      for (const attr of set) expect(attr.data.length).toBe(set.count * attr.tupleSize);
+    }
+    expect(dst.attrs.detail.require("label").getString(0)).toBe("pier");
+    // Appending grows as it always did, with the default on the new element.
+    dst.attrs.vertex.resize(dst.vertexCount + 1);
+    expect(dst.attrs.vertex.capacity).toBe(8);
+    expect(dst.attrs.vertex.require("uv").getTuple(dst.vertexCount - 1)).toEqual([0.5, 0.5]);
+  });
+
+  it("copies the elements only: bytes the source holds past its count do not come along", () => {
+    const src = makeMesh();
+    const P = src.attrs.point.require("P");
+    P.data.fill(42, src.pointCount * 3);
+    const dst = cloneGeometry(src);
+    const n = src.pointCount * 3;
+    expect(Array.from(dst.attrs.point.require("P").data)).toEqual(
+      Array.from(P.data.subarray(0, n)),
+    );
+    // A string column's table is the one the copy builds: the default in
+    // slot 0, then each word in element order — not the source's, which
+    // can hold words no element uses.
+    const tag = src.attrs.primitive.add("tag", "string", 1, "none");
+    tag.internString("unused");
+    tag.setString(1, "b");
+    expect(tag.stringTable).toEqual(["none", "unused", "b"]);
+    expect(cloneGeometry(src).attrs.primitive.require("tag").stringTable).toEqual(["none", "b"]);
+  });
 });
 
 describe("instanceAttributesOf", () => {

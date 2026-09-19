@@ -624,7 +624,12 @@ function copyRangeError(name: string): Error {
  *
  * `to` is resized only when it is not already the right size — the vertex
  * and primitive sets are sized by `setTopology`, and resizing them again
- * would be a no-op at best.
+ * would be a no-op at best. When `to` holds no columns yet its capacity is
+ * set to exactly `count`, since the result is built once at a known size.
+ *
+ * Every column this creates is written whole, so the columns are NOT
+ * default-initialized first. Columns `to` already held are none of this
+ * function's business and keep `resize`'s defaults on any new range.
  *
  * The gather reads and writes the raw storage rather than calling
  * `Attribute.copyFrom` once per element. That call re-checks the pair's
@@ -645,8 +650,21 @@ export function copyElements(
   indices: ArrayLike<number> | undefined,
   count: number,
 ): void {
-  for (const attr of from) to.add(attr.name, attr.type, attr.tupleSize, attr.defaultValue);
-  if (to.count !== count) to.resize(count);
+  // SIZED BEFORE THE COLUMNS EXIST, and the columns created uninitialized,
+  // because every column created here is written whole below: the
+  // identity is one `copyFrom` over `[0, count)`, and a gather writes slot
+  // `j` for every `j < count` — so the default fill `add` and `resize`
+  // would run first is overwritten element for element before anything
+  // reads it. A set that holds no columns yet is sized at exactly `count`;
+  // one that already holds columns of its own (a sampler's output cloud,
+  // handed to `carryPrimitiveAttributes`) goes through `resize`, which
+  // gives THOSE the default over any new range, since nothing here writes
+  // them.
+  if (to.size === 0) to._resizeForOverwrite(count);
+  else if (to.count !== count) to.resize(count);
+  for (const attr of from) {
+    to._addForOverwrite(attr.name, attr.type, attr.tupleSize, attr.defaultValue);
+  }
   for (const attr of from) {
     const dst = to.require(attr.name);
     if (indices === undefined) {

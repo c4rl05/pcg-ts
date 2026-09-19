@@ -686,7 +686,9 @@ export const meshFromField = standardNode<
     const nPoints = px.length;
     out.attrs.point.add("P", "f32", 3, 0);
     out.attrs.point.add("normal", "f32", 3, 0);
-    out.attrs.point.resize(nPoints);
+    // Exact and uninitialized: P and normal are the set's only columns, and
+    // the loop below assigns all three components of both for every point.
+    out.attrs.point._resizeForOverwrite(nPoints);
     const P = out.attrs.point.require("P").data;
     const N = out.attrs.point.require("normal").data;
     for (let v = 0; v < nPoints; v++) {

@@ -1555,6 +1555,101 @@ describe("mergePoints", () => {
   });
 });
 
+describe("merges: a column an input lacks, in a result sized without a fill", () => {
+  // Both merges size their result WITHOUT the default fill and write each
+  // input's block themselves, so these pin what that fill used to supply:
+  // a non-zero, non-uniform default over the block of every input that
+  // lacks the column — first, middle and last. Fresh storage reads 0
+  // there, which is what lets each expectation fail.
+  const TINT = [0.25, 0.5, 0.75, 1];
+
+  function tinted(positions: number[][], tints: number[][], labels: string[]) {
+    const geo = cloudAt(positions);
+    const tint = geo.attrs.point.add("tint", "f32", 4, TINT);
+    const label = geo.attrs.point.add("label", "string", 1, "none");
+    tints.forEach((t, i) => tint.setTuple(i, t));
+    labels.forEach((s, i) => label.setString(i, s));
+    return geo;
+  }
+
+  it("mergePoints: every lacking block reads the default, and the result is exactly its count", async () => {
+    const lackFirst = cloudAt([[0, 0, 0]]);
+    const a = tinted([[1, 0, 0], [2, 0, 0]], [[1, 0, 0, 1], [0, 1, 0, 1]], ["x", "y"]);
+    const lackMid = cloudAt([[3, 0, 0], [4, 0, 0]]);
+    const b = tinted([[5, 0, 0]], [[0, 0, 1, 1]], ["x"]);
+    const lackLast = cloudAt([[6, 0, 0]]);
+    const geo = firstGeo(
+      (
+        await runNode(mergePoints, {}, {
+          in: [lackFirst, a, lackMid, b, lackLast].map((g) => makeGeometryItem(g)),
+        })
+      ).out,
+    );
+    expect(geo.pointCount).toBe(7);
+    const tint = geo.attrs.point.require("tint");
+    expect([0, 1, 2, 3, 4, 5, 6].map((i) => tint.getTuple(i))).toEqual([
+      TINT,
+      [1, 0, 0, 1],
+      [0, 1, 0, 1],
+      TINT,
+      TINT,
+      [0, 0, 1, 1],
+      TINT,
+    ]);
+    const label = geo.attrs.point.require("label");
+    expect([0, 1, 2, 3, 4, 5, 6].map((i) => label.getString(i))).toEqual([
+      "none", "x", "y", "none", "none", "x", "none",
+    ]);
+    // The table a whole-result fill built: the default in slot 0, then
+    // each word in the order the copies met it.
+    expect(label.stringTable).toEqual(["none", "x", "y"]);
+    // The standard columns every input carries, copied whole.
+    expect(positionsOf(geo).map((p) => p[0])).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    for (const attr of geo.attrs.point) expect(attr.capacity).toBe(7);
+  });
+
+  it("mergePrimitives: the same, on the vertex and primitive domains", async () => {
+    const UV = [0.5, 0.25];
+    const withUv = (x: number, weight: number | undefined) => {
+      const mesh = createTriangleMesh([x, 0, 0, x + 1, 0, 0, x, 0, 1], [0, 1, 2]);
+      const uv = mesh.attrs.vertex.add("uv", "f32", 2, UV);
+      for (let v = 0; v < 3; v++) uv.setTuple(v, [x + v, 5 - v]);
+      if (weight !== undefined) mesh.attrs.primitive.add("weight", "f32", 1, 3).set(0, weight);
+      return mesh;
+    };
+    const plain = () => createPolyline([9, 0, 0, 9, 1, 0]);
+    const geo = firstGeo(
+      (
+        await runNode(mergePrimitives, {}, {
+          in: [plain(), withUv(0, 7), plain(), withUv(10, undefined), plain()].map((g) =>
+            makeGeometryItem(g),
+          ),
+        })
+      ).out,
+    );
+    expect(geo.vertexCount).toBe(2 + 3 + 2 + 3 + 2);
+    expect(geo.primitiveCount).toBe(5);
+    const uv = geo.attrs.vertex.require("uv");
+    const uvs = Array.from({ length: geo.vertexCount }, (_, v) => uv.getTuple(v));
+    expect(uvs).toEqual([
+      UV, UV,
+      [0, 5], [1, 4], [2, 3],
+      UV, UV,
+      [10, 5], [11, 4], [12, 3],
+      UV, UV,
+    ]);
+    const weight = geo.attrs.primitive.require("weight");
+    expect([0, 1, 2, 3, 4].map((p) => weight.get(p))).toEqual([3, 7, 3, 3, 3]);
+    const primtype = geo.attrs.primitive.require("primtype");
+    expect([0, 1, 2, 3, 4].map((p) => primtype.getString(p))).toEqual([
+      "polyline", "poly", "polyline", "poly", "polyline",
+    ]);
+    expect(geo.attrs.point.capacity).toBe(geo.pointCount);
+    expect(geo.attrs.vertex.capacity).toBe(geo.vertexCount);
+    expect(geo.attrs.primitive.capacity).toBe(geo.primitiveCount);
+  });
+});
+
 describe("mergePrimitives", () => {
   /**
    * A triangle whose topology came from bare `setTopology`, so it carries

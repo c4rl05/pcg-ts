@@ -172,9 +172,43 @@ export class Attribute<T extends AttrType = AttrType> {
     if (value.length !== ts) {
       throw new Error(`attribute "${this._name}": fill tuple length ${value.length} !== ${ts}`);
     }
-    for (let i = start; i < end; i++) {
-      const offset = i * ts;
-      for (let k = 0; k < ts; k++) this.data[offset + k] = value[k];
+    // Clamped at 0 because the per-element loop this replaced wrote
+    // nothing at a negative index, where `fill` and `copyWithin` would
+    // count back from the end. A range past the end is clipped by both
+    // forms alike.
+    const first = Math.max(start, 0);
+    if (end <= first) return;
+    const data = this.data;
+    const lo = first * ts;
+    const hi = end * ts;
+    // A tuple whose components are all the same number — every scalar
+    // default, since defaults are stored as tuples even at tupleSize 1, and
+    // most vector ones ([0, 0, 0], [1, 1, 1]) — is ONE typed-array fill.
+    // `Object.is` rather than `===` so 0 and -0 stay apart: they are
+    // different f32 bits, and a pattern holding both must take the copy
+    // below. Either way each slot holds the bits one assignment of that
+    // component would have stored, because `fill` converts its value
+    // exactly as an indexed store does.
+    let uniform = true;
+    for (let k = 1; k < ts; k++) {
+      if (!Object.is(value[k], value[0])) {
+        uniform = false;
+        break;
+      }
+    }
+    if (uniform) {
+      data.fill(value[0], lo, hi);
+      return;
+    }
+    // Otherwise write the tuple once and double it with `copyWithin`, which
+    // moves stored bytes: log2(elements) native copies instead of one JS
+    // store per component.
+    for (let k = 0; k < ts; k++) data[lo + k] = value[k];
+    let filled = ts;
+    while (lo + filled < hi) {
+      const n = Math.min(filled, hi - lo - filled);
+      data.copyWithin(lo + filled, lo, lo + n);
+      filled += n;
     }
   }
 
@@ -270,7 +304,13 @@ export class AttributeSet implements Iterable<Attribute> {
     return this._count;
   }
 
-  /** Allocated element capacity (grows by doubling). */
+  /**
+   * Allocated element capacity, always at least {@link count}. It grows by
+   * doubling as elements are appended, but a result built once at a known
+   * size (a cloned, merged or gathered geometry) is allocated at exactly
+   * its count. Read `count`, never capacity, for how many elements hold
+   * data.
+   */
   get capacity(): number {
     return this._capacity;
   }
@@ -295,6 +335,34 @@ export class AttributeSet implements Iterable<Attribute> {
     }
     const attr = new Attribute(name, type, tupleSize, this._capacity, defaultValue);
     if (this._count > 0) attr.fillDefault(0, this._count);
+    this.map.set(name, attr);
+    return attr;
+  }
+
+  /**
+   * @internal {@link add} WITHOUT initializing the existing elements: the
+   * new column's storage is fresh, so it reads as zeros, not as
+   * `defaultValue`, until the caller writes it. Only for a
+   * caller that writes EVERY element in `[0, count)` of this column before
+   * anything can read it — a copy of a whole column, or a gather with one
+   * source per destination slot. Anything less must use {@link add}: a
+   * non-zero default (scale 1, a colour, a string that is not the table's
+   * first entry) left unwritten would read as 0.
+   *
+   * A string column still interns its default at table index 0, exactly as
+   * {@link add} does, so the table a full copy builds is the one it built
+   * before.
+   */
+  _addForOverwrite<T extends AttrType>(
+    name: string,
+    type: T,
+    tupleSize = 1,
+    defaultValue?: AttrDefault,
+  ): Attribute<T> {
+    if (this.map.has(name)) {
+      throw new Error(`attribute "${name}" already exists`);
+    }
+    const attr = new Attribute(name, type, tupleSize, this._capacity, defaultValue);
     this.map.set(name, attr);
     return attr;
   }
@@ -373,6 +441,40 @@ export class AttributeSet implements Iterable<Attribute> {
     }
     if (count > this._count) {
       for (const attr of this.map.values()) attr.fillDefault(this._count, count);
+    }
+    this._count = count;
+  }
+
+  /**
+   * @internal {@link resize} for a caller that knows the FINAL count and
+   * writes every element in `[previous count, count)` of every column
+   * before anything reads it. Two things differ, and nothing else:
+   *
+   * - New elements are NOT initialized to the default. They hold zeros
+   *   when storage grows, and whatever an earlier, longer count left there
+   *   when it does not, so a range the caller does not overwrite reads as
+   *   neither. A caller that leaves any element of any column unwritten
+   *   must use {@link resize}, or fill that range with
+   *   {@link Attribute.fillDefault} itself.
+   * - Capacity is EXACT rather than doubled: storage that has to grow grows
+   *   to `count` elements, and a set holding no columns — whose capacity is
+   *   only a number until a column is added — takes `count` as its capacity
+   *   outright, shrinking it if need be. That is right for a result built
+   *   once at a size known up front (a clone, a merge of known inputs, a
+   *   gather of a known index list); a column that keeps growing should
+   *   grow through {@link resize}, whose doubling keeps appends amortized.
+   *   A later {@link resize} past an exact capacity doubles from there as
+   *   usual.
+   */
+  _resizeForOverwrite(count: number): void {
+    if (!Number.isInteger(count) || count < 0) {
+      throw new Error(`resize: count must be a non-negative integer, got ${count}`);
+    }
+    if (this.map.size === 0) {
+      this._capacity = count;
+    } else if (count > this._capacity) {
+      for (const attr of this.map.values()) attr._grow(count);
+      this._capacity = count;
     }
     this._count = count;
   }

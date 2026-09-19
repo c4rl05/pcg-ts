@@ -9,7 +9,7 @@
  * that looks like a successful cook. These tests pin the diagnostic.
  */
 import { describe, expect, it } from "vitest";
-import { createPointCloud } from "../data/index.js";
+import { AttributeSet, createPointCloud } from "../data/index.js";
 import { makeGeometryItem, makeValueItem, type GeometryItem } from "../graph/index.js";
 import { spawnInstances } from "../spawn/index.js";
 import {
@@ -19,7 +19,7 @@ import {
   volumeSample,
 } from "./index.js";
 import { firstGeo, runNode } from "./nodes.testsupport.js";
-import { requireReportSlot, type ReportSlot } from "./util.js";
+import { copyElements, requireReportSlot, type ReportSlot } from "./util.js";
 
 function cloudAt(positions: number[][]): ReturnType<typeof createPointCloud> {
   const geo = createPointCloud(positions.length);
@@ -226,5 +226,71 @@ describe("requireReportSlot: which geometry the collision is on", () => {
     const same = { ...slotOnP(), attrs, name: "segmentIndex" } as const;
     expect(() => requireReportSlot(same)).not.toThrow();
     expect(() => requireReportSlot({ ...same, on: "output" })).not.toThrow();
+  });
+});
+
+describe("copyElements", () => {
+  // It creates each column UNINITIALIZED, because it writes every one of
+  // them whole. These pin that the whole really is written — with
+  // non-zero, non-uniform defaults, so a slot left at the zero of fresh
+  // storage shows — and that a column the destination already held, which
+  // nothing here writes, still gets its default over a new range.
+  function source(): AttributeSet {
+    const set = new AttributeSet();
+    const tint = set.add("tint", "f32", 4, [0.25, 0.5, 0.75, 1]);
+    const label = set.add("label", "string", 1, "none");
+    set.resize(3);
+    tint.setTuple(0, [1, 0, 0, 1]);
+    tint.setTuple(2, [0, 0, 1, 1]);
+    label.setString(1, "b");
+    label.setString(2, "c");
+    return set;
+  }
+
+  it("gathers into an empty set at exactly the count, every slot written", () => {
+    const to = new AttributeSet();
+    copyElements(source(), to, [2, 0, 1, 2, 1], 5);
+    expect(to.count).toBe(5);
+    expect(to.capacity).toBe(5);
+    const tint = to.require("tint");
+    expect([0, 1, 2, 3, 4].map((i) => tint.getTuple(i))).toEqual([
+      [0, 0, 1, 1],
+      [1, 0, 0, 1],
+      [0.25, 0.5, 0.75, 1],
+      [0, 0, 1, 1],
+      [0.25, 0.5, 0.75, 1],
+    ]);
+    const label = to.require("label");
+    expect([0, 1, 2, 3, 4].map((i) => label.getString(i))).toEqual(["c", "none", "b", "c", "b"]);
+    expect(label.stringTable).toEqual(["none", "c", "b"]);
+  });
+
+  it("copies the identity whole", () => {
+    const to = new AttributeSet();
+    copyElements(source(), to, undefined, 3);
+    expect(to.capacity).toBe(3);
+    expect(Array.from(to.require("tint").data)).toEqual([
+      1, 0, 0, 1, 0.25, 0.5, 0.75, 1, 0, 0, 1, 1,
+    ]);
+  });
+
+  it("gives a column the destination already held its default over the new range", () => {
+    const to = new AttributeSet();
+    const keep = to.add("keep", "f32", 3, [1, 2, 3]);
+    to.resize(2);
+    keep.setTuple(0, [7, 7, 7]);
+    keep.setTuple(1, [8, 8, 8]);
+    copyElements(source(), to, [0, 1, 2, 0], 4);
+    expect(to.count).toBe(4);
+    expect([0, 1, 2, 3].map((i) => keep.getTuple(i))).toEqual([
+      [7, 7, 7],
+      [8, 8, 8],
+      [1, 2, 3],
+      [1, 2, 3],
+    ]);
+    // CONTROL: the gathered column over the same range holds gathered
+    // values, not its default, so the two branches are told apart.
+    expect(to.require("tint").getTuple(2)).toEqual([0, 0, 1, 1]);
+    expect(to.require("tint").getTuple(3)).toEqual([1, 0, 0, 1]);
   });
 });

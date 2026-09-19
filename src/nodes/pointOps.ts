@@ -1078,7 +1078,14 @@ export const copyToPoints = standardNode<
       outSet.add(indexName, "i32", 1, -1);
     }
 
-    outSet.resize(total);
+    // Exact and uninitialized, because every column is written whole below
+    // before anything reads it. The blocks `[starts[t], starts[t + 1])`
+    // tile `[0, total)`, and each kind of column covers every block: the
+    // target index is filled per target, a source column is gathered
+    // through `pointSrc` (one source per slot), a carried target column is
+    // broadcast per target, and a standard the source lacks (P, rot, scale,
+    // seed) is composed per copy in the transform loop.
+    outSet._resizeForOverwrite(total);
 
     // Written per TARGET, not per copy: one fill over the block of copies
     // that landed on it, at the same offsets the transform loop below
@@ -1381,6 +1388,23 @@ function unionColumns(
   }
 }
 
+/**
+ * Write one input's block `[offset, offset + n)` of every column of `into`,
+ * for a merge that sized `into` with `_resizeForOverwrite` and so skipped
+ * the default fill. A column the input carries is copied over the block; a
+ * column it lacks gets its default over the block — exactly what the fill
+ * over the whole result used to leave there, now written once instead of
+ * written and then copied over. Blocks tile the result, so after the last
+ * input every element of every column has been written exactly once.
+ */
+function appendBlock(into: AttributeSet, from: AttributeSet, offset: number, n: number): void {
+  for (const dst of into) {
+    const src = from.get(dst.name);
+    if (src === undefined) dst.fillDefault(offset, offset + n);
+    else dst.copyFrom(src, 0, offset, n);
+  }
+}
+
 /** Concatenate the point clouds of every connected input. */
 export const mergePoints = standardNode<MergePointsParams, MergePointsInputs, MergePointsOutputs>({
   type: "mergePoints",
@@ -1408,14 +1432,11 @@ export const mergePoints = standardNode<MergePointsParams, MergePointsInputs, Me
     unionColumns("mergePoints", items, "point", outSet);
     let total = 0;
     for (const item of items) total += item.geo.pointCount;
-    outSet.resize(total);
+    outSet._resizeForOverwrite(total);
     let offset = 0;
     for (const item of items) {
-      const n = item.geo.pointCount;
-      for (const attr of item.geo.attrs.point) {
-        outSet.require(attr.name).copyFrom(attr, 0, offset, n);
-      }
-      offset += n;
+      appendBlock(outSet, item.geo.attrs.point, offset, item.geo.pointCount);
+      offset += item.geo.pointCount;
     }
     const tags = new Set<string>();
     for (const item of items) for (const tag of item.tags) tags.add(tag);
@@ -1466,6 +1487,19 @@ export const mergePrimitives = standardNode<
       totalVerts += geo.vertexToPoint.length;
       totalPrims += geo.primVertexStart.length;
     }
+
+    // ALL THREE DOMAINS SIZED HERE, once, at exactly their totals and
+    // without the default fill, because the copy loop at the end writes
+    // every element of every column input by input (`appendBlock`: a
+    // column an input lacks gets its default over that input's block).
+    // Sizing the vertex and primitive sets BEFORE `setTopology` is what
+    // lets its resize find them already the right size and do nothing,
+    // where it used to grow them by doubling and fill them with defaults
+    // this node then copied over; the point `resize` beside it is a no-op
+    // for the same reason.
+    out.attrs.point._resizeForOverwrite(totalPoints);
+    out.attrs.vertex._resizeForOverwrite(totalVerts);
+    out.attrs.primitive._resizeForOverwrite(totalPrims);
 
     // THE ASSEMBLER IS LOCAL ON PURPOSE, and is not `gatherPrimitives`
     // (util.ts) with more sources. That one GATHERS a chosen subset of one
@@ -1519,17 +1553,9 @@ export const mergePrimitives = standardNode<
     let primOffset = 0;
     for (const item of items) {
       const geo = item.geo;
-      for (const attr of geo.attrs.point) {
-        out.attrs.point.require(attr.name).copyFrom(attr, 0, pointOffset, geo.pointCount);
-      }
-      for (const attr of geo.attrs.vertex) {
-        out.attrs.vertex.require(attr.name).copyFrom(attr, 0, vertexOffset, geo.attrs.vertex.count);
-      }
-      for (const attr of geo.attrs.primitive) {
-        out.attrs.primitive
-          .require(attr.name)
-          .copyFrom(attr, 0, primOffset, geo.attrs.primitive.count);
-      }
+      appendBlock(out.attrs.point, geo.attrs.point, pointOffset, geo.pointCount);
+      appendBlock(out.attrs.vertex, geo.attrs.vertex, vertexOffset, geo.attrs.vertex.count);
+      appendBlock(out.attrs.primitive, geo.attrs.primitive, primOffset, geo.attrs.primitive.count);
       pointOffset += geo.pointCount;
       vertexOffset += geo.attrs.vertex.count;
       primOffset += geo.attrs.primitive.count;
