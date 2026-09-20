@@ -442,7 +442,7 @@ export function repeatUntilNode(
     // an uninterrupted block. See NodeDef.selfMetered.
     selfMetered: true,
     memoKey: () => transitiveVersionKey(inner, new Set()),
-    async execute({ inputs, params, seed, signal, budgetMs, gpu, checkCancelled }) {
+    async execute({ inputs, params, seed, signal, budgetMs, gpu, tripwire, checkCancelled }) {
       const maxRounds = params.maxRounds as number;
       const settleAttr = params.settleAttr as string;
       // Checked here as well as in the schema, because a def built by this
@@ -513,7 +513,7 @@ export function repeatUntilNode(
               }
               let result;
               try {
-                result = await cook(inner, { signal, budgetMs, gpu });
+                result = await cook(inner, { signal, budgetMs, gpu, tripwire });
               } catch (err) {
                 // Cancellation passes through UNWRAPPED, and this branch
                 // has to come FIRST — `forEach.ts` documents the exact

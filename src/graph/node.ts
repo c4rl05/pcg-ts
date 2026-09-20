@@ -1,5 +1,6 @@
 import type { GpuFieldResolver } from "../fields/index.js";
 import type { DataCollection } from "./data.js";
+import type { Tripwire } from "./tripwire.js";
 
 /** What a pin carries; `any` is a wildcard compatible with every other kind. */
 export type PinKind = "geometry" | "value" | "instances" | "any";
@@ -91,6 +92,16 @@ export interface NodeExecuteArgs<P> {
    * exactly the pre-GPU ones.
    */
   readonly gpu?: GpuFieldResolver;
+  /**
+   * The enclosing cook's tripwire, when one is armed (see
+   * `CookOptions.tripwire`); `undefined` otherwise, which is every
+   * production cook. A composite node cooking an inner graph FORWARDS it
+   * — `cook(inner, { signal, budgetMs, gpu, tripwire })`, exactly as it
+   * forwards the other three — so the body's node outputs are watched by
+   * the outermost cook and are named `thisNode/innerNode` in a report. A
+   * node that does not cook an inner graph has nothing to do with it.
+   */
+  readonly tripwire?: Tripwire;
   /**
    * Throws `CookCancelledError` if the cook was aborted. Nodes doing long
    * loops should call it periodically so cancellation stays responsive.

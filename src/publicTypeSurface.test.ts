@@ -107,7 +107,15 @@ const ROOT_TYPE_SURFACE = [
   "SubgraphRegistrationSpec", "SubgraphSpec", "SurfaceSampleParams", "SweepProfileParams",
   "TransferAlongPathParams", "TransferAttrDomain", "TransferAttributeParams",
   "TransferByIndexParams", "TransferMappingResult", "TransferNearestOptions",
-  "TransferRaycastOptions", "TransferUvOptions", "TransformPointsParams", "UpdateOptions",
+  "TransferRaycastOptions", "TransferUvOptions", "TransformPointsParams",
+  // The opt-in mutation guard's three names, and TYPES ONLY on purpose:
+  // `TripwireError` and `resolveTripwire` stay in src/graph/tripwire.js
+  // (see the comment in src/graph/index.ts). A third-party composite node
+  // needs `Tripwire` to forward `NodeExecuteArgs.tripwire` into the inner
+  // cook it runs, and `TripwireMode`/`TripwireOption` spell what
+  // `CookOptions.tripwire` takes.
+  "Tripwire", "TripwireMode", "TripwireOption",
+  "UpdateOptions",
   "UpdateStats", "ValueConstantParams", "ValueItem", "VolumeSampleParams", "VoronoiCellsParams",
   "World",
   "WorldOptions", "WorldStats", "WorldValidationError", "WorleyFeatureOpts", "WorleyNoiseOpts", "WrapperKind",

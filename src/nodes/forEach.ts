@@ -214,7 +214,7 @@ export function forEachNode(
     // executor's seam can see inside an execute. See NodeDef.selfMetered.
     selfMetered: true,
     memoKey: () => transitiveVersionKey(inner, new Set()),
-    async execute({ inputs, params, seed, signal, budgetMs, gpu, checkCancelled }) {
+    async execute({ inputs, params, seed, signal, budgetMs, gpu, tripwire, checkCancelled }) {
       const source = inputs[iterated.name] ?? [];
       return withExclusiveGraph(inner, async () => {
         checkExposedValues(inner, paramList, params);
@@ -264,7 +264,7 @@ export function forEachNode(
             }
             let result;
             try {
-              result = await cook(inner, { signal, budgetMs, gpu });
+              result = await cook(inner, { signal, budgetMs, gpu, tripwire });
             } catch (err) {
               // Cancellation passes through UNWRAPPED, and this branch has
               // to come first. The executor rethrows a cancelled cook as

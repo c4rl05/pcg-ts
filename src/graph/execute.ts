@@ -23,6 +23,7 @@ import {
 } from "./data.js";
 import { CookCancelledError, GraphCycleError, GraphValidationError, NodeExecutionError } from "./errors.js";
 import { deriveNodeSeed, type Graph, type NodeState, type OutputDecl } from "./graph.js";
+import { resolveTripwire, type TripwireOption } from "./tripwire.js";
 
 /**
  * Progress callback payload: one entry per node visited by a cook.
@@ -116,6 +117,20 @@ export interface CookOptions {
    * wrapped); the node that just finished keeps its cache.
    */
   onNodeDone?: (info: NodeDoneInfo) => void;
+  /**
+   * Arm the tripwire: fail this cook if any node's output changed after
+   * that node finished producing it. Off by default and free when off —
+   * see `src/graph/tripwire.ts` for what it watches, what it costs and
+   * what it cannot see.
+   *
+   * `true` (or `"cook"`) sweeps once when the cook finishes; `"node"`
+   * sweeps after every node, which is slower but also names the node that
+   * was cooking when the change appeared. `false` declines even when
+   * `PCG_TRIPWIRE` is set in the environment. A `Tripwire` VALUE is how a
+   * composite node forwards the outer session into a nested cook (see
+   * `NodeExecuteArgs.tripwire`); callers pass a flag.
+   */
+  tripwire?: TripwireOption;
   /**
    * Cook only these declared outputs (by name): the pass visits just the
    * induced upstream subgraph, and the result contains exactly these
@@ -960,6 +975,10 @@ export function cook(graph: Graph, opts: CookOptions = {}): Promise<CookResult> 
 
 async function cookRun(graph: Graph, opts: CookOptions): Promise<CookResult> {
   const { budgetMs, signal, onNodeDone } = opts;
+  // `undefined` unless this cook was armed (or inherited an outer cook's
+  // session through a wrapper node). Every hook below is `tripwire?.…`
+  // against it, so an unarmed cook pays one property read per node.
+  const tripwire = resolveTripwire(opts.tripwire);
   const start = performance.now();
   let sliceStart = start;
   const gpuStats = opts.gpu !== undefined ? createGpuCookStats() : undefined;
@@ -1127,6 +1146,10 @@ async function cookRun(graph: Graph, opts: CookOptions): Promise<CookResult> {
         elapsedMs: performance.now() - nodeStart,
         selfMetered,
       });
+      // A cache HIT is watched too: the bytes served from it are exactly
+      // the bytes a later node could scribble on, and a cache filled by an
+      // earlier cook is the one whose corruption survives longest.
+      tripwire?.record(id, def.type, node.cache.outputs);
     } else {
       let outputs: Record<string, DataCollection>;
       try {
@@ -1138,6 +1161,9 @@ async function cookRun(graph: Graph, opts: CookOptions): Promise<CookResult> {
           budgetMs,
           gpu,
           checkCancelled,
+          // Scoped to this node, so a wrapper's body reports its nodes as
+          // `thisNode/innerNode` and the outermost cook sweeps them all.
+          tripwire: tripwire?.scope(id),
         });
       } catch (err) {
         // A CookCancelledError only counts as cancellation when the signal
@@ -1164,6 +1190,7 @@ async function cookRun(graph: Graph, opts: CookOptions): Promise<CookResult> {
         elapsedMs: performance.now() - nodeStart,
         selfMetered,
       });
+      tripwire?.record(id, def.type, outputs);
     }
   };
 
@@ -1268,6 +1295,9 @@ async function cookRun(graph: Graph, opts: CookOptions): Promise<CookResult> {
           selfMetered: id === run.terminal,
         });
       }
+      // Terminal-only caching: the run's one cache entry is the only
+      // output there is to watch. Interior members hold none.
+      tripwire?.record(run.terminal, terminal.def.type, terminal.cache.outputs);
       return true;
     }
 
@@ -1413,6 +1443,7 @@ async function cookRun(graph: Graph, opts: CookOptions): Promise<CookResult> {
         selfMetered: id === run.terminal,
       });
     }
+    tripwire?.record(run.terminal, terminal.def.type, outputs);
     return true;
   };
 
@@ -1436,6 +1467,11 @@ async function cookRun(graph: Graph, opts: CookOptions): Promise<CookResult> {
       }
       if (!fused) await cookNode(id);
 
+      // `"node"` mode sweeps here, at every depth, so the report can name
+      // the node that was cooking when the change appeared. `"cook"` mode
+      // sweeps once, below, when the outermost cook is done.
+      if (tripwire?.mode === "node") tripwire.sweep(id);
+
       if (budgetMs !== undefined && performance.now() - sliceStart > budgetMs) {
         await yieldToEventLoop();
         checkCancelled();
@@ -1453,6 +1489,13 @@ async function cookRun(graph: Graph, opts: CookOptions): Promise<CookResult> {
     throw err;
   }
   disposeUndelivered(outputs);
+  // The final sweep, and only from the session's own cook: a nested cook
+  // that inherited the handle (depth > 0) leaves its body's outputs
+  // watched, because the wrapper node that owns them is still running and
+  // whatever comes after it is exactly what this is looking for. Only on
+  // success — a cook that already threw has an error worth more than this
+  // one.
+  if (tripwire !== undefined && tripwire.depth === 0) tripwire.sweep(undefined);
   stats.elapsedMs = performance.now() - start;
   return { outputs, stats };
 }

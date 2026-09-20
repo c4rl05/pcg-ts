@@ -752,7 +752,11 @@ const portalDef = defineNode<PortalParams>({
  * The outer cook's signal and budgetMs are forwarded into the inner cook;
  * onNodeDone is deliberately not — inner node completions are an
  * implementation detail of the composite node (and their ids could shadow
- * outer ones).
+ * outer ones). The tripwire IS forwarded, and for the reason onNodeDone
+ * is not: an inner node's output is not an implementation detail once
+ * something outside the body can still write to it, so the outermost cook
+ * has to keep watching it. The shadowing is handled by prefixing — an
+ * inner node is reported as `outerId/innerId` (see `src/graph/tripwire.ts`).
  *
  * Note: instances of one definition share the inner graph. Two instances
  * get different seeds, so each cook of one invalidates the other's inner
@@ -816,7 +820,7 @@ export function subgraphNode(
     // number is a composite's either way. See NodeDef.selfMetered.
     selfMetered: true,
     memoKey: () => transitiveVersionKey(inner, new Set()),
-    async execute({ inputs, params, seed, signal, budgetMs, gpu }) {
+    async execute({ inputs, params, seed, signal, budgetMs, gpu, tripwire }) {
       // The writes and the cook are ONE indivisible step. One inner graph
       // can back several wrapper instances — the same def used twice, or,
       // once primitives are named, the same primitive referenced from two
@@ -840,7 +844,7 @@ export function subgraphNode(
           // gpu forwards like signal/budgetMs: the inner cook applies the
           // same policy (its per-cook stats view reports into the outer
           // cook's sink; see gpuStatsView in execute.ts).
-          const result = await cook(inner, { signal, budgetMs, gpu });
+          const result = await cook(inner, { signal, budgetMs, gpu, tripwire });
           const out: Record<string, DataCollection> = {};
           for (const exp of exposedOutputs) {
             out[exp.name] = result.outputs[`__out_${exp.name}`] ?? [];

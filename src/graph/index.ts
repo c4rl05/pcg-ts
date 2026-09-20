@@ -87,6 +87,14 @@ export {
   type CookStats,
   type NodeDoneInfo,
 } from "./execute.js";
+// TYPES ONLY. `TripwireError` and `resolveTripwire` stay in ./tripwire.js,
+// where the executor and the tests reach them: the tripwire is armed by
+// an option and reported by a message, and nothing a consumer writes
+// needs to construct one or catch it by class. The three names here are
+// what a THIRD-PARTY composite node needs to forward
+// `NodeExecuteArgs.tripwire` into the inner cook it runs, which is the
+// only reason any of this is public at all.
+export { type Tripwire, type TripwireMode, type TripwireOption } from "./tripwire.js";
 export { cloneGeometry } from "./clone.js";
 export {
   describeSubgraphParams,
