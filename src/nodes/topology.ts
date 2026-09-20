@@ -660,6 +660,16 @@ export const connectByIndex = standardNode<
       "a parent pointer",
     );
 
+    // WHICH answer a miss gets, settled here rather than asked once per
+    // MISS in the loop below — see the note in `src/noise/worley.ts`, and
+    // the same hoist at the top of connectPoints' execute. The miss count
+    // is data-proportional by design: `outOfRange`'s own description sells
+    // "skip" as the mode for a column with many out-of-range entries, and
+    // `missCountAttr` exists to report how many there were. So this is not
+    // a once-per-cook branch wearing a loop's clothes; it is a comparison
+    // that runs as often as the data says.
+    const missIsError = mode === "error";
+
     // One pass in point order, so the edge order IS the point order and
     // nothing has to be sorted back into place afterwards.
     const child: number[] = [];
@@ -674,7 +684,7 @@ export const connectByIndex = standardNode<
       const k = Math.trunc(idx.data[i]);
       if (k === root) continue; // a root: no parent, no edge, and no miss
       if (k < 0 || k >= n || k === i) {
-        if (mode === "error") {
+        if (missIsError) {
           const why =
             k === i
               ? "names itself, which would be an edge whose two vertices are the same point"

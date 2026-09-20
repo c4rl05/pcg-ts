@@ -335,6 +335,11 @@ export const runFit = standardNode<RunFitParams, RunFitInputs, RunFitOutputs>({
     // Params before geometry: a bad param reported as "no polyline
     // primitives" sends the author to debug the wrong thing entirely.
     const { arcAttr, valueAttr } = params;
+    // WHETHER a coordinate column was named, decided once rather than in
+    // the slot loop below and again per closed PATH — see the note in
+    // `src/noise/worley.ts`. The two remaining `arcAttr === ""` in this
+    // node are inside `throw` expressions, where the cook is already over.
+    const readsArcAttr = arcAttr !== "";
     if (valueAttr === "") {
       throw new Error(
         'runFit: param "valueAttr" must be a non-empty attribute name; it is the point attribute the line is fitted through, and a fit with nothing to fit is not a cheaper cook but an empty one',
@@ -359,7 +364,7 @@ export const runFit = standardNode<RunFitParams, RunFitInputs, RunFitOutputs>({
           `runFit: params "${slot.param}" and "valueAttr" are both "${slot.name}"; the fit would be written over the column it was fitted through, so every later path would be fitted against this node's own output rather than the data`,
         );
       }
-      if (arcAttr !== "" && slot.name === arcAttr) {
+      if (readsArcAttr && slot.name === arcAttr) {
         throw new Error(
           `runFit: params "${slot.param}" and "arcAttr" are both "${slot.name}"; the fit would be written over the arc coordinate the runs were cut on, so every later path would be cut on this node's own output rather than on the arc`,
         );
@@ -478,7 +483,7 @@ export const runFit = standardNode<RunFitParams, RunFitInputs, RunFitOutputs>({
       // closes the half that could not be. The cost is one stated param
       // on a path that has already opted into a coordinate of its own,
       // which is where the author knows the answer and the node does not.
-      if (cyclic && rawPeriod === 0 && params.arcAttr !== "") {
+      if (cyclic && rawPeriod === 0 && readsArcAttr) {
         throw new Error(
           `runFit: the closed path at primitive ${table.prim} wraps and reads its arc from attribute "${params.arcAttr}", but "period" is 0, which means "the path's own measured length" (${table.length}) — a value in world units that is only right if "${params.arcAttr}" is measured in them too. The seam gap is arc(first) + period - arc(last), so a period larger than that attribute's real extent invents a break at the seam and silently splits the run that crossed it. Set "period" to the value "${params.arcAttr}" wraps at (1 for a curveU coordinate, the lap length for a station), or set "wrap" false to treat the seam as a break, or clear "arcAttr" to use the measured arc.`,
         );

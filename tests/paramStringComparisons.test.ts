@@ -68,7 +68,7 @@
  * would be wrong advice.
  *
  * THE COST OF THE CLOSURE HALF, MEASURED: counting loop bodies alone
- * finds 12 sites and counting loops plus nested functions finds 23. The
+ * finds 9 sites and counting loops plus nested functions finds 20. The
  * loop-only rule is cheaper to freeze and would have scored the bug that
  * actually happened as clean — worley's comparison was in an arrow
  * returned from an arrow, not in a `for` body — so the closure half is
@@ -256,15 +256,8 @@ const ALLOWED: readonly Allowed[] = [
     file: "src/nodes/runs.ts",
     expr: "arcAttr",
     literal: '""',
-    sites: 3,
-    why: "one loop over runFit's reporting SLOTS, and two per-vertex loops where the comparison sits INSIDE the `throw` that ends the cook",
-  },
-  {
-    file: "src/nodes/runs.ts",
-    expr: "params.arcAttr",
-    literal: '""',
-    sites: 1,
-    why: "runFit's period/wrap refusal, per closed PATH — the GUARD of the throw, on the happy path, not inside it",
+    sites: 2,
+    why: "two per-vertex loops in runFit where the comparison sits INSIDE the `throw` that ends the cook, not in its guard",
   },
   {
     file: "src/nodes/sources.ts",
@@ -272,13 +265,6 @@ const ALLOWED: readonly Allowed[] = [
     literal: '"xz"',
     sites: 1,
     why: "inside a thrown message, in a loop over the two or three AXES of the scatter window",
-  },
-  {
-    file: "src/nodes/topology.ts",
-    expr: "mode",
-    literal: '"error"',
-    sites: 1,
-    why: "connectByIndex's per-point loop, on the MISS branch — the one site here that is genuinely data-proportional",
   },
 ];
 
