@@ -16,8 +16,9 @@ import {
   type TransferRaycastOptions,
 } from "../data/index.js";
 import { attributeNotFound } from "../data/attributeNotFound.js";
+import { deriveGeometry } from "../data/derive.js";
 import { isField, type Column } from "../fields/index.js";
-import { cloneGeometry, makeGeometryItem, type DataItem } from "../graph/index.js";
+import { makeGeometryItem, type DataItem } from "../graph/index.js";
 import { hashCombine } from "../random/index.js";
 import { standardNode } from "./registry.js";
 import {
@@ -348,7 +349,7 @@ export const setAttribute = standardNode<
       p.select === 0,
   },
   async execute({ inputs, params, seed: nodeSeed, gpu }) {
-    const geo = cloneGeometry(requireGeometry(inputs, "in", "setAttribute"));
+    const geo = deriveGeometry(requireGeometry(inputs, "in", "setAttribute"));
     const domain = params.domain as Domain;
     const type = params.type as AttrType;
     const ts = params.tupleSize;
@@ -536,7 +537,7 @@ export const promoteAttribute = standardNode<
     },
   },
   execute({ inputs, params }) {
-    const geo = cloneGeometry(requireGeometry(inputs, "in", "promoteAttribute"));
+    const geo = deriveGeometry(requireGeometry(inputs, "in", "promoteAttribute"));
     promote(geo, params.name, params.from as Domain, params.to as Domain, params.mode as PromoteMode);
     return { out: [makeGeometryItem(geo)] };
   },
@@ -700,7 +701,7 @@ export const transferAttribute = standardNode<
     },
   },
   execute({ inputs, params, seed: nodeSeed }) {
-    const dst = cloneGeometry(requireGeometry(inputs, "in", "transferAttribute"));
+    const dst = deriveGeometry(requireGeometry(inputs, "in", "transferAttribute"));
     const src = requireGeometry(inputs, "source", "transferAttribute");
     const attrDomain = params.attrDomain as TransferAttrDomain;
     if (params.hitAttr !== "" && params.hitAttr === params.name) {
@@ -858,7 +859,7 @@ export const attributeReduce = standardNode<
     },
   },
   execute({ inputs, params }) {
-    const geo = cloneGeometry(requireGeometry(inputs, "in", "attributeReduce"));
+    const geo = deriveGeometry(requireGeometry(inputs, "in", "attributeReduce"));
     const domain = params.domain as Domain;
     const set = geo.attrs[domain];
     const mode = params.mode;
@@ -1059,7 +1060,7 @@ export const attributeRemap = standardNode<
     },
   },
   execute({ inputs, params, seed: nodeSeed }) {
-    const geo = cloneGeometry(requireGeometry(inputs, "in", "attributeRemap"));
+    const geo = deriveGeometry(requireGeometry(inputs, "in", "attributeRemap"));
     const domain = params.domain as Domain;
     const set = geo.attrs[domain];
     const attr = set.get(params.name);
@@ -1255,7 +1256,7 @@ export const removeAttribute = standardNode<
   },
   execute({ inputs, params }) {
     const input = requireGeometry(inputs, "in", "removeAttribute");
-    const geo = cloneGeometry(input);
+    const geo = deriveGeometry(input);
     const domain = params.domain as Domain;
     const set = geo.attrs[domain];
     for (const name of params.names) {

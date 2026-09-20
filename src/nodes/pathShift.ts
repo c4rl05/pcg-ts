@@ -84,7 +84,8 @@ import type {
   Geometry,
   ReadonlyAttrData,
 } from "../data/index.js";
-import { cloneGeometry, makeGeometryItem } from "../graph/index.js";
+import { deriveGeometry } from "../data/derive.js";
+import { makeGeometryItem } from "../graph/index.js";
 import { standardNode } from "./registry.js";
 import { CANCEL_STRIDE, polylineWalks, requireGeometry, requireReportSlot } from "./util.js";
 import type { PathShiftInputs, PathShiftOutputs, PathShiftParams } from "./params.generated.js";
@@ -265,7 +266,7 @@ export const pathShift = standardNode<PathShiftParams, PathShiftInputs, PathShif
       });
     }
 
-    // cloneGeometry is the only helper that preserves topology, and it is
+    // deriveGeometry is the only helper that preserves topology, and it is
     // also what keeps this node pure: the input is a cached upstream object
     // and must never be mutated. The source columns above stay the INPUT'S,
     // and it is the copy-on-write fork that makes that safe rather than a
@@ -273,7 +274,7 @@ export const pathShift = standardNode<PathShiftParams, PathShiftInputs, PathShif
     // written. Every destination column below is taken through
     // `writable()`, which gives it storage of its own first, so nothing
     // written below can be read back as a source value.
-    const geo = cloneGeometry(src);
+    const geo = deriveGeometry(src);
     const outSet = geo.attrs.point;
     // `polylineWalks`, not `polylineArcTables`: a shift reads no distance,
     // and the full table allocates four Float64Arrays per path and takes a

@@ -28,8 +28,9 @@ import { type Column, isField } from "../fields/index.js";
 // cost more than the question is worth.
 import { peekFieldSpec } from "../fields/spec.js";
 import { attributeNotFound } from "../data/attributeNotFound.js";
+import { deriveGeometry } from "../data/derive.js";
 import { pointIdentities } from "../data/identity.js";
-import { cloneGeometry, makeGeometryItem, type ParamSchema } from "../graph/index.js";
+import { makeGeometryItem, type ParamSchema } from "../graph/index.js";
 import { hashCombine, hashFloat } from "../random/index.js";
 import { type PositionView, UniformGrid } from "../spatial/index.js";
 import { standardNode } from "./registry.js";
@@ -1472,7 +1473,7 @@ export const selfPrune = standardNode<SelfPruneParams, SelfPruneInputs, SelfPrun
     const uniform = staticScalar(params.minDistance);
     if (uniform !== undefined && !(uniform > 0)) {
       // Nothing to prune; pass a cloned input through.
-      return { out: [makeGeometryItem(cloneGeometry(geo))] };
+      return { out: [makeGeometryItem(deriveGeometry(geo))] };
     }
     // A P narrower than xyz would have the grid read the NEXT point's
     // coordinates as this one's y and z — silently, before the shared
@@ -1588,7 +1589,7 @@ export const projectToPlane = standardNode<
     },
   },
   execute({ inputs, params, seed: nodeSeed }) {
-    const geo = cloneGeometry(requireGeometry(inputs, "in", "projectToPlane"));
+    const geo = deriveGeometry(requireGeometry(inputs, "in", "projectToPlane"));
     // Both resolve ONCE, before the walk, and BEFORE `planeOffset` is
     // created below: a column may alias attribute storage, and adding a
     // column can reallocate the set. A plain vector is not resolved at all

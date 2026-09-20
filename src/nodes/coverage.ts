@@ -25,7 +25,8 @@
  */
 import type { Geometry } from "../data/index.js";
 import type { Column } from "../fields/index.js";
-import { cloneGeometry, makeGeometryItem } from "../graph/index.js";
+import { deriveGeometry } from "../data/derive.js";
+import { makeGeometryItem } from "../graph/index.js";
 import { UniformGrid } from "../spatial/index.js";
 import { standardNode } from "./registry.js";
 import {
@@ -350,7 +351,7 @@ export const pathCoverage = standardNode<
     },
   },
   execute({ inputs, params, checkCancelled, seed: nodeSeed }) {
-    const geo = cloneGeometry(requireGeometry(inputs, "path", "pathCoverage"));
+    const geo = deriveGeometry(requireGeometry(inputs, "path", "pathCoverage"));
     const boxes = requireGeometry(inputs, "boxes", "pathCoverage");
     const wantCovered = params.coveredAttr !== "";
     const wantHits = params.hitsAttr !== "";

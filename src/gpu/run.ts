@@ -6,7 +6,7 @@
  * across member kernels and a single readback at the terminal
  * materializes only the attributes some member wrote; untouched
  * attributes pass through from the input geometry via the same
- * cloneGeometry the CPU path starts from.
+ * deriveGeometry the CPU path starts from.
  *
  * Data-flow design (in place, not ping-pong): attribute buffers are
  * bound read_write and mutated in place by apply kernels, because
@@ -142,7 +142,7 @@ import {
   type ResidentRunInput,
   type ResidentRunResult,
 } from "../fields/index.js";
-import { cloneGeometry } from "../graph/clone.js";
+import { deriveGeometry } from "../data/derive.js";
 import { INSTANCE_COLOR_CHANNEL } from "../graph/data.js";
 import { CookCancelledError } from "../graph/errors.js";
 import { deviceSpec, type FieldSpecArg, specChildren } from "../fields/spec.js";
@@ -1579,7 +1579,7 @@ export async function executeResidentRun(
       // replace/remove/add calls, so shapes, defaults, and attribute
       // insertion order match the per-node path), then write the read
       // back columns.
-      out = cloneGeometry(geo);
+      out = deriveGeometry(geo);
       const outSet = out.attrs.point;
       for (const op of plan.layoutOps) {
         if (op.op === "replace") {

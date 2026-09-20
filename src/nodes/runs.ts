@@ -57,7 +57,8 @@ import {
   type Geometry,
 } from "../data/index.js";
 import type { Column } from "../fields/index.js";
-import { cloneGeometry, makeGeometryItem } from "../graph/index.js";
+import { deriveGeometry } from "../data/derive.js";
+import { makeGeometryItem } from "../graph/index.js";
 import { hashCombine } from "../random/index.js";
 import { standardNode } from "./registry.js";
 import {
@@ -410,7 +411,7 @@ export const runFit = standardNode<RunFitParams, RunFitInputs, RunFitOutputs>({
       });
     }
 
-    const geo = cloneGeometry(src);
+    const geo = deriveGeometry(src);
     // The full arc table rather than `polylineWalks`: this node measures
     // distance, which is the whole basis of a gap, and in the default
     // (`arcAttr` empty) mode the cumulative lengths ARE the coordinate.

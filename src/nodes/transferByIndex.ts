@@ -49,7 +49,8 @@ import type {
   AttributeSet,
   ReadonlyAttrData,
 } from "../data/index.js";
-import { cloneGeometry, makeGeometryItem } from "../graph/index.js";
+import { deriveGeometry } from "../data/derive.js";
+import { makeGeometryItem } from "../graph/index.js";
 import { standardNode } from "./registry.js";
 import {
   CANCEL_STRIDE,
@@ -304,9 +305,9 @@ export const transferByIndex = standardNode<
       "a source point index",
     );
 
-    const out = cloneGeometry(dstIn);
+    const out = deriveGeometry(dstIn);
     const outSet = out.attrs.point;
-    // `cloneGeometry` LENDS the input's columns rather than copying them,
+    // `deriveGeometry` LENDS the input's columns rather than copying them,
     // so what keeps a self-gather honest — one geometry wired to both pins
     // reading the values the node was handed, not the ones it is writing —
     // is the copy-on-write fork and not a copy. Every destination column

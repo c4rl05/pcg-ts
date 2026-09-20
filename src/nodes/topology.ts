@@ -22,7 +22,7 @@
  * node's category: filterByDensity, filterByBounds, filterByAttribute,
  * filterByExpression, selfPrune, partitionByAttribute and mergePoints all
  * rebuild the point domain and drop topology with it, so a network routed
- * through one arrives as a plain cloud. Only cloneGeometry preserves it,
+ * through one arrives as a plain cloud. Only deriveGeometry preserves it,
  * which is what this node uses. Joining two networks is `mergePrimitives`
  * (`pointOps.ts`), the union that renumbers topology instead of discarding
  * it — `mergePoints` is the points-only twin and stays that way.
@@ -37,7 +37,8 @@
  */
 import { PRIMTYPE_ATTR, setPolylineTopology } from "../data/index.js";
 import { canonicalPointRanks } from "../data/identity.js";
-import { cloneGeometry, makeGeometryItem } from "../graph/index.js";
+import { deriveGeometry } from "../data/derive.js";
+import { makeGeometryItem } from "../graph/index.js";
 import { adjacencyFor, type Adjacency } from "../spatial/index.js";
 import { standardNode } from "./registry.js";
 import {
@@ -346,10 +347,10 @@ export const connectPoints = standardNode<
       order.sort((a, b) => ranks[edgeA[a]] - ranks[edgeA[b]] || ranks[edgeB[a]] - ranks[edgeB[b]]);
     }
 
-    // cloneGeometry is the only helper that preserves topology, and it is
+    // deriveGeometry is the only helper that preserves topology, and it is
     // what keeps this node pure: the input is a cached upstream object.
     // Cloned only now, so a refusal above costs nothing.
-    const geo = cloneGeometry(src);
+    const geo = deriveGeometry(src);
     const pointIndices = new Uint32Array(count * 2);
     const primVertexStart = new Uint32Array(count);
     const primVertexCount = new Uint32Array(count);
@@ -700,7 +701,7 @@ export const connectByIndex = standardNode<
       parent.push(k);
     }
 
-    const geo = cloneGeometry(src);
+    const geo = deriveGeometry(src);
     const count = child.length;
     const pointIndices = new Uint32Array(count * 2);
     const primVertexStart = new Uint32Array(count);

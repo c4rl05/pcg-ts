@@ -16,7 +16,8 @@ import {
 import { adoptTopology } from "../data/adoptTopology.js";
 import { resizeForOverwrite } from "../data/overwrite.js";
 import { pointIdentities } from "../data/identity.js";
-import { cloneGeometry, type GeometryItem, makeGeometryItem } from "../graph/index.js";
+import { deriveGeometry } from "../data/derive.js";
+import { type GeometryItem, makeGeometryItem } from "../graph/index.js";
 import { hashCombine, hashFloat } from "../random/index.js";
 import { standardNode } from "./registry.js";
 import { isField, type Column } from "../fields/index.js";
@@ -116,7 +117,7 @@ export const transformPoints = standardNode<
   // kernel and falls back per-node for layouts it does not model.
   resident: { kind: "transformPoints" },
   async execute({ inputs, params, seed, gpu }) {
-    const geo = cloneGeometry(requireGeometry(inputs, "in", "transformPoints"));
+    const geo = deriveGeometry(requireGeometry(inputs, "in", "transformPoints"));
     const n = geo.pointCount;
     const tCol = requireTuple(await resolveOnMaybeGpu(gpu, geo, "point", params.translate, seed, "transformPoints", "translate"), [1, 3], "transformPoints", "translate");
     const rCol = requireTuple(await resolveOnMaybeGpu(gpu, geo, "point", params.rotateEuler, seed, "transformPoints", "rotateEuler"), [1, 3], "transformPoints", "rotateEuler");
@@ -203,7 +204,7 @@ export const jitterPoints = standardNode<
   // multiply-add in f32.
   resident: { kind: "jitterPoints" },
   async execute({ inputs, params, seed: nodeSeed, gpu }) {
-    const geo = cloneGeometry(requireGeometry(inputs, "in", "jitterPoints"));
+    const geo = deriveGeometry(requireGeometry(inputs, "in", "jitterPoints"));
     const seed = hashCombine(nodeSeed, params.seed);
     const amount = requireTuple(await resolveOnMaybeGpu(gpu, geo, "point", params.amount, seed, "jitterPoints", "amount"), [1, 3], "jitterPoints", "amount");
     const P = geo.attrs.point.require("P");
@@ -1655,7 +1656,7 @@ export const orientAlongVector = standardNode<
       !isField(params.up) || "up is a field; per-point roll is not ported to the device",
   },
   async execute({ inputs, params, seed, gpu }) {
-    const geo = cloneGeometry(requireGeometry(inputs, "in", "orientAlongVector"));
+    const geo = deriveGeometry(requireGeometry(inputs, "in", "orientAlongVector"));
     const axis = params.axis;
     if (!(ORIENT_AXES as readonly string[]).includes(axis)) {
       throw new Error(
@@ -1792,7 +1793,7 @@ export const setBounds = standardNode<SetBoundsParams, SetBoundsInputs, SetBound
     },
   },
   execute({ inputs, params, seed: nodeSeed }) {
-    const geo = cloneGeometry(requireGeometry(inputs, "in", "setBounds"));
+    const geo = deriveGeometry(requireGeometry(inputs, "in", "setBounds"));
     const set = geo.attrs.point;
     const corners = [
       ["boundsMin", params.boundsMin],

@@ -38,7 +38,7 @@
  * is categorised `filter` and PRESERVES topology (it clones), while
  * partitionByAttribute is categorised `attribute` and drops it. Nor is it
  * "did remove" — filterByAttribute drops topology even when its predicate
- * keeps every point. Only cloneGeometry preserves it, which is what each of
+ * keeps every point. Only deriveGeometry preserves it, which is what each of
  * these nodes uses.
  */
 import {
@@ -50,8 +50,9 @@ import {
   type Geometry,
 } from "../data/index.js";
 import { attributeNotFound } from "../data/attributeNotFound.js";
+import { deriveGeometry } from "../data/derive.js";
 import type { Column } from "../fields/index.js";
-import { cloneGeometry, makeGeometryItem } from "../graph/index.js";
+import { makeGeometryItem } from "../graph/index.js";
 import { hashCombine } from "../random/index.js";
 import { standardNode } from "./registry.js";
 import {
@@ -237,10 +238,10 @@ export const pointsToPath = standardNode<
     // group would send the author to debug their data instead of their
     // spelling.
     const skipShort = requireShortGroupsRule(params.shortGroups);
-    // cloneGeometry is the only helper that preserves topology, and it is
+    // deriveGeometry is the only helper that preserves topology, and it is
     // also what keeps this node honest about purity: the input geometry
     // is a cached upstream object and must never be mutated.
-    const geo = cloneGeometry(requireGeometry(inputs, "in", "pointsToPath"));
+    const geo = deriveGeometry(requireGeometry(inputs, "in", "pointsToPath"));
     const np = geo.pointCount;
     // THE WHOLE-INPUT FLOOR OBEYS `shortGroups` TOO, and it took an
     // argument to see why. A cloud of one point is the same fact as a
@@ -1290,7 +1291,7 @@ export const pathPointAt = standardNode<PathPointAtParams, PathPointAtInputs, Pa
         suggestion: name,
       });
     }
-    const geo = cloneGeometry(src);
+    const geo = deriveGeometry(src);
     const tables = polylineArcTables(geo, "pathPointAt");
     const at = requireTuple(
       await resolveOnMaybeGpu(gpu, geo, "point", params.parameter, seed, "pathPointAt", "parameter"),
@@ -1494,7 +1495,7 @@ export const pathScan = standardNode<PathScanParams, PathScanInputs, PathScanOut
       });
     }
 
-    const geo = cloneGeometry(src);
+    const geo = deriveGeometry(src);
     // `polylineWalks`, not `polylineArcTables`: a scan reads no distance,
     // and the full table allocates four Float64Arrays per path and takes a
     // square root per segment to produce numbers this node never touches.
@@ -1746,7 +1747,7 @@ export const pathRuns = standardNode<PathRunsParams, PathRunsInputs, PathRunsOut
       suggestion: "run",
     });
 
-    const geo = cloneGeometry(src);
+    const geo = deriveGeometry(src);
     // `polylineWalks`, not `polylineArcTables`: a segmented scan reads no
     // distance of its own — where distance is wanted it arrives as the
     // attribute being accumulated — so the arc table's four Float64Arrays
@@ -1902,10 +1903,10 @@ export const writeTangents = standardNode<
       domain: "point",
       suggestion: "tangent",
     });
-    // cloneGeometry preserves topology; gatherPoints and mergePoints do not.
+    // deriveGeometry preserves topology; gatherPoints and mergePoints do not.
     // It is also what keeps this node pure: the input is a cached upstream
     // object, and this is the one path node that writes into its geometry.
-    const geo = cloneGeometry(src);
+    const geo = deriveGeometry(src);
     const tables = polylineArcTables(geo, "writeTangents");
     const dst = geo.attrs.point.replace(name, "f32", 3, [0, 0, 0]);
     const P = geo.attrs.point.require("P");
@@ -2093,7 +2094,7 @@ export const writeCurveFrame = standardNode<
       });
     }
 
-    const geo = cloneGeometry(src);
+    const geo = deriveGeometry(src);
     const tables = polylineArcTables(geo, "writeCurveFrame");
     const P = geo.attrs.point.require("P");
     const tangent = geo.attrs.point.replace(params.tangentName, "f32", 3, [0, 0, 0]);

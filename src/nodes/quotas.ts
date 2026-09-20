@@ -25,7 +25,8 @@ import type { Geometry } from "../data/index.js";
 // library (see that module's header), and every identity-keyed node in the
 // standard library reaches it the same way.
 import { canonicalPointRanks } from "../data/identity.js";
-import { cloneGeometry, makeGeometryItem } from "../graph/index.js";
+import { deriveGeometry } from "../data/derive.js";
+import { makeGeometryItem } from "../graph/index.js";
 import { standardNode } from "./registry.js";
 import {
   CANCEL_STRIDE,
@@ -283,7 +284,7 @@ export const quotaRebalance = standardNode<
       suggestion: "quotaTarget",
     });
 
-    const geo = cloneGeometry(src);
+    const geo = deriveGeometry(src);
     const n = geo.attrs.point.count;
     if (n === 0) {
       // Nothing to resolve on, and nothing a field could say about zero

@@ -46,7 +46,8 @@
  * the halfway point is.
  */
 import type { AttrData, Attribute, ReadonlyAttrData } from "../data/index.js";
-import { cloneGeometry, makeGeometryItem } from "../graph/index.js";
+import { deriveGeometry } from "../data/derive.js";
+import { makeGeometryItem } from "../graph/index.js";
 import { standardNode } from "./registry.js";
 import {
   CANCEL_STRIDE,
@@ -251,7 +252,7 @@ export const transferAlongPath = standardNode<
       }
     }
 
-    const out = cloneGeometry(at);
+    const out = deriveGeometry(at);
     const outSet = out.attrs.point;
     const outP = outSet.get("P");
     const samples: Sampled[] = [];

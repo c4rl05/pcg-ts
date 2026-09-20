@@ -22,8 +22,9 @@
 import type { AttrDefault, Attribute, Geometry } from "../data/index.js";
 import type { Column } from "../fields/index.js";
 import { attributeNotFound } from "../data/attributeNotFound.js";
+import { deriveGeometry } from "../data/derive.js";
 import { pointIdentities } from "../data/identity.js";
-import { cloneGeometry, makeGeometryItem } from "../graph/index.js";
+import { makeGeometryItem } from "../graph/index.js";
 import { UniformGrid, type PositionView } from "../spatial/index.js";
 import { standardNode } from "./registry.js";
 import {
@@ -166,7 +167,7 @@ export const pointNeighborhood = standardNode<
     },
   },
   execute({ inputs, params, checkCancelled, seed: nodeSeed }) {
-    const geo = cloneGeometry(requireGeometry(inputs, "in", "pointNeighborhood"));
+    const geo = deriveGeometry(requireGeometry(inputs, "in", "pointNeighborhood"));
     const wantCount = params.countAttr !== "";
     const wantAverage = params.averageAttr !== "";
     if (!wantCount && !wantAverage) {
@@ -456,7 +457,7 @@ export const sampleNearestPoint = standardNode<
     },
   },
   execute({ inputs, params, checkCancelled, seed: nodeSeed }) {
-    const dst = cloneGeometry(requireGeometry(inputs, "in", "sampleNearestPoint"));
+    const dst = deriveGeometry(requireGeometry(inputs, "in", "sampleNearestPoint"));
     const src = requireGeometry(inputs, "source", "sampleNearestPoint");
     const wantDistance = params.distanceAttr !== "";
     const wantIndex = params.indexAttr !== "";
