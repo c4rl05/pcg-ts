@@ -6,6 +6,16 @@
  * it once and stands the result in daylight. Nothing here generates or
  * corrects anything — what is on screen is what the graph settled.
  *
+ * ONE THING MOVES, AND IT IS THE PAGE'S. The six lift cars ride their
+ * runs, slowly, at about a metre a second: four up and down the legs'
+ * inclined tracks, and the Edoux pair counterweighted against each other
+ * in the shaft so one climbs toward the 3rd floor as the other drops
+ * toward the 2nd. The graph settles where a car CAN be — each car is its
+ * own `car.<name>` output, and `lifts.ts` publishes the run it rides as
+ * `LIFT_CARS` — and this page owns the clock, which is the same division
+ * the lanterns demo draws. `?still` parks them all where the graph built
+ * them, which is what every scripted capture of this page asks for.
+ *
  * DAYLIGHT, WITH SHADOWS, because that is how the lattice reads. A braced
  * panel seen flat-lit is a hatched silhouette; the same panel under a low
  * sun throws its web onto the members behind it and onto the ground, and
@@ -60,6 +70,7 @@ import { attachGraphPanel } from "../../shared/graph/panel.js";
 import { createOverlay } from "../../shared/overlay.js";
 import { attachWordmark } from "../../shared/wordmark.js";
 import { buildEiffel } from "./graph.js";
+import { type CarRun, LIFT_CARS } from "./lifts.js";
 import { PART_CLASSES, type PartClass } from "./parts.js";
 
 // ------------------------------------------------------------------ //
@@ -150,6 +161,15 @@ function isRivets(name: string): boolean {
 }
 
 /**
+ * Does this output carry a lift car? The cook names them `car.<name>`,
+ * one output per car, because each is a body this page moves along its
+ * own run and a merged class would weld all six together.
+ */
+function isCar(name: string): boolean {
+  return name.startsWith("car.");
+}
+
+/**
  * The tower's nominal envelope — Plate XXXI's base square with some room,
  * to the top of the campanile. The shadow camera is fitted to what the
  * cook actually built; this is only the fallback when it built nothing.
@@ -198,6 +218,19 @@ camera.position.set(360, 140, 470);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 110, 0);
+/**
+ * `?still` parks every lift car where the graph built it.
+ *
+ * A scripted capture waits for two byte-identical frames, which a page
+ * with something moving in it never gives it, so every shot this repo
+ * takes of the tower asks for the still page (`scripts/capture-guides.mjs`,
+ * `scripts/capture-demos.mjs`). It is also the honest frame for a figure
+ * about STRUCTURE: parked, each car stands at the sourced moment
+ * `lifts.ts` places it at. The panel's "lifts" checkbox is the same
+ * switch, and opens set to this.
+ */
+const STILL = new URLSearchParams(location.search).has("still");
+
 // `?cam=x,y,z,tx,ty,tz` opens on a given eye and target instead: a way back
 // to a close look, and what a scripted capture poses the page with.
 const pose = new URLSearchParams(location.search).get("cam")?.split(",").map(Number);
@@ -304,7 +337,9 @@ const overlay = createOverlay({
   info:
     "Eiffel's 29 panels from Plate XXXI — four legs merging into one shaft — with every " +
     "member below the panel scale placed by rule. Cooked once, drawn as it came out of the " +
-    "graph, one material per part class. Orbit to judge it; the shadows are how the lattice reads.",
+    "graph, one material per part class. The six lift cars are the one thing that moves: they " +
+    "ride their runs at about a metre a second, the Edoux pair counterweighted against each " +
+    "other. Orbit to judge it; the shadows are how the lattice reads.",
 });
 
 const statFps = overlay.addStat("fps");
@@ -317,6 +352,13 @@ const classStats = Object.fromEntries(
 
 overlay.addCheckbox("rotate", false, (on) => {
   controls.autoRotate = on;
+});
+
+// The lifts run unless `?still` parked them. Off leaves every car exactly
+// where it stands, which is how a car is looked at rather than watched.
+let liftsRunning = !STILL;
+overlay.addCheckbox("lifts", !STILL, (on) => {
+  liftsRunning = on;
 });
 
 // THE DETAIL LEVELS, as links rather than a control: each is a plain URL
@@ -359,7 +401,10 @@ function refreshDetailLinks(): void {
   const cam = [p.x, p.y, p.z, t.x, t.y, t.z].map((v) => v.toFixed(2)).join(",");
   const here = currentDetail();
   for (const { d, a } of detailLinks) {
-    const query = d.key === "" ? `cam=${cam}` : `${d.key}&cam=${cam}`;
+    // `still` rides along with the pose, for the same reason: a scripted
+    // capture moves between depths by following these links, and a page
+    // that started its lifts again at the next depth would never settle.
+    const query = [d.key, STILL ? "still" : "", `cam=${cam}`].filter(Boolean).join("&");
     a.href = `?${query}`;
     const current = d.key === here;
     a.style.fontWeight = current ? "600" : "400";
@@ -541,19 +586,46 @@ async function main(): Promise<void> {
     present.push(cls);
     classStats[cls](drawn.triangles.toLocaleString());
   }
-  // Everything else the cook put out: the rivets, and any output no class
-  // names, which gets a stat line of its own so it cannot pass unseen.
+  // Everything else the cook put out: the rivets, the lift cars, and any
+  // output no class names, which gets a stat line of its own so it cannot
+  // pass unseen.
+  let carTriangles = 0;
   for (const [name, collection] of Object.entries(outputs)) {
     if ((PART_CLASSES as readonly string[]).includes(name)) continue;
-    const drawn = draw(name, collection, UNCLASSED, box, problems);
-    if (!isRivets(name)) {
+    const named = isRivets(name) || isCar(name);
+    // A car is the lifts' own fit-out, so it wears the platforms' paint;
+    // only a genuinely unclassed output gets the grey.
+    const drawn = draw(name, collection, isCar(name) ? MATERIALS.platforms : UNCLASSED, box, problems);
+    if (!named) {
       overlay.addStat(`${name} (unclassed)`)(
         drawn.meshes.length === 0 ? "no mesh" : drawn.triangles.toLocaleString(),
       );
     }
     if (drawn.meshes.length === 0) continue;
     keep(name, drawn);
-    if (!isRivets(name)) present.push(name);
+    if (!named) present.push(name);
+    if (isCar(name)) {
+      carTriangles += drawn.triangles;
+      const run = LIFT_CARS.find((r) => `car.${r.name}` === name);
+      if (run === undefined) {
+        problems.push(`${name}: the graph declared this car but published no run for it`);
+        continue;
+      }
+      for (const mesh of drawn.meshes) {
+        // A moving body cannot cast into a shadow map that is drawn once
+        // (`shadowMap.autoUpdate` is off): its shadow would stay where the
+        // car was. Redrawing the map every frame means re-rendering the whole
+        // tower into 4096² from the sun, which at the riveted depth is
+        // millions of triangles a frame for the shadow of a 4 m box.
+        mesh.castShadow = false;
+        cars.push({ mesh, run });
+      }
+    }
+  }
+  if (cars.length > 0) {
+    overlay.addStat("lift cars")(
+      `${cars.length}${STILL ? " parked" : " running"}, ${carTriangles.toLocaleString()} tri`,
+    );
   }
   statTotal(total.toLocaleString());
   if (rivets || riveted > 0) {
@@ -582,7 +654,12 @@ async function main(): Promise<void> {
     overlay.addSelect("show", options, "all", (v) => {
       for (const [name, list] of meshes) {
         const on =
-          v === "all" || v === name || (isRivets(name) && (v === "rivets" || name === `rivets.${v}`));
+          v === "all" ||
+          v === name ||
+          (isRivets(name) && (v === "rivets" || name === `rivets.${v}`)) ||
+          // A car rides with the fit-out it is painted like; it has no
+          // entry of its own, the way a class' rivets have none.
+          (isCar(name) && v === "platforms");
         for (const m of list) m.visible = on;
       }
       renderer.shadowMap.needsUpdate = true;
@@ -593,12 +670,71 @@ async function main(): Promise<void> {
 }
 
 // ------------------------------------------------------------------ //
+// The lifts.
+// ------------------------------------------------------------------ //
+
+/** A car's mesh and the run it rides. */
+const cars: Array<{ mesh: Mesh; run: CarRun }> = [];
+
+/**
+ * Where a car stands in its cycle at `t` seconds: 0 at its run's `from`,
+ * 1 at its `to`.
+ *
+ * Up, wait, down, wait — a lift's own round. The two travels are eased
+ * (3t² − 2t³) rather than linear, so a car leaves and arrives instead of
+ * snapping into full speed: at these distances the ends are the only part
+ * of the motion a viewer can actually read.
+ */
+function carPhase(run: CarRun, t: number): number {
+  const cycle = 2 * (run.trip + run.dwell);
+  const rise = run.trip / cycle;
+  const wait = run.dwell / cycle;
+  let p = (((t / cycle + run.phase) % 1) + 1) % 1;
+  if (p < rise) return ease(p / rise);
+  p -= rise;
+  if (p < wait) return 1;
+  p -= wait;
+  if (p < rise) return ease(1 - p / rise);
+  return 0;
+}
+
+const ease = (x: number): number => x * x * (3 - 2 * x);
+
+/**
+ * Put every car where its run has it at `t` seconds. A car is a rigid
+ * body over its whole run (`lifts.ts` explains why that holds), so this
+ * is one offset along the run's own direction and never a rebuild.
+ */
+function moveCars(t: number): void {
+  for (const { mesh, run } of cars) {
+    const d = run.from + (run.to - run.from) * carPhase(run, t) - run.at;
+    mesh.position.set(run.step[0] * d, run.step[1] * d, run.step[2] * d);
+  }
+}
+
+// ------------------------------------------------------------------ //
 // The loop.
 // ------------------------------------------------------------------ //
 
 const tickFps = createFpsMeter(statFps);
 
+let clock = 0;
+let lastFrame = performance.now();
+
 renderer.setAnimationLoop(() => {
+  const now = performance.now();
+  // Accumulated from CLAMPED deltas rather than read off the wall clock:
+  // rAF stops while the tab is hidden and `performance.now()` does not, so
+  // a page left in the background and come back to would otherwise
+  // teleport its cars the length of the tower.
+  // The clock only runs while the lifts do, so unchecking "lifts" stops
+  // the cars where they stand rather than letting them travel unseen and
+  // jump on the way back.
+  if (liftsRunning) {
+    clock += Math.min((now - lastFrame) / 1000, 0.1);
+    moveCars(clock);
+  }
+  lastFrame = now;
   controls.update();
   renderer.render(scene, camera);
   tickFps();

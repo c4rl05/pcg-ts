@@ -948,15 +948,26 @@ function edouxGuides(): Block[] {
   ];
 }
 
-function edouxCars(): Block[] {
+/**
+ * The two Edoux cars, each named, because each is its own mesh: they are
+ * counterweighted against one another and so are the one pair in the
+ * tower that must move in opposite directions.
+ */
+function edouxCars(): Array<{ name: string; block: Block }> {
   const [along, high, across] = EDOUX.car;
   // Counterweights: when the upper car is `travel` above the landing, the
   // lower one is as far below it [sourced mechanism].
   const up = FLOORS.landing + EDOUX.travel;
   const down = FLOORS.landing - EDOUX.travel;
   return [
-    { at: inShaft(-EDOUX.carAxis, up + high / 2), x: S_HAT, y: UP, size: [along, high, across] },
-    { at: inShaft(EDOUX.carAxis, down + high / 2), x: S_HAT, y: UP, size: [along, high, across] },
+    {
+      name: "edoux.nord",
+      block: { at: inShaft(-EDOUX.carAxis, up + high / 2), x: S_HAT, y: UP, size: [along, high, across] },
+    },
+    {
+      name: "edoux.sud",
+      block: { at: inShaft(EDOUX.carAxis, down + high / 2), x: S_HAT, y: UP, size: [along, high, across] },
+    },
   ];
 }
 
@@ -1106,8 +1117,153 @@ function shaftStairs(): { blocks: Block[]; rails: Vec3[][] } {
  * steepens to about 70° with the leg, which the model's cars do not ride.
  * The Otis car is drawn level on a ~65° track (PL-XXII ter Fig. 1); a
  * rigid one would tip about 11° on the 54.6° run, which is not modelled.
+ *
+ * This is where the graph BUILDS each car, which is where the page leaves
+ * it when nothing is driving it ({@link LIFT_CARS}).
  */
 const CAR_AT = [30, 42, 12, 22] as const;
+
+/** Which system and which pile, per quadrant target. Names the output. */
+const CAR_NAME = ["roux.ouest", "otis.sud", "roux.est", "otis.nord"] as const;
+
+/** A car's node id, from its name: `roux.ouest` -> `liftCarRouxOuest`. */
+const carId = (name: string): string =>
+  `liftCar${name
+    .split(".")
+    .map((w) => (w[0] as string).toUpperCase() + w.slice(1))
+    .join("")}`;
+
+/**
+ * Where each leg car starts in its own cycle, 0..1. Nothing but taste:
+ * four cars leaving the ground together would read as one mechanism.
+ */
+const CAR_PHASE = [0, 0.31, 0.62, 0.83] as const;
+
+/**
+ * The run a leg car rides, as its lower floor's height.
+ *
+ * It stops well short of either circuit's real top — the Roux reached the
+ * 1st floor (57.63) and the Otis the 2nd (115.73) — because the model's
+ * car is the one thing here that cannot follow its track all the way.
+ * Below node XXIV (50.4) the rail line is STRAIGHT TO WITHIN A HAIR, and
+ * that is what lets the host move a car it never rebuilds. It is not
+ * literally one segment — `railLine` stations it at every node, so there
+ * are five below XXIV, broken at 6.4, 17.4, 28.4 and 39.4 — but
+ * {@link RAIL_OFFSET} is flat at 4.35 over all of them and the inner
+ * corner falls at 0.5027/m, so their slopes agree to 1.3e-4 in tan
+ * (54.58855° at y 8 against 54.59100° at 44). A car built at one height
+ * and translated to another is therefore the same car to 0.51 mm at its
+ * worst corner — half the millimetre every output is jittered by anyway,
+ * and all of it in the chassis and the hanger, which alone re-read the
+ * line; the two decks are `levelBox`es and do not drift at all.
+ *
+ * Above XXIV the line steepens toward the leg's ~70° and a level-floored
+ * car built for 54.6° reads wrong, so the run ends below it.
+ *
+ * The ends are the CAR's, not the floor's. A car reaches well past the
+ * floor height that names it: the Otis' upper deck stands 4.51 over it
+ * and its 8.109 chassis 3.30 below the rail, so 44 puts its highest
+ * corner at 48.51 and its chassis' top at 46.9, both clear of XXIV, and
+ * 8 keeps its lowest corner at 4.07, clear of the ground at 1.58 and of
+ * the pedestal. The Roux car is shorter but rides further up its own
+ * chassis, and tops out slightly HIGHER, at 48.60 — it is the one that
+ * sets the upper end, by 1.80 m.
+ */
+const LEG_RUN = { from: 8, to: 44 } as const;
+
+/**
+ * A car's trip, end to end, and its wait at each end, in seconds.
+ *
+ * The leg run is 36 m of floor rise, which is 44.2 m up a 54.6° track, so
+ * 44 s is almost exactly a metre a second — and the Edoux' 80.2 m stroke
+ * in 80 s is the same. That is a walking pace and it is meant to be: the
+ * tower is 312 m tall, so a car crossing a leg at 1 m/s takes the better
+ * part of a minute to cross a tenth of the frame. No source here gives a
+ * speed; this is chosen to read as a lift and not as a lift shown in
+ * fast-forward.
+ */
+const LEG_TRIP = { trip: 44, dwell: 6 } as const;
+const EDOUX_TRIP = { trip: 80, dwell: 10 } as const;
+
+/**
+ * One lift car's run, for the host that moves it.
+ *
+ * The graph settles WHERE a car can be; the clock is the page's. A car is
+ * built at `at` and is a rigid body over its whole run, so the page has
+ * only to offset it: `P += (floor - at) * step`, with `floor` swept
+ * between `from` and `to`. `step` is world metres per metre of floor
+ * RISE, which is [0, 1, 0] in the shaft and leans in along the diagonal
+ * on a leg.
+ */
+export interface CarRun {
+  /** The graph declares this car as the output `car.<name>`. */
+  readonly name: string;
+  /** The lower floor's height where the car is BUILT: the page's zero. */
+  readonly at: number;
+  /** The ends of the run, as that same floor height. */
+  readonly from: number;
+  readonly to: number;
+  /** World metres the car moves per metre of floor rise. */
+  readonly step: Vec3;
+  /** Seconds from end to end, and the wait at each end. */
+  readonly trip: number;
+  readonly dwell: number;
+  /** Where in its own cycle the car stands at t = 0, 0..1. */
+  readonly phase: number;
+}
+
+/**
+ * How far a car moves per metre of floor rise, MEASURED on its own rail
+ * line rather than restated from the slope: the two ends of the run are
+ * read off the line and divided by the rise between them. On the straight
+ * segment that is exact, and it stays right if the line is ever re-read.
+ */
+function legStep(spec: CarSpec, k: number): Vec3 {
+  const line = railLine(spec.top);
+  const lo = onDiag(railAt(line, LEG_RUN.from).r, LEG_RUN.from);
+  const hi = onDiag(railAt(line, LEG_RUN.to).r, LEG_RUN.to);
+  return onLeg(k, mul3(sub3(hi, lo), 1 / (LEG_RUN.to - LEG_RUN.from)));
+}
+
+/**
+ * Every lift car in the tower and the run it rides — four in the legs and
+ * the Edoux pair in the shaft.
+ *
+ * The Edoux two are ONE machine: counterweighted against each other, they
+ * leave the landing together and reach their far ends together, which is
+ * why they share a phase and why both runs start at the landing (195.93)
+ * where the passengers changed cars. The upper runs up to the 3rd floor,
+ * the lower down to the 2nd, each 80.2 m — the pistons' stroke.
+ */
+export const LIFT_CARS: readonly CarRun[] = [
+  ...CAR_NAME.map((name, k) => ({
+    name,
+    at: CAR_AT[k] as number,
+    from: LEG_RUN.from,
+    to: LEG_RUN.to,
+    step: legStep(k % 2 === 0 ? ROUX_CAR : OTIS_CAR, k),
+    ...LEG_TRIP,
+    phase: CAR_PHASE[k] as number,
+  })),
+  {
+    name: "edoux.nord",
+    at: FLOORS.landing + EDOUX.travel,
+    from: FLOORS.landing,
+    to: FLOORS.third,
+    step: UP,
+    ...EDOUX_TRIP,
+    phase: 0.2,
+  },
+  {
+    name: "edoux.sud",
+    at: FLOORS.landing - EDOUX.travel,
+    from: FLOORS.landing,
+    to: FLOORS.second,
+    step: UP,
+    ...EDOUX_TRIP,
+    phase: 0.2,
+  },
+];
 
 /** The lifts and the stairs. `quads` are the four quadrant targets. */
 export function buildLifts(g: Graph, quads: NodeHandle, detail: Detail = {}): Parts {
@@ -1125,14 +1281,22 @@ export function buildLifts(g: Graph, quads: NodeHandle, detail: Detail = {}): Pa
   ]);
   const guides = blocks(g, "liftEdouxGuides", edouxGuides());
 
-  // Cars stand at a different moment in each leg, so they are laid out
-  // per leg here rather than copied.
-  const cars: Block[] = [];
-  for (let k = 0; k < 4; k++) {
-    const spec = k % 2 === 0 ? ROUX_CAR : OTIS_CAR;
-    for (const b of car(spec, CAR_AT[k] as number)) cars.push(blockOnLeg(k, b));
-  }
-  cars.push(...edouxCars());
+  // Cars stand at a different moment in each leg, so they are laid out per
+  // leg here rather than copied — and each is its own MESH, because the
+  // page moves them one at a time along the runs LIFT_CARS publishes. One
+  // merged node would be one rigid body and the six would have to travel
+  // together, which is the one thing a lift never does.
+  const cars = [
+    ...CAR_NAME.map((name, k) => ({
+      name,
+      mesh: blocks(
+        g,
+        carId(name),
+        car(k % 2 === 0 ? ROUX_CAR : OTIS_CAR, CAR_AT[k] as number).map((b) => blockOnLeg(k, b)),
+      ),
+    })),
+    ...edouxCars().map(({ name, block }) => ({ name, mesh: blocks(g, carId(name), [block]) })),
+  ];
 
   const e1 = firstToSecond();
   const shaft = shaftStairs();
@@ -1148,6 +1312,7 @@ export function buildLifts(g: Graph, quads: NodeHandle, detail: Detail = {}): Pa
   ]);
   return {
     girders: [tracks, guides],
-    platforms: [blocks(g, "liftCars", cars), stairs, skin(g, "liftRailSkin", rails, 0.025)],
+    platforms: [stairs, skin(g, "liftRailSkin", rails, 0.025)],
+    cars,
   };
 }

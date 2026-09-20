@@ -62,13 +62,16 @@
  * DETERMINISM. Every demo hard-codes its seed (1, or 42 for the galaxy, or
  * 1889 for eiffel), and the only URL parameters any of them read are the
  * editor's `?graph=`, which this script sets deliberately, and eiffel's
- * `?laced` / `?rivets` / `?cam=`, of which it sets only the pose — so
- * content is already reproducible. What is
+ * `?laced` / `?rivets` / `?cam=` / `?still`, of which it sets the pose and
+ * the still — so content is already reproducible. What is
  * not reproducible is the camera: infinite-world flies forward at 18 u/s from
  * t=0, gpu-world has autopilot on, and the galaxy cruises. Each is stopped
  * through its own UI
  * *before* waiting for the world to settle, so the camera sits at its initial
  * position and the framing does not depend on how fast the machine booted.
+ * Eiffel's moving parts are its six lift cars, and `?still` is their
+ * equivalent — set in the URL rather than clicked, because it also has to
+ * hold before the first frame is drawn.
  *
  * OTHER HARD-WON CONSTRAINTS
  *   - Headed, not headless. Two demos are WebGPU and want a real device;
@@ -466,10 +469,17 @@ const DEMOS = [
     // square on its diagonal, so all four legs and the lantern are in
     // frame. Naming them means a later change to the page's opening view
     // does not quietly reframe the committed thumbnail.
-    path: "demos/eiffel/?cam=360,140,470,0,110,0",
-    // One cook, no streaming, no clock: the page sets `data-ready` on the
-    // body two frames after the scene is complete (the first of the two
-    // draws the shadow map, which is only redrawn when the scene changes).
+    //
+    // `?still` PARKS THE SIX LIFT CARS, which otherwise ride their runs on
+    // a clock. Like the other demos' cameras, they are stopped rather than
+    // caught: a thumbnail shot of a running page would put each car
+    // wherever the machine's boot time left it. Parked is also the page's
+    // own sourced arrangement, which is what the thumbnail should show.
+    path: "demos/eiffel/?still&cam=360,140,470,0,110,0",
+    // One cook, no streaming, and — under `?still` — no clock: the page
+    // sets `data-ready` on the body two frames after the scene is complete
+    // (the first of the two draws the shadow map, which is only redrawn
+    // when the scene changes).
     // "failed" is accepted here too, so a cook that threw ends the wait at
     // once, and `failed` below turns it into an error instead of a picture
     // of an empty ground plane.

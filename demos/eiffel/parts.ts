@@ -119,9 +119,16 @@ export function jitter(g: Graph, id: string, geo: NodeHandle): NodeHandle {
  * spawners, each named. Every rivet set builds its own spawner, so rivets
  * come out as several outputs, `rivets.<name>` (41 at full detail); one
  * spawn is also capped at MAX_INSTANCES, 1,048,576.
+ *
+ * `cars` is the one thing here the graph does NOT settle in place: a lift
+ * car is a body the host moves, so each comes out as its own output,
+ * `car.<name>`, rather than merged into a class where it would be welded
+ * to the floor it passes. `lifts.ts` publishes the run each one rides
+ * (`LIFT_CARS`); the graph owns where a car CAN be and the page owns when.
  */
 export type Parts = Partial<Record<PartClass, NodeHandle[]>> & {
   rivets?: Array<{ name: string; spawn: NodeHandle }>;
+  cars?: Array<{ name: string; mesh: NodeHandle }>;
 };
 
 /**
@@ -140,6 +147,17 @@ export function assemble(g: Graph, parts: Parts): void {
     g.output(jitter(g, `${cls}Jitter`, out), "out", cls);
   }
   for (const { name, spawn } of parts.rivets ?? []) g.output(spawn, "instances", `rivets.${name}`);
+  for (const { name, mesh } of parts.cars ?? []) {
+    g.output(jitter(g, `${carId(name)}Jitter`, mesh), "out", `car.${name}`);
+  }
+}
+
+/** A car's node ids, from its name: `roux.ouest` -> `carRouxOuest`. */
+function carId(name: string): string {
+  return `car${name
+    .split(".")
+    .map((w) => (w[0] as string).toUpperCase() + w.slice(1))
+    .join("")}`;
 }
 
 /** Fold several modules' parts into one. */
@@ -151,6 +169,7 @@ export function joinParts(...all: Parts[]): Parts {
       if (list !== undefined && list.length > 0) (out[cls] ??= []).push(...list);
     }
     if (parts.rivets !== undefined) (out.rivets ??= []).push(...parts.rivets);
+    if (parts.cars !== undefined) (out.cars ??= []).push(...parts.cars);
   }
   return out;
 }

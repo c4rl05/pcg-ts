@@ -82,8 +82,11 @@ const QUALITY = 0.8;
 
 /**
  * The shot lists, keyed by guide. Per guide: the page, how to tell its cook
- * is done, and the CSS viewport every shot is laid out at (captured at 2x,
- * then resampled to the shot's `out`). Per shot: `id` (the file name),
+ * is done, the CSS viewport every shot is laid out at (captured at 2x,
+ * then resampled to the shot's `out`), and `always`, a query fragment every
+ * shot of that guide carries — this is where a page is told to hold still,
+ * since the stability gate below wants two identical frames and a page with
+ * something moving in it never gives it two. Per shot: `id` (the file name),
  * `query` (everything after `?`), `out` (the JPEG's pixel size; the guides'
  * article column is 860 CSS px, so full-width figures are 1720 px wide),
  * optional `css` to lay that one shot out at another viewport (keep its
@@ -97,6 +100,11 @@ const GUIDES = {
   eiffel: {
     page: "demos/eiffel/",
     css: [1600, 900],
+    // The six lift cars ride their runs on a clock; `?still` parks each one
+    // where the graph built it, at the moment `lifts.ts` sources. Without
+    // it no two frames of this page are ever the same and every shot below
+    // would run out its stability samples.
+    always: "still",
     ready: () =>
       document.body.dataset.ready === "failed" ||
       (document.body.dataset.ready === "1" &&
@@ -228,7 +236,8 @@ async function captureShot(browser, encPage, origin, guideId, guide, shot, log) 
     const [w, h] = shot.css ?? guide.css;
     await page.setViewport({ width: w, height: h, deviceScaleFactor: 2 });
     await page.bringToFront();
-    await page.goto(`${origin}/${guide.page}?${shot.query}`, { waitUntil: "load" });
+    const query = [guide.always, shot.query].filter(Boolean).join("&");
+    await page.goto(`${origin}/${guide.page}?${query}`, { waitUntil: "load" });
 
     // (1) this tab is painting
     await page.waitForFunction(() => window.__capFrames > 3, { timeout: 20_000 });
@@ -237,7 +246,7 @@ async function captureShot(browser, encPage, origin, guideId, guide, shot, log) 
     await page.waitForFunction(guide.ready, { timeout: 180_000, polling: 250 });
     if (await page.evaluate(guide.failed)) {
       throw new Error(
-        `the page reports that its cook failed. Open ${guide.page}?${shot.query} and read its problems section.`,
+        `the page reports that its cook failed. Open ${guide.page}?${query} and read its problems section.`,
       );
     }
     if (!shot.ui) {
