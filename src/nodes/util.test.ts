@@ -346,6 +346,201 @@ describe("copyElements", () => {
   });
 });
 
+/**
+ * THE GATHER LOOPS THEMSELVES — one body per tuple width, run with the
+ * source-index test lifted out of them into a single pass over the index
+ * map.
+ *
+ * Two things can now go wrong that could not before, and both are silent:
+ * a width could be wired to the wrong body (three components copied by a
+ * two-component loop leaves the third at the zero of fresh storage, and
+ * the point count is still right), and the lifted test could stop
+ * agreeing with the per-element one it replaced — by missing an offending
+ * index, by finding one that is not there, or by naming a different
+ * column. So every case below is checked against a REFERENCE gather
+ * written the long way here, at the width the column actually has, and
+ * every check is followed by a control showing that same comparison
+ * reporting a difference when the width is wrong. A test that cannot fail
+ * is not evidence.
+ */
+describe("copyElements: one gather loop per tuple width", () => {
+  /** What the gather has to produce, written out per component. */
+  function reference(
+    data: ArrayLike<number>,
+    indices: readonly number[],
+    ts: number,
+  ): number[] {
+    const out: number[] = [];
+    for (const s of indices) for (let k = 0; k < ts; k++) out.push(data[s * ts + k]);
+    return out;
+  }
+
+  /** A source of `n` elements at width `ts`, values `element*100 + component`. */
+  function ramp(n: number, ts: number): AttributeSet {
+    const set = new AttributeSet();
+    const a = set.add("a", "f32", ts, new Array(ts).fill(-1));
+    set.resize(n);
+    for (let i = 0; i < n; i++) for (let k = 0; k < ts; k++) a.data[i * ts + k] = i * 100 + k;
+    return set;
+  }
+
+  function gathered(src: AttributeSet, indices: readonly number[]): number[] {
+    const to = new AttributeSet();
+    copyElements(src, to, indices, indices.length);
+    return Array.from(to.require("a").data);
+  }
+
+  // Every width the library ships, plus one past the last specialized
+  // body so the general loop is exercised too.
+  const WIDTHS = [1, 2, 3, 4, 5, 9];
+  // The index-map shapes a caller can hand over. `identity` is spelled
+  // out as a map rather than left `undefined`, because the two take
+  // DIFFERENT paths: `undefined` is one bulk copy per column, and
+  // `[0, 1, 2 ...]` is the gather being asked for a permutation that
+  // happens to be the identity.
+  const MAPS: Array<[string, (n: number) => number[]]> = [
+    ["identity map", (n) => Array.from({ length: n }, (_, i) => i)],
+    ["contiguous run", (n) => Array.from({ length: n - 2 }, (_, i) => i + 2)],
+    ["reversed", (n) => Array.from({ length: n }, (_, i) => n - 1 - i)],
+    ["repeated indices", (n) => [1, 1, 1, n - 1, 1, n - 1]],
+    ["single element", () => [3]],
+    ["empty selection", () => []],
+  ];
+
+  for (const ts of WIDTHS) {
+    for (const [shape, make] of MAPS) {
+      it(`moves every component at tupleSize ${ts}: ${shape}`, () => {
+        const n = 12;
+        const src = ramp(n, ts);
+        const indices = make(n);
+        const data = src.require("a").data;
+        expect(gathered(src, indices)).toEqual(reference(data, indices, ts));
+        // CONTROL: the same comparison AT THE WRONG WIDTH. It has to
+        // disagree, or the check above would pass for a body that copied
+        // the wrong number of components. Widths of 1 and an empty
+        // selection have no wrong width to be read at — one component is
+        // one component, and nothing is moved — so they are the two the
+        // control cannot speak about.
+        if (ts > 1 && indices.length > 0) {
+          expect(gathered(src, indices)).not.toEqual(reference(data, indices, ts - 1));
+        }
+      });
+    }
+  }
+
+  it("a string column takes the same shapes, re-interned into the destination's own table", () => {
+    const src = new AttributeSet();
+    const label = src.add("label", "string", 1, "none");
+    src.resize(4);
+    label.setString(0, "a");
+    label.setString(1, "b");
+    label.setString(2, "c");
+    label.setString(3, "d");
+    const to = new AttributeSet();
+    copyElements(src, to, [3, 1, 3, 0], 4);
+    const out = to.require("label");
+    expect([0, 1, 2, 3].map((i) => out.getString(i))).toEqual(["d", "b", "d", "a"]);
+    // The destination's table holds its default first and then only the
+    // values that landed, in the order they landed — not a copy of the
+    // source's table.
+    expect(out.stringTable).toEqual(["none", "d", "b", "a"]);
+    // CONTROL: the source's table is the other order, so a test that
+    // passed by copying the table wholesale would show here.
+    expect(label.stringTable).toEqual(["none", "a", "b", "c", "d"]);
+  });
+
+  it("creates the columns the destination lacks and refuses a name it already has", () => {
+    const src = ramp(4, 3);
+    const to = new AttributeSet();
+    const mine = to.add("mine", "f32", 1, 5);
+    to.resize(2);
+    mine.data.set([1, 2]);
+    copyElements(src, to, [2, 0, 1], 3);
+    expect(to.names()).toEqual(["mine", "a"]);
+    // The LOGICAL range: a destination that already held a column grows
+    // through `resize`, whose capacity doubles, so there is dead storage
+    // past `count * tupleSize` and it is nobody's to read.
+    expect(Array.from(to.require("a").data.subarray(0, 9))).toEqual([
+      200, 201, 202, 0, 1, 2, 100, 101, 102,
+    ]);
+    // The column this did not create keeps `resize`'s default over the
+    // range it grew into, and its own values below it.
+    expect(Array.from(mine.data.subarray(0, 3))).toEqual([1, 2, 5]);
+    // A destination that already holds the SOURCE's name is refused
+    // rather than overwritten.
+    const clash = new AttributeSet();
+    clash.add("a", "f32", 3);
+    clash.resize(3);
+    expect(() => copyElements(src, clash, [0, 1, 2], 3)).toThrow(/attribute "a" already exists/);
+  });
+
+  it("raises the copyFrom message for an out-of-range index wherever it sits", () => {
+    const src = ramp(4, 3);
+    // FIRST slot, LAST slot and the middle: the lifted scan walks the
+    // whole map, so none of the three may slip past it.
+    for (const indices of [[9, 0, 1], [0, 1, 9], [0, 9, 1], [-1, 0, 1], [0, 1, -1]]) {
+      expect(() => copyElements(src, new AttributeSet(), indices, indices.length)).toThrow(
+        'attribute "a": copyFrom range out of bounds',
+      );
+    }
+    // CONTROL: the largest index that IS in range copies, so the test
+    // above is not passing because every gather throws.
+    const ok = new AttributeSet();
+    copyElements(src, ok, [3, 0, 3], 3);
+    expect(Array.from(ok.require("a").data)).toEqual([300, 301, 302, 0, 1, 2, 300, 301, 302]);
+  });
+
+  it("names the FIRST column, which is the one a per-element test reached first", () => {
+    const src = new AttributeSet();
+    src.add("first", "f32", 3);
+    src.add("second", "f32", 1);
+    src.resize(2);
+    expect(() => copyElements(src, new AttributeSet(), [0, 5], 2)).toThrow(
+      'attribute "first": copyFrom range out of bounds',
+    );
+    // CONTROL: with the columns declared the other way round the message
+    // follows, so the name really is read off the column order and is not
+    // a constant.
+    const other = new AttributeSet();
+    other.add("second", "f32", 1);
+    other.add("first", "f32", 3);
+    other.resize(2);
+    expect(() => copyElements(other, new AttributeSet(), [0, 5], 2)).toThrow(
+      'attribute "second": copyFrom range out of bounds',
+    );
+  });
+
+  it("raises nothing for a source with no columns, whatever the indices say", () => {
+    // Nothing is copied, so a per-element test never ran and the lifted
+    // one must not run either. `carryPrimitiveAttributes` returns early
+    // on this, but `gatherPrimitives` reaches it with an empty vertex or
+    // detail domain on every plain point cloud.
+    const empty = new AttributeSet();
+    empty.resize(2);
+    const to = new AttributeSet();
+    expect(() => copyElements(empty, to, [7, 8, 9], 3)).not.toThrow();
+    expect(to.count).toBe(3);
+  });
+
+  it("reads a fractional index exactly as the per-element test did", () => {
+    // An `ArrayLike<number>` can hold one, and a bound of `[0, srcCount)`
+    // accepts it. What it reads is the typed array's own answer for a
+    // non-integral index — `undefined`, which stores as NaN in an f32
+    // column — and that is the behaviour every caller has had. Pinned
+    // because lifting the test out of the loop is exactly the change that
+    // could have started rejecting it.
+    const src = ramp(4, 1);
+    const to = new AttributeSet();
+    copyElements(src, to, [1.5, 2], 2);
+    expect(Array.from(to.require("a").data)).toEqual([NaN, 200]);
+    // CONTROL: the same slot with a whole index reads a value, so the NaN
+    // above is the fractional index and not an unwritten slot.
+    const whole = new AttributeSet();
+    copyElements(src, whole, [1, 2], 2);
+    expect(Array.from(whole.require("a").data)).toEqual([100, 200]);
+  });
+});
+
 describe("orientQuat: one arm per axis, chosen by code and not by name", () => {
   /** A forward with no zero component, so no arm can pass by symmetry. */
   const FL = Math.hypot(1, 2, 3);

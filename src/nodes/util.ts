@@ -612,6 +612,117 @@ function copyRangeError(name: string): Error {
 }
 
 /**
+ * The first slot of `indices[0, count)` naming an element a source of
+ * `srcCount` elements does not have, or -1 when every one of them is
+ * readable. One pass, in ascending slot order, so the slot it reports is
+ * the one a test made per copied element would have reached first.
+ *
+ * THE TEST IS HERE AND NOT IN THE COPY LOOPS, and the whole win of this
+ * file's gather rests on that. A conditional that can THROW sits inside
+ * the loop it guards forever: it cannot be hoisted out or reordered
+ * around the stores, so every element of every column pays a compare and
+ * a branch the copy itself does not need, and the loop below it stays a
+ * load-test-store chain. Decided once, ahead of the columns, the copy
+ * loops become straight-line loads and stores over typed arrays —
+ * measured on 2026-09-20 at 60% of the previous cost for a tupleSize-3
+ * f32 column and 76-78% for a scalar one, single-column (nothing to
+ * amortize the extra pass over) and unchanged from 500 elements to
+ * 400000. Every column of one call shares this index map, so the pass
+ * runs ONCE per call and the 4.3 columns an average call carries share
+ * it.
+ *
+ * THE BRANCH AND NOT THE WIDTH IS WHERE THAT CAME FROM, which is worth
+ * recording because the obvious suspects were both wrong. Writing the
+ * tuple widths out while KEEPING the per-element test measured 96.6% of
+ * the old loop, and making the bodies monomorphic per array kind as well
+ * while keeping it measured 93.9%: neither is the 60%. Unrolling is what
+ * makes a branchless body worth having, not what pays for it.
+ *
+ * WHAT IT DOES NOT DO is reject a fractional or NaN index that lies in
+ * range, exactly as the per-element test did not: `indices` is typed as
+ * `ArrayLike<number>` and a plain array can hold one. Such an index reads
+ * `undefined` out of the source's storage and lands as the typed array's
+ * own conversion of it, which is the behaviour every caller has had and
+ * is not this scan's business to change.
+ */
+function firstOutOfRange(indices: ArrayLike<number>, count: number, srcCount: number): number {
+  for (let j = 0; j < count; j++) {
+    const s = indices[j];
+    if (s < 0 || s >= srcCount) return j;
+  }
+  return -1;
+}
+
+/*
+ * ONE GATHER LOOP PER TUPLE WIDTH, and they are as dull as they look.
+ *
+ * `tupleSize` is a runtime value, so the `for (let k = 0; k < ts; k++)`
+ * the general case needs is a loop whose trip count the compiler cannot
+ * see: three components become a loop with a compare, an increment and
+ * two index computations around each pair of accesses. The widths that
+ * exist are few and known — a census of the eiffel demo and the whole
+ * graph corpus on 2026-09-20 found tupleSize 1, 2, 3 and 4 and nothing
+ * else, with 3 and 4 alone carrying 78% of the scalars moved — so each
+ * gets its body written out and `gatherWide` keeps the general case for
+ * a width nobody has shipped yet.
+ *
+ * SEPARATE FUNCTIONS RATHER THAN BRANCHES IN ONE LOOP because the point
+ * is the loop body, not the dispatch: one call per COLUMN (4.3 per
+ * gather) is free, while a width test per ELEMENT is the thing being
+ * removed. They are NOT specialized per array type as well: doing that
+ * monomorphically costs eight near-identical copies of each body, or a
+ * `new Function` no browser Content-Security-Policy would run, and it
+ * measured 66.8% against this shape's 69.0% — two points for forty
+ * functions, so the shared bodies stay.
+ *
+ * Every one assumes its indices are in range: {@link firstOutOfRange} has
+ * already said so.
+ */
+function gather1(out: AttrData, src: AttrData, indices: ArrayLike<number>, count: number): void {
+  for (let j = 0; j < count; j++) out[j] = src[indices[j]];
+}
+
+function gather2(out: AttrData, src: AttrData, indices: ArrayLike<number>, count: number): void {
+  for (let j = 0, d = 0; j < count; j++, d += 2) {
+    const o = indices[j] * 2;
+    out[d] = src[o];
+    out[d + 1] = src[o + 1];
+  }
+}
+
+function gather3(out: AttrData, src: AttrData, indices: ArrayLike<number>, count: number): void {
+  for (let j = 0, d = 0; j < count; j++, d += 3) {
+    const o = indices[j] * 3;
+    out[d] = src[o];
+    out[d + 1] = src[o + 1];
+    out[d + 2] = src[o + 2];
+  }
+}
+
+function gather4(out: AttrData, src: AttrData, indices: ArrayLike<number>, count: number): void {
+  for (let j = 0, d = 0; j < count; j++, d += 4) {
+    const o = indices[j] * 4;
+    out[d] = src[o];
+    out[d + 1] = src[o + 1];
+    out[d + 2] = src[o + 2];
+    out[d + 3] = src[o + 3];
+  }
+}
+
+function gatherWide(
+  out: AttrData,
+  src: AttrData,
+  indices: ArrayLike<number>,
+  count: number,
+  ts: number,
+): void {
+  for (let j = 0, d = 0; j < count; j++, d += ts) {
+    const o = indices[j] * ts;
+    for (let k = 0; k < ts; k++) out[d + k] = src[o + k];
+  }
+}
+
+/**
  * Copy `count` elements of every attribute in `from` into `to`, creating
  * the columns (types, tuple sizes, defaults and string tables) as it goes.
  * `indices` selects which source element lands at each destination slot;
@@ -643,11 +754,16 @@ function copyRangeError(name: string): Error {
  * forbid: half a million points cost half a million transient objects. The
  * shape is checked once here instead — each destination column was just
  * created from its source's own type and tuple size, so the two always
- * match — leaving only the source index, which is still checked per element
- * and raises exactly what `copyFrom` would have. String columns keep the
- * `copyFrom` path: their values are indices into a per-attribute table and
- * have to be re-interned into the destination's, which is knowledge the
- * attribute owns.
+ * match — and so, since 2026-09-20, is the SOURCE INDEX: one pass over the
+ * index map ahead of the columns ({@link firstOutOfRange}) decides what a
+ * test inside every copy loop used to, and raises exactly what `copyFrom`
+ * would have, naming the same column. What is left is one straight-line
+ * loop per tuple width ({@link gather3} and its siblings). String columns
+ * keep the `copyFrom` path: their values are indices into a per-attribute
+ * table and have to be re-interned into the destination's, which is
+ * knowledge the attribute owns — and they are 0.6% of the corpus' gathered
+ * scalars and none of the eiffel demo's, so nothing here is shaped around
+ * them.
  */
 export function copyElements(
   from: AttributeSet,
@@ -703,39 +819,34 @@ export function copyElements(
   for (const attr of from) {
     addForOverwrite(to, attr.name, attr.type, attr.tupleSize, attr.defaultValue);
   }
+  // THE SOURCE INDICES ARE CHECKED ONCE HERE, NOT ONCE PER ELEMENT COPIED
+  // — see {@link firstOutOfRange} for why that is the whole speed of this
+  // gather. Raised from inside the column loop rather than from here so
+  // that the error still NAMES A COLUMN, and names the same one it always
+  // did: every column shares this index map, so the first column copied is
+  // the one a per-element test reached the offending slot in, and a `from`
+  // holding no columns copies nothing and so still raises nothing.
+  const bad = indices === undefined ? -1 : firstOutOfRange(indices, count, srcCount);
   for (const attr of from) {
     const dst = to.require(attr.name);
+    if (bad >= 0) throw copyRangeError(dst.name);
     if (indices === undefined) {
       if (count > srcCount) throw copyRangeError(dst.name);
       dst.copyFrom(attr, 0, 0, count);
       continue;
     }
     if (attr.type === "string") {
-      for (let j = 0; j < count; j++) {
-        const s = indices[j];
-        if (s < 0 || s >= srcCount) throw copyRangeError(dst.name);
-        dst.copyFrom(attr, s, j, 1);
-      }
+      for (let j = 0; j < count; j++) dst.copyFrom(attr, indices[j], j, 1);
       continue;
     }
     const src = attr.data;
     const out = dst.data;
     const ts = attr.tupleSize;
-    if (ts === 1) {
-      for (let j = 0; j < count; j++) {
-        const s = indices[j];
-        if (s < 0 || s >= srcCount) throw copyRangeError(dst.name);
-        out[j] = src[s];
-      }
-      continue;
-    }
-    for (let j = 0; j < count; j++) {
-      const s = indices[j];
-      if (s < 0 || s >= srcCount) throw copyRangeError(dst.name);
-      const so = s * ts;
-      const dof = j * ts;
-      for (let k = 0; k < ts; k++) out[dof + k] = src[so + k];
-    }
+    if (ts === 1) gather1(out, src, indices, count);
+    else if (ts === 2) gather2(out, src, indices, count);
+    else if (ts === 3) gather3(out, src, indices, count);
+    else if (ts === 4) gather4(out, src, indices, count);
+    else gatherWide(out, src, indices, count, ts);
   }
 }
 
