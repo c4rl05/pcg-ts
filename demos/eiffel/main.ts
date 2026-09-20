@@ -682,10 +682,82 @@ renderer.setAnimationLoop(() => {
     moveCars(clock);
   }
   lastFrame = now;
-  controls.update();
+  // A driven camera is not an orbited one: `update()` would re-derive the
+  // pose from the controls' own spherical and clamp it back inside
+  // `maxPolarAngle` and the distance limits, which is exactly what a shot
+  // looking up a leg from the ground is outside of.
+  if (!driven) controls.update();
   rig.render();
   tickFps();
 });
+
+/**
+ * The capture probe.
+ *
+ * A scripted capture has to own two things this page otherwise owns
+ * itself: WHERE THE CAMERA IS, and WHAT TIME IT IS. `?cam=` answers the
+ * first once, at load, which is the right shape for a screenshot and the
+ * wrong one for a film — a camera move through this tower is hundreds of
+ * poses, and reloading the page for each would recook 3.3M triangles
+ * every frame. `?still` answers the second by stopping the clock, which
+ * is a shot of parked cars rather than a shot at a chosen moment.
+ *
+ * So both are pushed in from outside instead, and nothing in here changes
+ * what the page does on its own: a page nobody drives never calls any of
+ * it.
+ */
+declare global {
+  interface Window {
+    pcgEiffel?: {
+      /**
+       * Put the camera at `eye` looking at `target`, both in metres, and
+       * optionally change the lens. The first call takes the camera off
+       * the orbit controls for good — damping and auto-rotate are both
+       * functions of elapsed time, and a driven camera must land exactly
+       * where it was told on the first frame, not ease toward it.
+       */
+      pose(
+        eye: readonly [number, number, number],
+        target: readonly [number, number, number],
+        fov?: number,
+      ): void;
+      /**
+       * Stop the page advancing its own lift clock, so `setClock` is the
+       * only thing that moves the cars.
+       */
+      pause(on: boolean): void;
+      /** Put every car where its run has it at `t` seconds. */
+      setClock(t: number): void;
+    };
+  }
+}
+
+/** True once something outside has taken the camera; see `pose`. */
+let driven = false;
+
+window.pcgEiffel = {
+  pose(eye, target, fov) {
+    driven = true;
+    controls.enabled = false;
+    controls.enableDamping = false;
+    controls.autoRotate = false;
+    camera.position.set(eye[0], eye[1], eye[2]);
+    controls.target.set(target[0], target[1], target[2]);
+    if (fov !== undefined && fov !== camera.fov) {
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+    }
+    camera.lookAt(controls.target);
+    camera.updateMatrixWorld();
+  },
+  pause(on) {
+    liftsRunning = !on;
+  },
+  setClock(t) {
+    clock = t;
+    moveCars(clock);
+  },
+};
 
 main()
   .then(() => {
