@@ -510,6 +510,39 @@ describe("copyElements: one gather loop per tuple width", () => {
     );
   });
 
+  it("writes nothing into the destination when an index is out of range", () => {
+    // THE ONE BEHAVIOUR THAT MOVED when the source-index test came out of
+    // the copy loops, pinned so it cannot move back unnoticed. The
+    // per-element test threw partway through the FIRST column, leaving
+    // slots 0..bad holding gathered values and a string column's table
+    // already carrying them. Deciding ahead of the columns means the
+    // destination is created and sized but untouched, which every call
+    // site now relies on by building a fresh destination and dropping it.
+    const src = new AttributeSet();
+    const a = src.add("a", "f32", 1, -7);
+    const s = src.add("s", "string", 1, "none");
+    src.resize(3);
+    a.data.set([10, 20, 30]);
+    s.setString(0, "zero");
+    s.setString(1, "one");
+    s.setString(2, "two");
+    const to = new AttributeSet();
+    // Slot 0 is readable and slot 1 is not, so a per-element test would
+    // have copied element 0 of "a" before refusing.
+    expect(() => copyElements(src, to, [2, 99], 2)).toThrow(/copyFrom range out of bounds/);
+    expect(Array.from(to.require("a").data)).toEqual([0, 0]);
+    // And the string table holds only the default it is born with — no
+    // value was interned on the way to the throw.
+    expect(to.require("s").stringTable).toEqual(["none"]);
+    // CONTROL: the same gather with both indices in range DOES write
+    // slot 0 and DOES intern, so the two assertions above are reading a
+    // destination that would otherwise have been filled.
+    const ok = new AttributeSet();
+    copyElements(src, ok, [2, 0], 2);
+    expect(Array.from(ok.require("a").data)).toEqual([30, 10]);
+    expect(ok.require("s").stringTable).toEqual(["none", "two", "zero"]);
+  });
+
   it("raises nothing for a source with no columns, whatever the indices say", () => {
     // Nothing is copied, so a per-element test never ran and the lifted
     // one must not run either. `carryPrimitiveAttributes` returns early

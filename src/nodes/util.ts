@@ -617,26 +617,29 @@ function copyRangeError(name: string): Error {
  * readable. One pass, in ascending slot order, so the slot it reports is
  * the one a test made per copied element would have reached first.
  *
- * THE TEST IS HERE AND NOT IN THE COPY LOOPS, and the whole win of this
- * file's gather rests on that. A conditional that can THROW sits inside
- * the loop it guards forever: it cannot be hoisted out or reordered
- * around the stores, so every element of every column pays a compare and
- * a branch the copy itself does not need, and the loop below it stays a
- * load-test-store chain. Decided once, ahead of the columns, the copy
- * loops become straight-line loads and stores over typed arrays —
- * measured on 2026-09-20 at 60% of the previous cost for a tupleSize-3
- * f32 column and 76-78% for a scalar one, single-column (nothing to
- * amortize the extra pass over) and unchanged from 500 elements to
- * 400000. Every column of one call shares this index map, so the pass
- * runs ONCE per call and the 4.3 columns an average call carries share
- * it.
+ * THE TEST IS HERE AND NOT IN THE COPY LOOPS. A conditional that can
+ * THROW cannot leave the loop it guards: it may not be hoisted out or
+ * reordered around the stores, so every element of every column paid a
+ * compare and a branch the copy itself does not need, and the body stayed
+ * a load-test-store chain instead of straight-line loads and stores.
+ * Decided once, ahead of the columns, it is paid once per CALL — every
+ * column of a call shares this index map, and an average call carries
+ * 4.3 of them.
  *
- * THE BRANCH AND NOT THE WIDTH IS WHERE THAT CAME FROM, which is worth
- * recording because the obvious suspects were both wrong. Writing the
- * tuple widths out while KEEPING the per-element test measured 96.6% of
- * the old loop, and making the bodies monomorphic per array kind as well
- * while keeping it measured 93.9%: neither is the 60%. Unrolling is what
- * makes a branchless body worth having, not what pays for it.
+ * NO RATIO FOR THE LOOP ALONE IS QUOTED HERE, AND THAT IS DELIBERATE.
+ * Three independently written microbenchmarks of this loop disagreed
+ * about it on the same machine on 2026-09-20, spanning 0.54 to 0.85 of
+ * the old loop at tupleSize 3, and the spread is a property of the
+ * measurement rather than of the code: the OLD loop needs hundreds of
+ * CALLS to reach its optimizing tier where this one arrives almost at
+ * once, so a lightly warmed harness times the warm-up, and a heavily
+ * warmed one is sensitive to how the batch, the index map and the
+ * working-set size were chosen. A number in a comment in this repository
+ * gets quoted, so the honest figure to quote is the END-TO-END one, which
+ * all three agreed on and which is what a caller actually gets: a 4-6%
+ * shorter eiffel cook, and 36-41% off the share of cook CPU these loops
+ * hold (median of 5 CPU profiles a side, the corpus unmoved because the
+ * gather is 1.2% of it). Re-measure end to end, never here.
  *
  * WHAT IT DOES NOT DO is reject a fractional or NaN index that lies in
  * range, exactly as the per-element test did not: `indices` is typed as
@@ -644,6 +647,11 @@ function copyRangeError(name: string): Error {
  * `undefined` out of the source's storage and lands as the typed array's
  * own conversion of it, which is the behaviour every caller has had and
  * is not this scan's business to change.
+ *
+ * It DOES run for a source holding no columns, where nothing will be
+ * copied and so nothing can be out of range. Left that way because the
+ * alternative is a test on every call to save four calls over 11.6k
+ * elements on the whole corpus and none at all in the eiffel demo.
  */
 function firstOutOfRange(indices: ArrayLike<number>, count: number, srcCount: number): number {
   for (let j = 0; j < count; j++) {
@@ -671,12 +679,33 @@ function firstOutOfRange(indices: ArrayLike<number>, count: number, srcCount: nu
  * gather) is free, while a width test per ELEMENT is the thing being
  * removed. They are NOT specialized per array type as well: doing that
  * monomorphically costs eight near-identical copies of each body, or a
- * `new Function` no browser Content-Security-Policy would run, and it
- * measured 66.8% against this shape's 69.0% — two points for forty
- * functions, so the shared bodies stay.
+ * `new Function` no browser Content-Security-Policy would run, and every
+ * harness that measured it put the gain in the low single digits — forty
+ * functions for it, so the shared bodies stay. The same caution as
+ * {@link firstOutOfRange} applies to that comparison: it is a
+ * microbenchmark figure, and the reason to believe THIS split is the
+ * end-to-end number, not the isolated one.
  *
  * Every one assumes its indices are in range: {@link firstOutOfRange} has
  * already said so.
+ *
+ * NO BULK PATH SITS IN FRONT OF THEM, and the measurement is worth
+ * keeping because the idea is an obvious one to have twice. A gather
+ * under an index map is a real permutation, so the only maps a
+ * `set`/`subarray` copy could serve are the ones that are secretly
+ * contiguous. On the eiffel demo they are 0.2-0.8% of gather time, and
+ * inside the arbitrary and monotonic maps that carry the rest, 0-1.2% of
+ * elements sit in a contiguous run of eight or more — a run detector
+ * would walk the map and find nothing. THE CORPUS IS NOT LIKE THAT: 25%
+ * of the elements its non-trivial maps gather are in runs of eight or
+ * more, twenty times the eiffel figure, because its gathers are mostly
+ * filters keeping long stretches of a cloud. It changes no decision, and
+ * the reason is scope rather than the ratio: all 95 corpus graphs move
+ * about 3% of the scalars one rivets cook does, and the gather is 1.2% of
+ * that cook to begin with. A run path would be real work for a fraction
+ * of a percent of the smaller of the two workloads. If a future workload
+ * gathers corpus-shaped maps at eiffel scale, this is the paragraph that
+ * was wrong.
  */
 function gather1(out: AttrData, src: AttrData, indices: ArrayLike<number>, count: number): void {
   for (let j = 0; j < count; j++) out[j] = src[indices[j]];
@@ -764,6 +793,20 @@ function gatherWide(
  * knowledge the attribute owns — and they are 0.6% of the corpus' gathered
  * scalars and none of the eiffel demo's, so nothing here is shaped around
  * them.
+ *
+ * ON A RANGE ERROR `to` IS LEFT WITH ITS COLUMNS CREATED AND SIZED BUT
+ * NOT ONE ELEMENT WRITTEN, AND THAT IS A PRECONDITION ON CALLERS RATHER
+ * THAN A PROMISE TO THEM. It is the one behaviour that moved when the
+ * source-index test came out of the copy loops: the per-element test
+ * threw partway through the FIRST column, so slots 0 to the offending one
+ * held gathered values and a string column had already interned them into
+ * `to`'s table. Nothing observes the difference today, because all 15
+ * call sites build a fresh destination for the gather and none of them
+ * catches the error and carries on — the throw reaches the executor,
+ * which wraps it and discards the geometry. A caller that gathered into a
+ * destination it meant to keep, or that caught this and read `to`
+ * afterwards, would be relying on a partial write that no longer happens;
+ * such a caller has to size and fill `to` itself.
  */
 export function copyElements(
   from: AttributeSet,
@@ -820,12 +863,18 @@ export function copyElements(
     addForOverwrite(to, attr.name, attr.type, attr.tupleSize, attr.defaultValue);
   }
   // THE SOURCE INDICES ARE CHECKED ONCE HERE, NOT ONCE PER ELEMENT COPIED
-  // — see {@link firstOutOfRange} for why that is the whole speed of this
-  // gather. Raised from inside the column loop rather than from here so
-  // that the error still NAMES A COLUMN, and names the same one it always
-  // did: every column shares this index map, so the first column copied is
-  // the one a per-element test reached the offending slot in, and a `from`
-  // holding no columns copies nothing and so still raises nothing.
+  // — see {@link firstOutOfRange} for why, and for why no isolated speed
+  // figure is quoted for it. Raised from inside the column loop rather
+  // than from here so that the error still NAMES A COLUMN, and names the
+  // same one it always did: every column shares this index map, so the
+  // first column copied is the one a per-element test reached the
+  // offending slot in. A `from` holding no columns copies nothing and so
+  // still raises nothing — it is scanned all the same, which costs four
+  // calls on the whole corpus and is not worth a test to avoid.
+  //
+  // Nothing is written before this decides, which is the one behaviour
+  // that moved; the doc comment above states it as the precondition it
+  // now is.
   const bad = indices === undefined ? -1 : firstOutOfRange(indices, count, srcCount);
   for (const attr of from) {
     const dst = to.require(attr.name);
