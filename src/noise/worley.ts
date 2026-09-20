@@ -128,7 +128,7 @@ export function worleyNoise(opts: WorleyNoiseOpts = {}): Field<1> {
       };
   // WHICH output, decided ONCE here rather than per sampled element. THE
   // CANONICAL NOTE ON WHY A PARAM STRING MUST NOT BE COMPARED INSIDE A
-  // PER-ELEMENT LOOP — nine other sites in the library point here.
+  // PER-ELEMENT LOOP — every other such site in the library points here.
   //
   // The sampler below runs once per point. Asking it `output === "cell"`
   // each time put a string comparison in a per-element loop, and V8

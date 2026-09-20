@@ -60,6 +60,7 @@ import {
   type PolylineArcTable,
   carryPrimitiveAttributes,
   locateOnArcLength,
+  orientAxisCode,
   orientQuat,
   polylineArcTables,
   polylineWalks,
@@ -708,6 +709,12 @@ export const pathResample = standardNode<
     // `stepAttr`. Always computed: it is one division per path, and a
     // number the node needs anyway to have placed anything.
     const steps: number[] = [];
+    // Which placement rule, settled here rather than asked once per PATH
+    // below — see the note in `src/noise/worley.ts`. The test is POSITIVE,
+    // so the trailing arm is still 'spacing', the only other value the
+    // check above lets through. Each arm's own refusals stay inside the
+    // loop, where the path they name is.
+    const modeIsCount = params.mode === "count";
     let total = 0;
     for (const table of tables) {
       const L = table.length;
@@ -719,7 +726,7 @@ export const pathResample = standardNode<
         );
       }
       const positions: number[] = [];
-      if (params.mode === "count") {
+      if (modeIsCount) {
         const n = params.count;
         if (!Number.isInteger(n) || n < least) {
           throw new Error(
@@ -1062,6 +1069,11 @@ export const pathSegments = standardNode<
         `pathSegments: param "axis" must be one of ${ORIENT_AXES.join(", ")}; got "${axis}"`,
       );
     }
+    // The axis as a code, settled here rather than asked inside the
+    // per-segment loop below — see the note in `src/noise/worley.ts`. It
+    // is the validated name's own index, so the loop's answer is
+    // unchanged. `lengthComp` below already reads the name once, here.
+    const axisCode = orientAxisCode(axis);
     // A PLAIN extend is checked here, before the geometry is read, exactly
     // as it always was. A FIELD has no number to check yet — it resolves
     // per point below, where a negative value clamps and a non-finite one
@@ -1183,7 +1195,7 @@ export const pathSegments = standardNode<
         // A path of zero total length cannot reach here: every one of
         // its segments is degenerate and was skipped above.
         curveU[w] = (table.cum[k] + len * 0.5) / L;
-        orientQuat(q, fx, fy, fz, 0, 1, 0, axis);
+        orientQuat(q, fx, fy, fz, 0, 1, 0, axisCode);
         rot[w * 4] = q[0];
         rot[w * 4 + 1] = q[1];
         rot[w * 4 + 2] = q[2];
@@ -1316,6 +1328,11 @@ export const pathPointAt = standardNode<PathPointAtParams, PathPointAtInputs, Pa
     const tangent = geo.attrs.point.replace("tangent", "f32", 3, [0, 0, 0]).data;
     const curveU = geo.attrs.point.replace("curveU", "f32", 1, 0).data;
     const found = [0, 0]; // scratch [segment, t], reused by every point
+    // Which reading, settled here rather than asked at every path point
+    // below — see the note in `src/noise/worley.ts`. The test is POSITIVE,
+    // so the trailing arm is still 'distance', and the two are the only
+    // values left: the check above refused everything else.
+    const modeIsFraction = params.mode === "fraction";
 
     for (const table of tables) {
       const L = table.length;
@@ -1328,7 +1345,7 @@ export const pathPointAt = standardNode<PathPointAtParams, PathPointAtInputs, Pa
       for (let k = 0; k < m; k++) {
         const p = pts[k];
         const raw = readComp(seek, p, 0);
-        const want = params.mode === "fraction" ? raw * L : raw;
+        const want = modeIsFraction ? raw * L : raw;
         const s = want < 0 ? 0 : want > L ? L : want;
         locateOnArcLength(found, table.cum, s);
         const lo = found[0];

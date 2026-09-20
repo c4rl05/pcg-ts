@@ -23,6 +23,7 @@ import {
   ORIENT_AXES,
   type FieldParam,
   geometryItems,
+  orientAxisCode,
   orientQuat,
   quatFromEulerDeg,
   quatMul,
@@ -466,14 +467,22 @@ function requireSelectionKeyAttr(
  * for its reason, quoted rather than paraphrased: a key is an IDENTITY, two
  * values a ULP apart would be two groups, and CPU/GPU parity is a tolerance
  * rather than an equality. A fractional key is refused on either side.
+ *
+ * `isText` is `attr.type === "string"` and is passed IN because this runs
+ * once per point: it is an attribute type rather than a param string, so
+ * its provenance is not the one the note in `src/noise/worley.ts`
+ * describes, but the shape is — one loop-invariant string, compared
+ * against a literal once per element — and the caller has the answer
+ * already.
  */
 function readSelectionKey(
   attr: Attribute,
+  isText: boolean,
   index: number,
   param: string,
   side: string,
 ): number | string {
-  if (attr.type === "string") return attr.getString(index);
+  if (isText) return attr.getString(index);
   const value = attr.data[index];
   if (!Number.isInteger(value)) {
     throw new Error(
@@ -530,12 +539,16 @@ function buildCopySelection(
   // target would come out empty and the cook would finish, cleanly, with
   // no points. That is an authoring mistake and not data: refuse it here
   // rather than let an empty output stand in for it.
-  if ((sAttr.type === "string") !== (tAttr.type === "string")) {
-    const stringSide = sAttr.type === "string" ? "sourceGroupAttr" : "targetGroupAttr";
-    const numberSide = sAttr.type === "string" ? "targetGroupAttr" : "sourceGroupAttr";
+  // Each side's kind, read once here and handed to every call of
+  // `readSelectionKey` below — the check this guards decided both anyway.
+  const sIsText = sAttr.type === "string";
+  const tIsText = tAttr.type === "string";
+  if (sIsText !== tIsText) {
+    const stringSide = sIsText ? "sourceGroupAttr" : "targetGroupAttr";
+    const numberSide = sIsText ? "targetGroupAttr" : "sourceGroupAttr";
     throw new Error(
       `copyToPoints: param "${stringSide}" names a string attribute and "${numberSide}" names a numeric ` +
-        `one (${(sAttr.type === "string" ? tAttr : sAttr).type}); a string key can never equal a number, ` +
+        `one (${(sIsText ? tAttr : sAttr).type}); a string key can never equal a number, ` +
         "so every target would take nothing. Name columns of the same kind on both sides — two string " +
         "names, or two whole-number ids.",
     );
@@ -545,7 +558,7 @@ function buildCopySelection(
   // the source's own order with the non-members removed.
   const byKey = new Map<number | string, number[]>();
   for (let s = 0; s < nS; s++) {
-    const key = readSelectionKey(sAttr, s, "sourceGroupAttr", "source");
+    const key = readSelectionKey(sAttr, sIsText, s, "sourceGroupAttr", "source");
     let bucket = byKey.get(key);
     if (!bucket) byKey.set(key, (bucket = []));
     bucket.push(s);
@@ -559,7 +572,7 @@ function buildCopySelection(
 
   const groupOf = new Int32Array(nT);
   for (let t = 0; t < nT; t++) {
-    const key = readSelectionKey(tAttr, t, "targetGroupAttr", "target");
+    const key = readSelectionKey(tAttr, tIsText, t, "targetGroupAttr", "target");
     const group = keyToGroup.get(key);
     // A TARGET THAT MATCHES NOTHING IS A LEGAL EMPTY BLOCK, not an error,
     // and for the reason `pointsToPath`'s `shortGroups "skip"` gives for
@@ -1632,6 +1645,10 @@ export const orientAlongVector = standardNode<
         `orientAlongVector: param "axis" must be one of ${ORIENT_AXES.join(", ")}; got "${axis}"`,
       );
     }
+    // The axis as a code, settled here rather than asked inside the
+    // per-point loop below — see the note in `src/noise/worley.ts`. It is
+    // the validated name's own index, so the loop's answer is unchanged.
+    const axisCode = orientAxisCode(axis);
     const dir = requireTuple(
       await resolveOnMaybeGpu(gpu, geo, "point", params.direction, seed, "orientAlongVector", "direction"),
       [1, 3],
@@ -1701,7 +1718,7 @@ export const orientAlongVector = standardNode<
         upy = uy * uInv;
         upz = uz * uInv;
       }
-      orientQuat(q, dx * dInv, dy * dInv, dz * dInv, upx, upy, upz, axis);
+      orientQuat(q, dx * dInv, dy * dInv, dz * dInv, upx, upy, upz, axisCode);
       rot[i * 4] = q[0];
       rot[i * 4 + 1] = q[1];
       rot[i * 4 + 2] = q[2];

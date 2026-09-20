@@ -33,6 +33,7 @@ import {
   type PolylineArcTable,
   carryPrimitiveAttributes,
   copyElements,
+  ORIENT_AXIS_PZ,
   orientQuat,
   polylineArcTables,
   readComp,
@@ -533,6 +534,13 @@ export const sweepProfile = standardNode<
         `sweepProfile: frame "${frameMode}" needs the "${frameAttr.name}" point attribute to be f32 with at least ${frameTuple} components, but it is ${frameAttr.type} with ${frameAttr.tupleSize}`,
       );
     }
+    // Both modes, settled here rather than asked inside the per-ring loop
+    // below — see the note in `src/noise/worley.ts`. Both were already
+    // branched on above (the miter limit's resolve, and the frame's own
+    // column), and both tests are POSITIVE, so each trailing arm still
+    // carries what it did: 'perpendicular', and the `rot` read.
+    const jointIsMiter = jointMode === "miter";
+    const frameIsCurveFrame = frameMode === "curveFrame";
 
     // Pass one: lay the output out. Purely combinatorial, so the writing
     // pass below can index straight into the blocks it names.
@@ -696,7 +704,7 @@ export const sweepProfile = standardNode<
         let my = 0;
         let mz = 0;
         let stretch = 0;
-        if (jointMode === "miter") {
+        if (jointIsMiter) {
           const cosHalf = nx * ox + ny * oy + nz * oz;
           const ms = cosHalf > 0 ? 1 / cosHalf : 0;
           // The ring's OWN limit: read at the point this ring stands on,
@@ -730,7 +738,7 @@ export const sweepProfile = standardNode<
         let have = false;
         if (frameAttr !== undefined && fd !== undefined) {
           const fo = pi * fs;
-          if (frameMode === "curveFrame") {
+          if (frameIsCurveFrame) {
             ax = fd[fo];
             ay = fd[fo + 1];
             az = fd[fo + 2];
@@ -775,7 +783,8 @@ export const sweepProfile = standardNode<
           // Local +Z onto the ring normal, through the one place the
           // library builds an orientation from a direction — so the up
           // fallbacks are the shared contract, not a second copy of it.
-          orientQuat(q, nx, ny, nz, ux, uy, uz, "+z");
+          // The axis is a module constant, so nothing here spells it.
+          orientQuat(q, nx, ny, nz, ux, uy, uz, ORIENT_AXIS_PZ);
           rotateVec(e1, q[0], q[1], q[2], q[3], 1, 0, 0);
           rotateVec(e2, q[0], q[1], q[2], q[3], 0, 1, 0);
         }
@@ -1056,6 +1065,11 @@ export const extrudePolygon = standardNode<
     }
 
     const layouts: ExtrudeLayout[] = [];
+    // Which direction rule, settled here rather than asked once per
+    // POLYGON below — see the note in `src/noise/worley.ts`. The test is
+    // POSITIVE, so a polygon under '+y' or 'vector' still skips the
+    // Newell branch and keeps the direction it arrived with.
+    const dirIsPolygonNormal = dirMode === "polygonNormal";
     let nPoints = 0;
     let nTris = 0;
     for (const table of tables) {
@@ -1098,7 +1112,7 @@ export const extrudePolygon = standardNode<
         dy = vy * inv;
         dz = vz * inv;
       }
-      if (dirMode === "polygonNormal") {
+      if (dirIsPolygonNormal) {
         const lenSq = nx * nx + ny * ny + nz * nz;
         if (lenSq === 0) {
           throw new Error(
@@ -1245,7 +1259,7 @@ export const extrudePolygon = standardNode<
       // The cap plane's basis, always: the degenerate-wall fallback below
       // borrows from it too. Same orientation construction, and the same
       // up fallbacks, every other frame in the library uses.
-      orientQuat(q, dx, dy, dz, 0, 1, 0, "+z");
+      orientQuat(q, dx, dy, dz, 0, 1, 0, ORIENT_AXIS_PZ);
       rotateVec(c1, q[0], q[1], q[2], q[3], 1, 0, 0);
       rotateVec(c2, q[0], q[1], q[2], q[3], 0, 1, 0);
       if (wantSides) {

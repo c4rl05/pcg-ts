@@ -1483,13 +1483,38 @@ export function writePolylineTangents(
 /** Which local axis an orientation maps onto its forward direction. */
 export const ORIENT_AXES = ["+x", "-x", "+y", "-y", "+z", "-z"] as const;
 
+/**
+ * {@link orientQuat}'s axis, as this list's INDEX rather than its name —
+ * resolved once per cook by the caller, because that function runs once
+ * per element and a string compared inside a per-element loop is the
+ * shape described in the note in `src/noise/worley.ts`.
+ *
+ * TOTAL, and deliberately so: a name that is not in the list answers -1,
+ * which `orientQuat`'s switch takes on its `default` arm — the very arm
+ * the old `switch (axis)` took for anything that was not one of the
+ * first five names. So this changes the ANSWER for no input at all,
+ * including a misspelling, `undefined` and `null`, for which `indexOf`'s
+ * strict equality also answers -1. Every caller validates the name
+ * against {@link ORIENT_AXES} and throws before reaching here, so the
+ * fallback is a preserved behaviour rather than a policy anybody relies
+ * on.
+ */
+export function orientAxisCode(axis: unknown): number {
+  return (ORIENT_AXES as readonly unknown[]).indexOf(axis);
+}
+
+/** The code for "+z", for the callers that pass that axis as a literal. */
+export const ORIENT_AXIS_PZ = orientAxisCode("+z");
+
 /** Squared-length threshold below which up and forward count as parallel. */
 export const ORIENT_PARALLEL_EPS = 1e-12;
 
 /**
- * Quaternion ([x, y, z, w]) putting the chosen local `axis` along a UNIT
- * forward direction, with a UNIT `up` hint fixing the roll. Both inputs
- * must already be normalized — the callers normalize once, outside their
+ * Quaternion ([x, y, z, w]) putting the local axis {@link orientAxisCode}
+ * named along a UNIT forward direction, with a UNIT `up` hint fixing the
+ * roll. A CODE and not the name, because this runs once per element; the
+ * callers resolve theirs once per cook. Both direction inputs must
+ * already be normalized — the callers normalize once, outside their
  * per-element loops, and the parallel test below is only scale-invariant
  * because of it.
  *
@@ -1511,7 +1536,7 @@ export function orientQuat(
   upx: number,
   upy: number,
   upz: number,
-  axis: string,
+  axisCode: number,
 ): number[] {
   // right = up x forward, falling back when (anti)parallel.
   let rx = upy * fz - upz * fy;
@@ -1541,24 +1566,26 @@ export function orientQuat(
   const uy = fz * rx - fx * rz;
   const uz = fx * ry - fy * rx;
   // Assign (right, u, forward) to basis columns so the chosen local
-  // axis maps to forward and the frame stays right-handed.
-  switch (axis) {
-    case "+x":
+  // axis maps to forward and the frame stays right-handed. Arm by arm
+  // the index the switch takes is ORIENT_AXES' own — see
+  // {@link orientAxisCode} for why the name no longer reaches here.
+  switch (axisCode) {
+    case 0: // "+x"
       quatFromBasis(out, fx, fy, fz, ux, uy, uz, -rx, -ry, -rz);
       break;
-    case "-x":
+    case 1: // "-x"
       quatFromBasis(out, -fx, -fy, -fz, ux, uy, uz, rx, ry, rz);
       break;
-    case "+y":
+    case 2: // "+y"
       quatFromBasis(out, -rx, -ry, -rz, fx, fy, fz, ux, uy, uz);
       break;
-    case "-y":
+    case 3: // "-y"
       quatFromBasis(out, rx, ry, rz, -fx, -fy, -fz, ux, uy, uz);
       break;
-    case "+z":
+    case 4: // "+z"
       quatFromBasis(out, rx, ry, rz, ux, uy, uz, fx, fy, fz);
       break;
-    default: // "-z"
+    default: // "-z", and anything orientAxisCode did not recognise
       quatFromBasis(out, -rx, -ry, -rz, ux, uy, uz, -fx, -fy, -fz);
       break;
   }

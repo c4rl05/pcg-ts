@@ -136,6 +136,11 @@ export const voronoiCells = standardNode<
     if (policy !== "drop" && policy !== "refuse") {
       throw new Error(`voronoiCells: unknown onUncertified "${policy}"; valid values: drop, refuse`);
     }
+    // The policy, settled here rather than asked at the site the
+    // certificate fails on — see the note in `src/noise/worley.ts`. The
+    // refusal itself stays where it was, inside the per-site loop, which
+    // is the only place that knows WHICH site it names.
+    const policyIsRefuse = policy === "refuse";
     const uniformRadius = typeof params.radius === "number" ? params.radius : undefined;
     if (uniformRadius !== undefined && (!(uniformRadius >= 0) || !Number.isFinite(uniformRadius))) {
       throw new Error(
@@ -414,7 +419,7 @@ export const voronoiCells = standardNode<
           }
         }
         if (!ok) {
-          if (policy === "refuse") {
+          if (policyIsRefuse) {
             const reach = Math.sqrt(reach2);
             throw new Error(
               `voronoiCells: the cell of the site at (${sx}, ${pd[i * ps + 1]}, ${sz}) is not certified — its corners reach ${reach} from the site, past the ${r / 2} that radius ${r} proves. Raise radius above ${2 * reach} so the sites that bound it are gathered, or set onUncertified to "drop". A site on the OUTER BOUNDARY of the cloud has an unbounded cell and NO radius certifies it: dropping is the only answer there, and scattering sites around the outside is how you keep the ones you care about.`,

@@ -475,6 +475,12 @@ export function renderSvg(collection: DataCollection, opts: RenderOptions = {}):
     // Primitives first, so points draw on top of the shapes they belong to.
     if (geo.primitiveCount > 0) {
       const primType = geo.attrs.primitive.get("primtype");
+      // Whether the column can be READ at all, settled before the
+      // per-primitive loop rather than inside it — see the note in
+      // `src/noise/worley.ts`. A primtype of another type reads as no
+      // column at all, exactly as the inline test made it.
+      const primTypeText =
+        primType !== undefined && primType.type === "string" ? primType : undefined;
       for (let p = 0; p < geo.primitiveCount; p++) {
         if (primIndex++ % primStride !== 0) continue;
         const start = geo.primVertexStart[p];
@@ -503,9 +509,7 @@ export function renderSvg(collection: DataCollection, opts: RenderOptions = {}):
         for (const sub of subpaths) {
           for (let k = 0; k < sub.length; k += 2) track(sub[k], sub[k + 1]);
         }
-        const isPolyline = primType !== undefined && primType.type === "string"
-          ? primType.getString(p) === "polyline"
-          : false;
+        const isPolyline = primTypeText !== undefined && primTypeText.getString(p) === "polyline";
         // Without a primitive column the stroke is the kind's default, so
         // an uncolored render is byte-for-byte the one it always was.
         const stroke = primColor?.(p) ?? (isPolyline ? POLYLINE_COLOR : POLY_COLOR);

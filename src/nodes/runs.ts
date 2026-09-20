@@ -66,6 +66,7 @@ import {
   carryPrimitiveAttributes,
   copyElements,
   locateOnArcLength,
+  orientAxisCode,
   orientQuat,
   polylineArcTables,
   requireGeometry,
@@ -735,6 +736,10 @@ export const arcTile = standardNode<ArcTileParams, ArcTileInputs, ArcTileOutputs
         `arcTile: param "axis" must be one of ${ORIENT_AXES.join(", ")}; got "${axis}"`,
       );
     }
+    // The axis as a code, settled here rather than asked inside the
+    // per-tile loop below — see the note in `src/noise/worley.ts`. It is
+    // the validated name's own index, so the loop's answer is unchanged.
+    const axisCode = orientAxisCode(axis);
     if (params.startAttr === "") {
       throw new Error(
         'arcTile: param "startAttr" must be a non-empty attribute name (the default is "runStart"); it is the point attribute on the ranges input holding where each range begins',
@@ -1031,7 +1036,7 @@ export const arcTile = standardNode<ArcTileParams, ArcTileInputs, ArcTileOutputs
           tangent[w * 3] = fx;
           tangent[w * 3 + 1] = fy;
           tangent[w * 3 + 2] = fz;
-          orientQuat(q, fx, fy, fz, 0, 1, 0, axis);
+          orientQuat(q, fx, fy, fz, 0, 1, 0, axisCode);
           rot[w * 4] = q[0];
           rot[w * 4 + 1] = q[1];
           rot[w * 4 + 2] = q[2];

@@ -19,7 +19,16 @@ import {
   volumeSample,
 } from "./index.js";
 import { firstGeo, runNode } from "./nodes.testsupport.js";
-import { copyElements, requireReportSlot, type ReportSlot } from "./util.js";
+import {
+  ORIENT_AXES,
+  ORIENT_AXIS_PZ,
+  copyElements,
+  orientAxisCode,
+  orientQuat,
+  requireReportSlot,
+  rotateVec,
+  type ReportSlot,
+} from "./util.js";
 
 function cloudAt(positions: number[][]): ReturnType<typeof createPointCloud> {
   const geo = createPointCloud(positions.length);
@@ -334,5 +343,83 @@ describe("copyElements", () => {
     // values, not its default, so the two branches are told apart.
     expect(to.require("tint").getTuple(2)).toEqual([0, 0, 1, 1]);
     expect(to.require("tint").getTuple(3)).toEqual([1, 0, 0, 1]);
+  });
+});
+
+describe("orientQuat: one arm per axis, chosen by code and not by name", () => {
+  /** A forward with no zero component, so no arm can pass by symmetry. */
+  const FL = Math.hypot(1, 2, 3);
+  const F: readonly [number, number, number] = [1 / FL, 2 / FL, 3 / FL];
+  /** An up hint not parallel to F, and not a world axis either. */
+  const UL = Math.hypot(0, 1, 1);
+  const UP: readonly [number, number, number] = [0, 1 / UL, 1 / UL];
+
+  /** Where a LOCAL direction lands under the orientation for `axis`. */
+  function turned(axis: unknown, local: readonly [number, number, number]): number[] {
+    const q = orientQuat([0, 0, 0, 1], F[0], F[1], F[2], UP[0], UP[1], UP[2], orientAxisCode(axis));
+    return rotateVec([0, 0, 0], q[0], q[1], q[2], q[3], local[0], local[1], local[2]);
+  }
+
+  /**
+   * The LOCAL direction each axis name promises to put ON the forward —
+   * the whole content of the switch, one entry per arm. They are pairwise
+   * distinct as directions, so exchanging any two arms makes at least two
+   * of the cases below fail; the CONTROL after them is what proves the
+   * assertion can fail at all.
+   */
+  const LOCAL: Record<string, [number, number, number]> = {
+    "+x": [1, 0, 0],
+    "-x": [-1, 0, 0],
+    "+y": [0, 1, 0],
+    "-y": [0, -1, 0],
+    "+z": [0, 0, 1],
+    "-z": [0, 0, -1],
+  };
+
+  it.each([...ORIENT_AXES])("puts local %s on the forward direction", (axis) => {
+    const got = turned(axis, LOCAL[axis]);
+    for (let k = 0; k < 3; k++) expect(got[k]).toBeCloseTo(F[k], 12);
+  });
+
+  it("rolls the frame the way each axis family documents", () => {
+    // For ±x and ±z the local +Y turns as close to `up` as the direction
+    // allows; for ±y the local +Z takes that role. "As close as allowed"
+    // is the component of `up` perpendicular to the forward, normalized.
+    const d = UP[0] * F[0] + UP[1] * F[1] + UP[2] * F[2];
+    const perp = [UP[0] - F[0] * d, UP[1] - F[1] * d, UP[2] - F[2] * d];
+    const pl = Math.hypot(perp[0], perp[1], perp[2]);
+    for (const axis of ORIENT_AXES) {
+      const upLike: [number, number, number] =
+        axis === "+y" || axis === "-y" ? [0, 0, 1] : [0, 1, 0];
+      const got = turned(axis, upLike);
+      for (let k = 0; k < 3; k++) expect(got[k]).toBeCloseTo(perp[k] / pl, 12);
+    }
+  });
+
+  it("CONTROL: reading an arm as another axis' moves the answer off the forward", () => {
+    for (const a of ORIENT_AXES) {
+      for (const b of ORIENT_AXES) {
+        if (a === b) continue;
+        const got = turned(a, LOCAL[b]);
+        const apart = Math.hypot(got[0] - F[0], got[1] - F[1], got[2] - F[2]);
+        expect(apart).toBeGreaterThan(1e-6);
+      }
+    }
+  });
+
+  it("codes ORIENT_AXES by its own index, and nothing else at all", () => {
+    ORIENT_AXES.forEach((axis, i) => expect(orientAxisCode(axis)).toBe(i));
+    expect(ORIENT_AXIS_PZ).toBe((ORIENT_AXES as readonly string[]).indexOf("+z"));
+    for (const bad of ["Z", "+Z", "", "0", 0, 4, undefined, null, {}]) {
+      expect(orientAxisCode(bad)).toBe(-1);
+    }
+  });
+
+  it("takes the '-z' arm for an unrecognised axis, as the string switch did", () => {
+    // Not a policy anybody relies on — every caller validates the name
+    // first — but the answer the old `default:` gave for exactly these
+    // inputs, kept so the hoist changes no output at all.
+    const minusZ = turned("-z", [1, 0, 0]);
+    for (const bad of ["Z", "", undefined, null]) expect(turned(bad, [1, 0, 0])).toEqual(minusZ);
   });
 });

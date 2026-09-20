@@ -362,6 +362,94 @@ describe("sweepProfile frames", () => {
     const bare = createPolyline([0, 0, 0, 1, 0, 0]);
     await expect(sweep(bare, { frame: "rot" })).rejects.toThrow(/orientAlongVector/);
   });
+
+  /**
+   * ONE ANCHORED CASE PER `frame` VALUE, each pinned to a direction only
+   * that value can produce. The three answers are mutually
+   * non-parallel, so exchanging any two arms fails at least two of them
+   * — which is what a test of a hoisted branch has to be able to do. The
+   * CONTROL after them proves the measurement can report "different".
+   *
+   * A ribbon is read rather than a tube because the roll is exactly what
+   * is under test, and a circular section hides it completely: the strip
+   * runs along the ring's first basis axis, so the vector between a
+   * ring's two points IS that axis, times the width.
+   */
+  describe("each frame value lands the roll on its own axis", () => {
+    /** A straight path along +x: every ring plane is the yz plane. */
+    function railed(): Geometry {
+      const geo = createPolyline([0, 0, 0, 1, 0, 0, 2, 0, 0]);
+      // curveFrame's source: +z, already perpendicular to the tangent.
+      const cn = geo.attrs.point.add("curveNormal", "f32", 3, [0, 0, 0]);
+      // rot's source: a quarter turn about +z, whose local +X is +y.
+      const rot = geo.attrs.point.add("rot", "f32", 4, [0, 0, 0, 1]);
+      const h = Math.SQRT1_2;
+      for (let i = 0; i < geo.pointCount; i++) {
+        cn.setTuple(i, [0, 0, 1]);
+        rot.setTuple(i, [0, 0, h, h]);
+      }
+      return geo;
+    }
+
+    /** The unit vector a ring's strip runs along, at the first ring. */
+    function rollAxis(geo: Geometry): number[] {
+      const P = geo.attrs.point.require("P");
+      const a = P.getTuple(0);
+      const b = P.getTuple(1);
+      const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const l = Math.hypot(d[0], d[1], d[2]);
+      // The width this block sweeps. Six places, not more: P is f32, and
+      // a strip that is not axis-aligned rounds into it.
+      expect(l).toBeCloseTo(0.5, 6);
+      return d.map((k) => k / l);
+    }
+
+    // `up` is deliberately neither a world axis nor parallel to the
+    // tangent: orientQuat's right is up x forward, which for up (0,1,1)/√2
+    // and forward +x is (0,1,-1)/√2 — a direction no attribute carries.
+    const EXPECTED: Record<string, number[]> = {
+      upHint: [0, Math.SQRT1_2, -Math.SQRT1_2],
+      curveFrame: [0, 0, 1],
+      rot: [0, 1, 0],
+    };
+
+    it.each(Object.keys(EXPECTED))("frame '%s' rolls onto the axis it names", async (frame) => {
+      const geo = await sweep(railed(), {
+        profile: "ribbon",
+        width: 0.5,
+        frame: frame as SweepProfileParams["frame"],
+        up: [0, 1, 1],
+      });
+      const got = rollAxis(geo);
+      const want = EXPECTED[frame];
+      // Up to sign: which end of the strip is point 0 is the profile's
+      // business, not the frame's.
+      const dot = got[0] * want[0] + got[1] * want[1] + got[2] * want[2];
+      expect(Math.abs(dot)).toBeCloseTo(1, 6);
+    });
+
+    it("CONTROL: each value's axis is off every other value's", async () => {
+      const axes: number[][] = [];
+      for (const frame of Object.keys(EXPECTED)) {
+        axes.push(
+          rollAxis(
+            await sweep(railed(), {
+              profile: "ribbon",
+              width: 0.5,
+              frame: frame as SweepProfileParams["frame"],
+              up: [0, 1, 1],
+            }),
+          ),
+        );
+      }
+      for (let i = 0; i < axes.length; i++) {
+        for (let j = i + 1; j < axes.length; j++) {
+          const dot = axes[i][0] * axes[j][0] + axes[i][1] * axes[j][1] + axes[i][2] * axes[j][2];
+          expect(Math.abs(dot)).toBeLessThan(0.99);
+        }
+      }
+    });
+  });
 });
 
 describe("sweepProfile is visible to the library's own consumers", () => {
