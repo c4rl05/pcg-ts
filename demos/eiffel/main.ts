@@ -24,6 +24,19 @@
  * lands), and the map is only re-rendered when the scene changes: the
  * light and the geometry are both fixed, so orbiting costs no shadow pass.
  *
+ * AND WITH OCCLUSION, which is the half of the read the sun cannot do. A
+ * structure that is mostly holes is described by where its members meet,
+ * and those corners are exactly what a single sun leaves flat. The dark
+ * that collects in them is ambient occlusion, and it costs three more
+ * full-scene passes (a normal prepass, the occlusion, a denoise) on top
+ * of the draw.
+ *
+ * THE LOOK IS ONE OBJECT, not a scatter of statements. `look.ts` holds it
+ * — environment, five lights, fog, exposure, occlusion — `rig.ts` turns
+ * it into a scene, and `env.ts` and `gtao.ts` are what those two stand
+ * on. All four were tuned away from this page and land here unchanged, so
+ * a new look is a new object and nothing else.
+ *
  * ONE MATERIAL PER CLASS, all in one family. The iron is painted one
  * colour on the real tower, and a render that gave every class its own hue
  * would read as a diagram, not a structure. The classes are nudged apart
@@ -48,17 +61,12 @@ import {
   ACESFilmicToneMapping,
   Box3,
   type BufferGeometry,
-  Color,
-  DirectionalLight,
   DoubleSide,
-  Fog,
-  HemisphereLight,
   type Material,
   Mesh,
   MeshStandardMaterial,
   PCFShadowMap,
   PerspectiveCamera,
-  PlaneGeometry,
   Scene,
   SphereGeometry,
   Vector3,
@@ -71,14 +79,13 @@ import { createOverlay } from "../../shared/overlay.js";
 import { attachWordmark } from "../../shared/wordmark.js";
 import { buildEiffel } from "./graph.js";
 import { type CarRun, LIFT_CARS } from "./lifts.js";
+import { LOOK } from "./look.js";
 import { PART_CLASSES, type PartClass } from "./parts.js";
+import { NEUTRAL, createRig } from "./rig.js";
 
 // ------------------------------------------------------------------ //
 // The look.
 // ------------------------------------------------------------------ //
-
-/** Sky, clear colour and fog, as one value so the horizon has no seam. */
-const SKY = 0xc4d0da;
 
 /**
  * The palette. The iron is the tower's brown family throughout, each class
@@ -86,7 +93,7 @@ const SKY = 0xc4d0da;
  * the family's lighter end, the names are gilded, and the pedestals are
  * pale stone.
  */
-const LOOK: Record<PartClass, { color: number; roughness: number; metalness: number }> = {
+const PALETTE: Record<PartClass, { color: number; roughness: number; metalness: number }> = {
   uprights: { color: 0x6b4d3b, roughness: 0.62, metalness: 0.15 },
   bracing: { color: 0x7b5b45, roughness: 0.66, metalness: 0.12 },
   horizontals: { color: 0x735441, roughness: 0.64, metalness: 0.12 },
@@ -107,7 +114,7 @@ const LOOK: Record<PartClass, { color: number; roughness: number; metalness: num
 const MATERIALS = Object.fromEntries(
   PART_CLASSES.map((cls) => [
     cls,
-    new MeshStandardMaterial({ ...LOOK[cls], side: DoubleSide }),
+    new MeshStandardMaterial({ ...PALETTE[cls], side: DoubleSide }),
   ]),
 ) as Record<PartClass, MeshStandardMaterial>;
 
@@ -176,14 +183,6 @@ function isCar(name: string): boolean {
  */
 const NOMINAL = new Box3(new Vector3(-90, 0, -90), new Vector3(90, 320, 90));
 
-/**
- * Where the sun is, as a direction TOWARD it. From behind the camera's
- * left shoulder and about 49 degrees up: the faces toward the camera split
- * into a lit side and a shaded one, and the tower's shadow falls back and
- * to the right, onto ground the opening view can see.
- */
-const SUN_DIR = new Vector3(-0.45, 0.78, 0.5).normalize();
-
 // ------------------------------------------------------------------ //
 // The scene.
 // ------------------------------------------------------------------ //
@@ -195,10 +194,11 @@ const renderer = new WebGLRenderer({ antialias: true, logarithmicDepthBuffer: tr
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+// The exposure is the look's, set by the rig; the operator is fixed here.
 renderer.shadowMap.enabled = true;
 // PCF, not PCF-soft: the soft variant is deprecated in this three and
-// falls back to this one with a warning. `radius` below does the softening.
+// falls back to this one with a warning. The look's shadow `radius` does
+// the softening.
 renderer.shadowMap.type = PCFShadowMap;
 // Both the light and the geometry are fixed, so the shadow map is drawn
 // when the scene changes and never on account of the camera.
@@ -207,8 +207,9 @@ renderer.shadowMap.needsUpdate = true;
 document.body.appendChild(renderer.domElement);
 
 const scene = new Scene();
-scene.background = new Color(SKY);
-scene.fog = new Fog(SKY, 900, 1950);
+// Until the rig is applied, a few lines down. Everything about the sky,
+// the fog and the ground is the look's from then on.
+scene.background = NEUTRAL;
 
 // 3/4 view from about 600 m out, a little above the first floor: the
 // whole 312 m fits with room over the lantern, and the base square is
@@ -248,84 +249,30 @@ controls.maxPolarAngle = Math.PI / 2 - 0.01;
 controls.autoRotateSpeed = 0.35;
 controls.update();
 
-scene.add(new HemisphereLight(0xdfe8f2, 0x8c7f6c, 1.1));
-
-const sun = new DirectionalLight(0xfff2e0, 3.0);
-sun.castShadow = true;
-sun.shadow.mapSize.set(4096, 4096);
-// Members are tens of centimetres thick and double-sided, which is the
-// worst case for acne; the normal offset (in metres) does most of the work.
-sun.shadow.bias = -0.0002;
-sun.shadow.normalBias = 0.12;
-sun.shadow.radius = 1.5;
-scene.add(sun, sun.target);
-
-const ground = new Mesh(
-  new PlaneGeometry(5000, 5000).rotateX(-Math.PI / 2),
-  new MeshStandardMaterial({ color: 0xa29c8f, roughness: 1, metalness: 0 }),
-);
-ground.receiveShadow = true;
-scene.add(ground);
-
 /**
- * Fit the sun and its shadow camera to a box.
+ * The look, made into a scene.
  *
- * The shadow camera has to hold two things: the tower, and the ground its
- * shadow falls on — which, at this elevation, reaches some 270 m past the
- * foot. Every point of that shadow lies on a ray from a point of the
- * tower away from the sun, so the frustum is the light-space bounds of the
- * box's eight corners plus where each corner's ray meets the ground.
+ * Five lights, the environment, the fog, the exposure, the render path
+ * and the occlusion all come from one `Look` object (`look.ts`), applied
+ * by a rig that knows nothing tower-shaped (`rig.ts`). What this page
+ * still owns is the palette — the colour each part class is painted —
+ * which it hands the rig so a look can state its differences from it.
  */
-function fitSun(box: Box3): void {
-  const center = box.getCenter(new Vector3());
-  const reach = box.getSize(new Vector3()).length();
-  sun.target.position.copy(center);
-  sun.position.copy(center).addScaledVector(SUN_DIR, reach);
-  sun.updateMatrixWorld();
-  sun.target.updateMatrixWorld();
-
-  // What `LightShadow.updateMatrices` does before each shadow pass, done
-  // here so the bounds are measured in the frame the pass will use.
-  const cam = sun.shadow.camera;
-  cam.position.copy(sun.position);
-  cam.lookAt(sun.target.position);
-  cam.updateMatrixWorld(true);
-  const toLight = cam.matrixWorld.clone().invert();
-
-  const lo = new Vector3(Infinity, Infinity, Infinity);
-  const hi = new Vector3(-Infinity, -Infinity, -Infinity);
-  const p = new Vector3();
-  for (let i = 0; i < 8; i++) {
-    const corner = new Vector3(
-      i & 1 ? box.max.x : box.min.x,
-      i & 2 ? box.max.y : box.min.y,
-      i & 4 ? box.max.z : box.min.z,
-    );
-    const onGround = corner.clone().addScaledVector(SUN_DIR, -Math.max(corner.y, 0) / SUN_DIR.y);
-    for (const q of [corner, onGround]) {
-      p.copy(q).applyMatrix4(toLight);
-      lo.min(p);
-      hi.max(p);
-    }
-  }
-  const margin = 2;
-  cam.left = lo.x - margin;
-  cam.right = hi.x + margin;
-  cam.bottom = lo.y - margin;
-  cam.top = hi.y + margin;
-  // The camera looks down -z, so depth is -z.
-  cam.near = Math.max(0.5, -hi.z - margin);
-  cam.far = -lo.z + margin;
-  cam.updateProjectionMatrix();
-  renderer.shadowMap.needsUpdate = true;
-}
-
-fitSun(NOMINAL);
+const rig = createRig(renderer, scene, camera, MATERIALS, {
+  width: window.innerWidth * renderer.getPixelRatio(),
+  height: window.innerHeight * renderer.getPixelRatio(),
+});
+rig.apply(LOOK);
+rig.fitShadow(NOMINAL);
 
 window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  // The composer's buffers are in device pixels, which is what the
+  // renderer's own size is multiplied by and the window's is not.
+  const r = renderer.getPixelRatio();
+  rig.setSize(window.innerWidth * r, window.innerHeight * r);
 });
 
 // ------------------------------------------------------------------ //
@@ -635,11 +582,11 @@ async function main(): Promise<void> {
 
   if (box.isEmpty()) {
     statSize("—");
-    fitSun(NOMINAL);
+    rig.fitShadow(NOMINAL);
   } else {
     const s = box.getSize(new Vector3());
     statSize(`${s.x.toFixed(1)} × ${s.z.toFixed(1)} × ${s.y.toFixed(1)} m`);
-    fitSun(box);
+    rig.fitShadow(box);
   }
 
   // Isolating one class is how a class is judged on its own; the shadows
@@ -736,7 +683,7 @@ renderer.setAnimationLoop(() => {
   }
   lastFrame = now;
   controls.update();
-  renderer.render(scene, camera);
+  rig.render();
   tickFps();
 });
 
