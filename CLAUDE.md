@@ -250,6 +250,16 @@ a parent — these are three different kinds of thing and the old single
 - Any UI (editor tooling, example chrome beyond plain HTML) uses Svelte.
 - Error messages are part of the agent API: name the offending node, pin,
   or param and state the valid alternatives or the fix.
+- A param string is decided ONCE, never per element. Compare it where the
+  node reads its params and carry the answer — a boolean, or a branded
+  code like `OrientAxisCode` — into the loop or the closure. This is not
+  style: a string parsed from JSON and compared per element is the shape
+  V8 miscompiled in `src/noise/worley.ts`, one element in ~22,500 taking
+  the wrong branch with no error (see the note there; grep the marker
+  phrase). `tests/paramStringComparisons.test.ts` scans for it, but only
+  WITHIN a file, so a helper that takes `mode: "wrap" | "clamp"` and is
+  called from a per-point loop elsewhere passes the scan and is exactly
+  the case that bit: keep the string out of the SIGNATURE.
 - Test-only modules are named `*.testsupport.ts` — fixtures, scenario
   builders and shared helpers that only tests may import. `*.test.ts` is
   the test itself; `*.testsupport.ts` is what tests import. Nothing
