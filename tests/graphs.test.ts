@@ -249,8 +249,12 @@ function firstDifferingElement(
           if (!other || other.tupleSize !== attr.tupleSize) continue;
           const ts = attr.tupleSize;
           const used = Math.min(setA.count, setB.count) * ts;
-          const ua = new Uint8Array(attr.data.buffer, attr.data.byteOffset, used * attr.data.BYTES_PER_ELEMENT);
-          const ub = new Uint8Array(other.data.buffer, other.data.byteOffset, used * other.data.BYTES_PER_ELEMENT);
+          // Over copies: the read view does not hand its buffer out, and
+          // finding the first differing byte only reads.
+          const ca = attr.data.slice(0, used);
+          const cb = other.data.slice(0, used);
+          const ua = new Uint8Array(ca.buffer, ca.byteOffset, ca.byteLength);
+          const ub = new Uint8Array(cb.buffer, cb.byteOffset, cb.byteLength);
           for (let k = 0; k < ua.length; k++) {
             if (ua[k] === ub[k]) continue;
             const lane = Math.floor(k / attr.data.BYTES_PER_ELEMENT);

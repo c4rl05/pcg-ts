@@ -51,6 +51,7 @@ import { compileFieldSpec, constSlotValues, specKernelKey } from "./compile.js";
 import {
   BUFFER_USAGE,
   MAP_MODE,
+  uploadSource,
   type GpuAdapterInfoLike,
   type GpuBufferLike,
   type GpuComputePipelineLike,
@@ -574,7 +575,7 @@ export class GpuFieldEvaluator implements GpuFieldResolver {
       for (const input of kernel.inputs) {
         const attr = set.require(input.name);
         const n = count * input.tupleSize;
-        let data: ArrayBufferView & { length: number };
+        let data: ArrayBufferView;
         if (attr.type === "bool") {
           const widened = new Uint32Array(n);
           // Hoisted: `data` is an accessor now.
@@ -582,7 +583,7 @@ export class GpuFieldEvaluator implements GpuFieldResolver {
           for (let i = 0; i < n; i++) widened[i] = bits[i];
           data = widened;
         } else {
-          data = attr.data.subarray(0, n);
+          data = uploadSource(attr.data.subarray(0, n));
         }
         const buf = acquire(n * 4, BUFFER_USAGE.STORAGE | BUFFER_USAGE.COPY_DST);
         device.queue.writeBuffer(buf, 0, data);

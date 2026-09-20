@@ -147,7 +147,10 @@ function outAttrBytes(result: Awaited<ReturnType<typeof cook>>, name: string): U
   if (item.kind !== "geometry") throw new Error("expected geometry");
   const attr = item.geo.attrs.point.require(name);
   const n = item.geo.attrs.point.count * attr.tupleSize;
-  return new Uint8Array(attr.data.buffer, attr.data.byteOffset, n * attr.data.BYTES_PER_ELEMENT);
+  // A copy, because these bytes are held across a recook that may reuse
+  // the same storage — and the read view does not hand its buffer out.
+  const used = attr.data.slice(0, n);
+  return new Uint8Array(used.buffer, used.byteOffset, used.byteLength);
 }
 
 describe.each(CASES)("gpu adoption: $name", (c) => {

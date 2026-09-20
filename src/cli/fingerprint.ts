@@ -46,11 +46,22 @@ export function hashBytes(bytes: Uint8Array): string {
   return a.toString(16).padStart(8, "0") + b.toString(16).padStart(8, "0");
 }
 
-/** The used prefix of an attribute's storage, as bytes. Capacity beyond `count` is not data. */
+/**
+ * The used prefix of an attribute's storage, as bytes. Capacity beyond
+ * `count` is not data.
+ *
+ * THE COPY IS THE POINT, not an oversight. A byte view laid over the
+ * column's own buffer would be a fully writable alias of storage a node
+ * cache holds — the one escape from `Attribute`'s read view that needs no
+ * cast — so the read view does not hand its buffer out, and `slice` is
+ * the way to bytes this code may own. It costs one copy per column per
+ * fingerprint, on a path that already walks every one of those bytes
+ * twice to hash them.
+ */
 function attributeBytes(attr: Attribute, count: number): Uint8Array {
   const used = count * attr.tupleSize;
-  const data = attr.data;
-  return new Uint8Array(data.buffer, data.byteOffset, used * data.BYTES_PER_ELEMENT);
+  const copy = attr.data.slice(0, used);
+  return new Uint8Array(copy.buffer, copy.byteOffset, copy.byteLength);
 }
 
 function hashAttribute(attr: Attribute, count: number): string {

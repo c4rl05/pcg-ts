@@ -7,6 +7,7 @@
  * WebGPU-specified constant values, defined locally so no global
  * `GPUBufferUsage`/`GPUMapMode` objects are required at runtime.
  */
+import type { ReadonlyAttrData } from "../data/index.js";
 
 /** Subset of `GPUAdapterInfo` used to derive the evaluator's cache salt. */
 export interface GpuAdapterInfoLike {
@@ -90,6 +91,40 @@ export interface GpuCommandEncoderLike {
 export interface GpuQueueLike {
   writeBuffer(buffer: GpuBufferLike, bufferOffset: number, data: ArrayBufferView): void;
   submit(commandBuffers: readonly GpuCommandBufferLike[]): void;
+}
+
+/**
+ * An attribute column's read view, as the thing an upload takes. It IS a
+ * typed array at runtime; it only declines to hand out its `buffer`, so
+ * it is not an `ArrayBufferView` statically.
+ *
+ * Uploading READS: `writeBuffer` copies out of the view into device
+ * memory and never writes back through it, so handing a column straight
+ * to the queue puts nothing about its storage at risk. The alternative
+ * was `slice(0, n)` at every upload — a full copy of every column, per
+ * cook, on the resident path — to satisfy a type about memory nobody
+ * writes.
+ *
+ * Widening `GpuQueueLike.writeBuffer` to take the read view was the other
+ * way, and it WORKS — measured, not assumed: a browser `GPUDevice` and
+ * the Node bindings keep satisfying {@link GpuDeviceLike} through method
+ * parameter bivariance, provided the widened union also names
+ * `ArrayBufferLike`, which a real queue accepts and an earlier attempt
+ * left out. (That omission, not the overloads, is what made the first
+ * attempt fail; the bivariance this file's header relies on held
+ * throughout.) It was rejected on the CONTRACT rather than on the types:
+ * widening this interface obliges every host that supplies a queue to
+ * accept a raw `ArrayBuffer` too, which is a published promise broadened
+ * for a reason entirely internal to this library.
+ *
+ * So the conversion lives HERE, once, with a name. THIS IS THE ONLY CAST
+ * IN THIS DIRECTION IN THE CODEBASE, and a reader asking how a read view
+ * reaches the device should find exactly this — not the same cast spread
+ * across the upload sites, where each copy would read as an ordinary
+ * escape from the read view rather than as the one documented seam.
+ */
+export function uploadSource(view: ReadonlyAttrData): ArrayBufferView {
+  return view as unknown as ArrayBufferView;
 }
 
 /**

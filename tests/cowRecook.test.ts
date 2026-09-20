@@ -92,10 +92,14 @@ type Snapshot = Map<string, Uint8Array>;
 
 /** A byte range of a typed array, COPIED. See the header on why the copy. */
 function bytesOf(
-  view: { readonly buffer: ArrayBufferLike; readonly byteOffset: number; readonly BYTES_PER_ELEMENT: number },
+  view: { slice(begin: number, end: number): ArrayBufferView },
   elements: number,
 ): Uint8Array {
-  return new Uint8Array(view.buffer, view.byteOffset, elements * view.BYTES_PER_ELEMENT).slice();
+  // The copy comes FIRST, not after: a byte view laid over the column's
+  // own buffer would alias storage a node cache holds, and the read view
+  // does not hand its buffer out.
+  const used = view.slice(0, elements);
+  return new Uint8Array(used.buffer, used.byteOffset, used.byteLength);
 }
 
 function text(value: string): Uint8Array {

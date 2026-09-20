@@ -11,6 +11,7 @@ export {
   type AttrTypeMap,
   DOMAINS,
   type Domain,
+  type AttrBufferId,
   type ReadonlyAttrData,
 } from "./types.js";
 export * from "./attribute.js";

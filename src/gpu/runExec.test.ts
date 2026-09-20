@@ -751,7 +751,7 @@ describe("resident run executor: named per-instance channels", () => {
         // with the pad slot written as an explicit zero. Sourced from the
         // POINT column so a wrong permutation cannot be hidden by reading
         // the CPU batch instead.
-        const src = geo.attrs.point.require(shape.name).data;
+        const src = geo.attrs.point.require(shape.name).data.slice();
         const expected = new Uint32Array(batch.count * shape.components);
         const srcWords =
           src instanceof Uint8Array

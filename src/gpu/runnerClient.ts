@@ -110,7 +110,12 @@ export function dispatchTask(
       for (let i = 0; i < n; i++) widened[i] = bits[i];
       return { binding: input.binding, data: toBase64(widened) };
     }
-    return { binding: input.binding, data: toBase64(attr.data.subarray(0, n)) };
+    // `slice` and not `subarray`: `toBase64` needs the real backing
+    // buffer, which the read view does not hand out, and this path is
+    // already allocating a base64 string of the same bytes — unlike the
+    // in-process upload in `evaluator.ts`, which hands the view straight
+    // to the queue.
+    return { binding: input.binding, data: toBase64(attr.data.slice(0, n)) };
   });
   return {
     name,

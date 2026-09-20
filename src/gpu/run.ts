@@ -168,6 +168,7 @@ import { compileFieldSpec, paramConstValues } from "./compile.js";
 import {
   BUFFER_USAGE,
   MAP_MODE,
+  uploadSource,
   type GpuBufferLike,
   type GpuComputePipelineLike,
   type GpuDeviceLike,
@@ -1348,7 +1349,7 @@ export async function executeResidentRun(
           for (let i = 0; i < n; i++) widened[i] = bits[i];
           device.queue.writeBuffer(buf, 0, widened);
         } else {
-          device.queue.writeBuffer(buf, 0, attr.data.subarray(0, n));
+          device.queue.writeBuffer(buf, 0, uploadSource(attr.data.subarray(0, n)));
         }
       } else if (slot.init === "quat-default") {
         const fill = new Float32Array(slot.bytes / 4);

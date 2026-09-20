@@ -865,8 +865,11 @@ describe("eiffel skeleton", () => {
       // Capacity is not content: a column allocated at exactly its count and
       // one grown by doubling can hold the same elements, so compare only
       // the logical range, not whatever slack follows it.
-      const pa = attrA.data.subarray(0, ga.attrs.point.count * attrA.tupleSize);
-      const pb = attrB.data.subarray(0, gb.attrs.point.count * attrB.tupleSize);
+      // `slice` and not `subarray`, because a column's read view does not
+      // hand out its buffer and `Buffer.from` needs one. The copy is free
+      // of consequence here — this compares bytes and keeps neither side.
+      const pa = attrA.data.slice(0, ga.attrs.point.count * attrA.tupleSize);
+      const pb = attrB.data.slice(0, gb.attrs.point.count * attrB.tupleSize);
       expect(Buffer.from(pb.buffer, pb.byteOffset, pb.byteLength).equals(Buffer.from(pa.buffer, pa.byteOffset, pa.byteLength)), name).toBe(true);
     }
   });

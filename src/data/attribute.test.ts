@@ -378,9 +378,11 @@ function bytesOf(data: ArrayBufferView): Uint8Array {
   return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
 }
 
-function sameBytes(a: ArrayBufferView, b: ArrayBufferView): boolean {
-  const x = bytesOf(a);
-  const y = bytesOf(b);
+function sameBytes(a: { slice(): ArrayBufferView }, b: { slice(): ArrayBufferView }): boolean {
+  // Whole arrays, capacity included, and both through a copy: a column's
+  // read view does not hand out its buffer, and a comparison only reads.
+  const x = bytesOf(a.slice());
+  const y = bytesOf(b.slice());
   if (x.length !== y.length) return false;
   for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return false;
   return true;

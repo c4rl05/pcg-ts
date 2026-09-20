@@ -89,15 +89,14 @@ function snapshotGeo(geo: Geometry): Map<string, AttrSnapshot> {
     const attr = set.require(name);
     const n = set.count * attr.tupleSize;
     const view = attr.data;
+    // The used prefix as bytes this snapshot owns: the copy comes first,
+    // since the read view does not hand its buffer out.
+    const used = view.slice(0, n);
     out.set(name, {
       name,
       type: attr.type,
       tupleSize: attr.tupleSize,
-      bytes: new Uint8Array(
-        view.buffer,
-        view.byteOffset,
-        n * (view as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT,
-      ).slice(),
+      bytes: new Uint8Array(used.buffer, used.byteOffset, used.byteLength),
       data: (view as unknown as { subarray(a: number, b: number): ArrayLike<number> }).subarray(0, n),
     });
   }
@@ -572,6 +571,9 @@ async function runChainCase(
   const cpuSnap = snapshot(cpu);
   const pnSnap = snapshot(pn);
   const fuSnap = snapshot(fu);
+  // Read back the way `inputP` was read: through a copy, since the read
+  // view does not hand its buffer out.
+  const afterP = fusedGeo.attrs.point.require("P").data.slice(0, inputP.length);
   const crossChecks = (c.crossChecks ?? []).map(([a, b]) => ({
     pair: `${a}=${b}`,
     equal: bytesEqual(fuSnap.get(a)!.bytes, fuSnap.get(b)!.bytes),
@@ -591,11 +593,7 @@ async function runChainCase(
     // executor must never write through it.
     inputUnmutated: bytesEqual(
       new Uint8Array(inputP.buffer, inputP.byteOffset, inputP.byteLength),
-      new Uint8Array(
-        fusedGeo.attrs.point.require("P").data.buffer,
-        fusedGeo.attrs.point.require("P").data.byteOffset,
-        inputP.byteLength,
-      ),
+      new Uint8Array(afterP.buffer, afterP.byteOffset, afterP.byteLength),
     ),
     attrs: compareAttrs(cpuSnap, pnSnap, fuSnap),
   };
@@ -1348,7 +1346,10 @@ async function jitterSemantics(ev: GpuFieldEvaluator): Promise<Record<string, un
   const expected = new Float32Array(count * 3);
   // NARROWS the read view; the fixture's `P` is f32x3 by construction.
   const src = input.attrs.point.require("P").data as ReadonlyAttrData<Float32Array>;
-  const bits = new Uint32Array(src.buffer, src.byteOffset, src.length);
+  // The same lanes as bit patterns, over a copy: the read view does not
+  // hand its buffer out, and reading the bits is all this needs.
+  const srcCopy = src.slice();
+  const bits = new Uint32Array(srcCopy.buffer, srcCopy.byteOffset, srcCopy.length);
   for (let i = 0; i < count; i++) {
     const ident = hashCombine(bits[i * 3], bits[i * 3 + 1], bits[i * 3 + 2], 0);
     for (let k = 0; k < 3; k++) {
@@ -1632,15 +1633,14 @@ function domainSnapshot(geo: Geometry, domain: "vertex" | "primitive" | "detail"
     const attr = set.require(name);
     const n = set.count * attr.tupleSize;
     const view = attr.data;
+    // The used prefix as bytes this snapshot owns: the copy comes first,
+    // since the read view does not hand its buffer out.
+    const used = view.slice(0, n);
     out.set(name, {
       name,
       type: attr.type,
       tupleSize: attr.tupleSize,
-      bytes: new Uint8Array(
-        view.buffer,
-        view.byteOffset,
-        n * (view as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT,
-      ).slice(),
+      bytes: new Uint8Array(used.buffer, used.byteOffset, used.byteLength),
       data: (view as unknown as { subarray(a: number, b: number): ArrayLike<number> }).subarray(0, n),
     });
   }

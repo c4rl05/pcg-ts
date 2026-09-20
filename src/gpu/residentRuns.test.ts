@@ -192,7 +192,10 @@ function outBytes(result: Awaited<ReturnType<typeof cook>>, attr: string, output
   if (item.kind !== "geometry") throw new Error("expected geometry");
   const a = item.geo.attrs.point.require(attr);
   const n = item.geo.attrs.point.count * a.tupleSize;
-  return new Uint8Array(a.data.buffer, a.data.byteOffset, n * a.data.BYTES_PER_ELEMENT).slice();
+  // The copy comes first: the read view does not hand its buffer out, and
+  // these bytes outlive the cook they were read from either way.
+  const used = a.data.slice(0, n);
+  return new Uint8Array(used.buffer, used.byteOffset, used.byteLength);
 }
 
 const nodeCache = (g: Graph, id: ReturnType<Graph["add"]>) => g._nodes.get(id.id)?.cache;
@@ -750,9 +753,8 @@ describe("resident run cache contract (CPU-backed run resolver)", () => {
           const item = outputs.out[0];
           if (item.kind !== "geometry") throw new Error("expected geometry");
           const attr = item.geo.attrs.point.require("P");
-          bytes.push(
-            new Uint8Array(attr.data.buffer, attr.data.byteOffset, attr.data.byteLength).slice(),
-          );
+          const used = attr.data.slice();
+          bytes.push(new Uint8Array(used.buffer, used.byteOffset, used.byteLength));
         },
       });
       return { world, bytes };

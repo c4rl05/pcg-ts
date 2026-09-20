@@ -1,29 +1,10 @@
 import type { AttrType, Domain, Geometry } from "../data/index.js";
 import type { GpuCookStats, GpuFieldResolver } from "./gpuResolver.js";
 import { resolveField } from "./inputs.js";
-import {
-  type Column,
-  type ColumnData,
-  type EvalContext,
-  type FieldLike,
-  evaluateField,
-} from "./types.js";
+import { type Column, type EvalContext, type FieldLike, evaluateField } from "./types.js";
 
 /** Prefix of anonymous attributes created by {@link capture}. */
 export const ANON_ATTR_PREFIX = "__anon_";
-
-/**
- * Which attribute type a field column's storage stands for. An
- * `Attribute` answers this from `attr.type`, which is authoritative and
- * is the only way to ask one; a {@link Column} carries no such tag — it
- * is a bare typed array plus a tuple size — so the array itself is all
- * there is to interrogate. Taking the array as a parameter keeps that
- * one unavoidable `instanceof` off anything named `data`, where it would
- * read as the escape from the attribute read view that it is not.
- */
-function columnType(data: ColumnData): AttrType {
-  return data instanceof Float32Array ? "f32" : data instanceof Int32Array ? "i32" : "u32";
-}
 
 /** Store a column as a fresh anonymous attribute; returns its name. */
 function storeColumn(geo: Geometry, domain: Domain, column: Column): string {
@@ -31,7 +12,20 @@ function storeColumn(geo: Geometry, domain: Domain, column: Column): string {
   let i = 0;
   let name = `${ANON_ATTR_PREFIX}${i}`;
   while (set.has(name)) name = `${ANON_ATTR_PREFIX}${++i}`;
-  const type: AttrType = columnType(column.data);
+  // `instanceof` ON A FIELD COLUMN IS NOT THE ATTRIBUTE ESCAPE it looks
+  // like. An `Attribute` answers "what type is this" from `attr.type`,
+  // which is authoritative and is the only way to ask one — asking its
+  // storage instead is how a write through the read view gets smuggled
+  // past a reader. A {@link Column} has no such tag: it is a bare typed
+  // array and a tuple size, so the array IS the only thing to
+  // interrogate, and nothing is being got around here.
+  //
+  // This spelling was briefly hidden behind a one-use helper so that a
+  // text scan banning `.data instanceof` would not match it. The scan is
+  // gone (it could not see the shape it was banning, and this was the
+  // only thing it ever changed), so the code is back as it reads best.
+  const type: AttrType =
+    column.data instanceof Float32Array ? "f32" : column.data instanceof Int32Array ? "i32" : "u32";
   const attr = set.add(name, type, column.tupleSize);
   attr.writable().set(column.data);
   return name;
