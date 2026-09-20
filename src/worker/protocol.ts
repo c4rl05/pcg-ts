@@ -241,12 +241,24 @@ function encodeGeometry(geo: Geometry, transfer: ArrayBuffer[]): Omit<EncodedGeo
 function decodeGeometry(enc: EncodedGeometryItem): Geometry {
   const geo = new Geometry();
   decodeDomain(geo.attrs.point, enc.point);
-  // The topology arrays arrived through the transfer list, so this side
-  // owns them exclusively: `installTopology` keeps them by reference
-  // instead of re-validating what a trusted cook already validated
-  // (`setTopology` would copy and re-check every reference). It is the
-  // route because the three fields are private; assigning them was how
-  // this read before they were.
+  // BY REFERENCE, AND NOT VALIDATED. The topology arrays arrived through
+  // the transfer list, which DETACHES the sender's buffers, so this side
+  // owns them exclusively; `installTopology` keeps them rather than
+  // re-checking what a trusted cook already checked (`setTopology` would
+  // copy and re-walk every reference). It is the route because the three
+  // fields are private; assigning them is how this read before they were.
+  //
+  // THE COLUMNS ARE COPIED HERE AND THE TOPOLOGY IS NOT, which is worth
+  // knowing because it is the one asymmetry: `decodeDomain` writes each
+  // column through `Attribute.writable().set(...)`. That asymmetry is
+  // also a hole in a hand-driven call — `decodeOutputs` is published, and
+  // a caller who BUILDS an `EncodedGeometryItem` from an array it keeps
+  // can write that array afterwards and edit the decoded geometry's
+  // topology, with no cast. Closing it means slicing here, measured at
+  // 13.1% more bytes copied per decode (3.68 MB against the 28.1 MB of
+  // columns a decode of the whole corpus already copies) for about 12%
+  // more decode time; the transfer list exists so those bytes are NOT
+  // copied. See PLAN.md, "the worker protocol's topology arrays".
   installTopology(geo, enc.vertexToPoint, enc.primVertexStart, enc.primVertexCount);
   decodeDomain(geo.attrs.vertex, enc.vertex);
   decodeDomain(geo.attrs.primitive, enc.primitive);

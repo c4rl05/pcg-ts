@@ -94,11 +94,13 @@ function channelFingerprint(batch: InstanceBatch): { channels?: Record<string, s
 
 /**
  * A topology array's bytes. It COPIES with `slice`, the way
- * {@link attributeBytes} does and for the same reason: a geometry's
- * topology arrays are lent to every geometry derived from it, so the read
- * view does not hand out its buffer and a byte view cannot be laid over
- * one. The hashed bytes are the array's own, so the fingerprint is
- * unchanged.
+ * {@link attributeBytes} does and for the same reason: a geometry hands
+ * its topology out through a read view, which does not hand out a buffer,
+ * so a byte view cannot be laid over one. (Each geometry owns its three
+ * arrays — nothing is shared — but the array a geometry holds IS the one
+ * a node built and a cache now keeps, which is what the read view is
+ * protecting.) The hashed bytes are the array's own, so the fingerprint
+ * is unchanged.
  */
 function hashTypedArray(array: ReadonlyTopology): string {
   const copy = array.slice();

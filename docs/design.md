@@ -17,10 +17,18 @@ geometry has, and there is no fifth.
 plus a corner list:
 
 ```ts
-vertexToPoint: Uint32Array;    // vertex i references point vertexToPoint[i]
-primVertexStart: Uint32Array;  // primitive p spans vertices
-primVertexCount: Uint32Array;  // [start[p], start[p] + count[p])
+get vertexToPoint(): ReadonlyTopology;    // vertex i references point vertexToPoint[i]
+get primVertexStart(): ReadonlyTopology;  // primitive p spans vertices
+get primVertexCount(): ReadonlyTopology;  // [start[p], start[p] + count[p])
 ```
+
+The three are `Uint32Array`s underneath, handed out through getters as a
+read view (`ReadonlyTopology`, the same view a column's `data` has). They
+are replaced rather than written: `setTopology` validates all three and
+resizes the vertex and primitive domains to match. The reason is that a
+node's cached geometry holds the very arrays its execute allocated, so an
+in-place write through `geo.vertexToPoint` edits a cached output — its
+own, or an upstream node's.
 
 That gives three array lengths that can differ independently, plus one
 implicit global. Each is a domain:

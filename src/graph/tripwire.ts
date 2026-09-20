@@ -829,18 +829,17 @@ function watchTopology(at: string, geo: {
 
 /**
  * Watch one topology array. It reads the array FRESH on every probe, the
- * way {@link watchAttribute} looks its column up again: a geometry
- * derived from another is LENT all three, and installing new topology
- * replaces the fields, so a captured reference would go on reporting the
- * bytes of an array the geometry no longer holds.
+ * way {@link watchAttribute} looks its column up again: installing
+ * topology REPLACES all three fields, so a captured reference would go on
+ * reporting the bytes of an array the geometry no longer holds.
  *
- * Both readings COPY, with `slice`. A topology array is lent to every
- * geometry derived from it, so the read view does not hand out its
- * buffer — a byte view laid over it would be a writable alias of storage
- * a node cache holds, which is the one escape the view exists to refuse.
- * `before` was copied anyway (a live view would move with the very write
- * this is built to catch), and `read()` runs once per probe per check,
- * where the comparison that follows walks the same bytes.
+ * Both readings COPY, with `slice`. A geometry hands its topology out
+ * through a read view, which does not hand out a buffer — a byte view
+ * laid over it would be a writable alias of the very array a node cache
+ * holds, which is the one escape the view exists to refuse. `before` was
+ * copied anyway (a live view would move with the very write this is built
+ * to catch), and `read()` runs once per probe per check, where the
+ * comparison that follows walks the same bytes.
  */
 function watchTopologyArray(
   at: string,

@@ -8,7 +8,10 @@
  * it is why this file has no assertions and is never executed — the check
  * happens when the project is type-checked, not when the suite runs.
  * `attributeWriteRoute.test.ts` asserts that this file still holds the
- * cases, so it cannot be quietly emptied.
+ * cases, so it cannot be quietly emptied — as TEXT, which is all a
+ * runtime test can read. So `npm test` never checks this claim and only
+ * `npm run check` does: loosen `ReadonlyAttrData` and the suite stays
+ * green while every directive here goes unused.
  *
  * IT REPLACED A TEXT SCAN, which is worth saying because the scan looked
  * like it was working. It banned `.data as <TypedArray>` and `.data
@@ -151,13 +154,15 @@ export function writableIsTheWayThrough(): void {
 }
 
 /**
- * THE TWO HOLES THAT REMAIN, pinned as facts rather than wished away.
+ * THE HOLES THAT REMAIN, pinned as facts rather than wished away.
  *
- * Neither has a directive on it, because neither is an error — these
- * lines compile today. They are here so the hole is written down where
- * the guard is, and so that a future TypeScript or lib change that
- * CLOSES one shows up as a compile error in this file rather than going
- * unnoticed. See `ReadonlyAttrData`'s own comment.
+ * None has a directive on it, because none is an error — every line
+ * below compiles today, and each was run against the checker rather than
+ * reasoned about. They are here so the holes are written down where the
+ * guard is, so that nobody reads the guard as a proof, and so that a
+ * future TypeScript or lib change CLOSING one shows up as a compile
+ * error in this file rather than going unnoticed. See
+ * `ReadonlyAttrData`'s own comment.
  */
 export function knownHoles(): void {
   const d: ReadonlyAttrData = anyAttr.data;
@@ -177,6 +182,16 @@ export function knownHoles(): void {
     arr[0] = 1;
     return v;
   });
+  // STRUCTURAL WIDENING, the one that needs no cast, no `instanceof` and
+  // no callback: TypeScript does not treat a readonly index signature as
+  // incompatible with a mutable one.
+  const widened: { [index: number]: number } = attr.data;
+  widened[0] = 1;
+  // The reflective routes, which never consult the type at all.
+  Reflect.set(attr.data, 0, 1);
+  Object.assign(attr.data, { 0: 1 });
+  Object.defineProperty(attr.data, "0", { value: 1 });
+  Float32Array.prototype.fill.call(attr.data, 0);
 }
 
 /**

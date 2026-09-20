@@ -3154,6 +3154,38 @@ on-brand pitch and is exactly the thing the GPU path has never done.
 
 ## Stretch — surveyed and NOT scheduled
 
+- **The worker protocol's topology arrays, the hole left in "an in-place
+  topology write no longer compiles".** Measured 2026-09-20.
+  `EncodedGeometryItem` is published from `pcg-ts/worker` with
+  `vertexToPoint`, `primVertexStart` and `primVertexCount` as mutable
+  `Uint32Array`s, and `decodeGeometry` installs them BY REFERENCE, where
+  every attribute column on the same item is copied. So a caller who
+  builds an encoded item from an array it keeps, and calls the published
+  `decodeOutputs`, can write that array afterwards and edit the decoded
+  geometry's topology — no cast, no reflection, compile-clean.
+  **Recommendation: leave it. It is one `.slice()` away and the slice
+  costs more than the hole does.**
+
+  WHAT CLOSING IT COSTS, measured by decoding the whole corpus 25 times
+  per arm, interleaved ADOPT / COPY / ADOPT with the two ADOPT timings as
+  the noise floor: 3.68 MB more copied against the 28.1 MB of columns a
+  decode of those 152 geometries already copies (+13.1%), 456 more
+  allocations, and about 12% more decode time (median 193 ms against
+  216 ms over three kept rounds of eleven; the arms are noisy, but all
+  three kept rounds moved the same way). Typing the fields read-only
+  without the slice closes nothing — the caller built the array, so it
+  holds a mutable reference whatever the field says — so it really is
+  copy or nothing.
+
+  WHY IT IS TOLERABLE. On the path the library actually runs, the encoded
+  item crosses `postMessage` in a TRANSFER LIST, which detaches the
+  sender's buffers: neither side can still hold one, so ownership really
+  has passed and the reference install is correct. The hole exists only
+  for a consumer hand-driving `decodeOutputs` in one process, which is
+  not what the protocol is for. The transfer list exists precisely so
+  those bytes are not copied, and paying 13% of a decode to defend
+  against a caller who never happens is the wrong trade.
+
 - **Lending a geometry's topology, the way the attribute columns are
   lent.** Measured 2026-09-20. `deriveGeometry` copies a geometry's three
   flat `Uint32Array` topology arrays through `setTopology`; the branch

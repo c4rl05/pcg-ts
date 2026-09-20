@@ -1608,9 +1608,10 @@ async function passthrough(ev: GpuFieldEvaluator): Promise<Record<string, unknow
   const b = geoOf(fused);
   const domainEqual = (domain: "vertex" | "primitive" | "detail"): boolean =>
     allAttrsEqual(domainSnapshot(a, domain), domainSnapshot(b, domain));
-  // `slice()` on the array, not on its buffer: a topology array's read
-  // view does not hand out a buffer, because the array may be one a
-  // derived geometry was lent. The bytes compared are the same.
+  // `slice()` on the array, not on its buffer: a geometry hands its
+  // topology out through a read view, which hands out no buffer, because
+  // that array is the one a node built and a cache now holds. The bytes
+  // compared are the same.
   const topoBytes = (v: ReadonlyTopology): Uint8Array => {
     const copy = v.slice();
     return new Uint8Array(copy.buffer, copy.byteOffset, copy.byteLength);

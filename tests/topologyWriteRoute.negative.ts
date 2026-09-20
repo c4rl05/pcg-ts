@@ -10,6 +10,13 @@
  * executed. `topologyWriteRoute.test.ts` asserts that it still holds the
  * cases, so it cannot be quietly emptied.
  *
+ * SO `npm test` NEVER CHECKS THIS CLAIM. Only `npm run check` does. The
+ * runtime guard reads this file as TEXT — it can see the cases go
+ * missing, and nothing else: loosen `ReadonlyTopology` back to
+ * `Uint32Array` and every test in the suite still passes while every
+ * directive here goes unused. A green `npm test` says nothing about
+ * whether the closure holds.
+ *
  * WHY THE THREE ARRAYS NEED THIS AT ALL. The library installs topology
  * BY REFERENCE: a node builds the three arrays, hands them over, and the
  * geometry it hands them to is what the graph caches. So
@@ -183,11 +190,13 @@ export function buildingTheReplacementStillWorks(): void {
 }
 
 /**
- * THE TWO HOLES THAT REMAIN, pinned as facts rather than wished away —
- * the same two `ReadonlyAttrData` has, because this is that type. Neither
- * line has a directive on it, because neither is an error today. They are
- * here so a future TypeScript or lib change that CLOSES one shows up as a
- * compile error in this file rather than going unnoticed.
+ * THE HOLES THAT REMAIN, pinned as facts rather than wished away — the
+ * same ones `ReadonlyAttrData` has, because this IS that type. No line
+ * below has a directive on it, because none of them is an error today:
+ * every one compiles, and each was run against the checker rather than
+ * reasoned about. They are here so that the closure is never read as a
+ * proof, and so that a future TypeScript or lib change CLOSING one shows
+ * up as a compile error in this file rather than going unnoticed.
  */
 export function knownHoles(): void {
   const v: ReadonlyTopology = geo.vertexToPoint;
@@ -202,6 +211,17 @@ export function knownHoles(): void {
   geo.primVertexStart.forEach((_value, _index, arr) => {
     arr[0] = 1;
   });
+  // STRUCTURAL WIDENING, and this is the one worth knowing: no cast, no
+  // `instanceof`, no callback. TypeScript does not treat a readonly index
+  // signature as incompatible with a mutable one, so the view is
+  // assignable to something that can be written through.
+  const widened: { [index: number]: number } = geo.vertexToPoint;
+  widened[0] = 1;
+  // The reflective routes, which never consult the type at all.
+  Reflect.set(geo.vertexToPoint, 0, 1);
+  Object.assign(geo.vertexToPoint, { 0: 1 });
+  Object.defineProperty(geo.vertexToPoint, "0", { value: 1 });
+  Uint32Array.prototype.set.call(geo.vertexToPoint, [1, 2]);
 }
 
 /**

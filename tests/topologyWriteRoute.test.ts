@@ -100,9 +100,15 @@ describe("the compile-level guard", () => {
   const text = (): string => readFileSync(join(REPO, NEGATIVE), "utf8");
 
   it("still carries a directive for every refusal it names", () => {
-    // The only way a negative type test fails silently is by being
-    // emptied: `tsc` says nothing about cases that are not there. The
-    // count is a floor, not an equality, so adding cases is free. It
+    // WHAT THIS CAN AND CANNOT SEE. It reads the negative file as TEXT,
+    // so it catches the one failure `tsc` cannot — the file being
+    // emptied, since `tsc` says nothing about cases that are not there —
+    // and it catches NOTHING ELSE. Loosen `ReadonlyTopology` back to
+    // `Uint32Array` and these six tests still pass while every directive
+    // in that file goes unused. The claim itself is checked by
+    // `npm run check`, never by `npm test`.
+    //
+    // The count is a floor, not an equality, so adding cases is free. It
     // counts the directives the compiler sees, not the ones the file's
     // own prose mentions, which is why the match demands a newline after.
     const source = text();

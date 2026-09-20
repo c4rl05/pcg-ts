@@ -199,8 +199,7 @@ describe("the tripwire catches a planted mutation", () => {
         // the geometry, so this node has to reach around the type to
         // write its input in place — which is exactly the mistake the
         // tripwire is here to catch, expressed the only way it can still
-        // be expressed. `writableTopology` would fork this geometry's
-        // arrays and leave the producer's alone, so it would plant no bug.
+        // be expressed.
         (item.geo.vertexToPoint as unknown as Uint32Array)[1] = 0;
         return { out: [makeGeometryItem(cloneGeometry(item.geo))] };
       },

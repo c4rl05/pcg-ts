@@ -82,10 +82,25 @@ export interface AttrBufferId {
  *   `map`, `filter`, `find`, `some` and `every`: `lib.es5.d.ts` types the
  *   callback's third parameter as the mutable class, so the array arrives
  *   writable however the receiver was typed.
+ * - STRUCTURAL WIDENING, and this is the one to know about, because it
+ *   needs no cast, no `instanceof` and no callback: `const a: { [index:
+ *   number]: number } = attr.data; a[0] = 1`. TypeScript does not treat a
+ *   READONLY index signature as incompatible with a mutable one, so the
+ *   view is assignable to a type that can be written through. Verified
+ *   against the checker on 2026-09-20 rather than reasoned about, on this
+ *   type and on {@link ReadonlyTopology} alike.
+ * - THE REFLECTIVE ROUTES, none of which the type is consulted for:
+ *   `Reflect.set(d, 0, 1)`, `Object.assign(d, { 0: 1 })`,
+ *   `Object.defineProperty(d, "0", { value: 1 })`, and borrowing a
+ *   mutator off the prototype — `Float32Array.prototype.fill.call(d, 0)`
+ *   and the same through `apply` and `bind`.
  *
- * Both are compile-time holes only. Neither is reachable by accident, and
- * neither is used anywhere in this repository, but a reader who assumes
- * this type is airtight will eventually write one.
+ * THESE ARE COMPILE-TIME HOLES ONLY, and there are five of them, so the
+ * closure is a guard against the accidental spelling and NOT a proof.
+ * None is reachable by accident, none is used anywhere in this
+ * repository, and the runtime object is an ordinary typed array that
+ * would accept any of them — a reader who assumes this type is airtight
+ * will eventually write one.
  *
  * Distributive over the union, so that `ReadonlyAttrData<AttrData>` is a
  * UNION OF VIEWS rather than one merged view and
@@ -133,7 +148,16 @@ export type ReadonlyAttrData<T extends AttrData = AttrData> = T extends AttrData
  * ONLY THE STATIC TYPE CHANGES. The value handed back is the
  * `Uint32Array` itself, so `ArrayBuffer.isView` still answers true, a
  * structured clone still moves it, and anything reading it by index or
- * `length` reads what it always did.
+ * `length` reads what it always did — and every hole listed on
+ * {@link ReadonlyAttrData} applies here unchanged, structural widening
+ * (`const a: { [index: number]: number } = geo.vertexToPoint`) included.
+ * This is a guard against the accidental spelling, not a proof.
+ *
+ * ONE MORE, SPECIFIC TO TOPOLOGY AND OUTSIDE THIS TYPE ALTOGETHER:
+ * `pcg-ts/worker` publishes `EncodedGeometryItem` with the three arrays
+ * as mutable `Uint32Array`s, and its decode installs them by reference.
+ * See PLAN.md, "the worker protocol's topology arrays", for what closing
+ * that would cost.
  *
  * THERE IS NO WRITE ROUTE, and that is deliberate rather than an
  * omission. Topology is REPLACED, not edited: build the three arrays and

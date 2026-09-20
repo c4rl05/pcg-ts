@@ -30,10 +30,10 @@
  * so an adopting caller throws the identical `setTopology:` message a
  * copying one would. Only the copy is skipped.
  *
- * This is not the only path that installs topology without the copy:
- * `decodeGeometry` in `src/worker/protocol.ts` assigns the three arrays it
- * received through a transfer list straight onto a new geometry, skipping
- * the validation as well, on the grounds that it owns them exclusively.
+ * `decodeGeometry` in `src/worker/protocol.ts` is the other caller that
+ * installs without the copy — it comes through {@link installTopology}
+ * like everything else, skipping the VALIDATION as well on the grounds
+ * that a trusted cook already did it.
  */
 import type { Geometry } from "./geometry.js";
 import type { ReadonlyTopology } from "./types.js";
