@@ -1090,6 +1090,27 @@ What the caller must respect (the mutation contracts):
   is in flight are detected and heal on the next pass, but that pass may
   return a torn mix of old and new state.
 
+An opt-in guard can check the first of those contracts for you:
+`cook(graph, { tripwire: true })` fails the cook if any node's output
+changed after that node finished producing it — the signature of a node
+that wrote where it should have cloned, silently corrupting an upstream
+node's cache. The corruption is invisible to the determinism guarantees
+above, because a second cook and a partitioned cook both read the same
+corrupted bytes the same way. Off by default and free when off; `"node"`
+mode also names the node that was cooking when the change appeared, but
+is quadratic in the cook's bytes (measured 5.5–6.4s against 2.1s over the
+graph corpus, 73–82s against 0.5s on the Eiffel demo) — a debugging
+session, not something to leave on. `PCG_TRIPWIRE=1` (or `=node`) arms
+every cook in a run without editing a call site; `PCG_TRIPWIRE_BUDGET_MB`
+moves the 4 GiB ceiling on the byte-for-byte snapshot it keeps — raise it
+for a cook bigger than anything here, lower it on a machine with little
+memory, since that snapshot is held on top of what the cook itself needs.
+The failure names the node, the output pin, the item, the domain, the
+attribute and the first differing element, with its old and new value.
+See `src/graph/tripwire.ts` for what it cannot see, and read that list
+before reading much into a green run — notably, a fused GPU run watches
+only its terminal.
+
 ## Examples
 
 `demos/` holds the five vite pages [pictured at the

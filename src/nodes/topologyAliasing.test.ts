@@ -249,6 +249,26 @@ function topologyOf(coll: DataCollection | undefined, name: string): Topology {
 const sameTopology = (a: Topology, b: Topology): boolean => JSON.stringify(a) === JSON.stringify(b);
 
 /**
+ * THIS FILE MUTATES ON PURPOSE, SO IT DECLINES THE TRIPWIRE.
+ *
+ * The controls below plant a vandal — a node that writes its input's
+ * topology, adopts its input's arrays, or builds into a pooled buffer —
+ * and then ask whether THIS FILE'S comparator sees it.
+ * `src/graph/tripwire.ts` is the general form of the same check, and under
+ * `PCG_TRIPWIRE` it watches every cook in the run: it would catch the
+ * vandal and abort the cook before the comparator ever took a reading, so
+ * the controls failed for the one reason that proves both instruments
+ * work. `tripwire: false` declines the environment's default per cook,
+ * which is exactly what it is for.
+ *
+ * ANY TEST THAT DELIBERATELY MUTATES A COOKED OUTPUT NEEDS THIS. Pass it
+ * on every `cook` the test makes, not just the one doing the damage — the
+ * sweep happens at the end of the cook that is armed, not the one that
+ * wrote.
+ */
+const NO_TRIPWIRE = { tripwire: false } as const;
+
+/**
  * Cook, edit downstream, cook again, snapshot the upstream cache, then
  * cook the upstream alone from scratch. `caught` names the upstream outputs
  * whose snapshot differs from the fresh cook — the guard's verdict.
@@ -258,9 +278,9 @@ const sameTopology = (a: Topology, b: Topology): boolean => JSON.stringify(a) ==
  */
 async function guard(opts: Omit<BuildOptions, "downstream"> = {}): Promise<{ caught: string[]; lateRead: string[] }> {
   const built = build({ downstream: true, ...opts });
-  const first = await cook(built.g);
+  const first = await cook(built.g, NO_TRIPWIRE);
   built.edit();
-  const second = await cook(built.g);
+  const second = await cook(built.g, NO_TRIPWIRE);
   // The edit re-cooked the downstream nodes and nothing upstream: every
   // upstream output is the same object the first cook produced.
   expect(second.stats.cooked).toBe(built.downstreamCount);
@@ -269,7 +289,7 @@ async function guard(opts: Omit<BuildOptions, "downstream"> = {}): Promise<{ cau
   }
   // SNAPSHOT BEFORE THE FRESH COOK (see the module doc).
   const cached = new Map(built.upstream.map((name) => [name, topologyOf(second.outputs[name], name)]));
-  const fresh = await cook(build({ downstream: false, pooled: opts.pooled }).g);
+  const fresh = await cook(build({ downstream: false, pooled: opts.pooled }).g, NO_TRIPWIRE);
   const caught: string[] = [];
   const lateRead: string[] = [];
   for (const name of built.upstream) {
@@ -287,6 +307,10 @@ describe("adopted topology is never rewritten by a downstream re-cook", () => {
     expect(await guard()).toEqual({ caught: [], lateRead: [] });
   });
 
+  // The controls run under `PCG_TRIPWIRE` like any other test: `guard`
+  // declines the tripwire per cook (see NO_TRIPWIRE), so the vandal it
+  // plants reaches this file's own comparator instead of being caught a
+  // layer earlier.
   it("control: a downstream node writing its input's topology in place is caught", async () => {
     expect((await guard({ vandal: "write" })).caught).toEqual(["links"]);
   });

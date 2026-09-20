@@ -755,8 +755,11 @@ const portalDef = defineNode<PortalParams>({
  * outer ones). The tripwire IS forwarded, and for the reason onNodeDone
  * is not: an inner node's output is not an implementation detail once
  * something outside the body can still write to it, so the outermost cook
- * has to keep watching it. The shadowing is handled by prefixing — an
- * inner node is reported as `outerId/innerId` (see `src/graph/tripwire.ts`).
+ * has to keep watching it. It goes in as `tripwireSession`, the plumbing
+ * half of that option — `tripwire` itself is the flag that ARMS a cook,
+ * and a body is never its own session. The shadowing is handled by
+ * prefixing: an inner node is reported as `outerId/innerId` (see
+ * `src/graph/tripwire.ts`).
  *
  * Note: instances of one definition share the inner graph. Two instances
  * get different seeds, so each cook of one invalidates the other's inner
@@ -844,7 +847,7 @@ export function subgraphNode(
           // gpu forwards like signal/budgetMs: the inner cook applies the
           // same policy (its per-cook stats view reports into the outer
           // cook's sink; see gpuStatsView in execute.ts).
-          const result = await cook(inner, { signal, budgetMs, gpu, tripwire });
+          const result = await cook(inner, { signal, budgetMs, gpu, tripwireSession: tripwire });
           const out: Record<string, DataCollection> = {};
           for (const exp of exposedOutputs) {
             out[exp.name] = result.outputs[`__out_${exp.name}`] ?? [];

@@ -95,11 +95,14 @@ export interface NodeExecuteArgs<P> {
   /**
    * The enclosing cook's tripwire, when one is armed (see
    * `CookOptions.tripwire`); `undefined` otherwise, which is every
-   * production cook. A composite node cooking an inner graph FORWARDS it
-   * — `cook(inner, { signal, budgetMs, gpu, tripwire })`, exactly as it
-   * forwards the other three — so the body's node outputs are watched by
-   * the outermost cook and are named `thisNode/innerNode` in a report. A
-   * node that does not cook an inner graph has nothing to do with it.
+   * production cook. A composite node cooking an inner graph FORWARDS it —
+   * `cook(inner, { signal, budgetMs, gpu, tripwireSession: tripwire })`,
+   * exactly as it forwards the other three — so the body's node outputs
+   * are watched by the OUTERMOST cook and are named `thisNode/innerNode`
+   * in a report. It goes in `tripwireSession` and not in `tripwire`: the
+   * latter is the flag that ARMS a cook, and a nested cook is never its
+   * own session. A node that does not cook an inner graph has nothing to
+   * do with this.
    */
   readonly tripwire?: Tripwire;
   /**

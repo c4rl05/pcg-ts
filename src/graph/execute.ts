@@ -23,7 +23,13 @@ import {
 } from "./data.js";
 import { CookCancelledError, GraphCycleError, GraphValidationError, NodeExecutionError } from "./errors.js";
 import { deriveNodeSeed, type Graph, type NodeState, type OutputDecl } from "./graph.js";
-import { resolveTripwire, type TripwireOption } from "./tripwire.js";
+import {
+  isTripwireFailure,
+  resolveTripwire,
+  type Tripwire,
+  type TripwireMode,
+  type TripwireSettings,
+} from "./tripwire.js";
 
 /**
  * Progress callback payload: one entry per node visited by a cook.
@@ -119,18 +125,53 @@ export interface CookOptions {
   onNodeDone?: (info: NodeDoneInfo) => void;
   /**
    * Arm the tripwire: fail this cook if any node's output changed after
-   * that node finished producing it. Off by default and free when off —
-   * see `src/graph/tripwire.ts` for what it watches, what it costs and
-   * what it cannot see.
+   * that node finished producing it. Off by default and free when off.
+   * `src/graph/tripwire.ts` has what it watches, what it costs, and the
+   * list of what it CANNOT see — read that list before reading anything
+   * into a green run, because several of the gaps are structural (fused
+   * GPU runs, `World` cells, browser workers).
    *
-   * `true` (or `"cook"`) sweeps once when the cook finishes; `"node"`
-   * sweeps after every node, which is slower but also names the node that
-   * was cooking when the change appeared. `false` declines even when
-   * `PCG_TRIPWIRE` is set in the environment. A `Tripwire` VALUE is how a
-   * composite node forwards the outer session into a nested cook (see
-   * `NodeExecuteArgs.tripwire`); callers pass a flag.
+   * `true` or `"cook"` sweeps once when the cook finishes: linear in the
+   * bytes the cook produced, and cheap enough to leave on — measured at
+   * no separable cost over the 95-graph corpus, and about 1.6x on the
+   * Eiffel demo.
+   *
+   * `"node"` sweeps after EVERY node instead, which is what lets the
+   * report also name the node that was cooking when the change appeared.
+   * That is QUADRATIC in the bytes the cook produced, and the difference
+   * is not small: 5.5-6.4 s against 2.1 s over the corpus, and 73-82 s
+   * against 0.5 s on the Eiffel demo.
+   *
+   * SO `"node"` IS FOR ONE GRAPH, NOT FOR A SUITE. It is what you switch
+   * to after `"cook"` has told you something moved, on the graph that
+   * moved. Over a whole test run it measured ~300x slower and produced 47
+   * timeouts against bounds tuned for an unarmed cook — none of them a
+   * real fault. A CI run or a corpus run wants `"cook"`.
+   *
+   * A test that mutates a cooked output ON PURPOSE passes `false` here,
+   * on every cook it makes; `src/nodes/topologyAliasing.test.ts` is the
+   * worked example.
+   *
+   * The object form takes `{ mode, budgetBytes }`; see `TripwireSettings`
+   * for why there is a memory ceiling at all.
+   *
+   * `false` declines even when `PCG_TRIPWIRE` is set in the environment.
+   * A composite node forwards the OUTER cook's session through
+   * {@link tripwireSession} instead — this field takes a flag and never a
+   * handle, so the two jobs cannot be confused.
    */
-  tripwire?: TripwireOption;
+  tripwire?: boolean | TripwireMode | TripwireSettings;
+  /**
+   * Continue an outer cook's tripwire session in this nested cook, so the
+   * body's node outputs stay watched by the cook that owns them rather
+   * than only until the inner cook returns.
+   *
+   * This is plumbing, not a knob: a composite node passes on the handle it
+   * was given as `NodeExecuteArgs.tripwire`, exactly as it passes on
+   * `signal`, `budgetMs` and `gpu`. It OVERRIDES {@link tripwire} when
+   * both are present, because a nested cook is never its own session.
+   */
+  tripwireSession?: Tripwire;
   /**
    * Cook only these declared outputs (by name): the pass visits just the
    * induced upstream subgraph, and the result contains exactly these
@@ -977,8 +1018,10 @@ async function cookRun(graph: Graph, opts: CookOptions): Promise<CookResult> {
   const { budgetMs, signal, onNodeDone } = opts;
   // `undefined` unless this cook was armed (or inherited an outer cook's
   // session through a wrapper node). Every hook below is `tripwire?.…`
-  // against it, so an unarmed cook pays one property read per node.
-  const tripwire = resolveTripwire(opts.tripwire);
+  // against it: two undefined checks per node on a cache hit (record,
+  // mode), three on a miss (scope, record, mode), plus one at the end of
+  // the cook. None of them is inside a node's own loops.
+  const tripwire = resolveTripwire(opts.tripwire, opts.tripwireSession);
   const start = performance.now();
   let sliceStart = start;
   const gpuStats = opts.gpu !== undefined ? createGpuCookStats() : undefined;
@@ -1169,6 +1212,15 @@ async function cookRun(graph: Graph, opts: CookOptions): Promise<CookResult> {
         // A CookCancelledError only counts as cancellation when the signal
         // actually aborted; a node throwing it spontaneously is a failure.
         if (err instanceof CookCancelledError && signal?.aborted) throw err;
+        // A tripwire failure from a NESTED cook passes through unwrapped,
+        // for the reason cancellation does. Wrapped, its class was lost
+        // (`World` rethrows verbatim and the worker protocol reconstructs
+        // by `error.name`), an `instanceof TripwireError` at the top
+        // stopped matching, and the multi-line report printed TWICE —
+        // once as itself and once quoted inside the wrapper's message. It
+        // is also not a fact about this node: the node that was damaged
+        // is named in the report, and it is usually not this one.
+        if (isTripwireFailure(err)) throw err;
         throw new NodeExecutionError(id, err);
       }
       for (const pin of def.outputs) {

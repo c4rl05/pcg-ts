@@ -95,6 +95,7 @@ import { deviceInstanceAttributesOf } from "../fields/index.js";
 import type { DataCollection } from "../graph/data.js";
 import { makeValueItem } from "../graph/data.js";
 import { CookCancelledError, GraphValidationError } from "../graph/errors.js";
+import { isTripwireFailure } from "../graph/tripwire.js";
 import { cook, withExclusiveGraph } from "../graph/execute.js";
 import type { Graph } from "../graph/graph.js";
 import { type NodeDef, type PinDef, defineNode } from "../graph/node.js";
@@ -513,7 +514,7 @@ export function repeatUntilNode(
               }
               let result;
               try {
-                result = await cook(inner, { signal, budgetMs, gpu, tripwire });
+                result = await cook(inner, { signal, budgetMs, gpu, tripwireSession: tripwire });
               } catch (err) {
                 // Cancellation passes through UNWRAPPED, and this branch
                 // has to come FIRST — `forEach.ts` documents the exact
@@ -530,6 +531,9 @@ export function repeatUntilNode(
                 // the caller asked to stop, and which round was in flight
                 // is not a fact about the graph.
                 if (err instanceof CookCancelledError) throw err;
+                // A tripwire failure passes through for the same reason;
+                // see the matching note in `forEach.ts`.
+                if (isTripwireFailure(err)) throw err;
                 throw new Error(
                   `repeatUntil: ${describeRound(rounds + 1, maxRounds)} failed — ${
                     err instanceof Error ? err.message : String(err)

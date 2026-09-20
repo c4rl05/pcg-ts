@@ -26,12 +26,24 @@ import { describe, expect, it } from "vitest";
 
 import { createPointCloud, Geometry } from "../data/index.js";
 import { cloneGeometry } from "./clone.js";
-import { makeGeometryItem, makeValueItem, type DataItem } from "./data.js";
+import {
+  makeGeometryItem,
+  makeInstancesItem,
+  makeValueItem,
+  type DataItem,
+  type InstancesItem,
+} from "./data.js";
 import { cook } from "./execute.js";
 import { Graph, type NodeHandle } from "./graph.js";
 import { defineNode, type NodeDef } from "./node.js";
 import { subgraphNode } from "./subgraph.js";
-import { TripwireError, resolveTripwire } from "./tripwire.js";
+import {
+  DEFAULT_BUDGET_BYTES,
+  TripwireBudgetError,
+  TripwireError,
+  resolveTripwire,
+  type TripwireSettings,
+} from "./tripwire.js";
 import { makePointsNode } from "./testNodes.js";
 
 /** A source of `count` points with P = (i, 0, 0). */
@@ -460,47 +472,239 @@ describe("arming", () => {
     expect(resolveTripwire(true)?.mode).toBe("cook");
     expect(resolveTripwire("cook")?.mode).toBe("cook");
     expect(resolveTripwire("node")?.mode).toBe("node");
+    expect(resolveTripwire({ mode: "node", budgetBytes: 4096 })?.budgetBytes).toBe(4096);
+    expect(resolveTripwire(true)?.budgetBytes).toBe(DEFAULT_BUDGET_BYTES);
     const root = resolveTripwire(true)!;
     expect(root.depth).toBe(0);
     expect(root.scope("a").depth).toBe(1);
     expect(root.scope("a").scope("b").depth).toBe(2);
-    // A handle passed in is inherited, not re-created.
-    expect(resolveTripwire(root)).toBe(root);
+    // The handle is inherited through its OWN argument, and it wins over
+    // the flag: a nested cook is never its own session.
+    expect(resolveTripwire(undefined, root)).toBe(root);
+    expect(resolveTripwire(false, root)).toBe(root);
+    expect(resolveTripwire("node", root)).toBe(root);
   });
 
-  it("an unarmed cook records nothing, and an armed one reports what it holds", async () => {
-    const g = new Graph(2);
-    const src = g.add(sourceNode(), undefined, "src");
-    const ok = g.add(politeNode(), undefined, "ok");
-    g.connect(src, "out", ok, "in");
-    g.output(ok, "out", "main");
+  it("refuses a handle in the flag slot, which typechecks but would open a second session", () => {
+    // `Tripwire` satisfies `TripwireSettings` structurally, so `tsc` has
+    // nothing to say here. The runtime does.
+    const handle = resolveTripwire(true)!;
+    expect(() => resolveTripwire(handle as unknown as TripwireSettings)).toThrow(
+      /takes a flag .* not a Tripwire handle/s,
+    );
+    expect(() => resolveTripwire(handle as unknown as TripwireSettings)).toThrow(
+      /tripwireSession/,
+    );
+  });
 
-    // The off path: no handle exists at all, so there is nothing to record
-    // into and nothing to sweep.
-    let sawTripwire: unknown = "unset";
-    const probe = defineNode<Record<string, never>>({
-      type: "probe",
+  it("reads PCG_TRIPWIRE at the start of each cook, so setting it at runtime works", () => {
+    const before = process.env.PCG_TRIPWIRE;
+    try {
+      process.env.PCG_TRIPWIRE = "node";
+      expect(resolveTripwire(undefined)?.mode).toBe("node");
+      process.env.PCG_TRIPWIRE = "1";
+      expect(resolveTripwire(undefined)?.mode).toBe("cook");
+      process.env.PCG_TRIPWIRE = "nonsense";
+      expect(resolveTripwire(undefined)).toBeUndefined();
+      delete process.env.PCG_TRIPWIRE;
+      expect(resolveTripwire(undefined)).toBeUndefined();
+      // And an explicit `false` still declines while the env var is on.
+      process.env.PCG_TRIPWIRE = "1";
+      expect(resolveTripwire(false)).toBeUndefined();
+      // The budget comes from the environment too.
+      process.env.PCG_TRIPWIRE_BUDGET_MB = "7";
+      expect(resolveTripwire(true)?.budgetBytes).toBe(7 * 1024 * 1024);
+    } finally {
+      delete process.env.PCG_TRIPWIRE_BUDGET_MB;
+      if (before === undefined) delete process.env.PCG_TRIPWIRE;
+      else process.env.PCG_TRIPWIRE = before;
+    }
+  });
+
+  /**
+   * SKIPPED UNDER `PCG_TRIPWIRE`, and that is the point of the env var
+   * rather than a hole in this test: a cook with no option is armed when
+   * the variable is set, so asserting the node saw `undefined` would fail
+   * for the right reason. Everything else in both tripwire suites passes
+   * either way, which is what lets the whole repository suite be run
+   * under `PCG_TRIPWIRE=1`.
+   */
+  it.skipIf(process.env.PCG_TRIPWIRE !== undefined)(
+    "an unarmed cook hands nodes no handle at all",
+    async () => {
+      const g = new Graph(2);
+      const src = g.add(sourceNode(), undefined, "src");
+      let sawTripwire: unknown = "unset";
+      const probe = defineNode<Record<string, never>>({
+        type: "probe",
+        inputs: [{ name: "in", kind: "geometry" }],
+        outputs: [{ name: "out", kind: "geometry" }],
+        defaultParams: {},
+        execute({ inputs, tripwire }) {
+          sawTripwire = tripwire;
+          return { out: [...inputs.in] };
+        },
+      });
+      const p = g.add(probe, undefined, "probe");
+      g.connect(src, "out", p, "in");
+      g.output(p, "out", "probed");
+      await cook(g);
+      expect(sawTripwire).toBeUndefined();
+    },
+  );
+
+  it("an armed cook reports what it holds", async () => {
+    const armed = resolveTripwire(true)!;
+    const g = new Graph(9);
+    const s = g.add(sourceNode(), undefined, "src");
+    g.output(s, "out", "main");
+    await cook(g, { tripwireSession: armed });
+    expect(armed.watched).toBeGreaterThan(0);
+    expect(armed.heldBytes).toBeGreaterThan(0);
+    expect(armed.blindSpots).toEqual([]);
+  });
+});
+
+describe("the budget", () => {
+  it("fails with a message naming the limit and how to raise it, not an OOM", async () => {
+    const g = new Graph(31);
+    const src = g.add(sourceNode("big", 20_000), undefined, "big");
+    g.output(src, "out", "main");
+    // One point cloud of 20k points carries far more than 4 KiB of
+    // standard attributes, so the very first node goes over.
+    const err = await cook(g, { tripwire: { budgetBytes: 4096 } }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(TripwireBudgetError);
+    const budget = err as TripwireBudgetError;
+    expect(budget.node).toBe("big");
+    expect(budget.budgetBytes).toBe(4096);
+    expect(budget.heldBytes).toBeGreaterThan(4096);
+    expect(budget.message).toContain("ran out of budget");
+    expect(budget.message).toContain("0.0 MiB limit");
+    expect(budget.message).toContain("budgetBytes: 8192");
+    expect(budget.message).toContain("PCG_TRIPWIRE_BUDGET_MB=");
+    // NOT a TripwireError: nothing is wrong with the graph.
+    expect(budget).not.toBeInstanceOf(TripwireError);
+  });
+
+  it("a generous budget lets the same cook through", async () => {
+    const g = new Graph(31);
+    const src = g.add(sourceNode("big", 20_000), undefined, "big");
+    g.output(src, "out", "main");
+    await expect(cook(g, { tripwire: { budgetBytes: 1 << 30 } })).resolves.toBeDefined();
+  });
+});
+
+describe("a batch whose channels cannot be read", () => {
+  /**
+   * `instanceAttributesOf` THROWS on a hand-built batch carrying two
+   * different colour buffers. A host holding one is fine unarmed; arming
+   * must not turn that into a failed cook, which is what it did.
+   */
+  function twoColourBatch(): InstancesItem {
+    const transforms = new Float32Array(16);
+    transforms[0] = 1;
+    return makeInstancesItem([
+      {
+        assetId: "rock",
+        count: 1,
+        transforms,
+        attributes: { color: new Float32Array([1, 0, 0]) },
+        colors: new Float32Array([0, 1, 0]),
+      },
+    ]);
+  }
+
+  function batchSource(item: InstancesItem): NodeDef<Record<string, never>> {
+    return defineNode<Record<string, never>>({
+      type: "handBuilt",
+      inputs: [],
+      outputs: [{ name: "out", kind: "instances" }],
+      defaultParams: {},
+      execute: () => ({ out: [item] }),
+    });
+  }
+
+  it("cooks armed exactly as it cooks unarmed", async () => {
+    const make = (): Graph => {
+      const g = new Graph(37);
+      const s = g.add(batchSource(twoColourBatch()), undefined, "hand");
+      g.output(s, "out", "main");
+      return g;
+    };
+    await expect(cook(make())).resolves.toBeDefined();
+    await expect(cook(make(), { tripwire: true })).resolves.toBeDefined();
+    await expect(cook(make(), { tripwire: "node" })).resolves.toBeDefined();
+  });
+
+  it("still watches the transforms, and says in the report what it could not read", async () => {
+    const item = twoColourBatch();
+    const g = new Graph(41);
+    const hand = g.add(batchSource(item), undefined, "hand");
+    const bad = g.add(
+      defineNode<Record<string, never>>({
+        type: "scribbles",
+        inputs: [{ name: "in", kind: "instances" }],
+        outputs: [{ name: "out", kind: "instances" }],
+        defaultParams: {},
+        execute({ inputs }) {
+          // The transforms ARE watched, unreadable channels or not.
+          item.batches[0]!.transforms[0] = 99;
+          return { out: [...inputs.in] };
+        },
+      }),
+      undefined,
+      "scribbles",
+    );
+    g.connect(hand, "out", bad, "in");
+    g.output(bad, "out", "main");
+    const err = await expectTripped(g);
+    expect(err.violations[0]!.node).toBe("hand");
+    expect(err.violations[0]!.at).toContain("transforms");
+    expect(err.violations[0]!.detail).toContain("was 1, now 99");
+    expect(err.blindSpots.join("\n")).toContain("channels could not be read");
+    expect(err.message).toContain("Not everything was watched on this cook");
+  });
+});
+
+describe("the failure message", () => {
+  it("carries no control bytes, so a grep over a log cannot silently skip it", async () => {
+    const source = defineNode<Record<string, never>>({
+      type: "named",
+      inputs: [],
+      outputs: [{ name: "out", kind: "geometry" }],
+      defaultParams: {},
+      execute() {
+        const geo = createPointCloud(2);
+        const kind = geo.attrs.point.add("kind", "string", 1);
+        kind.setString(0, "alpha");
+        kind.setString(1, "beta");
+        return { out: [makeGeometryItem(geo)] };
+      },
+    });
+    const offender = defineNode<Record<string, never>>({
+      type: "renames",
       inputs: [{ name: "in", kind: "geometry" }],
       outputs: [{ name: "out", kind: "geometry" }],
       defaultParams: {},
-      execute({ inputs, tripwire }) {
-        sawTripwire = tripwire;
+      execute({ inputs }) {
+        const item = inputs.in[0]!;
+        if (item.kind !== "geometry") throw new Error("no geometry");
+        item.geo.attrs.point.require("kind").stringTable[0] = "gamma";
         return { out: [...inputs.in] };
       },
     });
-    const p = g.add(probe, undefined, "probe");
-    g.connect(ok, "out", p, "in");
-    g.output(p, "out", "probed");
-    await cook(g);
-    expect(sawTripwire).toBeUndefined();
-
-    const armed = resolveTripwire(true)!;
-    await cook(new Graph(2), {});
-    const g2 = new Graph(9);
-    const s2 = g2.add(sourceNode(), undefined, "src");
-    g2.output(s2, "out", "main");
-    await cook(g2, { tripwire: armed });
-    expect(armed.watched).toBeGreaterThan(0);
-    expect(armed.heldBytes).toBeGreaterThan(0);
+    const g = new Graph(43);
+    const src = g.add(source, undefined, "named");
+    const bad = g.add(offender, undefined, "renames");
+    g.connect(src, "out", bad, "in");
+    g.output(bad, "out", "main");
+    const err = await expectTripped(g);
+    // eslint-disable-next-line no-control-regex
+    expect(err.message).not.toMatch(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/);
+    // Index 0 of the table is the attribute's default (the empty string),
+    // so "alpha" and "beta" are 1 and 2 — and the whole table lands in the
+    // message as JSON, which is the point: readable, and greppable.
+    expect(err.message).toContain('was ["","alpha","beta"]');
+    expect(err.message).toContain('now ["gamma","alpha","beta"]');
   });
 });

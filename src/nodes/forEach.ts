@@ -60,6 +60,7 @@ import {
   makeValueItem,
 } from "../graph/data.js";
 import { CookCancelledError, GraphValidationError } from "../graph/errors.js";
+import { isTripwireFailure } from "../graph/tripwire.js";
 import { cook, withExclusiveGraph } from "../graph/execute.js";
 import type { Graph } from "../graph/graph.js";
 import { itemKey, pointIdentityColumn, pointItemKey } from "../graph/itemKey.js";
@@ -264,7 +265,7 @@ export function forEachNode(
             }
             let result;
             try {
-              result = await cook(inner, { signal, budgetMs, gpu, tripwire });
+              result = await cook(inner, { signal, budgetMs, gpu, tripwireSession: tripwire });
             } catch (err) {
               // Cancellation passes through UNWRAPPED, and this branch has
               // to come first. The executor rethrows a cancelled cook as
@@ -280,6 +281,11 @@ export function forEachNode(
               // caller asked to stop, and which iteration was in flight is
               // not a fact about the graph.
               if (err instanceof CookCancelledError) throw err;
+              // A tripwire failure — a corrupted output, or the guard's own
+              // budget — passes through for the same reason, and its report
+              // already names the body node under this one's id. Wrapped,
+              // the class was lost and the report printed twice.
+              if (isTripwireFailure(err)) throw err;
               // Which of sixteen blew up is the first thing an author needs
               // and the last thing the raw error says.
               throw new Error(

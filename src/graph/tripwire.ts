@@ -34,7 +34,36 @@
  * holds roughly twice the memory of an unarmed one — which is why it is
  * off by default and not a thing to leave on.
  *
- * WHAT IT CANNOT SEE.
+ * WHAT IT CANNOT SEE. Read this before reading anything into a green run:
+ * several of these are STRUCTURAL, not edge cases, and one of them
+ * (fusion) silently removes the guard from most of a chain.
+ *
+ *   - FUSED DEVICE-RESIDENT RUNS. A fused run caches ONLY its terminal —
+ *     interior members hold no cache entry by design — so only the
+ *     terminal's output is watched. Measured on a five-node chain: two of
+ *     the five nodes watched. A device-resident spawn terminal snapshots
+ *     0 bytes where the same graph on the CPU path snapshots 528 KB. So
+ *     fusing a chain takes the guard off every node but its last, and a
+ *     cook with a GPU resolver is watched far less than the same cook
+ *     without one. Run the CPU path when the tripwire is the point.
+ *   - `World` AND STREAMING. `World` cooks each cell with its own options
+ *     and does not pass this one along, so a cell is never armed by a
+ *     caller. Under `PCG_TRIPWIRE` each cell then opens its OWN session
+ *     and sweeps at its own end — which means a cell's output being
+ *     written by a LATER cell, the cross-cell case, is invisible.
+ *   - BROWSER WORKERS. The env var is read off `process`, which does not
+ *     exist in a browser worker, so `PCG_TRIPWIRE` can never arm one. A
+ *     cook inside a worker has to be armed through the option.
+ *   - MUTATION BETWEEN COOKS. The snapshot starts when a node finishes,
+ *     so damage done to a cached output after the previous cook returned
+ *     and before this one started is already in the "before" bytes. What
+ *     this catches is a change DURING a cook.
+ *   - A REPLACED REFERENCE rather than a rewritten buffer. The probes pin
+ *     the objects the node handed over, so `item.geo = otherGeometry`, or
+ *     `outputs.out[0] = otherItem`, is unseen: the tripwire goes on
+ *     watching the geometry that was there. Both need a cast past
+ *     `readonly` to write at all, which is why this is a gap and not a
+ *     hole.
  *   - Mutation of anything it does not copy: params, the graph itself,
  *     a Field's closure state, host objects a node captured.
  *   - Device-resident instances. Their transforms live in GPU memory and
@@ -49,12 +78,40 @@
  *     node.
  *   - Capacity beyond `count`. Bytes past the used prefix of a column are
  *     allocation slack, not data, and a resize legitimately rewrites them.
+ *   - An instance batch whose channels cannot be read at all (a hand-built
+ *     one carrying both spellings of colour). Its transforms are still
+ *     watched, its channels are not, and the report says which batch —
+ *     see {@link Tripwire.blindSpots}.
  *
- * HOW TO ARM IT. `cook(graph, { tripwire: true })` — or `"node"` for the
- * slower mode that also names the node that was cooking when the change
- * was noticed. `PCG_TRIPWIRE=1` (or `=node`) in the environment arms every
- * cook that does not say otherwise, which is how a whole test run is put
- * under it without editing a call site.
+ * WHAT IT RETAINS, AND WHY THERE IS A BUDGET. Every probe closes over the
+ * object the node handed over, so nothing a watched cook produced can be
+ * collected until the outermost cook ends — including a loop body's
+ * outputs for EVERY iteration, which is deliberate: `forEach` accumulates
+ * its iterations' items into its own output, so iteration 1's geometry is
+ * still writable while iteration 7 runs. The cost is that retention grows
+ * with iterations rather than with the body, and a small synthetic loop
+ * reached 268.6 MB over 402 watched outputs. {@link TripwireSettings} caps
+ * it, so a runaway ends in a message naming the limit instead of an
+ * out-of-memory abort on the graph someone armed this for.
+ *
+ * HOW TO ARM IT. `cook(graph, { tripwire: true })`. `PCG_TRIPWIRE=1` arms
+ * every cook that does not say otherwise, which is how a whole test run is
+ * put under it without editing a call site; `PCG_TRIPWIRE_BUDGET_MB` moves
+ * the memory ceiling the same way. Both are read at the START OF EACH
+ * COOK, so a test may set or delete them at runtime.
+ *
+ * `PCG_TRIPWIRE=node` IS NOT THE SUITE VERSION OF THAT. `"node"` mode is
+ * for isolating one culprit on one graph; over a whole suite it measured
+ * ~300x slower and produced 47 timeouts against bounds tuned for an
+ * unarmed cook, none of them a real fault. Use `=1` for a suite or a
+ * corpus, and `"node"` on the single graph `"cook"` pointed at.
+ *
+ * A TEST THAT MUTATES ON PURPOSE OPTS OUT with `tripwire: false`, per
+ * cook, which declines the environment's default — see
+ * `src/nodes/topologyAliasing.test.ts`, whose controls plant a vandal and
+ * then ask whether their OWN comparator sees it. Pass it on every cook
+ * such a test makes: the sweep happens at the end of the cook that is
+ * armed, not the one that did the writing.
  *
  * NESTED COOKS. The handle threads through `NodeExecuteArgs.tripwire`, and
  * the three wrapper node types (`subgraph`, `forEach`, `repeatUntil`)
@@ -97,32 +154,68 @@
  *     what quadratic costs here, and why it is a debugging mode.
  */
 import { DOMAINS, type Attribute, type Domain } from "../data/index.js";
-import type { DataCollection, DataItem, DataValue, InstanceBatch } from "./data.js";
+import type {
+  DataCollection,
+  DataItem,
+  DataValue,
+  InstanceAttributes,
+  InstanceBatch,
+} from "./data.js";
 import { instanceAttributesOf, isDeviceResidentInstances } from "./data.js";
 
 /**
  * How often the tripwire compares.
  *
  * - `"cook"` sweeps once, when the outermost cook finishes. Linear in the
- *   bytes the cook produced, and the mode to leave armed.
+ *   bytes the cook produced, and the mode to leave armed: over 904 tests
+ *   it had no measurable cost at all.
  * - `"node"` sweeps after every node at every depth, so the report also
  *   names the node that was cooking when the change appeared. Quadratic
- *   in the bytes the cook produced — the mode to switch to once `"cook"`
- *   has told you something moved and you want to know who moved it.
+ *   in the bytes the cook produced.
+ *
+ * `"node"` IS FOR ISOLATING ONE CULPRIT ON ONE GRAPH, NOT FOR RUNNING A
+ * SUITE. Reach for it after `"cook"` has told you something moved and you
+ * want to know who moved it — on the one graph that moved. It measured
+ * about 300x slower on a whole-suite run, which is not a number any
+ * existing timeout survives: that run produced 47 vitest timeouts and one
+ * budget failure, none of them a real fault, purely because every bound in
+ * the suite is tuned for an unarmed cook. A CI run, a corpus run, or
+ * anything with a clock on it wants `"cook"`.
  */
 export type TripwireMode = "cook" | "node";
 
-/** What `CookOptions.tripwire` accepts. */
-export type TripwireOption = boolean | TripwireMode | Tripwire;
+/**
+ * The knobs, when a bare mode is not enough.
+ *
+ * `cook(g, { tripwire: { mode: "node", budgetBytes: 2 ** 31 } })`.
+ */
+export interface TripwireSettings {
+  /** See {@link TripwireMode}. Default `"cook"`. */
+  readonly mode?: TripwireMode;
+  /**
+   * How many bytes of snapshot the cook may hold before it fails rather
+   * than grows. Default {@link DEFAULT_BUDGET_BYTES}.
+   *
+   * There is a default at all because the alternative is an out-of-memory
+   * abort on the very graph someone armed this for, with no message and
+   * no culprit — the worst outcome a debugging aid can have. The snapshot
+   * is a byte-for-byte copy of every watched output, so an armed cook
+   * holds roughly twice what it produces, and a loop body's per-iteration
+   * outputs are ALL retained (see the retention note in the header).
+   */
+  readonly budgetBytes?: number;
+}
 
 /**
- * The handle an armed cook carries. Obtained by the executor from
- * `CookOptions.tripwire`, handed to every node as
- * `NodeExecuteArgs.tripwire`, and forwarded by composite nodes into their
- * inner cooks so a body's outputs are watched by the outermost cook.
+ * The handle an armed cook carries: `CookOptions.tripwireSession`, handed
+ * to every node as `NodeExecuteArgs.tripwire`, and forwarded by composite
+ * nodes into their inner cooks so a body's outputs are watched by the
+ * outermost cook.
  *
- * A node never calls anything on it but {@link scope}; the rest is
- * executor plumbing.
+ * This is NOT how a caller arms a cook — `CookOptions.tripwire` is, and it
+ * takes a flag rather than a handle so that the two jobs cannot be
+ * confused. A node never calls anything on this but {@link scope}; the
+ * rest is executor plumbing.
  */
 export interface Tripwire {
   /** See {@link TripwireMode}. */
@@ -138,6 +231,14 @@ export interface Tripwire {
   readonly watched: number;
   /** How many bytes the snapshots hold. What arming this costs in memory. */
   readonly heldBytes: number;
+  /** The ceiling {@link heldBytes} may not cross. See {@link TripwireSettings.budgetBytes}. */
+  readonly budgetBytes: number;
+  /**
+   * What the snapshot could not read and therefore is not watching, one
+   * line each. Empty on every cook this library produces; a host that
+   * hand-builds instance batches can put an unreadable one here.
+   */
+  readonly blindSpots: readonly string[];
   /**
    * The handle to give a nested cook run from inside node `nodeId`; inner
    * nodes are then reported as `nodeId/innerId`.
@@ -172,13 +273,79 @@ export class TripwireError extends Error {
    * common case rather than the alarming one.
    */
   readonly truncated: boolean;
+  /** See {@link Tripwire.blindSpots}: what this cook was not watching. */
+  readonly blindSpots: readonly string[];
 
-  constructor(violations: readonly TripwireViolation[], truncated = false) {
-    super(renderViolations(violations, truncated));
+  constructor(
+    violations: readonly TripwireViolation[],
+    truncated = false,
+    blindSpots: readonly string[] = [],
+  ) {
+    super(renderViolations(violations, truncated, blindSpots));
     this.name = "TripwireError";
     this.violations = violations;
     this.truncated = truncated;
+    this.blindSpots = blindSpots;
   }
+}
+
+/**
+ * The tripwire's own snapshot outgrew its budget.
+ *
+ * A separate class from {@link TripwireError} because it is a different
+ * event: nothing is wrong with the graph or with any node — the DEBUG AID
+ * ran out of room. Conflating the two would make "your node corrupted a
+ * cache" and "turn the budget up" the same failure.
+ */
+export class TripwireBudgetError extends Error {
+  /** The ceiling that was crossed. */
+  readonly budgetBytes: number;
+  /** What the snapshot held when it stopped. */
+  readonly heldBytes: number;
+  /** The node whose output took it over. */
+  readonly node: string;
+
+  constructor(budgetBytes: number, heldBytes: number, node: string, watched: number) {
+    super(
+      `tripwire: ran out of budget. Snapshotting node "${node}" took the copy to ` +
+        `${mib(heldBytes)} across ${watched} watched node outputs, past the ` +
+        `${mib(budgetBytes)} limit.\n` +
+        "  The tripwire keeps a byte-for-byte copy of every node's output so it can name\n" +
+        "  the element that moved, so an armed cook holds about twice what it produces —\n" +
+        "  and a loop body's outputs are kept for every iteration, because an accumulated\n" +
+        "  one can still be written after its iteration ends.\n" +
+        "  Raise it with `cook(g, { tripwire: { budgetBytes: " +
+        `${budgetBytes * 2} } })\`, or set PCG_TRIPWIRE_BUDGET_MB=${Math.ceil(
+          (budgetBytes * 2) / (1024 * 1024),
+        )}, ` +
+        "or narrow\n  the cook with `CookOptions.outputs` and arm the part you suspect.",
+    );
+    this.name = "TripwireBudgetError";
+    this.budgetBytes = budgetBytes;
+    this.heldBytes = heldBytes;
+    this.node = node;
+  }
+}
+
+function mib(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
+/**
+ * Is this the tripwire's own failure rather than the graph's?
+ *
+ * Every layer that wraps a failing cook — the executor's
+ * `NodeExecutionError`, `forEach`'s "which iteration" Error,
+ * `repeatUntil`'s "which round" — asks this and rethrows verbatim, for the
+ * reason each already rethrows a cancellation: wrapping loses the class
+ * (`World` rethrows verbatim and the worker protocol reconstructs by
+ * `error.name`) and prints the multi-line report a second time inside the
+ * wrapper's own message. A predicate rather than three `instanceof` pairs,
+ * so a third failure mode added here cannot be forgotten at two of the
+ * three sites.
+ */
+export function isTripwireFailure(err: unknown): boolean {
+  return err instanceof TripwireError || err instanceof TripwireBudgetError;
 }
 
 /** One node's output, and the first place it differs from its snapshot. */
@@ -200,15 +367,43 @@ export interface TripwireViolation {
 // ---------------------------------------------------------------------------
 
 /**
- * `PCG_TRIPWIRE`, read once. `1`/`true`/`cook` arms `"cook"` mode, `node`
- * arms `"node"` mode, anything else (including an absent `process`, which
- * is the browser) leaves it off.
+ * The default ceiling on the snapshot: 4 GiB.
+ *
+ * SET FROM WHAT THIS REPOSITORY ACTUALLY COOKS, not from a round number
+ * that felt safe. Measured: the corpus peaks at 41 MB on its largest
+ * graph, the Eiffel skeleton at its plain depth holds 273 MB, and the
+ * heaviest cook here — the same skeleton at `?rivets` depth, 860,000
+ * instances — peaks between 2.1 and 2.5 GiB. A 512 MiB default was tried
+ * first and it failed 17 of this repository's own tests under
+ * `PCG_TRIPWIRE=1`, which is a default that makes the whole-suite run
+ * useless rather than one that protects anybody.
+ *
+ * So this is a RUNAWAY guard, not a diet. What it is really for is the
+ * loop whose retention grows with its iterations (see the header): that
+ * shape climbs without bound and reaches any ceiling, so a ceiling turns
+ * it into a message naming the node and the limit instead of an
+ * out-of-memory abort with neither.
+ *
+ * On a memory-constrained machine, LOWER it — `PCG_TRIPWIRE_BUDGET_MB`, or
+ * {@link TripwireSettings.budgetBytes} — because an armed cook holds this
+ * on top of what the cook itself needs, and a 4 GiB snapshot on a 4 GB box
+ * dies before this ever fires.
  */
-const ENV_MODE: TripwireMode | undefined = readEnvMode();
+export const DEFAULT_BUDGET_BYTES = 4 * 1024 * 1024 * 1024;
 
+/**
+ * `PCG_TRIPWIRE` as a mode. `1`/`true`/`on`/`cook` arm `"cook"`, `node`
+ * arms `"node"`, anything else (including an absent `process`, which is
+ * the browser and every worker) leaves it off.
+ *
+ * READ AT THE START OF EVERY COOK rather than once at module load. A
+ * module-load read is the shape where `process.env.PCG_TRIPWIRE = "1"` in
+ * a test setup file does nothing at all if this module was imported first,
+ * and where `delete process.env.PCG_TRIPWIRE` cannot disarm — both silent.
+ * It is one property lookup per cook, not per node.
+ */
 function readEnvMode(): TripwireMode | undefined {
-  const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
-  const raw = proc?.env?.PCG_TRIPWIRE;
+  const raw = env("PCG_TRIPWIRE");
   if (raw === undefined) return undefined;
   const value = raw.trim().toLowerCase();
   if (value === "node") return "node";
@@ -216,18 +411,56 @@ function readEnvMode(): TripwireMode | undefined {
   return undefined;
 }
 
+/** `PCG_TRIPWIRE_BUDGET_MB`, or the default. Ignored when it is not a positive number. */
+function readEnvBudget(): number {
+  const raw = env("PCG_TRIPWIRE_BUDGET_MB");
+  if (raw === undefined) return DEFAULT_BUDGET_BYTES;
+  const mb = Number(raw.trim());
+  return Number.isFinite(mb) && mb > 0 ? mb * 1024 * 1024 : DEFAULT_BUDGET_BYTES;
+}
+
+function env(name: string): string | undefined {
+  const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+  return proc?.env?.[name];
+}
+
 /**
  * The session an armed cook uses, or `undefined` when it is not armed.
  *
- * An object means a nested cook inheriting the outer session; `false`
- * declines even when the environment arms everything else.
+ * `inherited` wins outright: a nested cook continues the outer session
+ * whatever the flag or the environment say, which is what keeps a body's
+ * outputs watched by the cook that owns them. Otherwise `false` declines
+ * even when the environment arms everything else, and `undefined` falls
+ * through to `PCG_TRIPWIRE`.
  */
-export function resolveTripwire(option: TripwireOption | undefined): Tripwire | undefined {
-  if (option === undefined) return ENV_MODE === undefined ? undefined : new Session(ENV_MODE);
-  if (option === false) return undefined;
-  if (option === true) return new Session("cook");
-  if (option === "cook" || option === "node") return new Session(option);
-  return option;
+export function resolveTripwire(
+  flag: boolean | TripwireMode | TripwireSettings | undefined,
+  inherited?: Tripwire,
+): Tripwire | undefined {
+  if (inherited !== undefined) return inherited;
+  if (flag === false) return undefined;
+  if (flag === undefined) {
+    const mode = readEnvMode();
+    return mode === undefined ? undefined : new Session(mode, readEnvBudget());
+  }
+  if (flag === true) return new Session("cook", readEnvBudget());
+  if (flag === "cook" || flag === "node") return new Session(flag, readEnvBudget());
+  // A `Tripwire` satisfies `TripwireSettings` STRUCTURALLY — it has a
+  // `mode` and a `budgetBytes` — and an excess-property check only fires
+  // on an object literal, so `cook(g, { tripwire: handle })` typechecks
+  // and would quietly open a SECOND session that sweeps its own empty
+  // list. That is the exact confusion splitting the option was meant to
+  // end, so it is refused in words rather than allowed to look like it
+  // worked.
+  if (typeof (flag as { scope?: unknown }).scope === "function") {
+    throw new TypeError(
+      "CookOptions.tripwire takes a flag (true, \"cook\", \"node\", or { mode, budgetBytes }), " +
+        "not a Tripwire handle. To continue an outer cook's session inside a composite node, " +
+        "pass the handle as `tripwireSession` instead: " +
+        "cook(inner, { signal, budgetMs, gpu, tripwireSession: tripwire }).",
+    );
+  }
+  return new Session(flag.mode ?? "cook", flag.budgetBytes ?? readEnvBudget());
 }
 
 // ---------------------------------------------------------------------------
@@ -281,6 +514,7 @@ interface Watched {
 
 class Session implements Tripwire {
   readonly mode: TripwireMode;
+  readonly budgetBytes: number;
   readonly depth = 0;
   /**
    * Every node output recorded so far, at every depth. Shared with the
@@ -288,10 +522,13 @@ class Session implements Tripwire {
    * `forEach` body's nodes as well as its own.
    */
   readonly list: Watched[] = [];
+  /** Deduped: one line per distinct thing this cook could not read. */
+  readonly blind = new Set<string>();
   private bytes = 0;
 
-  constructor(mode: TripwireMode) {
+  constructor(mode: TripwireMode, budgetBytes: number) {
     this.mode = mode;
+    this.budgetBytes = budgetBytes;
   }
 
   get watched(): number {
@@ -302,18 +539,29 @@ class Session implements Tripwire {
     return this.bytes;
   }
 
+  get blindSpots(): readonly string[] {
+    return [...this.blind];
+  }
+
   scope(nodeId: string): Tripwire {
     return new Scope(this, nodeId, 1);
   }
 
   record(nodeId: string, nodeType: string, outputs: Record<string, DataCollection>): void {
-    const entry = snapshot(nodeId, nodeType, outputs);
+    const entry = snapshot(nodeId, nodeType, outputs, this.blind);
     for (const probe of entry.bytes) this.bytes += probe.before.byteLength;
     this.list.push(entry);
+    // Checked AFTER the copy rather than predicted before it: one node's
+    // output is bounded by what the node produced, so the overshoot is
+    // bounded too, and stopping here means the message can name the node
+    // that went over.
+    if (this.bytes > this.budgetBytes) {
+      throw new TripwireBudgetError(this.budgetBytes, this.bytes, nodeId, this.list.length);
+    }
   }
 
   sweep(cookingNow: string | undefined): void {
-    sweepList(this.list, cookingNow);
+    sweepList(this.list, cookingNow, this.blindSpots);
   }
 }
 
@@ -351,6 +599,14 @@ class Scope implements Tripwire {
     return this.root.heldBytes;
   }
 
+  get budgetBytes(): number {
+    return this.root.budgetBytes;
+  }
+
+  get blindSpots(): readonly string[] {
+    return this.root.blindSpots;
+  }
+
   scope(nodeId: string): Tripwire {
     return new Scope(this.root, `${this.prefix}/${nodeId}`, this.depth + 1);
   }
@@ -372,6 +628,7 @@ function snapshot(
   node: string,
   type: string,
   outputs: Record<string, DataCollection>,
+  blind: Set<string>,
 ): Watched {
   const bytes: ByteProbe[] = [];
   const text: TextProbe[] = [];
@@ -388,7 +645,7 @@ function snapshot(
   for (const pin of pins) {
     const items = outputs[pin] ?? [];
     for (let i = 0; i < items.length; i++) {
-      watchItem(`output "${pin}", item ${i}`, items[i]!, bytes, text);
+      watchItem(`output "${pin}", item ${i}`, items[i]!, bytes, text, blind, node);
     }
   }
   return { node, type, bytes, text };
@@ -398,7 +655,14 @@ function shapeOfOutputs(outputs: Record<string, DataCollection>, pins: readonly 
   return pins.map((pin) => `${pin}:${(outputs[pin] ?? []).length}`).join(" ");
 }
 
-function watchItem(at: string, item: DataItem, bytes: ByteProbe[], text: TextProbe[]): void {
+function watchItem(
+  at: string,
+  item: DataItem,
+  bytes: ByteProbe[],
+  text: TextProbe[],
+  blind: Set<string>,
+  node: string,
+): void {
   text.push({
     at: `${at} — its kind, tags and rev`,
     before: itemShape(item),
@@ -456,7 +720,20 @@ function watchItem(at: string, item: DataItem, bytes: ByteProbe[], text: TextPro
     const batch = batches[b]!;
     const where = `${at} (instances), batch ${b} ("${batch.assetId}")`;
     watchBuffer(`${where} transforms`, batch.transforms, 16, "instance", bytes, () => batch.transforms);
-    const columns = instanceAttributesOf(batch);
+    // ARMING MUST NOT CHANGE WHETHER A COOK SUCCEEDS. `instanceAttributesOf`
+    // THROWS on a hand-built batch carrying both spellings of colour — a
+    // real thing for a host to hold, and hosts that hand-build batches are
+    // exactly who would arm this. Unarmed, such a cook is fine; armed, it
+    // used to die on a plain Error that never mentioned the tripwire. So:
+    // watch the transforms, skip the channels, and say so in the report.
+    const columns = readChannels(batch);
+    if (columns === undefined) {
+      blind.add(
+        `node "${node}", ${where}: its channels could not be read, so only its ` +
+          "transforms were watched",
+      );
+      continue;
+    }
     for (const name of Object.keys(columns).sort()) {
       const column = columns[name]!;
       watchBuffer(
@@ -465,7 +742,7 @@ function watchItem(at: string, item: DataItem, bytes: ByteProbe[], text: TextPro
         itemSizeOf(batch, column),
         "instance",
         bytes,
-        () => instanceAttributesOf(batch)[name],
+        () => readChannels(batch)?.[name],
       );
     }
   }
@@ -501,8 +778,15 @@ function watchAttribute(
   if (attr.type === "string") {
     text.push({
       at: `${at} — its string table`,
-      before: attr.stringTable.join("\u0000"),
-      read: () => live()?.stringTable.join("\u0000") ?? "<removed>",
+      // JSON, never a NUL-joined line. A probe's text lands verbatim in the
+      // failure message, and a stray control byte makes ripgrep skip a
+      // whole file SILENTLY — this repository has lost time to exactly
+      // that. JSON also keeps apart two tables a join would flatten.
+      before: JSON.stringify(attr.stringTable),
+      read: () => {
+        const a = live();
+        return a === undefined ? "<removed>" : JSON.stringify(a.stringTable);
+      },
     });
   }
   const usedNow = (a: Attribute | undefined): Uint8Array | undefined => {
@@ -591,9 +875,26 @@ function attrShape(attr: Attribute): string {
   return `${attr.type} x${attr.tupleSize} default=${text}`;
 }
 
+/**
+ * A batch's channels, or `undefined` when reading them throws. See the
+ * note at the call site: an unreadable batch is a fact about the batch and
+ * never a reason for an armed cook to fail where an unarmed one would not.
+ */
+function readChannels(batch: InstanceBatch): InstanceAttributes | undefined {
+  try {
+    return instanceAttributesOf(batch);
+  } catch {
+    return undefined;
+  }
+}
+
 function batchShape(batches: readonly InstanceBatch[]): string {
   return batches
-    .map((b) => `${b.assetId}:${b.count}:{${Object.keys(instanceAttributesOf(b)).sort().join(",")}}`)
+    .map((b) => {
+      const columns = readChannels(b);
+      const names = columns === undefined ? "<unreadable>" : Object.keys(columns).sort().join(",");
+      return `${b.assetId}:${b.count}:{${names}}`;
+    })
     .join(" ");
 }
 
@@ -621,7 +922,11 @@ function numberText(n: number): string {
  */
 const MAX_REPORTED = 4;
 
-function sweepList(list: readonly Watched[], cookingNow: string | undefined): void {
+function sweepList(
+  list: readonly Watched[],
+  cookingNow: string | undefined,
+  blindSpots: readonly string[],
+): void {
   const violations: TripwireViolation[] = [];
   let stoppedEarly = false;
   for (const entry of list) {
@@ -637,7 +942,7 @@ function sweepList(list: readonly Watched[], cookingNow: string | undefined): vo
       break;
     }
   }
-  if (violations.length > 0) throw new TripwireError(violations, stoppedEarly);
+  if (violations.length > 0) throw new TripwireError(violations, stoppedEarly, blindSpots);
 }
 
 function checkEntry(entry: Watched): { at: string; detail: string } | undefined {
@@ -664,8 +969,14 @@ function checkEntry(entry: Watched): { at: string; detail: string } | undefined 
   return undefined;
 }
 
+/**
+ * A probe's text for the report. Quoted, so an empty or space-padded value
+ * is visible — except when it is already a JSON array (a string table),
+ * where a second pair of quotes only makes it harder to read.
+ */
 function quote(text: string): string {
-  return text === "" ? "(empty)" : `"${text}"`;
+  if (text === "") return "(empty)";
+  return text.startsWith("[") ? text : `"${text}"`;
 }
 
 /**
@@ -743,6 +1054,7 @@ function countDiffering(a: Uint8Array, b: Uint8Array): { count: number; partial:
 function renderViolations(
   violations: readonly TripwireViolation[],
   truncated: boolean,
+  blindSpots: readonly string[],
 ): string {
   const count = truncated
     ? `the first ${violations.length} of them`
@@ -771,8 +1083,15 @@ function renderViolations(
   if (violations.every((v) => v.noticedAfter === undefined)) {
     lines.push(
       '  Re-run with `tripwire: "node"` to learn which node was cooking when the',
-      "  change appeared.",
+      "  change appeared (quadratic in the cook's bytes — see CookOptions.tripwire).",
     );
+  }
+  // Said whether or not it is related to the violation above, because the
+  // thing this report must never do is let a reader conclude "nothing else
+  // moved" from a sweep that was not looking everywhere.
+  if (blindSpots.length > 0) {
+    lines.push("  Not everything was watched on this cook:");
+    for (const spot of blindSpots) lines.push(`    - ${spot}`);
   }
   return lines.join("\n");
 }

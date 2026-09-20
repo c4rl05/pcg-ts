@@ -94,7 +94,7 @@ export {
 // what a THIRD-PARTY composite node needs to forward
 // `NodeExecuteArgs.tripwire` into the inner cook it runs, which is the
 // only reason any of this is public at all.
-export { type Tripwire, type TripwireMode, type TripwireOption } from "./tripwire.js";
+export { type Tripwire, type TripwireMode, type TripwireSettings } from "./tripwire.js";
 export { cloneGeometry } from "./clone.js";
 export {
   describeSubgraphParams,

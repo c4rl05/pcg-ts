@@ -109,12 +109,15 @@ const ROOT_TYPE_SURFACE = [
   "TransferByIndexParams", "TransferMappingResult", "TransferNearestOptions",
   "TransferRaycastOptions", "TransferUvOptions", "TransformPointsParams",
   // The opt-in mutation guard's three names, and TYPES ONLY on purpose:
-  // `TripwireError` and `resolveTripwire` stay in src/graph/tripwire.js
-  // (see the comment in src/graph/index.ts). A third-party composite node
-  // needs `Tripwire` to forward `NodeExecuteArgs.tripwire` into the inner
-  // cook it runs, and `TripwireMode`/`TripwireOption` spell what
-  // `CookOptions.tripwire` takes.
-  "Tripwire", "TripwireMode", "TripwireOption",
+  // `TripwireError`, `TripwireBudgetError` and `resolveTripwire` stay in
+  // src/graph/tripwire.js (see the comment in src/graph/index.ts). A
+  // third-party composite node needs `Tripwire` to forward
+  // `NodeExecuteArgs.tripwire` into the inner cook it runs, and
+  // `TripwireMode`/`TripwireSettings` are what `CookOptions.tripwire`
+  // takes. Each of the three has one job: the handle, the schedule, the
+  // knobs. `CookOptions.tripwire` used to accept the HANDLE as well,
+  // which is the overload these three replaced.
+  "Tripwire", "TripwireMode", "TripwireSettings",
   "UpdateOptions",
   "UpdateStats", "ValueConstantParams", "ValueItem", "VolumeSampleParams", "VoronoiCellsParams",
   "World",

@@ -223,6 +223,65 @@ describe("the tripwire reaches the loop wrappers' bodies", () => {
     expect((err as TripwireError).violations[0]!.detail).toContain("point 0, component 1");
   });
 
+  /**
+   * In `"node"` mode the sweep fires INSIDE the body's cook, which is
+   * inside the wrapper node's `execute`. Both the executor and `forEach`
+   * wrap a failing execute — the executor in a `NodeExecutionError`, the
+   * loop in a plain `Error` naming the iteration — and either one lost the
+   * class (`World` rethrows verbatim and the worker protocol reconstructs
+   * by `error.name`) and printed the whole multi-line report a second time
+   * inside its own message. Both now let it through.
+   */
+  it("a body's failure in node mode keeps its class and prints its report once", async () => {
+    const body = scribblingBody(false);
+    const def = forEachNode(
+      body.inner,
+      [{ name: "each", node: body.inPin, pin: "in" }],
+      [{ name: "out", node: body.out, pin: "out" }],
+    );
+    const g = new Graph(53);
+    const src = g.add(sourceOf(oneItem()), undefined, "src");
+    const loop = g.add(def, undefined, "loop");
+    g.connect(src, "out", loop, "each");
+    g.output(loop, "out", "main");
+    const err = await cook(g, { tripwire: "node" }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(TripwireError);
+    expect((err as Error).name).toBe("TripwireError");
+    const message = (err as Error).message;
+    // The report is the WHOLE message: it opens with "tripwire:" and that
+    // word appears once. Wrapped, the message opened with the wrapper's
+    // own sentence and carried the report quoted inside it.
+    expect(message.startsWith("tripwire:")).toBe(true);
+    expect(message.split("tripwire:")).toHaveLength(2);
+    expect(message).not.toContain("forEach: iteration");
+    expect(message).not.toContain("failed:");
+  });
+
+  /**
+   * The budget is the tripwire's OWN failure, not the graph's, and it
+   * takes the same route out of a body as a violation does — which is the
+   * whole reason the pass-through is a predicate over both classes rather
+   * than one `instanceof`. A loop is also where the budget actually bites,
+   * since retention grows with the iterations.
+   */
+  it("a budget overrun inside a body keeps its class too", async () => {
+    const body = scribblingBody(false);
+    const def = forEachNode(
+      body.inner,
+      [{ name: "each", node: body.inPin, pin: "in" }],
+      [{ name: "out", node: body.out, pin: "out" }],
+    );
+    const g = new Graph(59);
+    const src = g.add(sourceOf(oneItem()), undefined, "src");
+    const loop = g.add(def, undefined, "loop");
+    g.connect(src, "out", loop, "each");
+    g.output(loop, "out", "main");
+    const err = await cook(g, { tripwire: { budgetBytes: 64 } }).catch((e: unknown) => e);
+    expect((err as Error).name).toBe("TripwireBudgetError");
+    expect((err as Error).message.startsWith("tripwire: ran out of budget")).toBe(true);
+    expect((err as Error).message).not.toContain("forEach: iteration");
+  });
+
   it("repeatUntil: the same, through the round loop", async () => {
     const body = scribblingBody(true);
     const def = repeatUntilNode(
