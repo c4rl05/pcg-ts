@@ -36,12 +36,16 @@
  *   the CLI's geometry fingerprint. Copying keeps the bytes the copy
  *   produced.
  * - THE TOPOLOGY ARRAYS are copied, exactly as `cloneGeometry` copies
- *   them. They sit flat on `Geometry` as plain writable fields with no
- *   read view in front of them, so nothing would stop a write from
- *   reaching a cached input — and `topologyAliasing.test.ts` exists
- *   because writing an input's topology is a mistake worth catching, not
- *   one the type system catches. Sharing them is a separate change, and
- *   it needs its own guard first.
+ *   them, through `setTopology`. Lending them instead was BUILT AND
+ *   MEASURED on 2026-09-20 and withdrawn: it saved 0.31 / 1.95 / 6.79 MB
+ *   over the eiffel demo at plain / laced / rivets, 0.12% / 0.13% /
+ *   0.39% of what those cooks retain, because a copy is only RETAINED
+ *   when the derived geometry keeps what it was lent and nearly every
+ *   node that changes topology installs its own arrays a moment later.
+ *   See PLAN.md, "lending a geometry's topology". What that attempt DID
+ *   leave behind is the read view in front of the three arrays, which is
+ *   why they can be copied through `setTopology` — a geometry hands them
+ *   out as `ReadonlyTopology`, not as the array.
  *
  * WHAT IT COSTS, measured rather than assumed (2026-09-20, this
  * machine, counted over every node cache of a finished cook):
@@ -68,6 +72,7 @@
  * - Columns still on loan when the cook ends, by the flag: 74.3% / 74.1%
  *   / 79.9% / 74.1%. That is the number the whole design turns on — three
  *   columns in four are handed to a node that never writes them.
+ *
  */
 import { Attribute, type AttributeSet } from "./attribute.js";
 import { Geometry } from "./geometry.js";

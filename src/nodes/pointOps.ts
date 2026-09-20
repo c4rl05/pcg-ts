@@ -9,6 +9,7 @@ import {
   type AttributeSet,
   type Domain,
   type ReadonlyAttrData,
+  type ReadonlyTopology,
   Geometry,
   PRIMTYPE_ATTR,
   createPointCloud,
@@ -331,9 +332,13 @@ function requireTopologySized(geo: Geometry, who: string, where: string): void {
  * Handed a geometry's own three arrays this is the function it always was.
  */
 function appendTopologyBlock(
-  srcV2P: Uint32Array,
-  srcStart: Uint32Array,
-  srcCount: Uint32Array,
+  // The three SOURCES are read only, and a keep plan built from a whole
+  // geometry hands over that geometry's own arrays, which are read views.
+  // The three DESTINATIONS stay `Uint32Array`: this function writes them,
+  // and they are the caller's fresh output arrays.
+  srcV2P: ReadonlyTopology,
+  srcStart: ReadonlyTopology,
+  srcCount: ReadonlyTopology,
   vertexToPoint: Uint32Array,
   primVertexStart: Uint32Array,
   primVertexCount: Uint32Array,
@@ -617,9 +622,12 @@ function buildCopySelection(
 interface KeepPlan {
   readonly primSrc: Uint32Array;
   readonly vertexSrc: Uint32Array;
-  readonly vertexToPoint: Uint32Array;
-  readonly primVertexStart: Uint32Array;
-  readonly primVertexCount: Uint32Array;
+  // Read views, because `wholeSourceKeepPlan` puts the SOURCE GEOMETRY'S
+  // OWN arrays here rather than copies of them. A selected plan builds
+  // its three fresh, and a `Uint32Array` is assignable to the view.
+  readonly vertexToPoint: ReadonlyTopology;
+  readonly primVertexStart: ReadonlyTopology;
+  readonly primVertexCount: ReadonlyTopology;
 }
 
 /**

@@ -15,6 +15,10 @@
  *   all survive the boundary.
  */
 import { Geometry, type AttrData, type AttrType, type AttributeSet } from "../data/index.js";
+// By path: `installTopology` is library-internal, and the obligation it
+// carries — the geometry now OWNS these arrays — is discharged here by
+// the transfer list, which left this side the only holder.
+import { installTopology } from "../data/adoptTopology.js";
 import {
   CookCancelledError,
   GraphCycleError,
@@ -238,12 +242,12 @@ function decodeGeometry(enc: EncodedGeometryItem): Geometry {
   const geo = new Geometry();
   decodeDomain(geo.attrs.point, enc.point);
   // The topology arrays arrived through the transfer list, so this side
-  // owns them exclusively: adopt them instead of re-validating what a
-  // trusted cook already validated (`setTopology` would copy and
-  // re-check every reference).
-  geo.vertexToPoint = enc.vertexToPoint;
-  geo.primVertexStart = enc.primVertexStart;
-  geo.primVertexCount = enc.primVertexCount;
+  // owns them exclusively: `installTopology` keeps them by reference
+  // instead of re-validating what a trusted cook already validated
+  // (`setTopology` would copy and re-check every reference). It is the
+  // route because the three fields are private; assigning them was how
+  // this read before they were.
+  installTopology(geo, enc.vertexToPoint, enc.primVertexStart, enc.primVertexCount);
   decodeDomain(geo.attrs.vertex, enc.vertex);
   decodeDomain(geo.attrs.primitive, enc.primitive);
   decodeDomain(geo.attrs.detail, enc.detail);

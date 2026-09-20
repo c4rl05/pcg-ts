@@ -110,6 +110,15 @@ const ROOT_TYPE_SURFACE = [
   // holds — and the write route, `Attribute.writable()`, gives back the
   // array, so nothing is taken away that cannot be had. See src/data/types.ts.
   "ReadonlyAttrData",
+  // A geometry's three topology arrays as a reader sees them. It is the
+  // same view as `ReadonlyAttrData<Uint32Array>` and is spelled as one,
+  // but it keeps its own NAME because that is what a node author reads
+  // at the call site: `vertexToPoint: ReadonlyAttrData<Uint32Array>`
+  // sends a reader looking for an attribute that does not exist.
+  // Published because it is the type of three public getters and of
+  // `Geometry.setTopology`'s parameters; `slice()` still hands back a
+  // writable copy. See src/data/types.ts.
+  "ReadonlyTopology",
   "ResidentAttrDesc", "ResidentDesc",
   "ResidentMemberDesc", "ResidentRunContext", "ResidentRunInput", "ResidentRunResult",
   "RunFitParams", "SampleNearestPointParams", "SelfPruneParams", "SerializedConnection",

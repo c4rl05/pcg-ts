@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { cloneGeometry } from "../graph/clone.js";
 import * as root from "../index.js";
 import { Attribute, AttributeSet } from "./attribute.js";
+import { adoptTopology } from "./adoptTopology.js";
 import { deriveGeometry, isColumnShared } from "./derive.js";
 import { createTriangleMesh, Geometry, PRIMTYPE_ATTR } from "./geometry.js";
 import { DOMAINS, type Domain } from "./types.js";
@@ -116,13 +117,33 @@ describe("deriveGeometry", () => {
     );
   });
 
-  it("copies the topology arrays, which carry no read view of their own", () => {
+  it("copies the three topology arrays, which it hands out read-only", () => {
     const src = sample();
     const out = deriveGeometry(src);
     expect(Array.from(out.vertexToPoint)).toEqual(Array.from(src.vertexToPoint));
+    // COPIES, not the source's arrays: the derived geometry is what a
+    // node caches, and installing topology by reference is how a node
+    // hands its own arrays over — so two geometries holding one array is
+    // the shape `topologyAliasing.test.ts` hunts, not one to create here.
+    expect(out.vertexToPoint).not.toBe(src.vertexToPoint);
+    expect(out.primVertexStart).not.toBe(src.primVertexStart);
+    expect(out.primVertexCount).not.toBe(src.primVertexCount);
     expect(out.vertexToPoint.buffer).not.toBe(src.vertexToPoint.buffer);
-    expect(out.primVertexStart.buffer).not.toBe(src.primVertexStart.buffer);
-    expect(out.primVertexCount.buffer).not.toBe(src.primVertexCount.buffer);
+    // CONTROL: `adoptTopology` DOES install by reference, so `not.toBe`
+    // above is a test with teeth rather than a fact about typed arrays.
+    const shared = new Geometry();
+    shared.attrs.point.resize(src.pointCount);
+    adoptTopology(
+      shared,
+      src.vertexToPoint.slice(),
+      src.primVertexStart.slice(),
+      src.primVertexCount.slice(),
+    );
+    const own = shared.vertexToPoint;
+    const other = new Geometry();
+    other.attrs.point.resize(src.pointCount);
+    adoptTopology(other, own as unknown as Uint32Array, Uint32Array.of(0), Uint32Array.of(own.length));
+    expect(other.vertexToPoint).toBe(own);
   });
 
   it("lends the live prefix, not the allocation, when the source carries slack", () => {

@@ -18,6 +18,7 @@ import {
   createTriangleMesh,
   type AttrType,
   type ReadonlyAttrData,
+  type ReadonlyTopology,
 } from "../data/index.js";
 import {
   CookCancelledError,
@@ -1607,8 +1608,15 @@ async function passthrough(ev: GpuFieldEvaluator): Promise<Record<string, unknow
   const b = geoOf(fused);
   const domainEqual = (domain: "vertex" | "primitive" | "detail"): boolean =>
     allAttrsEqual(domainSnapshot(a, domain), domainSnapshot(b, domain));
+  // `slice()` on the array, not on its buffer: a topology array's read
+  // view does not hand out a buffer, because the array may be one a
+  // derived geometry was lent. The bytes compared are the same.
+  const topoBytes = (v: ReadonlyTopology): Uint8Array => {
+    const copy = v.slice();
+    return new Uint8Array(copy.buffer, copy.byteOffset, copy.byteLength);
+  };
   const topoEqual =
-    bytesEqual(new Uint8Array(a.vertexToPoint.buffer.slice(0)), new Uint8Array(b.vertexToPoint.buffer.slice(0))) &&
+    bytesEqual(topoBytes(a.vertexToPoint), topoBytes(b.vertexToPoint)) &&
     a.primitiveCount === b.primitiveCount &&
     a.vertexCount === b.vertexCount;
   const labelA = a.attrs.point.require("label");

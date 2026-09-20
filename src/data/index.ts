@@ -13,6 +13,7 @@ export {
   type Domain,
   type AttrBufferId,
   type ReadonlyAttrData,
+  type ReadonlyTopology,
 } from "./types.js";
 export * from "./attribute.js";
 // The class only, so a caller can `instanceof` the fault and read its

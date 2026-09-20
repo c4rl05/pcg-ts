@@ -1,5 +1,8 @@
 /**
- * Handing topology to a {@link Geometry} WITHOUT the defensive copy.
+ * Handing topology to a {@link Geometry} WITHOUT the defensive copy — and,
+ * since the three fields became private behind a read view, the ONLY
+ * place that can put an array on a geometry at all. `setTopology` reaches
+ * its install through here too.
  *
  * LIBRARY-INTERNAL, AND DELIBERATELY UNREACHABLE FROM EVERY ENTRY POINT.
  * No barrel re-exports this module. `src/index.ts` does re-export the
@@ -33,6 +36,33 @@
  * the validation as well, on the grounds that it owns them exclusively.
  */
 import type { Geometry } from "./geometry.js";
+import type { ReadonlyTopology } from "./types.js";
+
+/**
+ * The private storage of {@link Geometry}, reached by name because this
+ * module is its module's neighbour rather than one of its methods — the
+ * same cast `overwrite.ts` and `derive.ts` make, and for the same reason:
+ * a method on `Geometry` would be public API however it was commented,
+ * because `src/data/index.ts` re-exports the whole of `geometry.js`.
+ * `private` is a compile-time rule over ordinary properties, so this view
+ * is a cast and not a runtime trick, and the tests fail loudly if a field
+ * is renamed under it.
+ *
+ * EACH OF THE THREE IS ASSIGNED IN EXACTLY TWO PLACES: its field
+ * initializer on `Geometry`, which allocates a fresh empty array, and
+ * {@link installTopology} below. There is no third, which is what lets
+ * `adoptTopology`'s ownership rules be stated as rules about the CALLER's
+ * array rather than about who else might hold it.
+ */
+interface TopologyState {
+  _vertexToPoint: Uint32Array;
+  _primVertexStart: Uint32Array;
+  _primVertexCount: Uint32Array;
+}
+
+function topologyState(geo: Geometry): TopologyState {
+  return geo as unknown as TopologyState;
+}
 
 /**
  * The references {@link Geometry.setTopology} checks before it installs
@@ -42,9 +72,9 @@ import type { Geometry } from "./geometry.js";
  */
 export function checkTopology(
   pointCount: number,
-  vertexToPoint: Uint32Array,
-  primVertexStart: Uint32Array,
-  primVertexCount: Uint32Array,
+  vertexToPoint: ReadonlyTopology,
+  primVertexStart: ReadonlyTopology,
+  primVertexCount: ReadonlyTopology,
 ): void {
   if (primVertexStart.length !== primVertexCount.length) {
     throw new Error("setTopology: primVertexStart and primVertexCount lengths differ");
@@ -67,6 +97,12 @@ export function checkTopology(
  * size the vertex and primitive attribute sets to match. The tail both
  * paths share: `setTopology` passes its slices, `adoptTopology` the
  * caller's own arrays.
+ *
+ * IT WRITES THE PRIVATE FIELDS. The three are getters on `Geometry`, so
+ * `geo.vertexToPoint = …` compiles nowhere — including here, which is
+ * why this reaches the storage by the cast above. That is the point: one
+ * function installs all three, and a caller cannot replace one of them
+ * and leave the other two describing elements that no longer exist.
  */
 export function installTopology(
   geo: Geometry,
@@ -74,9 +110,10 @@ export function installTopology(
   primVertexStart: Uint32Array,
   primVertexCount: Uint32Array,
 ): void {
-  geo.vertexToPoint = vertexToPoint;
-  geo.primVertexStart = primVertexStart;
-  geo.primVertexCount = primVertexCount;
+  const state = topologyState(geo);
+  state._vertexToPoint = vertexToPoint;
+  state._primVertexStart = primVertexStart;
+  state._primVertexCount = primVertexCount;
   geo.attrs.vertex.resize(vertexToPoint.length);
   geo.attrs.primitive.resize(primVertexStart.length);
 }

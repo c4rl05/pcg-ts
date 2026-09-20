@@ -372,8 +372,8 @@ const PARAM_DOC_PROBE = "Number of points along X. Minimum 1.";
 // sharpest — every write must go through `Attribute.writable()`, and a
 // caller who took the geometry and wrote a column any other way would
 // edit a cached input. Their source-level tests check that no module
-// under `src/` re-exports them; only this reads the BUILT typings, where a
-// widened barrel or a d.ts bundler that inlines an internal declaration
+// under `src/` re-exports them; only this reads the BUILT typings, where
+// a widened barrel or a d.ts bundler that inlines an internal declaration
 // would actually show up.
 const INTERNAL_TYPE_NAMES = [
   "adoptTopology",

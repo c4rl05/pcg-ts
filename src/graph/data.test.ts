@@ -80,7 +80,10 @@ describe("cloneGeometry", () => {
     const dst = cloneGeometry(src);
     dst.attrs.point.require("P").set(0, 99);
     dst.attrs.point.require("density").set(1, 99);
-    dst.vertexToPoint[0] = 3;
+    // Through a cast, because a geometry hands its topology out
+    // read-only — which is what makes this question worth asking: the
+    // clone has to own its own arrays for the write to stay on this side.
+    (dst.vertexToPoint as unknown as Uint32Array)[0] = 3;
     dst.attrs.primitive.require("primtype").setString(0, "polyline");
     expect(src.attrs.point.require("P").get(0)).toBe(0);
     expect(src.attrs.point.require("density").get(1)).toBe(0.25);

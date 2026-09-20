@@ -120,6 +120,11 @@ const CASES: readonly ShapeCase[] = [
     declaration: "export class Geometry {",
     file: "src/data/geometry.ts",
     value: new Geometry(),
+    // The topology storage. Instance fields, so they are own enumerable
+    // properties at runtime however `private` reads in the source; they
+    // are what the `vertexToPoint` / `primVertexStart` /
+    // `primVertexCount` getters hand out, read-only.
+    internal: ["_vertexToPoint", "_primVertexStart", "_primVertexCount"],
     absent: ["topology"],
   },
   {

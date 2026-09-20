@@ -195,7 +195,13 @@ describe("the tripwire catches a planted mutation", () => {
       execute({ inputs }) {
         const item = inputs.in[0]!;
         if (item.kind !== "geometry") throw new Error("no geometry");
-        item.geo.vertexToPoint[1] = 0;
+        // THE CAST IS THE POINT. A topology array is read-only through
+        // the geometry, so this node has to reach around the type to
+        // write its input in place — which is exactly the mistake the
+        // tripwire is here to catch, expressed the only way it can still
+        // be expressed. `writableTopology` would fork this geometry's
+        // arrays and leave the producer's alone, so it would plant no bug.
+        (item.geo.vertexToPoint as unknown as Uint32Array)[1] = 0;
         return { out: [makeGeometryItem(cloneGeometry(item.geo))] };
       },
     });

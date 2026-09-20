@@ -25,6 +25,7 @@ import {
   type InstanceBatch,
   instanceAttributesOf,
   isDeviceResidentInstances,
+  type ReadonlyTopology,
 } from "../index.js";
 
 const encoder = new TextEncoder();
@@ -91,8 +92,17 @@ function channelFingerprint(batch: InstanceBatch): { channels?: Record<string, s
   return { channels };
 }
 
-function hashTypedArray(array: Uint32Array): string {
-  return hashBytes(new Uint8Array(array.buffer, array.byteOffset, array.byteLength));
+/**
+ * A topology array's bytes. It COPIES with `slice`, the way
+ * {@link attributeBytes} does and for the same reason: a geometry's
+ * topology arrays are lent to every geometry derived from it, so the read
+ * view does not hand out its buffer and a byte view cannot be laid over
+ * one. The hashed bytes are the array's own, so the fingerprint is
+ * unchanged.
+ */
+function hashTypedArray(array: ReadonlyTopology): string {
+  const copy = array.slice();
+  return hashBytes(new Uint8Array(copy.buffer, copy.byteOffset, copy.byteLength));
 }
 
 function geometryFingerprint(geo: Geometry): Record<string, unknown> {

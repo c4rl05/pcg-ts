@@ -54,7 +54,11 @@ export interface AttrBufferId {
  * offers — indexing, `length`, `slice`, iteration — and none of the five
  * that write (`set`, `fill`, `copyWithin`, `sort`, `reverse`). This is
  * the type of {@link Attribute.data}; the write route is
- * `Attribute.writable()`, which is also where a shared column forks.
+ * `Attribute.writable()`, which is also where a shared column forks. It
+ * is also, through {@link ReadonlyTopology}, the type of a geometry's
+ * three topology arrays — which are not shared, but are installed by
+ * reference into the object a node cache holds, so they need the same
+ * five writes refused.
  *
  * `subarray` is kept and RETYPED to return this same view, because a
  * subarray shares the buffer it was taken from: letting it come back
@@ -103,6 +107,41 @@ export type ReadonlyAttrData<T extends AttrData = AttrData> = T extends AttrData
       subarray(begin?: number, end?: number): ReadonlyAttrData<T>;
     }
   : never;
+
+/**
+ * A GEOMETRY'S TOPOLOGY ARRAY AS A READER SEES IT. The same view as a
+ * `u32` column's, and spelled as one, because what it has to refuse is
+ * the same five writes. It keeps its own NAME rather than being written
+ * out at each use: `vertexToPoint: ReadonlyAttrData<Uint32Array>` sends a
+ * reader looking for an attribute, and topology is not one.
+ *
+ * WHY IT IS READ-ONLY AT ALL. Inside the library, topology is installed
+ * BY REFERENCE: a node builds the three arrays, hands them over, and the
+ * geometry it hands them to is what the graph caches.
+ * So an in-place write through a geometry's `vertexToPoint` is a write
+ * into a node's cached output — its own, or, when the geometry came in on
+ * an input pin, an upstream node's. That is the mistake
+ * `src/nodes/topologyAliasing.test.ts` was written to catch after the
+ * fact; this refuses it at compile time.
+ *
+ * `buffer` closes to {@link AttrBufferId} for the reason it does on a
+ * column: a byte view laid over the array is a fully writable alias
+ * reached with no cast. `slice()` still copies, and is the way to bytes
+ * that may be written — `src/cli/fingerprint.ts` and
+ * `src/graph/tripwire.ts` both take it.
+ *
+ * ONLY THE STATIC TYPE CHANGES. The value handed back is the
+ * `Uint32Array` itself, so `ArrayBuffer.isView` still answers true, a
+ * structured clone still moves it, and anything reading it by index or
+ * `length` reads what it always did.
+ *
+ * THERE IS NO WRITE ROUTE, and that is deliberate rather than an
+ * omission. Topology is REPLACED, not edited: build the three arrays and
+ * install them with {@link Geometry.setTopology}, which validates them
+ * and resizes the vertex and primitive sets to match. A node that wants
+ * to change a few entries starts from `slice()`.
+ */
+export type ReadonlyTopology = ReadonlyAttrData<Uint32Array>;
 
 /** Typed-array constructor per attribute type. */
 export const ATTR_CTORS: { readonly [K in AttrType]: new (length: number) => AttrTypeMap[K] } = {

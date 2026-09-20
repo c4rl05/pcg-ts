@@ -61,6 +61,7 @@ import {
   instanceAttributesOf,
   jitterPoints,
   pointGrid,
+  pointsToPath,
   setAttribute,
   subgraphNode,
   transformPoints,
@@ -747,6 +748,67 @@ describe("the comparator", () => {
       firstDifference(warmDirty, cold, "warm", "cold"),
       "the cache half must name the corrupted producer",
     ).toContain("cache:grid");
+  });
+
+  it("catches an upstream cache whose TOPOLOGY was edited behind its owner's back", async () => {
+    // The same control, aimed at topology rather than at a column. A
+    // node's cached geometry holds the very arrays its execute allocated
+    // (the library installs topology by reference), so a node that wrote
+    // its INPUT's `vertexToPoint` would leave its producer's cache
+    // changed and every later cook would read the change. The corruption
+    // below is written through a cast, because the read view is now the
+    // only thing between the library and that write — which is exactly
+    // what makes this the control for it.
+    const build = (translate: number): Graph => {
+      const g = new Graph(5);
+      const grid = g.add(pointGrid, { countX: 6, countY: 1, countZ: 6 }, "grid");
+      const path = g.add(pointsToPath, {}, "path");
+      g.connect(grid, "out", path, "in");
+      const moved = g.add(transformPoints, { translate: [translate, 0, 0] }, "moved");
+      g.connect(path, "out", moved, "in");
+      g.output(moved, "out", "out");
+      return g;
+    };
+    const onlyOutputs = (snap: Snapshot): Snapshot =>
+      new Map([...snap].filter(([key]) => key.startsWith("out:")));
+    const topologyOf = (graph: Graph): Uint32Array => {
+      const cached = nodeCaches(graph).get("path")!.cache!.outputs;
+      const item = Object.values(cached)[0]![0]!;
+      if (item.kind !== "geometry") throw new Error("expected the path cache to hold geometry");
+      expect(item.geo.vertexToPoint.length).toBeGreaterThan(1);
+      return item.geo.vertexToPoint as unknown as Uint32Array;
+    };
+
+    // Clean first: the same sequence with no corruption must AGREE, or
+    // the corrupted run proves nothing.
+    const clean = build(0);
+    await cookSnapshot(solo(clean));
+    clean.setParam({ id: "moved" } as NodeHandle<Record<string, unknown>>, "translate", [1, 0, 0]);
+    const warmClean = (await cookSnapshot(solo(clean))).snap;
+    expectSame(warmClean, (await cookSnapshot(solo(build(1)))).snap, "warm", "cold", "unperturbed control");
+
+    // Then the same thing with `path`'s cached vertexToPoint moved.
+    const dirty = build(0);
+    await cookSnapshot(solo(dirty));
+    const v2p = topologyOf(dirty);
+    v2p[1] = v2p[0];
+    dirty.setParam({ id: "moved" } as NodeHandle<Record<string, unknown>>, "translate", [1, 0, 0]);
+    const warmDirty = (await cookSnapshot(solo(dirty))).snap;
+    const cold = (await cookSnapshot(solo(build(1)))).snap;
+    expect(
+      firstDifference(onlyOutputs(warmDirty), onlyOutputs(cold), "warm", "cold"),
+      "a corrupted producer's topology must reach the terminal",
+    ).toBeDefined();
+    // The PRODUCER's own cache entry fails too, and it is the topology
+    // that fails in it. Filtered to `path`, because the consumer
+    // recomputed from the damaged cache and copied the damage forward, so
+    // `cache:moved` differs as well and sorts first.
+    const onlyPath = (snap: Snapshot): Snapshot =>
+      new Map([...snap].filter(([key]) => key.startsWith("cache:path")));
+    expect(
+      firstDifference(onlyPath(warmDirty), onlyPath(cold), "warm", "cold"),
+      "the corrupted producer's own cache entry must fail",
+    ).toContain("topo:vertexToPoint");
   });
 
   it("reports a cook at a different seed", async () => {

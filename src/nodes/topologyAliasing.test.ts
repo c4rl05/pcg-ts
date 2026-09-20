@@ -29,7 +29,7 @@
 import { describe, expect, it } from "vitest";
 
 import { adoptTopology } from "../data/adoptTopology.js";
-import { Geometry, createPolyline } from "../data/index.js";
+import { Geometry, createPolyline, type ReadonlyTopology } from "../data/index.js";
 import { constant, length, position, sub } from "../fields/index.js";
 import {
   type DataCollection,
@@ -73,14 +73,19 @@ const vandal = defineNode<{ shift: number; mode: "write" | "adopt" }>({
     if (!src) throw new Error("test.topologyVandal: no geometry on pin in");
     if (params.shift === 0) return { out: [makeGeometryItem(cloneGeometry(src))] };
     const np = src.pointCount;
+    // EVERY WRITE HERE CASTS, and that is a result rather than a nuisance:
+    // a geometry hands its topology out read-only, so neither planted bug
+    // can be written any more without reaching around the type. The casts
+    // are what keeps the controls able to plant them.
+    const raw = (v: ReadonlyTopology): Uint32Array => v as unknown as Uint32Array;
     if (params.mode === "write") {
-      src.vertexToPoint[0] = (src.vertexToPoint[0] + params.shift) % np;
+      raw(src.vertexToPoint)[0] = (src.vertexToPoint[0] + params.shift) % np;
       return { out: [makeGeometryItem(cloneGeometry(src))] };
     }
     const out = new Geometry();
     out.attrs.point.resize(np);
-    adoptTopology(out, src.vertexToPoint, src.primVertexStart, src.primVertexCount);
-    out.vertexToPoint[0] = (out.vertexToPoint[0] + params.shift) % np;
+    adoptTopology(out, raw(src.vertexToPoint), raw(src.primVertexStart), raw(src.primVertexCount));
+    raw(out.vertexToPoint)[0] = (out.vertexToPoint[0] + params.shift) % np;
     return { out: [makeGeometryItem(out)] };
   },
 });

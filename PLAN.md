@@ -3154,6 +3154,40 @@ on-brand pitch and is exactly the thing the GPU path has never done.
 
 ## Stretch — surveyed and NOT scheduled
 
+- **Lending a geometry's topology, the way the attribute columns are
+  lent.** Measured 2026-09-20. `deriveGeometry` copies a geometry's three
+  flat `Uint32Array` topology arrays through `setTopology`; the branch
+  made it hand them over instead, with one shared flag for the set of
+  three, a `writableTopology` fork route, and a skipped revalidation.
+  **Recommendation: do not schedule. The read view that the attempt
+  needed was kept and SHIPPED; the lend itself was withdrawn.**
+
+  What a finished cook retains in topology is real — 20.0 / 132.9 /
+  138.6 MB over the eiffel demo at plain / laced / rivets, 7.8% / 8.8% /
+  7.9% of everything those cooks hold. What the lend saved of it is not:
+  0.31 / 1.95 / 6.79 MB, which is 1.5% / 1.5% / 4.9% of the topology and
+  0.12% / 0.13% / 0.39% of the cook. Over the 95-graph corpus, 504 KB of
+  64.5 MB. Distinct topology buffers fell from 4,824 / 5,679 / 7,821 to
+  2,238 / 2,454 / 2,736, so most of what stopped being duplicated was
+  SMALL: at plain, 2,586 arrays averaging 124 bytes.
+
+  WHY SO LITTLE, given that the copy happened on every derive: a copy is
+  only RETAINED when the derived geometry KEEPS what it was lent, and
+  nearly every node that changes topology builds its own three arrays and
+  installs them a moment later. Most of what the copy cost was garbage,
+  and garbage is not retained memory. There was no CPU win to chase
+  either -- `adoptTopology` had already removed the copying from the node
+  side -- and none appeared: corpus cooks interleaved OLD/NEW/OLD with the
+  two OLD timings as the noise floor, 5 of 9 rounds kept, median 1,996 ms
+  before and 2,013 ms after against a control spread reaching 113 ms.
+
+  Against that: a flag on `Geometry`, a fork route with NO production
+  caller (the audit found no in-place topology writer anywhere in `src/`),
+  and a third public type name. The part that pays is the type closure the
+  lend needed first -- the three arrays private behind a `ReadonlyTopology`
+  getter -- because it turns `topologyAliasing.test.ts`'s whole subject
+  into a compile error. That shipped; the lend did not.
+
 - **Hoisting the eiffel rivet rows' shared section frame.** Measured
   2026-09-19. At rivets depth every rivet row and its aim re-derive their
   member's section frame, `N = normalize(up - T (up . T))`, from the same

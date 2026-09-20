@@ -1,6 +1,6 @@
 import { adoptTopology, checkTopology, installTopology } from "./adoptTopology.js";
 import { AttributeSet } from "./attribute.js";
-import type { Domain } from "./types.js";
+import type { Domain, ReadonlyTopology } from "./types.js";
 
 /** Name of the primitive-type string attribute on the primitive domain. */
 export const PRIMTYPE_ATTR = "primtype";
@@ -19,10 +19,19 @@ export type PrimType = "poly" | "polyline";
  * `topology` member holding them — `geo.topology` is `undefined`, and each
  * array is READ by its own name. Writing them is
  * {@link Geometry.setTopology}, which validates every reference and
- * resizes the vertex and primitive sets to match; assigning one of the
- * three directly leaves the other two and both attribute sets describing
- * elements that no longer exist. `attrs` is a plain record keyed by domain
- * name (`geo.attrs.point`, or `geo.attrs[domain]`), not a Map.
+ * resizes the vertex and primitive sets to match — all three at once,
+ * because a set of three that did not agree would describe elements that
+ * do not exist.
+ *
+ * READ-ONLY, AND REPLACED RATHER THAN WRITTEN. Each is a getter handing
+ * out a {@link ReadonlyTopology}, so the array can be neither written
+ * through nor put back on its own. That is not fussiness about a
+ * container: a node's cached geometry holds the very arrays its execute
+ * allocated (the library installs them by reference), so writing an
+ * INPUT geometry's topology in place edits an upstream node's cache —
+ * which is what `src/nodes/topologyAliasing.test.ts` exists to catch, and
+ * what this refuses at compile time. `attrs` is a plain record keyed by
+ * domain name (`geo.attrs.point`, or `geo.attrs[domain]`), not a Map.
  *
  * Properties (not methods), in full: `attrs`, `pointCount`,
  * `primVertexCount`, `primVertexStart`, `primitiveCount`, `vertexCount`,
@@ -31,12 +40,24 @@ export type PrimType = "poly" | "polyline";
 export class Geometry {
   readonly attrs: Record<Domain, AttributeSet>;
 
+  private _vertexToPoint = new Uint32Array(0);
+  private _primVertexStart = new Uint32Array(0);
+  private _primVertexCount = new Uint32Array(0);
+
   /** Vertex i references point vertexToPoint[i]; length = vertex count. */
-  vertexToPoint: Uint32Array = new Uint32Array(0);
+  get vertexToPoint(): ReadonlyTopology {
+    return this._vertexToPoint;
+  }
+
   /** First vertex of each primitive; length = primitive count. */
-  primVertexStart: Uint32Array = new Uint32Array(0);
+  get primVertexStart(): ReadonlyTopology {
+    return this._primVertexStart;
+  }
+
   /** Vertex count of each primitive; length = primitive count. */
-  primVertexCount: Uint32Array = new Uint32Array(0);
+  get primVertexCount(): ReadonlyTopology {
+    return this._primVertexCount;
+  }
 
   constructor() {
     this.attrs = {
@@ -65,11 +86,17 @@ export class Geometry {
    * primitive attribute sets to match. The arrays are copied defensively,
    * so later caller-side mutation cannot corrupt validated topology.
    * Point attributes are untouched.
+   *
+   * It takes {@link ReadonlyTopology} rather than `Uint32Array` only so
+   * that another geometry's arrays can be handed straight to it — which
+   * is what `cloneGeometry` does. A real `Uint32Array` is assignable to
+   * it, so every existing caller still compiles, and the copy means an
+   * argument's later mutation still cannot reach the installed topology.
    */
   setTopology(
-    vertexToPoint: Uint32Array,
-    primVertexStart: Uint32Array,
-    primVertexCount: Uint32Array,
+    vertexToPoint: ReadonlyTopology,
+    primVertexStart: ReadonlyTopology,
+    primVertexCount: ReadonlyTopology,
   ): void {
     // The checks and the install are shared with the library's internal
     // no-copy path (`adoptTopology.ts`), so the two cannot drift apart;

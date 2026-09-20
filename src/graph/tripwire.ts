@@ -153,7 +153,7 @@
  *   - `"node"` mode: 5.5-6.4 s on the corpus, 73-82 s on Eiffel. That is
  *     what quadratic costs here, and why it is a debugging mode.
  */
-import { DOMAINS, type Attribute, type Domain } from "../data/index.js";
+import { DOMAINS, type Attribute, type Domain, type ReadonlyTopology } from "../data/index.js";
 import type {
   DataCollection,
   DataItem,
@@ -818,13 +818,41 @@ function watchAttribute(
 }
 
 function watchTopology(at: string, geo: {
-  vertexToPoint: Uint32Array;
-  primVertexStart: Uint32Array;
-  primVertexCount: Uint32Array;
+  vertexToPoint: ReadonlyTopology;
+  primVertexStart: ReadonlyTopology;
+  primVertexCount: ReadonlyTopology;
 }, bytes: ByteProbe[]): void {
-  watchBuffer(`${at} (geometry), topology vertexToPoint`, geo.vertexToPoint, 1, "vertex", bytes, () => geo.vertexToPoint);
-  watchBuffer(`${at} (geometry), topology primVertexStart`, geo.primVertexStart, 1, "primitive", bytes, () => geo.primVertexStart);
-  watchBuffer(`${at} (geometry), topology primVertexCount`, geo.primVertexCount, 1, "primitive", bytes, () => geo.primVertexCount);
+  watchTopologyArray(`${at} (geometry), topology vertexToPoint`, "vertex", bytes, () => geo.vertexToPoint);
+  watchTopologyArray(`${at} (geometry), topology primVertexStart`, "primitive", bytes, () => geo.primVertexStart);
+  watchTopologyArray(`${at} (geometry), topology primVertexCount`, "primitive", bytes, () => geo.primVertexCount);
+}
+
+/**
+ * Watch one topology array. It reads the array FRESH on every probe, the
+ * way {@link watchAttribute} looks its column up again: a geometry
+ * derived from another is LENT all three, and installing new topology
+ * replaces the fields, so a captured reference would go on reporting the
+ * bytes of an array the geometry no longer holds.
+ *
+ * Both readings COPY, with `slice`. A topology array is lent to every
+ * geometry derived from it, so the read view does not hand out its
+ * buffer — a byte view laid over it would be a writable alias of storage
+ * a node cache holds, which is the one escape the view exists to refuse.
+ * `before` was copied anyway (a live view would move with the very write
+ * this is built to catch), and `read()` runs once per probe per check,
+ * where the comparison that follows walks the same bytes.
+ */
+function watchTopologyArray(
+  at: string,
+  unit: string,
+  bytes: ByteProbe[],
+  live: () => ReadonlyTopology,
+): void {
+  const now = (): Uint8Array => {
+    const copy = live().slice();
+    return new Uint8Array(copy.buffer, copy.byteOffset, copy.byteLength);
+  };
+  bytes.push({ at, ctor: ctorOf(live()), tupleSize: 1, unit, before: now(), read: now });
 }
 
 /** Watch a whole typed array (no capacity slack to exclude). */

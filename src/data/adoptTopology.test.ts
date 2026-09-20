@@ -100,8 +100,13 @@ describe("Geometry.setTopology keeps its defensive copy", () => {
     count[0] = 1;
     expect(Array.from(geo.vertexToPoint)).toEqual([0, 1, 2]);
     expect(Array.from(geo.primVertexCount)).toEqual([3]);
-    geo.vertexToPoint[1] = 0;
+    // The other direction. The cast is what it takes to write an
+    // installed topology array at all now, which is the point of the
+    // read view — and it is the only way to ask this question, since the
+    // copy is exactly what makes the two sides independent.
+    (geo.vertexToPoint as unknown as Uint32Array)[1] = 0;
     expect(Array.from(v2p)).toEqual([2, 1, 2]);
+    expect(Array.from(geo.vertexToPoint)).toEqual([0, 0, 2]);
   });
 });
 
