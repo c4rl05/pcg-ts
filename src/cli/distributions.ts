@@ -396,9 +396,9 @@ function groupByValue(population: Population, ref: string, where: string): Parti
   }
   const c = singleComponent(sel, ref, "group-by");
   // WHICH reader, decided before the closure is built rather than inside
-  // it — `keyOf` runs once per element; see the note in
-  // `src/noise/worley.ts`. The f32 case threw above, so the remaining
-  // types split exactly here.
+  // it — `keyOf` runs once per element; see the
+  // note in `src/noise/worley.ts`. The f32 case threw above, so the
+  // remaining types split exactly here.
   const isText = column.type === "string";
   const keyOf = (i: number): string | number => (isText ? column.text(i, c) : column.numeric(i, c));
   const index = new Map<string | number, number>();

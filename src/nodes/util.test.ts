@@ -354,9 +354,15 @@ describe("orientQuat: one arm per axis, chosen by code and not by name", () => {
   const UL = Math.hypot(0, 1, 1);
   const UP: readonly [number, number, number] = [0, 1 / UL, 1 / UL];
 
-  /** Where a LOCAL direction lands under the orientation for `axis`. */
+  /**
+   * Where a LOCAL direction lands under the orientation for `axis`. The
+   * cast is the point of the signature elsewhere: `orientAxisCode` takes
+   * a `string`, and only a test reaches past that to check what the
+   * runtime still does with what untyped JS could hand it.
+   */
   function turned(axis: unknown, local: readonly [number, number, number]): number[] {
-    const q = orientQuat([0, 0, 0, 1], F[0], F[1], F[2], UP[0], UP[1], UP[2], orientAxisCode(axis));
+    const code = orientAxisCode(axis as string);
+    const q = orientQuat([0, 0, 0, 1], F[0], F[1], F[2], UP[0], UP[1], UP[2], code);
     return rotateVec([0, 0, 0], q[0], q[1], q[2], q[3], local[0], local[1], local[2]);
   }
 
@@ -409,10 +415,37 @@ describe("orientQuat: one arm per axis, chosen by code and not by name", () => {
 
   it("codes ORIENT_AXES by its own index, and nothing else at all", () => {
     ORIENT_AXES.forEach((axis, i) => expect(orientAxisCode(axis)).toBe(i));
-    expect(ORIENT_AXIS_PZ).toBe((ORIENT_AXES as readonly string[]).indexOf("+z"));
+    // The constant is checked by READING the list back, not by asking the
+    // list for the same index again: if "+z" ever left ORIENT_AXES, both
+    // sides of `toBe(indexOf("+z"))` would be -1 and agree.
+    expect(ORIENT_AXES[ORIENT_AXIS_PZ]).toBe("+z");
     for (const bad of ["Z", "+Z", "", "0", 0, 4, undefined, null, {}]) {
-      expect(orientAxisCode(bad)).toBe(-1);
+      expect(orientAxisCode(bad as string)).toBe(-1);
     }
+  });
+
+  it("refuses, AT COMPILE TIME, the three numbers that are not axis codes", () => {
+    // A bare number is no longer an axis. Each `@ts-expect-error` below
+    // FAILS THE BUILD if the call starts compiling — which is the whole
+    // guard the old `axis: string` gave by accident and `OrientAxisCode`
+    // now gives on purpose. They are exercised by `npm run check`
+    // (tsconfig includes `src`), not by this assertion.
+    const q: number[] = [0, 0, 0, 1];
+    // 1. `lengthComp`, the 0|1|2 naming a scale component, computed a few
+    //    lines from the call in both paths.ts and runs.ts.
+    const lengthComp: number = 1;
+    // @ts-expect-error a plain number is not an OrientAxisCode
+    orientQuat(q, 1, 0, 0, 0, 1, 0, lengthComp);
+    // 2. A literal out of range.
+    // @ts-expect-error 99 is not an OrientAxisCode either
+    orientQuat(q, 1, 0, 0, 0, 1, 0, 99);
+    // 3. A code fed back through the resolver, which would answer -1 and
+    //    silently mean "-z".
+    // @ts-expect-error orientAxisCode takes a name, never a code
+    orientQuat(q, 1, 0, 0, 0, 1, 0, orientAxisCode(ORIENT_AXIS_PZ));
+    // The one spelling that does compile, so the block proves a guard
+    // rather than a broken signature.
+    expect(orientQuat(q, 1, 0, 0, 0, 1, 0, ORIENT_AXIS_PZ)).toHaveLength(4);
   });
 
   it("takes the '-z' arm for an unrecognised axis, as the string switch did", () => {

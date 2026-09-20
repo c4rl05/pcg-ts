@@ -476,9 +476,12 @@ export function renderSvg(collection: DataCollection, opts: RenderOptions = {}):
     if (geo.primitiveCount > 0) {
       const primType = geo.attrs.primitive.get("primtype");
       // Whether the column can be READ at all, settled before the
-      // per-primitive loop rather than inside it — see the note in
-      // `src/noise/worley.ts`. A primtype of another type reads as no
-      // column at all, exactly as the inline test made it.
+      // per-primitive loop rather than inside it — see the
+      // note in `src/noise/worley.ts`. A primtype of another type reads
+      // as no column at all, exactly as the inline test made it.
+      // The `=== "polyline"` below stays put: its literal IS
+      // loop-invariant and `lookupString` would hoist it to an index,
+      // but this is a one-shot CLI SVG path, so the hoist buys nothing.
       const primTypeText =
         primType !== undefined && primType.type === "string" ? primType : undefined;
       for (let p = 0; p < geo.primitiveCount; p++) {

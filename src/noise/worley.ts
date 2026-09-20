@@ -128,7 +128,17 @@ export function worleyNoise(opts: WorleyNoiseOpts = {}): Field<1> {
       };
   // WHICH output, decided ONCE here rather than per sampled element. THE
   // CANONICAL NOTE ON WHY A PARAM STRING MUST NOT BE COMPARED INSIDE A
-  // PER-ELEMENT LOOP — every other such site in the library points here.
+  // PER-ELEMENT LOOP. Every site in the library that hoists for this
+  // reason points back with one marker phrase, unbroken on a single
+  // line, so `rg "note in .src/noise/worley\.ts"` lists all of them:
+  //
+  //     note in `src/noise/worley.ts`
+  //
+  // A PHRASE AND NOT A COUNT. A count here goes stale the next time a
+  // site is found, quietly, because nothing checks it; the grep
+  // re-derives the answer instead of asserting one. Keep the phrase off
+  // a line break when you add a site, which is the only way it can be
+  // missed.
   //
   // The sampler below runs once per point. Asking it `output === "cell"`
   // each time put a string comparison in a per-element loop, and V8

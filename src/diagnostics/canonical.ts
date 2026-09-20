@@ -25,7 +25,7 @@
  * on to hold. A name that arrives from `JSON.parse`, a concatenation or a
  * host's computation is a freshly allocated string, and a fresh string
  * compared against a source literal inside a per-element loop is the
- * shape V8 miscompiled in `src/noise/worley.ts` — see the note there.
+ * shape V8 miscompiled — see the note in `src/noise/worley.ts`.
  * Handing back the list's own string means that shape cannot form.
  *
  * Returning `undefined` rather than the value is the point of the

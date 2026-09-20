@@ -325,6 +325,47 @@ describe("stringList schemas", () => {
     ).toThrow(/param "list".*cannot accept fields/);
   });
 
+  it("refuses an enum that declares acceptsField", () => {
+    // Inert today — no enum param in the registry declares it and no
+    // resolver would honour it — but the guard the three list types
+    // already carry, and the one every hoisted enum branch rests on: an
+    // enum names the arm a node takes ONCE per cook, so a per-element
+    // value there would make the branch per-element by design. The
+    // schema is the only place that can say so.
+    expect(() =>
+      standardNode<{ mode: "a" | "b" }>({
+        type: "__test_enumField",
+        description: "test",
+        inputs: [],
+        outputs: [],
+        params: {
+          mode: {
+            type: "enum",
+            enum: ["a", "b"],
+            default: "a",
+            acceptsField: true,
+            description: "mode",
+          },
+        },
+        execute: () => ({}),
+      }),
+    ).toThrow(/param "mode".*cannot accept fields/);
+    // CONTROL: the same schema without the flag is accepted, so the test
+    // is pinning the flag rather than a typo in the rest of it.
+    expect(() =>
+      standardNode<{ mode: "a" | "b" }>({
+        type: "__test_enumOk",
+        description: "test",
+        inputs: [],
+        outputs: [],
+        params: {
+          mode: { type: "enum", enum: ["a", "b"], default: "a", description: "mode" },
+        },
+        execute: () => ({}),
+      }),
+    ).not.toThrow();
+  });
+
   it("derives defaultParams as a detached copy of the default list", () => {
     const source = ["a", "b"];
     const def = standardNode<{ list: readonly string[] }>({

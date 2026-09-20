@@ -1484,27 +1484,44 @@ export function writePolylineTangents(
 export const ORIENT_AXES = ["+x", "-x", "+y", "-y", "+z", "-z"] as const;
 
 /**
- * {@link orientQuat}'s axis, as this list's INDEX rather than its name —
- * resolved once per cook by the caller, because that function runs once
- * per element and a string compared inside a per-element loop is the
- * shape described in the note in `src/noise/worley.ts`.
- *
- * TOTAL, and deliberately so: a name that is not in the list answers -1,
- * which `orientQuat`'s switch takes on its `default` arm — the very arm
- * the old `switch (axis)` took for anything that was not one of the
- * first five names. So this changes the ANSWER for no input at all,
- * including a misspelling, `undefined` and `null`, for which `indexOf`'s
- * strict equality also answers -1. Every caller validates the name
- * against {@link ORIENT_AXES} and throws before reaching here, so the
- * fallback is a preserved behaviour rather than a policy anybody relies
- * on.
+ * An index into {@link ORIENT_AXES}, and NOTHING else that happens to be
+ * a number. The brand is the whole point: an axis code is a bare integer
+ * at runtime, so without it the type system would accept any other small
+ * integer in {@link orientQuat}'s last slot — and `lengthComp`, a 0|1|2
+ * naming a scale component, is computed a few lines from the call in
+ * both `paths.ts` and `runs.ts`. The old `axis: string` rejected that by
+ * accident; this rejects it on purpose. It costs nothing at runtime: the
+ * brand is erased, and the value is the plain index.
  */
-export function orientAxisCode(axis: unknown): number {
-  return (ORIENT_AXES as readonly unknown[]).indexOf(axis);
+export type OrientAxisCode = number & { readonly __orientAxis: unique symbol };
+
+/**
+ * {@link orientQuat}'s axis, as {@link ORIENT_AXES}' INDEX rather than
+ * its name — resolved once per cook by the caller, because that function
+ * runs once per element and a string compared inside a per-element loop
+ * is the shape described in the note in `src/noise/worley.ts`.
+ *
+ * The parameter is `string` and not `unknown` so that a CODE cannot be
+ * fed back in: `orientAxisCode(orientAxisCode(a))` would answer -1 and
+ * silently mean "-z", and the branded return type is what makes that a
+ * compile error rather than a wrong frame on every element.
+ *
+ * TOTAL at runtime all the same: a name that is not in the list answers
+ * -1, which `orientQuat`'s switch takes on its `default` arm — the very
+ * arm the old `switch (axis)` took for anything that was not one of the
+ * first five names. So this changes the ANSWER for no input at all,
+ * including a misspelling and (through a cast, or from untyped JS)
+ * `undefined` and `null`, for which `indexOf`'s strict equality also
+ * answers -1. Every caller validates the name against
+ * {@link ORIENT_AXES} and throws before reaching here, so the fallback is
+ * a preserved behaviour rather than a policy anybody relies on.
+ */
+export function orientAxisCode(axis: string): OrientAxisCode {
+  return (ORIENT_AXES as readonly string[]).indexOf(axis) as OrientAxisCode;
 }
 
 /** The code for "+z", for the callers that pass that axis as a literal. */
-export const ORIENT_AXIS_PZ = orientAxisCode("+z");
+export const ORIENT_AXIS_PZ: OrientAxisCode = orientAxisCode("+z");
 
 /** Squared-length threshold below which up and forward count as parallel. */
 export const ORIENT_PARALLEL_EPS = 1e-12;
@@ -1536,7 +1553,7 @@ export function orientQuat(
   upx: number,
   upy: number,
   upz: number,
-  axisCode: number,
+  axisCode: OrientAxisCode,
 ): number[] {
   // right = up x forward, falling back when (anti)parallel.
   let rx = upy * fz - upz * fy;

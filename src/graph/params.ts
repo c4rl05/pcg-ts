@@ -292,6 +292,9 @@ export function paramSchemaError(schema: ParamSchema): string | undefined {
       if (typeof d !== "string" || !(values as string[]).includes(d)) {
         return `default must be one of: ${(values as string[]).join(", ")}`;
       }
+      if (schema.acceptsField === true) {
+        return "cannot accept fields — an enum names a branch the node takes once per cook, not a per-element value";
+      }
       break;
     }
     case "vec3":
