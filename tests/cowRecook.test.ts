@@ -671,6 +671,25 @@ describe("the comparator", () => {
     }
   });
 
+  it("really reaches a wrapped body's caches, which the outer graph cannot see", async () => {
+    // Same argument one level down. A subgraph persists the inner graph's
+    // per-node entries across outer cooks, and the outer `_nodes` does not
+    // list them — so if this half ever came back empty, the two code
+    // subjects would silently stop covering the body they exist to cover
+    // and would still pass.
+    const built = subgraphSubject.build();
+    const snap = (await cookSnapshot(built)).snap;
+    const listed = new TextDecoder().decode(snap.get("body|nodes")!).split("\u0000");
+    // The four body nodes, plus the portal the wrapper injects.
+    expect(listed).toEqual(expect.arrayContaining(["jitter", "mark", "move", "settle"]));
+    for (const id of ["jitter", "mark", "move", "settle"]) {
+      expect(
+        [...snap.keys()].some((key) => key.startsWith(`body:${id}|`)),
+        `no cached body output for ${id}`,
+      ).toBe(true);
+    }
+  });
+
   it("catches an upstream cache that was edited behind its owner's back", async () => {
     // THE CONTROL THE WHOLE FILE RESTS ON. Every subject above passes;
     // this one shows the protocol can fail, by staging the exact fault it
