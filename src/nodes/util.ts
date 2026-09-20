@@ -11,6 +11,7 @@ import {
   type AttrType,
   type Attribute,
   type AttributeSet,
+  type ReadonlyAttrData,
 } from "../data/index.js";
 // By path: the no-copy topology hand-over and the overwrite sizing are
 // internal to the library and no barrel re-exports them (see the module
@@ -707,11 +708,21 @@ function firstOutOfRange(indices: ArrayLike<number>, count: number, srcCount: nu
  * gathers corpus-shaped maps at eiffel scale, this is the paragraph that
  * was wrong.
  */
-function gather1(out: AttrData, src: AttrData, indices: ArrayLike<number>, count: number): void {
+function gather1(
+  out: AttrData,
+  src: ReadonlyAttrData,
+  indices: ArrayLike<number>,
+  count: number,
+): void {
   for (let j = 0; j < count; j++) out[j] = src[indices[j]];
 }
 
-function gather2(out: AttrData, src: AttrData, indices: ArrayLike<number>, count: number): void {
+function gather2(
+  out: AttrData,
+  src: ReadonlyAttrData,
+  indices: ArrayLike<number>,
+  count: number,
+): void {
   for (let j = 0, d = 0; j < count; j++, d += 2) {
     const o = indices[j] * 2;
     out[d] = src[o];
@@ -719,7 +730,12 @@ function gather2(out: AttrData, src: AttrData, indices: ArrayLike<number>, count
   }
 }
 
-function gather3(out: AttrData, src: AttrData, indices: ArrayLike<number>, count: number): void {
+function gather3(
+  out: AttrData,
+  src: ReadonlyAttrData,
+  indices: ArrayLike<number>,
+  count: number,
+): void {
   for (let j = 0, d = 0; j < count; j++, d += 3) {
     const o = indices[j] * 3;
     out[d] = src[o];
@@ -728,7 +744,12 @@ function gather3(out: AttrData, src: AttrData, indices: ArrayLike<number>, count
   }
 }
 
-function gather4(out: AttrData, src: AttrData, indices: ArrayLike<number>, count: number): void {
+function gather4(
+  out: AttrData,
+  src: ReadonlyAttrData,
+  indices: ArrayLike<number>,
+  count: number,
+): void {
   for (let j = 0, d = 0; j < count; j++, d += 4) {
     const o = indices[j] * 4;
     out[d] = src[o];
@@ -740,7 +761,7 @@ function gather4(out: AttrData, src: AttrData, indices: ArrayLike<number>, count
 
 function gatherWide(
   out: AttrData,
-  src: AttrData,
+  src: ReadonlyAttrData,
   indices: ArrayLike<number>,
   count: number,
   ts: number,
@@ -889,7 +910,7 @@ export function copyElements(
       continue;
     }
     const src = attr.data;
-    const out = dst.data;
+    const out = dst.writable();
     const ts = attr.tupleSize;
     if (ts === 1) gather1(out, src, indices, count);
     else if (ts === 2) gather2(out, src, indices, count);
@@ -1597,7 +1618,7 @@ export function quatFromBasis(
  */
 export function writePolylineTangents(
   tables: readonly PolylineArcTable[],
-  pd: AttrData,
+  pd: ReadonlyAttrData,
   ps: number,
   out: Float32Array,
 ): void {

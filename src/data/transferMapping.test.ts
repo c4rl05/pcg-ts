@@ -318,8 +318,8 @@ function attrValues(attr: Attribute, count: number): number[] {
 /** Unit quad in UV space: 2 triangles, point-domain uv = xy, val = 10..40. */
 function unitQuad(): Geometry {
   const geo = createTriangleMesh([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0], [0, 1, 2, 0, 2, 3]);
-  geo.attrs.point.add("uv", "f32", 2).data.set([0, 0, 1, 0, 1, 1, 0, 1]);
-  geo.attrs.point.add("val", "f32", 1).data.set([10, 20, 30, 40]);
+  geo.attrs.point.add("uv", "f32", 2).writable().set([0, 0, 1, 0, 1, 1, 0, 1]);
+  geo.attrs.point.add("val", "f32", 1).writable().set([10, 20, 30, 40]);
   return geo;
 }
 
@@ -360,15 +360,15 @@ function terrain(n: number, seed: number): Geometry {
   tris.push(base, base + 1, base + 2); // degenerate
   const geo = createTriangleMesh(positions, tris);
   const np = geo.pointCount;
-  const uv = geo.attrs.point.add("uv", "f32", 2);
-  const val = geo.attrs.point.add("val", "f32", 1);
-  const id = geo.attrs.point.add("id", "i32", 1);
+  const uv = geo.attrs.point.add("uv", "f32", 2).writable();
+  const val = geo.attrs.point.add("val", "f32", 1).writable();
+  const id = geo.attrs.point.add("id", "i32", 1).writable();
   const P = geo.attrs.point.require("P").data;
   for (let i = 0; i < np; i++) {
-    uv.data[i * 2] = P[i * 3];
-    uv.data[i * 2 + 1] = P[i * 3 + 2];
-    val.data[i] = Math.fround(rand() * 100);
-    id.data[i] = i;
+    uv[i * 2] = P[i * 3];
+    uv[i * 2 + 1] = P[i * 3 + 2];
+    val[i] = Math.fround(rand() * 100);
+    id[i] = i;
   }
   return geo;
 }
@@ -420,7 +420,7 @@ describe("transferUv", () => {
     // winning triangle is observable: triangle 0 corners carry 1,2,3 and
     // triangle 1 corners 4,5,6.
     const src = unitQuad();
-    src.attrs.vertex.add("cv", "f32", 1).data.set([1, 2, 3, 4, 5, 6]);
+    src.attrs.vertex.add("cv", "f32", 1).writable().set([1, 2, 3, 4, 5, 6]);
     const dst = cloudWithUv([
       [0.5, 0.5],
       [0.25, 0.25],
@@ -435,9 +435,9 @@ describe("transferUv", () => {
     // Same 4 points, but the two triangles map to disjoint UV islands via
     // per-corner UVs. Point-domain UVs also exist and must be ignored.
     const src = createTriangleMesh([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0], [0, 1, 2, 0, 2, 3]);
-    src.attrs.vertex.add("uv", "f32", 2).data.set([0, 0, 1, 0, 1, 1, 10, 0, 11, 1, 10, 1]);
-    src.attrs.point.add("uv", "f32", 2).data.set([50, 50, 51, 50, 51, 51, 50, 51]);
-    src.attrs.point.add("val", "f32", 1).data.set([10, 20, 30, 40]);
+    src.attrs.vertex.add("uv", "f32", 2).writable().set([0, 0, 1, 0, 1, 1, 10, 0, 11, 1, 10, 1]);
+    src.attrs.point.add("uv", "f32", 2).writable().set([50, 50, 51, 50, 51, 51, 50, 51]);
+    src.attrs.point.add("val", "f32", 1).writable().set([10, 20, 30, 40]);
     const dst = cloudWithUv([
       [0.5, 0.25], // island A (triangle 0)
       [10.4, 0.6], // island B (triangle 1)
@@ -469,7 +469,7 @@ describe("transferUv", () => {
       [5, 5],
       [Number.NaN, 0.5],
     ]);
-    dst.attrs.point.add("val", "f32", 1).data.set([999, 999, 999]);
+    dst.attrs.point.add("val", "f32", 1).writable().set([999, 999, 999]);
     const { attribute, missCount } = transferUv(dst, src, "val");
     expect(missCount).toBe(2);
     const got = attrValues(attribute, 3);
@@ -482,7 +482,7 @@ describe("transferUv", () => {
       [0.5, 0.25],
       [5, 5],
     ]);
-    dst2.attrs.point.add("val", "i32", 1).data.set([777, 777]);
+    dst2.attrs.point.add("val", "i32", 1).writable().set([777, 777]);
     const replaced = transferUv(dst2, src, "val");
     expect(replaced.attribute.type).toBe("f32");
     expect(attrValues(replaced.attribute, 2)[1]).toBe(0);
@@ -490,10 +490,10 @@ describe("transferUv", () => {
 
   it("applies the per-type interpolation matrix (f32 interp, others dominant)", () => {
     const src = unitQuad();
-    src.attrs.point.add("v3", "f32", 3).data.set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-    src.attrs.point.add("iv", "i32", 1).data.set([100, 200, 300, 400]);
-    src.attrs.point.add("ui", "u32", 1).data.set([7, 8, 9, 10]);
-    src.attrs.point.add("bv", "bool", 1).data.set([0, 1, 1, 0]);
+    src.attrs.point.add("v3", "f32", 3).writable().set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    src.attrs.point.add("iv", "i32", 1).writable().set([100, 200, 300, 400]);
+    src.attrs.point.add("ui", "u32", 1).writable().set([7, 8, 9, 10]);
+    src.attrs.point.add("bv", "bool", 1).writable().set([0, 1, 1, 0]);
     const sv = src.attrs.point.add("sv", "string", 1);
     ["a", "b", "c", "d"].forEach((s, i) => sv.setString(i, s));
     // Exactly-representable UVs so the weight arithmetic is exact:
@@ -546,9 +546,9 @@ describe("transferUv", () => {
     // point j samples the value at corner (j+1) % 4 — a non-identity
     // mapping, so clobbering the shared storage mid-write would corrupt it.
     const geo = createTriangleMesh([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0], [0, 1, 2, 0, 2, 3]);
-    geo.attrs.vertex.add("uv", "f32", 2).data.set([0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1]);
-    geo.attrs.point.add("uv", "f32", 2).data.set([1, 0, 1, 1, 0, 1, 0, 0]);
-    geo.attrs.point.add("val", "f32", 1).data.set([10, 20, 30, 40]);
+    geo.attrs.vertex.add("uv", "f32", 2).writable().set([0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1]);
+    geo.attrs.point.add("uv", "f32", 2).writable().set([1, 0, 1, 1, 0, 1, 0, 0]);
+    geo.attrs.point.add("val", "f32", 1).writable().set([10, 20, 30, 40]);
     const { attribute, missCount } = transferUv(geo, geo, "val");
     expect(missCount).toBe(0);
     expect(attrValues(attribute, 4)).toEqual([20, 30, 40, 10]);
@@ -557,10 +557,10 @@ describe("transferUv", () => {
   it("treats an all-degenerate triangulation as all-miss", () => {
     const geo = createTriangleMesh([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0], [0, 1, 2, 0, 2, 3]);
     // All UVs collinear -> every triangle has zero UV area -> skipped.
-    geo.attrs.point.add("uv", "f32", 2).data.set([0, 0, 1, 1, 2, 2, 3, 3]);
-    geo.attrs.point.add("val", "f32", 1).data.set([10, 20, 30, 40]);
+    geo.attrs.point.add("uv", "f32", 2).writable().set([0, 0, 1, 1, 2, 2, 3, 3]);
+    geo.attrs.point.add("val", "f32", 1).writable().set([10, 20, 30, 40]);
     const dst = cloudWithUv([[1, 1]]);
-    dst.attrs.point.add("val", "f32", 1).data.set([555]);
+    dst.attrs.point.add("val", "f32", 1).writable().set([555]);
     const { attribute, missCount } = transferUv(dst, geo, "val");
     expect(missCount).toBe(1);
     expect(attrValues(attribute, 1)).toEqual([555]);
@@ -579,13 +579,13 @@ describe("transferUv", () => {
       [0, 0, 0, 3, 3, 0, 7, 7, 0, Q + 4, Q + 4, 0, Q + 8, Q + 4, 0, Q + 8, Q + 8, 0],
       [0, 1, 2, 3, 4, 5],
     );
-    geo.attrs.point.add("uv", "f32", 2).data.set([
+    geo.attrs.point.add("uv", "f32", 2).writable().set([
       // Sliver: legal (non-degenerate) UV area of ~4 * 2^-30.
       2 ** -7, 2 ** -7 - 2 ** -30, 3, 3, 7, 7,
       // Decoy triangle near Q so the grid reaches Q's cell at fine sizes.
       Q + 4, Q + 4, Q + 8, Q + 4, Q + 8, Q + 8,
     ]);
-    geo.attrs.point.add("val", "f32", 1).data.set([10, 20, 30, 100, 200, 300]);
+    geo.attrs.point.add("val", "f32", 1).writable().set([10, 20, 30, 100, 200, 300]);
     const queries = [
       [Q, Q], // far along the sliver's carrier line -> must MISS
       [Q + 6, Q + 6], // on the decoy's A-C edge -> hits the decoy
@@ -593,7 +593,7 @@ describe("transferUv", () => {
     let baseline: number[] | null = null;
     for (const cellSize of [undefined, 64, 1e9]) {
       const dst = cloudWithUv(queries);
-      dst.attrs.point.add("val", "f32", 1).data.set([999, 999]);
+      dst.attrs.point.add("val", "f32", 1).writable().set([999, 999]);
       const opts = cellSize === undefined ? {} : { cellSize };
       const { attribute, missCount } = transferUv(dst, geo, "val", opts);
       const got = attrValues(attribute, 2);
@@ -656,8 +656,8 @@ function groundQuad(): Geometry {
     [0, 0, 0, 10, 0, 0, 10, 0, 10, 0, 0, 10],
     [0, 1, 2, 0, 2, 3],
   );
-  geo.attrs.point.add("val", "f32", 1).data.set([10, 20, 30, 40]);
-  geo.attrs.point.add("id", "i32", 1).data.set([0, 1, 2, 3]);
+  geo.attrs.point.add("val", "f32", 1).writable().set([10, 20, 30, 40]);
+  geo.attrs.point.add("id", "i32", 1).writable().set([0, 1, 2, 3]);
   return geo;
 }
 
@@ -724,7 +724,7 @@ describe("transferRaycast", () => {
     pts.push([2, 8, 2], [3, 8, 3]);
     dirs.push(0, 0, 0, Number.NaN, -1, 0); // zero and non-finite: misses
     const dst = cloudAt(pts);
-    dst.attrs.point.add("dir", "f32", 3).data.set(dirs);
+    dst.attrs.point.add("dir", "f32", 3).writable().set(dirs);
     const hits = refRaycast(dst, src, { dirAttr: "dir" });
     const nd = dst.pointCount;
     const { attribute, missCount } = transferRaycast(dst, src, "val", {
@@ -742,7 +742,7 @@ describe("transferRaycast", () => {
     // Vertex-domain values differ across the shared diagonal; a ray
     // through the diagonal hits both triangles at exactly t = 7.
     const src = groundQuad();
-    src.attrs.vertex.add("cv", "f32", 1).data.set([1, 2, 3, 4, 5, 6]);
+    src.attrs.vertex.add("cv", "f32", 1).writable().set([1, 2, 3, 4, 5, 6]);
     const dst = cloudAt([
       [5, 7, 5],
       [2.5, 7, 2.5],
@@ -767,7 +767,7 @@ describe("transferRaycast", () => {
       [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7],
     );
     const val = geo.attrs.point.add("val", "f32", 1);
-    val.data.set([1, 1, 1, 1, 2, 2, 2, 2]);
+    val.writable().set([1, 1, 1, 1, 2, 2, 2, 2]);
     const above = cloudAt([[5, 8, 2.5]]);
     expect(attrValues(transferRaycast(above, geo, "val").attribute, 1)).toEqual([2]);
     const between = cloudAt([[5, 3, 2.5]]);
@@ -782,7 +782,7 @@ describe("transferRaycast", () => {
     const src = groundQuad();
     const mk = (): Geometry => {
       const d = cloudAt([[5, 7, 2.5]]);
-      d.attrs.point.add("val", "f32", 1).data.set([999]);
+      d.attrs.point.add("val", "f32", 1).writable().set([999]);
       return d;
     };
     expect(transferRaycast(mk(), src, "val", { maxDistance: 6.9 }).missCount).toBe(1);
@@ -796,7 +796,7 @@ describe("transferRaycast", () => {
   it("rays parallel to the surface (grazing) miss", () => {
     const src = groundQuad();
     const dst = cloudAt([[5, 0, 5]]); // on the plane, casting along it
-    dst.attrs.point.add("val", "f32", 1).data.set([123]);
+    dst.attrs.point.add("val", "f32", 1).writable().set([123]);
     const { missCount, attribute } = transferRaycast(dst, src, "val", {
       direction: [1, 0, 0],
     });
@@ -806,8 +806,8 @@ describe("transferRaycast", () => {
 
   it("applies the per-type matrix and the dominant-corner tie rule", () => {
     const src = groundQuad();
-    src.attrs.point.add("ui", "u32", 1).data.set([7, 8, 9, 10]);
-    src.attrs.point.add("bv", "bool", 1).data.set([0, 1, 1, 0]);
+    src.attrs.point.add("ui", "u32", 1).writable().set([7, 8, 9, 10]);
+    src.attrs.point.add("bv", "bool", 1).writable().set([0, 1, 1, 0]);
     const sv = src.attrs.point.add("sv", "string", 1);
     ["a", "b", "c", "d"].forEach((s, i) => sv.setString(i, s));
     // Hit at (5,0,5) on the diagonal: w = (0.5, 0, 0.5) — weight tie between
@@ -828,7 +828,7 @@ describe("transferRaycast", () => {
       [off, 0, off, off + 10, 0, off, off + 10, 0, off + 10, off, 0, off + 10],
       [0, 1, 2, 0, 2, 3],
     );
-    src.attrs.point.add("val", "f32", 1).data.set([10, 20, 30, 40]);
+    src.attrs.point.add("val", "f32", 1).writable().set([10, 20, 30, 40]);
     const dst = cloudAt([
       [off + 5, 7, off + 2.5],
       [off - 5, 7, off + 5],
@@ -900,8 +900,8 @@ describe("primitive-domain source attributes", () => {
   /** Unit quad (2 triangles) carrying per-primitive f32 / i32 / string. */
   function quadWithPrimAttrs(): Geometry {
     const geo = unitQuad();
-    geo.attrs.primitive.add("pval", "f32", 1).data.set([7, 9]);
-    geo.attrs.primitive.add("pid", "i32", 1).data.set([70, 90]);
+    geo.attrs.primitive.add("pval", "f32", 1).writable().set([7, 9]);
+    geo.attrs.primitive.add("pid", "i32", 1).writable().set([70, 90]);
     const tag = geo.attrs.primitive.add("ptag", "string", 1);
     tag.setString(0, "lower");
     tag.setString(1, "upper");
@@ -911,7 +911,7 @@ describe("primitive-domain source attributes", () => {
   /** Ground quad (2 triangles, y=0, xz in [0,10]) with per-primitive f32. */
   function groundWithPrimAttr(): Geometry {
     const geo = groundQuad();
-    geo.attrs.primitive.add("pval", "f32", 1).data.set([7, 9]);
+    geo.attrs.primitive.add("pval", "f32", 1).writable().set([7, 9]);
     return geo;
   }
 
@@ -971,8 +971,8 @@ describe("primitive-domain source attributes", () => {
   // interpolated answer, and it is NOT the value.
   it("never interpolates a primitive value (exactness witness)", () => {
     const src = quadWithPrimAttrs();
-    src.attrs.primitive.add("inf", "f32", 1).data.set([Infinity, Infinity]);
-    src.attrs.point.add("inf", "f32", 1).data.set([Infinity, Infinity, Infinity, Infinity]);
+    src.attrs.primitive.add("inf", "f32", 1).writable().set([Infinity, Infinity]);
+    src.attrs.point.add("inf", "f32", 1).writable().set([Infinity, Infinity, Infinity, Infinity]);
     // uv (0.5, 0) sits on triangle 0's edge uv(0,0)-uv(1,0): w = (0.5, 0.5, 0).
     const edgeQuery = (): Geometry => cloudWithUv([[0.5, 0]]);
     const interpolated = transferUv(edgeQuery(), src, "inf", { attrDomain: "point" });
@@ -985,8 +985,8 @@ describe("primitive-domain source attributes", () => {
     // Same witness through raycast: a ray down onto (5, 0, 0) lies on
     // triangle 0's edge A-B, giving w = (0.5, 0.5, 0) exactly.
     const rsrc = groundWithPrimAttr();
-    rsrc.attrs.primitive.add("inf", "f32", 1).data.set([Infinity, Infinity]);
-    rsrc.attrs.point.add("inf", "f32", 1).data.set([Infinity, Infinity, Infinity, Infinity]);
+    rsrc.attrs.primitive.add("inf", "f32", 1).writable().set([Infinity, Infinity]);
+    rsrc.attrs.point.add("inf", "f32", 1).writable().set([Infinity, Infinity, Infinity, Infinity]);
     const rayQuery = (): Geometry => cloudAt([[5, 10, 0]]);
     const rInterp = transferRaycast(rayQuery(), rsrc, "inf", { attrDomain: "point" });
     expect(rInterp.missCount).toBe(0);
@@ -1035,7 +1035,7 @@ describe("primitive-domain source attributes", () => {
     // A polyline network has no triangles at all, whatever domain the
     // attribute is on: uv and raycast can never reach one.
     const road = createPolyline([0, 0, 0, 1, 0, 0, 2, 0, 0]);
-    road.attrs.primitive.add("width", "f32", 1).data.set([3]);
+    road.attrs.primitive.add("width", "f32", 1).writable().set([3]);
     expect(() => transferUv(dst, road, "width", { attrDomain: "primitive" })).toThrow(
       /polyline\/edge network has none/,
     );

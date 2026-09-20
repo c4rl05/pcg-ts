@@ -138,7 +138,7 @@ describe("toBufferGeometry", () => {
     const geo = new Geometry();
     const P = geo.attrs.point.add("P", "f32", 3);
     geo.attrs.point.resize(4);
-    P.data.set([0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1]);
+    P.writable().set([0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1]);
     geo.setTopology(Uint32Array.of(0, 1, 2, 3), Uint32Array.of(0), Uint32Array.of(4));
     geo.attrs.primitive.add(PRIMTYPE_ATTR, "string", 1, "poly");
 
@@ -218,7 +218,7 @@ describe("toBufferGeometry", () => {
     const geo = new Geometry();
     const P = geo.attrs.point.add("P", "f32", 3);
     geo.attrs.point.resize(4);
-    P.data.set([0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 1]);
+    P.writable().set([0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 1]);
     geo.setTopology(Uint32Array.of(0, 1, 2, 0, 3), Uint32Array.of(0, 3), Uint32Array.of(3, 2));
     geo.attrs.primitive.add(PRIMTYPE_ATTR, "string", 1, "poly");
 
@@ -230,7 +230,7 @@ describe("toBufferGeometry", () => {
     const allBad = new Geometry();
     const Q = allBad.attrs.point.add("P", "f32", 3);
     allBad.attrs.point.resize(2);
-    Q.data.set([0, 0, 0, 1, 0, 0]);
+    Q.writable().set([0, 0, 0, 1, 0, 0]);
     allBad.setTopology(Uint32Array.of(0, 1), Uint32Array.of(0), Uint32Array.of(2));
     allBad.attrs.primitive.add(PRIMTYPE_ATTR, "string", 1, "poly");
     expect(() => toBufferGeometry(allBad)).toThrow(
@@ -415,7 +415,7 @@ describe("toLineGeometry", () => {
     const geo = new Geometry();
     const P = geo.attrs.point.add("P", "f32", 3);
     geo.attrs.point.resize(3);
-    P.data.set([0, 0, 0, 1, 0, 0, 2, 0, 0]);
+    P.writable().set([0, 0, 0, 1, 0, 0, 2, 0, 0]);
     geo.setTopology(Uint32Array.of(0, 1, 1, 2), Uint32Array.of(0, 2), Uint32Array.of(2, 2));
     expect(geo.attrs.primitive.get(PRIMTYPE_ATTR)).toBeUndefined();
     expect(pairs(toLineGeometry(geo).getIndex()!.array)).toEqual([

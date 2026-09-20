@@ -575,9 +575,11 @@ export class GpuFieldEvaluator implements GpuFieldResolver {
         const attr = set.require(input.name);
         const n = count * input.tupleSize;
         let data: ArrayBufferView & { length: number };
-        if (attr.data instanceof Uint8Array) {
+        if (attr.type === "bool") {
           const widened = new Uint32Array(n);
-          for (let i = 0; i < n; i++) widened[i] = attr.data[i];
+          // Hoisted: `data` is an accessor now.
+          const bits = attr.data;
+          for (let i = 0; i < n; i++) widened[i] = bits[i];
           data = widened;
         } else {
           data = attr.data.subarray(0, n);

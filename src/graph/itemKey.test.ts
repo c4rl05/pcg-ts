@@ -21,9 +21,9 @@ function cloudAt(positions: number[][], seeds?: number[]): Geometry {
   positions.forEach((p, i) => P.setTuple(i, p));
   if (seeds !== undefined) {
     // `createPointCloud` already carries the standard `seed` column.
-    const seed = geo.attrs.point.require("seed");
+    const seed = geo.attrs.point.require("seed").writable();
     seeds.forEach((s, i) => {
-      seed.data[i] = s;
+      seed[i] = s;
     });
   }
   return geo;

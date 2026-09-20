@@ -103,9 +103,11 @@ export function dispatchTask(
   const inputs = kernel.inputs.map((input) => {
     const attr = set.require(input.name);
     const n = count * input.tupleSize;
-    if (attr.data instanceof Uint8Array) {
+    if (attr.type === "bool") {
       const widened = new Uint32Array(n);
-      for (let i = 0; i < n; i++) widened[i] = attr.data[i];
+      // Hoisted: `data` is an accessor now.
+      const bits = attr.data;
+      for (let i = 0; i < n; i++) widened[i] = bits[i];
       return { binding: input.binding, data: toBase64(widened) };
     }
     return { binding: input.binding, data: toBase64(attr.data.subarray(0, n)) };

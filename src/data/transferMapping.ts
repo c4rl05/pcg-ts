@@ -66,7 +66,7 @@
  */
 import type { Attribute, AttributeSet } from "./attribute.js";
 import { PRIMTYPE_ATTR, type Geometry } from "./geometry.js";
-import type { AttrData, AttrDefault } from "./types.js";
+import type { AttrDefault, ReadonlyAttrData } from "./types.js";
 
 /**
  * Containment slack on normalized barycentric coordinates: a coordinate as
@@ -338,7 +338,14 @@ function writeMapped(
 
   // Snapshot source values if writing in place would clobber them
   // (transfer onto the same geometry/attribute).
-  let readData: AttrData = srcAttr.data;
+  //
+  // STILL AN IDENTITY TEST, and copy-on-write is what keeps it enough,
+  // for the reason `transferNearest` gives at its own copy of this guard:
+  // a destination column that merely SHARES the source's buffer is a
+  // different object, and the `writable()` below gives it storage of its
+  // own before the first byte lands — including, on the in-place path,
+  // the prior values a miss keeps, because a fork copies what was there.
+  let readData: ReadonlyAttrData = srcAttr.data;
   let readStrings: readonly string[] = srcAttr.stringTable;
   if (existing === srcAttr) {
     readData = srcAttr.data.slice();
@@ -352,7 +359,7 @@ function writeMapped(
 
   let missCount = 0;
   if (srcAttr.type === "f32" && !constantPerTriangle) {
-    const outData = out.data;
+    const outData = out.writable();
     for (let j = 0; j < nd; j++) {
       if (hit[j] === 0) {
         missCount++;
@@ -378,7 +385,7 @@ function writeMapped(
   // order). For a primitive source all three corner elements are the same
   // primitive, so the choice is a formality and the value arrives verbatim.
   const isString = srcAttr.type === "string";
-  const outData = out.data;
+  const outData = out.writable();
   for (let j = 0; j < nd; j++) {
     if (hit[j] === 0) {
       missCount++;
@@ -667,7 +674,7 @@ export function transferUv(
 /** Ray direction for every destination point, resolved once per call. */
 interface RayDirection {
   /** Per-point direction data, or null when one constant direction applies. */
-  readonly dirData: Float32Array | null;
+  readonly dirData: ReadonlyAttrData<Float32Array> | null;
   readonly dirStride: number;
   /** Normalized constant direction. Read only when `dirData` is null. */
   readonly cdx: number;
@@ -731,7 +738,7 @@ interface CompactedTriangles {
  */
 function compactRaycastTriangles(
   src: Geometry,
-  pd: Float32Array,
+  pd: ReadonlyAttrData<Float32Array>,
   ps: number,
   attrDomain: TransferAttrDomain,
   fn: string,

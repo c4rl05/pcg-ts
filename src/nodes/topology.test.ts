@@ -985,7 +985,7 @@ describe("connectPoints with a per-point radius", () => {
     reaches: readonly number[],
   ): Geometry {
     const geo = cloud(positions);
-    geo.attrs.point.add("reach", "f32", 1, 0).data.set(reaches);
+    geo.attrs.point.add("reach", "f32", 1, 0).writable().set(reaches);
     return geo;
   }
   const reachField = () => attribute("reach");

@@ -656,11 +656,11 @@ export const pathCoverage = standardNode<
     // Written only after every read: a slot may legitimately name a column
     // the loop above was still reading, and replace() reuses storage.
     if (covered) {
-      set.replace(params.coveredAttr, "bool", 1).data.set(covered.subarray(0, n));
+      set.replace(params.coveredAttr, "bool", 1).writable().set(covered.subarray(0, n));
     }
     if (hits) {
       const attr = set.replace(params.hitsAttr, "u32", 1, 0);
-      const data = attr.data;
+      const data = attr.writable();
       for (let i = 0; i < n; i++) data[i] = hits[i];
     }
     return { out: [makeGeometryItem(geo)] };

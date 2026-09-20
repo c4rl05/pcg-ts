@@ -80,7 +80,7 @@ describe("resizeForOverwrite", () => {
     const set = new AttributeSet();
     const a = set.add("a", "i32", 1, 9);
     set.resize(5); // capacity 8
-    a.data.set([1, 2, 3, 4, 5]);
+    a.writable().set([1, 2, 3, 4, 5]);
     resizeForOverwrite(set, 3);
     expect(set.capacity).toBe(8);
     expect(set.count).toBe(3);
@@ -93,7 +93,7 @@ describe("resizeForOverwrite", () => {
     const set = new AttributeSet();
     const a = set.add("a", "f32", 1, 3);
     resizeForOverwrite(set, 9);
-    a.data.set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    a.writable().set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     set.resize(10);
     expect(set.capacity).toBe(18);
     expect(Array.from(a.data.subarray(0, 10))).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 3]);

@@ -637,10 +637,10 @@ export const sweepProfile = standardNode<
     const out = new Geometry();
     copyElements(src.attrs.point, out.attrs.point, srcPoint, nPoints);
     const P = out.attrs.point.require("P");
-    const pOut = P.data;
+    const pOut = P.writable();
     const pStride = P.tupleSize;
-    const normal = out.attrs.point.replace("normal", "f32", 3, [0, 0, 0]).data;
-    const uv = out.attrs.point.replace("uv", "f32", 2, [0, 0]).data;
+    const normal = out.attrs.point.replace("normal", "f32", 3, [0, 0, 0]).writable();
+    const uv = out.attrs.point.replace("uv", "f32", 2, [0, 0]).writable();
 
     const srcP = src.attrs.point.require("P");
     const pd = srcP.data;
@@ -1239,10 +1239,10 @@ export const extrudePolygon = standardNode<
     const out = new Geometry();
     copyElements(src.attrs.point, out.attrs.point, srcPoint, nPoints);
     const P = out.attrs.point.require("P");
-    const pOut = P.data;
+    const pOut = P.writable();
     const pStride = P.tupleSize;
-    const normal = out.attrs.point.replace("normal", "f32", 3, [0, 0, 0]).data;
-    const uv = out.attrs.point.replace("uv", "f32", 2, [0, 0]).data;
+    const normal = out.attrs.point.replace("normal", "f32", 3, [0, 0, 0]).writable();
+    const uv = out.attrs.point.replace("uv", "f32", 2, [0, 0]).writable();
 
     const q: number[] = [0, 0, 0, 1];
     const c1: number[] = [0, 0, 0];

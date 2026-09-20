@@ -321,11 +321,16 @@ describe("fused-run non-finite reporting: what the scan may read", () => {
       const id = set.add("id", "u32", 1); // Uint32Array
       const active = set.add("active", "bool", 1); // Uint8Array
       set.resize(4);
+      // After the resize, never before it: the resize reallocates, so an
+      // array taken at `add` time would be the empty one.
+      const materialData = material.writable();
+      const idData = id.writable();
+      const activeData = active.writable();
       for (let i = 0; i < 4; i++) {
         P.setTuple(i, [i, i, i]);
-        material.data[i] = 0x7fc00000; // f32 bits of NaN
-        id.data[i] = 0x7f800000; // f32 bits of +Infinity
-        active.data[i] = 0xff;
+        materialData[i] = 0x7fc00000; // f32 bits of NaN
+        idData[i] = 0x7f800000; // f32 bits of +Infinity
+        activeData[i] = 0xff;
       }
       P.setTuple(1, [0, NaN, 0]);
       return { geo };
@@ -347,13 +352,16 @@ describe("fused-run non-finite reporting: what the scan may read", () => {
       const P = set.add("P", "f32", 3);
       const tail = set.add("tail", "f32", 1);
       set.resize(4);
+      // After the resize, and read through the same array it is written
+      // through: the column is both measured and filled here.
+      const tailData = tail.writable();
       for (let i = 0; i < 4; i++) {
         P.setTuple(i, [i, i, i]);
-        tail.data[i] = i;
+        tailData[i] = i;
       }
       // Past `count`, inside `capacity`: unreachable through the geometry.
-      tailScalars = tail.data.length - set.count * tail.tupleSize;
-      for (let i = set.count * tail.tupleSize; i < tail.data.length; i++) tail.data[i] = NaN;
+      tailScalars = tailData.length - set.count * tail.tupleSize;
+      for (let i = set.count * tail.tupleSize; i < tailData.length; i++) tailData[i] = NaN;
       P.setTuple(3, [NaN, 0, 0]);
       return { geo };
     });

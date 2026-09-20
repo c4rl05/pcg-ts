@@ -77,7 +77,13 @@
  * contradicts itself.
  */
 import { PRIMTYPE_ATTR } from "../data/index.js";
-import type { AttrData, AttrDefault, Attribute, Geometry } from "../data/index.js";
+import type {
+  AttrData,
+  AttrDefault,
+  Attribute,
+  Geometry,
+  ReadonlyAttrData,
+} from "../data/index.js";
 import { cloneGeometry, makeGeometryItem } from "../graph/index.js";
 import { standardNode } from "./registry.js";
 import { CANCEL_STRIDE, polylineWalks, requireGeometry, requireReportSlot } from "./util.js";
@@ -119,7 +125,7 @@ function requireDistinctNames(names: readonly string[], param: string, role: str
 /** One shifted column, resolved once before a single point is read. */
 interface Shifted {
   /** The input's storage for the attribute being read. */
-  readonly srcData: AttrData;
+  readonly srcData: ReadonlyAttrData;
   /** The output column it is written into (same type and tuple size). */
   readonly dstData: AttrData;
   /** Components per element, shared by both sides. */
@@ -262,8 +268,11 @@ export const pathShift = standardNode<PathShiftParams, PathShiftInputs, PathShif
     // cloneGeometry is the only helper that preserves topology, and it is
     // also what keeps this node pure: the input is a cached upstream object
     // and must never be mutated. The source columns above stay the INPUT'S,
-    // which the deep copy makes safe: nothing written below can be read back
-    // as a source value.
+    // and it is the copy-on-write fork that makes that safe rather than a
+    // copy — the derived columns LEND the input's storage until one is
+    // written. Every destination column below is taken through
+    // `writable()`, which gives it storage of its own first, so nothing
+    // written below can be read back as a source value.
     const geo = cloneGeometry(src);
     const outSet = geo.attrs.point;
     // `polylineWalks`, not `polylineArcTables`: a shift reads no distance,
@@ -289,7 +298,7 @@ export const pathShift = standardNode<PathShiftParams, PathShiftInputs, PathShif
       const dst = outSet.replace(outNames[i], a.type, a.tupleSize, a.defaultValue as AttrDefault);
       columns.push({
         srcData: a.data,
-        dstData: dst.data,
+        dstData: dst.writable(),
         ts: a.tupleSize,
         strings: a.type === "string" ? { table: a.stringTable, dst } : null,
       });
@@ -378,7 +387,7 @@ export const pathShift = standardNode<PathShiftParams, PathShiftInputs, PathShif
       // shift only. An inherited 1 is how a point with no path gets to claim
       // it found a neighbour.
       const flag = outSet.replace(params.hitAttr, "bool", 1);
-      flag.data.set(hit.subarray(0, n));
+      flag.writable().set(hit.subarray(0, n));
     }
     return { out: [makeGeometryItem(geo)] };
   },

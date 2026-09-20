@@ -279,7 +279,7 @@ describe("sweepProfile attributes", () => {
   it("copies input point attributes around the ring without interpolating", async () => {
     const path = straight(3);
     const tag = path.attrs.point.add("tag", "f32", 1, 0);
-    tag.data.set([10, 20, 30]);
+    tag.writable().set([10, 20, 30]);
     const geo = await sweep(path, { caps: false });
     const out = geo.attrs.point.require("tag");
     for (let ring = 0; ring < 3; ring++) {
@@ -290,7 +290,7 @@ describe("sweepProfile attributes", () => {
   it("gathers input primitive attributes onto the triangles that came from them", async () => {
     const two = twoPaths();
     const width = two.attrs.primitive.add("roadWidth", "f32", 1, 0);
-    width.data.set([1.5, 2.5]);
+    width.writable().set([1.5, 2.5]);
     const geo = await sweep(two, { caps: false });
     const carried = geo.attrs.primitive.require("roadWidth");
     // Not just the SET of values: each triangle must carry the width of
@@ -310,7 +310,7 @@ describe("sweepProfile attributes", () => {
   it("drops input vertex attributes and carries detail through 1:1", async () => {
     const path = straight(3);
     path.attrs.vertex.add("vtag", "f32", 1, 7);
-    path.attrs.detail.add("dtag", "f32", 1, 0).data.set([42]);
+    path.attrs.detail.add("dtag", "f32", 1, 0).writable().set([42]);
     const geo = await sweep(path, { caps: false });
     expect(geo.attrs.vertex.names()).toEqual([]);
     expect(geo.attrs.detail.require("dtag").get(0, 0)).toBe(42);
@@ -339,7 +339,7 @@ describe("sweepProfile attributes", () => {
     // carryPrimitiveAttributes refuses — and a silent merge would be the
     // worse answer, so it is asserted rather than assumed.
     const path = straight(3);
-    path.attrs.primitive.add("normal", "f32", 3, 0).data.set([5, 6, 7]);
+    path.attrs.primitive.add("normal", "f32", 3, 0).writable().set([5, 6, 7]);
     const geo = await sweep(path, { caps: false });
     expect(geo.attrs.primitive.require("normal").getTuple(0)).toEqual([5, 6, 7]);
     expect(geo.attrs.point.require("normal").getTuple(0)).not.toEqual([5, 6, 7]);
@@ -514,7 +514,7 @@ describe("extrudePolygon", () => {
   it("takes a per-point distance, which is what makes a sloped top", async () => {
     const sq = unitSquare();
     const h = sq.attrs.point.add("h", "f32", 1, 0);
-    h.data.set([1, 2, 3, 4]);
+    h.writable().set([1, 2, 3, 4]);
     const geo = await extrude(sq, { distance: attribute("h"), caps: "top", sides: false });
     const P = geo.attrs.point.require("P");
     expect([0, 1, 2, 3].map((i) => P.get(i, 1))).toEqual([1, 2, 3, 4]);
@@ -548,8 +548,8 @@ describe("extrudePolygon", () => {
 
   it("carries point and primitive attributes and writes normal and uv", async () => {
     const sq = unitSquare();
-    sq.attrs.point.add("tag", "f32", 1, 0).data.set([1, 2, 3, 4]);
-    sq.attrs.primitive.add("lotId", "i32", 1, 0).data.set([7]);
+    sq.attrs.point.add("tag", "f32", 1, 0).writable().set([1, 2, 3, 4]);
+    sq.attrs.primitive.add("lotId", "i32", 1, 0).writable().set([7]);
     const geo = await extrude(sq, { distance: 1 });
     expect(geo.attrs.point.require("uv").tupleSize).toBe(2);
     expect(geo.attrs.point.require("normal").tupleSize).toBe(3);
@@ -631,7 +631,7 @@ describe("the written normal agrees with the winding", () => {
     // The whole reason `distance` is field-capable: a ramped roof must
     // not shade as if it were flat.
     const sq = unitSquare();
-    sq.attrs.point.add("h", "f32", 1, 0).data.set([1, 1, 4, 4]);
+    sq.attrs.point.add("h", "f32", 1, 0).writable().set([1, 1, 4, 4]);
     const geo = await extrude(sq, { distance: attribute("h"), caps: "top", sides: false });
     const n = geo.attrs.point.require("normal").getTuple(0);
     expect(Math.hypot(...n)).toBeCloseTo(1, 6);
@@ -669,7 +669,7 @@ describe("degenerate input is defined, not NaN", () => {
     // truncate the topology silently rather than throw.
     const geo = createPolyline([7, 7, 7, 7, 7, 7, 0, 0, 0, 1, 0, 0]);
     setPolylineTopology(geo, Uint32Array.of(0, 1, 2, 3), Uint32Array.of(0, 2), Uint32Array.of(2, 2));
-    geo.attrs.primitive.add("tag", "f32", 1, 0).data.set([11, 22]);
+    geo.attrs.primitive.add("tag", "f32", 1, 0).writable().set([11, 22]);
     const out = await sweep(geo, { caps: false });
     expect(out.pointCount).toBe(2 * 9); // only the live path emitted rings
     const P = out.attrs.point.require("P");
@@ -696,7 +696,7 @@ describe("neither node touches its input", () => {
   // because the input is never mutated.
   it("leaves the geometry it was handed byte-identical", async () => {
     const path = straight(5);
-    path.attrs.point.add("tag", "f32", 1, 0).data.set([1, 2, 3, 4, 5]);
+    path.attrs.point.add("tag", "f32", 1, 0).writable().set([1, 2, 3, 4, 5]);
     const before = snapshotGeometry(path);
     await sweep(path, { profile: "square" });
     expectUntouched(before, path, "sweepProfile");
@@ -756,7 +756,7 @@ describe("a field param answers per element, where a number cannot", () => {
   // so a difference would be a real difference and not a rounding.
   it("extrudes two polygons of one input along two different vectors", async () => {
     const geo = twoSquares();
-    geo.attrs.primitive.add("dir", "f32", 3, 0).data.set([0, 4, 0, 4, 0, 0]);
+    geo.attrs.primitive.add("dir", "f32", 3, 0).writable().set([0, 4, 0, 4, 0, 0]);
     const out = await extrude(geo, {
       direction: "vector",
       vector: attribute("dir"),
@@ -806,7 +806,7 @@ describe("a field param answers per element, where a number cannot", () => {
 
   it("refuses a zero vector BY PRIMITIVE, and a plain zero by the param", async () => {
     const geo = twoSquares();
-    geo.attrs.primitive.add("dir", "f32", 3, 0).data.set([0, 4, 0, 0, 0, 0]);
+    geo.attrs.primitive.add("dir", "f32", 3, 0).writable().set([0, 4, 0, 0, 0, 0]);
     // Primitive 0 is fine; primitive 1 names no direction, and the
     // message says which polygon and what to do about it.
     await expect(
@@ -828,7 +828,7 @@ describe("a field param answers per element, where a number cannot", () => {
 
   it("miters one bend and pinches an identical one in the same sweep", async () => {
     const path = zigzag();
-    path.attrs.point.add("lim", "f32", 1, 0).data.set([1, 1.25, 2, 1, 1]);
+    path.attrs.point.add("lim", "f32", 1, 0).writable().set([1, 1.25, 2, 1, 1]);
     // Both bends turn 90 degrees and want the same stretch of sqrt(2);
     // ring 1's own limit refuses it and ring 2's allows it.
     const geo = await sweep(path, { radius: 0.2, miterLimit: attribute("lim"), caps: false });
@@ -876,7 +876,7 @@ describe("a field param answers per element, where a number cannot", () => {
 
   it("refuses a non-finite miterLimit field, naming the param and the element", async () => {
     const path = zigzag();
-    path.attrs.point.add("lim", "f32", 1, 0).data.set([1, Infinity, 2, 1, 1]);
+    path.attrs.point.add("lim", "f32", 1, 0).writable().set([1, Infinity, 2, 1, 1]);
     await expect(sweep(path, { miterLimit: attribute("lim"), caps: false })).rejects.toThrow(
       /param "miterLimit" resolved to \+Infinity at element 1/,
     );

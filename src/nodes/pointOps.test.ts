@@ -1661,7 +1661,7 @@ describe("mergePrimitives", () => {
     const geo = new Geometry();
     const P = geo.attrs.point.add("P", "f32", 3);
     geo.attrs.point.resize(3);
-    P.data.set([offsetX, 0, 0, offsetX + 1, 0, 0, offsetX, 0, 1]);
+    P.writable().set([offsetX, 0, 0, offsetX + 1, 0, 0, offsetX, 0, 1]);
     geo.setTopology(Uint32Array.of(0, 1, 2), Uint32Array.of(0), Uint32Array.of(3));
     return geo;
   }

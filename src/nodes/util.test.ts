@@ -292,8 +292,9 @@ describe("copyElements", () => {
     const a = src.add("a", "f32", 1, 9);
     src.resize(3);
     expect(src.capacity).toBe(8); // slots 3..7 are allocated and dead
-    a.data.set([1, 2, 3]);
-    a.data[3] = 42; // something plausible in one of them
+    const dead = a.writable();
+    dead.set([1, 2, 3]);
+    dead[3] = 42; // something plausible in one of them
     expect(() => copyElements(src, new AttributeSet(), [0, 3], 2)).toThrow(
       /copyFrom range out of bounds/,
     );
@@ -312,8 +313,8 @@ describe("copyElements", () => {
     const a = src.add("a", "f32", 1, 9);
     const b = src.add("b", "f32", 1, 0);
     src.resize(3);
-    a.data.set([1, 2, 3]);
-    b.data.set([4, 5, 6]);
+    a.writable().set([1, 2, 3]);
+    b.writable().set([4, 5, 6]);
     // The `carryPrimitiveAttributes` shape: a filtered subset of one set,
     // handed over with the count that set carries.
     const to = new AttributeSet();
@@ -380,7 +381,8 @@ describe("copyElements: one gather loop per tuple width", () => {
     const set = new AttributeSet();
     const a = set.add("a", "f32", ts, new Array(ts).fill(-1));
     set.resize(n);
-    for (let i = 0; i < n; i++) for (let k = 0; k < ts; k++) a.data[i * ts + k] = i * 100 + k;
+    const d = a.writable();
+    for (let i = 0; i < n; i++) for (let k = 0; k < ts; k++) d[i * ts + k] = i * 100 + k;
     return set;
   }
 
@@ -454,7 +456,7 @@ describe("copyElements: one gather loop per tuple width", () => {
     const to = new AttributeSet();
     const mine = to.add("mine", "f32", 1, 5);
     to.resize(2);
-    mine.data.set([1, 2]);
+    mine.writable().set([1, 2]);
     copyElements(src, to, [2, 0, 1], 3);
     expect(to.names()).toEqual(["mine", "a"]);
     // The LOGICAL range: a destination that already held a column grows
@@ -522,7 +524,7 @@ describe("copyElements: one gather loop per tuple width", () => {
     const a = src.add("a", "f32", 1, -7);
     const s = src.add("s", "string", 1, "none");
     src.resize(3);
-    a.data.set([10, 20, 30]);
+    a.writable().set([10, 20, 30]);
     s.setString(0, "zero");
     s.setString(1, "one");
     s.setString(2, "two");

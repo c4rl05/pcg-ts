@@ -265,10 +265,10 @@ describe("domain-constant folding, differentially", () => {
     geo.attrs.vertex.resize(count);
     geo.attrs.primitive.resize(count);
     const P = geo.attrs.point.require("P");
-    const w = geo.attrs.point.add("w", "f32", 1);
+    const w = geo.attrs.point.add("w", "f32", 1).writable();
     for (let i = 0; i < count; i++) {
       P.setTuple(i, [i * 1.5 - 2, i * -0.25, i * 3 + 0.125]);
-      w.data[i] = i * 0.5 - 1;
+      w[i] = i * 0.5 - 1;
     }
     return { geo, domain, seed };
   }
@@ -536,8 +536,8 @@ describe("domain-constant folding, differentially", () => {
 
   it("keeps a non-float column's storage type when a sibling folds", () => {
     const ctx = variedCtx(4, "point", 5);
-    const id = ctx.geo.attrs.point.add("id", "u32", 1);
-    for (let i = 0; i < 4; i++) id.data[i] = 4000000000 + i;
+    const id = ctx.geo.attrs.point.add("id", "u32", 1).writable();
+    for (let i = 0; i < 4; i++) id[i] = 4000000000 + i;
     const bare: FieldSpec = { fn: "attribute", name: "id", tupleSize: 1 };
     expect(subject(bare, ctx)).toBe(reference(bare, ctx));
     expect(subject(bare, ctx)).toContain("Uint32Array");

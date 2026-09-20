@@ -26,10 +26,10 @@ export function makePointsNode(count = 4): NodeDef<{ count: number }> {
     defaultParams: { count },
     execute({ params, seed }) {
       const geo = createPointCloud(params.count);
-      const P = geo.attrs.point.require("P");
+      const P = geo.attrs.point.require("P").writable();
       for (let i = 0; i < params.count; i++) {
         for (let k = 0; k < 3; k++) {
-          P.data[i * 3 + k] = hashFloat(hashCombine(seed, i, k));
+          P[i * 3 + k] = hashFloat(hashCombine(seed, i, k));
         }
       }
       return { out: [makeGeometryItem(geo)] };
@@ -61,11 +61,14 @@ export function transformNode(): NodeDef<{ offset: FieldLike }> {
         if (col.tupleSize !== 1 && col.tupleSize !== 3) {
           throw new Error(`transform: offset tuple must be 1 or 3, got ${col.tupleSize}`);
         }
-        const P = geo.attrs.point.require("P");
+        // Read AND written, so the writable array is taken first and the
+        // `+=` reads through it: a reference from `data` would be the
+        // pre-fork copy the moment the clone's column forks.
+        const P = geo.attrs.point.require("P").writable();
         const n = geo.pointCount;
         for (let i = 0; i < n; i++) {
           for (let k = 0; k < 3; k++) {
-            P.data[i * 3 + k] += col.tupleSize === 1 ? col.data[i] : col.data[i * 3 + k];
+            P[i * 3 + k] += col.tupleSize === 1 ? col.data[i] : col.data[i * 3 + k];
           }
         }
         out.push(makeGeometryItem(geo, item.tags));

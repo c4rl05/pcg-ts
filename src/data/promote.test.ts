@@ -18,7 +18,7 @@ function quad(): Geometry {
 function quadWithPointVal(): Geometry {
   const geo = quad();
   const val = geo.attrs.point.add("val", "f32");
-  val.data.set([10, 20, 30, 40]);
+  val.writable().set([10, 20, 30, 40]);
   return geo;
 }
 
@@ -26,7 +26,7 @@ function quadWithPointVal(): Geometry {
 function quadWithVertexW(): Geometry {
   const geo = quad();
   const w = geo.attrs.vertex.add("w", "f32", 1, 99);
-  w.data.set([1, 2, 3, 4, 5, 6]);
+  w.writable().set([1, 2, 3, 4, 5, 6]);
   return geo;
 }
 
@@ -70,7 +70,7 @@ describe("promote vertex -> point", () => {
       [0, 1, 2, 2, 1, 3],
     );
     const w = geo.attrs.vertex.add("w", "f32", 1, 99);
-    w.data.set([1, 2, 3, 4, 5, 6]);
+    w.writable().set([1, 2, 3, 4, 5, 6]);
     promote(geo, "w", "vertex", "point", "sum");
     expect(values(geo, "point", "w")).toEqual([1, 7, 7, 6, 99]);
   });
@@ -79,7 +79,7 @@ describe("promote vertex -> point", () => {
     for (const mode of ["min", "max"] as const) {
       const geo = quad();
       const w = geo.attrs.vertex.add("w", "f32");
-      w.data.set([NaN, 2, 3, 4, NaN, 6]);
+      w.writable().set([NaN, 2, 3, 4, NaN, 6]);
       promote(geo, "w", "vertex", "point", mode);
       const got = values(geo, "point", "w");
       // point0 <- [NaN] (all-NaN must not leak the ±Infinity fill);
@@ -94,7 +94,7 @@ describe("promote vertex -> point", () => {
   it("truncates integer averages via typed-array conversion", () => {
     const geo = quad();
     const w = geo.attrs.vertex.add("w", "u32");
-    w.data.set([1, 2, 3, 4, 5, 6]);
+    w.writable().set([1, 2, 3, 4, 5, 6]);
     promote(geo, "w", "vertex", "point", "average");
     // point1 average = (2+5)/2 = 3.5 -> 3; point2 = (3+4)/2 = 3.5 -> 3
     expect(values(geo, "point", "w")).toEqual([1, 3, 3, 6]);
@@ -120,7 +120,7 @@ describe("promote vertex <-> primitive", () => {
   it("broadcasts primitive -> vertex", () => {
     const geo = quad();
     const pv = geo.attrs.primitive.add("pv", "f32");
-    pv.data.set([100, 200]);
+    pv.writable().set([100, 200]);
     promote(geo, "pv", "primitive", "vertex", "first");
     expect(values(geo, "vertex", "pv")).toEqual([100, 100, 100, 200, 200, 200]);
   });
@@ -155,7 +155,7 @@ describe("promote point <-> primitive (via vertices)", () => {
     for (const [mode, want] of Object.entries(expected)) {
       const geo = quad();
       const pv = geo.attrs.primitive.add("pv", "f32");
-      pv.data.set([100, 200]);
+      pv.writable().set([100, 200]);
       promote(geo, "pv", "primitive", "point", mode as keyof typeof expected);
       expect(values(geo, "point", "pv"), mode).toEqual([...want]);
     }
@@ -181,7 +181,7 @@ describe("promote detail", () => {
   it("broadcasts detail -> any", () => {
     const geo = quad();
     const d = geo.attrs.detail.add("d", "f32");
-    d.data[0] = 7;
+    d.writable()[0] = 7;
     promote(geo, "d", "detail", "point", "first");
     expect(values(geo, "point", "d")).toEqual([7, 7, 7, 7]);
     promote(geo, "d", "detail", "vertex", "average");
@@ -195,7 +195,7 @@ describe("promote tuples and strings", () => {
   it("promotes tuple attributes componentwise", () => {
     const geo = quad();
     const uv = geo.attrs.point.add("uv", "f32", 2);
-    uv.data.set([0, 0, 1, 0, 0, 1, 1, 1]);
+    uv.writable().set([0, 0, 1, 0, 0, 1, 1, 1]);
     promote(geo, "uv", "point", "primitive", "average");
     const got = values(geo, "primitive", "uv");
     // prim0 = mean of (0,0),(1,0),(0,1); prim1 = mean of (0,1),(1,0),(1,1)

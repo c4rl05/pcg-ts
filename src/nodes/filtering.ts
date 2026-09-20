@@ -1639,14 +1639,19 @@ export const projectToPlane = standardNode<
       oz = origin[2];
     }
     const P = geo.attrs.point.require("P");
-    const pd = P.data;
+    // Taken as the WRITE view before anything is read through it: the
+    // projection reads each position to measure the offset and writes the
+    // same slot back, so one reference has to serve both. A read view
+    // taken first would be left pointing at the pre-projection copy the
+    // moment the write forked it.
+    const pd = P.writable();
     const ps = P.tupleSize;
     const n = geo.pointCount;
     let offsets: Float32Array | undefined;
     if (params.keepOffset) {
       const set = geo.attrs.point;
       if (set.has("planeOffset")) set.remove("planeOffset");
-      offsets = set.add("planeOffset", "f32", 1, 0).data;
+      offsets = set.add("planeOffset", "f32", 1, 0).writable();
     }
     for (let i = 0; i < n; i++) {
       if (normalCol !== undefined) {

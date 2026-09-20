@@ -42,7 +42,13 @@
  * them again is a fiction that fails silently the moment two of them land
  * near each other.
  */
-import type { AttrData, AttrDefault, Attribute, AttributeSet } from "../data/index.js";
+import type {
+  AttrData,
+  AttrDefault,
+  Attribute,
+  AttributeSet,
+  ReadonlyAttrData,
+} from "../data/index.js";
 import { cloneGeometry, makeGeometryItem } from "../graph/index.js";
 import { standardNode } from "./registry.js";
 import {
@@ -116,9 +122,9 @@ function destinationColumn(outSet: AttributeSet, src: Attribute): Attribute {
 
 /** One gathered column, resolved once before a single point is read. */
 interface Gathered {
-  /** The source's storage. */
-  readonly srcData: AttrData;
-  /** The destination's storage (same type and tuple size). */
+  /** The source's storage, read only. */
+  readonly srcData: ReadonlyAttrData;
+  /** The destination's storage (same type and tuple size), written. */
   readonly dstData: AttrData;
   /** Components per element, shared by both sides. */
   readonly ts: number;
@@ -300,15 +306,19 @@ export const transferByIndex = standardNode<
 
     const out = cloneGeometry(dstIn);
     const outSet = out.attrs.point;
-    // `cloneGeometry` deep-copies, so the destination's storage is never the
-    // source's even when one geometry is wired to both pins: a self-gather
-    // reads the values the node was handed, not the ones it is writing.
+    // `cloneGeometry` LENDS the input's columns rather than copying them,
+    // so what keeps a self-gather honest — one geometry wired to both pins
+    // reading the values the node was handed, not the ones it is writing —
+    // is the copy-on-write fork and not a copy. Every destination column
+    // below is taken through `writable()`, which gives it storage of its
+    // own before the first write; the source columns are other `Attribute`
+    // objects, and a fork never touches theirs.
     const columns: Gathered[] = [];
     for (const attr of sources) {
       const dst = destinationColumn(outSet, attr);
       columns.push({
         srcData: attr.data,
-        dstData: dst.data,
+        dstData: dst.writable(),
         ts: attr.tupleSize,
         strings: attr.type === "string" ? { table: attr.stringTable, dst } : null,
       });
@@ -384,7 +394,7 @@ export const transferByIndex = standardNode<
       // flag describes THIS gather only. An internal marker that inherited
       // a prior value is how a miss gets to claim it landed.
       const flag = outSet.replace(params.hitAttr, "bool", 1);
-      flag.data.set(hit.subarray(0, n));
+      flag.writable().set(hit.subarray(0, n));
     }
     return { out: [makeGeometryItem(out)] };
   },

@@ -33,6 +33,7 @@
  * worker may touch Dawn), reporting observations as JSON on stdout.
  */
 import { create } from "webgpu";
+import type { ReadonlyAttrData } from "../data/index.js";
 import { type Column, createGpuCookStats, evaluateField, makeField } from "../fields/index.js";
 import { type CookResult, Graph, cook, makeGeometryItem } from "../graph/index.js";
 import { fieldFromJson, type FieldSpec } from "../fields/fieldJson.js";
@@ -310,8 +311,8 @@ async function main(): Promise<void> {
     if (item.kind !== "geometry") throw new Error("params scenario: expected a geometry item");
     const set = item.geo.attrs.point;
     return {
-      scaled: (set.require("scaled").data as Float32Array).slice(0, COUNT),
-      flat: (set.require("flat").data as Float32Array).slice(0, COUNT),
+      scaled: (set.require("scaled").data as ReadonlyAttrData<Float32Array>).slice(0, COUNT),
+      flat: (set.require("flat").data as ReadonlyAttrData<Float32Array>).slice(0, COUNT),
     };
   };
   const gpuCook = await cook(fusedGraph(0.375), { gpu: ev });

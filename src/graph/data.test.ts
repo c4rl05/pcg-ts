@@ -117,7 +117,7 @@ describe("cloneGeometry", () => {
   it("copies the elements only: bytes the source holds past its count do not come along", () => {
     const src = makeMesh();
     const P = src.attrs.point.require("P");
-    P.data.fill(42, src.pointCount * 3);
+    P.writable().fill(42, src.pointCount * 3);
     const dst = cloneGeometry(src);
     const n = src.pointCount * 3;
     expect(Array.from(dst.attrs.point.require("P").data)).toEqual(

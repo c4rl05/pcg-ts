@@ -191,7 +191,9 @@ describe("the fingerprint itself", () => {
       for (let i = 0; i < 4; i++) attr.set(i, name === "a" ? i * 0.5 : 10 - i);
     }
     const a = geo.attrs.point.get("a")!;
-    if (mutate !== undefined) mutate(a.data as Float32Array);
+    // The callback writes, so it gets the write route; the cast only names
+    // the f32 column `get` hands back under the union.
+    if (mutate !== undefined) mutate(a.writable() as Float32Array);
     return { cloud: [makeGeometryItem(geo)], other: [makeGeometryItem(createPointCloud(2))] };
   }
 

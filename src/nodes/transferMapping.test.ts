@@ -17,9 +17,9 @@ function quadSource(): Geometry {
     [0, 0, 0, 10, 0, 0, 10, 0, 10, 0, 0, 10],
     [0, 1, 2, 0, 2, 3],
   );
-  geo.attrs.point.add("uv", "f32", 2).data.set([0, 0, 1, 0, 1, 1, 0, 1]);
-  geo.attrs.point.add("val", "f32", 1).data.set([10, 20, 30, 40]);
-  geo.attrs.point.add("id", "i32", 1).data.set([0, 1, 2, 3]);
+  geo.attrs.point.add("uv", "f32", 2).writable().set([0, 0, 1, 0, 1, 1, 0, 1]);
+  geo.attrs.point.add("val", "f32", 1).writable().set([10, 20, 30, 40]);
+  geo.attrs.point.add("id", "i32", 1).writable().set([0, 1, 2, 3]);
   return geo;
 }
 
@@ -104,7 +104,7 @@ describe("transferAttribute uv mapping", () => {
 
   it("reads vertex-domain attributes when attrDomain is 'vertex'", async () => {
     const src = quadSource();
-    src.attrs.vertex.add("cv", "f32", 1).data.set([1, 2, 3, 4, 5, 6]);
+    src.attrs.vertex.add("cv", "f32", 1).writable().set([1, 2, 3, 4, 5, 6]);
     const dst = dstCloud([{ p: [0, 0, 0], uv: [0.5, 0.5] }]);
     const out = firstGeo(
       (
@@ -121,7 +121,7 @@ describe("transferAttribute uv mapping", () => {
 
   it("reads primitive-domain attributes when attrDomain is 'primitive'", async () => {
     const src = quadSource();
-    src.attrs.primitive.add("roadWidth", "f32", 1).data.set([7, 9]);
+    src.attrs.primitive.add("roadWidth", "f32", 1).writable().set([7, 9]);
     // uv (0.75, 0.25) is inside triangle 0, (0.25, 0.75) inside triangle 1.
     const dst = dstCloud([
       { p: [0, 0, 0], uv: [0.75, 0.25] },
@@ -182,7 +182,7 @@ describe("transferAttribute raycast mapping", () => {
       { p: [5, 7, 2.5], uv: [0, 0] }, // aims down -> hit
       { p: [5, 7, 2.5], uv: [0, 0] }, // aims up -> miss
     ]);
-    dst.attrs.point.add("rayDir", "f32", 3).data.set([0, -1, 0, 0, 1, 0]);
+    dst.attrs.point.add("rayDir", "f32", 3).writable().set([0, -1, 0, 0, 1, 0]);
     const out = firstGeo(
       (
         await runNode(
@@ -207,11 +207,11 @@ describe("transferAttribute raycast mapping", () => {
 describe("transferAttribute nearest mapping (unchanged)", () => {
   it("matches transferNearest exactly and reports zero misses", async () => {
     const src = createPointCloud(3);
-    (src.attrs.point.require("P").data as Float32Array).set([0, 0, 0, 5, 0, 0, 0, 5, 0]);
-    src.attrs.point.require("density").data.set([0.1, 0.2, 0.3]);
+    src.attrs.point.require("P").writable().set([0, 0, 0, 5, 0, 0, 0, 5, 0]);
+    src.attrs.point.require("density").writable().set([0.1, 0.2, 0.3]);
     const mkDst = (): Geometry => {
       const d = createPointCloud(2);
-      (d.attrs.point.require("P").data as Float32Array).set([4, 0, 0, 0, 4, 0]);
+      d.attrs.point.require("P").writable().set([4, 0, 0, 0, 4, 0]);
       return d;
     };
     const out = firstGeo(
@@ -315,7 +315,7 @@ describe("transferAttribute hitAttr (per-point miss flag)", () => {
       { p: [5, 7, 2.5], uv: [0, 0] },
       { p: [5, 7, 2.5], uv: [0, 0] },
     ]);
-    dst.attrs.point.add("rayDir", "f32", 3).data.set([0, -1, 0, 0, 1, 0, 0, 0, 0]);
+    dst.attrs.point.add("rayDir", "f32", 3).writable().set([0, -1, 0, 0, 1, 0, 0, 0, 0]);
     const out = await run(dst, {
       name: "val",
       mapping: "raycast",
@@ -328,10 +328,10 @@ describe("transferAttribute hitAttr (per-point miss flag)", () => {
 
   it("nearest: every point is assigned, so every flag is 1", async () => {
     const src = createPointCloud(3);
-    (src.attrs.point.require("P").data as Float32Array).set([0, 0, 0, 5, 0, 0, 0, 5, 0]);
-    src.attrs.point.require("density").data.set([0.1, 0.2, 0.3]);
+    src.attrs.point.require("P").writable().set([0, 0, 0, 5, 0, 0, 0, 5, 0]);
+    src.attrs.point.require("density").writable().set([0.1, 0.2, 0.3]);
     const dst = createPointCloud(2);
-    (dst.attrs.point.require("P").data as Float32Array).set([4, 0, 0, 0, 4, 0]);
+    dst.attrs.point.require("P").writable().set([4, 0, 0, 0, 4, 0]);
     const out = await run(dst, { name: "density", hitAttr: "__hit", missCountAttr: "missed" }, src);
     expect(flags(out)).toEqual([1, 1]);
     expect(out.attrs.detail.require("missed").get(0)).toBe(0);
@@ -345,8 +345,8 @@ describe("transferAttribute hitAttr (per-point miss flag)", () => {
     // flag the same column would have to be filled with 1s to say the same
     // thing, and a freshly created column's default 0 would claim success.
     const src = createTriangleMesh([0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 2]);
-    src.attrs.point.add("uv", "f32", 2).data.set([0, 0, 0, 0, 0, 0]);
-    src.attrs.point.add("val", "f32", 1).data.set([10, 20, 30]);
+    src.attrs.point.add("uv", "f32", 2).writable().set([0, 0, 0, 0, 0, 0]);
+    src.attrs.point.add("val", "f32", 1).writable().set([10, 20, 30]);
     const dst = dstCloud([
       { p: [0, 5, 0], uv: [0.5, 0.5] },
       { p: [1, 5, 0], uv: [0.25, 0.25] },
@@ -366,7 +366,7 @@ describe("transferAttribute hitAttr (per-point miss flag)", () => {
       { p: [5, 7, 2.5], uv: [0, 0] }, // hits
       { p: [50, 7, 50], uv: [0, 0] }, // misses
     ]);
-    dst.attrs.point.add("__hit", "bool", 1).data.set([1, 1]);
+    dst.attrs.point.add("__hit", "bool", 1).writable().set([1, 1]);
     const sameType = await run(dst, { name: "val", mapping: "raycast", hitAttr: "__hit" });
     expect(flags(sameType)).toEqual([1, 0]);
 
@@ -379,7 +379,7 @@ describe("transferAttribute hitAttr (per-point miss flag)", () => {
       { p: [5, 7, 2.5], uv: [0, 0] },
       { p: [50, 7, 50], uv: [0, 0] },
     ]);
-    wrongType.attrs.point.add("__hit", "f32", 3).data.set([9, 9, 9, 9, 9, 9]);
+    wrongType.attrs.point.add("__hit", "f32", 3).writable().set([9, 9, 9, 9, 9, 9]);
     await expect(
       run(wrongType, { name: "val", mapping: "raycast", hitAttr: "__hit" }),
     ).rejects.toThrow(/hitAttr "__hit" already exists on the input's point domain as f32x3/);
@@ -441,7 +441,7 @@ describe("transferAttribute hitAttr (per-point miss flag)", () => {
       { p: [5, 7, 2.5], uv: [0, 0] }, // hits
       { p: [50, 7, 50], uv: [0, 0] }, // misses
     ]);
-    dst.attrs.point.add("__hit", "bool", 1).data.set([1, 1]);
+    dst.attrs.point.add("__hit", "bool", 1).writable().set([1, 1]);
     dst.attrs.detail.add("missed", "u32", 1).set(0, 99);
     const out = await run(dst, {
       name: "val",
@@ -612,10 +612,10 @@ describe("transferAttribute serialization", () => {
 
   it("deserializes legacy params (name only) as the nearest mapping", async () => {
     const src = createPointCloud(2);
-    (src.attrs.point.require("P").data as Float32Array).set([0, 0, 0, 9, 0, 0]);
-    src.attrs.point.require("density").data.set([0.25, 0.75]);
+    src.attrs.point.require("P").writable().set([0, 0, 0, 9, 0, 0]);
+    src.attrs.point.require("density").writable().set([0.25, 0.75]);
     const dst = createPointCloud(2);
-    (dst.attrs.point.require("P").data as Float32Array).set([1, 0, 0, 8, 0, 0]);
+    dst.attrs.point.require("P").writable().set([1, 0, 0, 8, 0, 0]);
     const g = deserializeGraph({
       formatVersion: 1,
       seed: 0,

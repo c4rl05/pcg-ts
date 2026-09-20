@@ -56,7 +56,7 @@ import { type EvalContext, evaluateField } from "./types.js";
 /** Point cloud with P set from a flat xyz array. */
 function cloudCtx(positions: number[], seed = 0): EvalContext {
   const geo = createPointCloud(positions.length / 3);
-  geo.attrs.point.require("P").data.set(positions);
+  geo.attrs.point.require("P").writable().set(positions);
   return { geo, domain: "point", seed };
 }
 

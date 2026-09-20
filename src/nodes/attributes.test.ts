@@ -1101,7 +1101,7 @@ function stackedPlanes(): Geometry {
     ],
     [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7],
   );
-  mesh.attrs.primitive.add("val", "f32", 1, 0).data.set([7, 7, 3, 3]);
+  mesh.attrs.primitive.add("val", "f32", 1, 0).writable().set([7, 7, 3, 3]);
   return mesh;
 }
 
@@ -1195,7 +1195,7 @@ describe("transferAttribute raycast direction as a field", () => {
 
   it("directionAttr still wins, and the field is not evaluated at all", async () => {
     const dst = twoPoints();
-    dst.attrs.point.add("dir", "f32", 3, 0).data.set([0, 1, 0, 0, 1, 0]);
+    dst.attrs.point.add("dir", "f32", 3, 0).writable().set([0, 1, 0, 0, 1, 0]);
     const res = await castOnto(dst, {
       directionAttr: "dir",
       // Would be refused (non-finite) the moment it was resolved.
@@ -1313,7 +1313,7 @@ describe("transferAttribute scratch columns cannot shadow the node's own output"
       [-10, 2, -10, 10, 2, -10, 10, 2, 10, -10, 2, 10],
       [0, 1, 2, 0, 2, 3],
     );
-    mesh.attrs.primitive.add(attr, "f32", 1, 0).data.set([7, 7]);
+    mesh.attrs.primitive.add(attr, "f32", 1, 0).writable().set([7, 7]);
     return mesh;
   };
 

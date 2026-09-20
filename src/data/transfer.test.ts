@@ -16,8 +16,8 @@ function makeLcg(seed: number): () => number {
 function seededCloud(count: number, seed: number, min: number, max: number): Geometry {
   const geo = createPointCloud(count);
   const rand = makeLcg(seed);
-  const P = geo.attrs.point.require("P").data as Float32Array;
-  const idx = geo.attrs.point.require("seed").data as Uint32Array;
+  const P = geo.attrs.point.require("P").writable();
+  const idx = geo.attrs.point.require("seed").writable();
   for (let i = 0; i < count; i++) {
     P[i * 3] = min + rand() * (max - min);
     P[i * 3 + 1] = min + rand() * (max - min);
@@ -33,8 +33,8 @@ function seededCloud(count: number, seed: number, min: number, max: number): Geo
  * never candidates, non-finite queries map to source index 0.
  */
 function bruteNearest(src: Geometry, dst: Geometry): number[] {
-  const sp = src.attrs.point.require("P").data as Float32Array;
-  const dp = dst.attrs.point.require("P").data as Float32Array;
+  const sp = src.attrs.point.require("P").data;
+  const dp = dst.attrs.point.require("P").data;
   const ns = src.attrs.point.count;
   const nd = dst.attrs.point.count;
   const result: number[] = [];
@@ -103,7 +103,7 @@ describe("transferNearest grid path", () => {
   it("handles queries far outside the source bounds", () => {
     const src = seededCloud(100, 9, 0, 1);
     const dst = createPointCloud(3);
-    const dp = dst.attrs.point.require("P").data as Float32Array;
+    const dp = dst.attrs.point.require("P").writable();
     dp.set([50, -30, 20, -100, -100, -100, 0.5, 0.5, 200]);
     const expected = bruteNearest(src, dst);
     transferNearest(dst, src, "seed", { bruteForceThreshold: 0 });
@@ -112,7 +112,7 @@ describe("transferNearest grid path", () => {
 
   it("handles planar (degenerate-extent) sources", () => {
     const src = seededCloud(200, 31, 0, 5);
-    const sp = src.attrs.point.require("P").data as Float32Array;
+    const sp = src.attrs.point.require("P").writable();
     for (let i = 0; i < 200; i++) sp[i * 3 + 2] = 0; // flatten to z = 0
     const dst = seededCloud(100, 32, 0, 5);
     const expected = bruteNearest(src, dst);
@@ -125,7 +125,7 @@ describe("transferNearest grid path", () => {
     // ring per cell of distance, hanging on far-away (but valid) queries.
     const src = seededCloud(100, 9, 0, 1);
     const dst = createPointCloud(2);
-    const dp = dst.attrs.point.require("P").data as Float32Array;
+    const dp = dst.attrs.point.require("P").writable();
     dp.set([3e8, -3e8, 3e8, -1e7, 0.5, 0.5]);
     const expected = bruteNearest(src, dst);
     const t0 = performance.now();
@@ -136,7 +136,9 @@ describe("transferNearest grid path", () => {
 
   it("ignores non-finite source points on both paths", () => {
     const src = seededCloud(40, 81, 0, 4);
-    const sp = src.attrs.point.require("P").data as Float32Array;
+    // One reference for the read and the poisoning alike: the write forks,
+    // so a `data` reference taken first would be the pre-fork copy.
+    const sp = src.attrs.point.require("P").writable();
     // Original position of point 5, captured before poisoning: a query
     // parked exactly there would pick index 5 if it were not skipped.
     const parked = [sp[5 * 3], sp[5 * 3 + 1], sp[5 * 3 + 2]];
@@ -145,7 +147,7 @@ describe("transferNearest grid path", () => {
     const expected: number[] = [];
     for (const bruteForceThreshold of [0, Number.MAX_SAFE_INTEGER]) {
       const dst = seededCloud(25, 82, 0, 4);
-      (dst.attrs.point.require("P").data as Float32Array).set(parked, 0);
+      dst.attrs.point.require("P").writable().set(parked, 0);
       if (expected.length === 0) {
         expected.push(...bruteNearest(src, dst));
         expect(expected).not.toContain(5);
@@ -160,7 +162,7 @@ describe("transferNearest grid path", () => {
     const src = seededCloud(50, 91, 0, 2);
     for (const bruteForceThreshold of [0, Number.MAX_SAFE_INTEGER]) {
       const dst = createPointCloud(3);
-      const dp = dst.attrs.point.require("P").data as Float32Array;
+      const dp = dst.attrs.point.require("P").writable();
       dp.set([Number.NaN, 0, 0, 1, Infinity, 1, 0.5, 0.5, 0.5]);
       const expected = bruteNearest(src, dst);
       transferNearest(dst, src, "seed", { bruteForceThreshold });
@@ -173,7 +175,7 @@ describe("transferNearest grid path", () => {
 
   it("throws when no source position is finite", () => {
     const src = createPointCloud(5);
-    (src.attrs.point.require("P").data as Float32Array).fill(Number.NaN, 0, 15);
+    src.attrs.point.require("P").writable().fill(Number.NaN, 0, 15);
     const dst = seededCloud(2, 93, 0, 1);
     expect(() => transferNearest(dst, src, "seed", { bruteForceThreshold: 0 })).toThrow(
       /no source point has a finite/,
@@ -183,16 +185,16 @@ describe("transferNearest grid path", () => {
 
   it("handles a single-point source and coincident sources", () => {
     const single = createPointCloud(1);
-    (single.attrs.point.require("P").data as Float32Array).set([1, 2, 3]);
-    single.attrs.point.require("seed").data[0] = 7;
+    single.attrs.point.require("P").writable().set([1, 2, 3]);
+    single.attrs.point.require("seed").writable()[0] = 7;
     const dst = seededCloud(10, 3, -5, 5);
     transferNearest(dst, single, "seed", { bruteForceThreshold: 0 });
     expect(transferredSeeds(dst)).toEqual(new Array(10).fill(7));
 
     // 50 coincident points: ties resolve to the lowest source index.
     const coincident = createPointCloud(50);
-    const cp = coincident.attrs.point.require("P").data as Float32Array;
-    const cs = coincident.attrs.point.require("seed").data as Uint32Array;
+    const cp = coincident.attrs.point.require("P").writable();
+    const cs = coincident.attrs.point.require("seed").writable();
     for (let i = 0; i < 50; i++) {
       cp.set([1, 2, 3], i * 3);
       cs[i] = i;
@@ -206,28 +208,28 @@ describe("transferNearest grid path", () => {
 describe("transferNearest values", () => {
   it("copies exact values on a tiny known layout", () => {
     const src = createPointCloud(3);
-    (src.attrs.point.require("P").data as Float32Array).set([0, 0, 0, 10, 0, 0, 0, 10, 0]);
+    src.attrs.point.require("P").writable().set([0, 0, 0, 10, 0, 0, 0, 10, 0]);
     const val = src.attrs.point.add("val", "f32");
-    val.data.set([7, 8, 9]);
+    val.writable().set([7, 8, 9]);
     const dst = createPointCloud(2);
-    (dst.attrs.point.require("P").data as Float32Array).set([6, 0, 0, 1, 1, 0]);
+    dst.attrs.point.require("P").writable().set([6, 0, 0, 1, 1, 0]);
     // Default threshold -> brute path (3 < 32).
     transferNearest(dst, src, "val");
     const brute = Array.from(dst.attrs.point.require("val").data.subarray(0, 2));
     expect(brute).toEqual([8, 7]);
     // Forced grid path agrees.
     const dst2 = createPointCloud(2);
-    (dst2.attrs.point.require("P").data as Float32Array).set([6, 0, 0, 1, 1, 0]);
+    dst2.attrs.point.require("P").writable().set([6, 0, 0, 1, 1, 0]);
     transferNearest(dst2, src, "val", { bruteForceThreshold: 0 });
     expect(Array.from(dst2.attrs.point.require("val").data.subarray(0, 2))).toEqual([8, 7]);
   });
 
   it("transfers tuple attributes componentwise", () => {
     const src = seededCloud(100, 21, 0, 6);
-    const uv = src.attrs.point.add("uv", "f32", 2);
+    const uv = src.attrs.point.add("uv", "f32", 2).writable();
     for (let i = 0; i < 100; i++) {
-      uv.data[i * 2] = i;
-      uv.data[i * 2 + 1] = i * 0.5;
+      uv[i * 2] = i;
+      uv[i * 2 + 1] = i * 0.5;
     }
     const dst = seededCloud(40, 22, 0, 6);
     const expected = bruteNearest(src, dst);
@@ -265,11 +267,9 @@ describe("transferNearest values", () => {
 
   it("survives transferring a geometry onto itself", () => {
     const geo = createPointCloud(4);
-    (geo.attrs.point.require("P").data as Float32Array).set([
-      0, 0, 0, 1, 0, 0, 2, 0, 0, 3, 0, 0,
-    ]);
+    geo.attrs.point.require("P").writable().set([0, 0, 0, 1, 0, 0, 2, 0, 0, 3, 0, 0]);
     const val = geo.attrs.point.add("val", "u32");
-    val.data.set([11, 22, 33, 44]);
+    val.writable().set([11, 22, 33, 44]);
     transferNearest(geo, geo, "val", { bruteForceThreshold: 0 });
     expect(Array.from(geo.attrs.point.require("val").data.subarray(0, 4))).toEqual([
       11, 22, 33, 44,

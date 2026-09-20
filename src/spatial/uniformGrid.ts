@@ -56,9 +56,13 @@ export interface PositionView {
  * - Build once, query any number of times, from any number of callers.
  * - The owner (a node, a cook cache, a caller) must rebuild when positions
  *   are written, when the point count changes, when the underlying buffer is
- *   reallocated (a resize can swap the typed array), or when a different
- *   cell size is wanted. Nothing here detects those; a cache should key on
- *   buffer identity plus count, stride and cell size.
+ *   reallocated (a resize can swap the typed array, and so can the first
+ *   write through `Attribute.writable()` to a column still sharing storage
+ *   with the one it was derived from), or when a different cell size is
+ *   wanted. Nothing here detects those; a cache should key on buffer
+ *   identity plus count, stride and cell size — and under copy-on-write
+ *   that key names the positions rather than the column holding them,
+ *   because a shared buffer is the same numbers seen twice.
  * - Queries never mutate the grid, so a built grid is safe to share.
  * - {@link insert} is the only mutator and only ever adds; a grid built
  *   incrementally (as `selfPrune` does, indexing survivors as it scans) is a

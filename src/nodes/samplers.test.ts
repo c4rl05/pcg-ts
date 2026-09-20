@@ -402,10 +402,10 @@ function legacySplineSample(
 
   const n = positions.length;
   const out = createPointCloud(n);
-  const op = out.attrs.point.require("P").data;
-  const tangent = out.attrs.point.add("tangent", "f32", 3, [0, 0, 0]).data;
-  const curveU = out.attrs.point.add("curveU", "f32", 1, 0).data;
-  const seeds = out.attrs.point.require("seed").data;
+  const op = out.attrs.point.require("P").writable();
+  const tangent = out.attrs.point.add("tangent", "f32", 3, [0, 0, 0]).writable();
+  const curveU = out.attrs.point.add("curveU", "f32", 1, 0).writable();
+  const seeds = out.attrs.point.require("seed").writable();
   for (let i = 0; i < n; i++) {
     const s = positions[i];
     let lo = 0;
@@ -441,7 +441,7 @@ describe("splineSample arc-length extraction", () => {
     const na = a.length / 3;
     const nb = b.length / 3;
     const geo = createPointCloud(na + nb);
-    const P = geo.attrs.point.require("P").data;
+    const P = geo.attrs.point.require("P").writable();
     P.set(a, 0);
     P.set(b, na * 3);
     const indices: number[] = [];

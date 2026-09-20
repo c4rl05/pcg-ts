@@ -23,6 +23,33 @@ export interface AttrTypeMap {
 /** Any attribute column array. */
 export type AttrData = AttrTypeMap[AttrType];
 
+/**
+ * A column's storage AS A READER SEES IT: every read a typed array
+ * offers — indexing, `length`, `slice`, `buffer`, iteration — and none of
+ * the four that write (`set`, `fill`, `copyWithin`, `sort`/`reverse`).
+ * This is the type of {@link Attribute.data}; the write route is
+ * `Attribute.writable()`, which is also where a shared column forks.
+ *
+ * `subarray` is kept and RETYPED to return this same view, because a
+ * subarray shares the buffer it was taken from: letting it come back
+ * mutable would hand out, in one call, exactly the write this type
+ * exists to refuse. `slice` is untouched — it copies, so what it returns
+ * is the caller's own array and may be written freely.
+ *
+ * DISTRIBUTIVE over the union on purpose. `Attribute` defaults to
+ * `AttrType`, so its `data` is a union of five array types; a
+ * non-distributive `Omit` over that union would collapse the five into
+ * one object whose every member is a union of signatures, and `slice()`
+ * would stop being callable. Written as a conditional type, the union of
+ * arrays stays a union of views, which is what it already was.
+ */
+export type ReadonlyAttrData<T extends AttrData = AttrData> = T extends AttrData
+  ? Omit<T, number | "set" | "fill" | "copyWithin" | "sort" | "reverse" | "subarray"> & {
+      readonly [index: number]: number;
+      subarray(begin?: number, end?: number): ReadonlyAttrData<T>;
+    }
+  : never;
+
 /** Typed-array constructor per attribute type. */
 export const ATTR_CTORS: { readonly [K in AttrType]: new (length: number) => AttrTypeMap[K] } = {
   f32: Float32Array,

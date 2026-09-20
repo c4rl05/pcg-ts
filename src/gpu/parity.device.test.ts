@@ -469,8 +469,9 @@ describe.skipIf(testDevice === null)(deviceSuiteName("device parity"), () => {
     const ROWS: readonly number[] = [
       0, -0, NaN, Infinity, -Infinity, -1, 9, -9, 2, 1.5, -0.25, 1e-40,
     ];
+    const Pd = P.writable();
     ROWS.forEach((x, i) => {
-      P.data[i * 3] = x;
+      Pd[i * 3] = x;
     });
 
     const PXP = { fn: "component", args: [{ fn: "position" }], index: 0 } as const;
@@ -666,8 +667,9 @@ describe.skipIf(testDevice === null)(deviceSuiteName("device parity"), () => {
     const ROWS: readonly number[] = [
       0, -0, NaN, Infinity, -Infinity, -1, 9, -9, 1.5, 128, -150, 1e-40, -1.5, -0.5, 1e9,
     ];
+    const Pd = P.writable();
     ROWS.forEach((x, i) => {
-      P.data[i * 3] = x;
+      Pd[i * 3] = x;
     });
 
     const PXP = { fn: "component", args: [{ fn: "position" }], index: 0 } as const;
@@ -903,8 +905,9 @@ describe.skipIf(testDevice === null)(deviceSuiteName("device parity"), () => {
       NaN, Infinity, -Infinity, 0, -0, -1, -0.5, -0.4, 0.4, 0.5, 1, 1.5, 2.5, 3.5, 4, 4.5, 4.9, 900,
       -900,
     ];
+    const Pd = P.writable();
     ROWS.forEach((x, i) => {
-      P.data[i * 3] = x;
+      Pd[i * 3] = x;
     });
 
     const PXP = { fn: "component", args: [{ fn: "position" }], index: 0 } as const;
@@ -1027,18 +1030,20 @@ describe.skipIf(testDevice === null)(deviceSuiteName("device parity"), () => {
     const geo = makeParityGeometry(64);
     const P = geo.attrs.point.require("P");
     const density = geo.attrs.point.require("density");
+    const Pd = P.writable();
+    const densityD = density.writable();
     // Rows 0..3: normalize/length extremes (+ a control row).
-    P.data.set([1e19, 0, 0], 0);
-    P.data.set([1e20, 1e20, 0], 3);
-    P.data.set([1e-25, 1e-25, 0], 6);
-    P.data.set([3, 4, 0], 9);
+    Pd.set([1e19, 0, 0], 0);
+    Pd.set([1e20, 1e20, 0], 3);
+    Pd.set([1e-25, 1e-25, 0], 6);
+    Pd.set([3, 4, 0], 9);
     // Rows 4..7: lattice coordinates at/beyond 2^31 (+ a negative).
-    P.data.set([2147483904, 0.5, 0.5], 12);
-    P.data.set([3e9, 0.5, 0.5], 15);
-    P.data.set([-3e9, 0.5, 0.5], 18);
-    P.data.set([5e9, 0.25, 0.75], 21);
+    Pd.set([2147483904, 0.5, 0.5], 12);
+    Pd.set([3e9, 0.5, 0.5], 15);
+    Pd.set([-3e9, 0.5, 0.5], 18);
+    Pd.set([5e9, 0.25, 0.75], 21);
     // NaN density lanes for min/max propagation.
-    for (let i = 0; i < 64; i += 4) density.data[i] = NaN;
+    for (let i = 0; i < 64; i += 4) densityD[i] = NaN;
 
     const probes: Record<string, FieldSpecArg> = {
       minNaN: { fn: "min", args: [{ fn: "attribute", name: "density" }, 0.5] },

@@ -62,8 +62,8 @@ import { DEFAULT_KIT, kitOrAbsent, kitPath } from "./support/kits.js";
  */
 function spreadCloud(n: number): ReturnType<typeof createPointCloud> {
   const geo = createPointCloud(n);
-  const P = geo.attrs.point.require("P").data;
-  const seeds = geo.attrs.point.require("seed").data;
+  const P = geo.attrs.point.require("P").writable();
+  const seeds = geo.attrs.point.require("seed").writable();
   for (let i = 0; i < n; i++) {
     P[i * 3] = i * 0.5;
     P[i * 3 + 1] = 0;
@@ -430,7 +430,7 @@ describe("stationGraph: D-4's coverage repair", () => {
    */
   function stationCloud(stations: readonly number[]): ReturnType<typeof createPointCloud> {
     const geo = createPointCloud(stations.length);
-    const P = geo.attrs.point.require("P").data;
+    const P = geo.attrs.point.require("P").writable();
     const st = geo.attrs.point.add("stationW", "f32", 1);
     const len = geo.attrs.point.add("lapLen", "f32", 1);
     for (let i = 0; i < stations.length; i++) {

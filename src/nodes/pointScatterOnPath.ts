@@ -197,8 +197,8 @@ export const pointScatterOnPath = standardNode<
     }
 
     const out = createPointCloud(total);
-    const outP = out.attrs.point.require("P").data;
-    const outSeed = out.attrs.point.require("seed").data;
+    const outP = out.attrs.point.require("P").writable();
+    const outSeed = out.attrs.point.require("seed").writable();
     // The arc column is a reporting slot whose SHAPE this node picks, so
     // a differently shaped column already under that name is refused
     // rather than deleted and re-added. Checked the moment the columns it
@@ -220,7 +220,7 @@ export const pointScatterOnPath = standardNode<
       // would be advice about the wrong geometry.
       on: "output",
     });
-    const outArc = out.attrs.point.replace(params.arcAttr, "f32", 1, 0).data;
+    const outArc = out.attrs.point.replace(params.arcAttr, "f32", 1, 0).writable();
     // Which polyline PRIMITIVE each point landed on, so the road's own
     // per-primitive values can be gathered onto the scatter below.
     const srcPrim = new Uint32Array(total);

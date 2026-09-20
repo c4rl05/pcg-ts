@@ -114,9 +114,11 @@ function leanDensityGeometry(count: number): Geometry {
   const P = geo.attrs.point.add("P", "f32", 3);
   const density = geo.attrs.point.add("density", "f32", 1);
   geo.attrs.point.resize(count);
+  const Pd = P.writable();
+  const densityD = density.writable();
   for (let i = 0; i < count; i++) {
-    for (let k = 0; k < 3; k++) P.data[i * 3 + k] = (hashFloat(hashCombine(808, i, k)) - 0.5) * 16;
-    density.data[i] = hashFloat(hashCombine(909, i));
+    for (let k = 0; k < 3; k++) Pd[i * 3 + k] = (hashFloat(hashCombine(808, i, k)) - 0.5) * 16;
+    densityD[i] = hashFloat(hashCombine(909, i));
   }
   return geo;
 }
@@ -288,8 +290,8 @@ async function main(): Promise<void> {
       const cpu = await cook(build());
       const dev = await cook(build(), { gpu: evaluator });
       const seedsOf = (r: CookResult): Set<number> => {
-        const col = attrColumn(r, "seed");
-        return new Set(Array.from(col.data as Uint32Array));
+        const { data } = attrColumn(r, "seed");
+        return new Set(Array.from(data as Uint32Array));
       };
       const a = seedsOf(cpu);
       const b = seedsOf(dev);

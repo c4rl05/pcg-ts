@@ -39,7 +39,7 @@ type Vec3 = readonly [number, number, number];
 function polylines(geo: Geometry): Vec3[][] {
   const P = geo.attrs.point.get("P");
   if (P === undefined) throw new Error("no P");
-  const data = P.data as Float32Array;
+  const data = P.data;
   const out: Vec3[][] = [];
   for (let p = 0; p < geo.primitiveCount; p++) {
     const start = geo.primVertexStart[p] as number;
@@ -263,7 +263,7 @@ describe("eiffel skeleton", () => {
     const geo = legBracing4RotDone!;
     const faceN = geo.attrs.primitive.get("faceN");
     expect(faceN?.tupleSize).toBe(3);
-    const n = faceN!.data as Float32Array;
+    const n = faceN!.data;
     const lines = polylines(geo);
     let checked = 0;
     const quadrantsSeen = new Set<string>();
@@ -829,8 +829,8 @@ describe("eiffel skeleton", () => {
     const got = await cookWith(ids);
     for (const id of ids) {
       const geo = got[id]!;
-      const P = geo.attrs.point.get("P")!.data as Float32Array;
-      const Nn = geo.attrs.point.get("normal")?.data as Float32Array | undefined;
+      const P = geo.attrs.point.get("P")!.data;
+      const Nn = geo.attrs.point.get("normal")?.data;
       expect(Nn, `${id} carries no normal`).toBeDefined();
       let checked = 0;
       for (let p = 0; p < geo.primitiveCount; p++) {

@@ -220,7 +220,7 @@ describe("pointNeighborhood", () => {
       [1, 0, 0],
     ]);
     const v = cloud.attrs.point.add("v", "f32", 1, 0);
-    v.data.set([0, 0, 1e16, -1e16, 1]);
+    v.writable().set([0, 0, 1e16, -1e16, 1]);
     const geo = firstGeo(
       (
         await runNode(
@@ -465,7 +465,7 @@ describe("pointNeighborhood", () => {
       [0, 0, 0],
       [1, 0, 0],
     ]);
-    tagged.attrs.point.add("tag", "i32", 1, -1).data.set([5, 6]);
+    tagged.attrs.point.add("tag", "i32", 1, -1).writable().set([5, 6]);
     await expect(
       runNode(
         pointNeighborhood,
@@ -487,7 +487,7 @@ describe("pointNeighborhood", () => {
       [1, 0, 0],
       [50, 0, 0],
     ]);
-    cloud.attrs.point.add("nbrCount", "u32", 1, 0).data.set([99, 99, 99]);
+    cloud.attrs.point.add("nbrCount", "u32", 1, 0).writable().set([99, 99, 99]);
     const geo = firstGeo(
       (await runNode(pointNeighborhood, { radius: 1 }, { in: [makeGeometryItem(cloud)] })).out,
     ) as ReturnType<typeof createPointCloud>;
@@ -590,9 +590,9 @@ describe("sampleNearestPoint", () => {
     ]);
     // The destination already carries `mark`; only the hit is overwritten.
     const mark = dst.attrs.point.add("mark", "f32", 1, -99);
-    mark.data.set([7, 8]);
+    mark.writable().set([7, 8]);
     const source = cloudAt([[1, 0, 0]]);
-    source.attrs.point.add("mark", "f32", 1, -99).data.set([42]);
+    source.attrs.point.add("mark", "f32", 1, -99).writable().set([42]);
     const geo = firstGeo(
       (
         await runNode(
@@ -716,7 +716,7 @@ describe("sampleNearestPoint", () => {
     expect(dst.attrs.point.require("P").tupleSize).toBe(3);
 
     const uvDst = cloudAt([[0, 0, 0]]);
-    uvDst.attrs.point.add("uv", "f32", 2, 0).data.set([0.25, 0.5]);
+    uvDst.attrs.point.add("uv", "f32", 2, 0).writable().set([0.25, 0.5]);
     await expect(
       runNode(
         sampleNearestPoint,
@@ -733,8 +733,8 @@ describe("sampleNearestPoint", () => {
       [0, 0, 0],
       [10, 0, 0],
     ]);
-    dst.attrs.point.add("nearDist", "f32", 1, 0).data.set([99, 99]);
-    dst.attrs.point.add("nearIdx", "i32", 1, -1).data.set([7, 7]);
+    dst.attrs.point.add("nearDist", "f32", 1, 0).writable().set([99, 99]);
+    dst.attrs.point.add("nearIdx", "i32", 1, -1).writable().set([7, 7]);
     const geo = firstGeo(
       (
         await runNode(
@@ -764,7 +764,7 @@ function cloudWithReach(
   reaches: readonly number[],
 ): ReturnType<typeof createPointCloud> {
   const cloud = cloudAt(positions);
-  cloud.attrs.point.add("reach", "f32", 1, 0).data.set(reaches);
+  cloud.attrs.point.add("reach", "f32", 1, 0).writable().set(reaches);
   return cloud;
 }
 
@@ -956,7 +956,7 @@ describe("sampleNearestPoint with a field maxDistance", () => {
     params: Partial<SampleNearestPointParams> = {},
   ): Promise<number[]> {
     const cloud = cloudAt(dst);
-    cloud.attrs.point.add("reach", "f32", 1, 0).data.set(reaches);
+    cloud.attrs.point.add("reach", "f32", 1, 0).writable().set(reaches);
     const out = await runNode(
       sampleNearestPoint,
       { maxDistance: attribute("reach"), ...params },

@@ -1,6 +1,6 @@
 import type { Attribute, AttributeSet } from "./attribute.js";
 import type { Geometry } from "./geometry.js";
-import type { AttrData, AttrDefault } from "./types.js";
+import type { AttrDefault, ReadonlyAttrData } from "./types.js";
 
 /** Options for {@link transferNearest}. */
 export interface TransferNearestOptions {
@@ -26,7 +26,7 @@ function requirePosition(
   set: AttributeSet,
   name: string,
   label: string,
-): { data: Float32Array; stride: number } {
+): { data: ReadonlyAttrData<Float32Array>; stride: number } {
   const attr = set.get(name);
   if (!attr) {
     throw new Error(`transferNearest: ${label} is missing position attribute "${name}"`);
@@ -36,7 +36,10 @@ function requirePosition(
       `transferNearest: ${label} position attribute "${name}" must be f32 with tupleSize >= 3`,
     );
   }
-  return { data: attr.data as Float32Array, stride: attr.tupleSize };
+  // A narrowing of the read view, not a way back to a writable array: the
+  // two checks above have just established which member of the union this
+  // is, and positions are only read here.
+  return { data: attr.data as ReadonlyAttrData<Float32Array>, stride: attr.tupleSize };
 }
 
 /** Pick a cell size targeting a few points per occupied cell. */
@@ -55,10 +58,10 @@ function deriveCellSize(ex: number, ey: number, ez: number, count: number): numb
 }
 
 function nearestBrute(
-  sp: Float32Array,
+  sp: ReadonlyAttrData<Float32Array>,
   ss: number,
   ns: number,
-  dp: Float32Array,
+  dp: ReadonlyAttrData<Float32Array>,
   ds: number,
   nd: number,
 ): Uint32Array {
@@ -93,10 +96,10 @@ function nearestBrute(
 }
 
 function nearestGrid(
-  sp: Float32Array,
+  sp: ReadonlyAttrData<Float32Array>,
   ss: number,
   ns: number,
-  dp: Float32Array,
+  dp: ReadonlyAttrData<Float32Array>,
   ds: number,
   nd: number,
   cellSizeHint: number | undefined,
@@ -285,7 +288,16 @@ export function transferNearest(
   const ts = srcAttr.tupleSize;
   // Snapshot source values if replacing the attribute would clobber them
   // (transfer onto the same geometry/attribute).
-  let readData: AttrData = srcAttr.data;
+  //
+  // STILL AN IDENTITY TEST, and copy-on-write is what keeps it enough. A
+  // destination column that merely SHARES the source's buffer is a
+  // different object, so it falls through here — and then every write
+  // below goes through `writable()`, which gives that column storage of
+  // its own before the first byte lands. The source keeps the buffer, and
+  // `readData` keeps reading the values it came in with. What the
+  // snapshot still guards is the case identity finds: one column playing
+  // both parts, where the fork moves the column this reference belongs to.
+  let readData: ReadonlyAttrData = srcAttr.data;
   let readStrings: readonly string[] = srcAttr.stringTable;
   if (dstPoints.get(attrName) === srcAttr) {
     readData = srcAttr.data.slice(0, ns * ts);
@@ -307,7 +319,7 @@ export function transferNearest(
     }
     return out;
   }
-  const outData = out.data;
+  const outData = out.writable();
   for (let j = 0; j < nd; j++) {
     const so = nearest[j] * ts;
     const dofs = j * ts;

@@ -62,8 +62,8 @@ export const pointGrid = standardNode<PointGridParams, PointGridInputs, PointGri
     const [ox, oy, oz] = params.origin;
     const n = countX * countY * countZ;
     const geo = createPointCloud(n);
-    const P = geo.attrs.point.require("P").data;
-    const seeds = geo.attrs.point.require("seed").data;
+    const P = geo.attrs.point.require("P").writable();
+    const seeds = geo.attrs.point.require("seed").writable();
     let i = 0;
     for (let z = 0; z < countZ; z++) {
       for (let y = 0; y < countY; y++) {
@@ -195,8 +195,8 @@ export const pointLine = standardNode<PointLineParams, PointLineInputs, PointLin
       }
     }
     const geo = createPointCloud(n);
-    const P = geo.attrs.point.require("P").data;
-    const seeds = geo.attrs.point.require("seed").data;
+    const P = geo.attrs.point.require("P").writable();
+    const seeds = geo.attrs.point.require("seed").writable();
     // 'endpoints': inclusive divides by the number of GAPS (n - 1), so the
     // last point lands on `end`; exclusive divides by the number of
     // SAMPLES (n), so the last point stops one step short. Only the
@@ -261,8 +261,8 @@ export const pointScatterInBounds = standardNode<
     const [ax, ay, az] = params.boundsMin;
     const [bx, by, bz] = params.boundsMax;
     const geo = createPointCloud(n);
-    const P = geo.attrs.point.require("P").data;
-    const seeds = geo.attrs.point.require("seed").data;
+    const P = geo.attrs.point.require("P").writable();
+    const seeds = geo.attrs.point.require("seed").writable();
     for (let i = 0; i < n; i++) {
       P[i * 3] = ax + (bx - ax) * hashFloat(hashCombine(seed, i, 0));
       P[i * 3 + 1] = ay + (by - ay) * hashFloat(hashCombine(seed, i, 1));
@@ -534,8 +534,8 @@ export const pointScatterInWorld = standardNode<
     // the pre-clip total and shrunk once at the end (resize down keeps the
     // written prefix), so the survivors are written in place.
     const geo = createPointCloud(total);
-    const px = geo.attrs.point.require("P").data;
-    const ps = geo.attrs.point.require("seed").data;
+    const px = geo.attrs.point.require("P").writable();
+    const ps = geo.attrs.point.require("seed").writable();
     let n = 0;
     sinceCheck = 0;
     for (let cz = c0z; cz <= c1z; cz++) {

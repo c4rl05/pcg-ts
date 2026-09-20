@@ -121,7 +121,7 @@ export function createTriangleMesh(
   const geo = new Geometry();
   const P = geo.attrs.point.add("P", "f32", 3);
   geo.attrs.point.resize(np);
-  P.data.set(positions);
+  P.writable().set(positions);
 
   const nv = triangles.length;
   const vertexToPoint = new Uint32Array(nv);
@@ -236,7 +236,7 @@ export function createPolyline(
   const geo = new Geometry();
   const P = geo.attrs.point.add("P", "f32", 3);
   geo.attrs.point.resize(np);
-  P.data.set(positions);
+  P.writable().set(positions);
 
   const closed = options.closed === true;
   const nv = np + (closed ? 1 : 0);

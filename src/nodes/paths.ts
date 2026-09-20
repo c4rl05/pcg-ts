@@ -793,10 +793,10 @@ export const pathResample = standardNode<
     }
 
     const out = createPointCloud(total);
-    const op = out.attrs.point.require("P").data;
-    const tangent = out.attrs.point.add("tangent", "f32", 3, [0, 0, 0]).data;
-    const curveU = out.attrs.point.add("curveU", "f32", 1, 0).data;
-    const seeds = out.attrs.point.require("seed").data;
+    const op = out.attrs.point.require("P").writable();
+    const tangent = out.attrs.point.add("tangent", "f32", 3, [0, 0, 0]).writable();
+    const curveU = out.attrs.point.add("curveU", "f32", 1, 0).writable();
+    const seeds = out.attrs.point.require("seed").writable();
     // `sampleArcAttr` gets its OWN report-slot check rather than a fourth
     // entry in requireResampleReports, and the domain is the reason:
     // that helper's argument is that its slots are PER-PATH facts and
@@ -825,7 +825,7 @@ export const pathResample = standardNode<
         // input" would send an author after a geometry it is not on.
         on: "output",
       });
-      sampleArc = out.attrs.point.replace(params.sampleArcAttr, "f32", 1, 0).data;
+      sampleArc = out.attrs.point.replace(params.sampleArcAttr, "f32", 1, 0).writable();
     }
     // The chord length of the EMITTED polyline, per path, and the only
     // number in this node measured back OFF the samples rather than from
@@ -992,7 +992,7 @@ export const pathResample = standardNode<
     // there.
     requireResampleReports(out.attrs.primitive, params, "output");
     if (params.lengthAttr !== "") {
-      const data = out.attrs.primitive.replace(params.lengthAttr, "f32", 1, 0).data;
+      const data = out.attrs.primitive.replace(params.lengthAttr, "f32", 1, 0).writable();
       // Output primitive `ti` resamples `tables[ti]` and nothing else, the
       // same 1:1 the primitive carry above relies on.
       for (let ti = 0; ti < tables.length; ti++) data[ti] = tables[ti].length;
@@ -1003,11 +1003,11 @@ export const pathResample = standardNode<
       // without a transfer. `resampledLengths` was measured in output
       // order, which IS `ti` order — `tables[ti]` is what path `ti` came
       // from — so no remap is needed here either.
-      const data = out.attrs.primitive.replace(params.resampledLengthAttr, "f32", 1, 0).data;
+      const data = out.attrs.primitive.replace(params.resampledLengthAttr, "f32", 1, 0).writable();
       for (let ti = 0; ti < tables.length; ti++) data[ti] = resampledLengths[ti];
     }
     if (params.stepAttr !== "") {
-      const data = out.attrs.primitive.replace(params.stepAttr, "f32", 1, 0).data;
+      const data = out.attrs.primitive.replace(params.stepAttr, "f32", 1, 0).writable();
       for (let ti = 0; ti < tables.length; ti++) data[ti] = steps[ti];
     }
     return { out: [makeGeometryItem(out)] };
@@ -1122,12 +1122,12 @@ export const pathSegments = standardNode<
     }
 
     const out = createPointCloud(total);
-    const op = out.attrs.point.require("P").data;
-    const rot = out.attrs.point.require("rot").data;
-    const scale = out.attrs.point.require("scale").data;
-    const seeds = out.attrs.point.require("seed").data;
-    const tangent = out.attrs.point.add("tangent", "f32", 3, [0, 0, 0]).data;
-    const curveU = out.attrs.point.add("curveU", "f32", 1, 0).data;
+    const op = out.attrs.point.require("P").writable();
+    const rot = out.attrs.point.require("rot").writable();
+    const scale = out.attrs.point.require("scale").writable();
+    const seeds = out.attrs.point.require("seed").writable();
+    const tangent = out.attrs.point.add("tangent", "f32", 3, [0, 0, 0]).writable();
+    const curveU = out.attrs.point.add("curveU", "f32", 1, 0).writable();
     // The opt-in per-path index, checked the moment the columns it must
     // not destroy exist. There is no earlier point that knows them: this
     // node builds a FRESH cloud rather than cloning, so the domain the
@@ -1151,7 +1151,7 @@ export const pathSegments = standardNode<
         // input" would be advice about the wrong geometry.
         on: "output",
       });
-      segmentIndex = out.attrs.point.replace(params.segmentIndexAttr, "i32", 1, 0).data;
+      segmentIndex = out.attrs.point.replace(params.segmentIndexAttr, "i32", 1, 0).writable();
     }
     // Which input polyline each segment came from. There is no output
     // primitive domain to carry onto — the output is a cloud.
@@ -1320,13 +1320,13 @@ export const pathPointAt = standardNode<PathPointAtParams, PathPointAtInputs, Pa
       ? { data: at.data.slice(), tupleSize: at.tupleSize }
       : at;
     const P = geo.attrs.point.require("P");
-    const pd = P.data;
+    const pd = P.writable();
     const ps = P.tupleSize;
     // Reset rather than update in place: a point no polyline reaches has
     // no tangent to report, and leaving a stale one from upstream would
     // be a value that quietly describes a different curve.
-    const tangent = geo.attrs.point.replace("tangent", "f32", 3, [0, 0, 0]).data;
-    const curveU = geo.attrs.point.replace("curveU", "f32", 1, 0).data;
+    const tangent = geo.attrs.point.replace("tangent", "f32", 3, [0, 0, 0]).writable();
+    const curveU = geo.attrs.point.replace("curveU", "f32", 1, 0).writable();
     const found = [0, 0]; // scratch [segment, t], reused by every point
     // Which reading, settled here rather than asked at every path point
     // below — see the note in `src/noise/worley.ts`. The test is POSITIVE,
@@ -1522,9 +1522,11 @@ export const pathScan = standardNode<PathScanParams, PathScanInputs, PathScanOut
         ? Number.NEGATIVE_INFINITY
         : 0;
     const start = new Array<number>(ts).fill(identity);
-    const out = geo.attrs.point.replace(outName, "f32", ts, start).data;
+    const out = geo.attrs.point.replace(outName, "f32", ts, start).writable();
     const totals =
-      totalAttr === "" ? null : geo.attrs.primitive.replace(totalAttr, "f32", ts, start);
+      totalAttr === ""
+        ? null
+        : geo.attrs.primitive.replace(totalAttr, "f32", ts, start).writable();
     // Accumulate in f64 whatever the source type, so a long f32 sum does
     // not lose its tail — the same reason attributeReduce does. A min or
     // a max needs none of that (it COPIES one of the values it was handed
@@ -1599,7 +1601,7 @@ export const pathScan = standardNode<PathScanParams, PathScanInputs, PathScanOut
         // The RAW total, after the normalization above rather than
         // before: `acc` is untouched by it, and the total is the one
         // thing normalizing the column would otherwise destroy.
-        for (let c = 0; c < ts; c++) totals.data[t + c] = acc[c];
+        for (let c = 0; c < ts; c++) totals[t + c] = acc[c];
       }
     }
     return { out: [makeGeometryItem(geo)] };
@@ -1773,7 +1775,7 @@ export const pathRuns = standardNode<PathRunsParams, PathRunsInputs, PathRunsOut
         ? Number.NEGATIVE_INFINITY
         : 0;
     const start = new Array<number>(ts).fill(identity);
-    const out = geo.attrs.point.replace(outName, "f32", ts, start).data;
+    const out = geo.attrs.point.replace(outName, "f32", ts, start).writable();
     // Accumulate in f64 whatever the source type, so a long f32 sum does
     // not lose its tail — the same reason attributeReduce and pathScan do.
     // A min or a max needs none of that (it COPIES one of the values it
@@ -1907,7 +1909,7 @@ export const writeTangents = standardNode<
     const tables = polylineArcTables(geo, "writeTangents");
     const dst = geo.attrs.point.replace(name, "f32", 3, [0, 0, 0]);
     const P = geo.attrs.point.require("P");
-    writePolylineTangents(tables, P.data, P.tupleSize, dst.data);
+    writePolylineTangents(tables, P.data, P.tupleSize, dst.writable());
     return { out: [makeGeometryItem(geo)] };
   },
 });
@@ -2099,17 +2101,22 @@ export const writeCurveFrame = standardNode<
     const binormal = geo.attrs.point.replace(params.binormalName, "f32", 3, [0, 0, 0]);
     // Allocated here with the rest rather than after the transport, so
     // every column this node writes exists before any of them is written
-    // into and no later `replace` can move one out from under a `.data`
-    // reference already taken.
+    // into and nothing below can move one out from under a reference
+    // already taken: not a later `replace`, which would re-add the column
+    // somewhere else, and not a copy-on-write fork either, because every
+    // reference below is taken AFTER the `writable()` that forks the
+    // column it belongs to. That ordering is what lets `td` read the
+    // tangents through `data` once `writable()` has handed the same array
+    // to the writer.
     const curvature =
       curvatureName === ""
         ? null
         : geo.attrs.point.replace(curvatureName, "f32", 3, [0, 0, 0]);
-    writePolylineTangents(tables, P.data, P.tupleSize, tangent.data);
+    writePolylineTangents(tables, P.data, P.tupleSize, tangent.writable());
 
     const td = tangent.data;
-    const nd = normal.data;
-    const bd = binormal.data;
+    const nd = normal.writable();
+    const bd = binormal.writable();
     const pd = P.data;
     const ps = P.tupleSize;
     const seed: number[] = [0, 0, 0];
@@ -2221,7 +2228,7 @@ export const writeCurveFrame = standardNode<
     // it cannot measure costs the ones after it nothing, where a point the
     // transport cannot measure has to be stepped over.
     if (curvature) {
-      const kd = curvature.data;
+      const kd = curvature.writable();
       for (const table of tables) {
         const pts = table.points;
         const nv = pts.length;

@@ -222,10 +222,10 @@ function districts(order: readonly number[]): Geometry {
   const n = order.length;
   const geo = createPointCloud(n);
   const P = geo.attrs.point.require("P");
-  const dist = geo.attrs.point.add("dist", "i32", 1);
+  const dist = geo.attrs.point.add("dist", "i32", 1).writable();
   order.forEach((src, i) => {
     P.setTuple(i, [src, src * 2, 0]);
-    dist.data[i] = src % 4;
+    dist[i] = src % 4;
   });
   return geo;
 }

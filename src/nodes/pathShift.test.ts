@@ -161,7 +161,7 @@ describe("pathShift: the shift", () => {
 
   it("shifts several attributes in one pass, each into its own column", async () => {
     const geo = cloud(STATIONS);
-    geo.attrs.point.add("w", "f32", 1, 0).data.set([100, 101, 102, 103, 104]);
+    geo.attrs.point.add("w", "f32", 1, 0).writable().set([100, 101, 102, 103, 104]);
     const out = await shift(await toPath(geo, { closed: true }), {
       attributes: ["v", "w"],
       outNames: ["nextV", "nextW"],
@@ -236,7 +236,7 @@ describe("pathShift: a closed path is a ring of points, not of vertices", () => 
   it("reads every point exactly once — the shift is a permutation of the ring", async () => {
     const geo = cloud(STATIONS);
     // rank i = i, so the shifted column IS the list of sources.
-    geo.attrs.point.add("rank", "i32", 1, -1).data.set([0, 1, 2, 3, 4]);
+    geo.attrs.point.add("rank", "i32", 1, -1).writable().set([0, 1, 2, 3, 4]);
     const out = await shift(await toPath(geo, { closed: true }), {
       attributes: ["rank"],
       outNames: ["fromRank"],
@@ -275,7 +275,7 @@ describe("pathShift: the order is the polyline's", () => {
    */
   async function crossed(closed: boolean): Promise<Geometry> {
     const geo = cloud([0, 10, 20, 30]);
-    geo.attrs.point.add("key", "f32", 1, 0).data.set([3, 1, 0, 2]);
+    geo.attrs.point.add("key", "f32", 1, 0).writable().set([3, 1, 0, 2]);
     return await toPath(geo, { orderAttr: "key", closed });
   }
 
@@ -520,7 +520,7 @@ describe("pathShift: attribute types", () => {
 
   it("keeps an i32 column an i32 column", async () => {
     const path = await ring((geo) => {
-      geo.attrs.point.add("lane", "i32", 1, -1).data.set([1, 2, 3]);
+      geo.attrs.point.add("lane", "i32", 1, -1).writable().set([1, 2, 3]);
     });
     const out = await shift(path, { attributes: ["lane"], outNames: ["nextLane"], offset: 1 });
     const next = out.attrs.point.require("nextLane");
@@ -530,7 +530,7 @@ describe("pathShift: attribute types", () => {
 
   it("keeps a u32 column a u32 column", async () => {
     const path = await ring((geo) => {
-      geo.attrs.point.add("id", "u32", 1, 0).data.set([7, 8, 9]);
+      geo.attrs.point.add("id", "u32", 1, 0).writable().set([7, 8, 9]);
     });
     const out = await shift(path, { attributes: ["id"], outNames: ["nextId"], offset: -1 });
     expect(out.attrs.point.require("nextId").type).toBe("u32");
@@ -539,7 +539,7 @@ describe("pathShift: attribute types", () => {
 
   it("keeps a bool column a bool column", async () => {
     const path = await ring((geo) => {
-      geo.attrs.point.add("flag", "bool", 1, 0).data.set([1, 0, 1]);
+      geo.attrs.point.add("flag", "bool", 1, 0).writable().set([1, 0, 1]);
     });
     const out = await shift(path, { attributes: ["flag"], outNames: ["nextFlag"], offset: 1 });
     expect(out.attrs.point.require("nextFlag").type).toBe("bool");
@@ -577,7 +577,7 @@ describe("pathShift: attribute types", () => {
     const path = await ring((geo) => {
       geo.attrs.point
         .add("uvw", "f32", 3, [0, 0, 0])
-        .data.set([0, 1, 2, 10, 11, 12, 20, 21, 22]);
+        .writable().set([0, 1, 2, 10, 11, 12, 20, 21, 22]);
     });
     const out = await shift(path, { attributes: ["uvw"], outNames: ["nextUvw"], offset: 1 });
     expect(out.attrs.point.require("nextUvw").tupleSize).toBe(3);
@@ -586,7 +586,7 @@ describe("pathShift: attribute types", () => {
 
   it("gives a missed tuple every component of the source's default", async () => {
     const geo = cloud([0, 0, 0]);
-    geo.attrs.point.add("uvw", "f32", 3, [7, 8, 9]).data.set([0, 1, 2, 10, 11, 12, 20, 21, 22]);
+    geo.attrs.point.add("uvw", "f32", 3, [7, 8, 9]).writable().set([0, 1, 2, 10, 11, 12, 20, 21, 22]);
     const out = await shift(await toPath(geo), {
       attributes: ["uvw"],
       outNames: ["nextUvw"],
@@ -688,7 +688,7 @@ describe("pathShift: the params", () => {
 
   it("resets an existing same-shape outName column, so a miss cannot inherit a value", async () => {
     const geo = cloud(STATIONS, 7);
-    geo.attrs.point.add("next", "f32", 1, 0).data.set([1, 2, 3, 4, 5]);
+    geo.attrs.point.add("next", "f32", 1, 0).writable().set([1, 2, 3, 4, 5]);
     const out = await shift(await toPath(geo), { ...V, offset: 1, outOfRange: "miss" });
     expect(col(out, "next")).toEqual([10, 20, 30, 40, 7]);
   });
@@ -711,7 +711,7 @@ describe("pathShift: hitAttr", () => {
 
   it("resets a flag it inherited, so it describes THIS shift only", async () => {
     const geo = cloud(STATIONS, 7);
-    geo.attrs.point.add("__hit", "bool", 1, 0).data.set([1, 1, 1, 1, 1]);
+    geo.attrs.point.add("__hit", "bool", 1, 0).writable().set([1, 1, 1, 1, 1]);
     const out = await shift(await toPath(geo), {
       ...V,
       offset: 1,

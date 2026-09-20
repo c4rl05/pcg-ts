@@ -13,7 +13,12 @@
  * vitest side to assert.
  */
 import { create } from "webgpu";
-import { Geometry, createTriangleMesh, type AttrType } from "../data/index.js";
+import {
+  Geometry,
+  createTriangleMesh,
+  type AttrType,
+  type ReadonlyAttrData,
+} from "../data/index.js";
 import {
   CookCancelledError,
   Graph,
@@ -176,8 +181,10 @@ function makeXformGeometry(count: number, shape: XformShape): Geometry {
         : undefined;
   const scale = shape.scale === true ? set.add("scale", "f32", 3, [1, 1, 1]) : undefined;
   set.resize(count);
+  const rotD = rot?.writable();
+  const scaleD = scale?.writable();
   for (let i = 0; i < count; i++) {
-    if (rot !== undefined && shape.rot === "quat") {
+    if (rotD !== undefined && shape.rot === "quat") {
       // Unit quaternion from a hashed axis-angle (deterministic, varied).
       const ax = hashFloat(hashCombine(707, i, 0)) - 0.5;
       const ay = hashFloat(hashCombine(707, i, 1)) - 0.5;
@@ -185,15 +192,15 @@ function makeXformGeometry(count: number, shape: XformShape): Geometry {
       const ang = hashFloat(hashCombine(708, i)) * Math.PI * 2;
       const len = Math.hypot(ax, ay, az) || 1;
       const s = Math.sin(ang / 2);
-      rot.data[i * 4] = (ax / len) * s;
-      rot.data[i * 4 + 1] = (ay / len) * s;
-      rot.data[i * 4 + 2] = (az / len) * s;
-      rot.data[i * 4 + 3] = Math.cos(ang / 2);
-    } else if (rot !== undefined) {
-      for (let k = 0; k < 3; k++) rot.data[i * 3 + k] = hashFloat(hashCombine(710, i, k));
+      rotD[i * 4] = (ax / len) * s;
+      rotD[i * 4 + 1] = (ay / len) * s;
+      rotD[i * 4 + 2] = (az / len) * s;
+      rotD[i * 4 + 3] = Math.cos(ang / 2);
+    } else if (rotD !== undefined) {
+      for (let k = 0; k < 3; k++) rotD[i * 3 + k] = hashFloat(hashCombine(710, i, k));
     }
-    if (scale !== undefined) {
-      for (let k = 0; k < 3; k++) scale.data[i * 3 + k] = 0.5 + hashFloat(hashCombine(709, i, k));
+    if (scaleD !== undefined) {
+      for (let k = 0; k < 3; k++) scaleD[i * 3 + k] = 0.5 + hashFloat(hashCombine(709, i, k));
     }
   }
   return geo;
@@ -211,9 +218,11 @@ function leanGeometry(count: number): Geometry {
   const P = set.add("P", "f32", 3);
   const density = set.add("density", "f32", 1);
   set.resize(count);
+  const Pd = P.writable();
+  const densityD = density.writable();
   for (let i = 0; i < count; i++) {
-    for (let k = 0; k < 3; k++) P.data[i * 3 + k] = (hashFloat(hashCombine(101, i, k)) - 0.5) * 16;
-    density.data[i] = hashFloat(hashCombine(202, i));
+    for (let k = 0; k < 3; k++) Pd[i * 3 + k] = (hashFloat(hashCombine(101, i, k)) - 0.5) * 16;
+    densityD[i] = hashFloat(hashCombine(202, i));
   }
   return geo;
 }
@@ -224,7 +233,8 @@ function makeMaskGeometry(count: number, withRot: boolean): Geometry {
   const set = geo.attrs.point;
   const mask = set.add("mask", "f32", 1, 0);
   set.resize(count);
-  for (let i = 0; i < count; i++) mask.data[i] = i % 4 === 0 ? 0 : 1;
+  const maskD = mask.writable();
+  for (let i = 0; i < count; i++) maskD[i] = i % 4 === 0 ? 0 : 1;
   return geo;
 }
 
@@ -1134,7 +1144,8 @@ function axisGeometry(): Geometry {
     [0, -1, 0],
     [0, 0, -1],
   ];
-  for (let i = 0; i < 6; i++) for (let k = 0; k < 3; k++) P.data[i * 3 + k] = pts[i][k];
+  const Pd = P.writable();
+  for (let i = 0; i < 6; i++) for (let k = 0; k < 3; k++) Pd[i * 3 + k] = pts[i][k];
   return geo;
 }
 
@@ -1335,7 +1346,8 @@ async function jitterSemantics(ev: GpuFieldEvaluator): Promise<Record<string, un
   // 0), and each axis draws hashFloat(hashCombine(seed, identity, k)).
   const jitterSeed = hashCombine(deriveNodeSeed(built.g.seed, built.ids[1]), extraSeed);
   const expected = new Float32Array(count * 3);
-  const src = input.attrs.point.require("P").data as Float32Array;
+  // NARROWS the read view; the fixture's `P` is f32x3 by construction.
+  const src = input.attrs.point.require("P").data as ReadonlyAttrData<Float32Array>;
   const bits = new Uint32Array(src.buffer, src.byteOffset, src.length);
   for (let i = 0; i < count; i++) {
     const ident = hashCombine(bits[i * 3], bits[i * 3 + 1], bits[i * 3 + 2], 0);
@@ -1499,8 +1511,9 @@ async function planRejections(ev: GpuFieldEvaluator): Promise<Array<Record<strin
         const set = geo.attrs.point;
         const cols = Array.from({ length: 8 }, (_, a) => set.add(`a${a}`, "f32", 1, 0));
         set.resize(400);
+        const colD = cols.map((c) => c.writable());
         for (let i = 0; i < 400; i++) {
-          for (let a = 0; a < 8; a++) cols[a].data[i] = hashFloat(hashCombine(900 + a, i));
+          for (let a = 0; a < 8; a++) colD[a][i] = hashFloat(hashCombine(900 + a, i));
         }
         return geo;
       },
@@ -1565,14 +1578,16 @@ async function passthrough(ev: GpuFieldEvaluator): Promise<Record<string, unknow
     const label = set.add("label", "string", 1, "");
     const density = set.add("density", "f32", 1, 0);
     set.resize(4);
+    const wideD = wide.writable();
+    const densityD = density.writable();
     for (let i = 0; i < 4; i++) {
-      for (let k = 0; k < 5; k++) wide.data[i * 5 + k] = hashFloat(hashCombine(811, i, k));
-      density.data[i] = hashFloat(hashCombine(812, i));
+      for (let k = 0; k < 5; k++) wideD[i * 5 + k] = hashFloat(hashCombine(811, i, k));
+      densityD[i] = hashFloat(hashCombine(812, i));
     }
     label.fill("alpha", 0, 2);
     label.fill("beta", 2, 2);
     geo.attrs.primitive.add("pid", "u32", 1, 0);
-    geo.attrs.primitive.require("pid").data[1] = 7;
+    geo.attrs.primitive.require("pid").writable()[1] = 7;
     geo.attrs.detail.add("note", "f32", 1, 0.5);
     return geo;
   };

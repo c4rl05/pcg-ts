@@ -57,6 +57,7 @@ import {
   makeInstancesItem,
   pointScatterInBounds,
   randomField,
+  type ReadonlyAttrData,
   setAttribute,
   spawnInstances,
   type SpawnInstancesParams,
@@ -249,8 +250,12 @@ function channelOf(batch: InstanceBatch, name: string): AttrData {
   return column;
 }
 
-/** A point attribute's storage, for comparing a channel against its source. */
-function pointColumn(geo: Geometry, name: string): AttrData {
+/**
+ * A point attribute's storage, for comparing a channel against its source.
+ * The READ view: this suite only ever indexes it and asks its dtype, and
+ * the write route would fork a buffer for nothing.
+ */
+function pointColumn(geo: Geometry, name: string): ReadonlyAttrData {
   return geo.attrs.point.require(name).data;
 }
 
@@ -723,7 +728,7 @@ describe("channels survive the worker wire", () => {
     // Instance order, values and dtypes, checked against the SOURCE points
     // on the far side of the wire — not against the pre-encode batches, so
     // a codec that permuted both consistently would still be caught.
-    const src: Record<string, AttrData> = {
+    const src: Record<string, ReadonlyAttrData> = {
       pid: pointColumn(geo, "pid"),
       bigId: pointColumn(geo, "bigId"),
       phase: pointColumn(geo, "phase"),

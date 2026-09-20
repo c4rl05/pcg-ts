@@ -2,7 +2,7 @@
  * Debug helper: visualize a pcg point cloud as THREE.Points.
  */
 import { BufferAttribute, BufferGeometry, Points, PointsMaterial } from "three";
-import type { Geometry } from "../data/index.js";
+import type { Geometry, ReadonlyAttrData } from "../data/index.js";
 import { readRgb, rgbSourceOf } from "../spawn/color.js";
 
 /** Options for {@link toPointsObject}. */
@@ -38,7 +38,10 @@ export function toPointsObject(
   // attribute storage and trimming unused capacity.
   bufferGeo.setAttribute(
     "position",
-    new BufferAttribute((P.data as Float32Array).slice(0, n * 3), 3),
+    // The cast NARROWS the read view to the member the two checks above
+    // have just established; it does not escape it. `slice` copies, so
+    // what three receives is the caller's own array.
+    new BufferAttribute((P.data as ReadonlyAttrData<Float32Array>).slice(0, n * 3), 3),
   );
   let vertexColors = false;
   // Same extraction the spawner uses (`src/spawn/color.ts`): components

@@ -2895,7 +2895,7 @@ describe("writeTangents", () => {
     // every other column open — an i32 tag under the tangent's name was
     // silently turned into three floats.
     const tagged = createPolyline([0, 0, 0, 1, 0, 0]);
-    tagged.attrs.point.add("tag", "i32", 1, 0).data.set([5, 6]);
+    tagged.attrs.point.add("tag", "i32", 1, 0).writable().set([5, 6]);
     await expect(
       runNode(writeTangents, { name: "tag" }, { in: [makeGeometryItem(tagged)] }),
     ).rejects.toThrow(

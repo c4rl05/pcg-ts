@@ -25,7 +25,7 @@
  * Reading meaning out of one here would make the guard's answer depend on
  * which path ran.
  */
-import type { AttrData } from "../data/index.js";
+import type { ReadonlyAttrData } from "../data/index.js";
 import type { ColumnData } from "./types.js";
 
 /**
@@ -39,7 +39,7 @@ import type { ColumnData } from "./types.js";
  * `capacity * tupleSize` and its tail holds elements the geometry does not
  * have. Scanning that tail would let dead storage decide a live answer.
  */
-export function firstNonFinite(data: ColumnData | AttrData, scalars: number): number {
+export function firstNonFinite(data: ColumnData | ReadonlyAttrData, scalars: number): number {
   if (!(data instanceof Float32Array)) return -1;
   const n = Math.min(scalars, data.length);
   for (let i = 0; i < n; i++) {
@@ -56,7 +56,7 @@ export function firstNonFinite(data: ColumnData | AttrData, scalars: number): nu
  * See {@link firstNonFinite} for why `scalars` is a required argument.
  */
 export function countNonFiniteElements(
-  data: ColumnData | AttrData,
+  data: ColumnData | ReadonlyAttrData,
   scalars: number,
   tupleSize: number,
 ): number {

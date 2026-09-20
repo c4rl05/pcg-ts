@@ -27,12 +27,21 @@ function copyDomain(src: Geometry, dst: Geometry, domain: Domain): void {
 
 /**
  * Deep-copy a geometry: every attribute of every domain (including string
- * tables and defaults) plus the topology arrays. Nodes use this to honor
- * the purity contract — transform a clone, never a cached input.
+ * tables and defaults) plus the topology arrays. This is how a caller
+ * honors the purity contract — transform a copy, never a cached input.
  *
  * The copy holds the same elements and nothing else: each domain's
  * `capacity` is exactly its `count`, where the source's may carry the
  * slack of growth by doubling. Appending to the copy grows it as usual.
+ *
+ * DEEP, AND IT STAYS DEEP. Every column of the result is its own
+ * allocation, so the result can be written through any route and however
+ * long it is held. The library's own nodes take a cheaper copy-on-write
+ * derivation instead — same elements, but each numeric column is still
+ * the input's storage until something writes it — which is sound only
+ * because every write inside the library goes through
+ * `Attribute.writable()`. That is an obligation this function does not
+ * ask of its callers, which is why it is the one that is published.
  */
 export function cloneGeometry(src: Geometry): Geometry {
   const dst = new Geometry();

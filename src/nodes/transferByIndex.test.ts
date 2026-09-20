@@ -49,7 +49,7 @@ function strings(geo: Geometry, name: string): string[] {
 function table(name: string, values: readonly number[], tupleSize = 1, defaultValue = 0): Geometry {
   const geo = createPointCloud(values.length / tupleSize);
   const attr = geo.attrs.point.add(name, "f32", tupleSize, defaultValue);
-  attr.data.set(values);
+  attr.writable().set(values);
   return geo;
 }
 
@@ -154,7 +154,7 @@ describe("transferByIndex: the gather", () => {
   it("gathers several named attributes in one pass", async () => {
     const src = TABLE();
     const w = src.attrs.point.add("w", "f32", 1, 0);
-    w.data.set([100, 101, 102, 103, 104]);
+    w.writable().set([100, 101, 102, 103, 104]);
     const out = await gather(picks([3, 1]), src, { attributes: ["v", "w"] });
     expect(col(out, "v")).toEqual([30, 10]);
     expect(col(out, "w")).toEqual([103, 101]);
@@ -162,7 +162,7 @@ describe("transferByIndex: the gather", () => {
 
   it("places the destination onto the source's positions when P is named", async () => {
     const src = createPointCloud(2);
-    src.attrs.point.require("P").data.set([10, 0, 0, 20, 0, 0]);
+    src.attrs.point.require("P").writable().set([10, 0, 0, 20, 0, 0]);
     const out = await gather(picks([1, 0, 1]), src, { attributes: ["P"] });
     expect(positionsOf(out)).toEqual([
       [20, 0, 0],
@@ -175,7 +175,7 @@ describe("transferByIndex: the gather", () => {
 describe("transferByIndex: which attributes", () => {
   it("takes every non-bookkeeping point attribute when the list is empty", async () => {
     const src = createPointCloud(2);
-    src.attrs.point.add("v", "f32", 1, 0).data.set([10, 20]);
+    src.attrs.point.add("v", "f32", 1, 0).writable().set([10, 20]);
     const tag = src.attrs.point.add("tag", "string", 1, "");
     tag.setString(0, "a");
     tag.setString(1, "b");
@@ -188,16 +188,16 @@ describe("transferByIndex: which attributes", () => {
 
   it("excludes the eight bookkeeping columns from the empty-list default", async () => {
     const src = createPointCloud(2);
-    src.attrs.point.add("v", "f32", 1, 0).data.set([10, 20]);
+    src.attrs.point.add("v", "f32", 1, 0).writable().set([10, 20]);
     // Every standard column made unmistakably the source's.
-    src.attrs.point.require("P").data.set([9, 9, 9, 9, 9, 9]);
-    src.attrs.point.require("rot").data.set([9, 9, 9, 9, 9, 9, 9, 9]);
-    src.attrs.point.require("scale").data.set([9, 9, 9, 9, 9, 9]);
-    src.attrs.point.require("density").data.set([9, 9]);
-    src.attrs.point.require("boundsMin").data.set([9, 9, 9, 9, 9, 9]);
-    src.attrs.point.require("boundsMax").data.set([9, 9, 9, 9, 9, 9]);
-    src.attrs.point.require("color").data.set([9, 9, 9, 9, 9, 9, 9, 9]);
-    src.attrs.point.require("seed").data.set([77, 77]);
+    src.attrs.point.require("P").writable().set([9, 9, 9, 9, 9, 9]);
+    src.attrs.point.require("rot").writable().set([9, 9, 9, 9, 9, 9, 9, 9]);
+    src.attrs.point.require("scale").writable().set([9, 9, 9, 9, 9, 9]);
+    src.attrs.point.require("density").writable().set([9, 9]);
+    src.attrs.point.require("boundsMin").writable().set([9, 9, 9, 9, 9, 9]);
+    src.attrs.point.require("boundsMax").writable().set([9, 9, 9, 9, 9, 9]);
+    src.attrs.point.require("color").writable().set([9, 9, 9, 9, 9, 9, 9, 9]);
+    src.attrs.point.require("seed").writable().set([77, 77]);
 
     const dst = picks([0, 1]);
     const out = await gather(dst, src, {});
@@ -209,7 +209,7 @@ describe("transferByIndex: which attributes", () => {
 
   it("lifts the exclusion when a bookkeeping column is named", async () => {
     const src = createPointCloud(2);
-    src.attrs.point.require("density").data.set([0.25, 0.75]);
+    src.attrs.point.require("density").writable().set([0.25, 0.75]);
     const out = await gather(picks([1, 1]), src, { attributes: ["density"] });
     expect(col(out, "density")).toEqual([0.75, 0.75]);
   });
@@ -240,7 +240,7 @@ describe("transferByIndex: which attributes", () => {
     // transferAttribute's rule, not the reporting-slot rule: the shape is
     // the source's and overwriting is what a copy IS.
     const dst = picks([1, 0]);
-    dst.attrs.point.add("v", "i32", 1, 0).data.set([5, 6]);
+    dst.attrs.point.add("v", "i32", 1, 0).writable().set([5, 6]);
     const src = table("v", [0, 1, 2, 3, 10, 11], 2);
     const out = await gather(dst, src, { attributes: ["v"] });
     const v = out.attrs.point.require("v");
@@ -294,7 +294,7 @@ describe("transferByIndex: out of range", () => {
 
   it("misses an index outside the source and keeps the prior value", async () => {
     const dst = picks([0, 5, -1]);
-    dst.attrs.point.add("v", "f32", 1, 0).data.set([7, 8, 9]);
+    dst.attrs.point.add("v", "f32", 1, 0).writable().set([7, 8, 9]);
     const out = await gather(dst, TABLE(), { attributes: ["v"], outOfRange: "miss" });
     expect(col(out, "v")).toEqual([0, 8, 9]);
   });
@@ -345,7 +345,7 @@ describe("transferByIndex: an empty source", () => {
   for (const outOfRange of ["clamp", "wrap", "miss"]) {
     it(`misses every point under "${outOfRange}" — there is no index to reach for`, async () => {
       const dst = picks([0, 1, 2]);
-      dst.attrs.point.add("v", "f32", 1, 0).data.set([7, 8, 9]);
+      dst.attrs.point.add("v", "f32", 1, 0).writable().set([7, 8, 9]);
       const out = await gather(dst, empty(), {
         attributes: ["v"],
         outOfRange,
@@ -394,7 +394,7 @@ describe("transferByIndex: reporting", () => {
 
   it("resets a hit flag it inherited, so it describes THIS gather only", async () => {
     const dst = picks([0, 7]);
-    dst.attrs.point.add("__hit", "bool", 1, 0).data.set([1, 1]);
+    dst.attrs.point.add("__hit", "bool", 1, 0).writable().set([1, 1]);
     const out = await gather(dst, table("v", [10, 20]), {
       attributes: ["v"],
       outOfRange: "miss",
@@ -611,7 +611,7 @@ describe("transferByIndex: determinism", () => {
     // The clone is deep, so the gather cannot read a value it has already
     // written: point 0 takes point 1's value and point 1 takes point 0's.
     const both = picks([1, 0]);
-    both.attrs.point.add("v", "f32", 1, 0).data.set([100, 200]);
+    both.attrs.point.add("v", "f32", 1, 0).writable().set([100, 200]);
     const out = await gather(both, both, { attributes: ["v"] });
     expect(col(out, "v")).toEqual([200, 100]);
   });

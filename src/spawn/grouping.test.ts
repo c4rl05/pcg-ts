@@ -124,8 +124,9 @@ describe("groupPointsByAsset: key resolution", () => {
     // Two different indices past the end of the table: getString reads
     // both as "", so both resolve to defaultAssetId and share ONE batch.
     const past = attr.stringTable.length;
-    attr.data[1] = past;
-    attr.data[3] = past + 5;
+    const idx = attr.writable();
+    idx[1] = past;
+    idx[3] = past + 5;
     const g = groupPointsByAsset(geo, BY_ASSET);
     expect(g.order).toEqual(["p", "d"]);
     expect(members(g, 0)).toEqual([0, 2]);

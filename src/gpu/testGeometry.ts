@@ -32,11 +32,21 @@ export function makeParityGeometry(count: number): Geometry {
   const material = set.add("material", "i32", 1);
   const species = set.add("species", "string", 1);
   set.resize(count);
+  // One `writable()` per column, taken after the resize that reallocates
+  // and before the loop that fills them: a fork is a per-column cost and
+  // must not be paid per element.
+  const Pd = P.writable();
+  const densityD = density.writable();
+  const normalD = normal.writable();
+  const uvD = uv.writable();
+  const activeD = active.writable();
+  const idD = id.writable();
+  const materialD = material.writable();
   for (let i = 0; i < count; i++) {
     for (let k = 0; k < 3; k++) {
-      P.data[i * 3 + k] = (hashFloat(hashCombine(101, i, k)) - 0.5) * 16;
+      Pd[i * 3 + k] = (hashFloat(hashCombine(101, i, k)) - 0.5) * 16;
     }
-    density.data[i] = hashFloat(hashCombine(202, i));
+    densityD[i] = hashFloat(hashCombine(202, i));
     // Unit-length, upper-hemisphere-biased: the shape a shading normal
     // has, so the forest slope field (1 - normal.y) spans [0, 1].
     {
@@ -45,15 +55,15 @@ export function makeParityGeometry(count: number): Geometry {
       const ny = 0.5 + 0.5 * hashFloat(hashCombine(606, i, 1));
       const nz = hashFloat(hashCombine(606, i, 2)) - 0.5;
       const inv = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz);
-      normal.data[i * 3] = nx * inv;
-      normal.data[i * 3 + 1] = ny * inv;
-      normal.data[i * 3 + 2] = nz * inv;
+      normalD[i * 3] = nx * inv;
+      normalD[i * 3 + 1] = ny * inv;
+      normalD[i * 3 + 2] = nz * inv;
     }
-    uv.data[i * 2] = hashFloat(hashCombine(303, i, 0));
-    uv.data[i * 2 + 1] = hashFloat(hashCombine(303, i, 1));
-    active.data[i] = i % 3 === 0 ? 1 : 0;
-    id.data[i] = hashCombine(404, i);
-    material.data[i] = (hashCombine(505, i) | 0) % 1000;
+    uvD[i * 2] = hashFloat(hashCombine(303, i, 0));
+    uvD[i * 2 + 1] = hashFloat(hashCombine(303, i, 1));
+    activeD[i] = i % 3 === 0 ? 1 : 0;
+    idD[i] = hashCombine(404, i);
+    materialD[i] = (hashCombine(505, i) | 0) % 1000;
     species.setString(i, SPECIES[i % SPECIES.length]);
   }
   return geo;

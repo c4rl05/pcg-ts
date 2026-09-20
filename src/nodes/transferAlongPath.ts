@@ -45,7 +45,7 @@
  * measuring the same path twice is how they come to disagree about where
  * the halfway point is.
  */
-import type { AttrData, Attribute } from "../data/index.js";
+import type { AttrData, Attribute, ReadonlyAttrData } from "../data/index.js";
 import { cloneGeometry, makeGeometryItem } from "../graph/index.js";
 import { standardNode } from "./registry.js";
 import {
@@ -91,11 +91,11 @@ function requireDistinctNames(names: readonly string[], param: string): void {
 /** One sampled column, resolved once before a single point is read. */
 interface Sampled {
   readonly name: string;
-  /** The path's storage for it. */
-  readonly src: AttrData;
+  /** The path's storage for it, read only. */
+  readonly src: ReadonlyAttrData;
   /** Components per element in `src`. */
   readonly srcTuple: number;
-  /** The destination storage on the output cloud. */
+  /** The destination storage on the output cloud, written. */
   readonly dst: AttrData;
   /** Components per element in `dst`. */
   readonly dstTuple: number;
@@ -272,7 +272,7 @@ export const transferAlongPath = standardNode<
           name: "P",
           src: src.data,
           srcTuple: src.tupleSize,
-          dst: outP.data,
+          dst: outP.writable(),
           dstTuple: outP.tupleSize,
           comps: 3,
           unit: false,
@@ -298,7 +298,7 @@ export const transferAlongPath = standardNode<
         name: src.name,
         src: src.data,
         srcTuple: src.tupleSize,
-        dst: dst.data,
+        dst: dst.writable(),
         dstTuple: src.tupleSize,
         comps: src.tupleSize,
         unit: unitNames.has(src.name),

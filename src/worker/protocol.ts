@@ -210,7 +210,7 @@ function decodeDomain(set: AttributeSet, enc: EncodedDomain): void {
   }
   set.resize(enc.count);
   for (const a of enc.attrs) {
-    set.require(a.name).data.set(a.data);
+    set.require(a.name).writable().set(a.data);
   }
 }
 

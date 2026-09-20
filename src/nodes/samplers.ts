@@ -140,9 +140,9 @@ export const surfaceSample = standardNode<
     // Place candidates: area-weighted triangle, uniform barycentric point.
     const n = params.count;
     const candidates = createPointCloud(n);
-    const cp = candidates.attrs.point.require("P").data;
-    const cn = candidates.attrs.point.add("normal", "f32", 3, [0, 1, 0]).data;
-    const cs = candidates.attrs.point.require("seed").data;
+    const cp = candidates.attrs.point.require("P").writable();
+    const cn = candidates.attrs.point.add("normal", "f32", 3, [0, 1, 0]).writable();
+    const cs = candidates.attrs.point.require("seed").writable();
     // Which triangle's PRIMITIVE each candidate landed on, so the mesh's
     // per-primitive values can be gathered onto the samples below.
     const candPrim = new Uint32Array(n);
@@ -404,10 +404,10 @@ export const splineSample = standardNode<
 
     const n = positions.length;
     const out = createPointCloud(n);
-    const op = out.attrs.point.require("P").data;
-    const tangent = out.attrs.point.add("tangent", "f32", 3, [0, 0, 0]).data;
-    const curveU = out.attrs.point.add("curveU", "f32", 1, 0).data;
-    const seeds = out.attrs.point.require("seed").data;
+    const op = out.attrs.point.require("P").writable();
+    const tangent = out.attrs.point.add("tangent", "f32", 3, [0, 0, 0]).writable();
+    const curveU = out.attrs.point.add("curveU", "f32", 1, 0).writable();
+    const seeds = out.attrs.point.require("seed").writable();
     // The per-sample report's slot, checked the moment the columns it must
     // not destroy exist and BEFORE the carry that can add more. This node
     // builds a FRESH cloud rather than cloning, so the input's point
@@ -431,7 +431,7 @@ export const splineSample = standardNode<
         // input" would send an author after a geometry it is not on.
         on: "output",
       });
-      sampleArc = out.attrs.point.replace(params.sampleArcAttr, "f32", 1, 0).data;
+      sampleArc = out.attrs.point.replace(params.sampleArcAttr, "f32", 1, 0).writable();
     }
     // The chord walk over the EMITTED samples, which is the whole point of
     // both reports: `curveU` measures the INPUT curve and this measures what
@@ -675,8 +675,8 @@ export const volumeSample = standardNode<
     const cellZ = nz > 0 ? ez / nz : 0;
 
     const geo = createPointCloud(total);
-    const P = geo.attrs.point.require("P").data;
-    const seeds = geo.attrs.point.require("seed").data;
+    const P = geo.attrs.point.require("P").writable();
+    const seeds = geo.attrs.point.require("seed").writable();
     let i = 0;
     for (let z = 0; z < nz; z++) {
       for (let y = 0; y < ny; y++) {

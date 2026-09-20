@@ -63,8 +63,11 @@ function makeTransformSample(count: number): Geometry {
   const rot = set.add("rot", "f32", 4);
   const scale = set.add("scale", "f32", 3);
   set.resize(count);
+  const Pd = P.writable();
+  const rotD = rot.writable();
+  const scaleD = scale.writable();
   for (let i = 0; i < count; i++) {
-    for (let k = 0; k < 3; k++) P.data[i * 3 + k] = (hashFloat(hashCombine(11, i, k)) - 0.5) * 80;
+    for (let k = 0; k < 3; k++) Pd[i * 3 + k] = (hashFloat(hashCombine(11, i, k)) - 0.5) * 80;
     // Axis-angle → unit quaternion, in f64 exactly as the CPU nodes do.
     const ax = hashFloat(hashCombine(22, i, 0)) - 0.5;
     const ay = hashFloat(hashCombine(22, i, 1)) - 0.5;
@@ -72,15 +75,15 @@ function makeTransformSample(count: number): Geometry {
     const len = Math.hypot(ax, ay, az) || 1;
     const angle = hashFloat(hashCombine(33, i)) * Math.PI * 2;
     const s = Math.sin(angle / 2);
-    rot.data[i * 4] = (ax / len) * s;
-    rot.data[i * 4 + 1] = (ay / len) * s;
-    rot.data[i * 4 + 2] = (az / len) * s;
-    rot.data[i * 4 + 3] = Math.cos(angle / 2);
-    for (let k = 0; k < 3; k++) scale.data[i * 3 + k] = 0.05 + hashFloat(hashCombine(44, i, k)) * 3.95;
+    rotD[i * 4] = (ax / len) * s;
+    rotD[i * 4 + 1] = (ay / len) * s;
+    rotD[i * 4 + 2] = (az / len) * s;
+    rotD[i * 4 + 3] = Math.cos(angle / 2);
+    for (let k = 0; k < 3; k++) scaleD[i * 3 + k] = 0.05 + hashFloat(hashCombine(44, i, k)) * 3.95;
   }
   const setQuat = (i: number, q: readonly number[], sc: readonly number[]): void => {
-    for (let k = 0; k < 4; k++) rot.data[i * 4 + k] = q[k];
-    for (let k = 0; k < 3; k++) scale.data[i * 3 + k] = sc[k];
+    for (let k = 0; k < 4; k++) rotD[i * 4 + k] = q[k];
+    for (let k = 0; k < 3; k++) scaleD[i * 3 + k] = sc[k];
   };
   if (count > 7) {
     setQuat(0, [0, 0, 0, 1], [1, 1, 1]); // identity, unit scale
@@ -116,9 +119,11 @@ function stripRotScale(src: Geometry, dropRot: boolean, dropScale: boolean): Geo
   const scale = dropScale ? undefined : set.add("scale", "f32", 3);
   const n = src.attrs.point.count;
   set.resize(n);
-  P.data.set(src.attrs.point.require("P").data.subarray(0, n * 3));
-  if (rot !== undefined) rot.data.set(src.attrs.point.require("rot").data.subarray(0, n * 4));
-  if (scale !== undefined) scale.data.set(src.attrs.point.require("scale").data.subarray(0, n * 3));
+  P.writable().set(src.attrs.point.require("P").data.subarray(0, n * 3));
+  if (rot !== undefined) rot.writable().set(src.attrs.point.require("rot").data.subarray(0, n * 4));
+  if (scale !== undefined) {
+    scale.writable().set(src.attrs.point.require("scale").data.subarray(0, n * 3));
+  }
   return geo;
 }
 
@@ -676,7 +681,7 @@ function makeSpeciesSample(count: number, tupleSize = 1): Geometry {
     if (tupleSize > 1) species.setString(i, m === 0 ? "fern" : "ghost", 1);
   }
   // Point 5 would be "pine"; an out-of-range index makes it "" instead.
-  species.data[5 * tupleSize] = species.stringTable.length + 3;
+  species.writable()[5 * tupleSize] = species.stringTable.length + 3;
   return geo;
 }
 
@@ -917,13 +922,15 @@ function makeColourSample(count: number, withSpecies: boolean): Geometry {
   const set = geo.attrs.point;
   const color = set.add("color", "f32", 4);
   const tint = set.add("tint", "f32", 3);
+  const colorD = color.writable();
+  const tintD = tint.writable();
   for (let i = 0; i < count; i++) {
-    for (let k = 0; k < 4; k++) color.data[i * 4 + k] = hashFloat(hashCombine(55, i, k));
-    for (let k = 0; k < 3; k++) tint.data[i * 3 + k] = (hashFloat(hashCombine(66, i, k)) - 0.5) * 3;
+    for (let k = 0; k < 4; k++) colorD[i * 4 + k] = hashFloat(hashCombine(55, i, k));
+    for (let k = 0; k < 3; k++) tintD[i * 3 + k] = (hashFloat(hashCombine(66, i, k)) - 0.5) * 3;
   }
   for (let e = 0; e < COLOR_EDGES.length && e < count; e++) {
-    for (let k = 0; k < 4; k++) color.data[e * 4 + k] = COLOR_EDGES[e][k];
-    for (let k = 0; k < 3; k++) tint.data[e * 3 + k] = COLOR_EDGES[e][k];
+    for (let k = 0; k < 4; k++) colorD[e * 4 + k] = COLOR_EDGES[e][k];
+    for (let k = 0; k < 3; k++) tintD[e * 3 + k] = COLOR_EDGES[e][k];
   }
   return geo;
 }
@@ -2042,7 +2049,8 @@ async function budget(
     const set = geo.attrs.point;
     const P = set.add("P", "f32", 3);
     set.resize(n);
-    for (let i = 0; i < n; i++) P.data[i * 3] = i;
+    const Pd = P.writable();
+    for (let i = 0; i < n; i++) Pd[i * 3] = i;
     return geo;
   };
 

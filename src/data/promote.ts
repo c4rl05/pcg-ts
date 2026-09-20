@@ -108,8 +108,13 @@ export function promote(
     return dst;
   }
 
+  // The write route first, then the read, so the read cannot be a
+  // reference the fork leaves behind. It cannot be here in any case: a
+  // column is only ever shared with the column of the SAME name on the
+  // SAME domain of another geometry, and these two are on different
+  // domains of one geometry, so forking `dst` never moves `src`.
+  const dstData = dst.writable();
   const srcData = src.data;
-  const dstData = dst.data;
 
   if (mode === "first") {
     forEachContribution(geo, from, to, (s, d) => {

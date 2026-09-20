@@ -87,11 +87,23 @@ import { UniformGrid, type PositionView } from "./uniformGrid.js";
  *   count changes, or when the buffer is reallocated.
  * - {@link adjacencyFor} detects all of those EXCEPT ONE: an in-place
  *   rewrite of `P` into the SAME buffer at the same count and stride. That
- *   is the exact gap `UniformGrid` documents, and it is closed in practice
- *   by the same discipline — every node clones its input geometry before
- *   writing (`cloneGeometry`), so a rewritten `P` is a different buffer.
- *   A caller that deliberately writes through a live `P.data` must call
- *   {@link buildAdjacency} directly.
+ *   is the exact gap `UniformGrid` documents. It is still closed by the
+ *   clone-before-write discipline every node follows, but copy-on-write
+ *   moved WHERE the closure happens, and the old argument — "`cloneGeometry`
+ *   makes a rewritten `P` a different buffer" — no longer describes it. A
+ *   clone now hands the derived geometry the buffer it came from; the WRITE
+ *   is what separates the two, because `Attribute.writable()` forks a column
+ *   that another column can still reach before it returns anything writable.
+ *   So a node that clones and then writes `P` still lands its write in a
+ *   buffer no cached relation was ever keyed on. What changed is the other
+ *   side: a derived geometry that never writes `P` keeps the buffer it was
+ *   cloned from and now HITS this cache, which is correct — two columns on
+ *   one buffer hold the same positions by construction, so the key names the
+ *   CONTENT and not the column.
+ *   The gap that remains is therefore narrower than it was: only a write to
+ *   a column nothing else shares reaches its own storage in place. A caller
+ *   deliberately doing that to a live `P` must call {@link buildAdjacency}
+ *   directly.
  */
 export interface Adjacency {
   /** Number of rows: the point count this was built over. */
@@ -241,7 +253,10 @@ function overflowError(
  * Cached relations, keyed on the position BUFFER's identity. A WeakMap
  * gives free eviction: when the geometry holding `P` is collected, so is
  * every adjacency derived from it, with no cache-invalidation call for a
- * caller to forget.
+ * caller to forget. Under copy-on-write one buffer can be reached from
+ * several columns at once, so the key identifies the positions rather
+ * than the column that happens to hold them — see the reuse contract on
+ * {@link Adjacency} for why that is the sound reading and not a looser one.
  *
  * The inner key is `count | stride | radius`, and **`cellSize` is
  * deliberately absent**: `queryRadius` returns the same set at any

@@ -97,7 +97,14 @@ const ROOT_TYPE_SURFACE = [
   "PointScatterInWorldParams", "PointScatterOnPathParams", "PointsToPathParams", "PrimType",
   "ProjectToPlaneParams", "PromoteAttributeParams", "PromoteMode", "QuotaRebalanceParams",
   "RegisteredNodeType", "RegisteredSubgraph", "RegistrationNodeRef", "RegistrationParam",
-  "RegistrationPin", "RemoveAttributeParams", "RepeatUntilParams", "ResidentAttrDesc", "ResidentDesc",
+  "RegistrationPin", "RemoveAttributeParams", "RepeatUntilParams",
+  // A column's storage AS A READER SEES IT: the type of `Attribute.data`,
+  // which is no longer the typed array itself. It has to be published
+  // because a consumer reading a column has to be able to NAME what it
+  // holds — and the write route, `Attribute.writable()`, gives back the
+  // array, so nothing is taken away that cannot be had. See src/data/types.ts.
+  "ReadonlyAttrData",
+  "ResidentAttrDesc", "ResidentDesc",
   "ResidentMemberDesc", "ResidentRunContext", "ResidentRunInput", "ResidentRunResult",
   "RunFitParams", "SampleNearestPointParams", "SelfPruneParams", "SerializedConnection",
   "SerializedExposedParam", "SerializedExposedPin", "SerializedGraph", "SerializedGraphParam",

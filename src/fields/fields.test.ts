@@ -107,7 +107,7 @@ describe("inputs", () => {
 
   it("position reads the P attribute", () => {
     const ctx = pointCtx(2);
-    ctx.geo.attrs.point.require("P").data.set([1, 2, 3, 4, 5, 6]);
+    ctx.geo.attrs.point.require("P").writable().set([1, 2, 3, 4, 5, 6]);
     const col = evaluateField(position(), ctx);
     expect(col.tupleSize).toBe(3);
     expect(Array.from(col.data)).toEqual([1, 2, 3, 4, 5, 6]);
@@ -418,7 +418,7 @@ describe("memoization", () => {
 describe("capture", () => {
   it("round-trips a field through an anonymous attribute", () => {
     const geo = createPointCloud(4);
-    geo.attrs.point.require("P").data.set([1, 0, 0, 0, 2, 0, 0, 0, 3, 1, 1, 1]);
+    geo.attrs.point.require("P").writable().set([1, 0, 0, 0, 2, 0, 0, 0, 3, 1, 1, 1]);
     const field = mul(position(), 2);
     const name = capture(geo, "point", field, 0);
     expect(name).toBe("__anon_0");

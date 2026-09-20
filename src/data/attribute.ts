@@ -1,4 +1,10 @@
-import { ATTR_CTORS, type AttrDefault, type AttrType, type AttrTypeMap } from "./types.js";
+import {
+  ATTR_CTORS,
+  type AttrDefault,
+  type AttrType,
+  type AttrTypeMap,
+  type ReadonlyAttrData,
+} from "./types.js";
 
 const MIN_CAPACITY = 8;
 
@@ -45,20 +51,39 @@ function normalizeDefault(
  * semantics (`bool` stores 0/1 bytes, integer types truncate/wrap).
  * String attributes store Uint32 indices into {@link Attribute.stringTable}.
  *
- * Hot loops should read/write {@link Attribute.data} directly; the
- * accessors here are conveniences for non-critical paths.
+ * STORAGE IS COPY-ON-WRITE. {@link Attribute.data} is the read view and
+ * cannot be written through; every write goes through
+ * {@link Attribute.writable}, which first gives this column storage of
+ * its own if it is still sharing a buffer with the column it was derived
+ * from. Hot loops hoist one of the two out of the loop — `const p =
+ * attr.data` to read, `const p = attr.writable()` to write — exactly as
+ * they hoisted `attr.data` when it was the only route; the accessors
+ * here are conveniences for non-critical paths.
+ *
+ * A reference taken from `data` BEFORE a fork keeps pointing at the
+ * pre-fork buffer, the same way a reference taken before a `resize`
+ * keeps pointing at the pre-growth one. Code that reads and writes one
+ * column in the same pass must take `writable()` first and read through
+ * that, not hold a `data` reference across the write.
  */
 export class Attribute<T extends AttrType = AttrType> {
   readonly type: T;
   /** Components per element (e.g. 3 for a vec3). */
   readonly tupleSize: number;
-  /**
-   * Backing storage; length = capacity * tupleSize. Reallocated on growth —
-   * do not cache across resizes.
-   */
-  data: AttrTypeMap[T];
   /** String table for string attributes (data stores indices into it). Empty for other types. */
   readonly stringTable: string[] = [];
+
+  private _data: AttrTypeMap[T];
+  /**
+   * Whether `_data` may also be reached from another {@link Attribute} —
+   * set on BOTH columns when one is derived from the other, cleared on
+   * the one that forks. A flag and not a count, because nothing in the
+   * language tells a buffer how many typed arrays view it: the honest
+   * conservative reading is "someone else might", and the cost of being
+   * wrong is one copy that was not needed, never a write seen through
+   * the wrong column.
+   */
+  private _shared = false;
 
   private _name: string;
   private _default: number[] | string;
@@ -72,9 +97,45 @@ export class Attribute<T extends AttrType = AttrType> {
     this.type = type;
     this.tupleSize = tupleSize;
     this._default = normalizeDefault(type, tupleSize, defaultValue);
-    this.data = new ATTR_CTORS[type](capacity * tupleSize);
+    this._data = new ATTR_CTORS[type](capacity * tupleSize);
     // Intern the default at index 0 so zero-initialized storage reads as it.
     if (type === "string") this.internString(this._default as string);
+  }
+
+  /**
+   * Backing storage TO READ; length = capacity * tupleSize. Reallocated
+   * on growth and on the copy-on-write fork — do not cache across a
+   * `resize` or a {@link writable} call.
+   */
+  get data(): ReadonlyAttrData<AttrTypeMap[T]> {
+    // The one cast the read view costs. `AttrTypeMap[T]` is assignable to
+    // `ReadonlyAttrData<AttrTypeMap[T]>` for every concrete `T` (the
+    // conditional resolves and the array has every member the view names),
+    // but with `T` still a type parameter the conditional stays deferred
+    // and the checker cannot see it. Nothing widens here: the value is the
+    // array itself, handed out under a type that offers fewer operations.
+    return this._data as unknown as ReadonlyAttrData<AttrTypeMap[T]>;
+  }
+
+  /**
+   * Backing storage TO WRITE, forking first when this column still shares
+   * a buffer with the column it was derived from. THE ONLY ROUTE that
+   * hands out a writable array, so the fork cannot be skipped by
+   * accident; every mutating method here calls it too.
+   *
+   * The result is this column's own array until the next growth: hoist it
+   * out of a loop, as the old `attr.data` was hoisted, and do not hold a
+   * `data` reference taken before the call — after a fork that reference
+   * is the pre-write copy.
+   */
+  writable(): AttrTypeMap[T] {
+    if (this._shared) {
+      const next = new ATTR_CTORS[this.type](this._data.length);
+      next.set(this._data);
+      this._data = next;
+      this._shared = false;
+    }
+    return this._data;
   }
 
   get name(): string {
@@ -83,7 +144,7 @@ export class Attribute<T extends AttrType = AttrType> {
 
   /** Elements this column can hold without reallocating. */
   get capacity(): number {
-    return this.data.length / this.tupleSize;
+    return this._data.length / this.tupleSize;
   }
 
   /**
@@ -96,20 +157,21 @@ export class Attribute<T extends AttrType = AttrType> {
 
   /** Read one component of an element. */
   get(index: number, component = 0): number {
-    return this.data[index * this.tupleSize + component];
+    return this._data[index * this.tupleSize + component];
   }
 
   /** Write one component of an element. */
   set(index: number, value: number, component = 0): void {
-    this.data[index * this.tupleSize + component] = value;
+    this.writable()[index * this.tupleSize + component] = value;
   }
 
   /** Read a whole element tuple, reusing `out` when provided. */
   getTuple(index: number, out: number[] = []): number[] {
     const ts = this.tupleSize;
     const offset = index * ts;
+    const data = this._data;
     out.length = ts;
-    for (let k = 0; k < ts; k++) out[k] = this.data[offset + k];
+    for (let k = 0; k < ts; k++) out[k] = data[offset + k];
     return out;
   }
 
@@ -120,19 +182,20 @@ export class Attribute<T extends AttrType = AttrType> {
       throw new Error(`attribute "${this._name}": tuple length ${values.length} !== ${ts}`);
     }
     const offset = index * ts;
-    for (let k = 0; k < ts; k++) this.data[offset + k] = values[k];
+    const data = this.writable();
+    for (let k = 0; k < ts; k++) data[offset + k] = values[k];
   }
 
   /** Read a string element (string attributes only). */
   getString(index: number, component = 0): string {
     this.assertString();
-    return this.stringTable[this.data[index * this.tupleSize + component]] ?? "";
+    return this.stringTable[this._data[index * this.tupleSize + component]] ?? "";
   }
 
   /** Write a string element, interning into the string table (string attributes only). */
   setString(index: number, value: string, component = 0): void {
     this.assertString();
-    this.data[index * this.tupleSize + component] = this.internString(value);
+    this.writable()[index * this.tupleSize + component] = this.internString(value);
   }
 
   /** Return the table index for `value`, adding it to the table if new. */
@@ -179,7 +242,6 @@ export class Attribute<T extends AttrType = AttrType> {
    */
   fill(value: AttrDefault, start = 0, end = this.capacity): void {
     const ts = this.tupleSize;
-    const data = this.data;
     const cap = this.capacity;
     const lo = fillBound(start, cap) * ts;
     const hi = fillBound(end, cap) * ts;
@@ -189,8 +251,11 @@ export class Attribute<T extends AttrType = AttrType> {
       }
       // Interned before the range is looked at, so an empty range still
       // leaves the table holding the word the caller named — which is what
-      // it did when the interning was this call's argument.
-      data.fill(this.internString(value), lo, hi);
+      // it did when the interning was this call's argument. The fork is
+      // asked for only when there is something to write, so interning into
+      // an empty range still copies nothing.
+      const index = this.internString(value);
+      if (hi > lo) this.writable().fill(index, lo, hi);
       return;
     }
     if (typeof value === "string") {
@@ -201,6 +266,7 @@ export class Attribute<T extends AttrType = AttrType> {
       throw new Error(`attribute "${this._name}": fill tuple length ${value.length} !== ${ts}`);
     }
     if (hi <= lo) return;
+    const data = this.writable();
     // SEED ONE TUPLE WITH INDEXED STORES — the very writes this replaces,
     // component for component — and spread those STORED BYTES over the
     // rest of the range. A scalar is the same thing with every component
@@ -272,28 +338,49 @@ export class Attribute<T extends AttrType = AttrType> {
       throw new Error(`attribute "${this._name}": copyFrom range out of bounds`);
     }
     const ts = this.tupleSize;
+    // THE FORK COMES FIRST, WHICHEVER BRANCH RUNS, and it is what lets the
+    // rest of this method go on reading `src` through a plain array. Two
+    // distinct columns can now view one buffer, so `src !== this` no
+    // longer means the bytes are unrelated — but a forked destination
+    // holds an array nothing else views, so after this line they are.
+    const dst = this.writable();
     if (src === (this as Attribute)) {
-      this.data.copyWithin(dstStart * ts, srcStart * ts, (srcStart + count) * ts);
+      dst.copyWithin(dstStart * ts, srcStart * ts, (srcStart + count) * ts);
       return;
     }
     if (this.type === "string") {
       const n = count * ts;
+      // Hoisted because `data` is an accessor now: the loop reads one
+      // array, and asking the column for it per element would be a call
+      // per element for the same answer.
+      const from = src.data;
       for (let i = 0; i < n; i++) {
-        const s = src.stringTable[src.data[srcStart * ts + i]] ?? "";
-        this.data[dstStart * ts + i] = this.internString(s);
+        const s = src.stringTable[from[srcStart * ts + i]] ?? "";
+        dst[dstStart * ts + i] = this.internString(s);
       }
       return;
     }
-    this.data.set(src.data.subarray(srcStart * ts, (srcStart + count) * ts), dstStart * ts);
+    // The read view satisfies `ArrayLike<number>`, which is the overload
+    // this resolves to now that `subarray` no longer comes back as a
+    // typed array. `set` dispatches on the VALUE, and the value is still
+    // the typed array it always was, so the copy is the same memmove.
+    dst.set(src.data.subarray(srcStart * ts, (srcStart + count) * ts), dstStart * ts);
   }
 
-  /** @internal Grow storage to at least `capacity` elements, preserving data. */
+  /**
+   * @internal Grow storage to at least `capacity` elements, preserving
+   * data. The reallocation is itself a fork — the new array is this
+   * column's alone — so a shared column comes out of it unshared, and
+   * the early return (storage already long enough) copies nothing and
+   * changes nothing, sharing included.
+   */
   _grow(capacity: number): void {
     const needed = capacity * this.tupleSize;
-    if (this.data.length >= needed) return;
+    if (this._data.length >= needed) return;
     const next = new ATTR_CTORS[this.type](needed);
-    next.set(this.data);
-    this.data = next;
+    next.set(this._data);
+    this._data = next;
+    this._shared = false;
   }
 
   /** @internal */

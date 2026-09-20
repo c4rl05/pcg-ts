@@ -465,7 +465,7 @@ export const voronoiCells = standardNode<
     copyElements(src.attrs.point, out.attrs.point, siteOf, vertexTotal);
     if (vertexTotal > 0) {
       const P = out.attrs.point.require("P");
-      const Pd = P.data;
+      const Pd = P.writable();
       const Pts = P.tupleSize;
       for (let c = 0; c < cellCount; c++) {
         const i = cellSite[c];

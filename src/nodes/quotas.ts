@@ -313,7 +313,7 @@ export const quotaRebalance = standardNode<
     const priority = scalarPerPoint(geo, "priority", params.priority, n);
     const categoryRaw = scalarPerPoint(geo, "category", params.category, n);
 
-    const target = geo.attrs.point.replace(targetAttr, "i32", 1, STAYS).data;
+    const target = geo.attrs.point.replace(targetAttr, "i32", 1, STAYS).writable();
     target.fill(STAYS, 0, n);
 
     // Current category per point, and the counts that make the shares.

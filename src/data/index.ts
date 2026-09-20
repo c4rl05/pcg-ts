@@ -11,6 +11,7 @@ export {
   type AttrTypeMap,
   DOMAINS,
   type Domain,
+  type ReadonlyAttrData,
 } from "./types.js";
 export * from "./attribute.js";
 // The class only, so a caller can `instanceof` the fault and read its

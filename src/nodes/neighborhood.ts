@@ -394,12 +394,12 @@ export const pointNeighborhood = standardNode<
     // that was averaged (or even "P"), and replace() reuses storage.
     if (counts) {
       const attr = set.replace(params.countAttr, "u32", 1, 0);
-      const data = attr.data;
+      const data = attr.writable();
       for (let i = 0; i < n; i++) data[i] = counts[i];
     }
     if (means) {
       const attr = set.replace(params.averageOutAttr, "f32", ts, 0);
-      const data = attr.data;
+      const data = attr.writable();
       for (let i = 0; i < n * ts; i++) data[i] = means[i];
     }
     return { out: [makeGeometryItem(geo)] };
@@ -566,12 +566,12 @@ export const sampleNearestPoint = standardNode<
     const set = dst.attrs.point;
     if (distances) {
       const attr = set.replace(params.distanceAttr, "f32", 1, 0);
-      const data = attr.data;
+      const data = attr.writable();
       for (let i = 0; i < n; i++) data[i] = distances[i];
     }
     if (wantIndex) {
       const attr = set.replace(params.indexAttr, "i32", 1, -1);
-      const data = attr.data;
+      const data = attr.writable();
       for (let i = 0; i < n; i++) data[i] = found[i];
     }
     if (sourceAttr) {

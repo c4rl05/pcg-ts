@@ -396,8 +396,8 @@ export const meshFromField = standardNode<
       checkCancelled();
       const n = Math.min(chunk, samples - base);
       const grid = createPointCloud(n);
-      const gp = grid.attrs.point.require("P").data;
-      const gseed = grid.attrs.point.require("seed").data;
+      const gp = grid.attrs.point.require("P").writable();
+      const gseed = grid.attrs.point.require("seed").writable();
       for (let at = 0; at < n; at++) {
         // Positions come from GLOBAL integer indices rather than being
         // accumulated, so a corner lands on the same float in every
@@ -695,8 +695,8 @@ export const meshFromField = standardNode<
     // Exact and uninitialized: P and normal are the set's only columns, and
     // the loop below assigns all three components of both for every point.
     resizeForOverwrite(out.attrs.point, nPoints);
-    const P = out.attrs.point.require("P").data;
-    const N = out.attrs.point.require("normal").data;
+    const P = out.attrs.point.require("P").writable();
+    const N = out.attrs.point.require("normal").writable();
     for (let v = 0; v < nPoints; v++) {
       P[v * 3] = px[v] as number;
       P[v * 3 + 1] = py[v] as number;

@@ -74,9 +74,9 @@ function rampShipped(data: Float32Array, stops: Stops): Float32Array {
   // and -0 included — which no attribute write would guarantee.
   const input = makeField<1>(`rampTestColumn(${columnSerial++})`, 1, () => ({ data, tupleSize: 1 }));
   const ctx: EvalContext = { geo: createPointCloud(data.length), domain: "point", seed: 0 };
-  const col = evaluateField(ramp(input, stops), ctx);
-  expect(col.data).toBeInstanceOf(Float32Array);
-  return col.data as Float32Array;
+  const { data: out } = evaluateField(ramp(input, stops), ctx);
+  expect(out).toBeInstanceOf(Float32Array);
+  return out as Float32Array;
 }
 
 /** A copy with every NaN rewritten to the one quiet NaN, 0x7fc00000. */
@@ -579,7 +579,8 @@ describe("ramp: byte-identical to the scan", () => {
     const got = evaluateField(field, { geo: createPointCloud(n), domain: "point", seed: 0 });
     const indices = new Uint32Array(n).map((_, i) => i);
     const reference = rampByScan(indices, stops);
-    expect(firstByteDifference(got.data as Float32Array, reference)).toBe(-1);
+    const { data: gotData } = got;
+    expect(firstByteDifference(gotData as Float32Array, reference)).toBe(-1);
     // Exact at every integer, which is what the table is for.
     expect(Array.from(got.data)).toEqual(values.map(Math.fround));
   });

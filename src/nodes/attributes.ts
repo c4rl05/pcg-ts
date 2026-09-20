@@ -213,7 +213,7 @@ function writeWeightedSelection(
   const attr = set.replace(params.name, "string", ts);
   const tableIdx = new Uint32Array(values.length);
   for (let v = 0; v < values.length; v++) tableIdx[v] = attr.internString(values[v]);
-  const data = attr.data;
+  const data = attr.writable();
   const n = set.count;
   for (let i = 0; i < n; i++) {
     for (let k = 0; k < ts; k++) {
@@ -425,7 +425,7 @@ export const setAttribute = standardNode<
       const tableIdx = new Uint32Array(values.length);
       for (let v = 0; v < values.length; v++) tableIdx[v] = attr.internString(values[v]);
       const last = values.length - 1;
-      const data = attr.data;
+      const data = attr.writable();
       const n = set.count;
       for (let i = 0; i < n; i++) {
         for (let k = 0; k < ts; k++) {
@@ -484,7 +484,7 @@ export const setAttribute = standardNode<
     const colData =
       existing && existing.data.buffer === col.data.buffer ? col.data.slice() : col.data;
     const attr = set.replace(params.name, type, ts);
-    const data = attr.data;
+    const data = attr.writable();
     const n = set.count;
     const isBool = type === "bool";
     for (let i = 0; i < n; i++) {
@@ -619,7 +619,7 @@ function rayScratchAttr(
     name = `${spec.scratch}${n}`;
   }
   const attr = set.replace(name, "f32", spec.tupleSize);
-  attr.data.set(col.data.subarray(0, set.count * spec.tupleSize));
+  attr.writable().set(col.data.subarray(0, set.count * spec.tupleSize));
   return name;
 }
 
@@ -812,7 +812,7 @@ export const transferAttribute = standardNode<
       // it — an internal marker that inherits a prior value is how a miss
       // gets to claim it landed.
       const flag = dst.attrs.point.replace(params.hitAttr, "bool", 1);
-      flag.data.set(hit.subarray(0, dst.attrs.point.count));
+      flag.writable().set(hit.subarray(0, dst.attrs.point.count));
     }
     return { out: [makeGeometryItem(dst)] };
   },
@@ -1215,7 +1215,7 @@ export const attributeRemap = standardNode<
       }
     }
     const target = set.replace(outName, "f32", ts, 0);
-    const data = target.data;
+    const data = target.writable();
     for (let i = 0; i < n * ts; i++) data[i] = values[i];
     return { out: [makeGeometryItem(geo)] };
   },

@@ -88,7 +88,7 @@ describe("filterByExpression", () => {
 
   it("reads attributes, and carries every attribute onto the survivors", async () => {
     const geo = cloudAt(LINE);
-    geo.attrs.point.require("density").data.set([0.1, 0.9, 0.2, 0.8]);
+    geo.attrs.point.require("density").writable().set([0.1, 0.9, 0.2, 0.8]);
     const tag = geo.attrs.point.add("tag", "string", 1, "");
     LINE.forEach((_, i) => tag.setString(i, `p${i}`));
     const out = firstGeo(

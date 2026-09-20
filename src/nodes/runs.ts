@@ -424,6 +424,14 @@ export const runFit = standardNode<RunFitParams, RunFitInputs, RunFitOutputs>({
         ? perElement(geo, "primitive", params.period, seed, "runFit", "period", "path", "a period")
         : () => scalarPeriod;
 
+    // READ references, taken before the `replace` loop below, and the
+    // refusals at the top of this node are what keeps them live: a slot
+    // may not be named `valueAttr` or `arcAttr`, so neither of these two
+    // columns is ever one the loop writes. Those refusals were about the
+    // fit being measured against this node's own output; under
+    // copy-on-write they carry a second weight, because a slot that DID
+    // name one of these would fork it and leave the reference here
+    // holding the values from before the write. Weaken one and both go.
     const valData = geo.attrs.point.require(valueAttr).data;
     const arcData = arc === null ? null : geo.attrs.point.require(arcAttr).data;
     // One `replace` per named slot, in the params' own order, so a
@@ -432,7 +440,10 @@ export const runFit = standardNode<RunFitParams, RunFitInputs, RunFitOutputs>({
     const written = new Map<string, AttrData>();
     for (const slot of slots) {
       if (slot.name === "") continue;
-      written.set(slot.param, geo.attrs.point.replace(slot.name, slot.type, 1, slot.fallback).data);
+      written.set(
+        slot.param,
+        geo.attrs.point.replace(slot.name, slot.type, 1, slot.fallback).writable(),
+      );
     }
     // The three required columns are named or the cook was already
     // refused above, so `require` here is a fact rather than a hope.
@@ -909,12 +920,12 @@ export const arcTile = standardNode<ArcTileParams, ArcTileInputs, ArcTileOutputs
     }
 
     const out = createPointCloud(total);
-    const op = out.attrs.point.require("P").data;
-    const rot = out.attrs.point.require("rot").data;
-    const scale = out.attrs.point.require("scale").data;
-    const seeds = out.attrs.point.require("seed").data;
-    const tangent = out.attrs.point.add("tangent", "f32", 3, [0, 0, 0]).data;
-    const curveU = out.attrs.point.add("curveU", "f32", 1, 0).data;
+    const op = out.attrs.point.require("P").writable();
+    const rot = out.attrs.point.require("rot").writable();
+    const scale = out.attrs.point.require("scale").writable();
+    const seeds = out.attrs.point.require("seed").writable();
+    const tangent = out.attrs.point.add("tangent", "f32", 3, [0, 0, 0]).writable();
+    const curveU = out.attrs.point.add("curveU", "f32", 1, 0).writable();
     // The opt-in columns, checked against the set they land on — this
     // node's OWN fresh cloud, not the input's, so the refusal must say so
     // (removeAttribute upstream cannot reach a column the node writes on
@@ -947,15 +958,17 @@ export const arcTile = standardNode<ArcTileParams, ArcTileInputs, ArcTileOutputs
       });
     }
     const flareCol =
-      params.flareAttr === "" ? null : out.attrs.point.replace(params.flareAttr, "f32", 1, 0).data;
+      params.flareAttr === ""
+        ? null
+        : out.attrs.point.replace(params.flareAttr, "f32", 1, 0).writable();
     const tileIndexCol =
       params.tileIndexAttr === ""
         ? null
-        : out.attrs.point.replace(params.tileIndexAttr, "i32", 1, 0).data;
+        : out.attrs.point.replace(params.tileIndexAttr, "i32", 1, 0).writable();
     const rangeIndexCol =
       params.rangeIndexAttr === ""
         ? null
-        : out.attrs.point.replace(params.rangeIndexAttr, "i32", 1, 0).data;
+        : out.attrs.point.replace(params.rangeIndexAttr, "i32", 1, 0).writable();
 
     // The carried range columns, checked before a single tile is placed:
     // the refusal costs nothing here and the work does.

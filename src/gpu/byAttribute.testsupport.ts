@@ -48,7 +48,7 @@
  * vitest worker may touch Dawn), reporting observations as JSON on stdout.
  */
 import { create } from "webgpu";
-import { Geometry } from "../data/index.js";
+import { Geometry, type ReadonlyAttrData } from "../data/index.js";
 import { type Column, createGpuCookStats, evaluateField } from "../fields/index.js";
 import { type FieldSpec, fieldFromJson } from "../fields/fieldJson.js";
 import { type CookResult, Graph, cook, makeGeometryItem } from "../graph/index.js";
@@ -85,8 +85,9 @@ function speciesCell(count: number, species: (i: number) => string): Geometry {
   const P = set.add("P", "f32", 3);
   const attr = set.add("species", "string", 1);
   set.resize(count);
+  const Pd = P.writable();
   for (let i = 0; i < count; i++) {
-    for (let k = 0; k < 3; k++) P.data[i * 3 + k] = (hashFloat(hashCombine(707, i, k)) - 0.5) * 8;
+    for (let k = 0; k < 3; k++) Pd[i * 3 + k] = (hashFloat(hashCombine(707, i, k)) - 0.5) * 8;
     attr.setString(i, species(i));
   }
   return geo;
@@ -105,8 +106,9 @@ function tagsGeometry(count: number): Geometry {
   const P = set.add("P", "f32", 3);
   const tags = set.add("tags", "string", 2);
   set.resize(count);
+  const Pd = P.writable();
   for (let i = 0; i < count; i++) {
-    for (let k = 0; k < 3; k++) P.data[i * 3 + k] = (hashFloat(hashCombine(808, i, k)) - 0.5) * 8;
+    for (let k = 0; k < 3; k++) Pd[i * 3 + k] = (hashFloat(hashCombine(808, i, k)) - 0.5) * 8;
     tags.setString(i, i % 2 === 0 ? "trunk" : "branch", 0);
     tags.setString(i, i % 3 === 0 ? "summer" : "winter", 1);
   }
@@ -453,8 +455,8 @@ async function main(): Promise<void> {
     if (item.kind !== "geometry") throw new Error("byAttribute scenario: expected a geometry item");
     const set = item.geo.attrs.point;
     return {
-      kind: (set.require("kind").data as Float32Array).slice(0, FUSED_COUNT),
-      scaled: (set.require("scaled").data as Float32Array).slice(0, FUSED_COUNT),
+      kind: (set.require("kind").data as ReadonlyAttrData<Float32Array>).slice(0, FUSED_COUNT),
+      scaled: (set.require("scaled").data as ReadonlyAttrData<Float32Array>).slice(0, FUSED_COUNT),
     };
   };
   const fusedEv = new GpuFieldEvaluator(device);

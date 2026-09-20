@@ -359,7 +359,7 @@ export const connectPoints = standardNode<
     // while leaving point attributes untouched.
     const degrees =
       params.degreeAttr !== ""
-        ? geo.attrs.point.replace(params.degreeAttr, "u32", 1, 0).data
+        ? geo.attrs.point.replace(params.degreeAttr, "u32", 1, 0).writable()
         : undefined;
     for (let e = 0; e < count; e++) {
       const s = order[e];
@@ -399,7 +399,7 @@ export const connectPoints = standardNode<
         suggestion: "edgeLength",
       });
       const attr = geo.attrs.primitive.replace(params.lengthAttr, "f32", 1, 0);
-      const data = attr.data;
+      const data = attr.writable();
       // Straight into the column, in edge order: the same sqrt of the same
       // d2, rounded to f32 once instead of buffered through an f64 array
       // first, so every stored value is bit-identical.
@@ -718,7 +718,7 @@ export const connectByIndex = standardNode<
     setPolylineTopology(geo, pointIndices, primVertexStart, primVertexCount);
 
     if (params.degreeAttr !== "") {
-      const deg = geo.attrs.point.replace(params.degreeAttr, "u32", 1, 0).data;
+      const deg = geo.attrs.point.replace(params.degreeAttr, "u32", 1, 0).writable();
       for (let e = 0; e < count; e++) {
         deg[child[e]]++;
         deg[parent[e]]++;
@@ -741,7 +741,7 @@ export const connectByIndex = standardNode<
         domain: "primitive",
         suggestion: "edgeLength",
       });
-      const len = geo.attrs.primitive.replace(params.lengthAttr, "f32", 1, 0).data;
+      const len = geo.attrs.primitive.replace(params.lengthAttr, "f32", 1, 0).writable();
       for (let e = 0; e < count; e++) {
         const a = child[e] * ps;
         const b = parent[e] * ps;

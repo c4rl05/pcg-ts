@@ -121,24 +121,24 @@ const COUNT = 24;
 function fixture(seed: number): EvalContext {
   const geo = createPointCloud(COUNT);
   const set = geo.attrs.point;
-  const P = set.require("P");
+  const P = set.require("P").writable();
   for (let i = 0; i < COUNT; i++) {
-    P.data[i * 3] = Math.sin(i) * 3;
-    P.data[i * 3 + 1] = Math.cos(i * 0.7) * 2;
-    P.data[i * 3 + 2] = i * 0.25 - 3;
+    P[i * 3] = Math.sin(i) * 3;
+    P[i * 3 + 1] = Math.cos(i * 0.7) * 2;
+    P[i * 3 + 2] = i * 0.25 - 3;
   }
-  const density = set.require("density");
-  for (let i = 0; i < COUNT; i++) density.data[i] = (i % 7) / 6 - 0.5;
-  const normal = set.add("normal", "f32", 3);
+  const density = set.require("density").writable();
+  for (let i = 0; i < COUNT; i++) density[i] = (i % 7) / 6 - 0.5;
+  const normal = set.add("normal", "f32", 3).writable();
   for (let i = 0; i < COUNT; i++) {
-    normal.data[i * 3] = ((i % 5) - 2) / 2;
-    normal.data[i * 3 + 1] = ((i % 3) - 1) / 2;
-    normal.data[i * 3 + 2] = ((i % 4) - 1.5) / 2;
+    normal[i * 3] = ((i % 5) - 2) / 2;
+    normal[i * 3 + 1] = ((i % 3) - 1) / 2;
+    normal[i * 3 + 2] = ((i % 4) - 1.5) / 2;
   }
   const flag = set.add("flag", "bool");
   for (let i = 0; i < COUNT; i++) flag.set(i, i % 3 === 0 ? 1 : 0);
-  const tag = set.add("tag", "u32", 1);
-  for (let i = 0; i < COUNT; i++) tag.data[i] = (i * 7) % 11;
+  const tag = set.add("tag", "u32", 1).writable();
+  for (let i = 0; i < COUNT; i++) tag[i] = (i * 7) % 11;
   // A string column, for the one fn that reads one. Three values plus the
   // default, so a predicate over it is neither all zeros nor all ones.
   const species = set.add("species", "string");

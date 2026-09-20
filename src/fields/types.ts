@@ -10,6 +10,13 @@ export type ColumnData = Float32Array | Int32Array | Uint32Array;
  * the geometry is mutated or resized (resizing can reallocate attribute
  * storage, leaving a held Column aliasing dead memory) — re-evaluate
  * with a fresh context after mutating.
+ *
+ * A copy-on-write fork is the third way a held view goes stale, and the
+ * quietest: the attribute it came from moves to storage of its own on
+ * the first write through `Attribute.writable()`, and the view keeps
+ * reading the buffer it was taken from — not dead memory, which is at
+ * least loud, but the pre-write values, which look exactly like live
+ * ones. Same rule, same fix: re-evaluate after mutating.
  */
 export interface Column {
   readonly data: ColumnData;

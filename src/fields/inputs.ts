@@ -12,6 +12,7 @@ import {
   withheldOver,
 } from "./spec.js";
 import {
+  type ColumnData,
   type Field,
   type FieldLike,
   elementCount,
@@ -95,12 +96,23 @@ export function attribute(name: string, tupleSize?: number): Field {
     }
     const ts = attr.tupleSize;
     const n = elementCount(ctx) * ts;
-    if (attr.data instanceof Uint8Array) {
+    if (attr.type === "bool") {
       const data = new Float32Array(n);
-      for (let i = 0; i < n; i++) data[i] = attr.data[i];
+      // Hoisted: `data` is an accessor now, so asking the column for its
+      // storage per element would be a call per element for one answer.
+      const bits = attr.data;
+      for (let i = 0; i < n; i++) data[i] = bits[i];
       return { data, tupleSize: ts };
     }
-    return { data: attr.data.subarray(0, n), tupleSize: ts };
+    // The zero-copy view this function documents, and the one place the
+    // fields layer looks straight at attribute storage. `Column.data` is
+    // typed mutable while `Attribute.data` is not, so the view costs one
+    // cast; it is taken on the subarray rather than on `attr.data`, so
+    // nothing here spells the shape that recovers a writable column out
+    // of the read view. `Column` (./types.ts) already promises an input
+    // column is read-only and valid only while the geometry holds still.
+    const view = attr.data.subarray(0, n);
+    return { data: view as ColumnData, tupleSize: ts };
   });
   // The grammar requires a non-empty name and, when given, a positive
   // integer tupleSize; this constructor checks neither.

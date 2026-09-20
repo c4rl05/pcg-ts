@@ -226,7 +226,7 @@ export const meshPrimitive = standardNode<
 
     const geo = createTriangleMesh(positions, triangles);
     const uv = geo.attrs.point.add("uv", "f32", 2, 0);
-    uv.data.set(uvs);
+    uv.writable().set(uvs);
     return { out: [makeGeometryItem(geo)] };
   },
 });

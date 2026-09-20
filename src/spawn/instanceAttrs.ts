@@ -39,7 +39,7 @@
  * same reason it carries no colour unless asked — an attribute crossing
  * the spawner costs a buffer and a renderer upload per cook.
  */
-import type { AttrData, AttrType, AttributeSet } from "../data/index.js";
+import type { AttrData, AttrType, AttributeSet, ReadonlyAttrData } from "../data/index.js";
 // ATTR_CTORS by path, not through `../data/index.js`: the barrel
 // deliberately omits it from the package surface (see its opening
 // comment), so the direct import IS the internal spelling — the same one
@@ -61,8 +61,8 @@ export interface InstanceAttrSource {
   readonly type: AttrType;
   /** Components per element, preserved from the point domain. */
   readonly tupleSize: number;
-  /** The point column, read only. */
-  readonly data: AttrData;
+  /** The point column, read only — and typed so, not merely documented. */
+  readonly data: ReadonlyAttrData;
 }
 
 /** `f32x3`, or just `u32` when the tuple is 1 — the library's spelling. */

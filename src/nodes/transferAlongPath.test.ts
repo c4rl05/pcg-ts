@@ -38,7 +38,7 @@ function pathWith(
 ): Geometry {
   const geo = createPolyline(positions, { closed });
   const attr = geo.attrs.point.add(name, "f32", tupleSize, 0);
-  attr.data.set(values);
+  attr.writable().set(values);
   return geo;
 }
 
@@ -196,10 +196,10 @@ describe("transferAlongPath: wrapping and clamping", () => {
 describe("transferAlongPath: which attributes", () => {
   it("takes every numeric non-bookkeeping column when the list is empty", async () => {
     const path = OPEN();
-    path.attrs.point.add("halfWidth", "f32", 1, 0).data.set([4, 4, 4, 4]);
+    path.attrs.point.add("halfWidth", "f32", 1, 0).writable().set([4, 4, 4, 4]);
     // Bookkeeping, deliberately excluded — and given values that would be
     // obvious if they leaked through.
-    path.attrs.point.add("seed", "u32", 1, 0).data.set([7, 7, 7, 7]);
+    path.attrs.point.add("seed", "u32", 1, 0).writable().set([7, 7, 7, 7]);
     path.attrs.point.add("color", "f32", 4, 0);
     // A string column, which no interpolation can produce a value between.
     path.attrs.point.add("kind", "string", 1, "rib");
@@ -217,7 +217,7 @@ describe("transferAlongPath: which attributes", () => {
 
   it("samples an excluded column when it is named explicitly", async () => {
     const path = OPEN();
-    path.attrs.point.add("density", "f32", 1, 0).data.set([1, 2, 3, 4]);
+    path.attrs.point.add("density", "f32", 1, 0).writable().set([1, 2, 3, 4]);
     const out = await gather(path, stations([2]), { attributes: ["density"] });
     expect(col(out, "density")).toEqual([2.5]);
   });
@@ -229,13 +229,13 @@ describe("transferAlongPath: which attributes", () => {
     // with a blend of two identities. Pinned because the description
     // makes exactly this claim about exactly this column.
     const path = OPEN();
-    path.attrs.point.add("seed", "u32", 1, 0).data.set([1, 2, 3, 4]);
+    path.attrs.point.add("seed", "u32", 1, 0).writable().set([1, 2, 3, 4]);
     const message = await rejection(gather(path, stations([2]), { attributes: ["seed"] }));
     expect(message).toContain('the sampled attribute "seed" already exists');
     expect(message).toContain("would DELETE");
     // The six that ARE f32 on both sides land without complaint.
     const ok = OPEN();
-    ok.attrs.point.add("density", "f32", 1, 0).data.set([1, 2, 3, 4]);
+    ok.attrs.point.add("density", "f32", 1, 0).writable().set([1, 2, 3, 4]);
     ok.attrs.point.add("color", "f32", 4, 0);
     const out = await gather(ok, stations([2]), { attributes: ["density", "color"] });
     expect(col(out, "density")).toEqual([2.5]);
@@ -292,7 +292,7 @@ describe("transferAlongPath: normalize", () => {
     // length is restored; the angle between them is not, which is what
     // the param's description says and what a caller must not assume away.
     const path = pathWith([0, 0, 0, 1, 0, 0], "a", [1, 0, 0, 0, 0, 1], 3);
-    path.attrs.point.add("b", "f32", 3, 0).data.set([0, 0, 1, -1, 0, 0]);
+    path.attrs.point.add("b", "f32", 3, 0).writable().set([0, 0, 1, -1, 0, 0]);
     const out = await gather(path, stations([0.5]), {
       attributes: ["a", "b"],
       normalize: ["a", "b"],
@@ -305,7 +305,7 @@ describe("transferAlongPath: normalize", () => {
     // Perpendicular here only because the two blends happen to be; the
     // frame's third axis is what actually shows the point.
     const path2 = pathWith([0, 0, 0, 1, 0, 0], "a", [1, 0, 0, 0, 0, 1], 3);
-    path2.attrs.point.add("b", "f32", 3, 0).data.set([0, 1, 0, 0, 1, 0]);
+    path2.attrs.point.add("b", "f32", 3, 0).writable().set([0, 1, 0, 0, 1, 0]);
     const out2 = await gather(path2, stations([0.5]), {
       attributes: ["a", "b"],
       normalize: ["a", "b"],
@@ -481,7 +481,7 @@ describe("transferAlongPath: what it preserves", () => {
     // The `at` input is itself a path here: this node removes no point,
     // so what arrives a path leaves a path.
     const at = createPolyline([0, 0, 0, 1, 0, 0, 2, 0, 0]);
-    at.attrs.point.add("station", "f32", 1, 0).data.set([0, 3, 6]);
+    at.attrs.point.add("station", "f32", 1, 0).writable().set([0, 3, 6]);
     const out = await gather(OPEN(), at, { attributes: ["v"] });
     expect(out.attrs.point.count).toBe(3);
     expect(out.primitiveCount).toBe(1);

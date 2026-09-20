@@ -19,6 +19,7 @@ import {
   createPolyline,
   createTriangleMesh,
   type PrimType,
+  type ReadonlyAttrData,
 } from "../data/index.js";
 import { readRgb, rgbSourceOf } from "../spawn/color.js";
 
@@ -206,7 +207,9 @@ function collectIndexed(
   if (!P || P.type !== "f32" || P.tupleSize !== 3) {
     throw new Error(`${who}: geometry needs a point attribute "P" (f32, tupleSize 3)`);
   }
-  const source = P.data as Float32Array;
+  // NARROWS the read view to the member the two checks above have just
+  // established, rather than escaping it: positions are only read here.
+  const source = P.data as ReadonlyAttrData<Float32Array>;
   const read = primTypeReader(geo);
   const starts = geo.primVertexStart;
   const counts = geo.primVertexCount;

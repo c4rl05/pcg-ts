@@ -129,7 +129,7 @@ describe("Attribute fill and copy", () => {
     const set = new AttributeSet();
     const a = set.add("a", "i32");
     set.resize(5);
-    a.data.set([1, 2, 3, 4, 5]);
+    a.writable().set([1, 2, 3, 4, 5]);
     a.copyFrom(a, 0, 1, 4);
     expect(Array.from(a.data.subarray(0, 5))).toEqual([1, 1, 2, 3, 4]);
   });
@@ -138,7 +138,7 @@ describe("Attribute fill and copy", () => {
     const setA = new AttributeSet();
     const a = setA.add("a", "f32", 2);
     setA.resize(3);
-    a.data.set([1, 2, 3, 4, 5, 6]);
+    a.writable().set([1, 2, 3, 4, 5, 6]);
     const setB = new AttributeSet();
     const b = setB.add("b", "f32", 2);
     setB.resize(3);
@@ -180,7 +180,7 @@ describe("AttributeSet defaults and resize", () => {
     const set = new AttributeSet();
     const a = set.add("a", "f32", 1, 9);
     set.resize(3);
-    a.data.set([1, 2, 3]);
+    a.writable().set([1, 2, 3]);
     set.resize(6);
     expect(Array.from(a.data.subarray(0, 6))).toEqual([1, 2, 3, 9, 9, 9]);
   });
@@ -213,7 +213,7 @@ describe("AttributeSet defaults and resize", () => {
     const set = new AttributeSet();
     const a = set.add("a", "i32", 1, 9);
     set.resize(5);
-    a.data.set([1, 2, 3, 4, 5]);
+    a.writable().set([1, 2, 3, 4, 5]);
     set.resize(2);
     expect(set.count).toBe(2);
     set.resize(5);
@@ -287,7 +287,7 @@ describe("AttributeSet ordering and management", () => {
     const b = set.add("b", "f32");
     set.add("c", "f32");
     set.resize(2);
-    b.data.set([5, 6]);
+    b.writable().set([5, 6]);
     const b2 = set.replace("b", "f32", 1, 7);
     expect(b2).toBe(b);
     expect(set.names()).toEqual(["a", "b", "c"]);
@@ -428,7 +428,8 @@ describe("Attribute.fill fast paths", () => {
             const a = set.add("a", type, ts);
             set.resize(16);
             // A sentinel everywhere, so a write outside [start, end) shows.
-            for (let i = 0; i < a.data.length; i++) a.data[i] = 77;
+            const sentinel = a.writable();
+            for (let i = 0; i < sentinel.length; i++) sentinel[i] = 77;
             const expected = a.data.slice();
             referenceFill(expected, ts, value, start, end);
             a.fill(value, start, end);

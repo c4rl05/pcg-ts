@@ -15,7 +15,7 @@ import { worleyFeature, worleyNoise, type WorleyNoiseOpts } from "./worley.js";
 /** Context over a point cloud with P set from a flat xyz array. */
 function cloudCtx(positions: ArrayLike<number>): EvalContext {
   const geo = createPointCloud(positions.length / 3);
-  geo.attrs.point.require("P").data.set(positions);
+  geo.attrs.point.require("P").writable().set(positions);
   return { geo, domain: "point", seed: 0 };
 }
 
@@ -37,7 +37,8 @@ function gridPositions(n: number, spacing: number): Float32Array {
 }
 
 function sample(field: Field, positions: ArrayLike<number>): Float32Array {
-  return evaluateField(field, cloudCtx(positions)).data as Float32Array;
+  const { data } = evaluateField(field, cloudCtx(positions));
+  return data as Float32Array;
 }
 
 function variance(values: Float32Array): number {
@@ -932,8 +933,9 @@ describe("node-derived noise seeds", () => {
   /** Sample at an explicit evaluation seed (`cloudCtx` pins seed 0). */
   function sampleAt(field: Field, seed: number): Float32Array {
     const geo = createPointCloud(POSITIONS.length / 3);
-    geo.attrs.point.require("P").data.set(POSITIONS);
-    return evaluateField(field, { geo, domain: "point", seed }).data as Float32Array;
+    geo.attrs.point.require("P").writable().set(POSITIONS);
+    const { data } = evaluateField(field, { geo, domain: "point", seed });
+    return data as Float32Array;
   }
 
   function correlation(a: Float32Array, b: Float32Array): number {
@@ -1012,15 +1014,15 @@ describe("node-derived noise seeds", () => {
     // than about the seeds.
     const wide = gridPositions(16, 1.3);
     const geo = createPointCloud(wide.length / 3);
-    geo.attrs.point.require("P").data.set(wide);
-    const columns = [0, 1, 2].map(
-      (variant) =>
-        evaluateField(perlinNoise({ seed: { from: "node", variant }, frequency: 1 }), {
-          geo,
-          domain: "point",
-          seed: GRAPH_SEED,
-        }).data as Float32Array,
-    );
+    geo.attrs.point.require("P").writable().set(wide);
+    const columns = [0, 1, 2].map((variant) => {
+      const { data } = evaluateField(perlinNoise({ seed: { from: "node", variant }, frequency: 1 }), {
+        geo,
+        domain: "point",
+        seed: GRAPH_SEED,
+      });
+      return data as Float32Array;
+    });
     for (const [i, j] of [
       [0, 1],
       [0, 2],
@@ -1305,7 +1307,7 @@ describe("worleyFeature", () => {
     const field = worleyFeature({ seed: { from: "node", variant: 2 } });
     const at = (seed: number): Array<[number, number, number]> => {
       const geo = createPointCloud(POS.length / 3);
-      geo.attrs.point.require("P").data.set(POS);
+      geo.attrs.point.require("P").writable().set(POS);
       const col = evaluateField(field, { geo, domain: "point", seed });
       const out: Array<[number, number, number]> = [];
       for (let i = 0; i < col.data.length; i += 3) {

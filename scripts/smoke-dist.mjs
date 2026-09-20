@@ -364,13 +364,25 @@ const PARAM_DOC_PROBE = "Number of points along X. Minimum 1.";
 // Names that are library-internal BY CONSTRUCTION — no barrel re-exports
 // their module — and must therefore appear in no consumer's typings.
 // `adoptTopology` (with `checkTopology` and `installTopology`) installs
-// topology by reference, and `resizeForOverwrite`/`addForOverwrite` size
-// storage without the default fill: each hands out an obligation the type
-// cannot carry, which is why neither is offered. Their source-level tests
-// check that no module under `src/` re-exports them; only this reads the
-// BUILT typings, where a widened barrel or a d.ts bundler that inlines an
-// internal declaration would actually show up.
-const INTERNAL_TYPE_NAMES = ["adoptTopology", "checkTopology", "installTopology", "ForOverwrite"];
+// topology by reference, `resizeForOverwrite`/`addForOverwrite` size
+// storage without the default fill, and `deriveGeometry` (with
+// `isColumnShared`) builds a geometry whose columns are still the
+// SOURCE's until something writes them: each hands out an obligation the
+// type cannot carry, which is why none is offered. The derive's is the
+// sharpest — every write must go through `Attribute.writable()`, and a
+// caller who took the geometry and wrote a column any other way would
+// edit a cached input. Their source-level tests check that no module
+// under `src/` re-exports them; only this reads the BUILT typings, where a
+// widened barrel or a d.ts bundler that inlines an internal declaration
+// would actually show up.
+const INTERNAL_TYPE_NAMES = [
+  "adoptTopology",
+  "checkTopology",
+  "installTopology",
+  "ForOverwrite",
+  "deriveGeometry",
+  "isColumnShared",
+];
 // The scan must be able to SEE a name before "found none" means anything:
 // `cloneGeometry` is published from the root entry, so it has to turn up.
 const PUBLISHED_TYPE_PROBE = "cloneGeometry";

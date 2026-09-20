@@ -1341,9 +1341,11 @@ export async function executeResidentRun(
       if (slot.init === "attr") {
         const attr = set.require(slot.name);
         const n = slot.bytes / 4;
-        if (attr.data instanceof Uint8Array) {
+        if (attr.type === "bool") {
           const widened = new Uint32Array(n);
-          for (let i = 0; i < n; i++) widened[i] = attr.data[i];
+          // Hoisted: `data` is an accessor now.
+          const bits = attr.data;
+          for (let i = 0; i < n; i++) widened[i] = bits[i];
           device.queue.writeBuffer(buf, 0, widened);
         } else {
           device.queue.writeBuffer(buf, 0, attr.data.subarray(0, n));
@@ -1595,16 +1597,23 @@ export async function executeResidentRun(
         const attr = outSet!.require(w.name);
         const n = count * attr.tupleSize;
         if (copy === undefined) throw new Error("resident run: readback missing for a written attribute");
-        if (attr.data instanceof Uint8Array) {
-          // bool attributes ride as u32 0/1; narrow back.
+        // Both branches write through `writable()` and not `data`: this
+        // is a column of the geometry the run made from the input, and
+        // under copy-on-write that column may still BE the input's, so
+        // the readback has to fork it before it lands or the write would
+        // reach the cache upstream as well.
+        if (attr.type === "bool") {
+          // bool attributes ride as u32 0/1; narrow back. One fork per
+          // attribute, hoisted where a `data` reference used to be read.
+          const dest = attr.writable();
           const wide = new Uint32Array(copy, offsets[wi], n);
-          for (let i = 0; i < n; i++) attr.data[i] = wide[i];
+          for (let i = 0; i < n; i++) dest[i] = wide[i];
         } else {
           const Ctor = ATTR_CTORS[attr.type];
           if (Ctor === undefined) {
             throw new Error(`resident run: cannot materialize attribute "${w.name}" of type ${attr.type}`);
           }
-          attr.data.set(new Ctor(copy, offsets[wi], n));
+          attr.writable().set(new Ctor(copy, offsets[wi], n));
         }
       });
     } else {

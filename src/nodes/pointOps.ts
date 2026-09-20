@@ -8,6 +8,7 @@ import {
   type Attribute,
   type AttributeSet,
   type Domain,
+  type ReadonlyAttrData,
   Geometry,
   PRIMTYPE_ATTR,
   createPointCloud,
@@ -15,7 +16,7 @@ import {
 import { adoptTopology } from "../data/adoptTopology.js";
 import { resizeForOverwrite } from "../data/overwrite.js";
 import { pointIdentities } from "../data/identity.js";
-import { type GeometryItem, cloneGeometry, makeGeometryItem } from "../graph/index.js";
+import { cloneGeometry, type GeometryItem, makeGeometryItem } from "../graph/index.js";
 import { hashCombine, hashFloat } from "../random/index.js";
 import { standardNode } from "./registry.js";
 import { isField, type Column } from "../fields/index.js";
@@ -121,12 +122,22 @@ export const transformPoints = standardNode<
     const rCol = requireTuple(await resolveOnMaybeGpu(gpu, geo, "point", params.rotateEuler, seed, "transformPoints", "rotateEuler"), [1, 3], "transformPoints", "rotateEuler");
     const sCol = requireTuple(await resolveOnMaybeGpu(gpu, geo, "point", params.scale, seed, "transformPoints", "scale"), [1, 3], "transformPoints", "scale");
     const P = geo.attrs.point.require("P");
-    const pd = P.data;
+    // Every one of the three is read and written in the same pass — the
+    // position is scaled and rotated back into its own slot, the rotation
+    // is composed with itself, the scale is multiplied in place — so each
+    // is taken as the WRITE view up front and read through that. A read
+    // view taken first would be the pre-transform copy the moment the
+    // first write forked the column.
+    const pd = P.writable();
     const ps = P.tupleSize;
     const rotAttr = geo.attrs.point.get("rot");
-    const rot = rotAttr && rotAttr.type === "f32" && rotAttr.tupleSize === 4 ? rotAttr.data : undefined;
+    const rot =
+      rotAttr && rotAttr.type === "f32" && rotAttr.tupleSize === 4 ? rotAttr.writable() : undefined;
     const scaleAttr = geo.attrs.point.get("scale");
-    const scl = scaleAttr && scaleAttr.type === "f32" && scaleAttr.tupleSize === 3 ? scaleAttr.data : undefined;
+    const scl =
+      scaleAttr && scaleAttr.type === "f32" && scaleAttr.tupleSize === 3
+        ? scaleAttr.writable()
+        : undefined;
     const q: number[] = [0, 0, 0, 1];
     const v: number[] = [0, 0, 0];
     const q2: number[] = [0, 0, 0, 1];
@@ -196,7 +207,10 @@ export const jitterPoints = standardNode<
     const seed = hashCombine(nodeSeed, params.seed);
     const amount = requireTuple(await resolveOnMaybeGpu(gpu, geo, "point", params.amount, seed, "jitterPoints", "amount"), [1, 3], "jitterPoints", "amount");
     const P = geo.attrs.point.require("P");
-    const pd = P.data;
+    // The offset is added to the position in place, so the read and the
+    // write are the same reference — see transformPoints for why that has
+    // to be the write view.
+    const pd = P.writable();
     const ps = P.tupleSize;
     const n = geo.pointCount;
     // Identities come from the INCOMING positions, before anything moves —
@@ -870,7 +884,7 @@ function planRotateAttrs(src: Geometry, names: readonly string[], keepTopology: 
 function rotateBlocks(
   data: Float32Array,
   starts: Uint32Array,
-  tRot: Float32Array | undefined,
+  tRot: ReadonlyAttrData<Float32Array> | undefined,
   v: number[],
 ): void {
   if (!tRot) return;
@@ -1107,7 +1121,7 @@ export const copyToPoints = standardNode<
     // its index never appears in the column — which is what keeps -1
     // meaning "belongs to no target" rather than "took no copies".
     if (indexName !== "") {
-      const dst = outSet.require(indexName).data;
+      const dst = outSet.require(indexName).writable();
       for (let t = 0; t < nT; t++) dst.fill(t, starts[t], starts[t + 1]);
     }
 
@@ -1133,7 +1147,7 @@ export const copyToPoints = standardNode<
     for (const attr of carried) {
       const dst = outSet.require(attr.name);
       const ts = dst.tupleSize;
-      const dd = dst.data;
+      const dd = dst.writable();
       const sd = attr.data;
       const isString = attr.type === "string";
       vals.length = ts;
@@ -1156,9 +1170,12 @@ export const copyToPoints = standardNode<
       }
     }
 
-    const readVec = (geoAttr: ReturnType<typeof srcSet.get>, tuple: number): Float32Array | undefined =>
+    const readVec = (
+      geoAttr: ReturnType<typeof srcSet.get>,
+      tuple: number,
+    ): ReadonlyAttrData<Float32Array> | undefined =>
       geoAttr && geoAttr.type === "f32" && geoAttr.tupleSize === tuple
-        ? (geoAttr.data as Float32Array)
+        ? (geoAttr.data as ReadonlyAttrData<Float32Array>)
         : undefined;
     const sP = readVec(srcSet.get("P"), 3);
     if (!sP) throw new Error('copyToPoints: source needs a point attribute "P" (f32, tupleSize 3)');
@@ -1173,10 +1190,10 @@ export const copyToPoints = standardNode<
     const tSeedAttr = tgtSet.get("seed");
     const tSeed = tSeedAttr && tSeedAttr.type === "u32" && tSeedAttr.tupleSize === 1 ? tSeedAttr.data : undefined;
 
-    const oP = outSet.require("P").data;
-    const oRot = outSet.require("rot").data;
-    const oScale = outSet.require("scale").data;
-    const oSeed = outSet.require("seed").data;
+    const oP = outSet.require("P").writable();
+    const oRot = outSet.require("rot").writable();
+    const oScale = outSet.require("scale").writable();
+    const oSeed = outSet.require("seed").writable();
     const v: number[] = [0, 0, 0];
     const q: number[] = [0, 0, 0, 1];
     for (let t = 0; t < nT; t++) {
@@ -1226,7 +1243,7 @@ export const copyToPoints = standardNode<
     // through. The columns were gathered verbatim above, so this rotates
     // them in place, one target block at a time.
     for (const name of rotate.point) {
-      rotateBlocks(outSet.require(name).data as Float32Array, starts, tRot, v);
+      rotateBlocks(outSet.require(name).writable() as Float32Array, starts, tRot, v);
     }
 
     // TOPOLOGY, opt-in and strictly additive. It runs LAST because the
@@ -1344,7 +1361,7 @@ export const copyToPoints = standardNode<
         // domain's per-target blocks.
         const blockStarts = domain === "vertex" ? vertexStarts : primStarts;
         for (const name of rotate[domain]) {
-          rotateBlocks(to.require(name).data as Float32Array, blockStarts, tRot, v);
+          rotateBlocks(to.require(name).writable() as Float32Array, blockStarts, tRot, v);
         }
       }
     }
@@ -1694,7 +1711,7 @@ export const orientAlongVector = standardNode<
       if (rotAttr) set.remove("rot");
       rotAttr = set.add("rot", "f32", 4, [0, 0, 0, 1]);
     }
-    const rot = rotAttr.data;
+    const rot = rotAttr.writable();
     const q: number[] = [0, 0, 0, 1];
     const n = geo.pointCount;
     for (let i = 0; i < n; i++) {
@@ -1817,7 +1834,7 @@ export const setBounds = standardNode<SetBoundsParams, SetBoundsInputs, SetBound
         attr.fill(value as AttrDefault, 0, set.count);
         return;
       }
-      const out = attr.data;
+      const out = attr.writable();
       for (let i = 0; i < set.count; i++) {
         const o = i * 3;
         out[o] = src[o];

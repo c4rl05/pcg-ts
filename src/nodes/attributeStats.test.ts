@@ -19,7 +19,8 @@ import { firstGeo, runNode, snapshotGeometry } from "./nodes.testsupport.js";
 function withValues(values: readonly number[], tupleSize = 1): ReturnType<typeof createPointCloud> {
   const geo = createPointCloud(values.length / tupleSize);
   const attr = geo.attrs.point.add("v", "f32", tupleSize, 0);
-  for (let i = 0; i < values.length; i++) attr.data[i] = values[i];
+  const d = attr.writable();
+  for (let i = 0; i < values.length; i++) d[i] = values[i];
   return geo;
 }
 
@@ -302,7 +303,7 @@ describe("attributeRemap", () => {
   it("converts an integer attribute to f32 in place — the nbrCount to density path", async () => {
     const geo = createPointCloud(3);
     const counts = geo.attrs.point.add("nbrCount", "u32", 1, 0);
-    counts.data.set([0, 2, 4]);
+    counts.writable().set([0, 2, 4]);
     const out = firstGeo(
       (
         await runNode(
@@ -379,7 +380,7 @@ describe("attributeRemap", () => {
     // Same tuple size, different type, and not the source: an i32 column
     // under another name is destroyed by the write, so it is refused too.
     const tagged = withValues([0, 1]);
-    tagged.attrs.point.add("id", "i32", 1, 0).data.set([5, 6]);
+    tagged.attrs.point.add("id", "i32", 1, 0).writable().set([5, 6]);
     await expect(
       runNode(attributeRemap, { name: "v", outName: "id" }, { in: [makeGeometryItem(tagged)] }),
     ).rejects.toThrow(
@@ -389,7 +390,7 @@ describe("attributeRemap", () => {
     // The identical shape change IS allowed when the column is the source:
     // an in-place u32 -> f32 remap, which outName's own doc promises.
     const counts = createPointCloud(3);
-    counts.attrs.point.add("nbrCount", "u32", 1, 0).data.set([0, 2, 4]);
+    counts.attrs.point.add("nbrCount", "u32", 1, 0).writable().set([0, 2, 4]);
     const out = firstGeo(
       (
         await runNode(
