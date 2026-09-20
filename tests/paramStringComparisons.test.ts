@@ -57,15 +57,26 @@
  *      meant to fix.
  *
  * `===`, `!==`, `==`, `!=` and `switch (x) { case …: }` all count. A
- * STRING CONSTANT is a string literal, a module-scope `const WRAP =
- * "wrap"`, or a property of a module-scope const object
- * (`MODES.wrap`), resolved in this file first and then across `src/`;
- * otherwise `params.mode === WRAP` would be a one-line way to silence
- * this test without fixing anything. Only identifiers and plain property
- * chains are candidates on the other side; anything computed is not, and
- * a root that is REASSIGNED anywhere in its own scope is dropped, because
- * a `let phase` a loop writes to is not loop-invariant and hoisting it
- * would be wrong advice.
+ * STRING CONSTANT is a string literal; a `const WRAP = "wrap"` in ANY
+ * enclosing scope, module or function; or a one-level property of a const
+ * object in any enclosing scope (`MODES.wrap`). A bare name that resolves
+ * to no declaration here falls back to a table of module-scope consts
+ * collected across `src/`, which is how an imported `WRAP` resolves.
+ * Without this, `params.mode === WRAP` would be a one-line way to silence
+ * the test without fixing anything.
+ *
+ * WHAT DOES NOT RESOLVE, so it reads as "not a string comparison" and is
+ * not reported: a NESTED property (`MODES.deep.inner` — only one level is
+ * followed), a module-scope `let` used as a constant (the const flag is
+ * the evidence), a value behind a call, and a computed member access.
+ *
+ * Only identifiers and plain property chains are candidates on the other
+ * side; anything computed is not. A root that is ASSIGNED inside the loop
+ * or closure it is compared in is dropped — a `let phase` the loop
+ * advances is not loop-invariant, so there is nothing to hoist and the
+ * message's advice would be wrong. Assignment ABOVE that region does not
+ * drop it: `let mode = params.mode; if (strict) mode = "clamp";` before a
+ * loop is loop-invariant and is the hazard, not an exception to it.
  *
  * THE COST OF THE CLOSURE HALF, MEASURED: counting loop bodies alone
  * finds 9 sites and counting loops plus nested functions finds 20. The
@@ -104,6 +115,20 @@
  * caller is. That is a real pre-fix shape in this repo's history, and
  * this scan would NOT have caught it, while it does catch pre-fix worley.
  * Anything that fixes it needs a call graph, which is a different tool.
+ * What covers it instead is a CONVENTION, in CLAUDE.md under Conventions:
+ * keep the string out of the SIGNATURE — take `axisCode: OrientAxisCode`
+ * or a boolean, not `mode: "wrap" | "clamp"`. This file cannot enforce
+ * that, and says so rather than letting the green tick imply otherwise.
+ *
+ * THE SWAP THAT STILL PASSES, written down so it is not rediscovered:
+ * the allowlist is keyed on file, expression and literal with a count, so
+ * deleting a cold allowlisted site and adding a HOT one in the same file,
+ * on the same expression, against the same literal, under the same
+ * nesting shape leaves the key and the count unchanged and stays green.
+ * It is narrow — it needs all four to match — and closing it means
+ * keying on something that moves with every edit, which is the trade the
+ * "no line numbers" note below refuses. Reviewing a diff that touches an
+ * allowlisted file is the cover for it.
  *
  * Also invisible:
  *
@@ -498,9 +523,16 @@ const isStringUnion = (
 
 /**
  * Type alias names whose right-hand side is a string-literal union, iterated
- * to a FIXED POINT rather than for a fixed number of sweeps: an alias of an
- * alias of an alias settles whatever order the files came in. The bound is
- * only there so a circular alias cannot spin.
+ * to a FIXED POINT rather than for a fixed number of sweeps, so an alias of
+ * an alias of an alias settles whatever order the files came in.
+ *
+ * THE BOUND FAILS OPEN, which is worth saying rather than implying. 32
+ * passes stops a circular alias spinning, but a chain deeper than 32 links
+ * presented in the worst (reverse) order would simply stop resolving, and
+ * nothing here would report it — the affected params read as not
+ * string-typed and their comparisons go unreported. The deepest chain in
+ * `src/` today is far short of that, and a missed alias costs coverage,
+ * never a false finding.
  */
 const collectStringUnionAliases = (files: readonly ts.SourceFile[]): ReadonlySet<string> => {
   const aliases = new Set<string>();
@@ -781,21 +813,32 @@ const scanSources = (entries: readonly SourceEntry[]): readonly Finding[] => {
       if (!root) return;
       const found = resolve(root.text, operand);
       if (!found) return;
-      // A value the code writes to is not loop-invariant; there is nothing
-      // to hoist and the message's advice would be wrong.
-      if (isReassignedIn(root.text, found.scope)) return;
       const origin = originOfDecl(found, { aliases, seen: new Set<ts.Node>() }, 0);
       if (!origin) return;
       let cursor: ts.Node | undefined = parentOf(node);
       let loops = 0;
       let closures = 0;
+      const perElement: ts.Node[] = [];
       while (cursor && cursor !== origin.scope) {
-        if (isLoop(cursor)) loops++;
-        else if (isFunctionLike(cursor)) closures++;
+        if (isLoop(cursor)) {
+          loops++;
+          perElement.push(cursor);
+        } else if (isFunctionLike(cursor)) {
+          closures++;
+          perElement.push(cursor);
+        }
         cursor = parentOf(cursor);
       }
       if (cursor === undefined) return; // origin scope is not an ancestor
       if (loops === 0 && closures === 0) return;
+      // A value written to INSIDE the per-element region varies with the
+      // element: a `let phase` the loop advances has nothing to hoist, and
+      // telling an author to hoist it would be wrong. Scoped to those
+      // constructs and not to the whole declaring scope, which was the
+      // first spelling and was too broad — `let mode = params.mode; if (x)
+      // mode = "clamp";` ABOVE the loop is loop-invariant and is exactly
+      // the hazard, and a blanket rule made it silent.
+      if (perElement.some((n) => isReassignedIn(root.text, n))) return;
       const nesting = [
         loops > 0 ? `${loops} loop${loops > 1 ? "s" : ""}` : "",
         closures > 0 ? `${closures} nested function${closures > 1 ? "s" : ""}` : "",
@@ -1002,6 +1045,38 @@ export const node = {
 `,
     expect: 1,
     names: ["params.mode", '<switch "clamp"|"wrap">'],
+  },
+  {
+    name: "a `let` the code settles ABOVE the loop and never touches inside it",
+    source: `
+export const node = {
+  execute({ params, xs }: { params: { mode: string; strict: boolean } ; xs: Float32Array }): number {
+    let mode = params.mode;
+    if (params.strict) mode = "clamp";
+    let acc = 0;
+    for (let i = 0; i < xs.length; i++) if (mode === "clamp") acc += xs[i]!;
+    return acc;
+  },
+};
+`,
+    expect: 1,
+    names: ["mode", '"clamp"'],
+  },
+  {
+    name: "a self-assignment above the loop, which settles nothing",
+    source: `
+export const node = {
+  execute({ params, xs }: { params: { mode: string }; xs: Float32Array }): number {
+    let mode = params.mode;
+    mode = mode;
+    let acc = 0;
+    for (let i = 0; i < xs.length; i++) if (mode === "clamp") acc += xs[i]!;
+    return acc;
+  },
+};
+`,
+    expect: 1,
+    names: ["mode", '"clamp"'],
   },
   {
     name: "a string-union parameter compared in a nested helper",
