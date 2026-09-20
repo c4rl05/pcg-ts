@@ -2,8 +2,9 @@
  * A {@link Look}, made into a scene.
  *
  * This is the only file that knows about three. It owns five lights, the
- * environment textures, the fog, the exposure, the render path and the
- * occlusion, and it knows nothing at all about the Eiffel Tower — it is
+ * environment textures, the fog, the exposure, the render path, the
+ * occlusion and the vignette, and it knows nothing at all about the
+ * Eiffel Tower — it is
  * handed a scene, a camera, a bounding box and a table of materials by
  * class name. That is deliberate: it was tuned away from this page and
  * landed here unchanged, and anything tower-shaped in it would have had
@@ -49,6 +50,7 @@ import type { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
 import { type BuiltEnv, type EnvSpec, buildEnv, sunDirection } from "./env.js";
 import { applyAo, createGtao } from "./gtao.js";
 import type { LightSpec, Look, MaterialSpec } from "./look.js";
+import { VIGNETTE_DEFAULT, applyVignette, createVignette, sizeVignette } from "./vignette.js";
 
 export interface Rig {
   /** Push a whole look. Rebuilds the environment only if its spec changed. */
@@ -118,6 +120,11 @@ export function createRig(
   composer.addPass(new RenderPass(scene, camera));
   const gtao = createGtao(scene, camera, size.width, size.height, renderer);
   composer.addPass(gtao);
+  // Upstream of the output pass on purpose: the vignette is light the lens
+  // did not deliver, so it is multiplied into a linear image and tone
+  // mapped along with everything else. `vignette.ts` says why at length.
+  const vignette = createVignette(size.width, size.height);
+  composer.addPass(vignette);
   // Tone mapping and the sRGB write happen HERE, not in the materials:
   // three only applies `renderer.toneMapping` when it is drawing straight
   // to the canvas, so everything upstream of this pass is linear, which
@@ -189,6 +196,7 @@ export function createRig(
     }
 
     applyAo(gtao, look.ao);
+    applyVignette(vignette, look.vignette ?? VIGNETTE_DEFAULT);
     current = look;
     if (lastBox !== undefined) fitShadow(lastBox);
     renderer.shadowMap.needsUpdate = true;
@@ -266,6 +274,7 @@ export function createRig(
   function setSize(width: number, height: number): void {
     composer.setSize(width, height);
     gtao.setSize(width, height);
+    sizeVignette(vignette, width, height);
   }
 
   return {

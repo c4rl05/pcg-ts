@@ -32,10 +32,10 @@
  * of the draw.
  *
  * THE LOOK IS ONE OBJECT, not a scatter of statements. `look.ts` holds it
- * — environment, five lights, fog, exposure, occlusion — `rig.ts` turns
- * it into a scene, and `env.ts` and `gtao.ts` are what those two stand
- * on. All four were tuned away from this page and land here unchanged, so
- * a new look is a new object and nothing else.
+ * — environment, five lights, fog, exposure, occlusion, vignette —
+ * `rig.ts` turns it into a scene, and `env.ts`, `gtao.ts` and
+ * `vignette.ts` are what those two stand on. A new look is a new object
+ * and nothing else.
  *
  * ONE MATERIAL PER CLASS, all in one family. The iron is painted one
  * colour on the real tower, and a render that gave every class its own hue

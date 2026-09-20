@@ -17,6 +17,7 @@
  */
 import type { AoSpec } from "./gtao.js";
 import type { EnvSpec, SunAngle } from "./env.js";
+import type { VignetteSpec } from "./vignette.js";
 
 /** One light. `angle: null` means "wherever the environment's sun is". */
 export interface LightSpec {
@@ -84,6 +85,13 @@ export interface Look {
   readonly envIntensity: number;
   readonly material: Readonly<Record<string, MaterialSpec>>;
   readonly ao: AoSpec;
+  /**
+   * OPTIONAL, and the one field a look may arrive without. Everything
+   * else here is stated by whatever tuned the look; the vignette is the
+   * page's own, so a look that says nothing about it gets
+   * `VIGNETTE_DEFAULT` rather than an error.
+   */
+  readonly vignette?: VignetteSpec;
 }
 
 const off: LightSpec = { on: false, color: 0xffffff, intensity: 0, angle: null };
@@ -137,6 +145,9 @@ export const LOOK: Look = {
   ambient: { intensity: 0.85, sky: 0xc4d0da, ground: 0x9a8f7d },
   envIntensity: 0.35,
   material: {},
+  // A quarter stop lost in the extreme corners, beginning halfway out:
+  // enough to hold the eye on the tower, not enough to read as a ring.
+  vignette: { on: true, amount: 0.25, start: 0.45 },
   ao: {
     on: true,
     radius: 0.45,
