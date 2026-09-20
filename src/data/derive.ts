@@ -43,11 +43,31 @@
  *   one the type system catches. Sharing them is a separate change, and
  *   it needs its own guard first.
  *
- * WHAT IT COSTS. The flag is a boolean, not a count: nothing in the
- * language tells a buffer how many typed arrays view it. So a column
- * whose sharer has already forked still reads as shared and copies once
- * more than it strictly must. That is a copy that was not needed, never a
- * write seen through the wrong column.
+ * WHAT IT COSTS, measured rather than assumed (2026-09-20, this
+ * machine, counted over every node cache of a finished cook):
+ *
+ * - THE FLAG IS A BOOLEAN, NOT A COUNT, because nothing in the language
+ *   tells a buffer how many typed arrays view it. A column whose borrower
+ *   has already forked still reads as shared and copies once more than it
+ *   strictly must. The bound on that waste is the total number of forks,
+ *   and forks are rare: 364 / 875 / 1,917 over the eiffel demo at plain /
+ *   laced / rivets, and 1,031 over the 95-graph corpus, against 16,781 /
+ *   21,578 / 31,507 / 8,081 columns the deep copy used to duplicate
+ *   unconditionally — 2.2%, 4.1%, 6.1% and 12.8% of them. A copy that
+ *   was not needed, never a write seen through the wrong column.
+ * - WHERE IT IS WORSE THAN THE CLONE, and it is worth knowing there is
+ *   such a place: a column lent by a source whose allocation ends past
+ *   its live count is a `subarray`, and a subarray keeps the WHOLE
+ *   allocation alive. The clone would have released that slack. While
+ *   every cache is live the cost is nil, because the lender is holding
+ *   its own allocation anyway — measured at 0 bytes on all three eiffel
+ *   depths and 59.8 KB (0.09%) on the corpus, over 3,824 / 6,495 /
+ *   11,265 / 1,643 partial views. It becomes real only when a lender is
+ *   DROPPED while a borrower survives, which is the streamed world
+ *   evicting a level, and nothing measures that today.
+ * - Columns still on loan when the cook ends, by the flag: 74.3% / 74.1%
+ *   / 79.9% / 74.1%. That is the number the whole design turns on — three
+ *   columns in four are handed to a node that never writes them.
  */
 import { Attribute, type AttributeSet } from "./attribute.js";
 import { Geometry } from "./geometry.js";

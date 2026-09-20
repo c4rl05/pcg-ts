@@ -86,24 +86,37 @@ import { UniformGrid, type PositionView } from "./uniformGrid.js";
  *   describe the same points. Rebuild when positions are written, when the
  *   count changes, or when the buffer is reallocated.
  * - {@link adjacencyFor} detects all of those EXCEPT ONE: an in-place
- *   rewrite of `P` into the SAME buffer at the same count and stride. That
- *   is the exact gap `UniformGrid` documents. It is still closed by the
- *   clone-before-write discipline every node follows, but copy-on-write
- *   moved WHERE the closure happens, and the old argument — "`cloneGeometry`
- *   makes a rewritten `P` a different buffer" — no longer describes it. A
- *   clone now hands the derived geometry the buffer it came from; the WRITE
- *   is what separates the two, because `Attribute.writable()` forks a column
- *   that another column can still reach before it returns anything writable.
- *   So a node that clones and then writes `P` still lands its write in a
- *   buffer no cached relation was ever keyed on. What changed is the other
- *   side: a derived geometry that never writes `P` keeps the buffer it was
- *   cloned from and now HITS this cache, which is correct — two columns on
- *   one buffer hold the same positions by construction, so the key names the
- *   CONTENT and not the column.
- *   The gap that remains is therefore narrower than it was: only a write to
- *   a column nothing else shares reaches its own storage in place. A caller
- *   deliberately doing that to a live `P` must call {@link buildAdjacency}
- *   directly.
+ *   rewrite of `P` into the same storage at the same count and stride.
+ *   That is the exact gap `UniformGrid` documents, and it is closed by the
+ *   clone-before-write discipline every node follows — but copy-on-write
+ *   moved WHERE the closure happens, so the old argument
+ *   ("`cloneGeometry` makes a rewritten `P` a different buffer") no
+ *   longer describes the code. A derived geometry starts out holding the
+ *   input's storage; the WRITE is what separates the two, because
+ *   `Attribute.writable()` forks a column another column can still reach
+ *   before it hands back anything writable. A node that derives and then
+ *   writes `P` therefore still lands its write somewhere no cached
+ *   relation was keyed on.
+ *
+ *   WHAT THE KEY ACTUALLY IS, since the distinction now matters: the
+ *   TYPED ARRAY OBJECT, `view.data`, not the `ArrayBuffer` under it and
+ *   not the positions as values. `Attribute.data` returns the same object
+ *   every call, so the key is stable, and a derived column IS that same
+ *   object whenever the source's allocation already ended at its live
+ *   count — which is the common case, and the case where this cache now
+ *   HITS across a derivation that never wrote `P`. That hit is sound: the
+ *   two columns cannot differ in content, because the first write to
+ *   either forks it to an object this cache has never seen. When the
+ *   source instead carries the slack of growth by doubling, the derived
+ *   column is a `subarray` of it — a DIFFERENT object over the same
+ *   memory — and the lookup simply misses and rebuilds. Correct, and one
+ *   rebuild is all it costs; no entry is ever reused across two arrays
+ *   that could disagree.
+ *
+ *   The gap that remains is therefore narrower than it was: only a write
+ *   to a column nothing else shares reaches its own storage in place. A
+ *   caller deliberately doing that to a live `P` must call
+ *   {@link buildAdjacency} directly.
  */
 export interface Adjacency {
   /** Number of rows: the point count this was built over. */
@@ -250,13 +263,19 @@ function overflowError(
 }
 
 /**
- * Cached relations, keyed on the position BUFFER's identity. A WeakMap
- * gives free eviction: when the geometry holding `P` is collected, so is
- * every adjacency derived from it, with no cache-invalidation call for a
- * caller to forget. Under copy-on-write one buffer can be reached from
- * several columns at once, so the key identifies the positions rather
- * than the column that happens to hold them — see the reuse contract on
- * {@link Adjacency} for why that is the sound reading and not a looser one.
+ * Cached relations, keyed on the identity of the POSITION ARRAY OBJECT —
+ * `view.data` itself, which is what `Attribute.data` hands back and is the
+ * same object on every call. Not the `ArrayBuffer` beneath it, and not the
+ * positions as values. A WeakMap gives free eviction: when the geometry
+ * holding `P` is collected, so is every adjacency derived from it, with no
+ * cache-invalidation call for a caller to forget.
+ *
+ * Under copy-on-write two columns can name one array, and this cache then
+ * serves both — which is sound because a write to either forks it away
+ * first, so no entry can outlive the positions it was built from. Two
+ * columns that view one buffer through DIFFERENT array objects (a derived
+ * column cut from a source with allocation slack) are two keys, and the
+ * second simply rebuilds. See the reuse contract on {@link Adjacency}.
  *
  * The inner key is `count | stride | radius`, and **`cellSize` is
  * deliberately absent**: `queryRadius` returns the same set at any

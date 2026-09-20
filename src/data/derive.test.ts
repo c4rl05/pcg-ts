@@ -265,20 +265,37 @@ describe("the copy-on-write fork", () => {
     expect(out.attrs.point.require("scale").getTuple(out.pointCount - 1)).toEqual([1, 1, 1]);
   });
 
-  it("forks when a resize grows within an existing capacity", () => {
-    // The case a growth-shaped test misses: `_grow` returns early because
-    // storage is long enough, so the default fill is the only writer.
+  it("forks the SOURCE when a resize grows it within its existing capacity", () => {
+    // The one path where the default fill is the ONLY writer: `_grow`
+    // returns early because storage is already long enough, so nothing
+    // reallocates and `fillDefault` has to do the forking itself.
+    //
+    // It can only be reached from the LENDING side. A derived column is
+    // cut to exactly its count, so growing one past that always
+    // reallocates and the fork is `_grow`'s — which is the test above.
+    // A source that has been shrunk still carries its old allocation, and
+    // growing back into it writes in place.
     const src = new Geometry();
     const scale = src.attrs.point.add("scale", "f32", 3, [1, 1, 1]);
     src.attrs.point.resize(8);
     for (let i = 0; i < 8; i++) scale.setTuple(i, [i, i, i]);
-    src.attrs.point.resize(4); // shrink; capacity stays 8
+    src.attrs.point.resize(4); // shrink; the allocation stays at 8
+    expect(scale.capacity).toBe(8);
+
     const out = deriveGeometry(src);
-    // The derived column was cut to the live prefix, so grow it back
-    // through a set that still has the room.
-    const kept = Array.from(scale.data);
-    out.attrs.point.resize(6);
-    expect(Array.from(scale.data)).toEqual(kept);
+    const lent = out.attrs.point.require("scale");
+    const lentBefore = Array.from(lent.data);
+    const lentArray = lent.data;
+    expect(lent.capacity).toBe(4);
+
+    // 6 <= 8, so no reallocation happens and the fill is all there is.
+    src.attrs.point.resize(6);
+    expect(scale.capacity).toBe(8); // it really did not reallocate for room
+    expect(scale.data.buffer).not.toBe(lentArray.buffer); // it reallocated to FORK
+    expect(Array.from(lent.data)).toEqual(lentBefore);
+    // And the source got what a fill is supposed to give it.
+    expect(scale.getTuple(5)).toEqual([1, 1, 1]);
+    expect(scale.getTuple(0)).toEqual([0, 0, 0]);
   });
 
   it("re-shares a column that has already forked once", () => {
