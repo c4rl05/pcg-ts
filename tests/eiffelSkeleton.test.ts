@@ -456,13 +456,36 @@ describe("eiffel skeleton", () => {
         expect(Math.abs(u! - mid), `post end at y=${y}`).toBeLessThan(2e-3);
         expect(Math.min(Math.abs(v! - p.outer), Math.abs(v! - p.inner))).toBeLessThan(2e-3);
       }
-      // Clear of the member it stands on: never within 0.4 of a node whose
-      // horizontal is centred on it, and never into panel 5, whose belt
-      // chords stand inside it with their faces on XXIV and XXIII (panel
-      // 11's likewise stand above XVIII, where panel 10's post ends).
+      // INTO the member it stands on, not short of it. The leg drifts
+      // sideways as it rises, so the post meets a node's horizontal
+      // obliquely while its cap is cut square: an end placed where the
+      // whole cap cleared the horizontal left the far corner up to 0.38 m
+      // clear of it — half a member wide, read as a post that stops short.
+      // So the axis end sits INSIDE the horizontal's box, past its near
+      // face and never past the node line, and the far corner clears.
+      // The belts are the exception (postStretch caps the pull-back at
+      // hw): their chord plates only touch XXIV, XXIII and XVIII, with
+      // their bodies inside panels 5 and 11, so a post stops clear of
+      // those and never enters them.
       for (const y of [a[1], b[1]]) {
-        const n = NODES.find((m) => Math.abs(m.y - y) < 0.4 && !["XXIV", "XXIII", "XVIII"].includes(m.name));
-        expect(n, `post end at y=${y} runs into node ${n?.name}`).toBeUndefined();
+        // The search reaches 1 m, well past the 0.4 bound, so an end that
+        // stopped SHORT of its horizontal is caught by the bound instead
+        // of falling outside the search and being skipped. (It has to stay
+        // under 1.34, the tie's own lo end below XXVIII, which stands on a
+        // chord plate rather than a horizontal and is not one of these.)
+        const n = NODES.find((m) => Math.abs(m.y - y) < 1 && !["XXIV", "XXIII", "XVIII"].includes(m.name));
+        if (n !== undefined) {
+          const hw = MEMBERS.horizontal.find(([at]) => at >= n.y)?.[1] ?? 0;
+          // Signed, from the side the member is on: a lower end stands on
+          // the node below it, an upper end hangs under the node above.
+          // So a positive d is an end that has not crossed the node line,
+          // and d < hw is one that reaches its horizontal. The measure is
+          // vertical while hw is a half-depth across the face's in-plane
+          // normal, which makes the bound conservative by about a tenth.
+          const d = y === Math.min(a[1], b[1]) ? y - n.y : n.y - y;
+          expect(d, `post end at y=${y} crosses node ${n.name}`).toBeGreaterThan(0);
+          expect(d, `post end at y=${y} short of node ${n.name}'s horizontal`).toBeLessThan(hw);
+        }
         const inPanel5 = y > node("XXIV").y - 0.02 && y < node("XXIII").y + 0.02;
         expect(inPanel5, `post end at y=${y} in panel 5`).toBe(false);
       }

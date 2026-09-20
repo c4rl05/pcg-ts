@@ -629,11 +629,24 @@ const POST_CLEAR = 0.05;
 /**
  * One stretch of a central post, on face f from height y0 to y1, standing
  * on members hw0 deep (below) and hw1 (above) — both lying along the face
- * at those heights, squared to it. The post ends where its own section,
- * w half-wide, clears them: along the post by (hw + clear + w |U.B|) /
- * (U.D), U the face's in-plane normal to the horizontal, D the post and B
- * the post's in-plane normal. Its ends, with the corner beyond it placed
- * at the same heights, so the edge rule reads the face it lies in.
+ * at those heights, squared to it. Its ends, with the corner beyond it
+ * placed at the same heights, so the edge rule reads the face it lies in.
+ *
+ * WHERE AN END GOES. U is the face's in-plane normal to the horizontal, D
+ * the post and B the post's in-plane normal. The leg drifts sideways as it
+ * rises, so within the face the post leans away from U — U.D is 0.91 in
+ * panel 1, 0.98 in panel 9 — and it therefore meets the horizontal
+ * obliquely. Its cap is cut square to D (a swept profile has no other
+ * cut), so the cap's two in-plane corners are 2 w |U.B| apart across U:
+ * an end placed where the WHOLE cap clears the member leaves the near
+ * corner at the clearance and the far one 2 w |U.B| beyond it — 0.38 m of
+ * daylight in panel 1, read as a post that stops short. So the end goes
+ * where the FAR corner clears, at (hw + clear - w |U.B|) / (U.D), and the
+ * near corner buries in the member: the same cut the first floor's outer
+ * posts take against b's face, "so no notch shows". The pull-back is
+ * capped at hw, so a member with nothing under the node line to bury into
+ * — hw = 0, the belts' chord plates, whose faces lie ON it and whose
+ * bodies stand inside panels 5 and 11 — keeps the end it always had.
  */
 function postStretch(
   f: number,
@@ -651,7 +664,8 @@ function postStretch(
   if (dot3(U, D) < 0) U = scale3(U, -1);
   const Bp = unit3(cross3(F, D));
   const w = tableAt(MEMBERS.web, (y0 + y1) / 2);
-  const along = (hw: number) => (hw + POST_CLEAR + w * Math.abs(dot3(U, Bp))) / dot3(U, D);
+  const half = w * Math.abs(dot3(U, Bp));
+  const along = (hw: number) => (hw + POST_CLEAR + half - 2 * Math.min(half, hw)) / dot3(U, D);
   return { lo: add3(c0, scale3(D, along(hw0))), hi: sub3(c1, scale3(D, along(hw1))) };
 }
 
@@ -659,9 +673,9 @@ function postStretch(
  * The central posts: one laced strut up the middle of every leg face,
  * parallel to the uprights, through the base tie, panels 1-4 and 6-9, and
  * panel 10 above its band [sourced PL-IX Fig. 8, PL-VII Figs 1, 2, 5]. Each
- * stretch stops clear of the horizontal (or the tie's bottom chord, or the
- * band's top chord) at either end: on the plates those crossings are
- * rosettes, not joints to an upright. A placed lattice of eight stations
+ * stretch stops ON the horizontal (or the tie's bottom chord, or the
+ * band's top chord) at either end, taking no joint: on the plates those
+ * crossings are rosettes, not joints to an upright. A placed lattice of eight stations
  * (corners even, face centres odd), two rows per stretch.
  */
 function centralPosts(g: Graph): NodeHandle {
