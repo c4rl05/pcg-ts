@@ -5,7 +5,7 @@
  * so a render colours by class and an inspection counts by class.
  */
 import type { Graph, NodeHandle } from "pcg-ts";
-import { mergePrimitives } from "pcg-ts";
+import { jitterPoints, mergePrimitives } from "pcg-ts";
 
 export const PART_CLASSES = [
   /** The corner uprights ("arbalétriers") of the legs and the shaft. */
@@ -57,6 +57,64 @@ export interface Detail {
 export const RIVET_ASSET = "rivet";
 
 /**
+ * One millimetre: the most any built position moves, per axis (plus one
+ * f32 ULP, which the store adds and which matters at 300 m, where the ULP
+ * is 15 µm — see the bound in `tests/eiffelSkeleton.test.ts`).
+ *
+ * The tower is drawn from ONE set of dimensions, so faces meet exactly —
+ * a gusset lies on the upright it plates, a member's end face lies on the
+ * horizontal it lands on, and the arch's foot lies 0.2 mm inside the
+ * pedestal's box face (SOURCES.md §17.2). Coplanar is the one thing a
+ * depth buffer cannot resolve, and the page's logarithmic buffer only
+ * moves where it fails, not whether. Its resolution is set by `far`
+ * ALONE — that is what log depth buys, and `near` does not enter it: the
+ * depth written is log2(1 + w) / log2(1 + far), so one step of a 24-bit
+ * buffer is (1 + w) ln(1 + far) / 2^24. With `far` 2000 that is 0.27 mm
+ * at the 608 m the page opens on and 0.68 mm at the 1500 m it lets the
+ * camera back out to, so faces that agree to the millimetre flicker
+ * against each other as the camera turns — which is what the tower's own
+ * dimensions make of every joint. (24 bits is what a desktop browser
+ * gives; three.js asks only for `depth: true`. On a 16-bit buffer that
+ * step is 70 mm at 600 m and nothing this file can do would help.)
+ *
+ * WHAT A MILLIMETRE ACTUALLY BUYS, measured rather than asserted: of the
+ * 13,716 gusset points that lay exactly in an upright's face plane at the
+ * laced depth, none still does, and about three quarters end up more than
+ * one depth step clear at the opening pose. The rest still fight, but
+ * over part of a face and differently across it rather than the whole
+ * face at once. Raising the figure would not fix the tail and would widen
+ * the cracks below.
+ *
+ * WHAT IT COSTS. {@link jitter} is keyed on POINT IDENTITY — the position
+ * bits together with the point's `seed` — not on the array slot, so this
+ * is a property of the built tower rather than of a cook order. Two
+ * points that coincide AND share a seed move together and stay welded;
+ * two that coincide with DIFFERENT seeds part company, and about two
+ * fifths of the coincident pairs inside a single class are of that kind,
+ * opening cracks of a millimetre or so (3 mm at the worst) where one
+ * member lands on another. That is a fifth of a pixel at the poses this
+ * page opens on and about a pixel at the guide's closest figure; it is
+ * ~20 px if the camera is driven all the way in to `minDistance`, 0.2 m,
+ * which is the one place this trade is visible.
+ */
+export const JITTER = 0.001;
+
+/**
+ * Move every point of `geo` off its plane by at most {@link JITTER}.
+ *
+ * Each jitter node carries its own seed (the graph's, folded with the
+ * node's id), so two faces that coincide in DIFFERENT classes — a gusset
+ * on an upright — always part company. Within one class it depends on the
+ * points' seeds: identical seeds stay welded, different ones part. See
+ * {@link JITTER} for what that costs.
+ */
+export function jitter(g: Graph, id: string, geo: NodeHandle): NodeHandle {
+  const node = g.add(jitterPoints, { amount: [JITTER, JITTER, JITTER] }, id);
+  g.connect(geo, "out", node, "in");
+  return node;
+}
+
+/**
  * What a module returns: its finished mesh nodes, by class, and any rivet
  * spawners, each named. Every rivet set builds its own spawner, so rivets
  * come out as several outputs, `rivets.<name>` (41 at full detail); one
@@ -66,7 +124,10 @@ export type Parts = Partial<Record<PartClass, NodeHandle[]>> & {
   rivets?: Array<{ name: string; spawn: NodeHandle }>;
 };
 
-/** Declare one graph output per class that has parts, named for the class. */
+/**
+ * Declare one graph output per class that has parts, named for the class,
+ * each {@link jitter}ed off the planes its neighbours share.
+ */
 export function assemble(g: Graph, parts: Parts): void {
   for (const cls of PART_CLASSES) {
     const list = parts[cls];
@@ -76,7 +137,7 @@ export function assemble(g: Graph, parts: Parts): void {
       out = g.add(mergePrimitives, {}, `${cls}Out`);
       for (const p of list) g.connect(p, "out", out, "in");
     }
-    g.output(out, "out", cls);
+    g.output(jitter(g, `${cls}Jitter`, out), "out", cls);
   }
   for (const { name, spawn } of parts.rivets ?? []) g.output(spawn, "instances", `rivets.${name}`);
 }

@@ -120,7 +120,6 @@ import type { Graph, NodeHandle } from "pcg-ts";
 import {
   attribute,
   component,
-  mergePoints,
   mul,
   orientAlongVector,
   pathResample,
@@ -128,7 +127,6 @@ import {
   position,
   ramp,
   setAttribute,
-  spawnInstances,
   sweepProfile,
   vec,
 } from "pcg-ts";
@@ -147,7 +145,7 @@ import {
   stationLattice,
   stationRows,
 } from "./lattice.js";
-import { type Detail, type Parts, RIVET_ASSET, joinParts } from "./parts.js";
+import { type Detail, type Parts, joinParts } from "./parts.js";
 import { FLOORS, MEMBERS, PANEL29 } from "./spec.js";
 import {
   UPRIGHT_SEAMS,
@@ -155,6 +153,7 @@ import {
   faceSkin,
   flatBars,
   rivetOutputs,
+  rivetSpawn,
   seamRivets,
   webMembers,
 } from "./strut.js";
@@ -600,21 +599,6 @@ function seamRuns(
     return [at(from), at(from + steps * pitch - RUN_SHORT)] as const;
   });
   return members(g, id, runs, faces);
-}
-
-/** Merge rivet point sets, size them, and spawn them (strut.ts's, not exported). */
-function rivetSpawn(g: Graph, id: string, sets: readonly NodeHandle[]): NodeHandle {
-  const all = g.add(mergePoints, {}, `${id}Rivets`);
-  for (const h of sets) g.connect(h, "out", all, "in");
-  const sized = g.add(
-    setAttribute,
-    { name: "scale", type: "f32", tupleSize: 3, value: RIVET_HEAD },
-    `${id}RivetSize`,
-  );
-  const spawn = g.add(spawnInstances, { assetId: RIVET_ASSET }, `${id}RivetSpawn`);
-  g.connect(all, "out", sized, "in");
-  g.connect(sized, "out", spawn, "in");
-  return spawn;
 }
 
 /** A point's distance outside a rectangle (0 inside). */

@@ -58,7 +58,7 @@ import {
   vec,
 } from "pcg-ts";
 import { END_SINE, END_SINE_MIN, FACE_NORMAL, type Vec3, indexTable, merge, skin } from "./lattice.js";
-import { type Detail, RIVET_ASSET } from "./parts.js";
+import { type Detail, RIVET_ASSET, jitter } from "./parts.js";
 
 /** A corner angle's half-width: 80-100 mm angles (Plate XXXI) [derived]. */
 const CHORD = 0.045;
@@ -760,8 +760,23 @@ function isVec3(v: readonly [number, number, number] | Field): v is readonly [nu
   return Array.isArray(v);
 }
 
-/** Merge rivet point sets, size them, and spawn them. */
-function rivetSpawn(g: Graph, id: string, sets: readonly NodeHandle[]): NodeHandle {
+/**
+ * Merge rivet point sets, size them, and spawn them. EXPORTED, and it has
+ * to stay exported: `summit.ts` held a character-identical private copy of
+ * this until the jitter below landed on one of them and not the other, and
+ * seven rivet outputs quietly kept their coplanar rims.
+ *
+ * Rivets fork off the resample samples before anything is skinned, so
+ * they never reach the mesh classes and `assemble` cannot jitter them:
+ * this is their own hook. A rivet head is a dome standing ON the plate it
+ * fastens and TANGENT to it at its rim, which is the coplanar case again,
+ * and a ring of it z-fights the plate at every head. The head does not
+ * FOLLOW its chord — the two are jittered by different nodes — so the
+ * seating moves by up to two millimetres rather than the one the steel
+ * moves alone; against a 19 mm head that is a tenth of its radius, and a
+ * rivet is half sunk in its plate to begin with.
+ */
+export function rivetSpawn(g: Graph, id: string, sets: readonly NodeHandle[]): NodeHandle {
   const all = g.add(mergePoints, {}, `${id}Rivets`);
   for (const h of sets) g.connect(h, "out", all, "in");
   const sized = g.add(
@@ -770,7 +785,7 @@ function rivetSpawn(g: Graph, id: string, sets: readonly NodeHandle[]): NodeHand
     `${id}RivetSize`,
   );
   const spawn = g.add(spawnInstances, { assetId: RIVET_ASSET }, `${id}RivetSpawn`);
-  g.connect(all, "out", sized, "in");
+  g.connect(jitter(g, `${id}RivetJitter`, all), "out", sized, "in");
   g.connect(sized, "out", spawn, "in");
   return spawn;
 }

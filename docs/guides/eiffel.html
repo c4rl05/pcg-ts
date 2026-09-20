@@ -1609,6 +1609,22 @@
       <p>Before the first rivet commit landed, an independent check found rivets up to 19 cm inside a
       plate — a size table stepped 1 cm past a node, and the skin read that as an 11 m taper — and the
       commit fixed it. After the first audit round every rivet sat within 0.04 mm of its steel.</p>
+      <p>That is the rules' accuracy, and it is no longer what a ruler laid on the built model reads.
+      Everything the graph outputs — every mesh class, and the rivet batches on their own hook — is
+      moved off its plane by up to 1 mm per axis at the end, because the tower is drawn from one set of
+      dimensions and its parts therefore meet EXACTLY: a gusset lies on the upright it plates, a
+      member's end face on the horizontal it lands on, a rivet's rim on the plate it fastens. Coplanar
+      is the one thing a depth buffer cannot resolve. The page's buffer is logarithmic, so its
+      resolution is set by <code>far</code> alone — the depth written is log2(1&nbsp;+&nbsp;w) /
+      log2(1&nbsp;+&nbsp;far), and one step of a 24-bit buffer is 0.27 mm at the 608 m the page opens
+      on — and those faces flickered against each other as the camera turned. The offset is keyed on
+      point identity rather than on an array slot, so it is a property of the built tower and not of a
+      cook order. Measured at the laced depth, of the 13,716 gusset points that lay exactly in an
+      upright's face plane none still does, and about three quarters clear a depth step at the opening
+      pose. The cost is that two coincident points carrying different seeds part company, opening
+      cracks of about a millimetre where one member lands on another: a fifth of a pixel here, a pixel
+      in the closest figure on this page, and visible only if the camera is driven to its 0.2 m
+      limit.</p>
     </div>
   </section>
 

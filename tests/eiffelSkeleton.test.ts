@@ -19,6 +19,7 @@ import {
 } from "pcg-ts";
 import { buildEiffel } from "../demos/eiffel/graph.js";
 import { UPRIGHT_KINK } from "../demos/eiffel/legs.js";
+import { JITTER } from "../demos/eiffel/parts.js";
 import {
   EDOUX_PLAN,
   ENTRETOISE,
@@ -34,6 +35,26 @@ import { planBracingBandLines, planBracingLines, planPattern } from "../demos/ei
 import { UPRIGHT_SEAMS } from "../demos/eiffel/strut.js";
 
 type Vec3 = readonly [number, number, number];
+
+/**
+ * How far a BUILT position may sit from where the rule put it. Every
+ * output is jittered by at most {@link JITTER} per axis to keep coplanar
+ * faces off each other's planes (see `demos/eiffel/parts.ts`), so a
+ * distance measured perpendicular to an axis carries up to that much in
+ * each of the three components — plus one f32 ULP per axis, because the
+ * offset is added into f32 storage and the tower reaches 312 m, where an
+ * ULP is 15 µm. Without that term the bound is not a bound: the measured
+ * worst case is 99.5% of sqrt(3) * JITTER and the ULP is what pushes it
+ * over. 20 µm covers every height this file measures at.
+ *
+ * The node-id probes this file reads for the paths and the skins tap the
+ * graph upstream of the jitter and are still exact; the rivets are read
+ * from a declared OUTPUT, so they are the ones that settle. If a probed
+ * id is ever moved downstream of a jitter node, the assertions around it
+ * — several of which hold two ends level to 5e-7 — fail outright rather
+ * than marginally, and this is the constant to reach for.
+ */
+const SETTLE = (JITTER + 2e-5) * Math.sqrt(3);
 
 /** Every polyline primitive of a geometry, as its vertex positions. */
 function polylines(geo: Geometry): Vec3[][] {
@@ -213,8 +234,8 @@ describe("eiffel skeleton", () => {
     const upperRivets = rivetBases(outputs["rivets.leg.uprights.upper"]![0]);
     const upperBelowXI = upperRivets.filter((p) => p[1] < node("XI").y - 0.5);
     expect(lowerRivets.length).toBeGreaterThan(0);
-    for (const p of lowerRivets) expect(toAxis(p, lower)).toBeCloseTo(row(0.435), 3);
-    for (const p of upperBelowXI) expect(toAxis(p, upper)).toBeCloseTo(row(0.25), 3);
+    for (const p of lowerRivets) expect(Math.abs(toAxis(p, lower) - row(0.435))).toBeLessThan(SETTLE);
+    for (const p of upperBelowXI) expect(Math.abs(toAxis(p, upper) - row(0.25))).toBeLessThan(SETTLE);
     // The upper box's first row, which would sit on the lower box's top
     // face, is not laid.
     expect(Math.min(...upperRivets.map((p) => p[1]))).toBeGreaterThan(yXVII + 0.05);
