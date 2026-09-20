@@ -145,9 +145,10 @@ export const LOOK: Look = {
   ambient: { intensity: 0.85, sky: 0xc4d0da, ground: 0x9a8f7d },
   envIntensity: 0.35,
   material: {},
-  // A quarter stop lost in the extreme corners, beginning halfway out:
-  // enough to hold the eye on the tower, not enough to read as a ring.
-  vignette: { on: true, amount: 0.25, start: 0.45 },
+  // Most of a stop lost in the extreme corners, beginning two fifths of
+  // the way out: enough to hold the eye on the tower against a flat sky,
+  // not enough to read as a ring.
+  vignette: { on: true, amount: 0.45, start: 0.4 },
   ao: {
     on: true,
     radius: 0.45,

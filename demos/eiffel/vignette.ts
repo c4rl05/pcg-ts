@@ -24,11 +24,12 @@ import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 export interface VignetteSpec {
   readonly on: boolean;
   /**
-   * The fraction of the light the extreme corner loses, in LINEAR terms —
-   * 0.25 is a quarter of a stop and change, which after the tone map is a
-   * corner a touch under a tenth darker than it was. Subtle is the point:
-   * a vignette you can see as a ring is a vignette that has become a
-   * subject.
+   * The fraction of the light the extreme corner loses, in LINEAR terms.
+   * It reads as far less than it sounds: the multiply happens before the
+   * tone map, so 0.45 — most of a stop — lands as a corner about a fifth
+   * darker in the finished image. Measured by eye against a flat sky,
+   * which is where a vignette shows first: 0.25 was invisible, 0.45 is
+   * seen without being looked for, 0.65 is a vignette you would name.
    */
   readonly amount: number;
   /**
@@ -38,7 +39,7 @@ export interface VignetteSpec {
   readonly start: number;
 }
 
-export const VIGNETTE_DEFAULT: VignetteSpec = { on: false, amount: 0.25, start: 0.45 };
+export const VIGNETTE_DEFAULT: VignetteSpec = { on: false, amount: 0.45, start: 0.4 };
 
 /**
  * The pass. `aspect` is a uniform rather than something read from the
