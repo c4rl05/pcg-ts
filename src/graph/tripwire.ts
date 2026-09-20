@@ -791,10 +791,19 @@ function watchAttribute(
   }
   const usedNow = (a: Attribute | undefined): Uint8Array | undefined => {
     if (a === undefined) return undefined;
-    const data = a.data;
-    const used = set.count * a.tupleSize * data.BYTES_PER_ELEMENT;
-    // Capacity past `count` is slack, not data.
-    return new Uint8Array(data.buffer, data.byteOffset, Math.min(used, data.byteLength));
+    // Capacity past `count` is slack, not data — and `slice` is how the
+    // used prefix is taken, not `subarray` over `data.buffer`. A column's
+    // read view does not hand out its buffer, because a byte view laid
+    // over it is a writable alias of storage a node cache holds, which is
+    // the one escape from `Attribute`'s read view that needs no cast. So
+    // this COPIES, on both sides of the comparison.
+    //
+    // It costs nothing this snapshot was not already paying: `before` was
+    // copied anyway (a live view would move with the very write this is
+    // built to catch), and `read()` runs once per probe per check, where
+    // the comparison that follows walks the same bytes.
+    const copy = a.data.slice(0, set.count * a.tupleSize);
+    return new Uint8Array(copy.buffer, copy.byteOffset, copy.byteLength);
   };
   const before = usedNow(attr);
   if (before === undefined) return;
@@ -803,7 +812,7 @@ function watchAttribute(
     ctor: ctorOf(attr.data),
     tupleSize: attr.tupleSize,
     unit: unitOf(domain),
-    before: copyOf(before),
+    before,
     read: () => usedNow(live()),
   });
 }

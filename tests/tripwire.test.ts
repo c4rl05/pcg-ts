@@ -174,7 +174,7 @@ describe("the tripwire reaches the loop wrappers' bodies", () => {
           const item = (inputs.in ?? [])[0];
           if (item === undefined || item.kind !== "geometry") return { out: [] };
           // The plant: a write into the geometry it was handed.
-          item.geo.attrs.point.require("P").data[1] = -77;
+          item.geo.attrs.point.require("P").writable()[1] = -77;
           if (!settle) return { out: [item] };
           const geo = createPointCloud(item.geo.pointCount);
           geo.attrs.detail.replace("moves", "u32", 1, 0).set(0, 0);
@@ -191,7 +191,7 @@ describe("the tripwire reaches the loop wrappers' bodies", () => {
   /** One geometry item to iterate over. */
   function oneItem(): ReturnType<typeof makeGeometryItem> {
     const geo = createPointCloud(3);
-    geo.attrs.point.require("P").data.set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    geo.attrs.point.require("P").writable().set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     return makeGeometryItem(geo);
   }
 

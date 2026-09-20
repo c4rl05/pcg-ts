@@ -181,7 +181,10 @@ async function main(): Promise<void> {
     process.stdout.write(JSON.stringify({ ok: false, error: "no WebGPU adapter" }));
     return;
   }
-  const device = (await adapter.requestDevice()) as unknown as GpuDeviceLike;
+  const device = await adapter.requestDevice();
+  // Compile-time check (tsc --noEmit): a real GPUDevice satisfies the
+  // structural device typing the evaluator is written against.
+  const structural: GpuDeviceLike = device;
 
   // -- a. exactness, on the shared parity fixture ---------------------------
   // The fixture cycles pine/oak/birch from element 0, so all three branches
@@ -189,7 +192,7 @@ async function main(): Promise<void> {
   // constants, so the column is a per-lane transcript of which branch the
   // kernel chose and the histogram below cannot be satisfied by a kernel
   // that always picked one.
-  const exactEv = new GpuFieldEvaluator(device);
+  const exactEv = new GpuFieldEvaluator(structural);
   const exactStats = createGpuCookStats();
   const exactGeo = makeParityGeometry(EXACT_COUNT);
   const exactCtx = { geo: exactGeo, domain: "point" as const, seed: SEED };
@@ -235,7 +238,7 @@ async function main(): Promise<void> {
   const ctxB = { geo: cellB, domain: "point" as const, seed: SEED };
   // ONE evaluator and ONE field object, so the second resolve can only
   // reach the device through the kernel the first one cached.
-  const cellEv = new GpuFieldEvaluator(device);
+  const cellEv = new GpuFieldEvaluator(structural);
   const cellStats = createGpuCookStats();
   // Three cases and a default over two tables that agree about none of
   // them: "cedar" is absent from A entirely, and pine/oak swap places.
@@ -327,7 +330,7 @@ async function main(): Promise<void> {
     default: 99,
   });
   const absentBefore = [...absentAttr.stringTable];
-  const absentEv = new GpuFieldEvaluator(device);
+  const absentEv = new GpuFieldEvaluator(structural);
   const absentStats = createGpuCookStats();
   let absentThrew: string | null = null;
   let absentGpu: Column | null = null;
@@ -362,7 +365,7 @@ async function main(): Promise<void> {
   const tagsGeo = tagsGeometry(TAGS_COUNT);
   const tagsCtx = { geo: tagsGeo, domain: "point" as const, seed: SEED };
   const tagsTable = [...tagsGeo.attrs.point.require("tags").stringTable];
-  const tagsEv = new GpuFieldEvaluator(device);
+  const tagsEv = new GpuFieldEvaluator(structural);
   const tagsStats = createGpuCookStats();
   const readTags = async (cases: Record<string, number>) => {
     const field = fieldFromJson({ fn: "byAttribute", name: "tags", cases, default: 99 });
@@ -405,7 +408,7 @@ async function main(): Promise<void> {
     cases: { pine: [1, 2, 3], oak: [4, 5, 6] },
     default: 7,
   });
-  const widthEv = new GpuFieldEvaluator(device);
+  const widthEv = new GpuFieldEvaluator(structural);
   const widthStats = createGpuCookStats();
   const widthPromise = widthEv.resolveField(widthField, widthCtx, widthStats);
   const widthGpu = widthPromise === null ? null : await widthPromise;
@@ -459,7 +462,7 @@ async function main(): Promise<void> {
       scaled: (set.require("scaled").data as ReadonlyAttrData<Float32Array>).slice(0, FUSED_COUNT),
     };
   };
-  const fusedEv = new GpuFieldEvaluator(device);
+  const fusedEv = new GpuFieldEvaluator(structural);
   const fusedCook = await cook(fusedGraph(), { gpu: fusedEv });
   const fusedStats = fusedCook.stats.gpu ?? createGpuCookStats();
   const cpuRun = readAttrs(await cook(fusedGraph()));

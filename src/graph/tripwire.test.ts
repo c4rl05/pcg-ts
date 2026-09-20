@@ -55,8 +55,8 @@ function sourceNode(type = "src", count = 8): NodeDef<Record<string, never>> {
     defaultParams: {},
     execute() {
       const geo = createPointCloud(count);
-      const P = geo.attrs.point.require("P");
-      for (let i = 0; i < count; i++) P.data[i * 3] = i;
+      const P = geo.attrs.point.require("P").writable();
+      for (let i = 0; i < count; i++) P[i * 3] = i;
       return { out: [makeGeometryItem(geo)] };
     },
   });
@@ -74,7 +74,7 @@ function politeNode(): NodeDef<Record<string, never>> {
       for (const item of inputs.in) {
         if (item.kind !== "geometry") continue;
         const geo = cloneGeometry(item.geo);
-        geo.attrs.point.require("P").data[1] = 99;
+        geo.attrs.point.require("P").writable()[1] = 99;
         out.push(makeGeometryItem(geo));
       }
       return { out };
@@ -124,7 +124,7 @@ describe("the tripwire catches a planted mutation", () => {
         const item = inputs.in[0]!;
         if (item.kind !== "geometry") throw new Error("no geometry");
         // The missing clone.
-        item.geo.attrs.point.require("P").data[3 * 5 + 2] = -1;
+        item.geo.attrs.point.require("P").writable()[3 * 5 + 2] = -1;
         return { out: [makeGeometryItem(cloneGeometry(item.geo))] };
       },
     });
@@ -150,7 +150,7 @@ describe("the tripwire catches a planted mutation", () => {
       defaultParams: {},
       execute() {
         const geo = createPointCloud(4);
-        geo.attrs.point.require("P").data[0] = 1;
+        geo.attrs.point.require("P").writable()[0] = 1;
         kept = geo;
         return { out: [makeGeometryItem(geo)] };
       },
@@ -163,7 +163,7 @@ describe("the tripwire catches a planted mutation", () => {
       outputs: [{ name: "out", kind: "geometry" }],
       defaultParams: {},
       execute({ inputs }) {
-        kept?.attrs.point.require("P").data.set([7, 7, 7], 0);
+        kept?.attrs.point.require("P").writable().set([7, 7, 7], 0);
         return { out: [...inputs.in] };
       },
     });
@@ -237,7 +237,16 @@ describe("the tripwire catches a planted mutation", () => {
     const adopt = (mark: number): Geometry => {
       const geo = createPointCloud(4);
       const P = geo.attrs.point.require("P");
-      P.data = shared;
+      // Reaching past `private` on purpose. Copy-on-write closed the
+      // public route — `data` is a read view with no setter, and nothing
+      // public or internal installs foreign storage into a column any
+      // more — but the tripwire is the net for this STATE however it
+      // arises, not only for the states a caller can still reach: a
+      // column pointing at a buffer someone else also holds is the same
+      // hazard whether a node adopted it or a future refactor reopens
+      // the door. Constructing impossible states is this test's job, so
+      // the reach belongs here and nowhere else.
+      (P as unknown as { _data: Float32Array })._data = shared;
       for (let i = 0; i < 4; i++) shared[i * 3] = mark + i;
       return geo;
     };
@@ -336,7 +345,7 @@ describe("the report when one write damages many nodes", () => {
         execute({ inputs }) {
           const item = inputs.in[0]!;
           if (item.kind !== "geometry") throw new Error("no geometry");
-          item.geo.attrs.point.require("P").data[0] = 3.5;
+          item.geo.attrs.point.require("P").writable()[0] = 3.5;
           return { out: [...inputs.in] };
         },
       }),
@@ -404,7 +413,7 @@ describe("the tripwire reaches nested cooks", () => {
         execute({ inputs }) {
           const item = inputs.in[0]!;
           if (item.kind !== "geometry") throw new Error("no geometry");
-          item.geo.attrs.point.require("P").data[6] = -42;
+          item.geo.attrs.point.require("P").writable()[6] = -42;
           return { out: [makeGeometryItem(cloneGeometry(item.geo))] };
         },
       }),
@@ -452,7 +461,7 @@ describe("the tripwire reaches nested cooks", () => {
         execute({ inputs }) {
           const item = inputs.in[0]!;
           if (item.kind !== "geometry") throw new Error("no geometry");
-          item.geo.attrs.point.require("P").data[0] = 1234;
+          item.geo.attrs.point.require("P").writable()[0] = 1234;
           return { out: [...inputs.in] };
         },
       }),

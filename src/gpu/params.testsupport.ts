@@ -196,8 +196,11 @@ async function main(): Promise<void> {
     process.stdout.write(JSON.stringify({ ok: false, error: "no WebGPU adapter" }));
     return;
   }
-  const device = (await adapter.requestDevice()) as unknown as GpuDeviceLike;
-  const ev = new GpuFieldEvaluator(device);
+  const device = await adapter.requestDevice();
+  // Compile-time check (tsc --noEmit): a real GPUDevice satisfies the
+  // structural device typing the evaluator is written against.
+  const structural: GpuDeviceLike = device;
+  const ev = new GpuFieldEvaluator(structural);
 
   const geo = makeParityGeometry(COUNT);
   const ctx = { geo, domain: "point" as const, seed: SEED };
