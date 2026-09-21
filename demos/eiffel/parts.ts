@@ -24,7 +24,11 @@ export const PART_CLASSES = [
   "masonry",
   /** Everything above the 3rd floor, and the 3rd-floor room. */
   "summit",
-  /** Gusset plates where web members meet the uprights. */
+  /**
+   * Gusset plates: where web members meet the uprights, and over the
+   * rosettes where a leg face's central post crosses a horizontal. Both
+   * are laced-depth-and-up, so this class is empty at the plain depth.
+   */
   "gussets",
   /** The 72 names on the first-floor skirt, gilded. */
   "names",

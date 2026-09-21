@@ -96,12 +96,14 @@ import {
 } from "./spec.js";
 import {
   JOINT_ENDS,
+  JOINT_PITCH,
   JOINT_REACH,
   LACING_STEP,
   UPRIGHT_SEAMS,
   faceSkin,
   flatBars,
   gussetMeshes,
+  lineRivets,
   rivetOutputs,
   seamRivets,
   webMembers,
@@ -627,6 +629,23 @@ const faceCentre = (f: number, y: number): Vec3 =>
 const POST_CLEAR = 0.05;
 
 /**
+ * The member a central post stands on at node `name` reaches this far past
+ * the node line: a node horizontal is centred on it, but the belts' chord
+ * plates only touch it (their outer edges lie ON XXIV and XXIII, XVIII and
+ * XVII, their bodies inside panels 5 and 11), so those four are 0.
+ *
+ * Over {@link POST_NODES} — and only over it — zero is therefore also the
+ * test for "no horizontal here". It is NOT that test in general: XXVIII
+ * carries no horizontal either (PL-VII Figs 1, 5 draw the "877" post
+ * continuous through it, and the ties' top chord takes its place), yet
+ * this returns 0.4 for it. XXVIII is kept out of the crossing plates by
+ * being absent from that list, because a post does not END there; adding
+ * it would invent a plate at a crossing that does not exist.
+ */
+const postSeat = (name: string): number =>
+  ["XXIV", "XXIII", "XVIII", "XVII"].includes(name) ? 0 : tableAt(MEMBERS.horizontal, node(name).y);
+
+/**
  * One stretch of a central post, on face f from height y0 to y1, standing
  * on members hw0 deep (below) and hw1 (above) — both lying along the face
  * at those heights, squared to it. Its ends, with the corner beyond it
@@ -679,11 +698,7 @@ function postStretch(
  * (corners even, face centres odd), two rows per stretch.
  */
 function centralPosts(g: Graph): NodeHandle {
-  // The member a post stands on reaches this far past the node line: a
-  // node horizontal is centred on it, but the belts' chord plates only
-  // touch it (their outer edges lie on XXIV and XXIII, XVIII and XVII).
-  const h = (name: string) =>
-    ["XXIV", "XXIII", "XVIII", "XVII"].includes(name) ? 0 : tableAt(MEMBERS.horizontal, node(name).y);
+  const h = postSeat;
   const tieDepth = (f: number) => {
     const s = faceSlopes(node("XXVIII").y - 1);
     const outerFace = f === 0 || f === 3;
@@ -734,6 +749,166 @@ function centralPosts(g: Graph): NodeHandle {
   const lat = placedLattice(g, "postLat", rows, true);
   return edges(lat, "Posts", 0, 1, (s, k) => s % 2 === 1 && k % 2 === 0);
 }
+
+/**
+ * A crossing plate's thickness [sourced PL-XIV Fig. 5 bis prints "2
+ * Goussets 1.130 x 10" at the summit girders' crossing; the joints' own
+ * plates are 8 to 10 mm].
+ */
+const CROSS_PLATE = 0.01;
+
+/**
+ * How far a crossing plate reaches past the steel it covers, in the face
+ * plane [estimated, as the joint plates' own 0.08].
+ */
+const CROSS_MARGIN = 0.08;
+
+/**
+ * The nodes a central post ENDS a stretch at, lowest first, the four that
+ * carry no horizontal included so {@link postSeat} can drop them. XXVIII is
+ * deliberately absent: the post passes through it without stopping, and
+ * `postSeat` does not read as 0 there (see its note).
+ */
+const POST_NODES = ["XXVII", "XXVI", "XXV", "XXIV", "XXIII", "XXII", "XXI", "XX", "XIX", "XVIII"];
+
+/**
+ * The rows round a crossing plate's edge: the joints' own pitch, and a
+ * rivet's own diameter in from the edge [estimated; PL-IX's Gousset A
+ * draws its edge rows about that far in].
+ */
+const CROSS_RIVETS = { pitch: JOINT_PITCH, inset: 0.04 } as const;
+
+/**
+ * THE ROSETTES' PLATES. A central post crosses a horizontal at the middle
+ * of every leg face, and in panels 1-4 the panel's two diagonals bisect
+ * each other at that same point, so the crossing is an eight-armed
+ * rosette. Both kinds get a pair of plates, one either side of the
+ * lattice, which is what the tower's own drawings put at a crossing: PL-VII
+ * Fig. 2's gap X's "central plate", PL-XIV Fig. 5 bis's "2 Goussets 1.130 x
+ * 10" where the summit's two diagonal girders cross.
+ *
+ * A plate is square to the POST, not to the tower. The leg drifts inward
+ * as it rises, so the post leans within the face and meets the horizontal
+ * at about 66 degrees ({@link postStretch}); a plate laid out vertically
+ * would sit askew on every arm it covers. It is `2 (w + CROSS_MARGIN)`
+ * across the post, and along the post it reaches past the far corner of
+ * the post's cut cap: the horizontal's half-depth is measured across U, so
+ * along the post it is `hw / (U.D)`, then the clearance the cap already
+ * takes and the margin. In panel 1 that is 0.96 by 1.14, against the 1.130
+ * PL-XIV prints for the one crossing plate the plates give a size for.
+ *
+ * WHY THE PLATES AND NOT A BETTER CUT. The cap is cut square to the post
+ * (a swept profile has no other cut) and the horizontal is not, so along
+ * the cut the joint is open somewhere however the end is placed: putting
+ * the near corner in the member (which is what `postStretch` does) leaves
+ * the far one standing off it, and the reverse leaves a notch. A plate
+ * over the crossing is how the tower closes it.
+ *
+ * The plates sit `w + CROSS_PLATE / 2` off the face plane, which is the
+ * post's and the horizontal's shared chord face: both are 800 struts
+ * squared to the same plane, so one offset serves the pair and the plate
+ * lands flush on all eight arms.
+ *
+ * WHAT WAS MEASURED, on the cooked tower. 352 plates (11 levels x 4 faces
+ * x 2 sides x 4 legs), +4,224 triangles, and 13,920 rivets in
+ * `rivets.leg.crossings`, every one of them pointing out of the lattice.
+ * The plate's inner face is on the chord face to 0.0000 at all seven
+ * crossings in panels 1-4, and its footprint contains the post's cut cap
+ * everywhere, by 0.148 along the post and 0.070 across it at the worst of
+ * the 44 crossings in a leg. Nothing is newly in contact: the tightest new
+ * standoff in the tower is 23 mm, from a crossing rivet's head to the
+ * Masque's bars over panel 4, which pass directly over those plates.
+ *
+ * TWO THINGS IT DOES NOT DO.
+ *
+ * At a KINKED node the plate lies on the bisector of the two stretches
+ * meeting there, and one flat rectangle cannot be flush on two planes: its
+ * corners stand 16 mm off the steel at XXII, 8 at XXI, 7 at XX and 1 at
+ * XIX. The alternative is two plates a crossing, each on its own panel's
+ * plane, which is not what the drawings show and would double a joint the
+ * tower riveted once. Sixteen millimetres on a 1.14 m plate 68 m up is the
+ * cheaper error.
+ *
+ * About 1,188 rivet heads that the post, the horizontal and the diagonals
+ * already carried have their bases under a plate — they sit on the very
+ * chord face it is flush against — so a 19 mm dome comes about 9 mm
+ * through it. That is three or four heads a plate, and what they read as
+ * on a riveted plate is more rivets. Suppressing them would mean a
+ * proximity test against 176 plate centres inside the rivet fields, which
+ * is a great deal of machinery to remove something nobody can identify as
+ * wrong.
+ *
+ * Not built: panel 10's band top chord (y 104.11) is in the horizontals
+ * class and a post does end on it, with 50 mm of daylight, but it is a
+ * 5 mm flat in the face plane rather than an 800 strut squared to it, so
+ * `w + CROSS_PLATE / 2` would stand a plate 0.4 m off the steel it plates.
+ * The ties' and belts' chords are the same case.
+ */
+function crossingPlates(): {
+  members: SegmentMember[];
+  rivetLines: SegmentMember[];
+  width: number;
+} {
+  // Every level a post crosses a horizontal at: the nodes it ends on that
+  // carry one, and the mid-panel horizontals of panels 1-4, which it runs
+  // straight through (`legLevels`).
+  const heights = [
+    ...POST_NODES.filter((name) => postSeat(name) > 0).map((name) => node(name).y),
+    ...legLevels()
+      .filter((l) => l.name.startsWith("mid-"))
+      .map((l) => l.y),
+  ];
+  // One width for the whole family: every crossing a post makes is an 800
+  // on an 800 (MEMBERS.web and MEMBERS.horizontal are both 0.4 up to XIX,
+  // the topmost), and `flatBars` takes one width for a set. Widening to the
+  // largest is the safe way to be wrong if that ever stops holding.
+  const width = Math.max(...heights.map((y) => 2 * (tableAt(MEMBERS.web, y) + CROSS_MARGIN)));
+  const members: SegmentMember[] = [];
+  const rivetLines: SegmentMember[] = [];
+  for (const y of heights) {
+    const hw = tableAt(MEMBERS.horizontal, y);
+    const w = tableAt(MEMBERS.web, y);
+    for (let f = 0; f < 4; f++) {
+      const c = faceCentre(f, y);
+      // The post's direction THROUGH the crossing. Read across the node it
+      // is the bisector of the two stretches meeting there, which is what a
+      // plate straddling a kink wants; within a panel it is the post.
+      const D = unit3(sub3(faceCentre(f, y + CROSS_STEP), faceCentre(f, y - CROSS_STEP)));
+      const H = unit3(sub3(corner(f + 1, y), corner(f, y)));
+      const F = unit3(cross3(H, D));
+      let U = unit3(cross3(F, H));
+      if (dot3(U, D) < 0) U = scale3(U, -1);
+      const B = unit3(cross3(F, D));
+      const half = hw / dot3(U, D) + POST_CLEAR + CROSS_MARGIN;
+      for (const side of [1, -1]) {
+        // The plate's own outward normal, which is what its rivets stand
+        // along; both plates of a pair cannot share one.
+        const n = scale3(F, side);
+        const o = add3(c, scale3(F, side * (w + CROSS_PLATE / 2)));
+        const at = (t: number, b: number) => add3(add3(o, scale3(D, t)), scale3(B, b));
+        members.push({ a: at(-half, 0), b: at(half, 0), n });
+        // Four rows round the edge, on the plate's mid-plane; the end rows
+        // stop a pitch short of the long ones so no two heads coincide.
+        const t = half - CROSS_RIVETS.inset;
+        const b = width / 2 - CROSS_RIVETS.inset;
+        rivetLines.push(
+          { a: at(-t, b), b: at(t, b), n },
+          { a: at(-t, -b), b: at(t, -b), n },
+          { a: at(t, -b + CROSS_RIVETS.pitch), b: at(t, b - CROSS_RIVETS.pitch), n },
+          { a: at(-t, -b + CROSS_RIVETS.pitch), b: at(-t, b - CROSS_RIVETS.pitch), n },
+        );
+      }
+    }
+  }
+  return { members, rivetLines, width };
+}
+
+/**
+ * How far either side of a crossing the post's direction is read. Any
+ * distance inside the two panels meeting there gives the same bisector;
+ * the shortest leg panel is 5.5 m.
+ */
+const CROSS_STEP = 0.25;
 
 /**
  * The "entretoises diagonales" of one leg (ENTRETOISE; PL-VIII Figs 1, 8):
@@ -1280,6 +1455,8 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
   ];
   const plates = (id: string, list: readonly SegmentMember[], width: number, thickness: number) =>
     flatBars(g, id, fourMembers(`${id}4`, segmentMembers(g, id, list)), width, thickness);
+  const crossings =
+    detail.lacedWeb === true || detail.rivets === true ? crossingPlates() : undefined;
   return {
     uprights: [
       skin(g, "legUprightSkin", lower4, MEMBERS.uprightBelow, [1, 0, 0]),
@@ -1318,9 +1495,37 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
         flatBars(g, `legMasque${i}`, fourMembers(`legMasque${i}x4`, paths), width, thickness),
       ),
     ],
-    gussets: gussetMeshes(webs),
+    gussets: [
+      ...gussetMeshes(webs),
+      // The plates over the rosettes, where a post crosses a horizontal —
+      // at the laced depth and up, which is where `webMembers` builds its
+      // own plates too. The plain depth's members are solid boxes that
+      // interpenetrate, so there is no daylight at a crossing to cover,
+      // and `gussets` is a class that does not exist there at all.
+      ...(crossings === undefined
+        ? []
+        : [plates("legCrossPlates", crossings.members, crossings.width, CROSS_PLATE)]),
+    ],
     rivets: [
       ...seams,
+      // The rows round each crossing plate's edge.
+      ...(detail.rivets === true && crossings !== undefined
+        ? [
+            {
+              name: "leg.crossings",
+              spawn: lineRivets(
+                g,
+                "legCrossRivets",
+                fourMembers(
+                  "legCrossRivets4",
+                  segmentMembers(g, "legCrossRivets", crossings.rivetLines),
+                ),
+                CROSS_PLATE / 2,
+                CROSS_RIVETS.pitch,
+              ),
+            },
+          ]
+        : []),
       ...rivetOutputs({
         "leg.horizontals": horizontalWeb,
         "leg.entretoises": entretoiseWeb,

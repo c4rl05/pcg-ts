@@ -371,7 +371,7 @@ const GUSSET_SPAN = "gussetSpan";
 /** A member's two rivet windows along it: (from, to) at its first end, then its second. */
 const JOINT_WINDOW = "jointWindow";
 /** Rivets along a chord over a plate, every this far [estimated, as the seams]. */
-const JOINT_PITCH = 0.1;
+export const JOINT_PITCH = 0.1;
 
 /**
  * How far along a member, from its end `end` (0 first, 1 second), its
@@ -658,6 +658,41 @@ export function rivetOutputs(
     if (set.jointRivets !== undefined) out.push({ name: `${name}.joints`, spawn: set.jointRivets });
   }
   return out;
+}
+
+/**
+ * Rivets along given LINES rather than along a member: a head every
+ * `pitch` on each path of `lines`, standing `out` off it along the line's
+ * own face normal and pointing that way.
+ *
+ * This is the rivet a plate takes that no member brought: a crossing plate
+ * is fastened by rows round its own edge, not by a chord running under it,
+ * so the row is a line of the plate's making. Each line therefore carries
+ * the OUTWARD normal of the plate it borders — both plates of a pair
+ * cannot share one, or the inner plate's heads would sink into the
+ * lattice — and `out` is measured from the line to the face the heads sit
+ * on, which for a line drawn on the plate's mid-plane is half its
+ * thickness.
+ */
+export function lineRivets(
+  g: Graph,
+  id: string,
+  lines: NodeHandle,
+  out: number,
+  pitch: number,
+): NodeHandle {
+  const samples = g.add(pathResample, { mode: "spacing", spacing: pitch }, `${id}Samples`);
+  const N = attribute(FACE_NORMAL, 3);
+  const at = g.add(transformPoints, { translate: mul(N, out) }, `${id}At`);
+  const aim = g.add(
+    orientAlongVector,
+    { direction: N, up: attribute("tangent", 3), axis: "+y" },
+    `${id}Aim`,
+  );
+  g.connect(lines, "out", samples, "in");
+  g.connect(samples, "out", at, "in");
+  g.connect(at, "out", aim, "in");
+  return rivetSpawn(g, id, [aim]);
 }
 
 /** The gusset meshes of several web-member sets, skipping the jointless. */
