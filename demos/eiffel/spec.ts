@@ -739,3 +739,19 @@ export const MASQUE = {
 
 /** Headline counts (Eiffel, and the operating company). */
 export const COUNTS = { parts: 18038, rivets: 2_500_000, ironTonnes: 7300 } as const;
+
+/**
+ * Linear read of a (y, w) table, clamped: what `ramp` does, before the
+ * cook. The tables above are the graph's and this reader's two readings of
+ * the same numbers, so anything laid out in JS lands where the field puts
+ * the steel.
+ */
+export function tableAt(stops: ReadonlyArray<readonly [number, number]>, y: number): number {
+  if (y <= stops[0]![0]) return stops[0]![1];
+  for (let i = 1; i < stops.length; i++) {
+    const [y0, v0] = stops[i - 1]!;
+    const [y1, v1] = stops[i]!;
+    if (y <= y1) return y1 === y0 ? v1 : v0 + ((y - y0) / (y1 - y0)) * (v1 - v0);
+  }
+  return stops[stops.length - 1]![1];
+}

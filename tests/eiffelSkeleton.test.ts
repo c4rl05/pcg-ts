@@ -23,6 +23,7 @@ import { type Detail, JITTER } from "../demos/eiffel/parts.js";
 import {
   EDOUX_PLAN,
   ENTRETOISE,
+  LEG_BELTS,
   LEG_GAP_LACING_500,
   LEG_LACING_500,
   MEMBERS,
@@ -264,112 +265,575 @@ function onLeg(p: Vec3, k: number): Vec3 {
 }
 
 /**
- * A crossing plate's own numbers [`demos/eiffel/legs.ts`: CROSS_PLATE, its
- * margin past the steel, the post's clearance, the step its direction is
- * read over, and its rivet rows' inset].
+ * A crossing plate's own numbers [`demos/eiffel/parts.ts`: CROSS_PLATE's
+ * `set` and `edge`, both quoted at an `at` strut and scaled by the section;
+ * `demos/eiffel/crossing.ts`: CROSS_THICK, CROSS_RIVETS; `demos/eiffel/legs.ts`:
+ * the margin a post landing takes ALONG the post past the cut cap, the post's
+ * clearance, and the step the post's direction is read over].
+ *
+ * `set` is 0.015, not the 0.02 a first pass took from the section table: the
+ * lacing's outer surface stands 0.0174 inside the angles' outer face, not the
+ * `CHORD - LACE` (0.0225) the table implies, because the swept square is
+ * mitred at the zigzag's vertices. This file re-measures that envelope from
+ * the cooked lacing rather than trusting either number.
  */
-const CROSS = { plate: 0.01, margin: 0.08, clear: 0.05, step: 0.25, inset: 0.04 } as const;
+const CROSS = {
+  thick: 0.01,
+  set: 0.015,
+  edge: 0.4,
+  at: 0.4,
+  margin: 0.02,
+  clear: 0.05,
+  step: 0.25,
+  pitch: 0.1,
+  inset: 0.04,
+} as const;
+
+/** The leg profile's slope either side of y, horizontal per vertical. */
+const faceSlopes = (y: number) => {
+  const lo = profileAt(y - 0.01);
+  const hi = profileAt(y + 0.01);
+  return { outer: (lo.outer - hi.outer) / 0.02, inner: (lo.inner - hi.inner) / 0.02 };
+};
+/** A depth printed in a rabattement (in the face plane), as a vertical one. */
+const vertical = (inPlane: number, slope: number) => inPlane / Math.sqrt(1 + slope * slope);
 
 /**
- * The heights a leg face's central post crosses a horizontal at. The nodes
- * a post ends on that carry one — XXVIII takes the ties' top chord plate
- * instead, and XXIV, XXIII, XVIII and XVII the belts' chord plates, whose
- * bodies stand inside panels 5 and 11 — and the mid-panel horizontals of
- * panels 1-4, which a post runs straight through. Read off Plate XXXI's
- * table here, the way `legLevels` reads it.
+ * One crossing that takes a pair of plates, as the rules put it. Re-derived
+ * from Plate XXXI's table and the members' own dimensions here, not read
+ * from `demos/eiffel/crossing.ts`.
  */
-function crossingHeights(): number[] {
-  const plated = ["XXVIII", "XXIV", "XXIII", "XVIII", "XVII"];
-  const out: number[] = [];
-  for (const name of ["XXVII", "XXVI", "XXV", "XXIV", "XXIII", "XXII", "XXI", "XX", "XIX", "XVIII"]) {
-    if (!plated.includes(name)) out.push(node(name).y);
-  }
-  for (const name of ["XXVIII", "XXVII", "XXVI", "XXV"]) {
+interface Crossing {
+  /** Which rule put it here, for the counts. */
+  readonly family: "post" | "legX" | "p10" | "gap" | "shaft";
+  /** The landing's name, for a post crossing. */
+  readonly label?: string;
+  /** The crossing point, on the members' shared face plane. */
+  readonly at: Vec3;
+  /** Unit, in that plane: the plate's long axis. */
+  readonly along: Vec3;
+  /** The plane's unit normal. */
+  readonly n: Vec3;
+  /** The struts' half-width there. */
+  readonly w: number;
+  /** Half the plate's length along `along`. */
+  readonly half: number;
+  /** A post landing at a node has a CUT CAP under it. */
+  readonly atNode: boolean;
+  /**
+   * How far the plate's ENDS stand off the steel because it lies on the
+   * bisector: `half sin(kink / 2)`, and zero wherever the leg runs
+   * straight through. An X crossing has no kink to bisect.
+   */
+  readonly residual: number;
+  /** Whether it lands on a HORIZONTAL STRUT rather than on a chord plate. */
+  readonly strut: boolean;
+}
+
+/** The nodes a central post ends a stretch at [PL-VII, PL-IX]. */
+const POST_NODES = ["XXVII", "XXVI", "XXV", "XXIV", "XXIII", "XXII", "XXI", "XX", "XIX", "XVIII"];
+/**
+ * How far past the node line the member a post stands on reaches. The belts'
+ * chord plates only TOUCH XXIV, XXIII, XVIII and XVII — their bodies stand
+ * inside panels 5 and 11 — so those four carry no horizontal.
+ */
+const postSeat = (name: string): number =>
+  ["XXIV", "XXIII", "XVIII", "XVII"].includes(name) ? 0 : tableAt(MEMBERS.horizontal, node(name).y);
+/** The ties' top chord's axis, above XXVIII in the plane. */
+const tieTop = (): number =>
+  node("XXVIII").y + vertical(LEG_BELTS.tieTopChordAxis, faceSlopes(node("XXVIII").y - 1).outer);
+/** How far below XXVIII a base tie's bottom chord lies on face f (A's two faces are the outer pair). */
+const tieDepth = (f: number): number => {
+  const s = faceSlopes(node("XXVIII").y - 1);
+  return f === 0 || f === 3
+    ? vertical(LEG_BELTS.tieOuterDepth, s.outer)
+    : vertical(LEG_BELTS.tieInnerDepth, s.inner);
+};
+/** The top of panel 10's base band: its printed depth over the outer faces' slope. */
+const band10Top = (): number =>
+  node("XIX").y + vertical(LEG_BELTS.band10Depth, faceSlopes(node("XIX").y + 1).outer);
+
+/**
+ * THE POST LANDINGS, re-derived from Plate XXXI's table: every level a leg
+ * face's central post meets a member SQUARE TO THE FACE — the node
+ * horizontals it ends on, the mid-panel horizontals of panels 1-4 it runs
+ * through (where the panel's own X crosses at the same point, the
+ * eight-armed rosettes), and panel 10's band top chord.
+ *
+ * NOT the ties' chords, nor the belts' chord plates at XXIV, XXIII and
+ * XVIII, though a post does end on each of them: those are flats lying IN
+ * the face plane, a third of a metre below where a plate set under the
+ * post's corner angles would sit, so a plate there plates nothing. The
+ * test below asserts they are unplated.
+ *
+ * ONE PLATE, ON THE BISECTOR. The post's direction is read ACROSS the
+ * crossing, so at a node where the leg turns it is the bisector of the two
+ * stretches meeting there. That is the one thing the rule cannot get
+ * right, and it is bounded rather than hidden: {@link Crossing.residual}
+ * carries how far the plate's ends then stand off the steel.
+ */
+function postCrossings(): Crossing[] {
+  const mid = (name: string) => {
     const i = NODES.findIndex((n) => n.name === name);
-    out.push((NODES[i]!.y + NODES[i + 1]!.y) / 2);
+    return (NODES[i]!.y + NODES[i + 1]!.y) / 2;
+  };
+  const landings: Array<{ label: string; y: number; hw: number; atNode: boolean }> = [
+    ...POST_NODES.filter((name) => postSeat(name) > 0).map((name) => ({
+      label: name,
+      y: node(name).y,
+      hw: postSeat(name),
+      atNode: true,
+    })),
+    ...["XXVIII", "XXVII", "XXVI", "XXV"].map((name) => ({
+      label: `mid-${name}`,
+      y: mid(name),
+      hw: tableAt(MEMBERS.horizontal, mid(name)),
+      atNode: false,
+    })),
+    { label: "band10", y: band10Top(), hw: LEG_BELTS.band10TopChord, atNode: false },
+  ];
+  const out: Crossing[] = [];
+  for (const landing of landings) {
+    for (let f = 0; f < 4; f++) {
+      const y = landing.y;
+      const w = tableAt(MEMBERS.web, y);
+      const at = legFaceCentre(f, y);
+      const H = unit3(sub3(legCorner(f + 1, y), legCorner(f, y)));
+      // The two stretches meeting here, and the bisector the plate takes.
+      const dirs = [-1, 1].map((s) => unit3(sub3(legFaceCentre(f, y + s * CROSS.step), at))) as [Vec3, Vec3];
+      const along = unit3(sub3(legFaceCentre(f, y + CROSS.step), legFaceCentre(f, y - CROSS.step)));
+      const n = unit3(cross3(H, along));
+      let U = unit3(cross3(n, H));
+      if (dot3(U, along) < 0) U = mul3(U, -1);
+      // Along the post it reaches the far corner of the cut cap: that
+      // corner stands `hw + clear` past the node line across U, so
+      // `/ (U.along)` along the post, plus the margin.
+      const half = (landing.hw + CROSS.clear) / dot3(U, along) + CROSS.margin;
+      // WHAT THE BISECTOR COSTS. One flat rectangle cannot lie on two
+      // planes: where the leg turns by `kink`, the plate's ends stand
+      // `half sin(kink / 2)` off the steel, and the two plates of a pair
+      // tip OPPOSITE ways.
+      const kink = Math.acos(Math.min(1, dot3(mul3(dirs[0], -1), dirs[1])));
+      out.push({
+        family: "post",
+        label: landing.label,
+        at,
+        along,
+        n,
+        w,
+        half,
+        atNode: landing.atNode,
+        residual: half * Math.sin(kink / 2),
+        strut: true,
+      });
+    }
   }
   return out;
 }
 
-/** One crossing plate, as the rules put it: its frame, its footprint and its crossing. */
-interface CrossPlate {
-  /** The crossing's height, and whether a node sits there (a post is CUT at one). */
-  readonly y: number;
-  readonly atNode: boolean;
-  /** Whether the leg face turns there: the two panels' planes differ, and the plate takes their bisector. */
-  readonly kinked: boolean;
-  /** The plate's centre, and the crossing point it stands off. */
+/**
+ * Where a lattice bay's two diagonals meet, and the plate's frame there:
+ * the two diagonals intersected directly (not through the trapezoid's
+ * fraction rule), the plate running along the bay's midline. An X cuts
+ * nothing, so its plate is SQUARE.
+ */
+function bayX(family: Crossing["family"], p0: Vec3, q0: Vec3, p1: Vec3, q1: Vec3): Crossing {
+  const u = sub3(q1, p0);
+  const v = sub3(p1, q0);
+  const w0 = sub3(p0, q0);
+  const a = dot3(u, u);
+  const b = dot3(u, v);
+  const c = dot3(v, v);
+  const d = dot3(u, w0);
+  const e = dot3(v, w0);
+  const at = add3(p0, mul3(u, (b * e - c * d) / (a * c - b * b)));
+  const along = unit3(sub3(mul3(add3(p1, q1), 0.5), mul3(add3(p0, q0), 0.5)));
+  const n = unit3(cross3(unit3(sub3(q0, p0)), along));
+  const w = tableAt(MEMBERS.web, at[1]);
+  return { family, at, along, n, w, half: (CROSS.edge * w) / CROSS.at, atNode: false, residual: 0, strut: true };
+}
+
+/** `squareRing(2)`: a square section with a station at each face's middle. */
+const RING2: ReadonlyArray<readonly [number, number]> = [
+  [1, 1],
+  [0.5, 1],
+  [0, 1],
+  [0, 0.5],
+  [0, 0],
+  [0.5, 0],
+  [1, 0],
+  [1, 0.5],
+];
+
+/**
+ * Every crossing in ONE leg (the +x+z quadrant): the post landings, the
+ * panels' own X's — 6-9 on all four faces, 12-17 on faces 0 and 3, which
+ * are the two that do not touch the inner upright a — panel 10's two X's a
+ * face above its band, and the gap X between this leg and the next in
+ * panels 12-16.
+ */
+function legCrossings(): Crossing[] {
+  const out: Crossing[] = [...postCrossings()];
+  const panels: Array<readonly [string, string, readonly number[]]> = [
+    ["XXIII", "XXII", [0, 1, 2, 3]],
+    ["XXII", "XXI", [0, 1, 2, 3]],
+    ["XXI", "XX", [0, 1, 2, 3]],
+    ["XX", "XIX", [0, 1, 2, 3]],
+    ["XVII", "XVI", [0, 3]],
+    ["XVI", "XV", [0, 3]],
+    ["XV", "XIV", [0, 3]],
+    ["XIV", "XIII", [0, 3]],
+    ["XIII", "XII", [0, 3]],
+    ["XII", "XI", [0, 3]],
+  ];
+  for (const [lo, hi, fs] of panels) {
+    const y0 = node(lo).y;
+    const y1 = node(hi).y;
+    for (const f of fs) {
+      out.push(bayX("legX", legCorner(f, y0), legCorner(f + 1, y0), legCorner(f, y1), legCorner(f + 1, y1)));
+    }
+  }
+  const p10At = (s: number, y: number): Vec3 => {
+    const { outer, inner } = profileAt(y);
+    const [u, v] = RING2[s % 8]!;
+    return [inner + (outer - inner) * u, y, inner + (outer - inner) * v];
+  };
+  const y0 = band10Top();
+  const y1 = node("XVIII").y;
+  for (let s = 0; s < 8; s++) out.push(bayX("p10", p10At(s, y0), p10At(s + 1, y0), p10At(s, y1), p10At(s + 1, y1)));
+  // The gap: b of this leg to d of the next, across the tower face.
+  const gapAt = (s: number, y: number): Vec3 => {
+    const { outer, inner } = profileAt(y);
+    return [s === 0 ? inner : -inner, y, outer];
+  };
+  const names = ["XVII", "XVI", "XV", "XIV", "XIII", "XII"];
+  for (let k = 0; k < 5; k++) {
+    const a = node(names[k]!).y;
+    const b = node(names[k + 1]!).y;
+    out.push(bayX("gap", gapAt(0, a), gapAt(1, a), gapAt(0, b), gapAt(1, b)));
+  }
+  return out;
+}
+
+/** The shaft's own X's: one per bay per panel, eight a panel, XI to the top of 28. */
+function shaftCrossings(): Crossing[] {
+  const levels = NODES.slice(NODES.findIndex((n) => n.name === "XI"));
+  const at = (s: number, k: number): Vec3 => {
+    const o = levels[k]!.outer;
+    const [u, v] = RING2[s % 8]!;
+    return [-o + 2 * o * u, levels[k]!.y, -o + 2 * o * v];
+  };
+  const out: Crossing[] = [];
+  for (let k = 0; k + 1 < levels.length; k++) {
+    for (let s = 0; s < 8; s++) out.push(bayX("shaft", at(s, k), at(s + 1, k), at(s, k + 1), at(s + 1, k + 1)));
+  }
+  return out;
+}
+
+/** One plate as the rules put it: its frame, its footprint, and what it covers. */
+interface Plate {
+  readonly c: Crossing;
+  /** The section in millimetres: the set it rides in, and so its node id. */
+  readonly key: string;
+  /** Its centre, and its own OUTWARD normal (the pair cannot share one). */
   readonly o: Vec3;
-  readonly cross: Vec3;
-  /** Along the post, across it in the plate, and out of the plate. */
+  readonly n: Vec3;
+  /** Along its member, and across it in the plate. */
   readonly D: Vec3;
   readonly B: Vec3;
-  readonly n: Vec3;
-  /** Half its length, half its width, and the members' half-width there. */
+  /** Half its length, half its width, and how far under the angles it is set. */
   readonly half: number;
-  readonly halfWidth: number;
-  readonly w: number;
+  readonly across: number;
+  readonly set: number;
 }
 
 /**
- * THE ROSETTES' PLATES, re-derived from the plates' own numbers rather than
- * from legs.ts: at every crossing, on all four faces of all four legs, a
- * pair one either side of the lattice. A plate is square to the POST, whose
- * direction through the crossing is the bisector of the two stretches
- * meeting there (read either side of it, which is the same line inside a
- * panel); it is `2 (w + margin)` across the post and, along it, reaches the
- * horizontal's half-depth measured across U — the face's in-plane normal to
- * the horizontal, which the post leans away from — plus the clearance the
- * post's cap already takes and the same margin. It stands `w + plate / 2`
- * off the face plane, which is the post's and the horizontal's shared chord
- * face.
+ * A pair of plates at each crossing, one either side; and, for a leg
+ * crossing, the same four times round the tower. Both knobs scale with the
+ * section, so a 500's plate is an 800's at 5/8 rather than an 800's plate
+ * on a smaller member.
  */
-function crossPlates(): CrossPlate[] {
-  const heights = crossingHeights();
-  // One width for the family, the largest: what `flatBars` takes for a set.
-  const halfWidth = Math.max(...heights.map((y) => tableAt(MEMBERS.web, y) + CROSS.margin));
-  const out: CrossPlate[] = [];
-  for (const y of heights) {
-    const hw = tableAt(MEMBERS.horizontal, y);
-    const w = tableAt(MEMBERS.web, y);
-    const atNode = NODES.some((n) => Math.abs(n.y - y) < 1e-9);
-    for (let f = 0; f < 4; f++) {
-      // The face's plane is |x| or |z| = outer (faces 0 and 3, the leg's
-      // outer faces) or inner: it turns at a node where that column's slope
-      // changes, and there the plate's plane is neither panel's.
-      const key = f === 0 || f === 3 ? "outer" : "inner";
-      const slope = (y0: number, y1: number) => (profileAt(y1)[key] - profileAt(y0)[key]) / (y1 - y0);
-      const kinked = Math.abs(slope(y - CROSS.step, y) - slope(y, y + CROSS.step)) > 1e-9;
-      const c = legFaceCentre(f, y);
-      const D = unit3(sub3(legFaceCentre(f, y + CROSS.step), legFaceCentre(f, y - CROSS.step)));
-      const H = unit3(sub3(legCorner(f + 1, y), legCorner(f, y)));
-      const F = unit3(cross3(H, D));
-      let U = unit3(cross3(F, H));
-      if (dot3(U, D) < 0) U = mul3(U, -1);
-      const B = unit3(cross3(F, D));
-      const half = hw / dot3(U, D) + CROSS.clear + CROSS.margin;
-      for (const side of [1, -1]) {
-        const n = mul3(F, side);
-        for (let k = 0; k < 4; k++) {
-          out.push({
-            y,
-            atNode,
-            kinked,
-            o: onLeg(add3(c, mul3(n, w + CROSS.plate / 2)), k),
-            cross: onLeg(c, k),
-            D: onLeg(D, k),
-            B: onLeg(B, k),
-            n: onLeg(n, k),
-            half,
-            halfWidth,
-            w,
-          });
-        }
+function platesOf(list: readonly Crossing[], legs: boolean): Plate[] {
+  const out: Plate[] = [];
+  for (const c of list) {
+    const set = (CROSS.set * c.w) / CROSS.at;
+    const across = (CROSS.edge * c.w) / CROSS.at;
+    const key = String(Math.round(c.w * 2000));
+    for (const side of [1, -1]) {
+      const o0 = add3(c.at, mul3(c.n, side * (c.w - set + CROSS.thick / 2)));
+      for (const k of legs ? [0, 1, 2, 3] : [0]) {
+        const n = legs ? onLeg(mul3(c.n, side), k) : mul3(c.n, side);
+        const D = legs ? onLeg(c.along, k) : c.along;
+        out.push({ c, key, o: legs ? onLeg(o0, k) : o0, n, D, B: cross3(n, D), half: c.half, across, set });
       }
     }
   }
   return out;
 }
+
+/**
+ * A geometry's primitives as their vertices, face normal and mean height,
+ * indexed by height. The skins' rings are a whole lacing step apart, so a
+ * point cloud is no test of what stands over a 0.5 m plate: the FACES are.
+ */
+interface Faces {
+  readonly n: number;
+  readonly cy: Float64Array;
+  readonly fn: Float64Array;
+  readonly order: Int32Array;
+  readonly start: Int32Array;
+  readonly count: Int32Array;
+  readonly p: Float64Array;
+}
+
+function faceIndex(geo: Geometry): Faces {
+  const total = geo.primitiveCount;
+  let verts = 0;
+  for (let p = 0; p < total; p++) verts += geo.primVertexCount[p] as number;
+  const cy = new Float64Array(total);
+  const fn = new Float64Array(3 * total);
+  const start = new Int32Array(total);
+  const count = new Int32Array(total);
+  const pts = new Float64Array(3 * verts);
+  const P = geo.attrs.point.get("P")!.data;
+  let vk = 0;
+  for (let p = 0; p < total; p++) {
+    const s = geo.primVertexStart[p] as number;
+    const c = geo.primVertexCount[p] as number;
+    start[p] = vk;
+    count[p] = c;
+    let ay = 0;
+    for (let v = s; v < s + c; v++) {
+      const i = geo.vertexToPoint[v] as number;
+      pts[3 * vk] = P[3 * i] as number;
+      pts[3 * vk + 1] = P[3 * i + 1] as number;
+      pts[3 * vk + 2] = P[3 * i + 2] as number;
+      ay += P[3 * i + 1] as number;
+      vk++;
+    }
+    cy[p] = ay / c;
+    const b = start[p] as number;
+    const q0: Vec3 = [pts[3 * b] as number, pts[3 * b + 1] as number, pts[3 * b + 2] as number];
+    const q1: Vec3 = [pts[3 * b + 3] as number, pts[3 * b + 4] as number, pts[3 * b + 5] as number];
+    const q2: Vec3 = [pts[3 * b + 6] as number, pts[3 * b + 7] as number, pts[3 * b + 8] as number];
+    const f = unit3(cross3(sub3(q1, q0), sub3(q2, q0)));
+    fn[3 * p] = f[0];
+    fn[3 * p + 1] = f[1];
+    fn[3 * p + 2] = f[2];
+  }
+  const order = Int32Array.from(
+    Array.from({ length: total }, (_, i) => i).sort((a, b) => (cy[a] as number) - (cy[b] as number)),
+  );
+  return { n: total, cy, fn, order, start, count, p: pts };
+}
+
+/** The first index of `order` at or above y. */
+function fromHeight(f: Faces, y: number): number {
+  let a = 0;
+  let b = f.n;
+  while (a < b) {
+    const m = (a + b) >> 1;
+    if ((f.cy[f.order[m] as number] as number) < y) a = m + 1;
+    else b = m;
+  }
+  return a;
+}
+
+/**
+ * Clip a convex polygon, given as (d, e) pairs, to the rectangle
+ * [-half, half] x [-across, across]. Sutherland-Hodgman, four half-planes.
+ */
+function clipToFootprint(poly: number[][], half: number, across: number): number[][] {
+  let out = poly;
+  const edges: Array<readonly [number, number, number]> = [
+    [1, 0, half],
+    [-1, 0, half],
+    [0, 1, across],
+    [0, -1, across],
+  ];
+  for (const [a, b, c] of edges) {
+    const inp = out;
+    out = [];
+    for (let i = 0; i < inp.length; i++) {
+      const q = inp[i]!;
+      const r = inp[(i + 1) % inp.length]!;
+      const dq = a * q[0]! + b * q[1]! - c;
+      const dr = a * r[0]! + b * r[1]! - c;
+      if (dq <= 0) out.push(q);
+      if (dq * dr < 0) {
+        const t = dq / (dq - dr);
+        out.push([q[0]! + (r[0]! - q[0]!) * t, q[1]! + (r[1]! - q[1]!) * t]);
+      }
+    }
+    if (out.length === 0) return [];
+  }
+  return out;
+}
+
+/**
+ * How far the steel of `f` stands above the plate's inner face, READ OVER
+ * THE PLATE'S OWN FOOTPRINT: every face whose outward normal is along the
+ * plate's own, clipped to that footprint and evaluated on its plane at the
+ * corners of what is left.
+ *
+ * Clipped, and not read at a vertex or over a bounding box, because a face
+ * spans a whole lacing step and a lacing bar crosses its strut at 35
+ * degrees: a vertex reports a standoff the plate never has, and the box
+ * round a skewed strip covers ground the strip does not. On the plate's
+ * own strut these numbers are its DEPTH under the corner angles, at every
+ * point of the footprint at once.
+ */
+function overPlate(f: Faces, p: Plate, reach = 1.4): number[] {
+  const R = Math.hypot(p.half, p.across) + reach;
+  const lo = fromHeight(f, p.o[1] - R);
+  const hi = fromHeight(f, p.o[1] + R);
+  const out: number[] = [];
+  const poly: number[][] = [];
+  for (let i = lo; i < hi; i++) {
+    const j = f.order[i] as number;
+    const F: Vec3 = [f.fn[3 * j] as number, f.fn[3 * j + 1] as number, f.fn[3 * j + 2] as number];
+    const Fn = dot3(F, p.n);
+    if (Fn < 0.999) continue;
+    poly.length = 0;
+    let d0 = 0;
+    let e0 = 0;
+    let h0 = 0;
+    const s = f.start[j] as number;
+    const n = f.count[j] as number;
+    for (let v = 0; v < n; v++) {
+      const dx = (f.p[3 * (s + v)] as number) - p.o[0];
+      const dy = (f.p[3 * (s + v) + 1] as number) - p.o[1];
+      const dz = (f.p[3 * (s + v) + 2] as number) - p.o[2];
+      const d = dx * p.D[0] + dy * p.D[1] + dz * p.D[2];
+      const e = dx * p.B[0] + dy * p.B[1] + dz * p.B[2];
+      d0 += d / n;
+      e0 += e / n;
+      h0 += (dx * p.n[0] + dy * p.n[1] + dz * p.n[2]) / n;
+      poly.push([d, e]);
+    }
+    // Not a member a panel away.
+    if (Math.abs(h0) > 0.12) continue;
+    const kept = clipToFootprint(poly, p.half, p.across);
+    if (kept.length < 3) continue;
+    // A real overlap rather than a touch along one edge.
+    const ds = kept.map((q) => q[0]!);
+    const es = kept.map((q) => q[1]!);
+    if (Math.max(...ds) - Math.min(...ds) < 0.02 || Math.max(...es) - Math.min(...es) < 0.02) continue;
+    const Fd = dot3(F, p.D);
+    const Fe = dot3(F, p.B);
+    for (const q of kept) {
+      out.push(h0 - (Fd * (q[0]! - d0) + Fe * (q[1]! - e0)) / Fn + CROSS.thick / 2);
+    }
+  }
+  return out;
+}
+
+/** A geometry's points, indexed by height. */
+interface Pts {
+  readonly n: number;
+  readonly p: Float64Array;
+  readonly order: Int32Array;
+}
+
+function pointIndex(geo: Geometry): Pts {
+  const n = geo.attrs.point.count;
+  const P = geo.attrs.point.get("P")!.data;
+  const p = new Float64Array(3 * n);
+  for (let i = 0; i < 3 * n; i++) p[i] = P[i] as number;
+  const order = Int32Array.from(
+    Array.from({ length: n }, (_, i) => i).sort((a, b) => (p[3 * a + 1] as number) - (p[3 * b + 1] as number)),
+  );
+  return { n, p, order };
+}
+
+/**
+ * The highest the cooked LACING reaches above the plate's inner face inside
+ * its footprint, or -Infinity where none of it is. A mitred zigzag's peak is
+ * a VERTEX, so this reads points and not faces.
+ */
+function laceOverPlate(q: Pts, p: Plate): number {
+  const R = Math.hypot(p.half, p.across) + 0.2;
+  const at = (i: number) => q.p[3 * (q.order[i] as number) + 1] as number;
+  let a = 0;
+  let b = q.n;
+  while (a < b) {
+    const m = (a + b) >> 1;
+    if (at(m) < p.o[1] - R) a = m + 1;
+    else b = m;
+  }
+  let best = -Infinity;
+  for (let i = a; i < q.n && at(i) <= p.o[1] + R; i++) {
+    const j = q.order[i] as number;
+    const dx = (q.p[3 * j] as number) - p.o[0];
+    const dy = (q.p[3 * j + 1] as number) - p.o[1];
+    const dz = (q.p[3 * j + 2] as number) - p.o[2];
+    const h = dx * p.n[0] + dy * p.n[1] + dz * p.n[2];
+    if (h > 0.1 || h < -0.25) continue;
+    if (Math.abs(dx * p.D[0] + dy * p.D[1] + dz * p.D[2]) > p.half) continue;
+    if (Math.abs(dx * p.B[0] + dy * p.B[1] + dz * p.B[2]) > p.across) continue;
+    best = Math.max(best, h + CROSS.thick / 2);
+  }
+  return best;
+}
+
+/** The cooked skins the crossing plates are measured against, and the plates. */
+interface CrossingProbe {
+  /** Each web class' CHORDS: the corner angles, whose outer faces are the plate's datum. */
+  readonly chords: Record<string, Faces>;
+  /** Each web class' LACING, which the plate has to stay outside: its mitred
+   * vertices, where a ring falls under a plate, and its flat outer faces,
+   * which run the whole length of every bar. */
+  readonly lacing: Record<string, Pts>;
+  readonly laceFaces: Record<string, Faces>;
+  /** Every plate the rules put on the tower: four legs, then the shaft. */
+  readonly plates: Plate[];
+}
+
+const WEB_CLASSES = [
+  "legPost",
+  "legHorizontal",
+  "legBracing",
+  "legGapBracing",
+  "shaftBracing",
+  "shaftHorizontal",
+];
+
+/**
+ * Cooked once and shared: the laced tower is 3.3M triangles and two of the
+ * crossing tests read the same probes of it.
+ */
+const crossingProbes = new Map<string, Promise<CrossingProbe>>();
+function crossingProbe(detail: Detail): Promise<CrossingProbe> {
+  const key = JSON.stringify(detail);
+  const got = crossingProbes.get(key);
+  if (got !== undefined) return got;
+  const made = (async (): Promise<CrossingProbe> => {
+    const g = buildEiffel(1889, detail);
+    for (const c of WEB_CLASSES) {
+      for (const kind of ["ChordSkin", "LaceSkin"]) {
+        g.output({ id: `${c}${kind}` } as NodeHandle, "out", `probe:${c}${kind}`);
+      }
+    }
+    const { outputs } = await cook(g);
+    const chords: Record<string, Faces> = {};
+    const lacing: Record<string, Pts> = {};
+    const laceFaces: Record<string, Faces> = {};
+    for (const c of WEB_CLASSES) {
+      chords[c] = faceIndex(firstGeometry(outputs[`probe:${c}ChordSkin`]!)!);
+      lacing[c] = pointIndex(firstGeometry(outputs[`probe:${c}LaceSkin`]!)!);
+      laceFaces[c] = faceIndex(firstGeometry(outputs[`probe:${c}LaceSkin`]!)!);
+    }
+    return {
+      chords,
+      lacing,
+      laceFaces,
+      plates: [...platesOf(legCrossings(), true), ...platesOf(shaftCrossings(), false)],
+    };
+  })();
+  crossingProbes.set(key, made);
+  return made;
+}
+
 
 describe("eiffel skeleton", () => {
   it("puts every leg-upright vertex on Plate XXXI's profile, and a vertex on every node", async () => {
@@ -1112,319 +1576,468 @@ describe("eiffel skeleton", () => {
     }
   });
 
-  it("plates every rosette: a pair at each of 11 crossings, on 4 faces, on 4 legs", async () => {
+  it("plates every crossing the rules put one at: the post's landings, the panels' X's, the gap X, the shaft", async () => {
     // Laced, because that is where the plates are: the plain depth's
     // members are solid boxes that interpenetrate, so there is no daylight
     // at a crossing to cover and the whole `gussets` class is absent.
-    expect((await cook(buildEiffel())).outputs.gussets).toBeUndefined();
+    const plain = await cook(buildEiffel());
+    expect(plain.outputs.gussets).toBeUndefined();
+    expect(Object.keys(plain.outputs).filter((k) => k.includes("crossings"))).toEqual([]);
+
+    const rule = platesOf(legCrossings(), false);
+    const shaft = platesOf(shaftCrossings(), false);
+    // The sets are split by SECTION, not by family: `flatBars` takes one
+    // width for a whole set, and an 800's plate on a 500 would be 0.80 wide.
+    const bySet = new Map<string, Plate[]>();
+    for (const p of rule) bySet.set(p.key, [...(bySet.get(p.key) ?? []), p]);
+    expect([...bySet.keys()].sort()).toEqual(["500", "600", "800"]);
+    // A post landing on each of the 12 levels a leg face's post meets a
+    // member square to the face, on 4 faces: 11 of them 800s (7 node
+    // horizontals and the 4 mid-panel ones of panels 1-4) and one — panel
+    // 10's band top chord — a 600. Then panels 6-9's 16 X's, panel 10's 8
+    // above its band, panels 12-17's 12 and the gap's 5. A pair of plates
+    // at each, one either side of the lattice.
+    const count = (key: string, family: Crossing["family"]) =>
+      (bySet.get(key) ?? []).filter((p) => p.c.family === family).length;
+    expect(count("800", "post")).toBe(2 * 44);
+    expect(count("800", "legX")).toBe(2 * 16);
+    expect(count("600", "post")).toBe(2 * 4);
+    expect(count("600", "p10")).toBe(2 * 8);
+    expect(count("500", "legX")).toBe(2 * 12);
+    expect(count("500", "gap")).toBe(2 * 5);
+    expect(shaft).toHaveLength(2 * 88);
+
     const g = buildEiffel(1889, { lacedWeb: true });
-    for (const id of ["legCrossPlates", "legCrossPlates4RotDone", "legCrossPlatesLit"]) {
-      g.output({ id } as NodeHandle, "out", `probe:${id}`);
-    }
+    const ids = [
+      "legCrossPlates800",
+      "legCrossPlates600",
+      "legCrossPlates500",
+      "shaftCrossMembers500",
+      "legCrossPlates800Lit",
+      "legCrossPlates600Lit",
+      "legCrossPlates500Lit",
+      "shaftCrossPlates500Lit",
+    ];
+    for (const id of ids) g.output({ id } as NodeHandle, "out", `probe:${id}`);
     const { outputs } = await cook(g);
     const geo = (id: string) => firstGeometry(outputs[`probe:${id}`]!)!;
-    const family = crossPlates();
-    // 7 nodes that carry a horizontal a post ends on, and panels 1-4's four
-    // mid-panel horizontals it runs through.
-    expect(crossingHeights()).toHaveLength(11);
-    expect(family).toHaveLength(11 * 4 * 2 * 4);
-    expect(polylines(geo("legCrossPlates"))).toHaveLength(11 * 4 * 2);
-    expect(polylines(geo("legCrossPlates4RotDone"))).toHaveLength(family.length);
-    const lit = geo("legCrossPlatesLit");
-    expect(lit.attrs.point.count).toBe(24 * family.length);
-    expect(lit.primitiveCount).toBe(12 * family.length);
-    // The plates go into `gussets`, the class the joints' own plates are
-    // in, so the class holds more boxes than this family: each crossing
-    // plate is found in it by where it stands.
-    const litBoxes = flatBoxes(lit);
-    const boxes = flatBoxes(firstGeometry(outputs.gussets!)!);
-    expect(litBoxes).toHaveLength(family.length);
-    expect(boxes.length).toBeGreaterThan(family.length);
-    const nearest = (all: ReturnType<typeof flatBoxes>, at: Vec3) => {
-      let best = Infinity;
-      let bi = -1;
-      all.forEach((b, i) => {
-        const d = len3(sub3(b.centre, at));
-        if (d < best) {
-          best = d;
-          bi = i;
-        }
-      });
-      return { best, bi };
-    };
-    const taken = new Set<number>();
-    for (const p of family) {
-      // Its SIZE is read before the class is jittered, where it is exact:
-      // a 10 mm plate cannot be measured to better than a millimetre once
-      // every point has moved by up to one.
-      const built = nearest(litBoxes, p.o);
-      expect(built.best, `plate at y=${p.y.toFixed(3)}`).toBeLessThan(1e-5);
-      const box = litBoxes[built.bi]!;
-      for (const [axis, half, what] of [
-        [p.D, p.half, "along the post"],
-        [p.B, p.halfWidth, "across the post"],
-        [p.n, CROSS.plate / 2, "in thickness"],
-      ] as const) {
-        const got = Math.max(...box.points.map((q) => Math.abs(dot3(sub3(q, box.centre), axis))));
-        expect(Math.abs(got - half), `plate at y=${p.y.toFixed(3)} ${what}`).toBeLessThan(1e-5);
-      }
-      // And its PLACE in the class it is merged into, within the JITTER
-      // every class carries (the mean of 24 points averages it down: the
-      // worst read is 0.45 mm of the 1.77 the bound allows).
-      const placed = nearest(boxes, p.o);
-      expect(placed.best, `plate at y=${p.y.toFixed(3)}`).toBeLessThan(SETTLE);
-      taken.add(placed.bi);
-    }
-    // One box per crossing plate: nothing doubled up, nothing left over.
-    expect(taken.size).toBe(family.length);
-  });
-
-  it("lands each crossing plate on the chord faces of both the post and the horizontal", async () => {
-    const { legCrossPlates4RotDone, legPosts4RotDone, legHorizontals4RotDone } = await cookWith(
-      ["legCrossPlates4RotDone", "legPosts4RotDone", "legHorizontals4RotDone"],
-      { lacedWeb: true },
-    );
-    const axes = polylines(legCrossPlates4RotDone!);
-    const plateN = faceNormals(legCrossPlates4RotDone!);
-    const posts = polylines(legPosts4RotDone!);
-    const postN = faceNormals(legPosts4RotDone!);
-    const hors = polylines(legHorizontals4RotDone!);
-    const horN = faceNormals(legHorizontals4RotDone!);
     const ends = (l: readonly Vec3[]): [Vec3, Vec3] => [l[0]!, l[l.length - 1]!];
-    for (const p of crossPlates()) {
-      // The cooked plate: the midpoint of its axis is its centre, and faceN
-      // the outward normal its rivets stand along.
-      let best = Infinity;
-      let bi = -1;
-      axes.forEach((l, i) => {
-        const [a, b] = ends(l);
-        const d = len3(sub3(mul3(add3(a, b), 0.5), p.o));
-        if (d < best) {
-          best = d;
-          bi = i;
-        }
-      });
-      expect(best, `plate at y=${p.y.toFixed(3)}`).toBeLessThan(1e-4);
-      const [a, b] = ends(axes[bi]!);
-      const o = mul3(add3(a, b), 0.5);
-      const n = plateN[bi]!;
-      const D = unit3(sub3(b, a));
-      const B = cross3(n, D);
-      // Its horizontal: no other axis passes as close to the plate's
-      // centre, which is `w + plate / 2` off it — the chords' outer face
-      // plus half the plate. The horizontal is square to n, so the foot of
-      // the plate's centre on its axis IS the crossing point.
-      const off = p.w + CROSS.plate / 2;
-      let h = { at: o, off: Infinity, dir: [0, 0, 0] as Vec3 };
-      let hi = -1;
-      hors.forEach((l, i) => {
-        const [c, d] = ends(l);
-        const f = foot(o, c, d);
-        if (f.off < h.off) {
-          h = f;
-          hi = i;
-        }
-      });
-      expect(h.off, `horizontal under the plate at y=${p.y.toFixed(3)}`).toBeCloseTo(off, 4);
-      expect(Math.abs(dot3(n, h.dir))).toBeLessThan(1e-5);
-      const X = h.at;
-      expect(len3(sub3(X, p.cross)), `crossing at y=${p.y.toFixed(3)}`).toBeLessThan(1e-4);
-      // The plate stands off the crossing along its own normal ALONE: it is
-      // centred on it across the post and along it.
-      expect(Math.abs(dot3(sub3(o, X), D))).toBeLessThan(1e-4);
-      expect(Math.abs(dot3(sub3(o, X), B))).toBeLessThan(1e-4);
-      expect(dot3(sub3(o, X), n)).toBeCloseTo(off, 4);
-      // FLUSH: a member's own chord face over the crossing — w out along
-      // its section's normal, which is its faceN squared to its axis —
-      // lies IN the plate's inner face, and the plate's four corners lie
-      // in it too where the two planes are one.
-      const chordFace = (dir: Vec3, fn: Vec3): { N: Vec3; at: Vec3 } => {
-        let N = unit3(sub3(fn, mul3(dir, dot3(fn, dir))));
-        if (dot3(N, n) < 0) N = mul3(N, -1);
-        return { N, at: add3(X, mul3(N, p.w)) };
-      };
-      const inner = add3(o, mul3(n, -CROSS.plate / 2));
-      const corners = [1, -1].flatMap((sd) =>
-        [1, -1].map((sb) => add3(add3(inner, mul3(D, sd * p.half)), mul3(B, sb * p.halfWidth))),
-      );
-      const gap = (f: { N: Vec3; at: Vec3 }) => dot3(sub3(f.at, inner), f.N);
-      const standoff = (f: { N: Vec3; at: Vec3 }) =>
-        Math.max(...corners.map((q) => Math.abs(dot3(sub3(q, f.at), f.N))));
-      // Inside a panel the two planes are the same one, so the plate is
-      // flush to the last micron. Where the leg face TURNS at the node, the
-      // plate takes the bisector and nothing can be flush on both stretches
-      // at once: the chord face falls away by w (1 - cos) at the crossing,
-      // 0.124 mm at the sharpest turn the legs make.
-      const flush = p.kinked ? 2e-4 : 1e-5;
-      const hFace = chordFace(h.dir, horN[hi]!);
-      expect(Math.abs(gap(hFace)), `horizontal at y=${p.y.toFixed(3)}`).toBeLessThan(flush);
-      // The post stretches that MEET at the crossing: the one that runs
-      // through it inside a panel, and at a node the two cut ends either
-      // side of it (one at XIX, where the post above starts on panel 10's
-      // band). A stretch runs a whole panel, so reaching within 0.6 m of
-      // the crossing — the most a cut end is pulled back — picks out those
-      // and not the next one up or down, which in panels 1-4 lies on the
-      // same line and would pass a test on the line alone.
-      const through = posts.filter((l) => {
-        const [c, d] = ends(l);
-        const f = foot(X, c, d);
-        const along = dot3(sub3(X, c), f.dir);
-        return f.off < 1e-3 && along > -0.6 && along < len3(sub3(d, c)) + 0.6;
-      });
-      expect(through.length, `posts through the crossing at y=${p.y.toFixed(3)}`).toBeGreaterThan(0);
-      expect(through.length, `posts through the crossing at y=${p.y.toFixed(3)}`).toBeLessThanOrEqual(p.atNode ? 2 : 1);
-      const tilts: number[] = [];
-      for (const l of through) {
-        const [c, d] = ends(l);
-        const dir = unit3(sub3(d, c));
-        const face = chordFace(dir, postN[posts.indexOf(l)]!);
-        expect(Math.abs(gap(face)), `post at y=${p.y.toFixed(3)}`).toBeLessThan(flush);
-        // WHAT THE BISECTOR COSTS, at the corners, where it is worst: one
-        // flat rectangle cannot lie on two planes, so a kinked crossing
-        // leaves its corners off the steel — 16.2 mm at XXII, 8.4 at XXI,
-        // 6.7 at XX and 1.4 at XIX, and nothing anywhere else.
-        for (const f of [face, hFace]) {
-          expect(standoff(f), `corner at y=${p.y.toFixed(3)}`).toBeLessThan(p.kinked ? 0.017 : 1e-4);
-        }
-        tilts.push(Math.abs(dot3(n, dir)));
+
+    // The member lists are built in the +x+z quadrant and copied four times
+    // (the shaft is built WHOLE, with no copy), so each is matched against
+    // one leg's rules and each plate is a DISTINCT member: nothing doubled.
+    const gussets = flatBoxes(firstGeometry(outputs.gussets!)!);
+    let litBoxes = 0;
+    const centres: Vec3[] = [];
+    for (const [id, list, legs] of [
+      ["legCrossPlates800", bySet.get("800")!, true],
+      ["legCrossPlates600", bySet.get("600")!, true],
+      ["legCrossPlates500", bySet.get("500")!, true],
+      ["shaftCrossMembers500", shaft, false],
+    ] as const) {
+      const lines = polylines(geo(id));
+      const ns = faceNormals(geo(id));
+      expect(lines, id).toHaveLength(list.length);
+      const taken = new Set<number>();
+      for (const p of list) {
+        let best = Infinity;
+        let bi = -1;
+        lines.forEach((l, i) => {
+          const [a, b] = ends(l);
+          const d = len3(sub3(mul3(add3(a, b), 0.5), p.o));
+          if (d < best) {
+            best = d;
+            bi = i;
+          }
+        });
+        expect(best, `${id} plate at y=${p.o[1].toFixed(3)}`).toBeLessThan(1e-4);
+        taken.add(bi);
+        const [a, b] = ends(lines[bi]!);
+        expect(len3(sub3(b, a)) / 2, `${id} half at y=${p.o[1].toFixed(3)}`).toBeCloseTo(p.half, 4);
+        expect(Math.abs(dot3(unit3(sub3(b, a)), p.D))).toBeCloseTo(1, 6);
+        // Its OWN outward normal: the pair cannot share one, or the inner
+        // plate's rivets would point into the lattice.
+        expect(dot3(ns[bi]!, p.n), `${id} normal at y=${p.o[1].toFixed(3)}`).toBeCloseTo(1, 5);
       }
-      for (const t of tilts) {
-        // And the plate makes the SAME angle with every stretch through the
-        // crossing, which is what the bisector buys: the error is shared.
-        expect(Math.abs(t - tilts[0]!), `bisected at y=${p.y.toFixed(3)}`).toBeLessThan(1e-3);
-        // (Square to a micron inside a panel: a direction read off f32
-        // positions 13 m apart at 50 m up carries about 1e-6 of noise.)
-        expect(t, `square to the post at y=${p.y.toFixed(3)}`).toBeLessThan(p.kinked ? 0.025 : 1e-5);
+      expect(taken.size, id).toBe(list.length);
+      // The boxes the flat bars make of them, one per plate per leg, sized
+      // by the rule: `2 half` along, `2 across` wide, `thick` through.
+      const lit = flatBoxes(geo(`${id.replace("CrossMembers", "CrossPlates")}Lit`));
+      expect(lit.length, id).toBe(list.length * (legs ? 4 : 1));
+      litBoxes += lit.length;
+      for (const p of (legs ? [0, 1, 2, 3] : [0]).flatMap((k) =>
+        list.map((q) => ({
+          o: legs ? onLeg(q.o, k) : q.o,
+          D: legs ? onLeg(q.D, k) : q.D,
+          n: legs ? onLeg(q.n, k) : q.n,
+          B: legs ? onLeg(q.B, k) : q.B,
+          half: q.half,
+          across: q.across,
+        })),
+      )) {
+        centres.push(p.o);
+        let best = Infinity;
+        let bi = -1;
+        lit.forEach((b, i) => {
+          const d = len3(sub3(b.centre, p.o));
+          if (d < best) {
+            best = d;
+            bi = i;
+          }
+        });
+        expect(best).toBeLessThan(5e-5);
+        const box = lit[bi]!;
+        for (const [axis, half, what] of [
+          [p.D, p.half, "along"],
+          [p.B, p.across, "across"],
+          [p.n, CROSS.thick / 2, "through"],
+        ] as const) {
+          const got = Math.max(...box.points.map((q) => Math.abs(dot3(sub3(q, box.centre), axis))));
+          // (5e-5, not the micron the 800s hold: the 500 set rides up to
+          // 174 m, where an f32 ULP is 15 microns and a box corner carries
+          // three of them.)
+          expect(Math.abs(got - half), `${id} ${what}`).toBeLessThan(5e-5);
+        }
+        // And it is IN the class, within the jitter every class carries.
+        let placed = Infinity;
+        for (const b of gussets) placed = Math.min(placed, len3(sub3(b.centre, p.o)));
+        expect(placed).toBeLessThan(SETTLE);
+      }
+    }
+    // 888 plates: 178 a leg and 176 up the shaft.
+    expect(litBoxes).toBe(4 * (120 + 24 + 34) + 176);
+    expect(centres).toHaveLength(litBoxes);
+
+    // AND THE LEVELS THAT ARE NOT PLATED, though a post does end on each.
+    // The ties' two chords and the belts' chord plates at XXIV, XXIII and
+    // XVIII are flats lying IN the face plane, a third of a metre below
+    // where a plate set under the POST's corner angles would sit, so a
+    // plate there plates nothing — and panels 5 and 11 carry no central
+    // post, so it would have had no steel of any kind under it. A plate on
+    // a flat needs a rule of its own.
+    const tieY = (f: number) => node("XXVIII").y - tieDepth(f);
+    for (const [name, y] of [
+      ["tie A's bottom chord", tieY(0)],
+      ["tie B's bottom chord", tieY(1)],
+      ["the ties' top chord", tieTop()],
+      ["XXIV's belt chord", node("XXIV").y],
+      ["XXIII's belt chord", node("XXIII").y],
+      ["XVIII's belt chord", node("XVIII").y],
+    ] as const) {
+      for (let f = 0; f < 4; f++) {
+        const at = legFaceCentre(f, y);
+        let near = Infinity;
+        for (const c of centres) near = Math.min(near, len3(sub3(c, at)));
+        expect(near, `${name} is plated`).toBeGreaterThan(1);
       }
     }
   });
 
-  it("covers the post's cut cap with the plate over it, at every node crossing", async () => {
-    // The post is laced here, but its cap is the same square: a strut's
-    // chords sit just inside the table's half-width and their own boxes
-    // reach back out to it, so the corner is w from the axis either way.
-    const { legCrossPlates4RotDone, legPosts4RotDone } = await cookWith(
-      ["legCrossPlates4RotDone", "legPosts4RotDone"],
+  it("sets every crossing plate the depth its section asks under the angles, and bounds what the bisector costs", async () => {
+    const { chords, plates } = await crossingProbe({ lacedWeb: true });
+    // The plate's own strut: the one whose crossing it plates. A post
+    // landing's is the post, an X's the diagonals that make it.
+    const own: Record<Crossing["family"], string> = {
+      post: "legPost",
+      legX: "legBracing",
+      p10: "legBracing",
+      gap: "legGapBracing",
+      shaft: "shaftBracing",
+    };
+    let flat = 0;
+    let flatAt = "";
+    let faces = 0;
+    const kink = new Map<string, number>();
+    const rule = new Map<string, number>();
+    for (const p of plates) {
+      // Every face of the strut that stands over the plate, clipped to its
+      // footprint — the depth test and the flatness test at once.
+      const hits = overPlate(chords[own[p.c.family]]!, p);
+      expect(hits.length, `no steel over the plate at y=${p.o[1].toFixed(3)}`).toBeGreaterThan(0);
+      if (p.c.residual > 1e-4) {
+        rule.set(p.c.label ?? "", Math.max(rule.get(p.c.label ?? "") ?? 0, p.c.residual));
+      }
+      faces += hits.length;
+      for (const h of hits) {
+        const err = Math.abs(h - p.set);
+        if (p.c.residual > 1e-4) {
+          kink.set(p.c.label ?? "", Math.max(kink.get(p.c.label ?? "") ?? 0, err));
+        } else if (err > flat) {
+          flat = err;
+          flatAt = `${p.c.family}${p.c.label === undefined ? "" : `:${p.c.label}`} y=${p.o[1].toFixed(3)}`;
+        }
+      }
+    }
+    // WHERE THE LEG RUNS STRAIGHT the plate holds the depth to the f32
+    // noise: measured 0.02 mm over the 28,007 chord faces clipped to the
+    // 888 plates' footprints — every X crossing in the tower, and the eight
+    // post landings that are not at a turn.
+    expect(faces).toBeGreaterThan(20000);
+    expect(flat, `depth under the angles, worst at ${flatAt}`).toBeLessThan(1e-4);
+    // The depth is `set * w / 0.4`: both knobs are quoted at an 800 and
+    // scale with the section, so a 500 goes SHALLOWER, never deeper.
+    const set = (key: string) => plates.find((p) => p.key === key)!.set;
+    expect(set("800")).toBeCloseTo(0.015, 9);
+    expect(set("600")).toBeCloseTo(0.01125, 9);
+    expect(set("500")).toBeCloseTo(0.009375, 9);
+
+    // AND WHAT THE BISECTOR COSTS. A post landing is ONE plate, square to
+    // the post's direction read ACROSS the crossing, so where the leg turns
+    // it lies on the bisector of the two stretches and one flat rectangle
+    // cannot lie on both planes: its ends stand off the steel, and the two
+    // plates of a pair tip OPPOSITE ways. The rule's figure is
+    // `half sin(kink / 2)`; measured it is a little under, because the
+    // steel does not quite reach the plate's ends.
+    expect([...kink.keys()].sort()).toEqual(["XIX", "XX", "XXI", "XXII"]);
+    for (const [name, mm] of [
+      ["XXII", 14.34],
+      ["XXI", 7.4],
+      ["XX", 5.94],
+      ["XIX", 1.2],
+    ] as const) {
+      expect(1000 * (kink.get(name) as number), `the bisector at ${name}`).toBeCloseTo(mm, 1);
+    }
+    // It tracks the rule, at 83-93% of it, and never exceeds it: the two
+    // faces of a leg turn by slightly different angles, so each level's
+    // worst plate is read against that level's widest turn.
+    for (const [name, got] of kink) {
+      const want = rule.get(name) as number;
+      expect(got, `the bisector at ${name}`).toBeLessThan(want);
+      expect(got, `the bisector at ${name}`).toBeGreaterThan(0.8 * want);
+    }
+    // THE HORIZONTAL A POST LANDS ON is a different member with its own
+    // plane. Where the leg runs straight it is the same plane and the plate
+    // holds the depth on it to 0.013 mm; where the leg turns the bisector
+    // splits the error between the two, and the horizontal — which takes
+    // the plane of the panel ABOVE it — carries 10.07 mm of it at XXII.
+    let straight = 0;
+    let turned = 0;
+    for (const p of plates) {
+      if (p.c.family !== "post") continue;
+      for (const h of overPlate(chords.legHorizontal!, p)) {
+        const err = Math.abs(h - p.set);
+        if (p.c.residual > 1e-4) turned = Math.max(turned, err);
+        else straight = Math.max(straight, err);
+      }
+    }
+    expect(straight, "the horizontal under a straight post landing").toBeLessThan(2e-5);
+    expect(1000 * turned, "the horizontal under a kinked post landing").toBeCloseTo(10.07, 1);
+  });
+
+  it("keeps every crossing plate's inner face outside the lacing it covers, and counts the ones it does not", async () => {
+    const { lacing, laceFaces, plates } = await crossingProbe({ lacedWeb: true });
+    // The bound the DEPTH is chosen against, re-measured from the cooked
+    // lacing rather than from CHORD - LACE: a lacing bar's swept square is
+    // mitred at the zigzag's vertices, so MID-SPAN its outer surface stands
+    // 0.0174 inside the angles' outer face and not the 0.0225 the section
+    // table implies. At `set` 0.02 the plate sat 2.6 mm behind it.
+    const behind: string[] = [];
+    const through: string[] = [];
+    let clean = Infinity;
+    let worst = -Infinity;
+    for (const p of plates) {
+      // Read two ways, because neither alone sees all of it: the mitred
+      // VERTICES, which are the lacing's peaks but stand a whole lacing
+      // step apart, and the flat outer FACES clipped to the footprint,
+      // which run the length of every bar and so cover the plates no vertex
+      // falls under.
+      let top = -Infinity;
+      for (const c of WEB_CLASSES) {
+        top = Math.max(top, laceOverPlate(lacing[c]!, p), ...overPlate(laceFaces[c]!, p, 0.3));
+      }
+      expect(Number.isFinite(top), `no lacing under the plate at y=${p.o[1].toFixed(3)}`).toBe(true);
+      worst = Math.max(worst, top);
+      if (top <= 0) clean = Math.min(clean, -top);
+      else {
+        behind.push(p.c.label ?? "");
+        if (top > CROSS.thick) through.push(p.c.label ?? "");
+      }
+    }
+    // WHERE IT HOLDS — every X crossing in the tower and every post landing
+    // clear of a turn, 816 of the 888 plates — the tightest clearance
+    // anywhere is 1.57 mm.
+    expect(behind.length + through.length).toBeGreaterThan(0);
+    expect(clean, "the tightest clean clearance").toBeGreaterThan(0.0015);
+    // WHERE IT DOES NOT. Two things eat it, both only at the four kinked
+    // post landings. The bisector's tilt (above) spends the clearance the
+    // depth was chosen for; and a strut's lacing blows out past its mitre
+    // in the last rings before a CUT end, reaching 2.6 mm inside the
+    // angles' outer face where mid-span it is 17.4. Counted and bounded
+    // rather than asserted to zero, so that the figure is on the record and
+    // cannot GROW without this failing.
+    const tally = (v: string[]) => [...new Set(v)].sort().map((k) => `${k}=${v.filter((x) => x === k).length}`);
+    expect(tally(behind)).toEqual(["XX=8", "XXI=32", "XXII=32"]);
+    expect(tally(through)).toEqual(["XXI=8"]);
+    expect(behind).toHaveLength(72);
+    expect(through).toHaveLength(8);
+    // 3.1 mm PAST the angles' outer face at the worst of them, which is the
+    // tilt and the blow-out at once.
+    expect(1000 * worst, "the deepest the lacing reaches").toBeCloseTo(18.09, 1);
+  });
+
+  it("covers the post's cut cap with the plate over it, at every node landing", async () => {
+    const { legCrossPlates8004RotDone, legCrossPlates6004RotDone, legPosts4RotDone } = await cookWith(
+      ["legCrossPlates8004RotDone", "legCrossPlates6004RotDone", "legPosts4RotDone"],
       { lacedWeb: true },
     );
-    const axes = polylines(legCrossPlates4RotDone!);
-    const plateN = faceNormals(legCrossPlates4RotDone!);
+    const built = [legCrossPlates8004RotDone!, legCrossPlates6004RotDone!].flatMap((geo) => {
+      const ns = faceNormals(geo);
+      return polylines(geo).map((l, i) => {
+        const [a, b] = [l[0]!, l[l.length - 1]!];
+        const D = unit3(sub3(b, a));
+        return { o: mul3(add3(a, b), 0.5), D, n: ns[i]!, B: cross3(ns[i]!, D), half: len3(sub3(b, a)) / 2 };
+      });
+    });
     const posts = polylines(legPosts4RotDone!);
     const postN = faceNormals(legPosts4RotDone!);
     let caps = 0;
     let leastAlong = Infinity;
-    let leastAcross = Infinity;
-    for (const p of crossPlates()) {
-      // Only a node crossing has a cut end under it: at a mid-panel
-      // horizontal the post runs straight through.
-      if (!p.atNode) continue;
+    for (const p of platesOf(legCrossings(), true)) {
+      // Only a node landing has a cut end under it: at a mid-panel
+      // horizontal, and on panel 10's band chord, the post runs on through.
+      if (!p.c.atNode) continue;
       let best = Infinity;
       let bi = -1;
-      axes.forEach((l, i) => {
-        const d = len3(sub3(mul3(add3(l[0]!, l[l.length - 1]!), 0.5), p.o));
+      built.forEach((q, i) => {
+        const d = len3(sub3(q.o, p.o));
         if (d < best) {
           best = d;
           bi = i;
         }
       });
       expect(best).toBeLessThan(1e-4);
-      const [a, b] = [axes[bi]![0]!, axes[bi]![axes[bi]!.length - 1]!];
-      const o = mul3(add3(a, b), 0.5);
-      const D = unit3(sub3(b, a));
-      // Its footprint along the post, as built and as the rule has it: the
-      // cap is measured against what covers it, so read the plate, but a
-      // plate cut to a different length is not the one that was checked.
-      const half = len3(sub3(b, a)) / 2;
-      expect(half, `plate at y=${p.y.toFixed(3)}`).toBeCloseTo(p.half, 4);
-      const B = cross3(plateN[bi]!, D);
+      const q = built[bi]!;
       posts.forEach((l, j) => {
         const [c, d] = [l[0]!, l[l.length - 1]!];
-        if (foot(p.cross, c, d).off > 2e-3) return;
         const T = unit3(sub3(d, c));
-        // A swept profile has one cut: square to the post. So the cap is a
-        // w square on the post's own section axes — N, its face normal
-        // squared to it, and N x T — at the end, whatever angle it meets
-        // the horizontal at.
+        // A swept profile has one cut, square to the post, so the cap is a
+        // w square on the post's own section axes: N, its face normal
+        // squared to its axis, and N x T.
         const N = unit3(sub3(postN[j]!, mul3(T, dot3(postN[j]!, T))));
         const Bp = cross3(N, T);
         for (const e of [c, d]) {
-          if (len3(sub3(e, p.cross)) > 1) continue;
-          const w = tableAt(MEMBERS.web, e[1]);
+          const r = sub3(e, q.o);
+          // The end under THIS plate: on its axis and within its footprint
+          // along the post.
+          if (Math.abs(dot3(r, q.B)) > 0.02) continue;
+          if (Math.abs(dot3(r, q.n) + p.c.w - p.set + CROSS.thick / 2) > 0.02) continue;
+          if (Math.abs(dot3(r, q.D)) > q.half) continue;
           caps++;
+          const w = tableAt(MEMBERS.web, e[1]);
           for (const sn of [1, -1]) {
             for (const sb of [1, -1]) {
-              const q = add3(add3(e, mul3(N, sn * w)), mul3(Bp, sb * w));
-              const r = sub3(q, o);
-              leastAlong = Math.min(leastAlong, half - Math.abs(dot3(r, D)));
-              leastAcross = Math.min(leastAcross, p.halfWidth - Math.abs(dot3(r, B)));
+              const corner = add3(add3(e, mul3(N, sn * w)), mul3(Bp, sb * w));
+              leastAlong = Math.min(leastAlong, q.half - Math.abs(dot3(sub3(corner, q.o), q.D)));
             }
           }
         }
       });
     }
-    // 13 cut ends up each face (two at each of XXVII, XXVI, XXV, XXII, XXI
-    // and XX, one at XIX, where the post above starts on panel 10's band),
-    // each covered by the pair of plates over it, on 4 faces of 4 legs.
+    // 13 cut ends up each face — two at each of XXVII, XXVI, XXV, XXII,
+    // XXI and XX, where the post stops and starts again, and one at XIX,
+    // where the post above starts on panel 10's band instead — each covered
+    // by the pair of plates over it, on 4 faces of 4 legs.
     expect(caps).toBe(13 * 2 * 4 * 4);
-    // Every corner of every cap inside the plate's footprint, with the
-    // margin the plate reaches past the steel still to spare.
+    // ALONG THE POST the plate reaches past every corner of every cap, by
+    // 89 mm at the worst of them: the margin it takes past the cap, plus
+    // what measuring the reach across U rather than along the post buys.
     expect(leastAlong).toBeGreaterThan(0.05);
-    expect(leastAcross).toBeGreaterThan(0.05);
   });
 
-  it("rivets the crossing plates round their own edges: on the outer face, inside the outline", async () => {
+  it("rivets every crossing plate round its own edges: on the outer face, inside the outline, pointing out", async () => {
     const g = buildEiffel(1889, { rivets: true });
-    g.output({ id: "legCrossPlates4RotDone" } as NodeHandle, "out", "probe:plates");
+    const probes = [
+      ["800", "legCrossPlates8004RotDone", "rivets.leg.crossings.800", 16512],
+      ["600", "legCrossPlates6004RotDone", "rivets.leg.crossings.600", 2368],
+      ["500", "legCrossPlates5004RotDone", "rivets.leg.crossings.500", 2720],
+      ["500", "shaftCrossMembers500", "rivets.shaft.crossings.500", 3520],
+    ] as const;
+    for (const [, id] of probes) g.output({ id } as NodeHandle, "out", `probe:${id}`);
     const { outputs } = await cook(g);
-    const geo = firstGeometry(outputs["probe:plates"]!)!;
-    const ns = faceNormals(geo);
-    const plates = polylines(geo).map((l, i) => {
-      const [a, b] = [l[0]!, l[l.length - 1]!];
-      const D = unit3(sub3(b, a));
-      return { o: mul3(add3(a, b), 0.5), D, n: ns[i]!, B: cross3(ns[i]!, D), half: len3(sub3(b, a)) / 2 };
-    });
-    const item = outputs["rivets.leg.crossings"]![0]!;
-    expect(item.kind).toBe("instances");
-    if (item.kind !== "instances") return;
-    expect(item.batches.map((b) => b.assetId)).toEqual(["rivet"]);
-    const halfWidth = crossPlates()[0]!.halfWidth;
-    const per = new Map<number, number>();
-    const axes = rivetAxes(item);
-    rivetBases(item).forEach((r, k) => {
-      // Its plate: the pair stands 0.81 apart and the next crossing is a
-      // panel away, so no other centre is nearer than its own.
-      let best = Infinity;
-      let bi = -1;
-      plates.forEach((q, i) => {
-        const d = len3(sub3(r, q.o));
-        if (d < best) {
-          best = d;
-          bi = i;
-        }
+    const rule = [...platesOf(legCrossings(), true), ...platesOf(shaftCrossings(), false)];
+    // The samples a spacing resample lays on a row of length L at pitch p.
+    const heads = (L: number) => {
+      const whole = Math.floor(L / CROSS.pitch + 1e-6);
+      return whole + 1 + (L - whole * CROSS.pitch > 1e-4 ? 1 : 0);
+    };
+    let total = 0;
+    for (const [key, id, name, want0] of probes) {
+      const geo = firstGeometry(outputs[`probe:${id}`]!)!;
+      const ns = faceNormals(geo);
+      const shaft = id.startsWith("shaft");
+      const plates = polylines(geo).map((l, i) => {
+        const [a, b] = [l[0]!, l[l.length - 1]!];
+        const D = unit3(sub3(b, a));
+        const mine = rule.find(
+          (p) =>
+            p.key === key &&
+            (p.c.family === "shaft") === shaft &&
+            len3(sub3(p.o, mul3(add3(a, b), 0.5))) < 1e-4,
+        );
+        expect(mine, `no rule for the plate at ${id}`).toBeDefined();
+        return { o: mul3(add3(a, b), 0.5), D, n: ns[i]!, B: cross3(ns[i]!, D), half: len3(sub3(b, a)) / 2, across: mine!.across };
       });
-      expect(best).toBeLessThan(0.8);
-      per.set(bi, (per.get(bi) ?? 0) + 1);
-      const q = plates[bi]!;
-      const d = sub3(r, q.o);
-      // On the OUTER face — the rows are drawn on the plate's mid-plane and
-      // the heads stand half its thickness off it — and inside the outline,
-      // a rivet's own diameter in from the edge. Every head is jittered
-      // (`rivetSpawn`), which is what SETTLE covers.
-      expect(Math.abs(dot3(d, q.n) - CROSS.plate / 2)).toBeLessThan(SETTLE);
-      expect(Math.abs(dot3(d, q.D)) - (q.half - CROSS.inset)).toBeLessThan(SETTLE);
-      expect(Math.abs(dot3(d, q.B)) - (halfWidth - CROSS.inset)).toBeLessThan(SETTLE);
-      // And standing OUT of the lattice, along its own plate's normal: the
-      // two plates of a pair cannot share one, or the inner plate's heads
-      // would sink into the steel it covers.
-      expect(dot3(axes[k]!, q.n)).toBeCloseTo(1, 5);
-    });
-    // Four rows on every plate: the two long ones, 2 (half - inset) = 0.99
-    // to 1.06 m of them, and the two short ones, which stop a pitch clear
-    // of those, 0.68. At the joints' pitch that is 11 or 12 heads to a long
-    // row and 7 or 8 to a short one — 36 to 40 a plate.
-    expect(per.size).toBe(plates.length);
-    expect(Math.min(...per.values())).toBeGreaterThanOrEqual(36);
-    expect(Math.max(...per.values())).toBeLessThanOrEqual(40);
+      const item = outputs[name]![0]!;
+      expect(item.kind, name).toBe("instances");
+      if (item.kind !== "instances") return;
+      expect(item.batches.map((b) => b.assetId)).toEqual(["rivet"]);
+      // Four rows round the edge: the two long ones `inset` in from the
+      // ends, and the two short ones, which stop a pitch clear of those so
+      // no two heads coincide.
+      const want = plates.reduce(
+        (n, p) =>
+          n +
+          2 * heads(2 * (p.half - CROSS.inset)) +
+          2 * heads(2 * (p.across - CROSS.inset - CROSS.pitch)),
+        0,
+      );
+      expect(want, name).toBe(want0);
+      const got = item.batches.reduce((n, b) => n + b.count, 0);
+      expect(got, name).toBe(want);
+      total += got;
+      const per = new Map<number, number>();
+      const axes = rivetAxes(item);
+      rivetBases(item).forEach((r, k) => {
+        let best = Infinity;
+        let bi = -1;
+        plates.forEach((q, i) => {
+          const v = sub3(r, q.o);
+          const off = (t: number, lim: number) => Math.max(0, Math.abs(t) - lim);
+          const d = Math.hypot(
+            dot3(v, q.n) - CROSS.thick / 2,
+            off(dot3(v, q.D), q.half - CROSS.inset),
+            off(dot3(v, q.B), q.across - CROSS.inset),
+          );
+          if (d < best) {
+            best = d;
+            bi = i;
+          }
+        });
+        // How far off its own plate's rows the head lies: the jitter, and
+        // nothing else. (Matched on the OUTLINE, not the centre: at a
+        // crossing two plates stand `2 (w - set)` apart across the lattice
+        // and a head near an end is no nearer one centre than the other.)
+        expect(best, name).toBeLessThan(SETTLE);
+        per.set(bi, (per.get(bi) ?? 0) + 1);
+        const q = plates[bi]!;
+        const d = sub3(r, q.o);
+        // On the OUTER face — the rows are drawn on the plate's mid-plane
+        // and the heads stand half its thickness off it — and inside the
+        // outline, a rivet's own diameter in from the edge. Every head is
+        // jittered (`rivetSpawn`), which is what SETTLE covers.
+        expect(Math.abs(dot3(d, q.n) - CROSS.thick / 2), name).toBeLessThan(SETTLE);
+        expect(Math.abs(dot3(d, q.D)) - (q.half - CROSS.inset), name).toBeLessThan(SETTLE);
+        expect(Math.abs(dot3(d, q.B)) - (q.across - CROSS.inset), name).toBeLessThan(SETTLE);
+        // And standing OUT of the lattice, along its own plate's normal:
+        // the two plates of a pair cannot share one, or the inner plate's
+        // heads would sink into the steel it covers.
+        expect(dot3(axes[k]!, q.n), name).toBeCloseTo(1, 5);
+      });
+      expect(per.size, name).toBe(plates.length);
+    }
+    // 25,120 heads over the 888 plates: 32 on an 800's square X plate and
+    // 36 on its longer post-landing one, 24 to 26 on a 600, 20 on a 500.
+    expect(total).toBe(16512 + 2368 + 2720 + 3520);
   });
 
   it("round-trips through its serialized form to the same geometry", async () => {

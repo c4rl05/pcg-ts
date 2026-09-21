@@ -26,14 +26,22 @@ import {
   squareRing,
   stationLattice,
 } from "./lattice.js";
-import type { Detail, Parts } from "./parts.js";
-import { EDOUX_PLAN, MEMBERS, NODES, PLAN_BRACING, node, profileAt } from "./spec.js";
+import {
+  CROSS_RIVETS,
+  CROSS_THICK,
+  crossPlateSets,
+  latticeCrossings,
+} from "./crossing.js";
+import { CROSS_PLATE, type Detail, type Parts } from "./parts.js";
+import { EDOUX_PLAN, MEMBERS, NODES, PLAN_BRACING, node, profileAt, tableAt } from "./spec.js";
 import {
   JOINT_REACH,
   LACING_STEP,
   UPRIGHT_SEAMS,
   faceSkin,
+  flatBars,
   gussetMeshes,
+  lineRivets,
   rivetOutputs,
   seamRivets,
   webMembers,
@@ -370,6 +378,19 @@ export function buildShaft(g: Graph, detail: Detail = {}): Parts {
     edges(lat, "CrossB", -1, 1),
   ]);
   const laced = { lacingStep: LACING_STEP };
+  // The plates over the shaft's own crossings, one per bay per panel where
+  // the bay's two diagonals cross. The shaft has no central posts and its
+  // horizontals sit at the nodes, so every one of these is a plain
+  // four-armed X — eight a panel, since `squareRing(2)` makes each tower
+  // face two bays. Unlike the legs the shaft is built WHOLE, with no
+  // quadrant copy, so these go straight to `flatBars`.
+  const crossSets =
+    detail.lacedWeb === true || detail.rivets === true
+      ? crossPlateSets(
+          latticeCrossings(lat, 1, () => true, (h) => tableAt(MEMBERS.web, h)),
+          { ...CROSS_PLATE, ...detail.crossPlate },
+        )
+      : [];
   // At XI the shaft's bd stands on the two legs' b and d, still 0.50
   // apart axis to axis (PL-VII Fig. 3 "250 250"): a member ending on bd
   // there clears both boxes, 0.50 either side of the face centre, not one.
@@ -405,8 +426,31 @@ export function buildShaft(g: Graph, detail: Detail = {}): Parts {
     bracing: bracingWeb.meshes,
     // The plan bracing at every node from XVI up but IX (PL-VIII Figs 13-22).
     girders: planBracingMeshes(g),
-    gussets: gussetMeshes([horizontalWeb, bracingWeb]),
+    gussets: [
+      ...gussetMeshes([horizontalWeb, bracingWeb]),
+      ...crossSets.map((set) =>
+        flatBars(
+          g,
+          `shaftCrossPlates${set.key}`,
+          segmentMembers(g, `shaftCrossMembers${set.key}`, set.members),
+          set.width,
+          CROSS_THICK,
+        ),
+      ),
+    ],
     rivets: [
+      ...(detail.rivets === true
+        ? crossSets.map((set) => ({
+            name: `shaft.crossings.${set.key}`,
+            spawn: lineRivets(
+              g,
+              `shaftCrossRivets${set.key}`,
+              segmentMembers(g, `shaftCrossRivetLines${set.key}`, set.rivetLines),
+              CROSS_THICK / 2,
+              CROSS_RIVETS.pitch,
+            ),
+          }))
+        : []),
       ...(detail.rivets === true
         ? [
             {

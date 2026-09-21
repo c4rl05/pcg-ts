@@ -45,13 +45,21 @@
  * and the names are gilded.
  *
  * THE RIVETS ARE INSTANCES, not mesh. `?rivets` (which implies `?laced`)
- * makes the cook put out `rivets*` outputs of instance batches — about 860,000
+ * makes the cook put out `rivets*` outputs of instance batches — about 885,000
  * of them — and the page draws each batch as one instanced unit-size dome
  * whose instance matrix carries the rivet's true size. They receive the
  * sun's shadow but do not cast it: a head 13 mm high throws nothing a
  * 4096 map over the fitted 180 x 342 m frustum (4-8 cm a texel) could
  * resolve, and casting would put
  * all of those instances into every shadow pass.
+ *
+ * TWO KNOBS, and only two. `?plateSet=` and `?plateEdge=` are the crossing
+ * plates' depth under the corner angles and their half-width across the
+ * member, in metres, defaulting to 0.015 and 0.4. They exist because those
+ * two dimensions are settled by eye rather than read off a plate, and a
+ * reload is a shorter loop than an edit and a rebuild. Nothing else on this
+ * page is tunable, and nothing else should be: every other number in the
+ * tower is either sourced or derived from one that is.
  *
  * Offline quality first: this page does not try to be fast yet.
  */
@@ -135,7 +143,7 @@ const UNCLASSED = new MeshStandardMaterial({
  * y = 0 and rising 0.7 along +y, the rivet's axis out of the plate. Each
  * instance matrix carries the rivet's true size, so this is the shape
  * only. Open at the base, which lies against the plate and is never seen;
- * 16 around and 3 rings is 80 triangles, and there are about 860,000 of these.
+ * 16 around and 3 rings is 80 triangles, and there are about 885,000 of these.
  */
 function rivetHead(): BufferGeometry {
   const base = 1;
@@ -230,6 +238,26 @@ controls.target.set(0, 110, 0);
  * `lifts.ts` places it at. The panel's "lifts" checkbox is the same
  * switch, and opens set to this.
  */
+/**
+ * Read a set of numeric query params into a partial record, leaving out
+ * any that were absent or not a finite number — so a typo falls back to
+ * the built-in value rather than to NaN, and an untouched knob stays
+ * absent instead of restating its own default.
+ */
+function tuned<K extends string>(
+  params: URLSearchParams,
+  keys: Record<K, string>,
+): Partial<Record<K, number>> {
+  const out: Partial<Record<K, number>> = {};
+  for (const [key, param] of Object.entries(keys) as Array<[K, string]>) {
+    const raw = params.get(param);
+    if (raw === null) continue;
+    const n = Number(raw);
+    if (Number.isFinite(n)) out[key] = n;
+  }
+  return out;
+}
+
 const STILL = new URLSearchParams(location.search).has("still");
 
 // `?cam=x,y,z,tx,ty,tz` opens on a given eye and target instead: a way back
@@ -499,7 +527,13 @@ async function main(): Promise<void> {
   const params = new URLSearchParams(location.search);
   const rivets = params.has("rivets");
   const laced = params.has("laced") || rivets;
-  const graph = buildEiffel(1889, { lacedWeb: laced, rivets });
+  // `?plateSet=` and `?plateEdge=` are the crossing plates' two by-eye
+  // dimensions (`CrossPlate` in parts.ts), in metres, while they are being
+  // settled: the plate's depth under the corner angles and its half-width
+  // across its member. They are the only numbers on this page that can be
+  // changed from outside, because they are the only ones nothing derives.
+  const crossPlate = tuned(params, { set: "plateSet", edge: "plateEdge" });
+  const graph = buildEiffel(1889, { lacedWeb: laced, rivets, crossPlate });
   // Shown before the cook, so a graph that fails to cook can still be read.
   attachGraphPanel([{ name: "eiffel skeleton", graph }], { into: graphSlot, title: "graph" });
 
@@ -577,6 +611,12 @@ async function main(): Promise<void> {
   statTotal(total.toLocaleString());
   if (rivets || riveted > 0) {
     overlay.addStat("rivets")(riveted > 0 ? riveted.toLocaleString() : "absent");
+  }
+  // Only when something was overridden: the default page says nothing about
+  // a knob nobody turned.
+  const turned = Object.entries(crossPlate);
+  if (turned.length > 0) {
+    overlay.addStat("plate")(turned.map(([k, v]) => `${k} ${v}`).join(", "));
   }
   const hasRivets = [...meshes.keys()].some(isRivets);
 

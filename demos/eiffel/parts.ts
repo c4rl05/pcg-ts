@@ -25,9 +25,9 @@ export const PART_CLASSES = [
   /** Everything above the 3rd floor, and the 3rd-floor room. */
   "summit",
   /**
-   * Gusset plates: where web members meet the uprights, and over the
-   * rosettes where a leg face's central post crosses a horizontal. Both
-   * are laced-depth-and-up, so this class is empty at the plain depth.
+   * Gusset plates: where web members meet the uprights, and over every
+   * crossing of two laced struts in the legs and the shaft. Both are
+   * laced-depth-and-up, so this class is empty at the plain depth.
    */
   "gussets",
   /** The 72 names on the first-floor skirt, gilded. */
@@ -36,18 +36,71 @@ export const PART_CLASSES = [
 
 export type PartClass = (typeof PART_CLASSES)[number];
 
+/**
+ * The crossing plates' two dimensions that are settled BY EYE rather than
+ * derived, in metres. They are the only numbers in the tower that are, so
+ * they are the only ones the page can override: `?plateSet=` and
+ * `?plateEdge=` reach them through {@link Detail}, and a reload is the
+ * whole loop. Everything else about a plate follows from the members it
+ * covers.
+ */
+export interface CrossPlate {
+  /**
+   * How far UNDER a strut's corner angles' outer face a plate is set.
+   *
+   * It has to stay OUTSIDE the lacing or the zigzag shows through it, and
+   * the lacing is not where the section table suggests: its swept square
+   * is mitred at the zigzag's vertices, so on two of a strut's four sides
+   * it stands 0.0276 off the chord axis rather than `LACE` (0.0225), which
+   * puts its outer surface **0.0174** inside the angles' outer face, not
+   * 0.0225 [measured three ways: on the cooked lacing member by member
+   * (0.017406 for an 800, 0.019402 for a 600, 0.018727 for a 500), under
+   * the plates themselves, and in closed form — the zigzag turns through
+   * `2 atan(2 (outer - CHORD) / step)` at a vertex, so the mitred square
+   * reaches `LACE / cos` of half that, agreeing to 1e-5]. So an 800's
+   * window is 0 to 0.0174, and the default takes 2.40 mm of it as margin.
+   *
+   * A first pass set this to 0.02 against the 0.0225 the table implies,
+   * which put the plate 2.6 mm BEHIND the lacing at every one of the
+   * plates. The 0.0174 is a MID-SPAN figure: at the penultimate ring
+   * before a member's cut end the sweep blows out past its mitre to
+   * 1.6 mm, which no usable `set` stays outside of. The end cap itself is
+   * the safest place on a member, at the full 0.0225, having no bisector
+   * to mitre.
+   */
+  readonly set: number;
+  /**
+   * A plate's half-width across its member, at an 800 strut; a narrower
+   * strut takes a proportionally narrower plate. At the default it is
+   * exactly the strut's own half-width, so the plate's long edges land on
+   * the strut's sides.
+   */
+  readonly edge: number;
+}
+
+/** {@link CrossPlate} as the tower is built without an override. */
+export const CROSS_PLATE: CrossPlate = { set: 0.015, edge: 0.4 };
+
+/** The strut `CrossPlate.edge` is quoted at: an 800 (`MEMBERS.web` below XIX). */
+export const CROSS_PLATE_AT = 0.4;
+
 /** How much of the tower's self-similar depth to build. */
 export interface Detail {
   /**
+   * Override either of the crossing plates' by-eye dimensions; the rest of
+   * {@link CROSS_PLATE} stands. The page fills this from its query string.
+   */
+  readonly crossPlate?: Partial<CrossPlate>;
+  /**
    * Build the web bars and horizontal struts as laced lattice struts
    * (four corner angles and X lacing) instead of solid square members.
-   * About 2.9M triangles more (0.41M to 3.28M).
+   * About 2.9M triangles more (0.41M to 3.30M).
    */
   readonly lacedWeb?: boolean;
   /**
    * Rivets as instances (asset id {@link RIVET_ASSET}): one wherever a
    * lacing bar meets a chord, along the box members' seams, and over the
-   * gusset plates. Implies `lacedWeb`. About 860,000 instances.
+   * gusset plates. Implies `lacedWeb`. About 885,000 instances.
    */
   readonly rivets?: boolean;
 }
@@ -121,7 +174,7 @@ export function jitter(g: Graph, id: string, geo: NodeHandle): NodeHandle {
 /**
  * What a module returns: its finished mesh nodes, by class, and any rivet
  * spawners, each named. Every rivet set builds its own spawner, so rivets
- * come out as several outputs, `rivets.<name>` (41 at full detail); one
+ * come out as several outputs, `rivets.<name>` (45 at full detail); one
  * spawn is also capped at MAX_INSTANCES, 1,048,576.
  *
  * `cars` is the one thing here the graph does NOT settle in place: a lift
