@@ -57,6 +57,8 @@ The Commons category https://commons.wikimedia.org/wiki/Category:Architectural_d
   - **b**, **d**: the two side corners. PL-XXXI notes "Les arbalétriers b et d ont la même section".
 - In a face-on elevation, c projects onto the same line as one side corner (the **outer** silhouette). a projects onto the same line as the other side corner (the **inner** silhouette). So "outer half-width" = the c/d axes and "inner half-width" = the a/b axes.
 - Legs: Montant n°1 Nord, n°2 Est, n°3 Sud, n°4 Ouest [sourced: PL-I Fig. 3; PL-XXXI plan diagram].
+  - The book numbers them two ways: E1900-TXT once prints "2 ou Ouest… 4 ou Est". The plates, the text's own clockwise order and the caisson legs (N and W, Seine side) all give 2 = Est, which the code follows. In the render's top view (x right, z down, PL-XVIII Fig. 3 as drawn) pile 4 Ouest is the +x+z leg, then 3 Sud, 2 Est, 1 Nord by quadrant target; `PILES` and `FACES` in `spec.ts` hold that in one place and `tests/eiffelConventions.test.ts` holds them to the plates [derived].
+- Altitudes ("cotes") are above sea level; y = cote − 33.50 (`yOfCote` in `spec.ts`). A depth quoted without its datum may be an altitude: see §3.3 on the caissons' "22 m" [derived].
 - Panels are numbered 1 (bottom) to 29 (top). PL-XXXI labels each panel's **bottom node** with the Roman numeral 29 − p: XXVIII is the bottom of panel 1 and I is the bottom of panel 28 [sourced]. This spec uses those node names.
 - **Rabattement vs elevation.** PL-VII draws each face rotated into the drawing plane. On that plate, horizontal lengths are true, but "heights" are measured along the inclined face: in-plane height = vertical height × √(1 + s²), where s is the face slope (horizontal per vertical). PL-XXXI and PL-I are true elevations.
 
@@ -274,7 +276,7 @@ Arbalétrier box width relative to leg side [derived]:
 - **4 masonry blocks per leg, 16 in total**, one under each arbalétrier. TS-FR: "4 massifs de maçonnerie qui supportent les 4 montants de chaque pied de la Tour, dits arbalétriers" [sourced]. WP-FR "Seize massifs de fondation" [sourced].
 - Each block is **5 m × 10 m**: TE-FOUND "ses propres fondations en maçonnerie, mesurant 5 mètres sur 10" [sourced]. The blocks are tied by walls: TE-HIST "lié aux autres par des murs" [sourced].
 - Bearing stones ("sommiers en pierre de taille de Château-Landon"): 18.70 kg/cm² on the stone, and 4.9–5.3 kg/cm² on the concrete (WP-FR, citing Eiffel 1900 pp. 67–68) [sourced]. The official figure is 3–4 kg/cm² on the ground (TE-HIST) [sourced].
-- **Depth.** Official: 7 m (TE-FOUND) [sourced]. Deepest (N and W, Seine side) ≤ 15 m (TS-FR) [sourced]. Compressed-air caissons "to a depth of 22 m" (WP-EN) [sourced]. THESIS "36 meters of deep Masonry" is a **misreading** of the 36.00 m support-centre altitude [derived].
+- **Depth.** Official: 7 m (TE-FOUND) [sourced]. Deepest (N and W, Seine side) ≤ 15 m (TS-FR) [sourced]. Compressed-air caissons "to a depth of 22 m" (WP-EN) [sourced]. Read as a cote, 22 m is 33.50 − 22 = 11.5 m below the ground at the centre, within TS-FR's ≤ 15 m; read as a depth below ground it exceeds it [derived]. THESIS "36 meters of deep Masonry" is a **misreading** of the 36.00 m support-centre altitude [derived].
 - Anchor bolts: "boulons d'ancrage de 7.80 mètres de long" (WP-FR); "a pair of bolts 10 cm in diameter and 7.5 m long" (WP-EN) [sourced].
 - Masonry pedestals ("soubassements", decorative): 25 m square, 4 m high (WP-FR) [sourced].
 - Construction jacks: 800 t capacity, 9.5 cm travel, later replaced by steel wedges (THESIS; WP-EN) [sourced].

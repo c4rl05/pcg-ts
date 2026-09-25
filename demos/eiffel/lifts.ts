@@ -132,7 +132,7 @@ import {
 } from "pcg-ts";
 import { type Vec3, box, copyToQuadrants, indexTable, merge, skin } from "./lattice.js";
 import type { Detail, Parts } from "./parts.js";
-import { FLOORS, NODES, profileAt } from "./spec.js";
+import { FLOORS, NODES, PILES, profileAt } from "./spec.js";
 
 type Quat = readonly [number, number, number, number];
 
@@ -1123,8 +1123,11 @@ function shaftStairs(): { blocks: Block[]; rails: Vec3[][] } {
  */
 const CAR_AT = [30, 42, 12, 22] as const;
 
-/** Which system and which pile, per quadrant target. Names the output. */
-const CAR_NAME = ["roux.ouest", "otis.sud", "roux.est", "otis.nord"] as const;
+/**
+ * Which system and which pile, per quadrant target, read off `PILES`:
+ * `roux.ouest`, `otis.sud`, `roux.est`, `otis.nord`. Names the output.
+ */
+const CAR_NAME = PILES.map((p) => `${p.lift}.${p.name.toLowerCase()}`);
 
 /** A car's node id, from its name: `roux.ouest` -> `liftCarRouxOuest`. */
 const carId = (name: string): string =>
@@ -1241,7 +1244,7 @@ export const LIFT_CARS: readonly CarRun[] = [
     at: CAR_AT[k] as number,
     from: LEG_RUN.from,
     to: LEG_RUN.to,
-    step: legStep(k % 2 === 0 ? ROUX_CAR : OTIS_CAR, k),
+    step: legStep(PILES[k]?.lift === "roux" ? ROUX_CAR : OTIS_CAR, k),
     ...LEG_TRIP,
     phase: CAR_PHASE[k] as number,
   })),
@@ -1292,7 +1295,7 @@ export function buildLifts(g: Graph, quads: NodeHandle, detail: Detail = {}): Pa
       mesh: blocks(
         g,
         carId(name),
-        car(k % 2 === 0 ? ROUX_CAR : OTIS_CAR, CAR_AT[k] as number).map((b) => blockOnLeg(k, b)),
+        car(PILES[k]?.lift === "roux" ? ROUX_CAR : OTIS_CAR, CAR_AT[k] as number).map((b) => blockOnLeg(k, b)),
       ),
     })),
     ...edouxCars().map(({ name, block }) => ({ name, mesh: blocks(g, carId(name), [block]) })),

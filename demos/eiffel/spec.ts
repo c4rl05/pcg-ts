@@ -125,6 +125,87 @@ export const FLOORS = {
   flagTop: 312.275,
 } as const;
 
+/**
+ * Plate altitudes ("cotes") are metres above sea level; the ground at the
+ * tower's centre is "(33.50)" [sourced PL-I], so y = cote - 33.50 and
+ * every FLOORS entry is its printed cote less this [derived]. A number
+ * quoted without its datum ("caissons to 22 m") is an altitude until shown
+ * otherwise.
+ */
+export const GROUND_ALTITUDE = 33.5;
+
+/** Height above the ground at the tower's centre, from a plate's cote. */
+export const yOfCote = (cote: number): number => cote - GROUND_ALTITUDE;
+
+/** The four legs' ("piles'") names, by the plates' numbering. */
+export type PileName = "Nord" | "Est" | "Sud" | "Ouest";
+
+/**
+ * THE PILES, one compass for every part that depends on a leg or a face.
+ *
+ * The book numbers them two ways. Its text once prints « 2 ou Ouest … 4 ou
+ * Est », but the plates (PL-I Fig. 3, PL-XVIII Fig. 3, PL-XXXI's plan),
+ * the text's own clockwise order and the compressed-air caissons (Seine
+ * side, under the North and West legs) all give n°1 Nord, n°2 Est, n°3
+ * Sud, n°4 Ouest, clockwise seen from above [sourced]. The plates win.
+ *
+ * The model has no compass of its own: it lays PL-XVIII Fig. 3 out as the
+ * render's top view, x right and z down, which puts pile 2 top left, 3 top
+ * right, 1 bottom left and 4 bottom right, as the figure does. A part
+ * built in the +x+z quadrant is pile 4's, and quadrant target k (k quarter
+ * turns about +y, +z onto +x: see `quadrants` in lattice.ts) carries it to
+ * the pile listed at k [derived]. `corner` is the sign of (x, z) at the
+ * pile. tests/eiffelConventions.test.ts holds this table to the plates.
+ *
+ * - `lift`: Otis in piles 1 and 3, Roux, Combaluzier et Lepape in 2 and 4
+ *   [sourced PL-XX, PL-XXI].
+ * - `groundStair`: « un dans la pile 2 et un dans la pile 4; les piles 1 et
+ *   3 n'ont pas d'escalier partant du rez-de-chaussée » [sourced PL-XX Nota].
+ * - `caissons`: foundations sunk by compressed air, under the two legs on
+ *   the Seine side, North and West [sourced TS-FR; SOURCES.md §3.3].
+ */
+export const PILES: ReadonlyArray<{
+  readonly n: 1 | 2 | 3 | 4;
+  readonly name: PileName;
+  readonly quadrant: 0 | 1 | 2 | 3;
+  readonly corner: readonly [1 | -1, 1 | -1];
+  readonly lift: "otis" | "roux";
+  readonly groundStair: boolean;
+  readonly caissons: boolean;
+}> = [
+  { n: 4, name: "Ouest", quadrant: 0, corner: [1, 1], lift: "roux", groundStair: true, caissons: true },
+  { n: 3, name: "Sud", quadrant: 1, corner: [1, -1], lift: "otis", groundStair: false, caissons: false },
+  { n: 2, name: "Est", quadrant: 2, corner: [-1, -1], lift: "roux", groundStair: true, caissons: false },
+  { n: 1, name: "Nord", quadrant: 3, corner: [-1, 1], lift: "otis", groundStair: false, caissons: true },
+];
+
+/** A pile by its plate number. */
+export function pile(n: 1 | 2 | 3 | 4): (typeof PILES)[number] {
+  return PILES.find((p) => p.n === n) as (typeof PILES)[number];
+}
+
+/**
+ * THE FACES, each between two piles, as the quadrant targets turn a part
+ * built on the +z face: target 0 is +z, 1 +x, 2 -z, 3 -x [derived]. A face
+ * between piles at compass points faces the intercardinal between them.
+ * `pavilion` is the 1889 building on its three central first-floor bays
+ * [sourced PL-XVIII Fig. 3 and Nota, E1900-TXT; SOURCES.md §10.2]; the
+ * Flamand became a theatre after 1889.
+ */
+export const FACES: ReadonlyArray<{
+  readonly quadrant: 0 | 1 | 2 | 3;
+  /** The face's outward normal in the render, (x, z). */
+  readonly normal: readonly [number, number];
+  readonly compass: "NW" | "SW" | "SE" | "NE";
+  readonly piles: readonly [1 | 2 | 3 | 4, 1 | 2 | 3 | 4];
+  readonly pavilion: "Restaurant flamand" | "Bar anglo-américain" | "Restaurant français" | "Restaurant russe";
+}> = [
+  { quadrant: 0, normal: [0, 1], compass: "NW", piles: [1, 4], pavilion: "Restaurant flamand" },
+  { quadrant: 1, normal: [1, 0], compass: "SW", piles: [3, 4], pavilion: "Bar anglo-américain" },
+  { quadrant: 2, normal: [0, -1], compass: "SE", piles: [2, 3], pavilion: "Restaurant français" },
+  { quadrant: 3, normal: [-1, 0], compass: "NE", piles: [1, 2], pavilion: "Restaurant russe" },
+];
+
 /** Platform plans (Plate I, 1900): outside side and area. */
 export const PLATFORMS = {
   first: { side: 70.695, area: 4200 },
