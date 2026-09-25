@@ -26,7 +26,8 @@ export const PART_CLASSES = [
   "summit",
   /**
    * Gusset plates: where web members meet the uprights, and over every
-   * crossing of two laced struts in the legs and the shaft. Both are
+   * crossing of two laced struts in the legs, the shaft and the first
+   * floor, and the summit girders' "2 Goussets 1.130 x 10". All are
    * laced-depth-and-up, so this class is empty at the plain depth.
    */
   "gussets",
@@ -100,7 +101,7 @@ export interface Detail {
   /**
    * Rivets as instances (asset id {@link RIVET_ASSET}): one wherever a
    * lacing bar meets a chord, along the box members' seams, and over the
-   * gusset plates. Implies `lacedWeb`. About 885,000 instances.
+   * gusset plates. Implies `lacedWeb`. About 875,000 instances.
    */
   readonly rivets?: boolean;
 }

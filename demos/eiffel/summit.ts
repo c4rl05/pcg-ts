@@ -99,22 +99,27 @@
  *    its diameter, 0.24 tapering to 0.12, is [estimated].
  *
  * Panel 29 is sorted like the shaft (uprights, bracing, horizontals);
- * everything from the gallery up is the "summit" class.
+ * everything from the gallery up is the "summit" class, but for the two
+ * gussets over the girders' crossing, which are "gussets" with every
+ * other crossing plate in the tower.
  *
  * DETAIL, as for the legs and the shaft (`Detail`). With `lacedWeb` panel
  * 29's posts become laced struts (`webMembers`). The flat bars stay flat
  * bars, and the diagonal girders have no member that `lacedWeb` changes:
- * their end frames are laced at every detail, as the plates draw them.
- * With `rivets`: seam rows on the corner uprights, in panel 29 and inside
- * the girders' ends (the uprights' pitch and inset, strut.ts); the laced
- * members' lacing and joint rivets; two rivets through each end of every
- * flat bar of panel 29 and of the girders' mesh, just clear of the post,
- * plate or chord it lands on; two rows along each face of panel 29's band
- * plate girder, between the posts, and of every girder chord; one rivet at
- * each node of the end frames' lacing; and on the dome, seam rows along
- * every chord and one rivet on each OUTER face of a chord at every node
- * its lacing meets [estimated]. Every rivet set is its own output,
- * `rivets.summit.<part>`. The defaults build solid members and no rivets.
+ * their end frames are laced at every detail, as the plates draw them. It
+ * does add the crossing's "2 Goussets 1.130 x 10", top and bottom, by the
+ * legs' crossing rule (see `diagonalGirders`), because the class that rule
+ * builds into is a laced-depth one. With `rivets`: seam rows on the corner
+ * uprights, in panel 29 and inside the girders' ends (the uprights' pitch
+ * and inset, strut.ts); the laced members' lacing and joint rivets; two
+ * rivets through each end of every flat bar of panel 29 and of the girders'
+ * mesh, just clear of the post, plate or chord it lands on; two rows along
+ * each face of panel 29's band plate girder, between the posts, and of
+ * every girder chord; one rivet at each node of the end frames' lacing; the
+ * gussets' edge rows; and on the dome, seam rows along every chord and one
+ * rivet on each OUTER face of a chord at every node its lacing meets
+ * [estimated]. Every rivet set is its own output, `rivets.summit.<part>`.
+ * The defaults build solid members and no rivets.
  */
 import type { Graph, NodeHandle } from "pcg-ts";
 import {
@@ -140,18 +145,21 @@ import {
   indexTable,
   merge,
   placedLattice,
+  segmentMembers,
   skin,
   squareRing,
   stationLattice,
   stationRows,
 } from "./lattice.js";
-import { type Detail, type Parts, joinParts } from "./parts.js";
+import { CROSS_RIVETS, CROSS_THICK, type Crossing, crossPlateSets } from "./crossing.js";
+import { CROSS_PLATE_AT, type Detail, type Parts, joinParts } from "./parts.js";
 import { FLOORS, MEMBERS, PANEL29 } from "./spec.js";
 import {
   UPRIGHT_SEAMS,
   type WebMembers,
   faceSkin,
   flatBars,
+  lineRivets,
   rivetOutputs,
   rivetSpawn,
   seamRivets,
@@ -1321,7 +1329,62 @@ function diagonalGirders(g: Graph, y0: number, detail: Detail): Parts {
     faceBars(g, "girderEndMesh", GIRDER_MESH.bar, endMesh, endPlane),
     plates(g, "girderLacing", lacing, A.lacing.width, A.lacing.thick),
   ];
-  if (detail.rivets !== true) return { summit };
+
+  // THE CROSSING'S GUSSETS: "2 Goussets 1.130 x 10" where the girders cross
+  // [sourced PL-XIV Fig. 5 bis; SOURCES.md §23.1]: 1.130 and 10 mm are
+  // printed, the plate being square is inferred [estimated] from the one
+  // size given and the 1.130 plating it lies on — the plate the legs'
+  // crossing rule quotes. It is that rule's joint —
+  // two members crossing in a plane, a plate either side of it — with the
+  // plane turned flat: the girders cross in PLAN, so the shared plane is
+  // the level one through the crossing at mid-depth, its normal is up, and
+  // "either side" is the top and the bottom. `crossPlateSets` builds it
+  // unchanged; what changes is what it is fed, because a laced strut is
+  // square and this section is not:
+  // - `w`, which places the pair, is half the DEPTH, so the plates land on
+  //   the girders' outer faces: the top one on the cover plating, which
+  //   runs through the crossing on the continuous girder, the bottom one
+  //   under the bottom flanges;
+  // - `set` is 0. A strut's plate is set under its corner angles to lie
+  //   among them over the lacing; here the outer faces ARE plating, the
+  //   cover and the flanges, with nothing to lie among, and a plate set
+  //   under them would be inside the girder;
+  // - `edge` carries the breadth. The rule makes a plate as wide as its
+  //   strut, `edge` at an 800 scaled by w / 0.4, and since `w` is the depth
+  //   here the breadth goes in through `edge`: 0.4 x 1.130 / 4.500. Read
+  //   against the girder's own breadth, the default CROSS_PLATE (edge 0.4
+  //   at 0.4, a plate exactly as wide as what it covers) gives 1.130 — the
+  //   printed size, so the rule and the plate agree; read against the
+  //   depth that places the pair it would give a 4.50 plate set 84 mm into
+  //   the girder. The page's by-eye knobs do not reach this one: nothing
+  //   about it is by eye.
+  // Square, it is exactly the crossing's footprint in plan, laid square to
+  // the continuous girder, which runs through [the orientation estimated:
+  // the callout gives a size]. Laced depth and up, with the other crossing
+  // plates, so `gussets` stays a class the plain depth does not have.
+  //
+  // The bottom plate is under the flanges at the girders' foot, and the
+  // foot stands on the apartment's roof: it and its heads are inside that
+  // solid box, 10 mm and a head deep — built because the plate is drawn,
+  // hidden because the model's pavilion is solid. The ladder cylinder's
+  // foot stands 10 mm into the top one, which is what a tube standing on a
+  // plate looks like; its 0.70 clears the plate's rivet rows by 0.17.
+  const continuous = DIAGONALS.find((D) => D.continuous) as Diagonal;
+  const crossing: Crossing = { at: [0, (y0 + y1) / 2, 0], along: continuous.a, n: up, w: G.height / 2 };
+  const crossSets =
+    detail.lacedWeb === true || detail.rivets === true
+      ? crossPlateSets([crossing], { set: 0, edge: (CROSS_PLATE_AT * G.breadth) / G.height })
+      : [];
+  const gussets = crossSets.map((set) =>
+    flatBars(
+      g,
+      `girderCrossPlates${set.key}`,
+      segmentMembers(g, `girderCrossPlates${set.key}`, set.members),
+      set.width,
+      CROSS_THICK,
+    ),
+  );
+  if (detail.rivets !== true) return { summit, gussets };
 
   // RIVETS. The mesh bars' ends, clear of the chords, the plates and the
   // verticals they land on or pass.
@@ -1418,7 +1481,20 @@ function diagonalGirders(g: Graph, y0: number, detail: Detail): Parts {
   const seamPieces = corners.map(([a, b]) => [[a[0], ya, a[2]] as Vec3, [b[0], yb, b[2]] as Vec3] as const);
   return {
     summit,
+    gussets,
     rivets: [
+      // The rows round the gussets' edges, on their outer faces: on the
+      // top one, over the cover; on the bottom one, pointing down.
+      ...crossSets.map((set) => ({
+        name: crossSets.length === 1 ? "summit.crossings" : `summit.crossings.${set.key}`,
+        spawn: lineRivets(
+          g,
+          `girderCrossRivets${set.key}`,
+          segmentMembers(g, `girderCrossRivets${set.key}`, set.rivetLines),
+          CROSS_THICK / 2,
+          CROSS_RIVETS.pitch,
+        ),
+      })),
       ...cornerSeams(g, "girderUpright", "summit.diagonals.uprights", seamPieces, MEMBERS.upright, detail),
       { name: "summit.diagonals.bars", spawn: rivetSpawn(g, "girderBar", barRivets) },
       {
@@ -1795,6 +1871,7 @@ export function buildSummit(g: Graph, detail: Detail = {}): Parts {
   const summit: NodeHandle[] = [...gallery(g), ...(girders.summit ?? []), ribs, ladder, ...lantern(g, crownY)];
   return joinParts(panel29(g, detail), {
     summit,
+    gussets: girders.gussets ?? [],
     rivets: [...(girders.rivets ?? []), ...ribRivets],
   });
 }

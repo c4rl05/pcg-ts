@@ -119,9 +119,11 @@
  * extruded along their own normals.
  *
  * DETAIL, as for the legs. With `lacedWeb` the girders' diagonals and the
- * 2nd floor's 600 web become laced struts (`webMembers`); with `rivets`
- * those struts carry their lacing rivets, and every chord, post and
- * montant carries seam rows along its corner angles.
+ * 2nd floor's 600 web become laced struts (`webMembers`), and wherever two
+ * of them cross a pair of plates covers the crossing, by the legs' own
+ * rule (`crossing.ts`; see `crossingsOf`); with `rivets` those struts
+ * carry their lacing rivets, the plates their edge rows, and every chord,
+ * post and montant carries seam rows along its corner angles.
  */
 import {
   type Field,
@@ -149,9 +151,25 @@ import {
   merge,
   type Vec3,
 } from "./lattice.js";
-import type { Detail, Parts } from "./parts.js";
-import { ARCH, FIRST_FLOOR, MEMBERS, PEDESTAL, node, profileAt } from "./spec.js";
-import { UPRIGHT_SEAMS, faceSkin, rivetOutputs, seamRivets, webMembers } from "./strut.js";
+import {
+  CROSS_RIVETS,
+  CROSS_THICK,
+  type Crossing,
+  crossFootprints,
+  crossPlateSets,
+  turnFootprints,
+} from "./crossing.js";
+import { CROSS_PLATE, type Detail, type Parts } from "./parts.js";
+import { ARCH, FIRST_FLOOR, MEMBERS, PEDESTAL, node, profileAt, tableAt } from "./spec.js";
+import {
+  UPRIGHT_SEAMS,
+  faceSkin,
+  flatBars,
+  lineRivets,
+  rivetOutputs,
+  seamRivets,
+  webMembers,
+} from "./strut.js";
 
 /** A point in a face plane: x across it, t up it from the arch centre. */
 type InPlane = readonly [number, number];
@@ -1068,6 +1086,106 @@ function secondFloor(): {
   };
 }
 
+// ---------------------------------------------------------- the crossings
+
+/**
+ * Where two laced struts of one web set cross in their plane, as the
+ * crossing plates' rule takes them (`crossing.ts`, unchanged: a pair of
+ * plates at each, one either side, set under the angles). Found from the
+ * MEMBERS, not from stations, because nothing on this floor is a station
+ * lattice for `latticeCrossings` to ask: every member here is an explicit
+ * two-point member, and the grande poutre's two diagonal sets are not an X
+ * per bay at all.
+ *
+ * WHAT CROSSES, a face, both planes [derived from `girders` and
+ * `secondFloor`, and held by the test]:
+ * - the grande poutre, 19 a plane. Its first set falls one bay toward the
+ *   axis, its second rises one bay the other way through each post's
+ *   mid-height, so in every bay the first-set diagonal crosses the two
+ *   second-set halves that share the bay, at a quarter and three quarters
+ *   of it, both at a quarter of the depth from a chord: 8 a half. The end
+ *   bay's diagonal from b crosses the last second-set bar once more, 0.79
+ *   clear of the end post's axis: 9 a half. And on the axis the two sets
+ *   make an X, 1 — 19.
+ * - the decorative girder, an X per bay, 10 a plane.
+ * - panel 10's 600 X, one each side of the axis post: 2 (face plane only).
+ * - the entretoises' cross members: none. A frame's two are parallel and
+ *   each frame is its own plane.
+ *
+ * That is 2 (19 + 10) + 2 = 60 A FACE, the backlog's "60 laced-strut
+ * crossings" — which read the +z face's list as it is built, before the
+ * quadrant copy: 240 on the tower, 480 plates.
+ *
+ * NOT PLATED: where a second-set diagonal passes a post. The posts are
+ * solid and thinner than the strut (168 against 360), so the post runs
+ * INSIDE the strut's box there, and a plate set under the 360's angles
+ * stands 89 mm off the post's face with nothing but the strut's own
+ * chords under it; the 500 end posts are thicker than the strut, and a
+ * plate there would be buried in the post. PL-VII's "mid-height gusset"
+ * joins a flat post to the web, which is a joint of its own, as the legs'
+ * chord flats are (legs.ts), not a crossing of two laced struts. The
+ * deliberately skipped pair is a meeting at an END (the first set's two
+ * diagonals on the axis at the bottom chord, the X's at their posts): a
+ * joint, not a crossing, and only an interior crossing is taken.
+ *
+ * THE PLATE'S AXIS is the bisector of the two members, each read upward
+ * in their plane. For an X square in its bay — every interior bay of the
+ * decorative girder, and every grande poutre crossing but the end bay's,
+ * whose two sets both rise one depth per bay — that is the plane's own up
+ * line, the bay's midline, which is what `bayCrossing` takes for the
+ * legs. Where the pair is skewed (the decorative girder's end bays under
+ * b, the grande poutre's end bay, panel 10's X over its trapezoid) the
+ * bisector is what keeps a square plate symmetric on both arms.
+ */
+function crossingsOf(list: readonly Member[], table: ReadonlyArray<readonly [number, number]>): Crossing[] {
+  const sub = (p: Vec3, q: Vec3): Vec3 => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+  const dot = (p: Vec3, q: Vec3) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+  const unit = (v: Vec3): Vec3 => {
+    const l = Math.hypot(v[0], v[1], v[2]);
+    return [v[0] / l, v[1] / l, v[2] / l];
+  };
+  // How near an end still counts as the end: a millimetre, where the
+  // members that meet at a node share their end points to f64.
+  const END = 1e-3;
+  const out: Crossing[] = [];
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      const [m, k] = [list[i]!, list[j]!];
+      // One face: the same normal. (Not "k's end on the plane through m
+      // along that normal": the normal is a stretch's, SLOPE over panels
+      // 1-4, and the node table's panels differ from it by 1e-5, so a
+      // member 7 m up the face stands 0.07 mm off that plane while lying
+      // exactly in its own panel's. The axes meeting is the test.)
+      if (dot(m.n, k.n) < 1 - 1e-9) continue;
+      const d1 = sub(m.b, m.a);
+      const d2 = sub(k.b, k.a);
+      const r = sub(k.a, m.a);
+      // The nearest points of the two axes (the normal equations), which
+      // coincide where they cross.
+      const a11 = dot(d1, d1);
+      const a12 = dot(d1, d2);
+      const a22 = dot(d2, d2);
+      const det = a11 * a22 - a12 * a12;
+      if (det < 1e-12 * a11 * a22) continue;
+      const s = (dot(r, d1) * a22 - dot(r, d2) * a12) / det;
+      const t = (dot(r, d1) * a12 - dot(r, d2) * a11) / det;
+      const l1 = Math.sqrt(a11);
+      const l2 = Math.sqrt(a22);
+      if (s * l1 <= END || (1 - s) * l1 <= END || t * l2 <= END || (1 - t) * l2 <= END) continue;
+      const at: Vec3 = [m.a[0] + d1[0] * s, m.a[1] + d1[1] * s, m.a[2] + d1[2] * s];
+      const on: Vec3 = [k.a[0] + d2[0] * t, k.a[1] + d2[1] * t, k.a[2] + d2[2] * t];
+      if (Math.hypot(...sub(at, on)) > 1e-6) continue;
+      // The plane's up line, and each member turned to rise along it.
+      const n = unit(m.n);
+      const up = unit([-n[0] * n[1], 1 - n[1] * n[1], -n[2] * n[1]]);
+      const u1 = unit(dot(d1, up) < 0 ? [-d1[0], -d1[1], -d1[2]] : d1);
+      const u2 = unit(dot(d2, up) < 0 ? [-d2[0], -d2[1], -d2[2]] : d2);
+      out.push({ at, along: unit([u1[0] + u2[0], u1[1] + u2[1], u1[2] + u2[2]]), n, w: tableAt(table, at[1]) });
+    }
+  }
+  return out;
+}
+
 // ------------------------------------------------------------- assembly
 
 /** Build the between-leg girders, the arches and the 2nd floor's bands on all four faces. */
@@ -1100,9 +1218,40 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}
   const posts = four("ffPosts", gd.posts);
   const endPosts = four("ffEndPosts", gd.endPosts);
   const fillets = four("ffFillets", gd.fillets);
-  const web = webMembers(g, "ffWeb", four("ffBars", gd.bars), GIRDER_WEB, detail);
-  const cross = webMembers(g, "ffEntretoise", four("ffCross", en.cross), ENTRETOISE_WEB, detail);
-  const web10 = webMembers(g, "ffPanel10", four("ffWeb10", sf.web10), PANEL10_WEB, detail);
+  // The crossings the plates go over (built below), read first because the
+  // lacing needs them: a plate is set under the corner angles' outer face,
+  // so no lacing rivet may stand where one lies (`WebOpts.covers`). Listed
+  // on the +z face, as the members are, and turned onto the other three as
+  // the quadrant copy turns the struts.
+  const laced = detail.lacedWeb === true || riveted;
+  const tune = { ...CROSS_PLATE, ...detail.crossPlate };
+  const crossLists = {
+    bars: laced ? crossingsOf(gd.bars, GIRDER_WEB) : [],
+    cross: laced ? crossingsOf(en.cross, ENTRETOISE_WEB) : [],
+    web10: laced ? crossingsOf(sf.web10, PANEL10_WEB) : [],
+  };
+  const covers = (list: readonly Crossing[]) => ({
+    covers: riveted ? [0, 1, 2, 3].flatMap((k) => turnFootprints(crossFootprints(list, tune), k)) : [],
+  });
+  const web = webMembers(g, "ffWeb", four("ffBars", gd.bars), GIRDER_WEB, detail, undefined, covers(crossLists.bars));
+  const cross = webMembers(
+    g,
+    "ffEntretoise",
+    four("ffCross", en.cross),
+    ENTRETOISE_WEB,
+    detail,
+    undefined,
+    covers(crossLists.cross),
+  );
+  const web10 = webMembers(
+    g,
+    "ffPanel10",
+    four("ffWeb10", sf.web10),
+    PANEL10_WEB,
+    detail,
+    undefined,
+    covers(crossLists.web10),
+  );
 
   const girderMeshes = [
     solid("ffMainChord", mainChords, MAIN_CHORD, "ff.girders.main"),
@@ -1124,6 +1273,32 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}
   rivets.push(
     ...rivetOutputs({ "ff.girders.web": web, "ff.entretoises": cross, "ff.second.web": web10 }),
   );
+
+  // The plates over the laced struts' crossings, at the laced depth and up,
+  // as in the legs and the shaft: the plain depth's members are solid boxes
+  // that interpenetrate, with no daylight at a crossing to cover, and
+  // `gussets` does not exist there. Built on the +z face and copied, like
+  // every member here; split by section (the girders' 360s, panel 10's
+  // 600s) because `flatBars` takes one width a set. The page's by-eye
+  // knobs (`?plateSet`, `?plateEdge`) reach these as they reach the legs'.
+  const crossSets = crossPlateSets([...crossLists.bars, ...crossLists.cross, ...crossLists.web10], tune);
+  const crossPlates = crossSets.map((set) =>
+    flatBars(g, `ffCrossPlates${set.key}`, four(`ffCrossPlates${set.key}`, set.members), set.width, CROSS_THICK),
+  );
+  if (riveted) {
+    for (const set of crossSets) {
+      rivets.push({
+        name: `ff.crossings.${set.key}`,
+        spawn: lineRivets(
+          g,
+          `ffCrossRivets${set.key}`,
+          four(`ffCrossRivets${set.key}`, set.rivetLines),
+          CROSS_THICK / 2,
+          CROSS_RIVETS.pitch,
+        ),
+      });
+    }
+  }
 
   const archMeshes = [
     solid(
@@ -1160,6 +1335,7 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}
     girders: girderMeshes,
     arches: archMeshes,
     masonry: [pierFour],
+    gussets: crossPlates,
     rivets,
   };
 }

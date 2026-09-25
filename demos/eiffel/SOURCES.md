@@ -1606,7 +1606,6 @@ Every one is within 0.001 mm of its own member's skin, with axis·n = 1.000. No 
   - the 6 Edoux pulleys, their bearing bars and cables;
   - the central "Treillis 50 x 4" frame between the webs (PL-XIV Fig. 1);
   - the "Plat 128 x 6" flats on the end plates;
-  - the "2 Goussets 1.130 x 10" at the crossing;
   - the springing gussets ("Gousset de 10 m/m", "Attache de la partie en arc");
   - the four contrefiches under the girders, hidden in the solid apartment;
   - the "Escalier du campanile".
