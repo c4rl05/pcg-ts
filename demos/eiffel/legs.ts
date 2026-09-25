@@ -86,8 +86,10 @@ import {
   CROSS_RIVETS,
   CROSS_THICK,
   type Crossing,
+  crossFootprints,
   crossPlateSets,
   latticeCrossings,
+  turnFootprints,
 } from "./crossing.js";
 import {
   ENTRETOISE,
@@ -763,10 +765,10 @@ const CROSS_MARGIN = 0.02;
  * The two dimensions a crossing plate is given rather than derives:
  * {@link CrossPlate}, which the page can override. `set` is chosen
  * against the lacing — a strut's lacing runs between its chords' AXES, so
- * its outer surface stands `CHORD - LACE` (0.0225) inside the angles'
- * outer face, and the default 0.02 clears it by 2.5 mm while lying 10 mm
- * under the angles, so the plate covers the lacing instead of being read
- * through it. `edge` is the half-width across the member, the default
+ * its mitred outer surface stands 0.0174 inside the angles' outer face
+ * (measured; see `CrossPlate.set` in parts.ts), and the default 0.015
+ * clears it by 2.4 mm, so the plate covers the lacing instead of being
+ * read through it. `edge` is the half-width across the member, the default
  * being the strut's own.
  */
 const crossPlate = (detail: Detail): CrossPlate => ({ ...CROSS_PLATE, ...detail.crossPlate });
@@ -850,10 +852,10 @@ const POST_NODES = ["XXVII", "XXVI", "XXV", "XXIV", "XXIII", "XXII", "XXI", "XX"
  * are the only ones whose depth is off the set at all, worst 14.3 mm; the
  * other 760 are exact to f32.
  *
- * Not built: the first floor's own 60 laced-strut crossings, and the
+ * The same rule plates the first floor's own laced-strut crossings and the
  * summit's two diagonal girders — whose crossing plate, PL-XIV Fig. 5
- * bis's "2 Goussets 1.130 x 10", is the very thing this rule is sized
- * against. Neither module is on this path yet.
+ * bis's "2 Goussets 1.130 x 10", is the very thing it is sized against
+ * (firstFloor.ts, summit.ts).
  */
 function postCrossings(): Crossing[] {
   // Every level a post crosses a horizontal at: the nodes it ends on that
@@ -1361,7 +1363,26 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
   const four = (id: string, h: NodeHandle) => copyToQuadrants(g, id, h, quads);
   // Edge-rule members carry their faces' normals, which the copy must turn.
   const fourMembers = (id: string, h: NodeHandle) => copyMembersToQuadrants(g, id, h, quads);
-  const laced = { lacingStep: LACING_STEP };
+  // The crossings the plates go over (listed and explained below, where
+  // they are built), read here first because the lacing needs them: a
+  // plate is set under the corner angles' outer face, so no lacing rivet
+  // may stand where one lies (`WebOpts.covers`). Listed in this quadrant;
+  // the struts are already copied onto all four, so their covers are too.
+  const webAt = (y: number) => tableAt(MEMBERS.web, y);
+  const crossList =
+    detail.lacedWeb === true || detail.rivets === true
+      ? [
+          ...postCrossings(),
+          ...latticeCrossings(lat, 1, (f, k) => crossOn(f, k, 1), webAt),
+          ...latticeCrossings(p10, 1, () => true, webAt),
+          ...latticeCrossings(gap, 1, (_s, k) => k <= 4, webAt),
+        ]
+      : [];
+  const covered =
+    detail.rivets === true
+      ? [0, 1, 2, 3].flatMap((k) => turnFootprints(crossFootprints(crossList, crossPlate(detail)), k))
+      : [];
+  const laced = { lacingStep: LACING_STEP, covers: covered };
   const diagonals = { upright: MEMBERS.upright, reach: JOINT_REACH.diagonal, kinks: true };
   const across = { upright: MEMBERS.upright, reach: JOINT_REACH.horizontal, kinks: true };
   const horizontalWeb = webMembers(
@@ -1501,19 +1522,7 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
   // The gap's members ride the same quadrant copy as the leg's, so they can
   // share a set; the sets are split by SECTION, not by family, because
   // `flatBars` takes one width for a set.
-  const webAt = (y: number) => tableAt(MEMBERS.web, y);
-  const crossSets =
-    detail.lacedWeb === true || detail.rivets === true
-      ? crossPlateSets(
-          [
-            ...postCrossings(),
-            ...latticeCrossings(lat, 1, (f, k) => crossOn(f, k, 1), webAt),
-            ...latticeCrossings(p10, 1, () => true, webAt),
-            ...latticeCrossings(gap, 1, (_s, k) => k <= 4, webAt),
-          ],
-          crossPlate(detail),
-        )
-      : [];
+  const crossSets = crossList.length > 0 ? crossPlateSets(crossList, crossPlate(detail)) : [];
   return {
     uprights: [
       skin(g, "legUprightSkin", lower4, MEMBERS.uprightBelow, [1, 0, 0]),

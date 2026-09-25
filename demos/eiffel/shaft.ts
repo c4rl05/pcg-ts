@@ -29,6 +29,7 @@ import {
 import {
   CROSS_RIVETS,
   CROSS_THICK,
+  crossFootprints,
   crossPlateSets,
   latticeCrossings,
 } from "./crossing.js";
@@ -384,13 +385,14 @@ export function buildShaft(g: Graph, detail: Detail = {}): Parts {
   // four-armed X — eight a panel, since `squareRing(2)` makes each tower
   // face two bays. Unlike the legs the shaft is built WHOLE, with no
   // quadrant copy, so these go straight to `flatBars`.
-  const crossSets =
+  const crossList =
     detail.lacedWeb === true || detail.rivets === true
-      ? crossPlateSets(
-          latticeCrossings(lat, 1, () => true, (h) => tableAt(MEMBERS.web, h)),
-          { ...CROSS_PLATE, ...detail.crossPlate },
-        )
+      ? latticeCrossings(lat, 1, () => true, (h) => tableAt(MEMBERS.web, h))
       : [];
+  const tune = { ...CROSS_PLATE, ...detail.crossPlate };
+  const crossSets = crossList.length > 0 ? crossPlateSets(crossList, tune) : [];
+  // No lacing rivet where a plate lies (`WebOpts.covers`).
+  const lacing = { ...laced, covers: detail.rivets === true ? crossFootprints(crossList, tune) : [] };
   // At XI the shaft's bd stands on the two legs' b and d, still 0.50
   // apart axis to axis (PL-VII Fig. 3 "250 250"): a member ending on bd
   // there clears both boxes, 0.50 either side of the face centre, not one.
@@ -409,7 +411,7 @@ export function buildShaft(g: Graph, detail: Detail = {}): Parts {
     MEMBERS.horizontal,
     detail,
     { upright: MEMBERS.upright, reach: JOINT_REACH.horizontal, kinks: true, uprightAt },
-    laced,
+    lacing,
   );
   const bracingWeb = webMembers(
     g,
@@ -418,7 +420,7 @@ export function buildShaft(g: Graph, detail: Detail = {}): Parts {
     MEMBERS.web,
     detail,
     { upright: MEMBERS.upright, reach: JOINT_REACH.diagonal, kinks: true, uprightAt },
-    laced,
+    lacing,
   );
   return {
     uprights: [skin(g, "shaftUprightSkin", uprights, MEMBERS.uprightAbove, [1, 0, 0])],

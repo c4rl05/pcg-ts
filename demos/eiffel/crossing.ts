@@ -186,6 +186,57 @@ export function crossPlateSets(
 }
 
 /**
+ * What a crossing's pair of plates covers, as the struts under it see it:
+ * a rectangle on the members' shared face plane, centred on the crossing,
+ * `half` along `along` and `halfAcross` along `across`, the pair either
+ * side of the plane along `n`. The lacing's rivets must stay out of it
+ * (`WebOpts.covers` in strut.ts): the plate is set under the corner angles'
+ * outer face, so a lacing head on that face within the rectangle stands in
+ * the plate, and next to the plate's own edge rows.
+ */
+export interface PlateFootprint {
+  readonly at: Vec3;
+  readonly along: Vec3;
+  readonly across: Vec3;
+  readonly n: Vec3;
+  readonly half: number;
+  readonly halfAcross: number;
+}
+
+/** The footprints {@link crossPlateSets} lays its plates over, one per crossing, sized as it sizes them. */
+export function crossFootprints(list: readonly Crossing[], tune: CrossPlate): PlateFootprint[] {
+  return list.map((c) => {
+    const halfAcross = (tune.edge * c.w) / CROSS_PLATE_AT;
+    return {
+      at: c.at,
+      along: c.along,
+      across: unit3(cross3(c.n, c.along)),
+      n: c.n,
+      half: c.half ?? halfAcross,
+      halfAcross,
+    };
+  });
+}
+
+/**
+ * The same footprints turned k quarter turns about +y, as the quadrant
+ * targets turn a part built in the +x+z quadrant (+z onto +x): for parts
+ * whose crossings are listed once and copied onto all four legs.
+ */
+export function turnFootprints(list: readonly PlateFootprint[], k: number): PlateFootprint[] {
+  const turn = ([x, y, z]: Vec3): Vec3 =>
+    k % 4 === 0 ? [x, y, z] : k % 4 === 1 ? [z, y, -x] : k % 4 === 2 ? [-x, y, -z] : [-z, y, x];
+  return list.map((f) => ({
+    at: turn(f.at),
+    along: turn(f.along),
+    across: turn(f.across),
+    n: turn(f.n),
+    half: f.half,
+    halfAcross: f.halfAcross,
+  }));
+}
+
+/**
  * The crossings of a lattice's OWN X's: one per bay that carries a cross,
  * found from the stations rather than from the members. A bay is a
  * trapezoid and {@link bayCrossing} solves it exactly, so this asks the

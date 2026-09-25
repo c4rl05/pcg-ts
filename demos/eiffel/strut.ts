@@ -24,6 +24,7 @@ import {
   type FieldLike,
   type Graph,
   type NodeHandle,
+  abs,
   add,
   attribute,
   component,
@@ -35,20 +36,25 @@ import {
   div,
   filterByExpression,
   ge,
+  gt,
   le,
   lt,
   max,
   meshPrimitive,
   mergePoints,
+  mergePrimitives,
   mod,
   mul,
   normalize,
   orientAlongVector,
   pathResample,
+  pointGrid,
+  pointsToPath,
   position,
   promoteAttribute,
   ramp,
   removeAttribute,
+  sampleNearestPoint,
   setAttribute,
   spawnInstances,
   select,
@@ -57,6 +63,7 @@ import {
   transformPoints,
   vec,
 } from "pcg-ts";
+import type { PlateFootprint } from "./crossing.js";
 import { END_SINE, END_SINE_MIN, FACE_NORMAL, type Vec3, indexTable, merge, skin } from "./lattice.js";
 import { type Detail, RIVET_ASSET, jitter } from "./parts.js";
 
@@ -268,7 +275,126 @@ export interface WebOpts {
    * deep).
    */
   readonly halfB?: ReadonlyArray<readonly [number, number]>;
+  /**
+   * The crossing plates laid over these members, in world space (all four
+   * quadrants for a copied part): no lacing rivet is spawned on a face a
+   * plate covers (see {@link StrutOpts.covers}).
+   */
+  readonly covers?: readonly PlateFootprint[];
 }
+
+/**
+ * THE TOWER'S JOINT PLATES, as one cloud of points over their mid-planes,
+ * one per graph: every riveted set with joints adds its plates to it and
+ * every riveted set's lacing keeps {@link PLATE_CLEAR} off it. That clears
+ * a strut's own gusset plates, which cover the first stretch of it at each
+ * end where the joint rivets sit on top, and its neighbours' too: where
+ * several members meet an upright their plates overlap into one gusset,
+ * and one member's plate reaches over another's strut — even across
+ * modules, where the first floor's and the summit's struts run into the
+ * legs' and the shaft's joints. The lacing reads the plates and the plates
+ * read only the members' ends, so the graph stays acyclic.
+ *
+ * Each plate arrives as its centre line (`lines`), carrying its full
+ * width as a vector across it; the cloud resamples every line at
+ * {@link PLATE_CLOUD_STEP} and spreads each sample across the plate in
+ * {@link PLATE_CLOUD_ACROSS} points. A plate of any length is sampled as
+ * finely as any other: the longest runs 3.87 m, where a fixed grid per
+ * plate left gaps a head could fall through.
+ */
+interface PlateCloud {
+  readonly lines: NodeHandle;
+  readonly cloud: NodeHandle;
+}
+const PLATE_CLOUDS = new WeakMap<Graph, PlateCloud>();
+
+function plateCloudOf(g: Graph): PlateCloud {
+  let c = PLATE_CLOUDS.get(g);
+  if (c === undefined) {
+    // (A resample keeps a path's primitive attributes, not its points'.)
+    const lines = g.add(mergePrimitives, {}, "jointPlateLines");
+    const lift = g.add(
+      promoteAttribute,
+      { name: PLATE_ACROSS, from: "point", to: "primitive", mode: "first" },
+      "jointPlateAcrossLift",
+    );
+    const resampled = g.add(pathResample, { mode: "spacing", spacing: PLATE_CLOUD_STEP }, "jointPlateResample");
+    const along = g.add(
+      promoteAttribute,
+      { name: PLATE_ACROSS, from: "primitive", to: "point", mode: "first" },
+      "jointPlateAlong",
+    );
+    g.connect(lines, "out", lift, "in");
+    g.connect(lift, "out", resampled, "in");
+    g.connect(resampled, "out", along, "in");
+    const cloud = g.add(mergePoints, {}, "jointPlateCloud");
+    for (let k = 0; k < PLATE_CLOUD_ACROSS; k++) {
+      const t = k / (PLATE_CLOUD_ACROSS - 1) - 0.5;
+      const spread = g.add(
+        transformPoints,
+        { translate: mul(attribute(PLATE_ACROSS, 3), t) },
+        `jointPlateAcross${k}`,
+      );
+      g.connect(along, "out", spread, "in");
+      g.connect(spread, "out", cloud, "in");
+    }
+    c = { lines, cloud };
+    PLATE_CLOUDS.set(g, c);
+  }
+  return c;
+}
+
+/**
+ * The lacing heads the cloud is asked about, from every set at once: a
+ * nearest-point query builds a spatial index over its source each time it
+ * runs, and a 490,000-point cloud indexed once per set cost a third of
+ * the riveted cook. So each set tags its heads with its own number and
+ * merges them in (`heads`); ONE query tests them all (`off`); each set
+ * takes its own back out by number.
+ */
+interface PlateQuery {
+  readonly heads: NodeHandle;
+  readonly off: NodeHandle;
+  sets: number;
+}
+const PLATE_QUERIES = new WeakMap<Graph, PlateQuery>();
+
+function plateQueryOf(g: Graph, cloud: NodeHandle): PlateQuery {
+  let q = PLATE_QUERIES.get(g);
+  if (q === undefined) {
+    const heads = g.add(mergePoints, {}, "lacingHeadsOnPlates");
+    const near = g.add(
+      sampleNearestPoint,
+      { distanceAttr: PLATE_DIST, indexAttr: "", maxDistance: PLATE_CLEAR * 2 },
+      "lacingHeadsPlates",
+    );
+    const off = g.add(filterByExpression, { predicate: gt(attribute(PLATE_DIST), PLATE_CLEAR) }, "lacingHeadsOffPlates");
+    g.connect(heads, "out", near, "in");
+    g.connect(cloud, "out", near, "source");
+    g.connect(near, "out", off, "in");
+    q = { heads, off, sets: 0 };
+    PLATE_QUERIES.set(g, q);
+  }
+  return q;
+}
+
+/** The joint-plate cloud's step along each plate's centre line. */
+const PLATE_CLOUD_STEP = 0.1;
+/**
+ * Points across each plate in its cloud: 13 over the widest joint plate,
+ * 0.96 m, are 0.08 apart [derived].
+ */
+const PLATE_CLOUD_ACROSS = 13;
+/**
+ * How near a lacing head may come to a joint plate's cloud: half the
+ * cloud's widest cell diagonal, so a head anywhere over a plate finds a
+ * sample within it, plus the half-thickness and the jitter [derived:
+ * hypot(0.1, 0.08) / 2 + 0.004 + 0.002]. A head up to that far outside a
+ * plate's edge goes too, where the lacing would end at the plate.
+ */
+export const PLATE_CLEAR = 0.07;
+/** A joint plate's full width, as a vector across it, on its centre line. */
+const PLATE_ACROSS = "plateAcross";
 
 /** A lacing step for the members whose mean height lies in [from, to). */
 export interface LacingBand {
@@ -327,9 +453,9 @@ export function webMembers(
       meshes: [opts.halfB === undefined ? faceSkin(g, id, paths, outer) : faceBox(g, id, paths, outer, opts.halfB)],
     };
   }
-  const ends =
+  const { plateLines, ...ends } =
     joints === undefined
-      ? {}
+      ? { plateLines: undefined }
       : memberJoints(g, id, paths, outer, joints, riveted, alongB);
   // A member with joints is a strut only between them: its ends stop where
   // its joint starts, just clear of the upright, and the gusset plates
@@ -348,7 +474,10 @@ export function webMembers(
       ? {}
       : { step: opts.lacingStep.map(([w, s]) => [w - CHORD, s] as const) }),
     ...(opts.lacingBands === undefined ? {} : { stepBands: opts.lacingBands }),
+    ...(opts.covers === undefined || opts.covers.length === 0 ? {} : { covers: opts.covers }),
+    ...(riveted ? { plateCloud: plateCloudOf(g).cloud } : {}),
   });
+  if (plateLines !== undefined) g.connect(plateLines, "out", plateCloudOf(g).lines, "in");
   return {
     meshes: [struts.chords, struts.lacing],
     ...(struts.rivets === undefined ? {} : { rivets: struts.rivets }),
@@ -476,7 +605,7 @@ function memberJoints(
   riveted: boolean,
   /** The outer half-width along B (`WebOpts.halfB`); `outer` for a square. */
   alongB: ReadonlyArray<readonly [number, number]> = outer,
-): { gussets: NodeHandle; jointRivets?: NodeHandle } {
+): { gussets: NodeHandle; jointRivets?: NodeHandle; plateLines?: NodeHandle } {
   const y = component(position(), 1);
   const w = sub(ramp(y, outer), CHORD);
   const wB = sub(ramp(y, alongB), CHORD);
@@ -568,6 +697,26 @@ function memberJoints(
   g.connect(sized, "out", plates, "target");
   if (!riveted) return { gussets: plates };
 
+  // Each plate's centre line, carrying its width across it, for the
+  // tower's lacing to keep off (`plateCloudOf`): a unit segment along the
+  // unit box's local x, which the copy scales to the plate's length.
+  const withAcross = g.add(
+    setAttribute,
+    { name: PLATE_ACROSS, type: "f32", tupleSize: 3, value: mul(B, component(spanOf, 2)) },
+    `${id}PlateAcross`,
+  );
+  g.connect(sized, "out", withAcross, "in");
+  const unitEnds = g.add(
+    pointGrid,
+    { countX: 2, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [-0.5, 0, 0] },
+    `${id}PlateUnitEnds`,
+  );
+  const segment = g.add(pointsToPath, {}, `${id}PlateUnitLine`);
+  g.connect(unitEnds, "out", segment, "in");
+  const lines = g.add(copyToPoints, { topology: "keep", targetNames: [PLATE_ACROSS] }, `${id}PlateLines`);
+  g.connect(segment, "out", lines, "source");
+  g.connect(withAcross, "out", lines, "target");
+
   // Rivets: samples within reach of either end, on both plates' chords.
   // Each end's window [joint start, + reach] is read ONCE, at that end (the
   // tips), and lifted onto the member: read at every sample instead, a
@@ -645,7 +794,7 @@ function memberJoints(
       return aim;
     }),
   );
-  return { gussets: plates, jointRivets: rivetSpawn(g, `${id}Joint`, heads) };
+  return { gussets: plates, jointRivets: rivetSpawn(g, `${id}Joint`, heads), plateLines: lines };
 }
 
 /** Name the rivet spawners of several web-member sets, skipping the rivetless. */
@@ -852,10 +1001,34 @@ export interface StrutOpts {
   readonly stepBands?: ReadonlyArray<LacingBand>;
   /** Also spawn a rivet wherever a lacing bar meets a chord. */
   readonly rivets?: boolean;
+  /**
+   * Crossing plates over these struts (crossing.ts `crossFootprints`). A
+   * crossing plate is set UNDER the corner angles' outer face, covering the
+   * lacing between them, so a lacing head on a face the plate lies on,
+   * within its rectangle (plus a head's radius), would stand in the plate
+   * and beside the plate's own edge rows: none is spawned there. Each
+   * section corner's heads are tested where they sit, against the plate
+   * whose centre is nearest the sample.
+   */
+  readonly covers?: readonly PlateFootprint[];
+  /** The joint plates' sample points (`plateCloudOf`): no lacing head within {@link PLATE_CLEAR}. */
+  readonly plateCloud?: NodeHandle;
 }
 
 /** The primitive attribute a member's mean height rides on to its step. */
 const STRUT_Y = "strutY";
+/** A lacing head's distance to the nearest joint-plate sample (Infinity past its reach). */
+const PLATE_DIST = "plateDist";
+/** A lacing head's outward axis and its set's number, carried through the tower-wide merge (`plateQueryOf`). */
+const RIVET_AXIS = "rivetAxis";
+/** The index of the crossing plate nearest a lacing sample, -1 past `COVER_REACH`. */
+const COVER_INDEX = "coverIdx";
+/**
+ * How far a sample looks for a crossing plate's centre: beyond the
+ * farthest a covered head can be from it (a post landing's plate is about
+ * 0.8 x 1.1 m) [derived], so a miss is a sample no plate reaches.
+ */
+const COVER_REACH = 1.5;
 
 /** The four section corners in ring order, as (sN, sB) sign pairs. */
 const CORNERS = [
@@ -864,6 +1037,69 @@ const CORNERS = [
   [-1, -1],
   [1, -1],
 ] as const;
+
+/**
+ * Keep the points of `pts` whose `head` (a field of each point: where its
+ * rivet would sit) lies outside every plate footprint in `covers`. The
+ * footprints become a point cloud of their centres; each point finds the
+ * nearest (crossing plates are metres apart, and where two families cross
+ * at one point only one plate is built), reads that plate's frame back by
+ * index, and is dropped when the head is within the rectangle, grown by a
+ * head's radius, and near the plate's plane.
+ */
+function coverFilter(
+  g: Graph,
+  id: string,
+  pts: NodeHandle,
+  covers: readonly PlateFootprint[],
+  head: Field,
+): NodeHandle {
+  const grid = g.add(
+    pointGrid,
+    { countX: covers.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
+    `${id}Plates`,
+  );
+  const col = (f: (c: PlateFootprint) => number): number[] => covers.map(f);
+  const placed = g.add(
+    setAttribute,
+    {
+      name: "P",
+      type: "f32",
+      tupleSize: 3,
+      value: vec(indexTable(col((c) => c.at[0])), indexTable(col((c) => c.at[1])), indexTable(col((c) => c.at[2]))),
+    },
+    `${id}PlateAt`,
+  );
+  g.connect(grid, "out", placed, "in");
+  const near = g.add(
+    sampleNearestPoint,
+    { distanceAttr: "", indexAttr: COVER_INDEX, maxDistance: COVER_REACH },
+    `${id}Near`,
+  );
+  g.connect(pts, "out", near, "in");
+  g.connect(placed, "out", near, "source");
+  const i = attribute(COVER_INDEX);
+  const table = (f: (c: PlateFootprint) => number): Field => ramp(i, col(f).map((v, k) => [k, v + 0] as const));
+  const v3 = (f: (c: PlateFootprint) => Vec3): Field => vec(table((c) => f(c)[0]), table((c) => f(c)[1]), table((c) => f(c)[2]));
+  const d = sub(head, v3((c) => c.at));
+  const inside = mul(
+    mul(
+      lt(abs(dot(d, v3((c) => c.along))), add(table((c) => c.half), RIVET_HEAD)),
+      lt(abs(dot(d, v3((c) => c.across))), add(table((c) => c.halfAcross), RIVET_HEAD)),
+    ),
+    // Near the plane: the struts' own half-depth is under 0.45 everywhere.
+    lt(abs(dot(d, v3((c) => c.n))), 0.5),
+  );
+  const keep = g.add(
+    filterByExpression,
+    { predicate: max(lt(i, 0), sub(1, mul(ge(i, 0), inside))) },
+    `${id}Keep`,
+  );
+  const done = g.add(removeAttribute, { names: [COVER_INDEX], domain: "point" }, `${id}Done`);
+  g.connect(near, "out", keep, "in");
+  g.connect(keep, "out", done, "in");
+  return done;
+}
 
 /**
  * Turn member paths into laced struts. Returns the chords' and the
@@ -953,28 +1189,67 @@ export function latticeStruts(
   // two faces it borders: two rivets per chord per sample, eight per
   // strut section. Each head sits on its chord's outer face on that side,
   // its axis along the face's outward normal.
-  const heads = CORNERS.flatMap(([sn, sb], c) =>
-    (
-      [
-        ["N", mul(N, sn)],
-        ["B", mul(B, sb)],
-      ] as const
-    ).map(([side, out]) => {
-      const at = g.add(
-        transformPoints,
-        { translate: add(corner(c), mul(out, o.chord)) },
-        `${id}Rivet${c}${side}`,
+  const clear: NodeHandle = samples;
+  // Per B side (sb), the N-face heads of that side's two corners, kept off
+  // the crossing plates. The plates are a pair either side of the face
+  // plane, so one test in the plane serves both N faces.
+  const uncovered = (sb: number): NodeHandle => {
+    if (o.covers === undefined || o.covers.length === 0) return clear;
+    return coverFilter(g, `${id}Cover${sb > 0 ? "P" : "M"}`, clear, o.covers, add(position(), mul(B, mul(wB, sb))));
+  };
+  const clearBySide = new Map<number, NodeHandle>();
+  const clearFor = (sb: number): NodeHandle => {
+    let h = clearBySide.get(sb);
+    if (h === undefined) {
+      h = uncovered(sb);
+      clearBySide.set(sb, h);
+    }
+    return h;
+  };
+  const head = (c: number, side: string, out: Field, from: NodeHandle): NodeHandle => {
+    const at = g.add(transformPoints, { translate: add(corner(c), mul(out, o.chord)) }, `${id}Rivet${c}${side}`);
+    g.connect(from, "out", at, "in");
+    return at;
+  };
+  const aimed = (name: string, from: NodeHandle, out: Field): NodeHandle => {
+    const aim = g.add(orientAlongVector, { direction: out, up: T, axis: "+y" }, `${id}${name}Aim`);
+    g.connect(from, "out", aim, "in");
+    return aim;
+  };
+  const bHeads = CORNERS.map(([, sb], c) => aimed(`Rivet${c}B`, head(c, "B", mul(B, sb), samples), mul(B, sb)));
+  let nHeads: NodeHandle[];
+  if (o.plateCloud === undefined) {
+    nHeads = CORNERS.map(([sn, sb], c) => aimed(`Rivet${c}N`, head(c, "N", mul(N, sn), clearFor(sb)), mul(N, sn)));
+  } else {
+    // Off every joint plate in the tower (`plateCloudOf`), asked with every
+    // other set's heads in one query (`plateQueryOf`): the four N faces'
+    // heads carry their own axis and this set's number in, and come back
+    // out by number to be aimed.
+    const q = plateQueryOf(g, o.plateCloud);
+    const set = q.sets++;
+    CORNERS.forEach(([sn, sb], c) => {
+      const at = head(c, "N", mul(N, sn), clearFor(sb));
+      const tag = g.add(
+        setAttribute,
+        { name: RIVET_AXIS, type: "f32", tupleSize: 4, value: vec(mul(N, sn), set) },
+        `${id}Rivet${c}NTag`,
       );
-      const aim = g.add(
-        orientAlongVector,
-        { direction: out, up: T, axis: "+y" },
-        `${id}Rivet${c}${side}Aim`,
-      );
-      g.connect(samples, "out", at, "in");
-      g.connect(at, "out", aim, "in");
-      return aim;
-    }),
-  );
+      g.connect(at, "out", tag, "in");
+      g.connect(tag, "out", q.heads, "in");
+    });
+    const mine = g.add(
+      filterByExpression,
+      { predicate: lt(abs(sub(component(attribute(RIVET_AXIS, 4), 3), set)), 0.5) },
+      `${id}RivetNOffPlates`,
+    );
+    g.connect(q.off, "out", mine, "in");
+    const axis = attribute(RIVET_AXIS, 4);
+    const aim = aimed("RivetN", mine, vec(component(axis, 0), component(axis, 1), component(axis, 2)));
+    const done = g.add(removeAttribute, { names: [PLATE_DIST, RIVET_AXIS], domain: "point" }, `${id}RivetNDone`);
+    g.connect(aim, "out", done, "in");
+    nHeads = [done];
+  }
+  const heads = [...nHeads, ...bHeads];
   const spawn = rivetSpawn(g, id, heads);
   return { ...meshes, rivets: spawn };
 }
