@@ -136,6 +136,13 @@ export interface Detail {
    * the channels' flats: builtup.ts, `lowerBuiltRows`). About 120,000 heads more.
    */
   readonly fullRivets?: boolean;
+  /**
+   * The erection's temporary works as well (`erection.ts`): the timber
+   * pylons with their sand boxes and shoes, the girders' scaffolds and
+   * their decks, as `works.<kind>` outputs. The page asks for it with
+   * `?build`; nothing of the tower changes.
+   */
+  readonly build?: boolean;
 }
 
 /**
@@ -240,6 +247,13 @@ export type Parts = Partial<Record<PartClass, NodeHandle[]>> & {
    * overwritten.
    */
   cloth?: Array<{ name: string; mesh: NodeHandle }>;
+  /**
+   * The erection's temporary works (`erection.ts`), each kind put out as
+   * `works.<name>`, not jittered: they meet the tower's faces nowhere, and
+   * the page shows each only between the days it stood (`chronology.ts`
+   * `WORKS`).
+   */
+  works?: Array<{ name: string; mesh: NodeHandle }>;
 };
 
 /**
@@ -261,6 +275,7 @@ export function assemble(g: Graph, parts: Parts): void {
   for (const { name, spawn } of parts.fittings ?? []) g.output(spawn, "instances", `fittings.${name}`);
   for (const { name, spawn } of parts.chains ?? []) g.output(spawn, "instances", `chain.${name}`);
   for (const { name, mesh } of parts.cloth ?? []) g.output(mesh, "out", `cloth.${name}`);
+  for (const { name, mesh } of parts.works ?? []) g.output(mesh, "out", `works.${name}`);
   for (const { name, mesh } of parts.cars ?? []) {
     g.output(jitter(g, `${carId(name)}Jitter`, mesh), "out", `car.${name}`);
   }
@@ -287,6 +302,7 @@ export function joinParts(...all: Parts[]): Parts {
     if (parts.cars !== undefined) (out.cars ??= []).push(...parts.cars);
     if (parts.chains !== undefined) (out.chains ??= []).push(...parts.chains);
     if (parts.cloth !== undefined) (out.cloth ??= []).push(...parts.cloth);
+    if (parts.works !== undefined) (out.works ??= []).push(...parts.works);
   }
   return out;
 }

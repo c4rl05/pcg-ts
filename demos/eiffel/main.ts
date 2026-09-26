@@ -139,7 +139,7 @@ import {
 } from "./rivetPack.js";
 import { BufferAttribute, DataTexture, NearestFilter, SRGBColorSpace } from "three";
 import { FLAG_BANDS, FLAG_GRID, FLAG_POINTS, flagNormals, flagPose } from "./flag.js";
-import { attachScrubber, buildDayParam, stageErection } from "./scrub.js";
+import { TIMBER, attachScrubber, buildDayParam, isWorks, isWorksIron, stageErection } from "./scrub.js";
 
 // ------------------------------------------------------------------ //
 // The look.
@@ -886,7 +886,7 @@ async function main(): Promise<void> {
   // across its member. They are the only numbers on this page that can be
   // changed from outside, because they are the only ones nothing derives.
   const crossPlate = tuned(params, { set: "plateSet", edge: "plateEdge" });
-  const graph = buildEiffel(1889, { lacedWeb: laced, rivets, fullRivets, crossPlate });
+  const graph = buildEiffel(1889, { lacedWeb: laced, rivets, fullRivets, crossPlate, build: BUILD });
   // Shown before the cook, so a graph that fails to cook can still be read.
   attachGraphPanel([{ name: "eiffel skeleton", graph }], { into: graphSlot, title: "graph" });
 
@@ -935,6 +935,15 @@ async function main(): Promise<void> {
   let carTriangles = 0;
   for (const [name, collection] of Object.entries(outputs)) {
     if ((PART_CLASSES as readonly string[]).includes(name)) continue;
+    if (isWorks(name)) {
+      // The erection's temporary works (erection.ts, cranes.ts): timber,
+      // and the iron (the pylons' sand boxes and shoes, the cranes) in the
+      // machinery's paint.
+      const drawn = draw(name, collection, isWorksIron(name) ? MATERIALS.machinery : TIMBER, box, problems);
+      keep(name, drawn);
+      if (!name.startsWith("works.crane.")) overlay.addStat(name)(drawn.triangles.toLocaleString());
+      continue;
+    }
     if (isCloth(name)) {
       // The flag: the page moves it, so it is kept apart (`hang`).
       const drawn = draw(name, collection, FLAG_MATERIAL, box, problems);

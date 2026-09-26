@@ -414,16 +414,19 @@ const GROUND_STAIRS = [dayOf("1888-11-01"), dayOf("1888-11-30")] as const;
  *
  * - The pylons, « élevés » while the legs were built out to 27 m (PL-XXIV
  *   text), from August 1887 [estimated] to the landing; the bearings on
- *   them once the uprights' tronçon over them was up (the front 4.5 m, a
- *   tronçon, past the prop) [estimated]; all of it down once « les poutres
+ *   them with the tronçon they are riveted under, the one from node XXVI
+ *   (28.40), up when the front passed 32.90 (the uprights' dating,
+ *   `datedHeight`), 22 Oct 1887 [estimated]; all of it down once « les poutres
  *   du deuxième étage furent assemblées et les boîtes à sable enlevées »
  *   (p. 115): standing on photograph 7 (15 May 1888), gone on photograph 8
  *   (21 Aug) [the order sourced; the days estimated].
  * - The scaffolds, « élevés en même temps que les pylônes » yet still going
  *   up on photograph 4 (7 Dec 1887), finished for the girders begun on
  *   them on 18 Dec [the end sourced; the start estimated]; the deck came
- *   off before the arches' crowns went onto the centring under it
- *   (7 May 1888) [estimated]; the rest down with the pylons.
+ *   off on 7 May 1888, when the arches were begun: in the model the
+ *   arches' crowns pass where the deck stood [derived from the model; the
+ *   book dates no deck coming off, and has the crowns built on the
+ *   scaffold itself, p. 117]; the rest down with the pylons.
  */
 const wholeDayOf = (day: number): number => Math.ceil(day - 1e-9);
 
@@ -432,7 +435,7 @@ const PYLON_TOP = 27.41;
 
 export const WORKS: Readonly<Record<string, { readonly up: readonly [number, number]; readonly base: number; readonly top: number; readonly down: number }>> = {
   pylons: { up: [dayOf("1887-08-01"), dayOf("1887-10-05")], base: 0, top: 27.41, down: dayOf("1888-08-10") },
-  bearings: { up: [wholeDayOf(frontDay(34.5)), wholeDayOf(frontDay(34.5))], base: 27, top: 30, down: dayOf("1888-08-01") },
+  bearings: { up: [wholeDayOf(frontDay(28.4 + 4.5)), wholeDayOf(frontDay(28.4 + 4.5))], base: 27, top: 30, down: dayOf("1888-08-01") },
   scaffolds: { up: [dayOf("1887-10-01"), dayOf("1887-12-17")], base: 0, top: 42.6, down: dayOf("1888-08-20") },
   decks: { up: [dayOf("1887-12-15"), dayOf("1887-12-17")], base: 42, top: 42.6, down: MILESTONES.archesBegun },
 };
@@ -454,7 +457,10 @@ export function pieceDay(cls: string, b: Box6): number {
   const cz = (b[2] + b[5]) / 2;
   if (cls.startsWith("works.")) {
     const w = WORKS[cls.slice("works.".length)];
-    if (w !== undefined) return within(w.up, (b[4] - w.base) / (w.top - w.base));
+    // By its FOOT: a post goes up whole from the ground (the pylons' and
+    // scaffolds' posts are spliced at their joints, so an upper length
+    // waits for the lower), and a moise or a cross on the posts after them.
+    if (w !== undefined) return within(w.up, (b[1] - w.base) / (w.top - w.base));
   }
   switch (cls) {
     case "foundations":

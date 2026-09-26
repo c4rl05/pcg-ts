@@ -48,6 +48,11 @@ export function isWorks(name: string): boolean {
   return name.startsWith("works.");
 }
 
+/** Is it iron rather than timber: the sand boxes and shoes on the pylons, and the cranes? */
+export function isWorksIron(name: string): boolean {
+  return name === "works.bearings" || name.startsWith("works.crane.");
+}
+
 /**
  * The temporary works' timber: sawn pine, weathered pale and dry, outside
  * the iron's family because it is not iron [estimated]. The bearings (sand
