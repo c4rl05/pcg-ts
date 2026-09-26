@@ -37,7 +37,7 @@
  */
 import type { WebGLRenderer } from "three";
 import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
-import type { Camera, Scene } from "three";
+import type { Camera, Material, Mesh, Object3D, Scene } from "three";
 
 /** What `GTAOPass` ships, verbatim. Both must match or we throw. */
 const STOCK_VIEW_POSITION = `		vec3 getViewPosition( const in vec2 screenPosition, const in float depth ) {
@@ -132,7 +132,47 @@ export function createGtao(
 ): GTAOPass {
   const pass = new GTAOPass(scene, camera, width, height);
   if (renderer.capabilities.logarithmicDepthBuffer) patchForLogDepth(pass);
+  skipSeeThrough(pass);
   return pass;
+}
+
+/**
+ * The pass's own prepass hides points and lines, "which do not contribute
+ * to AO", and nothing else. A see-through surface does not either: a pane
+ * drawn into the normal-and-depth buffer would stand in for everything
+ * behind it, so the members seen through a window would be shaded as the
+ * flat glass is, and every mullion would print a dark halo on it. So a
+ * mesh whose material is `transparent` is hidden for the prepass too, the
+ * same way the pass hides a line — in its own visibility cache, which it
+ * restores. Like the depth patch, it asserts what it wraps: a three that
+ * renames the method throws here instead of quietly occluding glass.
+ */
+function skipSeeThrough(pass: GTAOPass): void {
+  const inner = pass as unknown as {
+    _overrideVisibility?: () => void;
+    _visibilityCache?: Object3D[];
+  };
+  const stock = inner._overrideVisibility;
+  if (typeof stock !== "function" || !Array.isArray(inner._visibilityCache)) {
+    throw new Error(
+      "GTAO see-through patch: this three's GTAOPass no longer has _overrideVisibility / " +
+        "_visibilityCache. Re-read node_modules/three/examples/jsm/postprocessing/GTAOPass.js " +
+        "and update gtao.ts, or the glass will occlude what is seen through it.",
+    );
+  }
+  const scene = (pass as unknown as { scene: Scene }).scene;
+  inner._overrideVisibility = function (this: typeof inner): void {
+    stock.call(this);
+    const cache = this._visibilityCache as Object3D[];
+    scene.traverse((object) => {
+      const material = (object as Mesh).material as Material | Material[] | undefined;
+      const seeThrough = Array.isArray(material) ? material.some((m) => m.transparent) : material?.transparent === true;
+      if ((object as Mesh).isMesh === true && object.visible && seeThrough) {
+        object.visible = false;
+        cache.push(object);
+      }
+    });
+  };
 }
 
 function patchForLogDepth(pass: GTAOPass): void {

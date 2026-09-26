@@ -790,6 +790,48 @@ From outside, the grande poutre is hidden behind the skirt [derived]. The skirt'
 
 ---
 
+### 10.11 The glass (2026-09-26)
+
+Backlog item 17. Until now every glazed opening was built as its frame with the glass left out. Two classes carry it now: `glass` (clear) and `silvered` (the crescents' cast glass). The page draws `glass` blended at a low opacity, writing no depth, front faces only, casting no shadow and left out of the occlusion prepass (main.ts `GLASS`, gtao.ts `skipSeeThrough`).
+
+**What the text says is glass** [sourced E1900-TXT pp. 12, 213-216, OCR]:
+- The pavilions: « les ouvertures de 7,765 m sont divisées elles-mêmes en deux entraxes de 3,88 m donnant la largeur des baies vitrées ouvertes sur la galerie » (p. 213). The Bar's gables « sont décorés par des vitraux colorés de la maison Champigneulle » (p. 214).
+- The lanterns (p. 214): on the Bar, « couvert en zinc et ne sert qu'à l'aération. Il en est de même pour les restaurants Flamand et Français. Pour le restaurant Russe, il comprend trois châssis vitrés. »
+- The ceilings: the Bar's « quatre panneaux vitrés dans la travée centrale et trois panneaux dans les travées latérales »; the Français' « seul panneau vitré ovale par travée ».
+- The arcade's crescents: « des cabochons en verre jaune et, en dessus de ceux-ci, des verres coulés étamés et teintés donnant l'aspect de plaques dorées ». The 1st platform's ledger has « Verrerie des arcades (Néret) » (p. 218); « Verre coulé étamé (Néret) » is the 2nd platform's (p. 219).
+- The 3rd floor: « des glaces mobiles que l'on peut élever ou abaisser » (p. 216), and « une sorte de cage vitrée par des glaces mobiles » (p. 12).
+
+**The glazing bars** [measured on the full-resolution scans at about 118 px/m (1:100) and 60 px/m (1:200), ±0.03-0.05; heights over the restaurant floor]:
+- **Français doors (PL-XXIX Figs 1, 3).** Four equal leaves of about 0.61 across the 2.60, with the meeting stile on the axis (drawn double). A raised panel runs from 0 to 0.58. The glass is three panes high, with bars at 1.18 and 1.73, up to a transom from 2.28 to 2.44 at the springing. Above it sits the fan: an inner arched light over the two middle leaves (span 1.26, crown 3.03), split by the axis bar, and rays at about 30-32° and 53-58° from the upright, read as 30° and 60°. That gives 2 + 6 lights, with the glass crown at 3.61.
+- **Russe screen (PL-XXIX Fig. 11).** Leaves are two panes high over a rail at 2.10-2.13 (drawn double). Three sashes over the transom, three panes high (bars at 3.44 and 3.76), 2 / 4 / 2 across. The plate's nota: « Les panneaux vitrés des baies B ont été enlevés après l'exposition de 1889 ».
+- **Bar screen (PL-XXX Fig. 5).** The printed chain is 325 · 150 · 110 · 80 · 645.6 · 80|80 · 645.6 · 160 · 645.6 · 80|80 · 645.6 · 80 · 75 = 3882.5. Leaves are two panes high over a rail at 1.97-2.07. Over the transom, two sashes about 0.80 wide sit centrally, two by two with a bar at 3.37, flanked by diagonal boarding.
+- **Russe screen, centre bay (PL-XXIX Fig. 11).** Open below the transom; over it, under the carved gables, « Châssis fixe » arched lights with vertical bars.
+- **Flamand screen (PL-XXX Fig. 17, the Théâtre's front).** Leaves are two panes across and four high, with bars at about 1.13, 1.65 and 2.14. The fanlight is flattish, arched, about 3.4 wide and 1.25 high, eight across (three mullions on the leaves' lines and a bar between each two) and three high; the spandrels over it are diagonal boarding.
+- **3rd-floor croisées (PL-XIV Figs 7, 10; PL-XIX Figs 3, 9).** Parapet 1.200, clear opening 1.030 and beam 0.200 are printed. Each bay is split by an intermediate I-post into two lights, 1.34 + 1.16. The sashes' subdivision is not drawn at 1:200.
+
+**What `platforms.ts` builds** (`GLAZING`, `GLAZING_BARS`, `glazing`, `francaisDoors`, `screenGlazing`, `tympanumGlass`, `crescentGlass`), and `summit.ts` (`summitGlass`):
+- Every pane is a sheet 6 mm thick [estimated]. It sits in the plane of the frame it fills, cut to the clear opening between that frame's members, and runs 2 mm into them [estimated rebate]. The exception is Eiffel's pavilion, whose panes stop at the walls' reveals, because those walls are the rooms' solids.
+- Bars are 0.030 wide and rails 0.050, each 0.040 through the plane [estimated]. The doors' stiles are 0.050 and the meeting stile 0.070 [estimated].
+- **Bar ends.** Where a ray's square end meets a slanting rib or head, the glass past it is its own small piece, inside the ray's band, so no light shows round a bar's end (`endFill`).
+- **Pavilions.** The Français' six doors, as above: jambs 0.08, four leaves of 0.61, 20 lights each and five pieces past the rays' ends. The fan's ring is built as the six chords between the rays' feet, so every light stays convex. The transom's top is the model's springing, 2.43. The Français' glazed tympana over the façade and every vault's void-side tympanum on all four: six lights each, between the post and the rays `tympanum` already built, and five end pieces. The three timber screens, as above: the Russe's centre half-bays glazed over the transom four by three [estimated count]; the Bar's two sashes 0.80 wide by its middle mullion, the rest of its sash height boarded (0.05, in the screen's plane); the Flamand's fanlight glazed to the centre line of the arch its dressing draws in front, eight across and three high, boarded over it. Their rows split the model's sash height evenly, as the plates' bars split theirs.
+- **Silvered.** One plate of silvered glass in each of the 12 cells of all 36 crescents, set 0.010 behind the gable's face [estimated], so each cabochon's ring stands in front of it, and the small pieces past both ends of each of the 11 rays. At each crescent's foot, where the two ribs come down to the springing apart, a sill 0.10 tall [estimated] from the outer rib's foot to the inner rib's edge at the sill's top, in the `platforms` class, carries the lowest plates.
+- **3rd floor.** Four panes in each of the 24 croisées, either side of the bar and the meeting rail `gallery` already builds. A chamfer's last pane stops at the next straight side's vertex post, which is square to that side and so reaches 0.05 √2 along the chamfer. Two panes in each of Eiffel's pavilion's 16 windows, and one in each of its 8 doors (glazed doors as PL-XIX Fig. 3 is read; no text says so).
+- **Counts.** 150 + 33 + 132 + 324 + 96 + 152 = 887 clear pieces on the 1st floor, 96 + 40 on the 3rd, and 432 silvered plates plus 1,584 end pieces.
+
+**Left out, and why:**
+- The Russe's lantern « trois châssis vitrés »: PL-XXIX Figs 13-14 draw a glass band 0.40 high, but the model's lantern stands only 0.07-0.26 above the vault.
+- The ceilings' glazed panels: they are inside halls the model does not furnish.
+- The Bar's stained glass (Champigneulle): its gables are drawn with the same clear glass as the tympana.
+
+**Open:**
+- The plates draw the void-side vault ends four different ways:
+  - the Français' (PL-XXIX Figs 1, 3) as an ornamental lunette of piers, fan panels and lattice quarters, with no mark that says glass;
+  - the Bar's (PL-XXX Fig. 1) weatherboarded, with two-by-two windows;
+  - the Flamand's (PL-XXX Fig. 11) as one segmental window about 4.9 × 2.15;
+  - the Russe's (PL-XXIX Fig. 9) as an oval 3.4824 wide.
+  The model keeps one glazed post-and-rays tympanum for all four, as §10.4 already reads them.
+- The croisées: the plate's 0.45 + 4 × 2.50 + 0.45 bays split 1.34 + 1.16 against the model's posts (§29) and its mid-bay bar and meeting rail.
+
 ## 11. The lifts and the stairs (1889)
 
 Compiled 2026-09-18 for `lifts.ts`. Heights are z above the ground at the tower centre (§0) unless marked as an altitude (z + 33.50). Tags as in §0. Legs by the plates' numbering: n°1 Nord, n°2 Est, n°3 Sud, n°4 Ouest. E1900-TXT once prints "2 ou Ouest… 4 ou Est"; the plates and the rest of the text say 2 = Est, which is used.
@@ -2201,7 +2243,7 @@ Compiled for `summit.ts` from E1900-TXT pp. 79–80 (§§ 11–12), pp. 215–21
 |---|---|---|
 | gallery bays | 8 a side, 3 a chamfer (44) [estimated] | **24 croisées**: 2.25 / 2.50 / 2.50 / 2.25 a side, 2 a chamfer, 0.70 solid piers at the vertices |
 | parapet | an open X lattice | a solid 1.20 sheet, its 40 × 40 lattice outside |
-| window | open to the deck | 1.030, a two-light sash (bar and meeting rail) a bay, the 0.200 sablière over it; no panes |
+| window | open to the deck | 1.030, a two-light sash (bar and meeting rail) a bay, the 0.200 sablière over it; its panes §10.11 |
 | balcony railing | 2 rails | 3 round bars, 0.15 / 0.60 / 1.00 |
 | balcony deck | solid | open for the Edoux car at its top stop, the cables, the Sud guide post, the little stair and the contrefiches |
 | apartment | a solid 10.68 box, 278.56–280.98 | a **pavilion** 10.50 square: the 0.15 floor step, 0.25 double walls with 16 windows and 8 doors, the uprights cased in its corners, partitions with 12 doors round the salon, cuisine, office, W.C., coffre, physiologie, two laboratories, optique (physique), cabinet de toilette and the Edoux's cage; the 10.68 roof, 0.10 deep, under the girders' foot |
@@ -2227,7 +2269,7 @@ Nothing of the girders, the contrefiches, the uprights, the dome, the lantern or
 - **The gallery's height.** The text's « 2,50 m » under the ceiling against 2.31 clear under the deck here, unless the raised promenade floor (+0.18) is the datum.
 - **The chamfer.** PL-XIV prints 3.9592; the 16.56 / 10.90 octagon gives 4.002.
 - **The rooms.** Only Physiologie and Optique are named: optique is read as physique, and the two unnamed rooms as électricité and météorologie, in no known order. Partitions are straightened to the plan's two directions, within its ±0.15. The walls' 0.25 is [estimated]. The +x wall's extra opening at 4.46–4.91 (probably the door onto the terrace) is not built, and PL-XIX Fig. 3's second door, drawn 1.1–1.25 wide, is built 0.89.
-- **Not built:** the panes (glazing), the flag, the stairs (the little stair's and the campanile stair's openings and room are left), the 8 inclined lightning rods on the balcony (two a face, about 3.4 long, 38–41 degrees out, PL-XIX Figs 3, 6, 9), the Decauville track (0.53 gauge, centreline 7.34 out, PL-XIX Fig. 6) and the Mangin projectors, the 3rd floor's boutiques, buvette and étalages (PL-XIX Fig. 9), the furniture, the entretoise girders inside the pavilion's walls, the cupola's inner floor (0.792 × 2.44), the lantern's optics.
+- **Not built:** the flag, the stairs (the little stair's and the campanile stair's openings and room are left), the 8 inclined lightning rods on the balcony (two a face, about 3.4 long, 38–41 degrees out, PL-XIX Figs 3, 6, 9), the Decauville track (0.53 gauge, centreline 7.34 out, PL-XIX Fig. 6) and the Mangin projectors, the 3rd floor's boutiques, buvette and étalages (PL-XIX Fig. 9), the furniture, the entretoise girders inside the pavilion's walls, the cupola's inner floor (0.792 × 2.44), the lantern's optics.
 - **Superseded:** §6.4's element assignments for "5.750", "1.700" and "2.686"; §12.2's "The cupola is bulbous" and the top terrace's "1.00" railing; §12.3's lantern bullets and its "Not built" contrefiches and fan; §23.3's "the four contrefiches … hidden in the solid apartment" and "The dome keeps its own section".
 
 ## 30. The 72 names, lettered (2026-09-26)

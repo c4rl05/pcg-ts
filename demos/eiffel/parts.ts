@@ -40,6 +40,17 @@ export const PART_CLASSES = [
    * chains (see `Parts`).
    */
   "machinery",
+  /**
+   * Clear glass: the pavilions' doors, screens and tympana on the 1st
+   * floor, the 3rd-floor gallery's croisées and Eiffel's pavilion's
+   * windows. The page draws it see-through and lets it cast no shadow.
+   */
+  "glass",
+  /**
+   * The arcade crescents' « verres coulés étamés et teintés »: glass
+   * silvered and tinted to read as gilt plate, so opaque and metallic.
+   */
+  "silvered",
 ] as const;
 
 export type PartClass = (typeof PART_CLASSES)[number];

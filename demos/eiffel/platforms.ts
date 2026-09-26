@@ -104,7 +104,7 @@
  *   restaurant floor [derived: 56.40 + 6.05 − 57.63], within the 4.61 to
  *   5.03 the pavilion plates print for their own [sourced]; the hall is its
  *   walls, the gallery façade two glazed doors a bay between piers
- *   (`FACADE`), its glass left out. Each vault
+ *   (`FACADE`), glazed (`glazing`). Each vault
  *   carries a glazed ridge lantern: 2.65 wide, a gable 3.80 eave to eave
  *   rising 0.70 to a ridge at altitude 99.37 [sourced PL-XXX; the others
  *   print 99.39 and 99.40], its length [estimated from the roof plan].
@@ -1291,8 +1291,8 @@ const BALCONY = {
  * The gables, opened (PL-XIX Fig. 1; PL-XIII Fig. 26; E1900-TXT): the
  * crescent between the vault's arc and the inner arc is ribs with glass
  * between, « glazed and gilt in the cells between its rays » [sourced], so
- * it is built as its two arc ribs and the rays, the glass left out as the
- * balustrades' infill is; rib and ray widths [estimated]. Under the inner
+ * it is built as its two arc ribs and the rays, its silvered glass
+ * `glazing`'s; rib and ray widths [estimated]. Under the inner
  * arc the lunette is « un treillis de bois » [sourced]: laths on both
  * diagonals, 0.40 apart [estimated from PL-XIX's diamonds], over the small
  * arches between the plate piers, with the three rays PL-XIX draws from
@@ -1311,10 +1311,11 @@ const GABLE = {
  * 0.85 either end, a glazed door 2.60 wide, a 0.86 pier, a second door
  * [sourced]; each door from the floor to an arched head springing at 2.43
  * and rising 1.12 [measured], the wall over it solid to the gutter. The
- * glass is left out. The walls' thickness [estimated]. The tympanum over
- * the wall under each vault is glazed trellis on a post and rays [sourced
- * drawing], built as the post, the rays and a rib along the vault; so is
- * the one at each vault's end, on the void side, as the Français had them
+ * doors' glass and bars are `francaisDoors`'. The walls' thickness
+ * [estimated]. The tympanum over the wall under each vault is glazed
+ * trellis on a post and rays [estimated: PL-XXIX draws an ornamental
+ * lunette there, SOURCES.md §10.11], built as the post, the rays and a rib
+ * along the vault; so is the one at each vault's end, on the void side, as the Français had them
  * « pendant l'Exposition de 1889 » [sourced PL-XXIX Fig. 1; the Bar's on
  * PL-XXX Fig. 1 are boarded, with windows, perhaps later].
  */
@@ -1991,8 +1992,7 @@ function arcadeFace(): Block[] {
  *   model's crescent]. The boss is an instance (`fittings.cabochons`,
  *   asset `cabochon`), so the page can draw it in yellow glass; its ring
  *   is iron, 0.03 proud of the gable [estimated]. The « verres coulés
- *   étamés et teintés » over them are glass, left out as the rest of the
- *   crescent's is.
+ *   étamés et teintés » over them are the `silvered` class (`glazing`).
  * - THE GLOBE. « Au centre de chaque arcade est disposé un gros ballon en
  *   verre dépoli enveloppé d'un treillage métallique, dans lequel est un
  *   bec de gaz » [sourced text]; no plate read draws it. One to an arcade
@@ -2490,7 +2490,7 @@ function pavilionFace(staff: boolean): { walls: Block[]; vaults: Prism[] } {
  * PL-XXIX Fig. 11; "645.6" on the Bar, "605.6" on the Russe] on mullions
  * 0.080 [sourced "80"]; over the transom each pavilion's own sashes: two
  * on the Bar, three on the Russe (0.56 / 1.29 / 0.56), one arched on the
- * Flamand [counted]; the glass left out. Over the wall head each vault's
+ * Flamand [counted]; their glass and bars `screenGlazing`'s. Over the wall head each vault's
  * end is BOARDED [sourced drawings:
  * the vertical boarding of PL-XXX Figs 5, 17 and PL-XXIX Fig. 11], 0.05
  * thick [estimated], where the Français' is glazed trellis. The Russe
@@ -3034,7 +3034,729 @@ function pavilionParts(): Array<{ prefix: string; part: Parted; faces: readonly 
     { prefix: "russe", part: russeDressing(), faces: [P.russe] },
     { prefix: "anglo", part: angloDressing(), faces: [P.anglo] },
     { prefix: "flamand", part: flamandDressing(), faces: [P.flamand] },
+    // The glazing bars (`GLAZING_BARS`); the glass itself is `glazing`'s.
+    { prefix: "francais", part: francaisDoorsAll().bars, faces: [P.francais] },
+    { prefix: "flamand", part: screenGlazing("flamand", false, DRESSING.flamand.upper).bars, faces: [P.flamand] },
+    { prefix: "anglo", part: screenGlazing("anglo", false, DRESSING.anglo.upper).bars, faces: [P.anglo] },
+    { prefix: "russe", part: screenGlazing("russe", true, DRESSING.russe.upper).bars, faces: [P.russe] },
   ];
+}
+
+// ------------------------------------------------------------------ //
+// THE GLASS (SOURCES.md §10.11).
+// ------------------------------------------------------------------ //
+
+/**
+ * THE GLASS the frames above leave open (SOURCES.md §10.11; PL-XIII,
+ * PL-XIX, PL-XXIX, PL-XXX, E1900-TXT pp. 12, 213-216). Every pane is a sheet
+ * `pane` thick [estimated: 6 mm plate], in the plane of the frame it
+ * fills, cut to that frame's clear opening and run `rebate` into the
+ * members round it [estimated], so no light shows at an edge and no pane
+ * reaches into a member further than a glazier's rebate.
+ *
+ * - THE PAVILIONS' CLEAR GLASS (the `glass` class): the Français' six
+ *   gallery doors (`FACADE`) and its glazed tympana over the façade; the
+ *   glazed tympanum at every vault's void-side end, on all four; and the
+ *   three « en bois apparent » the leaves and sashes of their screen
+ *   (`screenFront`), « les baies vitrées ouvertes sur la galerie »
+ *   [sourced p. 213], all but the leaves of the Russe's open centre bay.
+ *   Each cut into its lights by the frame's own bars, with the glass past
+ *   each ray's square end its own piece (`endFill`). NOT glazed, and why: the lanterns,
+ *   zinc « et ne sert qu'à l'aération » on three [sourced p. 214] and on
+ *   the Russe « trois châssis vitrés » standing 0.07-0.26 over the vault in
+ *   the model's section, too little to glaze; the ceilings' glazed panels
+ *   (the Français' « seul panneau vitré ovale par travée », the Bar's
+ *   coffers), inside a hall the model does not furnish; the Bar's gables'
+ *   stained glass by Champigneulle [sourced p. 214], drawn here as the
+ *   clear glass of the tympana it would fill.
+ * - THE ARCADE'S CRESCENTS (the `silvered` class): « des cabochons en
+ *   verre jaune et, en dessus de ceux-ci, des verres coulés étamés et
+ *   teintés donnant l'aspect de plaques dorées » [sourced p. 213; the
+ *   ledger's « Verrerie des arcades (Néret) », p. 218]: silvered and tinted
+ *   cast glass, which reads as gilt plate, not as a window, so it is its
+ *   own class with its own paint. One plate in each of the 12 cells of
+ *   every one of the 36 crescents, between the rays and the ribs, set
+ *   `silveredSet` behind the gable's face [estimated], so the cabochons'
+ *   rings, 0.03 proud of it, stand just in front.
+ */
+export const GLAZING = { pane: 0.006, rebate: 0.002, silveredSet: 0.01 } as const;
+
+/** A point in a frame's own plane: (a, y) on a face, or (u, y) along a wall. */
+type P2 = readonly [number, number];
+
+/** The part of the convex `poly` where (x - at) · n ≥ d (Sutherland-Hodgman, one plane). */
+function clipHalf(poly: readonly P2[], at: P2, n: P2, d: number): P2[] {
+  const out: P2[] = [];
+  const f = (p: P2) => (p[0] - at[0]) * n[0] + (p[1] - at[1]) * n[1] - d;
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i] as P2;
+    const q = poly[(i + 1) % poly.length] as P2;
+    const fp = f(p);
+    const fq = f(q);
+    if (fp >= 0) out.push(p);
+    if (fp >= 0 !== fq >= 0) {
+      const t = fp / (fp - fq);
+      out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]);
+    }
+  }
+  return out;
+}
+
+/** A polygon's signed area, (a, y) seen from +r: positive anticlockwise. */
+function area2(poly: readonly P2[]): number {
+  let s = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i] as P2;
+    const q = poly[(i + 1) % poly.length] as P2;
+    s += p[0] * q[1] - q[0] * p[1];
+  }
+  return s / 2;
+}
+
+/** A bar in a frame's plane: its centre line and its width in that plane. */
+interface PlaneBar {
+  readonly from: P2;
+  readonly to: P2;
+  readonly w: number;
+}
+
+/**
+ * The convex `poly` cut into the lights between `bars`, ordered so that
+ * each light lies to the right of the bar before it and to the left of
+ * the bar after it, looking along the bar (`from` to `to`); every light
+ * runs `GLAZING.rebate` past a bar's edge into it.
+ */
+function lights(poly: readonly P2[], bars: readonly PlaneBar[]): P2[][] {
+  const out: P2[][] = [];
+  for (let k = 0; k <= bars.length; k++) {
+    const light = lightBetween(poly, bars[k - 1], bars[k]);
+    if (light !== undefined) out.push(light);
+  }
+  return out;
+}
+
+/**
+ * The one light of the convex `poly` to the right of `before` and the left
+ * of `after` (either may be absent), run `GLAZING.rebate` past each bar's
+ * edge into it; undefined if nothing is left.
+ */
+function lightBetween(poly: readonly P2[], before: PlaneBar | undefined, after: PlaneBar | undefined): P2[] | undefined {
+  const side = (b: PlaneBar): P2 => {
+    const dx = b.to[0] - b.from[0];
+    const dy = b.to[1] - b.from[1];
+    const l = Math.hypot(dx, dy);
+    return [-dy / l, dx / l];
+  };
+  let light: P2[] = [...poly];
+  if (before !== undefined) {
+    const n = side(before);
+    light = clipHalf(light, before.from, [-n[0], -n[1]], before.w / 2 - GLAZING.rebate);
+  }
+  if (after !== undefined) light = clipHalf(light, after.from, side(after), after.w / 2 - GLAZING.rebate);
+  return light.length >= 3 && Math.abs(area2(light)) > 1e-4 ? light : undefined;
+}
+
+/**
+ * A pane: the polygon in the plane r = const, as a sheet `GLAZING.pane`
+ * thick centred on r (wound clockwise seen from +r, so it extrudes in).
+ */
+function sheet(poly: readonly P2[], r: number, t: number = GLAZING.pane): Prism {
+  const ring = area2(poly) > 0 ? [...poly].reverse() : [...poly];
+  return { outline: ring.map(([a, y]): Vec3 => [a, y, r + t / 2]), depth: t };
+}
+
+/** An axis-aligned light, a0..a1 by y0..y1, run `rebate` into its frame all round. */
+function rect(a0: number, a1: number, y0: number, y1: number): P2[] {
+  const e = GLAZING.rebate;
+  return [
+    [a0 - e, y0 - e],
+    [a1 + e, y0 - e],
+    [a1 + e, y1 + e],
+    [a0 - e, y1 + e],
+  ];
+}
+
+/**
+ * The glass in the square end of a bar that meets a curved or sloping
+ * member: the part of the convex `region` inside the bar's band, to
+ * `rebate` short of its edges (where the lights either side of it stop),
+ * and past its end `to` (`start`: past `from`), `rebate` into the bar. On
+ * `side` 1 only the band's left half looking from `from` to `to`, on -1
+ * only its right half. Undefined if that leaves nothing.
+ */
+function endFill(region: readonly P2[], from: P2, to: P2, w: number, side: -1 | 0 | 1 = 0, start = false): P2[] | undefined {
+  const e = GLAZING.rebate;
+  const l = Math.hypot(to[0] - from[0], to[1] - from[1]);
+  const d: P2 = [(to[0] - from[0]) / l, (to[1] - from[1]) / l];
+  const n: P2 = [-d[1], d[0]];
+  const half = w / 2 - e;
+  let fill = clipHalf(region, from, n, side === 1 ? 0 : -half);
+  fill = clipHalf(fill, from, [-n[0], -n[1]], side === -1 ? 0 : -half);
+  fill = start ? clipHalf(fill, from, [-d[0], -d[1]], -e) : clipHalf(fill, to, d, -e);
+  return fill.length >= 3 && Math.abs(area2(fill)) > 1e-6 ? fill : undefined;
+}
+
+/** The convex `poly` cut to the convex `clip` (either winding). */
+function clipConvex(poly: readonly P2[], clip: readonly P2[]): P2[] {
+  const sign = area2(clip) > 0 ? 1 : -1;
+  let out: P2[] = [...poly];
+  for (let i = 0; i < clip.length && out.length > 0; i++) {
+    const p = clip[i] as P2;
+    const q = clip[(i + 1) % clip.length] as P2;
+    // Inside is to the left of p->q for an anticlockwise clip.
+    out = clipHalf(out, p, [-(q[1] - p[1]) * sign, (q[0] - p[0]) * sign], 0);
+  }
+  return out;
+}
+
+/**
+ * The glass of the tympanum `tympanum` builds over bay centre `c` at r:
+ * the vault's end under its rib, over the sill, cut by the post and rays
+ * into six lights.
+ */
+function tympanumGlass(c: number, r: number): Prism[] {
+  const n = ARCADE.vaultSegments;
+  const inset = ARCADE.shell + GABLE.innerRib;
+  const rib = vaultArc(c, r, inset);
+  let poly: P2[] = vaultArc(c, r, inset - GLAZING.rebate).map(([a, y]): P2 => [a, y]);
+  poly = clipHalf(poly, [c, SPRING_Y + GABLE.innerRib - GLAZING.rebate], [0, 1], 0);
+  const hub: P2 = [c, SPRING_Y];
+  const bars: PlaneBar[] = [];
+  // Left to right, each pointing out of the hub: a light lies to the
+  // right of the ray before it.
+  for (let i = 2; i <= n - 2; i += 2) {
+    const [x, y] = rib[i] as Vec3;
+    bars.push({ from: hub, to: [x, y], w: i === n / 2 ? GABLE.outerRib : GABLE.ray });
+  }
+  // Each ray's square end meets the rib at a slant: the glass beyond it.
+  const ends = bars.map((b) => endFill(poly, b.from, b.to, b.w)).filter((f): f is P2[] => f !== undefined);
+  return [...lights(poly, bars), ...ends].map((p) => sheet(p, r - ARCADE.plate / 2));
+}
+
+/**
+ * The glazing bars, read off the plates at 1:100 (SOURCES.md §10.11;
+ * heights over the restaurant floor, good to ±0.03-0.05 [measured at about
+ * 118 px/m on the full scans] unless tagged). Bars 0.030 wide, rails 0.050,
+ * each 0.040 through the frame's plane [estimated: the plates draw lines].
+ *
+ * - THE FRANÇAIS' DOORS (PL-XXIX Figs 1, 3): four equal leaves of 0.61
+ *   between jambs 0.08 [measured: 0.58-0.63 stile to stile, about 0.08
+ *   frames], a stile between each pair and a meeting stile on the axis
+ *   [measured: a double line]; a raised panel from the floor to 0.58;
+ *   three panes to a leaf, bars at 1.18 and 1.73, up to a transom from
+ *   2.28 to the springing (the model's 2.43; measured 2.44). Over it, the
+ *   head's fan: an inner arched light over the two middle leaves, radius
+ *   0.62 [measured: span 1.26, crown 3.03], split by the axis bar, and
+ *   rays at ±30 and ±60 degrees from the upright [measured 30-32 and
+ *   53-58] from it out to the head: 2 + 6 lights. The ring is built as the
+ *   six chords between the rays' feet, so every light is convex.
+ * - THE SCREENS' LEAVES: two panes high on the Russe and the Bar, over a
+ *   rail at 2.10 and 2.02 [measured PL-XXIX Fig. 11: 2.10-2.13; PL-XXX
+ *   Fig. 5: 1.97-2.07; drawn double, so rails]; four high and two across
+ *   on the Flamand, bars at 1.13, 1.65, 2.14 [measured PL-XXX Fig. 17].
+ *   OVER THE TRANSOM each draws its own (`screenGlazing`): the Russe three
+ *   sashes three panes high, 2 / 4 / 2 across, and over its open centre
+ *   bay « Châssis fixe » lights, built four across and three high
+ *   [estimated: the plate draws vertical bars under the gables, not their
+ *   count]; the Bar two sashes about 0.80 wide either side of its middle
+ *   mullion, two by two, and diagonal boarding beyond them [measured]; the
+ *   Flamand a fanlight under the arch its dressing draws, eight across (the
+ *   leaves' lines and a bar between each two) and three high [counted],
+ *   boarded over the arch [sourced drawing]. The rows split the heights
+ *   evenly, as the plates' bars split theirs [measured: equal thirds and
+ *   halves].
+ */
+const GLAZING_BARS = {
+  bar: 0.03,
+  rail: 0.05,
+  depth: 0.04,
+  door: {
+    jamb: 0.08,
+    stile: 0.05,
+    meeting: 0.07,
+    panel: 0.58,
+    bars: [1.18, 1.73],
+    transom: 2.28,
+    fan: { radius: 0.62, rays: [-60, -30, 0, 30, 60] },
+  },
+  screen: {
+    russe: { across: 1, rails: [2.1], rail: true, upper: [2, 4, 2], rows: 3, centre: 4 },
+    anglo: { across: 1, rails: [2.02], rail: true, upper: [2, 2], rows: 2, sash: 0.8 },
+    flamand: { across: 2, rails: [1.13, 1.65, 2.14], rail: false, upper: [8], rows: 3 },
+  },
+} as const;
+
+/** A bar across or up an opening: where its middle is, and its width. */
+interface Cut {
+  readonly at: number;
+  readonly w: number;
+}
+
+/** Glass and the bars that divide it: its panes, and the bars as a part (named for `fitOutSolids`). */
+interface Glazed {
+  readonly panes: Prism[];
+  readonly bars: Parted;
+}
+
+/**
+ * A rectangular opening a0..a1 by y0..y1 in the plane r, divided by bars up
+ * it at `xs` and across it at `ys`: the bars as blocks
+ * `GLAZING_BARS.depth` through the plane (the ones across running between
+ * the ones up, so no two share a volume), the panes as the cells between
+ * them, each run `rebate` into every bar and edge round it.
+ */
+function grid(
+  a0: number,
+  a1: number,
+  y0: number,
+  y1: number,
+  r: number,
+  xs: readonly Cut[],
+  ys: readonly Cut[],
+): { panes: Prism[]; bars: Block[] } {
+  const t = GLAZING_BARS.depth;
+  const cuts = (lo: number, hi: number, list: readonly Cut[]) => [
+    lo,
+    ...[...list].sort((p, q) => p.at - q.at).flatMap((b) => [b.at - b.w / 2, b.at + b.w / 2]),
+    hi,
+  ];
+  const ca = cuts(a0, a1, xs);
+  const cy = cuts(y0, y1, ys);
+  const bars: Block[] = xs.map((x) => span(x.at - x.w / 2, x.at + x.w / 2, y0, y1, r - t / 2, r + t / 2));
+  for (const y of ys) {
+    for (let i = 0; i < ca.length; i += 2) {
+      bars.push(span(ca[i] as number, ca[i + 1] as number, y.at - y.w / 2, y.at + y.w / 2, r - t / 2, r + t / 2));
+    }
+  }
+  const panes: Prism[] = [];
+  for (let i = 0; i < ca.length; i += 2) {
+    for (let j = 0; j < cy.length; j += 2) {
+      panes.push(sheet(rect(ca[i] as number, ca[i + 1] as number, cy[j] as number, cy[j + 1] as number), r));
+    }
+  }
+  return { panes, bars };
+}
+
+/** `n` bars `w` wide dividing a0..a1 into n + 1 lights of equal clear width. */
+function even(a0: number, a1: number, n: number, w: number): Cut[] {
+  const clear = (a1 - a0 - n * w) / (n + 1);
+  return Array.from({ length: n }, (_, k) => ({ at: a0 + (k + 1) * clear + k * w + w / 2, w }));
+}
+
+/** Where the ray from `from` along `d` first leaves through the polyline `line` (a door's head). */
+function exit(line: readonly P2[], from: P2, d: P2): { at: P2; normal: P2 } {
+  let best: { at: P2; normal: P2; t: number } | undefined;
+  for (let i = 0; i + 1 < line.length; i++) {
+    const p = line[i] as P2;
+    const q = line[i + 1] as P2;
+    const e: P2 = [q[0] - p[0], q[1] - p[1]];
+    const den = d[0] * e[1] - d[1] * e[0];
+    if (Math.abs(den) < 1e-12) continue;
+    const w: P2 = [p[0] - from[0], p[1] - from[1]];
+    const t = (w[0] * e[1] - w[1] * e[0]) / den;
+    const s = (w[0] * d[1] - w[1] * d[0]) / den;
+    if (t > 1e-9 && s >= -1e-9 && s <= 1 + 1e-9 && (best === undefined || t < best.t)) {
+      const l = Math.hypot(e[0], e[1]);
+      best = { at: [from[0] + d[0] * t, from[1] + d[1] * t], normal: [e[1] / l, -e[0] / l], t };
+    }
+  }
+  if (best === undefined) throw new Error(`platforms.ts exit: the ray from ${from} along ${d} leaves no head`);
+  return best;
+}
+
+/**
+ * The Français' two doors over bay centre `c` in the gallery façade (see
+ * `FACADE`, `GLAZING_BARS.door`): each door's panel, stiles, bars,
+ * transom and fan, and its lights, in the wall's middle plane.
+ */
+function francaisDoors(c: number): Glazed {
+  const F = FACADE;
+  const B = GLAZING_BARS;
+  const D = B.door;
+  const r = PAV.front - F.wall / 2;
+  const t = B.depth;
+  const floor = FLOORS.first;
+  const spring = floor + F.spring;
+  const e = GLAZING.rebate;
+  const bars = parted("doorFrame", "doorFan");
+  const panes: Prism[] = [];
+  for (const s of [-1, 1]) {
+    const a = c + (s * (F.mid + F.door)) / 2;
+    const h = F.door / 2;
+    // The panel and the transom, the door's width.
+    bars.doorFrame.blocks.push(
+      span(a - h, a + h, floor, floor + D.panel, r - t / 2, r + t / 2),
+      span(a - h, a + h, floor + D.transom, spring, r - t / 2, r + t / 2),
+    );
+    // The jambs, and the leaves between them: a stile between each pair,
+    // the meeting stile on the axis.
+    const inside = h - D.jamb;
+    const pitch = inside / 2;
+    bars.doorFrame.blocks.push(
+      span(a - h, a - inside, floor + D.panel, floor + D.transom, r - t / 2, r + t / 2),
+      span(a + inside, a + h, floor + D.panel, floor + D.transom, r - t / 2, r + t / 2),
+    );
+    const low = grid(
+      a - inside,
+      a + inside,
+      floor + D.panel,
+      floor + D.transom,
+      r,
+      [
+        { at: a - pitch, w: D.stile },
+        { at: a, w: D.meeting },
+        { at: a + pitch, w: D.stile },
+      ],
+      D.bars.map((y) => ({ at: floor + y, w: B.bar })),
+    );
+    bars.doorFrame.blocks.push(...low.bars);
+    panes.push(...low.panes);
+
+    // The fan, centred on the axis at the springing. The ring is the
+    // chords between its points at -90 (on the transom), the rays' feet
+    // and +90; the rays run from it out to the head, the middle one from
+    // the centre, through the inner light, which it splits.
+    const hub: P2 = [a, spring];
+    const R = D.fan.radius;
+    const dir = (deg: number): P2 => [Math.sin((deg * Math.PI) / 180), Math.cos((deg * Math.PI) / 180)];
+    const angles = [-90, ...D.fan.rays, 90];
+    const ring = angles.map((deg): P2 => [a + R * dir(deg)[0], spring + R * dir(deg)[1]]);
+    const head = doorHead(a, PAV.front).map(([x, y]): P2 => [x, y]);
+    for (let i = 0; i + 1 < ring.length; i++) {
+      const [p, q] = [ring[i] as P2, ring[i + 1] as P2];
+      bars.doorFan.blocks.push(bar([p[0], p[1], r], [q[0], q[1], r], B.bar, t));
+    }
+    const rays: PlaneBar[] = [];
+    const ends: Array<{ from: P2; to: P2 }> = [];
+    for (const deg of D.fan.rays) {
+      const d = dir(deg);
+      const from: P2 = deg === 0 ? hub : [a + R * d[0], spring + R * d[1]];
+      // Stopped where its square end's leading corner meets the head's
+      // facet, so no corner of it reaches into the wall above.
+      const out = exit(head, hub, d);
+      const cos = Math.abs(d[0] * out.normal[0] + d[1] * out.normal[1]);
+      const back = ((B.bar / 2) * Math.sqrt(Math.max(0, 1 - cos * cos))) / cos + 0.001;
+      const to: P2 = [out.at[0] - d[0] * back, out.at[1] - d[1] * back];
+      bars.doorFan.blocks.push(bar([from[0], from[1], r], [to[0], to[1], r], B.bar, t));
+      rays.push({ from: hub, to: [a + d[0], spring + d[1]], w: B.bar });
+      ends.push({ from, to });
+    }
+    // The glass under the head, over the transom: a sector between each
+    // two rays (left to right, each light to the right of the ray before
+    // it looking out along it), cut by its chord of the ring into the fan
+    // light beyond; and inside the ring the two inner lights either side
+    // of the axis.
+    // The head, `rebate` out along its normal: the same facets on an
+    // ellipse grown by it both ways.
+    const grown = Array.from({ length: F.headSegments + 1 }, (_, i): P2 => {
+      const phi = Math.PI * (1 - i / F.headSegments);
+      return [a + (h + e) * Math.cos(phi), spring + (F.rise + e) * Math.sin(phi)];
+    });
+    const opening: P2[] = [[a - h - e, spring - e], ...grown, [a + h + e, spring - e]];
+    const chordIn = (i: number): { at: P2; n: P2 } => {
+      const [p, q] = [ring[i] as P2, ring[i + 1] as P2];
+      const l = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      let n: P2 = [(q[1] - p[1]) / l, -(q[0] - p[0]) / l];
+      if ((hub[0] - p[0]) * n[0] + (hub[1] - p[1]) * n[1] < 0) n = [-n[0], -n[1]];
+      return { at: p, n };
+    };
+    const sectors = lights(opening, rays);
+    if (sectors.length !== ring.length - 1) throw new Error(`platforms.ts francaisDoors: ${sectors.length} fan sectors`);
+    sectors.forEach((sector, i) => {
+      const { at, n } = chordIn(i);
+      const fanLight = clipHalf(sector, at, [-n[0], -n[1]], B.bar / 2 - e);
+      if (fanLight.length >= 3) panes.push(sheet(fanLight, r));
+    });
+    for (const [half, away] of [
+      [ring.slice(0, 4), -1],
+      [ring.slice(3), 1],
+    ] as const) {
+      let inner: P2[] = [hub, ...half];
+      for (let i = 0; i + 1 < ring.length; i++) {
+        const { at, n } = chordIn(i);
+        inner = clipHalf(inner, at, n, B.bar / 2 - e);
+      }
+      inner = clipHalf(inner, hub, [0, 1], -e);
+      inner = clipHalf(inner, hub, [away, 0], B.bar / 2 - e);
+      if (inner.length >= 3) panes.push(sheet(inner, r));
+    }
+    // The rays stop short of the head, square: the glass past each end.
+    for (const { from, to } of ends) {
+      const fill = endFill(opening, from, to, B.bar);
+      if (fill !== undefined) panes.push(sheet(fill, r));
+    }
+  }
+  return { panes, bars };
+}
+
+/**
+ * A timber screen's glass, glazing bars and boarding, light by light
+ * (`screenFront`, the same `open` and `upper`; `GLAZING_BARS.screen`): the
+ * leaves between the mullions over the sill, and over the transom what
+ * each pavilion's plate draws there — the Russe's sashes between its own
+ * mullions and its centre bay's fixed lights, the Bar's two sashes by its
+ * middle mullion and the boarding beyond them, the Flamand's fanlight
+ * under its arch and the boarding over it.
+ */
+function screenGlazing(which: keyof typeof GLAZING_BARS.screen, open: boolean, upper: readonly number[]): Glazed {
+  const F = PAVILION_FRAME;
+  const B = GLAZING_BARS;
+  const S = B.screen[which];
+  const { front, half, bay } = PAV;
+  const floor = FLOORS.first;
+  const rMid = front - F.post / 2;
+  const stations = [-3, -2, -1, 0, 1, 2, 3].map((i) =>
+    Math.abs(i) === 3 ? Math.sign(i) * (half - F.post / 2) : i * bay,
+  );
+  const transom = floor + F.transom;
+  const u0 = transom + F.beam;
+  const u1 = SPRING_Y - F.beam;
+  const bars = parted("glazing", "boarding");
+  const panes: Prism[] = [];
+  // The lights between the mullions at fractions `at` of a0..a1, each glazed as `each` says.
+  const row = (a0: number, a1: number, at: readonly number[], each: (l0: number, l1: number, k: number) => void) => {
+    const edges = [a0, ...at.flatMap((u) => [a0 + (a1 - a0) * u - F.mullion / 2, a0 + (a1 - a0) * u + F.mullion / 2]), a1];
+    for (let i = 0; i < edges.length; i += 2) each(edges[i] as number, edges[i + 1] as number, i / 2);
+  };
+  const put = (g: { panes: Prism[]; bars: Block[] }) => {
+    panes.push(...g.panes);
+    bars.glazing.blocks.push(...g.bars);
+  };
+  const board = (poly: readonly P2[]) => bars.boarding.prisms.push(sheet(poly, rMid, F.board));
+  for (let j = 0; j + 1 < stations.length; j++) {
+    const a0 = (stations[j] as number) + F.post / 2;
+    const a1 = (stations[j + 1] as number) - F.post / 2;
+    const centre = open && (j === 2 || j === 3);
+    if (!centre) {
+      const leaves = Array.from({ length: F.leaves - 1 }, (_, m) => (m + 1) / F.leaves);
+      row(a0, a1, leaves, (l0, l1) =>
+        put(
+          grid(
+            l0,
+            l1,
+            floor + F.sill,
+            transom,
+            rMid,
+            even(l0, l1, S.across - 1, B.bar),
+            S.rails.map((y) => ({ at: floor + y, w: S.rail ? B.rail : B.bar })),
+          ),
+        ),
+      );
+    }
+    const rows = even(u0, u1, S.rows - 1, B.bar);
+    if (which === "russe") {
+      // Over the open centre bay the fixed lights; elsewhere the sashes.
+      if (centre) put(grid(a0, a1, u0, u1, rMid, even(a0, a1, B.screen.russe.centre - 1, B.bar), rows));
+      else row(a0, a1, upper, (l0, l1, k) => put(grid(l0, l1, u0, u1, rMid, even(l0, l1, (S.upper[k] ?? 1) - 1, B.bar), rows)));
+    } else if (which === "anglo") {
+      // A sash either side of the middle mullion, boarding beyond it.
+      const w = B.screen.anglo.sash;
+      row(a0, a1, upper, (l0, l1, k) => {
+        const [g0, g1] = k === 0 ? [l1 - w, l1] : [l0, l0 + w];
+        put(grid(g0, g1, u0, u1, rMid, even(g0, g1, (S.upper[k] ?? 1) - 1, B.bar), rows));
+        const [b0, b1] = k === 0 ? [l0, g0] : [g1, l1];
+        board([
+          [b0, u0],
+          [b1, u0],
+          [b1, u1],
+          [b0, u1],
+        ]);
+      });
+    } else {
+      // The fanlight under the dressing's arch (`flamandDressing`: its
+      // feet 0.05 inside the posts, rising `archRise` from the transom's
+      // beam), glazed to the arch's centre line behind it; its bars on the
+      // leaves' lines and between them; boarding over it.
+      const D = DRESSING;
+      const f0 = a0 + 0.05;
+      const f1 = a1 - 0.05;
+      const mid = (f0 + f1) / 2;
+      const arch: P2[] = [];
+      for (let i = 0; i <= D.facets; i++) {
+        const phi = Math.PI * (1 - i / D.facets);
+        arch.push([mid + ((f1 - f0) / 2) * Math.cos(phi), u0 + D.flamand.archRise * Math.sin(phi)]);
+      }
+      const archAt = (x: number): number => {
+        for (let i = 0; i + 1 < arch.length; i++) {
+          const [p, q] = [arch[i] as P2, arch[i + 1] as P2];
+          if (x >= p[0] - 1e-9 && x <= q[0] + 1e-9) return p[1] + ((q[1] - p[1]) * (x - p[0])) / (q[0] - p[0]);
+        }
+        return u0;
+      };
+      const xs: Cut[] = [];
+      for (let m = 1; m < 8; m++) xs.push({ at: a0 + ((a1 - a0) * m) / 8, w: m % 2 === 0 ? F.mullion : B.bar });
+      const ys = even(u0, u0 + D.flamand.archRise, S.rows - 1, B.bar);
+      const cells = grid(f0, f1, u0, u0 + D.flamand.archRise, rMid, xs, ys);
+      for (const pane of cells.panes) {
+        const ring = pane.outline.map(([x, y]): P2 => [x, y]);
+        const light = clipConvex(ring, arch);
+        if (light.length >= 3 && Math.abs(area2(light)) > 1e-6) panes.push(sheet(light, rMid));
+      }
+      const t = B.depth;
+      for (const x of xs) {
+        // Up to the arch at the bar's higher side, so no light shows over it.
+        const [x0, x1] = [x.at - x.w / 2, x.at + x.w / 2];
+        const yTop = Math.max(archAt(x0), archAt(x1), ...arch.filter((q) => q[0] > x0 && q[0] < x1).map((q) => q[1]));
+        if (yTop - u0 > 1e-6) bars.glazing.blocks.push(span(x.at - x.w / 2, x.at + x.w / 2, u0, yTop, rMid - t / 2, rMid + t / 2));
+      }
+      for (const y of ys) {
+        // Across the arch at that height, between its two sides.
+        const across = clipConvex(
+          [
+            [f0, y.at - y.w / 2],
+            [f1, y.at - y.w / 2],
+            [f1, y.at + y.w / 2],
+            [f0, y.at + y.w / 2],
+          ],
+          arch,
+        );
+        const lo = Math.min(...across.map((q) => q[0]));
+        const hi = Math.max(...across.map((q) => q[0]));
+        // [lo, hi] less the upright bars, which run through.
+        let from = lo;
+        for (const x of [...xs].sort((p, q) => p.at - q.at)) {
+          const [x0, x1] = [x.at - x.w / 2, x.at + x.w / 2];
+          if (x1 <= from || x0 >= hi) continue;
+          if (x0 - from > 1e-6) bars.glazing.blocks.push(span(from, x0, y.at - y.w / 2, y.at + y.w / 2, rMid - t / 2, rMid + t / 2));
+          from = Math.max(from, x1);
+        }
+        if (hi - from > 1e-6) bars.glazing.blocks.push(span(from, hi, y.at - y.w / 2, y.at + y.w / 2, rMid - t / 2, rMid + t / 2));
+      }
+      // The boarding: a strip by each post, and over each facet of the arch up to the head beam.
+      board([
+        [a0, u0],
+        [f0, u0],
+        [f0, u1],
+        [a0, u1],
+      ]);
+      board([
+        [f1, u0],
+        [a1, u0],
+        [a1, u1],
+        [f1, u1],
+      ]);
+      for (let i = 0; i + 1 < arch.length; i++) {
+        const [p, q] = [arch[i] as P2, arch[i + 1] as P2];
+        board([p, q, [q[0], u1], [p[0], u1]]);
+      }
+    }
+  }
+  return { panes, bars };
+}
+
+/** The Français' doors over its three bays, as one. */
+function francaisDoorsAll(): Glazed {
+  const all = [-1, 0, 1].map((k) => francaisDoors(bayCentre(k)));
+  const bars = parted("doorFrame", "doorFan");
+  for (const d of all) {
+    for (const name of ["doorFrame", "doorFan"] as const) {
+      bars[name].blocks.push(...(d.bars[name] as Piece).blocks);
+      bars[name].prisms.push(...(d.bars[name] as Piece).prisms);
+    }
+  }
+  return { panes: all.flatMap((d) => d.panes), bars };
+}
+
+/**
+ * The silvered glass in the crescent of the gable over bay centre `c` on
+ * the face (`gableRibs`, face gable): a plate in each of its twelve cells,
+ * between two rays (or a ray and the crescent's foot) and the two ribs;
+ * the plates in the square ends of the rays, which meet the ribs at a
+ * slant; and at each foot, where the two ribs come down to the springing
+ * apart, a sill the width of a ray on which the end plates stand
+ * [estimated: the plates draw the crescent's foot on the pier's head].
+ */
+function crescentGlass(c: number): { plates: Prism[]; ends: Prism[]; sills: Block[] } {
+  const n = ARCADE.vaultSegments;
+  const e = GLAZING.rebate;
+  const outerIn = vaultArc(c, EDGE, GABLE.outerRib);
+  const innerOut = innerArc(c, EDGE, GABLE.innerRib);
+  const top = vaultArc(c, EDGE, GABLE.outerRib - e);
+  const bottom = innerArc(c, EDGE, GABLE.innerRib - e);
+  const p2 = (p: Vec3): P2 => [p[0], p[1]];
+  const sill = SPRING_Y + GABLE.ray;
+  // Each sill runs from the outer rib's foot to where the inner rib's edge
+  // stands at the sill's top, which leans out over its own foot.
+  const sills: Block[] = [
+    [0, 1],
+    [n, n - 1],
+  ].map(([i, j]) => {
+    const [p, q] = [innerOut[i as number] as Vec3, innerOut[j as number] as Vec3];
+    const x = p[0] + ((q[0] - p[0]) * (sill - p[1])) / (q[1] - p[1]);
+    const [a0, a1] = [(outerIn[i as number] as Vec3)[0], x].sort((u, v) => u - v) as [number, number];
+    return span(a0, a1, SPRING_Y, sill, EDGE - ARCADE.plate, EDGE);
+  });
+  // Cell i, over the sill.
+  const cell = (i: number): P2[] => {
+    const quad: P2[] = [p2(top[i] as Vec3), p2(top[i + 1] as Vec3), p2(bottom[i + 1] as Vec3), p2(bottom[i] as Vec3)];
+    return clipHalf(quad, [c, sill - e], [0, 1], 0);
+  };
+  const rays: PlaneBar[] = [];
+  for (let i = 1; i < n; i++) {
+    rays.push({ from: p2(innerOut[i] as Vec3), to: p2(outerIn[i] as Vec3), w: GABLE.ray });
+  }
+  const r = EDGE - GLAZING.silveredSet;
+  const plates: Prism[] = [];
+  for (let i = 0; i < n; i++) {
+    const light = lightBetween(cell(i), rays[i - 1], rays[i]);
+    if (light === undefined) throw new Error(`platforms.ts crescentGlass: cell ${i} of the gable at ${c} is empty`);
+    plates.push(sheet(light, r));
+  }
+  // Ray i + 1 runs between cells i (on its left) and i + 1 (on its right).
+  const ends: Prism[] = [];
+  rays.forEach((ray, i) => {
+    for (const [side, k] of [
+      [1, i],
+      [-1, i + 1],
+    ] as const) {
+      for (const start of [false, true]) {
+        const fill = endFill(cell(k), ray.from, ray.to, ray.w, side, start);
+        if (fill !== undefined) ends.push(sheet(fill, r));
+      }
+    }
+  });
+  return { plates, ends, sills };
+}
+
+/**
+ * The clear glass (`glass`) and the silvered (`silvered`), each as world
+ * prisms on the faces it stands on, and a pane count by opening for the
+ * record. For inspection as well as for the cook.
+ */
+export function glazing(): { glass: Prism[]; silvered: Prism[]; sills: Block[]; count: Record<string, number> } {
+  const P = PAVILION_FACE;
+  const all = [0, 1, 2, 3];
+  const timber = DRESSING;
+  const count: Record<string, number> = {};
+  const glass: Prism[] = [];
+  const put = (name: string, list: readonly Prism[], faces: readonly number[]) => {
+    const placed = allFacesPrisms(list, faces);
+    count[name] = (count[name] ?? 0) + placed.length;
+    glass.push(...placed);
+  };
+  const rearOf = (k: number) => (k === 0 ? PAV.back : PAV.annex) + ARCADE.plate;
+  put("francais.doors", francaisDoorsAll().panes, [P.francais]);
+  for (const k of [-1, 0, 1]) {
+    const c = bayCentre(k);
+    put("francais.tympana", tympanumGlass(c, PAV.front), [P.francais]);
+    put("rear.tympana", tympanumGlass(c, rearOf(k)), all);
+  }
+  put("flamand.screen", screenGlazing("flamand", false, timber.flamand.upper).panes, [P.flamand]);
+  put("anglo.screen", screenGlazing("anglo", false, timber.anglo.upper).panes, [P.anglo]);
+  put("russe.screen", screenGlazing("russe", true, timber.russe.upper).panes, [P.russe]);
+  const plates: Prism[] = [];
+  const ends: Prism[] = [];
+  const feet: Block[] = [];
+  for (let k = -4; k <= 4; k++) {
+    const cr = crescentGlass(bayCentre(k));
+    plates.push(...cr.plates);
+    ends.push(...cr.ends);
+    feet.push(...cr.sills);
+  }
+  const silvered = [...allFacesPrisms(plates, all), ...allFacesPrisms(ends, all)];
+  count["crescents"] = plates.length * all.length;
+  count["crescent.ends"] = ends.length * all.length;
+  return { glass, silvered, sills: allFaces(feet, all), count };
 }
 
 /** The 1st floor's cross girders on the +z face: parallelograms between the legs. */
@@ -4368,6 +5090,8 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
   }
   const galleryRail = railFace(GALLERY_RAIL, EDGE, EDGE, GALLERY.floor, galleryPosts);
 
+  // The glass the frames leave open (`glazing`), and the crescents' sills.
+  const glazed = glazing();
   const fitBlocks = blocks(
     g,
     "fitOut",
@@ -4392,6 +5116,7 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
       allFaces(staffShell.walls, staffFaces),
       allFaces(timberShell.walls, timberFaces),
       landingBlocks(),
+      glazed.sills,
     ),
   );
   // The inner arcade, all round; the entrance flights, on the Français and
@@ -4465,6 +5190,8 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
 
   return {
     platforms: [fitBlocks, fitPrisms, ...fitInner, ...fitFlights, ...fitSecond, ...fitPavilions, ...fitArcade],
+    glass: [prisms(g, "restaurantGlass", glazed.glass)],
+    silvered: [prisms(g, "crescentGlass", glazed.silvered)],
     fittings,
     names: [namesLetters(g)],
     masonry: [copyToQuadrants(g, "pedestals", pedestal, quads)],

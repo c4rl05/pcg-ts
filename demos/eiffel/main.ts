@@ -78,6 +78,7 @@ import {
   CylinderGeometry,
   LatheGeometry,
   DoubleSide,
+  FrontSide,
   type InstancedMesh,
   type Material,
   Mesh,
@@ -145,6 +146,14 @@ const PALETTE: Record<PartClass, { color: number; roughness: number; metalness: 
   // The lifts' machinery: bare iron, oiled and worn rather than painted —
   // the family's darkest step, and a touch more metal.
   machinery: { color: 0x4f3a2e, roughness: 0.5, metalness: 0.3 },
+  // Clear glass, faintly green as plate glass is, near-mirror smooth; the
+  // see-through rest of it is set on the material below (`GLASS`).
+  glass: { color: 0xb9ccc8, roughness: 0.06, metalness: 0 },
+  // The arcade crescents' silvered, tinted cast glass « donnant l'aspect de
+  // plaques dorées »: a mirror behind a warm tint, read as gilt; a shade
+  // paler than the names' leaf. (Smoother, it mirrored the dark lattice
+  // and read olive.)
+  silvered: { color: 0xcfa84e, roughness: 0.3, metalness: 0.85 },
 };
 
 const MATERIALS = Object.fromEntries(
@@ -153,6 +162,31 @@ const MATERIALS = Object.fromEntries(
     new MeshStandardMaterial({ ...PALETTE[cls], side: DoubleSide }),
   ]),
 ) as Record<PartClass, MeshStandardMaterial>;
+
+/**
+ * THE GLASS IS SEEN THROUGH, and that is the whole of its job: a pane
+ * that hid the lattice behind it would undo the one thing the page is
+ * for. So it is blended rather than transmitted — a transmission material
+ * renders the opaque scene a second time into a texture every frame,
+ * which at `?laced` is millions of triangles for the refraction of a few
+ * hundred windows — at a low opacity, and it writes no depth, so panes
+ * behind panes all show and the order they draw in cannot matter (the
+ * same colour blended over itself commutes). Each pane is a thin solid,
+ * so it is drawn FRONT faces only: the near face of the sheet and never
+ * both, which would double every pane's tint. It casts no shadow (a depth
+ * map knows no opacity, and every pane would print as a solid black
+ * plate, dark on the restaurants and the gallery floor) but receives the
+ * lattice's, which is how a window reads as standing in the sun; and the
+ * occlusion pass leaves it out (`gtao.ts`), so the members behind the
+ * glass keep their own.
+ */
+const GLASS = { opacity: 0.2 } as const;
+Object.assign(MATERIALS.glass, {
+  transparent: true,
+  opacity: GLASS.opacity,
+  depthWrite: false,
+  side: FrontSide,
+});
 
 /**
  * An output no class names — a module under construction declaring its
@@ -711,6 +745,8 @@ async function main(): Promise<void> {
       classStats[cls]("no mesh");
       continue;
     }
+    // Glass casts nothing (see `GLASS`).
+    if (cls === "glass") for (const mesh of drawn.meshes) mesh.castShadow = false;
     keep(cls, drawn);
     present.push(cls);
     classStats[cls](drawn.triangles.toLocaleString());

@@ -33,7 +33,7 @@
  *    bays a straight side and two a chamfer, over a solid 1.20 parapet with
  *    its 40 x 40 lattice outside, 0.50 solid piers at the corners, the
  *    1.030 window and the 0.200 sablière [sourced, `GALLERY_POSTS`,
- *    `GALLERY_WALL`]; the panes are the glazing's item. The balcony is 17.6
+ *    `GALLERY_WALL`]; the panes are `summitGlass`'s. The balcony is 17.6
  *    m across [estimated: PL-VII draws it about 0.5 proud of the glass],
  *    its railing three round bars on the window posts continued [sourced
  *    PL-XIV Fig. 7, `BALCONY_RAILS`]. Its deck is open for the Edoux, the
@@ -163,6 +163,7 @@ import {
 } from "./lattice.js";
 import { CROSS_RIVETS, CROSS_THICK, type Crossing, crossPlateSets } from "./crossing.js";
 import { CROSS_PLATE_AT, type Detail, type Parts, joinParts } from "./parts.js";
+import { GLAZING } from "./platforms.js";
 import { FLOORS, MEMBERS, PANEL29 } from "./spec.js";
 import {
   UPRIGHT_SEAMS,
@@ -1432,7 +1433,7 @@ function anticlockwise(s: Slab): Slab {
  * The glazed gallery round the 3rd floor and Eiffel's balcony on its roof
  * (header, items 2-3): the posts, the solid corner piers, the parapet's
  * sheet with its lattice outside it, the sill, the sablière, each bay's
- * sash bars (the panes are the glazing's), and the balcony's deck and
+ * sash bars (the panes are `summitGlass`'s), and the balcony's deck and
  * railing.
  */
 function gallery(g: Graph): NodeHandle[] {
@@ -1961,6 +1962,83 @@ function pavilion(g: Graph): NodeHandle[] {
     slabs(g, "pavilionRoof", p.roof),
     faceSkin(g, "pavilionSash", members(g, "pavilionSashPaths", p.sashes, p.sashN), PAVILION.sash),
   ];
+}
+
+// ------------------------------------------------------------------ the glass
+
+/**
+ * The glass of the 3rd-floor gallery and of Eiffel's pavilion (SOURCES.md
+ * §10.11), as slabs in the planes of their frames, each light cut to its
+ * frame's clear opening and run `GLAZING.rebate` into the members round
+ * it, `GLAZING.pane` thick [estimated, as on the 1st floor]:
+ *
+ * - THE CROISÉES: « des glaces mobiles que l'on peut élever ou abaisser »
+ *   [sourced p. 216], each bay's two sashes meeting at mid-height, each
+ *   sash of two lights either side of the bar `gallery` builds (PL-XIX
+ *   Fig. 3 draws two lights a bay), so four panes a bay, 96 in the 24
+ *   bays, on the glass line between the posts, over the sill rail and
+ *   under the sablière.
+ * - THE PAVILION: each two-light window's two panes either side of its
+ *   bar, sill to head, and each door glazed from the floor to its head as
+ *   PL-XIX Fig. 3 is read (`PAVILION`), in the wall's middle plane: 32 + 8,
+ *   each stopping at the wall's reveal (see below).
+ */
+export function summitGlass(): { gallery: Slab[]; pavilion: Slab[] } {
+  const t = GLAZING.pane;
+  const e = GLAZING.rebate;
+  const y0 = FLOORS.third;
+  const line = octagon(GALLERY.flat, GALLERY.straight, y0);
+  const { bays } = galleryLayout(y0);
+  const frame = GALLERY_MEMBERS.frame;
+  const bar = GALLERY_WALL.sash;
+  const sill = y0 + GALLERY.parapet;
+  const head = sill + GALLERY_WALL.window;
+  const meet = (sill + frame + head) / 2;
+  const gallery: Slab[] = [];
+  for (const b of bays) {
+    const mid = (b.u0 + b.u1) / 2;
+    // A chamfer's second bay ends on the next straight side's vertex post,
+    // square to that side, so turned 45 degrees to this one: it reaches
+    // frame √2 along the chamfer, not frame.
+    const L = Math.hypot(line[(b.side + 1) % 8]![0] - line[b.side]![0], line[(b.side + 1) % 8]![2] - line[b.side]![2]);
+    const end = b.side % 2 === 1 && Math.abs(b.u1 - L) < 1e-9 ? frame * Math.SQRT2 : frame;
+    for (const [u0, u1] of [
+      [b.u0 + frame, mid - bar],
+      [mid + bar, b.u1 - end],
+    ] as const) {
+      for (const [ya, yb] of [
+        [sill + frame, meet - bar],
+        [meet + bar, head],
+      ] as const) {
+        gallery.push(sidePanel(line, b.side, u0 - e, u1 + e, ya - e, yb + e, -t / 2, t / 2));
+      }
+    }
+  }
+  const P = PAVILION;
+  const half = P.side / 2;
+  const mid = (half + (half - P.wall)) / 2;
+  const floorY = apartmentFloor;
+  const pavilion: Slab[] = [];
+  const pane = (f: Face, u0: number, u1: number, ya: number, yb: number): Slab => {
+    const ring = [onFace(f, mid, u0, ya, -t / 2), onFace(f, mid, u1, ya, -t / 2), onFace(f, mid, u1, ya, t / 2), onFace(f, mid, u0, ya, t / 2)];
+    return anticlockwise({ outline: ring, depth: yb - ya });
+  };
+  // The pavilion's panes stop AT its walls' reveals rather than in them:
+  // the walls are the rooms' solids, which nothing may enter by a
+  // millimetre (tests/eiffelSummitRooms.test.ts). Into the bar, as ever.
+  FACES.forEach((f, i) => {
+    for (const [u, kind] of PAVILION_OPENINGS[i]!) {
+      if (kind === "W") {
+        const w = P.window.width / 2;
+        const [ya, yb] = [floorY + P.window.sill, floorY + P.window.head];
+        pavilion.push(pane(f, u - w, u - P.sash + e, ya, yb), pane(f, u + P.sash - e, u + w, ya, yb));
+      } else {
+        const w = P.door.width / 2;
+        pavilion.push(pane(f, u - w, u + w, floorY, floorY + P.door.head));
+      }
+    }
+  });
+  return { gallery, pavilion };
 }
 
 // ------------------------------------------------------------ the contrefiches
@@ -2908,8 +2986,10 @@ export function buildSummit(g: Graph, detail: Detail = {}): Parts {
     ladder,
     ...lantern(g, crownY),
   ];
+  const glazed = summitGlass();
   return joinParts(panel29(g, detail), {
     summit,
+    glass: [slabs(g, "galleryGlass", glazed.gallery), slabs(g, "pavilionGlass", glazed.pavilion)],
     gussets: girders.gussets ?? [],
     rivets: [...(girders.rivets ?? []), ...ribRivets],
   });
