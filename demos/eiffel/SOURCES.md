@@ -2060,6 +2060,16 @@ The backlog asked for "tie plates across the chord angles at every strut end, an
 - **Heads under other steel.** About 1,100 crossing heads have steel within 3 cm above them, 870 of them in the girder web, about the rate of that set's chord heads. About 200 stand 12-23 mm from a `decoTop` head facing the same way at y ≈ 50.1 [measured by the independent check].
 - **Heads inside the uprights' steel from before this change.** The first floor's sets keep 672 such heads: `main` 424, the arches' chords 154, their montants 61, and 33 across five more sets [measured]. They are the first floor's to settle.
 
+### 27.6 Shop and site rivets on the page (2026-09-26)
+
+**The rule** is §27.4's `rivetClass`: one class per rivet output, so the tag is the batch. The page draws every output with a site share (`.joints`, `.splices`, `.crossings`, the `…Lap`s) in a material of its own and the rest in the rivet asset's (`main.ts`, `RIVET_TONE`). No per-instance channel is needed, because no output mixes the two.
+
+**The look.** The book gives no colour difference: the tower was painted over both. What differs is how they were driven. The riveters replaced the erectors' temporary bolts "par des rivets posés à chaud" [sourced text p. 107]. Each gang was four men: "le riveur, le frappeur, le teneur de tas et le mousse chauffeur" [sourced text p. 114]. The book does not say how the shop drove its heads. So a site head is drawn a step lighter and rougher than a shop head, as a hand-closed head painted on the tower [estimated]: 0x684a37 at roughness 0.68, against 0x5c4232 at 0.58. That difference shows close up and not from the ground.
+
+**The toggle.** The "site rivets" checkbox, or `?site` in the URL, lights the site heads orange (0xe0782a) against the shop's, to show where the Champ de Mars riveting was. A "site-driven" line counts the heads it covers. That is heads, not rivets: §27.4 counts rivets.
+
+Rendered on a local dev server at the guide's `rivets-close` pose, both ways: the joint and splice rows light up, and the uprights' seam rows stay shop. There are 349,456 site heads of 1,207,672 (29 %).
+
 ---
 
 ## 28. The arches' ironwork: PL-XI Fig. 14, the decorated panel (2026-09-26)

@@ -50,7 +50,7 @@
  * and the names are gilded.
  *
  * THE RIVETS ARE INSTANCES, not mesh. `?rivets` (which implies `?laced`)
- * makes the cook put out `rivets*` outputs of instance batches — about 894,000
+ * makes the cook put out `rivets*` outputs of instance batches — about 1.2 M
  * of them — and the page draws each batch as one instanced unit-size dome
  * whose instance matrix carries the rivet's true size. They receive the
  * sun's shadow but do not cast it: a head 13 mm high throws nothing a
@@ -114,6 +114,7 @@ import { LOOK } from "./look.js";
 import { PART_CLASSES, type PartClass } from "./parts.js";
 import { BALUSTER, CABOCHON_RISE, FITTING_ASSETS } from "./platforms.js";
 import { NEUTRAL, createRig } from "./rig.js";
+import { rivetClass } from "./spec.js";
 
 // ------------------------------------------------------------------ //
 // The look.
@@ -170,7 +171,7 @@ const UNCLASSED = new MeshStandardMaterial({
  * y = 0 and rising 0.7 along +y, the rivet's axis out of the plate. Each
  * instance matrix carries the rivet's true size, so this is the shape
  * only. Open at the base, which lies against the plate and is never seen;
- * 16 around and 3 rings is 80 triangles, and there are about 894,000 of these.
+ * 16 around and 3 rings is 80 triangles, and there are about 1.2 M of these.
  */
 function rivetHead(): BufferGeometry {
   const base = 1;
@@ -186,14 +187,42 @@ function rivetHead(): BufferGeometry {
 }
 
 /**
+ * SHOP AND SITE RIVETS. Most of the tower's rivets were driven at
+ * Levallois-Perret; the 1,050,846 the book counts were driven on the
+ * Champ de Mars, hot, by gangs of four, and the paint went on over both
+ * (spec.ts `COUNTS`; SOURCES.md §27.6). Which
+ * output is which is spec.ts' `rivetClass`, one class per output, so the
+ * tag is the batch: a site output draws in its own material and needs no
+ * per-instance channel. By default the site heads are a step lighter and
+ * rougher than the shop's — hand-closed and painted on the tower, in the
+ * same paint — which reads up close and not from the ground [estimated];
+ * the "site rivets" checkbox (or `?site`) lights them instead.
+ */
+const RIVET_TONE = {
+  shop: { color: 0x5c4232, roughness: 0.58 },
+  site: { color: 0x684a37, roughness: 0.68 },
+  lit: { color: 0xe0782a, roughness: 0.5 },
+} as const;
+const RIVET_SHOP = new MeshStandardMaterial({ ...RIVET_TONE.shop, metalness: 0.18 });
+const RIVET_SITE = new MeshStandardMaterial({ ...RIVET_TONE.site, metalness: 0.18 });
+
+/** Show the site rivets in their own tone, or lit up against the shop's. */
+function lightSiteRivets(on: boolean): void {
+  const tone = on ? RIVET_TONE.lit : RIVET_TONE.site;
+  RIVET_SITE.color.set(tone.color);
+  RIVET_SITE.roughness = tone.roughness;
+}
+
+/**
  * What the cook's instance batches resolve against. The rivets are the
  * iron's family a step darker than any class: they sit proud of the plate
- * and read as its shaded dots.
+ * and read as its shaded dots. (A site rivet output is redrawn in
+ * {@link RIVET_SITE} once drawn.)
  */
 const ASSETS: AssetMap = {
   rivet: {
     geometry: rivetHead(),
-    material: new MeshStandardMaterial({ color: 0x5c4232, roughness: 0.58, metalness: 0.18 }),
+    material: RIVET_SHOP,
   },
   // The 1st floor's fittings (platforms.ts): each a unit shape whose true
   // size the instance matrix carries, in the one material that is not
@@ -705,6 +734,9 @@ async function main(): Promise<void> {
     }
     if (drawn.meshes.length === 0) continue;
     keep(name, drawn);
+    // A site rivet output in its own material (`rivetClass`: any share of
+    // it driven on site); every other rivet keeps the asset's, the shop's.
+    if (isRivets(name) && rivetClass(name).share > 0) for (const mesh of drawn.meshes) mesh.material = RIVET_SITE;
     if (!named) present.push(name);
     if (isChain(name)) {
       const chain = LIFT_CHAINS.findIndex((c) => `chain.${c.name}` === name);
@@ -746,6 +778,15 @@ async function main(): Promise<void> {
   statTotal(total.toLocaleString());
   if (rivets || riveted > 0) {
     overlay.addStat("rivets")(riveted > 0 ? riveted.toLocaleString() : "absent");
+  }
+  if (riveted > 0) {
+    let site = 0;
+    for (const [name, list] of meshes) {
+      if (isRivets(name) && rivetClass(name).share > 0) for (const m of list) site += (m as InstancedMesh).count;
+    }
+    overlay.addStat("site-driven")(`${site.toLocaleString()} (${((100 * site) / riveted).toFixed(0)} %)`);
+    lightSiteRivets(params.has("site"));
+    overlay.addCheckbox("site rivets", params.has("site"), lightSiteRivets);
   }
   if (fitted > 0) overlay.addStat("fittings")(fitted.toLocaleString());
   if (linked > 0) overlay.addStat("chain pieces")(linked.toLocaleString());
