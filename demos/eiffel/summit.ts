@@ -23,25 +23,31 @@
  *    + 0.60) [sourced PL-VII]; the base is the shaft's own 0.60 horizontal
  *    at its top node; the light horizontals are 0.16 [measured PL-XIV]. The
  *    corner uprights and the b/d posts run on up through the glazed gallery
- *    to the apartment's floor [PL-VII Fig. 4].
+ *    to the balcony's beam [PL-VII Fig. 4], and on inside the pavilion's
+ *    walls.
  * 2. THE GALLERY: a glazed octagon ("paroi vitrée") 16.56 m across the
  *    flats with 10.90 m straight sides and 45-degree chamfers [sourced
- *    PL-XIX Fig. 9], glazed from the floor to Eiffel's BALCONY, whose deck
- *    top is 2.430 over the floor [sourced on three plates: PL-VII 1.200 +
- *    1.030 + 0.200, PL-XIV Fig. 2 1.200 + 1.230, PL-XIX Fig. 3 "1.20" +
- *    "1.23"] on "Fer I 120" joists [sourced PL-VII]: a 1.20 lattice
- *    parapet ("treillis 40 x 40 x 4") and glazing above it, built as its
- *    frame — sills, mullions, the parapet's X — with the panes left open.
- *    The balcony is 17.6 m across [estimated: PL-VII draws it about 0.5
- *    proud of the glass], with a 1.00 railing [sourced PL-VII] on the
- *    glass line, its posts over the mullions [PL-XIV Fig. 2].
- * 3. THE APARTMENT: a box 10.68 m square [sourced PL-XIX Fig. 5, "Toiture
- *    du logement de Monsieur Eiffel"], its floor 2.58 over the 3rd floor,
- *    a step of 0.15 above the balcony [sourced PL-XIX Fig. 3, "Niveau du
- *    plancher (312.21) du logement"], and 2.27 m tall [sourced PL-XIX
- *    Fig. 3]. 2.58 + 2.27 closes on the chain's printed 4.850 to y 280.98
- *    [derived]. The model's block stands on the balcony deck, so it holds
- *    the step too.
+ *    PL-XIX Fig. 9], closed to Eiffel's BALCONY, whose deck top is 2.430
+ *    over the floor [sourced PL-VII 1.200 + 1.030 + 0.200, PL-XIV Fig. 2,
+ *    PL-XIX Fig. 3] on "Fer I 120" joists: 24 "croisées anglaises", four
+ *    bays a straight side and two a chamfer, over a solid 1.20 parapet with
+ *    its 40 x 40 lattice outside, 0.50 solid piers at the corners, the
+ *    1.030 window and the 0.200 sablière [sourced, `GALLERY_POSTS`,
+ *    `GALLERY_WALL`]; the panes are the glazing's item. The balcony is 17.6
+ *    m across [estimated: PL-VII draws it about 0.5 proud of the glass],
+ *    its railing three round bars on the window posts continued [sourced
+ *    PL-XIV Fig. 7, `BALCONY_RAILS`]. Its deck is open for the Edoux, the
+ *    cables, the little stair and the contrefiches (`ROOM_WELLS`).
+ * 3. EIFFEL'S PAVILION: a timber pavilion 10.50 m square and 2.27 m tall
+ *    [sourced E1900-TXT p. 216; PL-XIX Fig. 3], its floor 2.58 over the 3rd
+ *    floor, a step of 0.15 above the balcony [sourced PL-XIX Fig. 3,
+ *    "Niveau du plancher (312.21) du logement"], its 10.680 roof on the
+ *    girders' foot [sourced PL-XIX Fig. 5]: 2.58 + 2.27 closes on the
+ *    chain's printed 4.850 to y 280.98 [derived]. Inside, on PL-XIX Fig. 6's
+ *    plan, the salon, cabinet de toilette, cuisine, water-closet, office,
+ *    coffre, the four laboratories and the Edoux's cage, with four windows
+ *    and two doors a face (`PAVILION`, `pavilionPlan`). Four CONTREFICHES
+ *    prop the girders' ends through its corners (`CONTREFICHE`).
  * 4. THE TWO GRANDES POUTRES DIAGONALES, 4.500 deep [sourced PL-XIX
  *    Fig. 3: "Parties droites des poutres en diagonale 4.50"] to y 285.48.
  *    In plan they are an X [PL-XIX Fig. 5, coupe GH, and Fig. 8, coupe EF]:
@@ -74,29 +80,31 @@
  *    crossing over the axis: 7.435 m out in plan on each half-diagonal
  *    ("14.870" across) and 7.435 m high [sourced PL-XIX Fig. 5, PL-VII:
  *    "11,935" = 4.500 + 7.435], so the extrados is a semicircle of radius
- *    7.435 about the box's top, crown at y 292.915 [derived]. Each rib is
- *    a box girder 1.13 m broad, 0.77 between its chords [sourced PL-XIX
- *    Figs 5, 8], and 1.20 m deep
- *    [estimated, PL-VII]: four chords laced on all four faces, 12 arc
- *    segments [estimated].
+ *    7.435 about the box's top, crown at y 292.915 [derived]. Each rib is a
+ *    box 1.300 deep radially, its two trusses 0.77 apart in the
+ *    girders' webs' planes [sourced E1900-TXT p. 79, PL-XV Fig. 2: 7.435 /
+ *    6.135], 9 panels a quarter [measured PL-XV Fig. 2] (`DOME`). Round the
+ *    axis, the stair core, a 0.70 sheet tube from the girders' top to the
+ *    lantern's floor [sourced PL-XV], and room left for its spiral stair
+ *    (`LADDER`, `STAIR_ENVELOPE`).
  * 6. THE LANTERN TERRACE, floor at 293.215 [sourced]; the chain's 0.250
  *    would put it at 293.165, the 0.05 m the spec leaves open, so the
  *    deck runs from the crown and is 0.300 thick. A square 4.615 m with
- *    0.776 chamfers [derived: PL-XIX Fig. 13 prints "5.750" across the
- *    DIAGONAL, chamfer to chamfer, and "776" on a chamfer; PL-VII draws the
- *    deck 4.6 wide], railed 1.00 [sourced].
- * 7. THE LANTERN ("phare"), DECAGONAL in plan [sourced PL-XIX Figs 12,
- *    13]: a 3.980 base ("soubassement") 2.60 across the flats [sourced
- *    Fig. 13], carrying at +3.08 a balcony ("balcon de la lanterne")
- *    3.60 across [sourced Fig. 12] on 0.775 consoles, with a 0.900
- *    parapet [sourced]; the 1.140 glazed lantern and the 2.055 cupola
- *    [sourced heights], the cupola bulbous [PL-VII, PL-XIX] to the 0.125
- *    top deck, 1.80 wide [estimated], at the printed top terrace 300.515.
- *    On it the lightning conductor's cage ("soutien du paratonnerre"),
- *    1.70 wide and 3.05 tall [sourced PL-VII, PL-XIX Fig. 4], straight for
- *    1.80 [estimated] and then closing on the pole.
- * 8. THE FLAGPOLE: 11.760 above the top terrace, to y 312.275 [sourced];
- *    its diameter, 0.24 tapering to 0.12, is [estimated].
+ *    0.776 chamfers [derived: "5.750" across the chamfers on PL-XV Fig. 2,
+ *    PL-XIX Fig. 13 and PL-VII, and "776" on a chamfer], railed 1.090
+ *    [sourced p. 79, PL-XV Fig. 2].
+ * 7. THE LANTERN ("phare"), a decagon of 0.80 sides [sourced p. 79], on
+ *    PL-XV Fig. 1's chain (`LANTERN`, `lanternLevels`): the 3.980
+ *    soubassement with the lantern's floor 2.305 up, the balcony at +3.08
+ *    on ten 0.775 consoles, "3.611" across, with a 0.900 parapet; the
+ *    1.140 glazing; the spherical cupola, Ø 2.686, 2.180 from the sablière
+ *    to the Ø 1.70 top platform at 300.515; on it the 1.20 railing, five of
+ *    its angles bent in to the socket at 3.05 [sourced p. 80, PL-XV Fig. 1,
+ *    PL-XIX Fig. 4].
+ * 8. THE ROD, the lightning conductor that carried the flag: 10.790 on a
+ *    1.000 tripod, a 60 mm bar ending in three 1.50 points [sourced p. 80,
+ *    PL-XV Fig. 1], its tip at PL-I's 312.275, its foot seated 0.030 into
+ *    the tripod's head (`ROD`).
  *
  * Panel 29 is sorted like the shaft (uprights, bracing, horizontals);
  * everything from the gallery up is the "summit" class, but for the two
@@ -125,9 +133,11 @@ import type { Graph, NodeHandle } from "pcg-ts";
 import {
   attribute,
   component,
+  extrudePolygon,
   mul,
   orientAlongVector,
   pathResample,
+  pointGrid,
   pointsToPath,
   position,
   ramp,
@@ -203,8 +213,6 @@ const P29 = {
  * ("312.21" - "309.63"), the parapet.
  */
 const GALLERY = { flat: 8.28, straight: 5.45, height: 2.58, parapet: 1.2 } as const;
-/** Its bays: per straight side, per chamfer [estimated from PL-XIX Fig. 3's mullions, about 1.35]. */
-const GALLERY_BAYS = { straight: 8, chamfer: 3 } as const;
 /** Its frame, as half-widths [estimated]: mullions and sills, the parapet's 40 x 40 lattice. */
 const GALLERY_MEMBERS = { frame: 0.05, lattice: 0.02 } as const;
 /**
@@ -219,6 +227,7 @@ const BALCONY = { level: 2.43, overhang: 0.52, deck: 0.12, railing: 1.0, member:
 
 /** The apartment [sourced PL-XIX: 10.680 square roof, 2.270 tall]. */
 const APARTMENT = { side: 10.68, height: 2.27 } as const;
+
 
 /**
  * The two diagonal girders' sections, in a girder's own frame: `d` along
@@ -302,50 +311,181 @@ const GIRDER_AT = {
 const GIRDER_MESH = { spacing: 1.21, rise: 1.21 * Math.tan((43 * Math.PI) / 180), bar: 0.045 } as const;
 
 /**
- * The dome: the extrados radius, which is also the rise and the plan's
- * half-diagonal [sourced]; the chord axes' spacing radially and across the
- * rib, the chords' and lacing's half-widths, and the arc's segments
- * [estimated; the rib's breadth sourced: 0.95 + 2 x 0.09 = 1.130 overall
- * and 0.95 - 2 x 0.09 = 0.770 between the chords].
+ * The dome, the "quatre grands arceaux à jour" (E1900-TXT p. 12): two
+ * semicircular arches at right angles, "d'une largeur de 1,300 m; le rayon
+ * de leur extrados est de 7,435 m. Leur section suivant un plan diamétral
+ * est un caisson de 1,300 m sur 0,77 m", two trusses "dans le plan de ces
+ * poutres" (the diagonal girders', whose webs are "espacées de 0,77 m d'axe
+ * en axe"), each of "quatre cornières de 50x50x6" with posts and a lattice
+ * of the same angles, joined by "quatre cadres à croisillons et par un
+ * contreventement en fers plats de 50 x 8" [sourced p. 79].
+ *
+ * - `radius`: the extrados, also the rise and the plan's half-diagonal
+ *   [sourced 7.435; PL-XIX Fig. 5, PL-VII "11,935" = 4.500 + 7.435].
+ * - `chord`: a chord's half-width, two 50 x 50 x 6 angles back to back,
+ *   built square [derived 0.10].
+ * - `depth`: the chords' axes apart radially, 1.300 over them less a chord
+ *   [derived 1.30 - 0.10].
+ * - `breadth`: the chords' axes apart across the rib. Each truss's plane is
+ *   its chords' inner face, on the girder's web at +-0.385, the angles'
+ *   outstanding legs outward, so the axes stand a half-chord out [derived
+ *   0.77 + 0.10]. It leaves the crown's "carré" 0.77 clear, which the 0.70
+ *   ladder cylinder passes (below).
+ * - `lacing`: the angles and flats, half 50 mm [derived]; `segments`, a
+ *   quarter arch's panels, one every 10 degrees with a radial post at each
+ *   node [measured PL-XV Fig. 2; 12 until 2026-09-26, estimated].
+ *
+ * Until 2026-09-26 the rib was 0.95 x 1.02 on 0.18 chords (1.20 deep, 1.13
+ * broad, [estimated] from PL-VII and the girders' flanges), which the text
+ * does not bear out: 1.300 deep, and 0.77 in the webs' planes.
  */
-const DOME = { radius: 7.435, depth: 1.02, breadth: 0.95, chord: 0.09, lacing: 0.03, segments: 12 } as const;
+const DOME = { radius: 7.435, depth: 1.2, breadth: 0.87, chord: 0.05, lacing: 0.025, segments: 9 } as const;
 
 /**
- * The campanile's ladder cylinder ("Cylindre en tôle avec échelle à
- * l'intérieur", PL-XIX Fig. 5), on the axis: its diameter [sourced PL-XIX
- * Fig. 13 "700"; PL-VII draws it 0.72]; the prism's sides [estimated].
+ * The campanile's stair core, "le cylindre en tôle de 690 mm de diamètre
+ * intérieur servant de noyau à l'escalier tournant du phare", fixed "au
+ * moyen de collerettes" inside the "carré" the arches form at their crown,
+ * with "une échelle verticale en fer" inside it [sourced E1900-TXT p. 79];
+ * "Diam. ext. 700" and "Hauteur totale du cylindre 10m035", from the
+ * girders' top (318.985) to the lantern's floor (329.020), which it
+ * carries "en son milieu" [sourced PL-XV Figs 1, 2; p. 79]; the prism's
+ * sides [estimated]. The spiral stair round it, 1.980 across [sourced PL-XV
+ * Fig. 2, PL-XIX Fig. 5 "1.98"], is the stairs' item: `STAIR_ENVELOPE`
+ * keeps its room.
  */
-const LADDER = { diameter: 0.7, sides: 16 } as const;
+const LADDER = { diameter: 0.7, sides: 16, height: 10.035 } as const;
 
-/** The lantern stack [sourced heights; widths as in the header]. */
+/**
+ * The room the campanile's spiral stair needs round the core: 1.980
+ * across, from the girders' top 22 steps of 178 to its landing at about
+ * 322.90 [sourced PL-XV Fig. 2: "1.980", 22 x 178 = 3.916], and the
+ * landing's 1.200 railing over it [sourced]. Nothing but the core stands
+ * in it.
+ */
+export const STAIR_ENVELOPE = { radius: 0.99, rise: 22 * 0.178, railing: 1.2 } as const;
+
+/**
+ * The lantern stack. Its heights are the chain PL-XV Fig. 1 prints (1:50,
+ * 236-240 px/m; readings in SOURCES.md §29): terrace 326.715, +2.305 the
+ * lantern's floor 329.020, +1.675 the "sablière inférieure" 330.695 (so the
+ * soubassement is 3.980, as PL-VII and the text give), +1.140 the glass to
+ * the "sablière supérieure" 331.835, +0.525 the cupola's floor 332.360,
+ * +1.655 the top platform 334.015 [sourced].
+ */
 const LANTERN = {
-  /** The terrace: square side, chamfer [derived], deck railing [sourced]. */
+  /**
+   * The terrace: square side, chamfer [derived from the "5.750" printed
+   * across the chamfers on PL-XV Fig. 2, PL-XIX Fig. 13 and PL-VII, and the
+   * "776" (PL-XIX) / "770" (PL-XVI Fig. 22) chamfer that faces an arch].
+   * The text's "grands côtés 3,40 … petits côtés 0,70" gives 4.39 across;
+   * the plates are followed (§29). Its railing posts rise "1,090 m
+   * au-dessus du plancher" [sourced p. 79; PL-XV Fig. 2: 150 + 300 + 300 +
+   * 300 + 40]. Before 2026-09-26 the railing was 1.00.
+   */
   terrace: 4.615,
   chamfer: 0.776,
-  railing: 1.0,
-  /** The soubassement: height, and across the decagon's flats. */
+  railing: 1.09,
+  /**
+   * The lantern's floor over the terrace [sourced "2.305"], and its depth
+   * [estimated]: the soubassement's "chambre de service" closes on it,
+   * and the core carries it.
+   */
+  floorAt: 2.305,
+  floorDepth: 0.1,
+  /**
+   * The soubassement: height [sourced 3.980], and the decagon's side,
+   * "un prisme décagonal … dont le côté a 0,80 m" [sourced p. 79], so
+   * 2.589 across the corners and 2.462 across the flats [derived]: PL-XIX
+   * Fig. 13's "2.60" is across the corners and PL-XVI Fig. 24's "1.25" an
+   * apothem, both rounded [sourced]. Until 2026-09-26 the model read 2.60
+   * across the flats (a 0.845 side).
+   */
   baseHeight: 3.98,
-  baseFlats: 2.6,
-  /** The balcony: its floor above the terrace (2.305 + 0.775), the consoles' depth, parapet, across the flats. */
+  side: 0.8,
+  /**
+   * The balcony ("balcon de la lanterne", 329.795): its floor above the
+   * terrace (2.305 + 0.775) [sourced], on "10 consoles pareilles" 0.775
+   * tall [sourced PL-XV Fig. 33]; its 0.900 parapet [sourced]; across the
+   * flats "3.611" [sourced PL-XIX Fig. 12, its first digit half hidden].
+   */
   balconyAt: 3.08,
   console: 0.775,
   parapet: 0.9,
-  balconyFlats: 3.6,
-  /** The glazed lantern and the cupola: heights. */
+  balconyFlats: 3.611,
+  /** The glazed lantern, "sur une hauteur de 1,14 m" [sourced]. */
   lanternHeight: 1.14,
-  cupolaHeight: 2.055,
-  /** The cupola's straight sides before it rounds [estimated], and the top deck. */
-  cupolaStraight: 0.9,
+  /**
+   * The cupola, "la coupole sphérique, de 2,686 m de diamètre … de 2,180 m
+   * de hauteur" [sourced p. 79], from the sablière supérieure to the
+   * platform: a drum 0.755 to the springing ("Naissance"), then 1.300 of
+   * sphere to its crown ring, Ø 0.600, then 0.125 of the platform's
+   * structure [sourced PL-XV Fig. 1]. A sphere of radius 1.343 on the drum
+   * rises 1.309 to the Ø 0.600 ring [derived], the printed 1.300 within
+   * 9 mm. Until 2026-09-26 it was a bulb, straight 0.9 [estimated] and
+   * rounding in to a 1.80 deck, as wide as the decagon.
+   */
+  cupolaDiameter: 2.686,
+  cupolaDrum: 0.755,
+  crownRing: 0.6,
+  cupolaSides: 24,
+  /**
+   * The top platform: "plancher circulaire en tôle striée, de 1,70 m de
+   * diamètre" [sourced p. 79; PL-XV Fig. 1 "1.700"], 0.125 deep to the
+   * cupola's crown [sourced PL-XV Fig. 1, PL-VII].
+   */
   topDeck: 0.125,
-  topDeckWidth: 1.8,
-  /** The lightning conductor's cage: width, height [sourced], straight part [estimated]. */
-  finialWidth: 1.7,
-  finialHeight: 3.05,
-  finialStraight: 1.8,
+  topDiameter: 1.7,
+  /**
+   * Its railing, "de 1,20 m de hauteur, … formé par des cornières de 60 x
+   * 60 x 8. Cinq de celles-ci sont cintrées de manière à venir s'assembler
+   * sur une douille pentagonale qui maintient le paratonnerre à 2,05 m
+   * au-dessus de sa base" [sourced p. 80]. On PL-XV Fig. 1 [sourced]: the
+   * posts on the rim (radius 0.85), from 0.275 under the platform; rails at
+   * 0.230, 0.530, 0.830, 1.130 and the top at 1.200; the five bent ones go
+   * on plumb to +1.800, then curve in over 1.000 (two R 500 arcs with a
+   * 262.5 straight between) into the socket, 0.250 tall from +2.800 to
+   * +3.050, PL-XIX Fig. 4's "Soutien du paratonnerre 3.05". The five others
+   * stop at the rail [estimated: PL-XVI Fig. 27 draws about ten]. Angles
+   * built square, 0.06 [derived].
+   */
+  postsBelow: 0.275,
+  rails: [0.23, 0.53, 0.83, 1.13, 1.2],
+  bentPlumb: 1.8,
+  socket: [2.8, 3.05],
+  socketRadius: 0.06,
+  angle: 0.03,
 } as const;
 
-/** The flagpole's radius at its foot and head [estimated]. */
-const FLAG_RADIUS = { foot: 0.12, head: 0.06 } as const;
+/**
+ * The lightning rod that doubled as flagpole: "fixé, sur un trépied, le
+ * paratonnerre, dont la longueur totale est de 10,790 m. C'est un fer rond
+ * de 60 mm à la base, terminé par trois pointes inclinées de 1,50 m et qui
+ * porte le pavillon national" [sourced p. 80; PL-XV Fig. 1 "Hauteur du
+ * paratonnerre 10.790", PL-XIX Fig. 4 "10m790"]. Its base, the tripod's
+ * apex, is 1.000 above the platform [sourced PL-XV Fig. 1, PL-XIX Fig. 4,
+ * PL-VII], and 1.000 + 2.05 = 3.050, the socket's top [derived]. PL-VII's
+ * "10.760" over that base and PL-I's "11m760" over the platform put the tip
+ * at 312.275 (altitude 345.775), the spec's `flagTop`; a 10.790 rod on the
+ * 1.000 apex would stand 0.030 higher. The rod is built 10.790 long with its
+ * tip at `flagTop`, its foot seated 0.030 into the tripod's head [derived,
+ * the reading that closes all five figures; SOURCES.md §29]. The points,
+ * « inclinées de 1,50 m », are 1.50 long, leaning 18 degrees [measured
+ * PL-VII Fig. 4, the only one drawn to scale; low confidence]. The tripod's
+ * three legs foot on the Ø 0.600 crown ring [sourced PL-XV detail D], 0.32
+ * out [measured]. The rod's head and the points' tips, and the legs'
+ * section [estimated].
+ */
+export const ROD = {
+  base: 1.0,
+  length: 10.79,
+  foot: 0.03,
+  head: 0.02,
+  points: 1.5,
+  lean: (18 * Math.PI) / 180,
+  tip: 0.008,
+  legFoot: 0.32,
+  leg: 0.025,
+} as const;
 
 /**
  * A rivet head's radius: strut.ts's (38 mm across for a 22 mm rivet
@@ -746,6 +886,8 @@ const apartmentFloor = FLOORS.third + GALLERY.height;
 /** The balcony deck's top and underside; the glazing runs from the floor to the underside. */
 const balconyTop = FLOORS.third + BALCONY.level;
 const balconyUnder = balconyTop - BALCONY.deck;
+/** The pavilion's roof, on the diagonal girders' foot: 2.58 + 2.27 = 4.850 over the 3rd floor [sourced PL-VII]. */
+const roomTop = apartmentFloor + APARTMENT.height;
 
 /** Panel 29: the shaft's last panel, a braced 10 m box, and its core carried up through the gallery. */
 function panel29(g: Graph, detail: Detail): Parts {
@@ -755,9 +897,13 @@ function panel29(g: Graph, detail: Detail): Parts {
   const riveted = detail.rivets === true;
 
   // The core's columns, three levels: the panel, then on up through the
-  // gallery. The corners are the uprights; the posts at the face centres
-  // (the merged b/d) go up with them, the others stop at the floor.
-  const core = boxLattice(g, "p29", half, [bottom, top, apartmentFloor]);
+  // gallery to the balcony's beam [PL-VII Fig. 4]. The corners are the
+  // uprights; the posts at the face centres (the merged b/d) go up with
+  // them, the others stop at the floor. Above the deck both run on inside
+  // the pavilion's walls, the corners boxed at its corners (`PAVILION`);
+  // until 2026-09-26 the b/d went through the deck to the apartment's
+  // floor, into the solid apartment block.
+  const core = boxLattice(g, "p29", half, [bottom, top, balconyUnder]);
   const isMid = (s: number) => s % 4 === 2;
   const corners = chains(core, "Corners", (s) => isCorner(s));
   const postWeb = posts(g, core, "p29Post", P29.post, detail, (s, k) => !isCorner(s) && (isMid(s) || k < 2));
@@ -985,63 +1131,383 @@ function octagonSlab(
   ]);
 }
 
-/** The glazed gallery, the balcony on its roof, and the apartment. */
+/**
+ * A convex outline on a level, wound anticlockwise seen from above, to be
+ * extruded up by `depth`: a slab, a wall, a partition, a post.
+ */
+export interface Slab {
+  readonly outline: readonly Vec3[];
+  readonly depth: number;
+}
+
+/** An axis-aligned box as a `Slab`: x0..x1, z0..z1, y0 up to y1. */
+function boxSlab(x0: number, x1: number, z0: number, z1: number, y0: number, y1: number): Slab {
+  if (!(x1 > x0 && z1 > z0 && y1 > y0)) {
+    throw new Error(`summit: boxSlab [${x0}, ${x1}] x [${z0}, ${z1}] x [${y0}, ${y1}]: every extent must be positive`);
+  }
+  return {
+    outline: [
+      [x0, y0, z1],
+      [x1, y0, z1],
+      [x1, y0, z0],
+      [x0, y0, z0],
+    ],
+    depth: y1 - y0,
+  };
+}
+
+/** A plan point (s, t) of the diagonals' frame (s toward pile 3, +x -z; t toward pile 4, +x +z) on (x, z). */
+const fromST = (s: number, t: number): [number, number] => [(s + t) * Math.SQRT1_2, (t - s) * Math.SQRT1_2];
+
+/** A rectangular opening in the diagonals' frame: s0..s1 along the N-S diagonal, t0..t1 across it. */
+export interface Well {
+  readonly s: readonly [number, number];
+  readonly t: readonly [number, number];
+}
+
+/** A convex polygon (s, t) clipped to the box s0..s1, t0..t1 (Sutherland-Hodgman). */
+function clipST(poly: ReadonlyArray<readonly [number, number]>, s0: number, s1: number, t0: number, t1: number): Array<[number, number]> {
+  let out = poly.map((p): [number, number] => [p[0], p[1]]);
+  const planes: Array<[0 | 1, number, 1 | -1]> = [
+    [0, s0, 1],
+    [0, s1, -1],
+    [1, t0, 1],
+    [1, t1, -1],
+  ];
+  for (const [k, v, sign] of planes) {
+    const inside = (p: [number, number]) => sign * (p[k] - v) >= -1e-9;
+    const next: Array<[number, number]> = [];
+    for (let i = 0; i < out.length; i++) {
+      const a = out[i]!;
+      const b = out[(i + 1) % out.length]!;
+      if (inside(a)) next.push(a);
+      if (inside(a) !== inside(b)) {
+        const f = (v - a[k]) / (b[k] - a[k]);
+        next.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]);
+      }
+    }
+    out = next;
+    if (out.length === 0) break;
+  }
+  return out;
+}
+
+/**
+ * A slab over a convex plan (x, z points) less rectangular wells in the
+ * diagonals' frame, as convex pieces (platforms.ts's `floorWithWells`,
+ * which that module keeps to itself): the plan cut into bands at the
+ * wells' edges across the diagonal, each band into the spans between the
+ * wells it crosses. Every piece is wound anticlockwise seen from above.
+ */
+function slabWithWells(
+  plan: ReadonlyArray<readonly [number, number]>,
+  wells: readonly Well[],
+  y0: number,
+  y1: number,
+): Slab[] {
+  const big = 1e3;
+  const st = plan.map(([x, z]): [number, number] => [(x - z) * Math.SQRT1_2, (x + z) * Math.SQRT1_2]);
+  const ts = [-big, big, ...wells.flatMap((w) => [w.t[0], w.t[1]])].sort((a, b) => a - b);
+  const out: Slab[] = [];
+  for (let i = 0; i + 1 < ts.length; i++) {
+    const [ta, tb] = [ts[i]!, ts[i + 1]!];
+    if (tb - ta < 1e-9) continue;
+    const mid = (ta + tb) / 2;
+    const cut = wells
+      .filter((w) => mid > w.t[0] && mid < w.t[1])
+      .map((w) => w.s)
+      .sort((a, b) => a[0] - b[0]);
+    const spans: Array<[number, number]> = [];
+    let from = -big;
+    for (const [c0, c1] of cut) {
+      if (c0 > from) spans.push([from, c0]);
+      from = Math.max(from, c1);
+    }
+    spans.push([from, big]);
+    for (const [sa, sb] of spans) {
+      const piece = clipST(st, sa, sb, ta, tb);
+      if (piece.length < 3) continue;
+      const xz = piece.map(([s, t]) => fromST(s, t));
+      let area = 0;
+      for (let k = 0; k < xz.length; k++) {
+        const [x0, z0] = xz[k]!;
+        const [x1, z1] = xz[(k + 1) % xz.length]!;
+        area += x0 * z1 - x1 * z0;
+      }
+      if (Math.abs(area) < 1e-6) continue;
+      if (area > 0) xz.reverse();
+      out.push({ outline: xz.map(([x, z]): Vec3 => [x, y0, z]), depth: y1 - y0 });
+    }
+  }
+  return out;
+}
+
+/** An octagon's plan (x, z), a square `2 flatHalf` across with 45-degree chamfers to straight sides `2 straightHalf`. */
+function octagonPlan(flatHalf: number, straightHalf: number): Array<[number, number]> {
+  return octagon(flatHalf, straightHalf, 0).map(([x, , z]): [number, number] => [x, z]);
+}
+
+/**
+ * Slabs as one mesh, each outline a closed path extruded straight up by its
+ * depth: every wall and cap gets its own points and a flat `normal`, which
+ * the summit class needs (a merge with the swept members zero-fills a
+ * missing one). Cooked in runs of at most 1024 points, as platforms.ts's
+ * `prisms` are, since an index table's lookup scans its stops.
+ */
+function slabs(g: Graph, id: string, list: readonly Slab[]): NodeHandle {
+  const runs: Slab[][] = [[]];
+  let count = 0;
+  for (const p of list) {
+    if (count + p.outline.length > 1024 && runs[runs.length - 1]!.length > 0) {
+      runs.push([]);
+      count = 0;
+    }
+    runs[runs.length - 1]!.push(p);
+    count += p.outline.length;
+  }
+  const meshes = runs.map((run, r) => {
+    const rid = runs.length === 1 ? id : `${id}Run${r}`;
+    const pts = run.flatMap((p) => p.outline);
+    const slots = g.add(
+      pointGrid,
+      { countX: pts.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
+      `${rid}Slots`,
+    );
+    const place = g.add(
+      setAttribute,
+      {
+        name: "P",
+        type: "f32",
+        tupleSize: 3,
+        value: vec(
+          indexTable(pts.map((p) => p[0])),
+          indexTable(pts.map((p) => p[1])),
+          indexTable(pts.map((p) => p[2])),
+        ),
+      },
+      `${rid}Place`,
+    );
+    const key = g.add(
+      setAttribute,
+      { name: "slab", type: "i32", value: indexTable(run.flatMap((p, i) => p.outline.map(() => i))) },
+      `${rid}Key`,
+    );
+    const len = g.add(
+      setAttribute,
+      { name: "depth", type: "f32", value: indexTable(run.flatMap((p) => p.outline.map(() => p.depth))) },
+      `${rid}Depth`,
+    );
+    const paths = g.add(pointsToPath, { groupAttr: "slab", closed: true }, `${rid}Paths`);
+    const solid = g.add(extrudePolygon, { direction: "+y", distance: attribute("depth"), caps: "both" }, rid);
+    g.connect(slots, "out", place, "in");
+    g.connect(place, "out", key, "in");
+    g.connect(key, "out", len, "in");
+    g.connect(len, "out", paths, "in");
+    g.connect(paths, "out", solid, "in");
+    return solid;
+  });
+  return meshes.length === 1 ? meshes[0]! : merge(g, id, meshes);
+}
+
+// ---------------------------------------------------------------- the gallery
+
+/**
+ * The gallery's bays, "croisées anglaises" [sourced E1900-TXT's cost table,
+ * « Croisées anglaises (Lepage) … 250 la pièce … 6.000,00 »: 24 at 250 fr;
+ * the OCR's "21" is a misread, and 24 is what the plans draw]. Along a
+ * 10.90 straight side the posts stand 0.200 / 0.700 from each vertex, a
+ * 0.50 solid corner pier between them, then at 2.950, 5.450 (the face's
+ * axis), 7.950 and 10.200 [sourced PL-XIV Figs 8, 10], so four glazed bays
+ * of 2.25 / 2.50 / 2.50 / 2.25; a chamfer has one post at its middle
+ * [sourced "1.9796" on a 3.9592 chamfer], two bays. 4 x 4 + 4 x 2 = 24
+ * [derived]. The pier is built solid from the vertex, the 0.20 at the
+ * vertex being the chamfer's corner post [estimated]. Each bay is one sash
+ * window of two lights, its sashes meeting at mid-height, « des glaces
+ * mobiles que l'on peut élever ou abaisser » [sourced p. 216; PL-XIX Fig. 3
+ * draws two lights a bay].
+ */
+const GALLERY_POSTS = { straight: [0.7, 2.95, 5.45, 7.95, 10.2], pier: 0.7 } as const;
+
+/**
+ * The gallery's heights over the 3rd floor [sourced PL-XIV Fig. 7, PL-VII
+ * Fig. 4: the parapet "Tôle de 1.200 x 3" with "Corn. 40 x 40 x 4" riveted
+ * on it, the window "1.030", the "sablière" 0.200 (a U of 200 x 4) under
+ * the balcony's deck, 1.20 + 1.03 + 0.20 = 2.43]. The parapet is solid —
+ * « une paroi en bois et fer, formant un garde-corps de 1,20 m de hauteur
+ * », the « paroi pleine du garde-corps » [sourced pp. 79, 215] — with its
+ * lattice on the outside; built 0.05 thick with its lining [estimated].
+ */
+const GALLERY_WALL = { window: 1.03, sablière: 0.2, sheet: 0.05, sash: 0.02 } as const;
+
+/**
+ * The upper terrace's railing (the balcony): « trois fers ronds formant les
+ * lisses du garde-corps de la terrasse » on the window posts continued
+ * [sourced p. 79], "Rond de 25 mm" at the top and "Rond de 20 mm" below, at
+ * 1.000, 0.600 and 0.150 over the sablière's top [sourced PL-XIV Fig. 7,
+ * the last digit read from the total]. Until 2026-09-26: two rails.
+ */
+const BALCONY_RAILS = [
+  { at: 0.15, half: 0.01 },
+  { at: 0.6, half: 0.01 },
+  { at: 1.0, half: 0.0125 },
+] as const;
+
+/** A post round the gallery's octagon: its point on the glass line, its side, and whether it is a vertex. */
+interface GalleryPost {
+  readonly p: Vec3;
+  readonly side: number;
+  readonly u: number;
+}
+
+/**
+ * The gallery's posts on an octagon at height y (`octagon`'s order: even
+ * sides straight, odd sides chamfers), and its glazed bays as [from, to]
+ * along each side, `u` measured from the side's first vertex.
+ */
+export function galleryLayout(y = FLOORS.third): {
+  readonly posts: GalleryPost[];
+  readonly bays: Array<{ side: number; u0: number; u1: number }>;
+  readonly piers: Array<{ side: number; u0: number; u1: number }>;
+} {
+  const poly = octagon(GALLERY.flat, GALLERY.straight, y);
+  const posts: GalleryPost[] = [];
+  const bays: Array<{ side: number; u0: number; u1: number }> = [];
+  const piers: Array<{ side: number; u0: number; u1: number }> = [];
+  for (let i = 0; i < 8; i++) {
+    const a = poly[i]!;
+    const b = poly[(i + 1) % 8]!;
+    const L = Math.hypot(b[0] - a[0], b[2] - a[2]);
+    const at = (u: number): Vec3 => [a[0] + ((b[0] - a[0]) * u) / L, y, a[2] + ((b[2] - a[2]) * u) / L];
+    const us = i % 2 === 0 ? [0, ...GALLERY_POSTS.straight] : [0, L / 2];
+    for (const u of us) posts.push({ p: at(u), side: i, u });
+    if (i % 2 === 0) {
+      piers.push({ side: i, u0: 0, u1: GALLERY_POSTS.pier }, { side: i, u0: L - GALLERY_POSTS.pier, u1: L });
+      const s = GALLERY_POSTS.straight;
+      for (let k = 0; k + 1 < s.length; k++) bays.push({ side: i, u0: s[k]!, u1: s[k + 1]! });
+    } else {
+      bays.push({ side: i, u0: 0, u1: L / 2 }, { side: i, u0: L / 2, u1: L });
+    }
+  }
+  return { posts, bays, piers };
+}
+
+/** Eiffel's balcony's deck: the gallery's octagon grown by the overhang, less `ROOM_WELLS`. */
+export function balconyDeckSlabs(): Slab[] {
+  const grow = BALCONY.overhang;
+  const bFlat = GALLERY.flat + grow;
+  const bStraight = GALLERY.straight + grow * Math.tan(Math.PI / 8);
+  return slabWithWells(octagonPlan(bFlat, bStraight), ROOM_WELLS, balconyUnder, balconyTop);
+}
+
+/** A point `u` along side `i` of an octagon, `off` out of its line (outward positive). */
+function onSide(poly: readonly Vec3[], i: number, u: number, y: number, off = 0): Vec3 {
+  const a = poly[i]!;
+  const b = poly[(i + 1) % poly.length]!;
+  const L = Math.hypot(b[0] - a[0], b[2] - a[2]);
+  const n = sideNormal(poly, i);
+  return [a[0] + ((b[0] - a[0]) * u) / L + n[0] * off, y, a[2] + ((b[2] - a[2]) * u) / L + n[2] * off];
+}
+
+/** A vertical panel along side `i` of an octagon, u0..u1, y0..y1, between `in0` and `in1` inside its line. */
+function sidePanel(poly: readonly Vec3[], i: number, u0: number, u1: number, y0: number, y1: number, in0: number, in1: number): Slab {
+  const ring = [onSide(poly, i, u0, y0, -in0), onSide(poly, i, u1, y0, -in0), onSide(poly, i, u1, y0, -in1), onSide(poly, i, u0, y0, -in1)];
+  return anticlockwise({ outline: ring, depth: y1 - y0 });
+}
+
+/** A slab with its outline wound anticlockwise seen from above (+y), whichever way it was given. */
+function anticlockwise(s: Slab): Slab {
+  let area = 0;
+  const o = s.outline;
+  for (let k = 0; k < o.length; k++) {
+    const p = o[k]!;
+    const q = o[(k + 1) % o.length]!;
+    area += p[0] * q[2] - q[0] * p[2];
+  }
+  // (x, z) with y up: x cross z is -y, so an anticlockwise ring seen from
+  // above has a negative x-z area.
+  return area > 0 ? { outline: [...o].reverse(), depth: s.depth } : s;
+}
+
+/**
+ * The glazed gallery round the 3rd floor and Eiffel's balcony on its roof
+ * (header, items 2-3): the posts, the solid corner piers, the parapet's
+ * sheet with its lattice outside it, the sill, the sablière, each bay's
+ * sash bars (the panes are the glazing's), and the balcony's deck and
+ * railing.
+ */
 function gallery(g: Graph): NodeHandle[] {
   const y0 = FLOORS.third;
   const deckUnder = balconyUnder;
   const glass = octagon(GALLERY.flat, GALLERY.straight, y0);
-  const bays = (i: number) => (i % 2 === 0 ? GALLERY_BAYS.straight : GALLERY_BAYS.chamfer);
-  const at = bayPoints(glass, bays);
+  const { posts, bays, piers } = galleryLayout(y0);
   const frame = GALLERY_MEMBERS.frame;
+  const sill = y0 + GALLERY.parapet;
+  const head = sill + GALLERY_WALL.window;
 
-  // Mullions, floor to the balcony deck, and the sill, parapet and head rails.
+  // The posts, floor to the balcony's deck.
   const mullions = faceSkin(
     g,
     "galleryMullion",
     members(
       g,
       "galleryMullionPaths",
-      at.map(({ p }) => [p, [p[0], deckUnder, p[2]]] as const),
-      at.map(({ side }) => sideNormal(glass, side)),
+      posts.map(({ p }) => [p, [p[0], deckUnder, p[2]]] as const),
+      posts.map(({ side }) => sideNormal(glass, side)),
     ),
     frame,
   );
-  const railY = [y0 + frame, y0 + GALLERY.parapet, deckUnder - frame];
-  const rails = skin(
-    g,
-    "galleryRailSkin",
-    loops(g, "galleryRails", railY.map((y) => glass.map((p) => [p[0], y, p[2]] as Vec3))),
-    frame,
-    [0, 1, 0],
-  );
-  // The parapet's lattice: an X in every bay.
+  // The floor rail, the sill on the parapet, and the sablière under the
+  // deck, which is the windows' head.
+  const rails = merge(g, "galleryRails", [
+    skin(g, "galleryRailSkin", loops(g, "galleryRailLoops", [y0 + frame, sill].map((y) => glass.map((p) => [p[0], y, p[2]] as Vec3))), frame, [0, 1, 0]),
+    skin(g, "gallerySabliereSkin", loops(g, "gallerySabliereLoop", [glass.map((p) => [p[0], (head + deckUnder) / 2, p[2]] as Vec3)]), (deckUnder - head) / 2, [0, 1, 0]),
+  ]);
+
+  // The parapet's sheet in every bay and the piers' full height, just
+  // inside the posts and rails; the lattice on the sheet's outer face.
+  const sIn0 = frame;
+  const sIn1 = frame + GALLERY_WALL.sheet;
+  const sheets: Slab[] = [
+    ...bays.map((b) => sidePanel(glass, b.side, b.u0 + frame, b.u1 - frame, y0, sill, sIn0, sIn1)),
+    ...piers.map((b) => sidePanel(glass, b.side, b.u0 + frame, b.u1 - frame, y0, head, sIn0, sIn1)),
+  ];
+  const latticeIn = frame - GALLERY_MEMBERS.lattice;
   const lattice: Array<readonly [Vec3, Vec3]> = [];
   const latticeN: Vec3[] = [];
   const ya = y0 + 2 * frame;
-  const yb = y0 + GALLERY.parapet - frame;
-  for (let i = 0; i < at.length; i++) {
-    const a = at[i]!;
-    const b = at[(i + 1) % at.length]!;
-    const n = sideNormal(glass, a.side);
-    lattice.push([[a.p[0], ya, a.p[2]], [b.p[0], yb, b.p[2]]], [[b.p[0], ya, b.p[2]], [a.p[0], yb, a.p[2]]]);
+  const yb = sill - frame;
+  for (const b of bays) {
+    const n = sideNormal(glass, b.side);
+    const [p0, p1] = [b.u0 + frame, b.u1 - frame];
+    lattice.push(
+      [onSide(glass, b.side, p0, ya, -latticeIn), onSide(glass, b.side, p1, yb, -latticeIn)],
+      [onSide(glass, b.side, p1, ya, -latticeIn), onSide(glass, b.side, p0, yb, -latticeIn)],
+    );
     latticeN.push(n, n);
   }
-  const parapet = faceSkin(
-    g,
-    "galleryLattice",
-    members(g, "galleryLatticePaths", lattice, latticeN),
-    GALLERY_MEMBERS.lattice,
-  );
+  const parapet = faceSkin(g, "galleryLattice", members(g, "galleryLatticePaths", lattice, latticeN), GALLERY_MEMBERS.lattice);
 
-  // The balcony: the deck overhanging the glass, and its railing on the
-  // glass line, each post over a mullion [PL-XIV Fig. 2: the rail post
+  // Each croisée: the two lights' bar and the sashes' meeting rail, on the
+  // glass line between the sill and the sablière.
+  const sashBars: Array<readonly [Vec3, Vec3]> = [];
+  const sashN: Vec3[] = [];
+  const meet = (sill + frame + head) / 2;
+  for (const b of bays) {
+    const n = sideNormal(glass, b.side);
+    const mid = (b.u0 + b.u1) / 2;
+    sashBars.push(
+      [onSide(glass, b.side, mid, sill + frame), onSide(glass, b.side, mid, head)],
+      [onSide(glass, b.side, b.u0 + frame, meet), onSide(glass, b.side, b.u1 - frame, meet)],
+    );
+    sashN.push(n, n);
+  }
+  const sash = faceSkin(g, "gallerySash", members(g, "gallerySashPaths", sashBars, sashN), GALLERY_WALL.sash);
+
+  // The balcony: the deck overhanging the glass, open where the Edoux, the
+  // cables, the little stair and the contrefiches pass (`ROOM_WELLS`), and
+  // its railing on the window posts continued [PL-XIV Fig. 2: the rail post
   // continues the mullion; PL-VII draws the rail's ends at +-8.2-8.3].
-  const grow = BALCONY.overhang;
-  const bFlat = GALLERY.flat + grow;
-  const bStraight = GALLERY.straight + grow * Math.tan(Math.PI / 8);
-  const deck = octagonSlab(g, "balconyDeck", bFlat, bStraight, deckUnder, BALCONY.deck);
-  const rail = octagon(GALLERY.flat, GALLERY.straight, balconyTop);
-  const railAt = bayPoints(rail, bays);
+  const deck = slabs(g, "balconyDeck", balconyDeckSlabs());
   const m = BALCONY.member;
   const railPosts = faceSkin(
     g,
@@ -1049,36 +1515,497 @@ function gallery(g: Graph): NodeHandle[] {
     members(
       g,
       "balconyPostPaths",
-      railAt.map(({ p }) => [p, [p[0], balconyTop + BALCONY.railing - m, p[2]]] as const),
-      railAt.map(({ side }) => sideNormal(rail, side)),
+      posts.map(({ p }) => [[p[0], balconyTop, p[2]], [p[0], balconyTop + BALCONY.railing, p[2]]] as const),
+      posts.map(({ side }) => sideNormal(glass, side)),
     ),
     m,
   );
-  const railRails = skin(
+  const railRails = merge(
     g,
-    "balconyRailSkin",
-    loops(
-      g,
-      "balconyRails",
-      [balconyTop + BALCONY.railing / 2, balconyTop + BALCONY.railing - m].map((y) =>
-        rail.map((p) => [p[0], y, p[2]] as Vec3),
+    "balconyRails",
+    BALCONY_RAILS.map((r, i) =>
+      skin(
+        g,
+        `balconyRailSkin${i}`,
+        loops(g, `balconyRailLoop${i}`, [glass.map((p) => [p[0], balconyTop + r.at, p[2]] as Vec3)]),
+        r.half,
+        [0, 1, 0],
       ),
     ),
-    m,
-    [0, 1, 0],
   );
+  return [mullions, rails, slabs(g, "galleryParapet", sheets), parapet, sash, deck, railPosts, railRails];
+}
 
-  // The apartment, from the balcony deck (its floor's 0.15 step included)
-  // to its roof.
-  const roof = apartmentFloor + APARTMENT.height;
-  const apartment = levelBoxes(g, "apartment", [
+// ---------------------------------------------------------------- the pavilion
+
+/**
+ * Eiffel's pavilion, the « pavillon carré en bois, de 10,50 m de côté » on
+ * the 4th platform [sourced E1900-TXT p. 216; PL-XIX Fig. 6 "10.500"]:
+ * « un salon de réception avec cabinet de toilette, cuisine et
+ * water-closet, ainsi que quatre petits laboratoires … d'électricité, de
+ * météorologie, de physique et de physiologie », with « l'emplacement de la
+ * cage d'ascenseur prolongée »; « La hauteur est de 2,27 m; la toiture,
+ * presque horizontale, est garnie de plomb. Les parois sont doubles et
+ * munies à l'intérieur de coton minéral » [sourced p. 216]. The plan is
+ * PL-XIX Fig. 6, « Plan du logement de Monsieur Eiffel » (1:200, read at
+ * 60 px/m on its printed 10.00 and 10.500; SOURCES.md §29): its Seine side
+ * is +z, as for PL-XIX Fig. 8 (§23.1), and its cage lands on the upper
+ * car's line, s = -2.65, which is the check that the plan is turned right.
+ *
+ * - `side`: outside the walls [sourced]; they stand on the corner uprights'
+ *   outer faces (5.00 + 0.25, [derived]), so the four uprights, and the
+ *   « poutre double à treillis … logée dans l'intérieur des parois en bois
+ *   … hauteur de 2,56 m » that ties them [sourced p. 79], are inside the
+ *   walls.
+ * - `wall`: the double wall's thickness [estimated: the plate draws its
+ *   line weight, 0.08-0.10, and the girder in it needs more].
+ * - `casing`: the corner upright (0.50 square) boxed in [derived].
+ * - `roof`, `roofDepth`: the roof's square, "Toiture du logement … 10.680"
+ *   [sourced PL-XIX Fig. 5], 0.09 over the walls; its depth, « des fers de
+ *   100 mm qui s'attachent sur la membrure inférieure des grandes poutres
+ *   diagonales et reçoivent un lambrissage recouvert de plomb » [sourced
+ *   p. 79], its top on the girders' underside, "314.48" [sourced PL-VII].
+ * - `partition`: a partition's thickness [estimated].
+ * - `window`: a two-light window, 0.87 wide, sill 1.06 and head 1.92 over
+ *   the floor [measured PL-XIX Fig. 3]; `door`, a full-height opening 0.89
+ *   wide, 1.95 tall [measured PL-XIX Fig. 3, read as a glazed door]; the
+ *   inner doors [estimated].
+ */
+export const PAVILION = {
+  side: 10.5,
+  wall: 0.25,
+  casing: 0.5,
+  roof: 10.68,
+  roofDepth: 0.1,
+  partition: 0.08,
+  window: { width: 0.87, sill: 1.06, head: 1.92 },
+  door: { width: 0.89, head: 1.95 },
+  innerDoor: 2.0,
+  sash: 0.02,
+} as const;
+
+/**
+ * Each outer wall's openings, as (centre along the face's `u`, W window or
+ * D door), in `FACES` order (+z, +x, -z, -x). Measured on PL-XIX Fig. 6,
+ * ±0.15 [measured, 60 px/m]: six a wall, window-door-window either side of
+ * a solid centre panel, which PL-XIX Fig. 3's elevation confirms (four
+ * two-light windows and two doors a face). On the -x wall the last window
+ * is set at 3.70 against the plan's 3.825, 0.125 in, to clear the cabinet
+ * de toilette's partition, which meets the wall there [estimated]. The
+ * extra opening the +x wall draws at 4.46-4.91 from its end (likely the
+ * door onto the terrace) is not built.
+ */
+const PAVILION_OPENINGS: ReadonlyArray<ReadonlyArray<readonly [number, "W" | "D"]>> = [
+  [[-3.555, "W"], [-2.46, "D"], [-1.325, "W"], [1.4, "W"], [2.55, "D"], [3.7, "W"]],
+  [[3.485, "W"], [2.46, "D"], [1.47, "W"], [-1.36, "W"], [-2.57, "D"], [-3.755, "W"]],
+  [[3.61, "W"], [2.5, "D"], [1.31, "W"], [-1.25, "W"], [-2.455, "D"], [-3.505, "W"]],
+  [[-3.595, "W"], [-2.385, "D"], [-1.285, "W"], [1.41, "W"], [2.66, "D"], [3.7, "W"]],
+];
+
+/**
+ * The openings the 4th platform's deck and the pavilion's floor leave, in
+ * the diagonals' frame (s toward pile 3, t toward pile 4):
+ *
+ * - THE EDOUX. At its top stop the upper car's floor is the 3rd floor and
+ *   its body stands 3.52 over it, to 279.65 (lifts.ts, cooked: body s
+ *   -4.435 to -0.865, t +-1.95; its roof frame and tensioners, |t| <= 0.3,
+ *   to s -4.79 and -0.51 up to 278.66), so the floors open over it, 0.05
+ *   clear [derived]. PL-XIX Fig. 6 prints the cage round it "3.90" by
+ *   "4.210" [sourced]: 4.21 along the car's line, 3.90 across, which is the
+ *   car's own width; the model's cage clears the car's cables and rods by
+ *   0.02-0.05 and its body by 0.05, so it is 4.20 x 4.00 clear.
+ * - THE LOWER CAR'S CABLES, from the pulleys in the continuous girder at s
+ *   +0.57-0.66 and +4.64-4.73, t +-0.10 (lifts.ts): a slot 0.05 clear; the
+ *   outer pair drop beside the « Poteau-guide des câbles 390 x 580 » that
+ *   runs up to the girder's foot at s +4.682 (lifts.ts; PL-XX Figs 1-2),
+ *   whose opening takes them too, and the inner pair beside the light guide
+ *   at s +0.49-0.75, t +-0.13 (lifts.ts), each 0.05 clear.
+ * - THE LITTLE STAIR from the 3rd floor, « un petit escalier tournant »
+ *   [sourced p. 216], "1.60" across [sourced PL-XIX Fig. 6], centred 1.85
+ *   out on the +x axis [measured PL-XIX Figs 6, 9: +1.83, +1.87]: the
+ *   stairs' item builds it; its square well is here.
+ * - THE CONTREFICHES (`CONTREFICHE`), where each crosses the deck and the
+ *   floor [derived from their line, 0.07 clear].
+ */
+export const ROOM_WELLS: readonly Well[] = [
+  { s: [-4.75, -0.55], t: [-2.0, 2.0] },
+  { s: [-4.86, -0.44], t: [-0.35, 0.35] },
+  { s: [0.438, 0.798], t: [-0.18, 0.18] },
+  { s: [4.437, 4.927], t: [-0.34, 0.34] },
+  { s: [1.308 - 0.85, 1.308 + 0.85], t: [1.308 - 0.85, 1.308 + 0.85] },
+  { s: [5.4, 6.45], t: [-0.45, 0.45] },
+  { s: [-6.45, -5.4], t: [-0.45, 0.45] },
+  { s: [-0.45, 0.45], t: [5.4, 6.45] },
+  { s: [-0.45, 0.45], t: [-6.45, -5.4] },
+];
+
+/**
+ * The openings in the pavilion's roof, which the girders stand on: the
+ * contrefiches' heads [derived, 0.1 clear] and the cables' middle pairs,
+ * which drop from the pulleys to both cars, the Sud pair beside its light
+ * guide [lifts.ts; 0.05 clear]. The outer pairs, and the Sud guide post,
+ * rise inside the contrefiches' openings.
+ */
+const ROOF_WELLS: readonly Well[] = [
+  { s: [4.3, 5.25], t: [-0.45, 0.45] },
+  { s: [-5.25, -4.3], t: [-0.45, 0.45] },
+  { s: [-0.45, 0.45], t: [4.3, 5.25] },
+  { s: [-0.45, 0.45], t: [-5.25, -4.3] },
+  { s: [0.438, 0.798], t: [-0.18, 0.18] },
+  { s: [-0.71, -0.52], t: [-0.15, 0.15] },
+];
+
+/**
+ * The partitions, in the diagonals' frame or square to the faces, and the
+ * inner doors in them. From PL-XIX Fig. 6 [measured, 60 px/m, ±0.15],
+ * straightened to the plan's two directions, each clipped to the walls'
+ * inner faces:
+ *
+ * - THE CAGE round the Edoux, its walls outside `ROOM_WELLS`' first
+ *   opening (4.20 x 4.00 clear against the printed 4.21 x 3.90; above).
+ * - SALON | CUISINE and OFFICE, s = 3.43 from the -z wall (where it meets
+ *   the wall at x -0.15, in its solid centre panel) to the office's wall,
+ *   and SALON | PHYSIOLOGIE, t = -0.45 from the cage [the plan's two walls
+ *   (5.16, 0.47)-(7.28, 2.43) and (7.28, 2.43)-(4.66, 5.43), which meet
+ *   the cage's side].
+ * - CUISINE | OFFICE, t = -2.23 to the -z wall at x 1.85, between its
+ *   openings [the plan's kitchen, x 5.2-7.3 along that wall].
+ * - OFFICE | W.C. and COFFRE, t = 0.66 to the +x wall at z -4.12, and the
+ *   W.C. and the coffre, s 2.30-3.40 and 3.40-4.60, t 0.66-1.80 [the
+ *   plan's W.C. at x 7.5-8.8, y 3.0-4.0, the coffre at x 9-10, y 3.3-4.0].
+ * - PHYSIOLOGIE | the two unnamed rooms, z = 1.96 from the cage to the +x
+ *   wall, and between those two, x = 1.97 to the +z wall [the plan's 7.3
+ *   and 7.0, and its "3.50" from the cage's corner; both set between the
+ *   walls' openings].
+ * - CABINET DE TOILETTE | OPTIQUE, t = -0.55 beyond the cage's end, clear
+ *   of the contrefiche [the plan's "Cabinet de toilette" strip along the -x
+ *   wall and "Optique" in the corner].
+ *
+ * The text's four laboratories are électricité, météorologie, physique
+ * and physiologie; the plate names only "Physiologie" and "Optique". So
+ * optique is read as physique, and the two unnamed rooms as électricité
+ * and météorologie, in no known order [inference].
+ */
+export function pavilionPlan(): {
+  readonly partitions: Array<{ readonly name: string; readonly outline: Array<[number, number]>; readonly doors: Array<{ readonly from: Vec3; readonly to: Vec3 }>; readonly top?: number }>;
+  readonly rooms: Array<{ readonly name: string; readonly at: readonly [number, number] }>;
+} {
+  const th = PAVILION.partition / 2;
+  const inner = PAVILION.side / 2 - PAVILION.wall;
+  const square: Array<[number, number]> = [
+    [inner, -inner],
+    [inner, inner],
+    [-inner, inner],
+    [-inner, -inner],
+  ];
+  const clip = (poly: Array<[number, number]>): Array<[number, number]> => clipXZ(poly, square);
+  const st = (s0: number, s1: number, t0: number, t1: number) =>
+    clip(([[s0, t0], [s1, t0], [s1, t1], [s0, t1]] as const).map(([s, t]) => fromST(s, t)));
+  const xz = (x0: number, x1: number, z0: number, z1: number): Array<[number, number]> =>
+    clip([
+      [x0, z0],
+      [x1, z0],
+      [x1, z1],
+      [x0, z1],
+    ]);
+  // A door in a wall along s (at t) or along t (at s), or square to the
+  // faces: its centre along the wall, and its width.
+  const along = (axis: "s" | "t" | "x" | "z", fixed: number, c: number, w: number) => {
+    const pt = (v: number): Vec3 => {
+      if (axis === "s") {
+        const [x, z] = fromST(v, fixed);
+        return [x, 0, z];
+      }
+      if (axis === "t") {
+        const [x, z] = fromST(fixed, v);
+        return [x, 0, z];
+      }
+      return axis === "x" ? [v, 0, fixed] : [fixed, 0, v];
+    };
+    return { from: pt(c - w / 2), to: pt(c + w / 2) };
+  };
+  const partitions: Array<{ name: string; outline: Array<[number, number]>; doors: Array<{ from: Vec3; to: Vec3 }>; top?: number }> = [
+    // The cage: its two ends across the car's line, its two sides along it.
+    // The Nord end stops under the contrefiche's head, which passes over it
+    // into the cage (`CONTREFICHE`: its underside at 280.24-280.28 there).
+    { name: "cage.nord", outline: st(-4.75 - 2 * th, -4.75, -2.0 - 2 * th, -0.45), doors: [] },
+    { name: "cage.nord", outline: st(-4.75 - 2 * th, -4.75, 0.45, 2.0 + 2 * th), doors: [] },
+    { name: "cage.nord.under", outline: st(-4.75 - 2 * th, -4.75, -0.45, 0.45), doors: [], top: cageUnderStrut() },
+    { name: "cage.sud", outline: st(-0.55, -0.55 + 2 * th, -2.0 - 2 * th, 2.0 + 2 * th), doors: [] },
+    { name: "cage.ouest", outline: st(-4.75, -0.55, 2.0, 2.0 + 2 * th), doors: [] },
+    { name: "cage.est", outline: st(-4.75, -0.55, -2.0 - 2 * th, -2.0), doors: [] },
     {
-      c: [0, (balconyTop + roof) / 2, 0],
-      along: [1, 0, 0],
-      size: [APARTMENT.side, roof - balconyTop, APARTMENT.side],
+      name: "salon|cuisine,office",
+      outline: st(3.43 - th, 3.43 + th, -8, 0.66 + th),
+      doors: [along("t", 3.43, -2.95, 0.8), along("t", 3.43, -1.35, 0.8), along("t", 3.43, 0.105, 0.7)],
     },
-  ]);
-  return [mullions, rails, parapet, deck, railPosts, railRails, apartment];
+    { name: "salon|physiologie", outline: st(-0.55, 3.43 - th, -0.45 - th, -0.45 + th), doors: [along("s", -0.45, 1.2, 0.8)] },
+    { name: "cuisine|office", outline: st(3.43 + th, 8, -2.23 - th, -2.23 + th), doors: [along("s", -2.23, 4.1, 0.7)] },
+    { name: "office|wc,coffre", outline: st(2.3 - th, 8, 0.66 - th, 0.66 + th), doors: [] },
+    { name: "wc", outline: st(2.3 - th, 2.3 + th, 0.66 + th, 1.8 - th), doors: [] },
+    { name: "wc|coffre", outline: st(3.4 - th, 3.4 + th, 0.66 + th, 1.8 - th), doors: [] },
+    { name: "coffre", outline: st(4.6 - th, 4.6 + th, 0.66 + th, 1.8 - th), doors: [] },
+    {
+      name: "physiologie|wc,coffre",
+      outline: st(2.3 - th, 4.6 + th, 1.8 - th, 1.8 + th),
+      doors: [along("s", 1.8, 2.85, 0.6), along("s", 1.8, 4.0, 0.6)],
+    },
+    {
+      name: "physiologie|laboratoires",
+      outline: xz(0.9, inner, 1.96 - th, 1.96 + th),
+      doors: [along("x", 1.96, 1.47, 0.7), along("x", 1.96, 3.3, 0.8)],
+    },
+    { name: "laboratoires", outline: xz(1.97 - th, 1.97 + th, 1.96 + th, inner), doors: [along("z", 1.97, 3.5, 0.8)] },
+    { name: "toilette|optique", outline: st(-8, -4.75 - 2 * th, -0.55 - th, -0.55 + th), doors: [along("s", -0.55, -5.6, 0.6)] },
+  ];
+  const rooms = (
+    [
+      ["salon", fromST(1.5, -2.5)],
+      ["cuisine", fromST(3.9, -2.9)],
+      ["office", fromST(5.0, -1.0)],
+      ["water-closet", fromST(2.85, 1.2)],
+      ["coffre", fromST(4.0, 1.2)],
+      ["physiologie", fromST(1.0, 3.0)],
+      ["électricité", [0.5, 3.5]],
+      ["météorologie", [3.5, 3.5]],
+      ["physique (optique)", fromST(-5.8, 0.8)],
+      ["cabinet de toilette", fromST(-5.6, -1.2)],
+      ["cage d'ascenseur", fromST(-2.65, 0)],
+    ] as const
+  ).map(([name, at]) => ({ name, at: [at[0], at[1]] as const }));
+  return { partitions, rooms };
+}
+
+/**
+ * How high the cage's Nord end stands under the contrefiche's head: the
+ * strut's underside over the wall's outer face, less 0.05 [derived from
+ * `CONTREFICHE`: about 280.08].
+ */
+function cageUnderStrut(): number {
+  const C = CONTREFICHE;
+  const [dh, yh] = C.head;
+  const [df, yf] = C.foot;
+  const L = Math.hypot(df - dh, yf - yh);
+  const u = [(df - dh) / L, (yf - yh) / L];
+  // The box's lower face, half its depth under the axis along its normal
+  // (-u_y, u_x).
+  const lo = [dh + u[1]! * (C.depth / 2), yh - u[0]! * (C.depth / 2)];
+  const at = 4.75 + PAVILION.partition;
+  return lo[1]! + ((at - lo[0]!) / u[0]!) * u[1]! - 0.05;
+}
+
+/** A convex polygon (x, z) clipped to a convex window (Sutherland-Hodgman, both anticlockwise or both clockwise). */
+function clipXZ(poly: ReadonlyArray<readonly [number, number]>, window: ReadonlyArray<readonly [number, number]>): Array<[number, number]> {
+  let out = poly.map((p): [number, number] => [p[0], p[1]]);
+  // The window's own winding decides which side is inside.
+  let area = 0;
+  for (let k = 0; k < window.length; k++) {
+    const a = window[k]!;
+    const b = window[(k + 1) % window.length]!;
+    area += a[0] * b[1] - b[0] * a[1];
+  }
+  const sign = Math.sign(area);
+  for (let k = 0; k < window.length; k++) {
+    const a = window[k]!;
+    const b = window[(k + 1) % window.length]!;
+    const side = (p: readonly [number, number]) => sign * ((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]));
+    const next: Array<[number, number]> = [];
+    for (let i = 0; i < out.length; i++) {
+      const p = out[i]!;
+      const q = out[(i + 1) % out.length]!;
+      const sp = side(p);
+      const sq = side(q);
+      if (sp >= -1e-9) next.push(p);
+      if ((sp >= -1e-9) !== (sq >= -1e-9)) {
+        const f = sp / (sp - sq);
+        next.push([p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f]);
+      }
+    }
+    out = next;
+    if (out.length === 0) break;
+  }
+  return out;
+}
+
+/**
+ * A vertical wall piece along a straight line a -> b (plan points) as
+ * slabs from y0 to y1, `thick` about the line, less its openings: each
+ * `[u0, u1]` along the line from a, open from `sill` over y0 to `head` over
+ * y0 (a sill of 0 is a door).
+ */
+function wallSlabs(
+  a: readonly [number, number],
+  b: readonly [number, number],
+  thick: number,
+  y0: number,
+  y1: number,
+  openings: ReadonlyArray<{ readonly u0: number; readonly u1: number; readonly sill: number; readonly head: number }>,
+): Slab[] {
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const d = [(b[0] - a[0]) / L, (b[1] - a[1]) / L];
+  const n = [-d[1]!, d[0]!];
+  const piece = (u0: number, u1: number, ya: number, yb: number): Slab =>
+    anticlockwise({
+      outline: [
+        [a[0] + d[0]! * u0 + (n[0]! * thick) / 2, ya, a[1] + d[1]! * u0 + (n[1]! * thick) / 2],
+        [a[0] + d[0]! * u1 + (n[0]! * thick) / 2, ya, a[1] + d[1]! * u1 + (n[1]! * thick) / 2],
+        [a[0] + d[0]! * u1 - (n[0]! * thick) / 2, ya, a[1] + d[1]! * u1 - (n[1]! * thick) / 2],
+        [a[0] + d[0]! * u0 - (n[0]! * thick) / 2, ya, a[1] + d[1]! * u0 - (n[1]! * thick) / 2],
+      ],
+      depth: yb - ya,
+    });
+  const out: Slab[] = [];
+  const sorted = [...openings].sort((p, q) => p.u0 - q.u0);
+  let from = 0;
+  for (const o of sorted) {
+    if (o.u0 > from + 1e-9) out.push(piece(from, o.u0, y0, y1));
+    if (o.sill > 1e-9) out.push(piece(o.u0, o.u1, y0, y0 + o.sill));
+    if (y0 + o.head < y1 - 1e-9) out.push(piece(o.u0, o.u1, y0 + o.head, y1));
+    from = o.u1;
+  }
+  if (from < L - 1e-9) out.push(piece(from, L, y0, y1));
+  return out;
+}
+
+/** The pavilion's floor, outer walls with their openings, casings, partitions and roof, as slabs; and its windows' bars. */
+export function pavilionSolids(): {
+  readonly floor: Slab[];
+  readonly walls: Slab[];
+  readonly casings: Slab[];
+  readonly partitions: Slab[];
+  readonly roof: Slab[];
+  readonly sashes: Array<readonly [Vec3, Vec3]>;
+  readonly sashN: Vec3[];
+  readonly windows: number;
+  readonly doors: number;
+} {
+  const P = PAVILION;
+  const half = P.side / 2;
+  const inner = half - P.wall;
+  const floorY = apartmentFloor;
+  const ceiling = roomTop - P.roofDepth;
+  const square = (h: number): Array<[number, number]> => [
+    [h, -h],
+    [h, h],
+    [-h, h],
+    [-h, -h],
+  ];
+  const floor = slabWithWells(square(half), ROOM_WELLS, balconyTop, floorY);
+  const roof = slabWithWells(square(P.roof / 2), ROOF_WELLS, ceiling, roomTop);
+  const c = half - P.casing;
+  const casings = [
+    boxSlab(c, half, c, half, floorY, ceiling),
+    boxSlab(-half, -c, c, half, floorY, ceiling),
+    boxSlab(-half, -c, -half, -c, floorY, ceiling),
+    boxSlab(c, half, -half, -c, floorY, ceiling),
+  ];
+  // The outer walls, between the casings, on each face's line.
+  const walls: Slab[] = [];
+  const sashes: Array<readonly [Vec3, Vec3]> = [];
+  const sashN: Vec3[] = [];
+  let windows = 0;
+  let doors = 0;
+  FACES.forEach((f, i) => {
+    const mid = (half + inner) / 2;
+    const at = (u: number): [number, number] => [f.n[0] * mid + f.t[0] * u, f.n[2] * mid + f.t[2] * u];
+    const u0 = -c;
+    const openings = PAVILION_OPENINGS[i]!.map(([u, kind]) => {
+      const w = kind === "W" ? P.window.width : P.door.width;
+      if (kind === "W") {
+        windows++;
+        // The two lights' bar, in the wall's middle.
+        sashes.push([onFace(f, mid, u, floorY + P.window.sill), onFace(f, mid, u, floorY + P.window.head)]);
+        sashN.push(f.n);
+      } else {
+        doors++;
+      }
+      return { u0: u - w / 2 - u0, u1: u + w / 2 - u0, sill: kind === "W" ? P.window.sill : 0, head: kind === "W" ? P.window.head : P.door.head };
+    });
+    walls.push(...wallSlabs(at(u0), at(c), P.wall, floorY, ceiling, openings));
+  });
+  // The partitions, each less its doors.
+  const partitions: Slab[] = [];
+  for (const part of pavilionPlan().partitions) {
+    if (part.outline.length < 3) continue;
+    if (part.doors.length === 0) {
+      partitions.push(anticlockwise({ outline: part.outline.map(([x, z]): Vec3 => [x, floorY, z]), depth: (part.top ?? ceiling) - floorY }));
+      continue;
+    }
+    // A partition with doors is a straight wall: its line from its door's
+    // direction, its extent from its outline.
+    const d0 = part.doors[0]!;
+    const dir = unit([d0.to[0] - d0.from[0], 0, d0.to[2] - d0.from[2]]);
+    const us = part.outline.map(([x, z]) => x * dir[0] + z * dir[2]);
+    const vs = part.outline.map(([x, z]) => -x * dir[2] + z * dir[0]);
+    const [lo, hi] = [Math.min(...us), Math.max(...us)];
+    const v = (Math.min(...vs) + Math.max(...vs)) / 2;
+    const thick = Math.max(...vs) - Math.min(...vs);
+    const base = (u: number): [number, number] => [dir[0] * u - dir[2] * v, dir[2] * u + dir[0] * v];
+    const openings = part.doors.map((d) => {
+      const a = d.from[0] * dir[0] + d.from[2] * dir[2];
+      const b = d.to[0] * dir[0] + d.to[2] * dir[2];
+      return { u0: Math.min(a, b) - lo, u1: Math.max(a, b) - lo, sill: 0, head: P.innerDoor };
+    });
+    partitions.push(...wallSlabs(base(lo), base(hi), thick, floorY, ceiling, openings));
+  }
+  return { floor, walls, casings, partitions, roof, sashes, sashN, windows, doors };
+}
+
+/** Eiffel's pavilion, its floor to its roof (header, item 3). */
+function pavilion(g: Graph): NodeHandle[] {
+  const p = pavilionSolids();
+  return [
+    slabs(g, "pavilionFloor", p.floor),
+    slabs(g, "pavilionWalls", [...p.walls, ...p.casings]),
+    slabs(g, "pavilionPartitions", p.partitions),
+    slabs(g, "pavilionRoof", p.roof),
+    faceSkin(g, "pavilionSash", members(g, "pavilionSashPaths", p.sashes, p.sashN), PAVILION.sash),
+  ];
+}
+
+// ------------------------------------------------------------ the contrefiches
+
+/**
+ * The four contrefiches, « des contrefiches inclinées venant prendre un
+ * nouvel appui sur l'arbalétrier d'angle au niveau de la galerie du
+ * troisième étage … formées par un caisson, dont les parois verticales
+ * sont constituées par une âme de 600 x 8 raidie, haut et bas, par des
+ * cornières de 70 x 70 x 8 » [sourced E1900-TXT p. 79]; "4 Contrefiches des
+ * poutres en diagonale" [sourced PL-XIX Fig. 3], one under each end of each
+ * girder, "Contrefiche 600 x 762" [sourced PL-VII Fig. 4]. In a girder's
+ * frame (`d` from the axis, heights):
+ *
+ * - `head`: the axis's top, under the girder's foot, 4.42-5.04 out
+ *   [measured PL-XIV Fig. 4, 239 px/m], just outboard of the pulley post,
+ *   set 0.145 under the foot so the box's square end stays under it
+ *   [derived].
+ * - `foot`: on the corner upright's gusset, 309.63 to about 310.9, the
+ *   axis at about 310.3 [measured PL-XIV Fig. 2], built at d 6.90, flanking
+ *   the upright (the box is 0.762 wide, the upright 0.707 across the
+ *   diagonal) [derived]. The line leans 27.5 degrees [derived; measured
+ *   24-30].
+ * - `depth` 0.600, `width` 0.762 over the walls [sourced]; each wall with
+ *   its angles 0.04 thick [estimated]. The box is two walls: the Edoux
+ *   cables drop between them.
+ */
+export const CONTREFICHE = { head: [4.8, 280.835], foot: [6.9, 276.8], depth: 0.6, width: 0.762, wall: 0.04 } as const;
+
+/** The contrefiches' walls: two per strut, four struts. */
+function contrefiches(g: Graph): NodeHandle {
+  const C = CONTREFICHE;
+  const pieces: Array<{ from: Vec3; to: Vec3; n: Vec3 }> = [];
+  for (const D of DIAGONALS) {
+    for (const sign of [1, -1]) {
+      for (const w of [C.width / 2 - C.wall / 2, -(C.width / 2 - C.wall / 2)]) {
+        pieces.push({
+          from: inGirder(D, sign * C.head[0], w, C.head[1]),
+          to: inGirder(D, sign * C.foot[0], w, C.foot[1]),
+          n: D.p,
+        });
+      }
+    }
+  }
+  return plates(g, "contrefiche", pieces, C.depth, C.wall);
 }
 
 /**
@@ -1694,22 +2621,65 @@ function prism(
   return node;
 }
 
-/** The lantern terrace, the lantern, the cupola, the conductor's cage and the flagpole. */
+/** The lantern's levels, from the terrace up (`LANTERN`; PL-XV Fig. 1's chain). */
+export function lanternLevels(): {
+  readonly terrace: number;
+  readonly lanternFloor: number;
+  readonly balcony: number;
+  readonly glass: readonly [number, number];
+  readonly springing: number;
+  readonly crown: number;
+  readonly platform: number;
+  /** The tripod's apex, 1.000 over the platform, and the rod's seated foot. */
+  readonly tripod: number;
+  readonly rodBase: number;
+  readonly pointsFrom: number;
+  readonly rodTip: number;
+} {
+  const L = LANTERN;
+  const terrace = FLOORS.lanternTerrace;
+  const glass0 = terrace + L.baseHeight;
+  const glass1 = glass0 + L.lanternHeight;
+  const platform = FLOORS.topTerrace;
+  const rodTip = FLOORS.flagTop;
+  const rodBase = rodTip - ROD.length;
+  return {
+    terrace,
+    lanternFloor: terrace + L.floorAt,
+    balcony: terrace + L.balconyAt,
+    glass: [glass0, glass1],
+    springing: glass1 + L.cupolaDrum,
+    crown: platform - L.topDeck,
+    platform,
+    tripod: platform + ROD.base,
+    rodBase,
+    pointsFrom: rodTip - ROD.points * Math.cos(ROD.lean),
+    rodTip,
+  };
+}
+
+/**
+ * The lantern terrace, the lantern, the cupola, the top platform with its
+ * railing and socket, the tripod and the rod (header, items 6-8).
+ */
 function lantern(g: Graph, crownY: number): NodeHandle[] {
   const L = LANTERN;
-  const deckTop = FLOORS.lanternTerrace;
-  const baseTop = deckTop + L.baseHeight;
-  const cupolaY = baseTop + L.lanternHeight;
-  const cupolaTop = cupolaY + L.cupolaHeight;
-  const topY = FLOORS.topTerrace;
+  const lv = lanternLevels();
+  const deckTop = lv.terrace;
+  const baseTop = lv.glass[0];
+  const cupolaY = lv.glass[1];
+  const topY = lv.platform;
   // The normal of the vertical plane through the axis and a point.
   const tangential = vec(mul(component(position(), 2), -1), 0, component(position(), 0));
   const out: NodeHandle[] = [];
 
-  // The terrace: a chamfered square, and its railing just inside the edge.
+  // The terrace: a chamfered square round the stair core's "carré" (770,
+  // sourced PL-XV Fig. 1, PL-XVI Fig. 22), and its railing just inside the
+  // edge.
   const tHalf = L.terrace / 2;
   const tStraight = tHalf - L.chamfer / Math.SQRT2;
-  out.push(octagonSlab(g, "lanternTerrace", tHalf, tStraight, crownY, deckTop - crownY));
+  const core = 0.385;
+  out.push(slabs(g, "lanternTerrace", slabWithWells(octagonPlan(tHalf, tStraight), [{ s: [-core, core], t: [-core, core] }], crownY, deckTop)));
   const m = 0.025;
   const rail = octagon(tHalf - m, tStraight - m * Math.tan(Math.PI / 8), deckTop);
   const railAt = bayPoints(rail, (i) => (i % 2 === 0 ? 3 : 1));
@@ -1738,12 +2708,16 @@ function lantern(g: Graph, crownY: number): NodeHandle[] {
     ),
   );
 
-  // The soubassement, and the balcony on its consoles.
-  const rBase = circum(L.baseFlats, 10);
+  // The soubassement, its sheet walls open inside to the lantern's floor,
+  // which the core carries; and the balcony on its ten consoles.
+  const rBase = L.side / 2 / Math.sin(Math.PI / 10);
   const rBalcony = circum(L.balconyFlats, 10);
-  const balconyY = deckTop + L.balconyAt;
+  const balconyY = lv.balcony;
   const consoleY = balconyY - L.console;
-  out.push(prism(g, "lanternBase", 10, [deckTop, baseTop], rBase));
+  out.push(prism(g, "lanternBase", 10, [deckTop, baseTop], rBase, false));
+  // The floor round the core's head, which carries it [sourced p. 80].
+  const floorPlan = polygon(10, rBase - 0.01, 0).map(([x, , z]): [number, number] => [x, z]);
+  out.push(slabs(g, "lanternFloor", slabWithWells(floorPlan, [{ s: [-0.36, 0.36], t: [-0.36, 0.36] }], lv.lanternFloor - L.floorDepth, lv.lanternFloor)));
   out.push(prism(g, "balconyFloor", 10, [balconyY - 0.1, balconyY], rBalcony));
   out.push(prism(g, "balconyParapet", 10, [balconyY, balconyY + L.parapet], rBalcony, false));
   const arcSteps = 8;
@@ -1778,97 +2752,137 @@ function lantern(g: Graph, crownY: number): NodeHandle[] {
     skin(g, "lanternRingSkin", loops(g, "lanternRings", [foot, head]), 0.04, [0, 1, 0]),
   );
 
-  // The cupola: straight sides, then a quarter ellipse in to the top deck.
-  const rTop = L.topDeckWidth / 2;
-  const straightTop = cupolaY + L.cupolaStraight;
-  const cupola: Array<readonly [number, number]> = [
-    [cupolaY, rBase],
-    ...Array.from({ length: 9 }, (_, i) => {
-      const t = (i / 8) * (Math.PI / 2);
-      return [straightTop + (cupolaTop - straightTop) * Math.sin(t), rTop + (rBase - rTop) * Math.cos(t)] as const;
+  // The cupola: the drum, then the sphere on it to the crown ring. The
+  // polygon's circumradius is the sphere's, so its sides stand a little
+  // inside it.
+  const R = L.cupolaDiameter / 2;
+  const rRing = L.crownRing / 2;
+  const top = lv.crown;
+  const rise = Math.sqrt(R * R - rRing * rRing);
+  const profile: Array<readonly [number, number]> = [
+    [cupolaY, R],
+    ...Array.from({ length: 11 }, (_, i) => {
+      const a = (i / 10) * Math.asin(rise / R);
+      return [lv.springing + R * Math.sin(a), R * Math.cos(a)] as const;
     }),
   ];
+  // The sphere ends at the ring; the platform's structure stands on it.
+  const cupola = profile.map(([y, r]) => [Math.min(y, top), r] as const);
   out.push(
     prism(
       g,
       "cupola",
-      10,
+      L.cupolaSides,
       cupola.map(([y]) => y),
       cupola,
     ),
   );
-  out.push(prism(g, "topDeck", 10, [cupolaTop, topY], rTop));
 
-  // The conductor's cage: eight ribs, straight, then closing on the pole,
-  // with the top terrace's two rails round the straight part.
-  const rCage = L.finialWidth / 2;
-  const cageTop = topY + L.finialHeight;
-  const bendY = topY + L.finialStraight;
-  const poleAt = (y: number) =>
-    FLAG_RADIUS.foot + ((FLAG_RADIUS.head - FLAG_RADIUS.foot) * (y - topY)) / (FLOORS.flagTop - topY);
-  const rEnd = poleAt(cageTop);
-  const ribs = placedLattice(
+  // The top platform, Ø 1.70, on the crown ring.
+  const rTop = L.topDiameter / 2;
+  out.push(prism(g, "topDeck", L.cupolaSides, [top, topY], rTop));
+
+  // Its railing: ten posts on the rim from 0.275 under the platform, the
+  // five bent ones on to the socket; the rails round the posts' line.
+  const a = L.angle;
+  const rPost = rTop - a;
+  const postFoot = topY - L.postsBelow;
+  const railTop = topY + L.rails[L.rails.length - 1]!;
+  const straightPosts: Array<readonly [Vec3, Vec3]> = [];
+  const straightN: Vec3[] = [];
+  for (let i = 0; i < 5; i++) {
+    const t = ((2 * i + 1) * Math.PI) / 5;
+    const dir: Vec3 = [Math.cos(t), 0, Math.sin(t)];
+    straightPosts.push([[dir[0] * rPost, postFoot, dir[2] * rPost], [dir[0] * rPost, railTop, dir[2] * rPost]]);
+    straightN.push(dir);
+  }
+  out.push(faceSkin(g, "topRailPost", members(g, "topRailPostPaths", straightPosts, straightN), a));
+  const socketR = L.socketRadius;
+  const bendFrom = topY + L.bentPlumb;
+  const bendTo = topY + L.socket[0];
+  const steps = 8;
+  const bent = placedLattice(
     g,
-    "finial",
-    stationRows(8, 10, (s, k) => {
-      const v = polygon(8, 1, 0)[s]!;
-      let r = rCage;
-      let y = topY;
-      if (k >= 1) {
-        const t = ((k - 1) / 8) * (Math.PI / 2);
-        r = rEnd + (rCage - rEnd) * Math.cos(t);
-        y = bendY + (cageTop - bendY) * Math.sin(t);
-      }
-      return [v[0] * r, y, v[2] * r];
-    }),
+    "topBent",
+    [
+      ...[postFoot, bendFrom].map((y) => Array.from({ length: 5 }, (_, i) => [rPost * Math.cos((2 * i * Math.PI) / 5), y, rPost * Math.sin((2 * i * Math.PI) / 5)] as Vec3)),
+      ...Array.from({ length: steps }, (_, k) => {
+        const f = (k + 1) / steps;
+        // Two reversed arcs: in along a smooth S, plumb again at the socket.
+        const e = f * f * (3 - 2 * f);
+        const r = rPost + (socketR + a - rPost) * e;
+        const y = bendFrom + (bendTo - bendFrom) * f;
+        return Array.from({ length: 5 }, (_, i) => [r * Math.cos((2 * i * Math.PI) / 5), y, r * Math.sin((2 * i * Math.PI) / 5)] as Vec3);
+      }),
+    ],
   );
-  out.push(skin(g, "finialRibSkin", chains(ribs, "Paths"), 0.03, tangential));
+  out.push(skin(g, "topBentSkin", chains(bent, "Paths"), a, tangential));
   out.push(
     skin(
       g,
-      "finialRailSkin",
-      loops(g, "finialRails", [topY + 0.5, topY + 1.0].map((y) => polygon(8, rCage, y))),
-      0.025,
+      "topRailSkin",
+      loops(g, "topRails", L.rails.map((h) => polygon(20, rPost, topY + h))),
+      0.015,
       [0, 1, 0],
     ),
   );
+  // The socket, a pentagonal sleeve round the rod.
+  out.push(prism(g, "topSocket", 5, [topY + L.socket[0], topY + L.socket[1]], socketR + 0.005, false));
 
-  // The flagpole.
+  // The tripod, from the crown ring to the rod's foot, and the rod, a
+  // round bar tapering to its three points.
+  const legs: Array<readonly [Vec3, Vec3]> = [];
+  for (let i = 0; i < 3; i++) {
+    const t = (2 * i * Math.PI) / 3 + Math.PI / 2;
+    legs.push([[ROD.legFoot * Math.cos(t), topY, ROD.legFoot * Math.sin(t)], [0, lv.tripod, 0]]);
+  }
+  out.push(skin(g, "rodTripod", members(g, "rodTripodPaths", legs), ROD.leg, [0, 1, 0]));
   out.push(
     prism(
       g,
-      "flagpole",
+      "rod",
       12,
-      [topY, FLOORS.flagTop],
+      [lv.rodBase, lv.pointsFrom],
       [
-        [topY, FLAG_RADIUS.foot],
-        [FLOORS.flagTop, FLAG_RADIUS.head],
+        [lv.rodBase, ROD.foot],
+        [lv.pointsFrom, ROD.head],
       ],
     ),
   );
+  const points: Array<readonly [Vec3, Vec3]> = [];
+  const out3 = ROD.points * Math.sin(ROD.lean);
+  for (let i = 0; i < 3; i++) {
+    const t = (2 * i * Math.PI) / 3;
+    points.push([[0, lv.pointsFrom, 0], [out3 * Math.cos(t), lv.rodTip, out3 * Math.sin(t)]]);
+  }
+  out.push(skin(g, "rodPoints", members(g, "rodPointPaths", points), ROD.tip, [0, 1, 0]));
   return out;
 }
 
-/** Build panel 29, the 3rd-floor gallery and apartment, and the campanile, at the given detail. */
+/** Build panel 29, the 3rd-floor gallery and Eiffel's pavilion, and the campanile, at the given detail. */
 export function buildSummit(g: Graph, detail: Detail = {}): Parts {
-  const roomTop = apartmentFloor + APARTMENT.height;
   const girderTop = roomTop + GIRDER.height;
   const { mesh: ribs, crownY, rivets: ribRivets } = dome(g, girderTop, detail);
   const girders = diagonalGirders(g, roomTop, detail);
 
-  // The ladder cylinder, from the girders' crossing up through the dome's
-  // opening to the lantern terrace's deck, where the lantern's base takes
-  // it on [PL-VII Fig. 4 draws it from the girders' top up, through the
-  // ribs' crown, and not between them; PL-XIX Fig. 5 names it at the
-  // crossing].
+  // The stair core, from the girders' crossing up through the dome's crown
+  // and the terrace to the lantern's floor, which it carries.
   const ladder = prism(
     g,
     "ladderCylinder",
     LADDER.sides,
-    [girderTop, FLOORS.lanternTerrace],
+    [girderTop, lanternLevels().lanternFloor],
     circum(LADDER.diameter, LADDER.sides),
   );
-  const summit: NodeHandle[] = [...gallery(g), ...(girders.summit ?? []), ribs, ladder, ...lantern(g, crownY)];
+  const summit: NodeHandle[] = [
+    ...gallery(g),
+    ...pavilion(g),
+    contrefiches(g),
+    ...(girders.summit ?? []),
+    ribs,
+    ladder,
+    ...lantern(g, crownY),
+  ];
   return joinParts(panel29(g, detail), {
     summit,
     gussets: girders.gussets ?? [],
