@@ -22,6 +22,13 @@ export const PART_CLASSES = [
   "platforms",
   /** The masonry pedestals. */
   "masonry",
+  /**
+   * What is under the ground, and what stood on the site's higher ground
+   * round the piles (ground.ts): the machine room's walls and floors, the
+   * flue and its chimney. The ground plane hides what is under it; the
+   * page's section view opens it.
+   */
+  "foundations",
   /** Everything above the 3rd floor, and the 3rd-floor room. */
   "summit",
   /**

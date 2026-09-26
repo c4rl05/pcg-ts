@@ -144,6 +144,9 @@ const PALETTE: Record<PartClass, { color: number; roughness: number; metalness: 
   // it sits in its own shade, and a darker paint read as solid black.
   platforms: { color: 0x7d5e48, roughness: 0.7, metalness: 0.1 },
   masonry: { color: 0xcdc3ae, roughness: 0.93, metalness: 0 },
+  // What is under the ground: rubble, concrete and brick, a darker and
+  // warmer stone than the pedestals' cast facing.
+  foundations: { color: 0x9a8a76, roughness: 0.96, metalness: 0 },
   summit: { color: 0x72533f, roughness: 0.62, metalness: 0.15 },
   gussets: { color: 0x684a39, roughness: 0.6, metalness: 0.15 },
   // The names were gilded; the only thing on the tower that is not iron
@@ -747,7 +750,10 @@ async function main(): Promise<void> {
       classStats[cls]("absent");
       continue;
     }
-    const drawn = draw(cls, collection, MATERIALS[cls], box, problems);
+    // The foundations reach 50 m past the pedestals (the chimney) and 12 m
+    // under the ground, where the sun's shadow has nothing to fall on: they
+    // stay out of the box the shadow is fitted to.
+    const drawn = draw(cls, collection, MATERIALS[cls], cls === "foundations" ? new Box3() : box, problems);
     if (drawn.meshes.length === 0) {
       classStats[cls]("no mesh");
       continue;
