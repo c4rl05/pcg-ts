@@ -2183,6 +2183,39 @@ The backlog asked for "tie plates across the chord angles at every strut end, an
 
 Rendered on a local dev server at the guide's `rivets-close` pose, both ways: the joint and splice rows light up, and the uprights' seam rows stay shop. There are 349,456 site heads of 1,207,672 (29 %).
 
+### 27.7 Hand-driven heads (2026-09-26)
+
+A hand-closed head is never the snap's exact dome, square on its hole. Every head now takes its own width, rise, lean, turn about its axis and off-centre (`heads.ts`).
+
+**The split.**
+- **The graph settles which.** Every rivet carries one draw, `headDrive` in [0, 1), from its own identity (`randomField`: its position with its seed; `rivetSpawn` in `strut.ts`), as a per-instance channel. The same head draws the same value in every cook and whatever order the heads come in.
+- **The page settles how, once, at load.** It right-multiplies each instance matrix by the head's transform in the unit head's own frame (`driveHead`, `driveMatrix`): scale by width and rise, turn about y, lean the axis, move off centre, sink.
+- **Why not all in the graph.** That was built first, and measured: per-head frame arithmetic over 1.2 M heads, with a node's copy of every head at each step, added about 4 s to the riveted cook. The draw alone is within the cook's noise, and the page's pass is about 0.5 s, once, with nothing per frame.
+- **What it keeps.** The graph's instance transforms stay the rule's, so every seat, axis and clearance the tests hold is unchanged. The rim-clash invariants (§27.5 and earlier) still read the same numbers.
+
+**The ranges** [estimated: no source measures a head's departure]:
+- Width ±4 % and rise ±12 %. The one original head recorded is 42 mm across (§7), against the model's 38.
+- Lean up to 3°, toward any side.
+- Off-centre up to 1.2 mm in the plate.
+- Turn: any angle.
+- Each value is the fractional part of the draw times an odd multiplier. The draw is a multiple of 2^-24, so each value is exactly uniform, at a resolution of about 12 bits, which a head's variance cannot show.
+
+**The rim never rises.** Leaning by θ lifts one side of a rim of radius w by w sin θ. The head is sunk exactly that along its axis, so the rim's highest point stays on the plane the head was set on. The far side goes 2 w sin θ into steel no one sees. The off-centre moves the head in its plane, not off it. The transform stays a rotation times a scale, which three's instanced normal transform handles exactly.
+
+**Measured.**
+- Cook time: within the noise at the riveted depth. The independent check's interleaved runs put the change 150-420 ms either side of HEAD on a loaded machine.
+- Every rivet output's transforms hash identical to HEAD's. Instances and triangles are unchanged.
+- The channel is 4 bytes an instance, and the page drops it once the heads are driven.
+- At the guide's close pose the heads differ in size and highlight, subtly. The lean shows at 0.2 m.
+- A driven head reaches up to 21 mm from its seat against 19: the clash tests still read the rule's 19 mm heads.
+
+Tested in `tests/eiffelRivetHeads.test.ts`:
+- the decode's bounds;
+- the rim never rising, with a control that the unsunk lean lifts it;
+- the lean;
+- the draw's independence of order;
+- the channel on every rivet output of the tower.
+
 ---
 
 ## 28. The arches' ironwork: PL-XI Fig. 14, the decorated panel (2026-09-26)

@@ -54,6 +54,7 @@ import {
   position,
   promoteAttribute,
   ramp,
+  randomField,
   removeAttribute,
   sampleNearestPoint,
   setAttribute,
@@ -66,6 +67,7 @@ import {
 } from "pcg-ts";
 import type { PlateFootprint } from "./crossing.js";
 import { END_SINE, END_SINE_MIN, FACE_NORMAL, type Vec3, indexTable, merge, skin } from "./lattice.js";
+import { HEAD_DRIVE_ATTR } from "./heads.js";
 import { type Detail, RIVET_ASSET, jitter } from "./parts.js";
 
 /** A corner angle's half-width: 80-100 mm angles (Plate XXXI) [derived]. */
@@ -1060,6 +1062,12 @@ function isVec3(v: readonly [number, number, number] | Field): v is readonly [nu
  * seating moves by up to two millimetres rather than the one the steel
  * moves alone; against a 19 mm head that is a tenth of its radius, and a
  * rivet is half sunk in its plate to begin with.
+ *
+ * And each head is DRIVEN: it carries one draw, {@link HEAD_DRIVE_ATTR},
+ * from its own identity (`randomField`: its position with its seed) as a
+ * per-instance channel, and the page leans, turns, sizes and seats it by
+ * that draw in its own frame (heads.ts). The instance transform stays the
+ * rule's.
  */
 export function rivetSpawn(g: Graph, id: string, sets: readonly NodeHandle[]): NodeHandle {
   const all = g.add(mergePoints, {}, `${id}Rivets`);
@@ -1069,9 +1077,19 @@ export function rivetSpawn(g: Graph, id: string, sets: readonly NodeHandle[]): N
     { name: "scale", type: "f32", tupleSize: 3, value: RIVET_HEAD },
     `${id}RivetSize`,
   );
-  const spawn = g.add(spawnInstances, { assetId: RIVET_ASSET }, `${id}RivetSpawn`);
+  const drive = g.add(
+    setAttribute,
+    { name: HEAD_DRIVE_ATTR, type: "f32", value: randomField("rivetHead") },
+    `${id}RivetDrive`,
+  );
+  const spawn = g.add(
+    spawnInstances,
+    { assetId: RIVET_ASSET, instanceAttrs: [HEAD_DRIVE_ATTR] },
+    `${id}RivetSpawn`,
+  );
   g.connect(jitter(g, `${id}RivetJitter`, all), "out", sized, "in");
-  g.connect(sized, "out", spawn, "in");
+  g.connect(sized, "out", drive, "in");
+  g.connect(drive, "out", spawn, "in");
   return spawn;
 }
 

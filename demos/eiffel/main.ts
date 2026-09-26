@@ -120,6 +120,7 @@ import { PART_CLASSES, type PartClass } from "./parts.js";
 import { BALUSTER, CABOCHON_RISE, FITTING_ASSETS } from "./platforms.js";
 import { NEUTRAL, createRig } from "./rig.js";
 import { rivetClass } from "./spec.js";
+import { HEAD_DRIVE_ATTR, driveHead, driveMatrix } from "./heads.js";
 import { BufferAttribute, DataTexture, NearestFilter, SRGBColorSpace } from "three";
 import { FLAG_BANDS, FLAG_GRID, FLAG_POINTS, flagNormals, flagPose } from "./flag.js";
 
@@ -333,6 +334,35 @@ function dome(rise: number, around: number, rings: number): BufferGeometry {
 /** Does this output carry rivets? The cook names them `rivets`, `rivets.<class>`, ... */
 function isRivets(name: string): boolean {
   return name.startsWith("rivets");
+}
+
+/**
+ * Drive every head of a rivet output as its own draw says (heads.ts):
+ * each instance matrix right-multiplied by the head's transform in the
+ * unit head's frame, once, at load. The graph's transforms are the rule's
+ * seats; this is the hand that closed each head. A batch without the
+ * channel is left as the rule set it.
+ */
+function driveHeads(list: readonly Mesh[]): void {
+  for (const mesh of list) {
+    const inst = mesh as InstancedMesh;
+    const draws = inst.geometry.getAttribute(HEAD_DRIVE_ATTR);
+    if (draws === undefined) continue;
+    const m = inst.instanceMatrix.array;
+    const a = new Array<number>(16);
+    for (let i = 0; i < inst.count; i++) {
+      const d = driveMatrix(driveHead(draws.getX(i)));
+      const o = 16 * i;
+      for (let k = 0; k < 16; k++) a[k] = m[o + k]!;
+      // m = a · d, column-major.
+      for (let c = 0; c < 4; c++)
+        for (let r = 0; r < 4; r++)
+          m[o + 4 * c + r] = a[r]! * d[4 * c]! + a[4 + r]! * d[4 * c + 1]! + a[8 + r]! * d[4 * c + 2]! + a[12 + r]! * d[4 * c + 3]!;
+    }
+    inst.instanceMatrix.needsUpdate = true;
+    // Its work is done: the shader never reads it, so it is not uploaded.
+    inst.geometry.deleteAttribute(HEAD_DRIVE_ATTR);
+  }
 }
 
 /** Does this output carry fittings (globes, cabochons, balusters)? The cook names them `fittings.<name>`. */
@@ -793,6 +823,7 @@ async function main(): Promise<void> {
     // A site rivet output in its own material (`rivetClass`: any share of
     // it driven on site); every other rivet keeps the asset's, the shop's.
     if (isRivets(name) && rivetClass(name).share > 0) for (const mesh of drawn.meshes) mesh.material = RIVET_SITE;
+    if (isRivets(name)) driveHeads(drawn.meshes);
     if (!named) present.push(name);
     if (isChain(name)) {
       const chain = LIFT_CHAINS.findIndex((c) => `chain.${c.name}` === name);
