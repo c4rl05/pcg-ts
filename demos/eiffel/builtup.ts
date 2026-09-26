@@ -1,8 +1,10 @@
 /**
- * THE LOWER UPRIGHTS AS BUILT: supports to XVII, the sixteen arbalétriers
- * of the four legs as PL-XXXI's sections make them (`UPRIGHT_SECTIONS`,
+ * THE UPRIGHTS AS BUILT: supports to XVII, the sixteen arbalétriers of the
+ * four legs as PL-XXXI's sections make them (`UPRIGHT_SECTIONS`,
  * `UPRIGHT_BOX` in spec.ts), and the one place anything reads where a
- * lower upright's steel is.
+ * lower upright's steel is; and above XVII (at the end of this file) the
+ * legs' c, b and d and the shaft's eight, from its upper sections
+ * (`UPPER_SECTIONS`, `UPPER_BOX`).
  *
  * THE BOX. A constant 0.877 m square IN PLAN, its faces in the tower's face
  * planes, the plates growing inward as they thicken [sourced text]. Square
@@ -73,8 +75,12 @@
 import type { Vec3 } from "./lattice.js";
 import {
   NODES,
+  UPPER_BOX,
+  UPPER_SECTIONS,
   UPRIGHT_BOX,
   UPRIGHT_SECTIONS,
+  type UpperMakeup,
+  type UpperSection,
   type UprightMakeup,
   type UprightSection,
 } from "./spec.js";
@@ -155,7 +161,7 @@ export function segmentAxis(name: UprightName, k: number): SegmentAxis {
   return { A, Q, T: unit(sub(Q, A)) };
 }
 
-/** A face's frame square to an axis T: its centre-line offset from the axis, across (e), out (n), and width. */
+/** A face's frame square to an axis T, of a plan square 2H: its centre-line offset from the axis, across (e), out (n), and width. */
 export interface FaceFrame {
   readonly mid: Vec3;
   readonly e: Vec3;
@@ -163,8 +169,7 @@ export interface FaceFrame {
   readonly W: number;
 }
 
-export function faceFrame(T: Vec3, d: PlanDir): FaceFrame {
-  const H = UPRIGHT_BOX.planHalf;
+export function faceFrame(T: Vec3, d: PlanDir, H: number = UPRIGHT_BOX.planHalf): FaceFrame {
   const dv: Vec3 = [d[0], 0, d[1]];
   const h: Vec3 = [Math.abs(d[1]), 0, Math.abs(d[0])];
   const hp = squareTo(h, T);
@@ -199,7 +204,7 @@ export const AS_BUILT: Protrusions = { cj: true, angles: true };
 
 /** A rectangle of steel in a face's (s across, o out of the web) coordinates, running the panel's length. */
 export interface FacePiece {
-  readonly what: "web" | "cj" | "finFlat" | "fin" | "channelFlat" | "channelLeg";
+  readonly what: "web" | "cj" | "finFlat" | "fin" | "channelFlat" | "channelLeg" | "flange" | "stem" | "angle" | "closure";
   readonly s0: number;
   readonly s1: number;
   readonly o0: number;
@@ -488,4 +493,386 @@ export function lowerSeamRows(pitch: number, inset: number): Array<{ a: Vec3; b:
     }
   }
   return out;
+}
+
+/*
+ * ===========================================================================
+ * THE UPPER UPRIGHTS, XVII to the top of panel 28 (`UPPER_SECTIONS`,
+ * `UPPER_BOX` in spec.ts): the legs' c, b and d above the 2nd floor
+ * (panels 12-17, closed 500 boxes) and the shaft's eight from XI (panel 18:
+ * c a box, the merged bd a T 1,000 wide; panels 19-28: c an open L, closed
+ * over its nodes' attachments, and bd a T 500 x 500).
+ *
+ * Built as the lower box is: a flat box per plate per panel in the face it
+ * lies in, the 500 square IN PLAN about the axis with its faces in the
+ * tower's face planes, the plies growing inward, the thickness stepping at
+ * the node, each plate ending where its centre line crosses the node's
+ * horizontal plane (+ KINK_CLOSE) where the column turns. It turns at XV,
+ * XIV and XIII, at XI (where the legs' b and d end on the T and the corner
+ * c runs on into the shaft) and at X; panels 19-28 are one straight
+ * frustum.
+ *
+ * AT XI the legs' b and d, 0.50 apart axis to axis, touch in the face's
+ * centre plane; above it their two facing heavy faces go on as the T's
+ * stem (two plies of 10) and their two faces in the tower's face as its
+ * flange: their plates end on the node's horizontal line and the T's begin
+ * on it. No seam head is laid on those facing faces where they stand
+ * closer than two heads' rise apart (the last 0.195 below XI, and half a
+ * pitch more).
+ *
+ * Canonical members (the +x+z leg; bd on the +z face): c (outer, outer), b
+ * (inner, outer), d (outer, inner), bd (0, outer). The legs' are copied
+ * onto the quadrants by the caller; the shaft's are turned here.
+ * ===========================================================================
+ */
+
+/** An upper upright, canonical: the corner c, the legs' b and d, the shaft's merged bd. */
+export type UpperName = "c" | "b" | "d" | "bd";
+
+const nodeIndex = (name: string): number => NODES.findIndex((n) => n.name === name);
+/** Segment k runs NODES[k] -> NODES[k + 1]: the legs' upper chains k in [XVII, XI), the shaft's in [XI, top28). */
+export const UPPER_FROM = nodeIndex("XVII");
+export const SHAFT_FROM = nodeIndex("XI");
+export const UPPER_TO = nodeIndex("top28");
+
+/**
+ * The faces of an upper box that carry its heavy plies [sourced PL-XXXI
+ * UP3, UP4]: c's two in the tower's faces; b's and d's in the tower's face
+ * and toward the face's centre line (away from c).
+ */
+const HEAVY: Readonly<Record<"c" | "b" | "d", readonly PlanDir[]>> = {
+  c: [
+    [1, 0],
+    [0, 1],
+  ],
+  b: [
+    [0, 1],
+    [-1, 0],
+  ],
+  d: [
+    [1, 0],
+    [0, -1],
+  ],
+};
+/** b's and d's faces toward the next leg's d and b, which they touch at XI. */
+const FACING: Readonly<Record<"b" | "d", PlanDir>> = { b: [-1, 0], d: [0, -1] };
+
+const same = (p: PlanDir, q: PlanDir): boolean => p[0] === q[0] && p[1] === q[1];
+
+/** An upper upright's axis over segment k, canonical. */
+export function upperAxis(name: UpperName, k: number): SegmentAxis {
+  const at = (n: (typeof NODES)[number]): Vec3 =>
+    name === "c"
+      ? [n.outer, n.y, n.outer]
+      : name === "b"
+        ? [n.inner, n.y, n.outer]
+        : name === "d"
+          ? [n.outer, n.y, n.inner]
+          : [0, n.y, n.outer];
+  const A = at(NODES[k]!);
+  const Q = at(NODES[k + 1]!);
+  return { A, Q, T: unit(sub(Q, A)) };
+}
+
+/** `name`'s makeup in the upper section governing segment k. */
+export function upperMakeupOf(name: UpperName, k: number): UpperMakeup {
+  const s: UpperSection | undefined = UPPER_SECTIONS.find((x) => x.section === NODES[k]!.name);
+  if (s === undefined) throw new Error(`eiffel builtup: no upper section governs segment ${k} (node ${NODES[k]!.name})`);
+  return name === "c" ? s.c : s.bd;
+}
+
+/** The segments an upper upright has, [from, to). */
+function upperRange(name: UpperName): readonly [number, number] {
+  if (name === "c") return [UPPER_FROM, UPPER_TO];
+  if (name === "bd") return [SHAFT_FROM, UPPER_TO];
+  return [UPPER_FROM, SHAFT_FROM];
+}
+
+/**
+ * Whether upper upright `name` turns at segment k's lower and upper node:
+ * its axis changes direction there, or (b and d at XI, bd at XI) it hands
+ * over to the other member, whose faces meet its own on the node's
+ * horizontal line all the same (both have the node's plan squares there).
+ */
+function upperTurns(name: UpperName, k: number): { lo: boolean; hi: boolean } {
+  const [k0, k1] = upperRange(name);
+  const { T } = upperAxis(name, k);
+  const bends = (j: number) => dot(T, upperAxis(name, j).T) < 1 - 1e-9;
+  return {
+    lo: (k > k0 && bends(k - 1)) || (name === "bd" && k === SHAFT_FROM),
+    hi: (k + 1 < k1 && bends(k + 1)) || ((name === "b" || name === "d") && k + 1 === SHAFT_FROM),
+  };
+}
+
+/** One face of an upper upright on a segment: its plan direction, its steel in its frame, and (a closing plate) how far from each end it runs. */
+export interface UpperFace {
+  readonly d: PlanDir;
+  readonly pieces: FacePiece[];
+  readonly near?: number;
+}
+
+/**
+ * The steel of upper upright `name` on segment k, face by face (the header,
+ * `UPPER_SECTIONS`): the webs, the L's closing plates, the T's flange and
+ * stem at every depth; from the laced depth up (`show.angles`), with the
+ * lower protrusions, the angles the open L and the T show.
+ */
+export function upperFaces(name: UpperName, k: number, show: Protrusions): UpperFace[] {
+  const m = upperMakeupOf(name, k);
+  const { T } = upperAxis(name, k);
+  const H = UPPER_BOX.planHalf;
+  if (m.shape === "T") {
+    const d: PlanDir = [0, 1];
+    const f = faceFrame(T, d, H);
+    const F = (f.W / 2) * ((m.flange ?? 500) / 500);
+    const tf = m.heavy / 1000;
+    const S = m.light / 2000;
+    // The stem runs in to the plan square's inner face, 2H in plan: along n, 2H n_z.
+    const D = 2 * H * Math.abs(f.n[2]);
+    const pieces: FacePiece[] = [
+      { what: "flange", s0: -F, s1: F, o0: -tf, o1: 0 },
+      { what: "stem", s0: -S, s1: S, o0: -D, o1: -tf },
+    ];
+    if (show.angles) {
+      const a = m.angles[0]![1] / 1000;
+      const t = m.angles[0]![2] / 1000;
+      for (const g of [-1, 1]) {
+        const s = (p: number, q: number) => ({ s0: Math.min(g * p, g * q), s1: Math.max(g * p, g * q) });
+        pieces.push(
+          // The flange's tip: flat leg on it, the other turned inward.
+          { what: "angle", ...s(F - a, F), o0: -tf - t, o1: -tf },
+          { what: "angle", ...s(F - t, F), o0: -tf - a, o1: -tf - t },
+          // The stem's root, either side.
+          { what: "angle", ...s(S, S + a), o0: -tf - t, o1: -tf },
+          { what: "angle", ...s(S, S + t), o0: -tf - a, o1: -tf - t },
+          // The stem's tip, back to back, turned out.
+          { what: "angle", ...s(S, S + t), o0: -D + t, o1: -D + a },
+          { what: "angle", ...s(S, S + a), o0: -D, o1: -D + t },
+        );
+      }
+    }
+    return [{ d, pieces }];
+  }
+  const heavy = HEAVY[name === "bd" ? "b" : name];
+  const out: UpperFace[] = [];
+  for (const d of BOX_FACES) {
+    const f = faceFrame(T, d, H);
+    const isHeavy = heavy.some((h) => same(h, d));
+    if (m.shape === "L" && !isHeavy) {
+      // Closed over the node's attachments [sourced text], by an 8 mm plate.
+      out.push({
+        d,
+        pieces: [{ what: "closure", s0: -f.W / 2, s1: f.W / 2, o0: -UPPER_BOX.light, o1: 0 }],
+        near: UPPER_BOX.closure,
+      });
+      continue;
+    }
+    const t = (isHeavy ? m.heavy : m.light) / 1000;
+    const pieces: FacePiece[] = [{ what: "web", s0: -f.W / 2, s1: f.W / 2, o0: -t, o1: 0 }];
+    if (m.shape === "L" && show.angles) {
+      // In each exterior face's frame e runs toward the other exterior
+      // face: the corner is at s = +W/2, the free edge at -W/2.
+      const { leg: a, t: ta } = UPPER_BOX.angle;
+      const w = f.W / 2;
+      pieces.push(
+        // The heel's leg on this plate, inside the corner.
+        { what: "angle", s0: w - t - a, s1: w - t, o0: -t - ta, o1: -t },
+        // The free edge's angle: flat leg on the plate, the other turned inward.
+        { what: "angle", s0: -w, s1: -w + a, o0: -t - ta, o1: -t },
+        { what: "angle", s0: -w, s1: -w + ta, o0: -t - a, o1: -t - ta },
+      );
+    }
+    out.push({ d, pieces });
+  }
+  return out;
+}
+
+/** A quarter turn about the tower's axis, `q` times: (x, z) -> (z, -x). */
+function turnQ(p: Vec3, q: number): Vec3 {
+  let r = p;
+  for (let i = 0; i < q; i++) r = [r[2], r[1], -r[0]];
+  return r;
+}
+
+/** The plates of the given upper uprights over segments [k0, k1) (clipped to each one's own), canonical. */
+function upperPlatesOf(names: readonly UpperName[], k0: number, k1: number, show: Protrusions): UprightPlate[] {
+  const out: UprightPlate[] = [];
+  for (const name of names) {
+    const [r0, r1] = upperRange(name);
+    for (let k = Math.max(k0, r0); k < Math.min(k1, r1); k++) {
+      const { A, Q, T } = upperAxis(name, k);
+      const L = Math.hypot(...sub(Q, A));
+      const turn = upperTurns(name, k);
+      for (const face of upperFaces(name, k, show)) {
+        const f = faceFrame(T, face.d, UPPER_BOX.planHalf);
+        for (const p of face.pieces) {
+          const s = (p.s0 + p.s1) / 2;
+          const o = (p.o0 + p.o1) / 2;
+          const lying = p.s1 - p.s0 >= p.o1 - p.o0;
+          const off = add(f.mid, scale(f.e, s), scale(f.n, o));
+          const [lo, hi] = pieceEnds(off, T, L, turn.lo, turn.hi);
+          const runs: ReadonlyArray<readonly [number, number]> =
+            face.near === undefined ? [[lo, hi]] : [[lo, lo + face.near], [hi - face.near, hi]];
+          for (const [a, b] of runs) {
+            out.push({
+              a: add(A, off, scale(T, a)),
+              b: add(A, off, scale(T, b)),
+              n: lying ? f.n : f.e,
+              width: lying ? p.s1 - p.s0 : p.o1 - p.o0,
+              thickness: lying ? p.o1 - p.o0 : p.s1 - p.s0,
+              what: p.what,
+            });
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** The legs' upper uprights' plates, XVII to XI, one leg (c, b, d); the caller copies them onto the quadrants. */
+export function upperLegPlates(show: Protrusions): UprightPlate[] {
+  return upperPlatesOf(["c", "b", "d"], UPPER_FROM, SHAFT_FROM, show);
+}
+
+/** The shaft's eight uprights' plates, XI to the top of panel 28, all four quarters. */
+export function shaftPlates(show: Protrusions): UprightPlate[] {
+  const one = upperPlatesOf(["c", "bd"], SHAFT_FROM, UPPER_TO, show);
+  return [0, 1, 2, 3].flatMap((q) => one.map((p) => ({ ...p, a: turnQ(p.a, q), b: turnQ(p.b, q), n: turnQ(p.n, q) })));
+}
+
+/** A seam row on an upper upright: across its face (s), out of it (o), and which way its heads face. */
+interface RowSpec {
+  readonly s: number;
+  readonly o: number;
+  /** Heads facing across the face (on a T's stem, through its angles), this way along e; else out along n. */
+  readonly across?: 1 | -1;
+}
+
+/**
+ * The seam rows of upper upright `name` on segment k: today's rule (a row
+ * `inset` in from each edge a corner angle is riveted along, on the plate's
+ * outer surface) laid on the steel as built. A box's four faces, two rows
+ * each; the L's two plates, at its heel and at its free edges; the T's
+ * flange at its tips and either side of the stem, and the stem through the
+ * angles at its root and its tip, heads on their legs.
+ */
+function upperRows(name: UpperName, k: number, inset: number): Array<{ d: PlanDir; rows: RowSpec[] }> {
+  const m = upperMakeupOf(name, k);
+  const faces = upperFaces(name, k, WEBS_ONLY);
+  if (m.shape === "T") {
+    const f = faces[0]!;
+    const F = f.pieces[0]!.s1;
+    const stem = f.pieces[1]!;
+    const S = stem.s1;
+    const ta = m.angles[0]![2] / 1000;
+    const rows: RowSpec[] = [];
+    for (const g of [-1, 1] as const) {
+      rows.push(
+        { s: g * (F - inset), o: 0 },
+        { s: g * (S + inset), o: 0 },
+        { s: g * (S + ta), o: stem.o1 - inset, across: g },
+        { s: g * (S + ta), o: stem.o0 + inset, across: g },
+      );
+    }
+    return [{ d: f.d, rows }];
+  }
+  return faces
+    .filter((face) => face.near === undefined)
+    .map((face) => {
+      const w = face.pieces[0]!.s1;
+      return { d: face.d, rows: [{ s: w - inset, o: 0 }, { s: -(w - inset), o: 0 }] };
+    });
+}
+
+/**
+ * The seam rows of the given upper uprights over segments [k0, k1),
+ * canonical: every row a head every `pitch`, centred on its stretch and at
+ * least half a pitch short of each end of it, which at a turn is the first
+ * of its own crossing of the node's horizontal plane, its face's plate's
+ * end and the next panel's on that face (as `lowerSeamRows`). On b's and
+ * d's faces toward the next leg a row stops where the two facing faces
+ * close to two `head` rises apart.
+ */
+function upperRowsOf(
+  names: readonly UpperName[],
+  k0: number,
+  k1: number,
+  pitch: number,
+  inset: number,
+  head: number,
+): Array<{ a: Vec3; b: Vec3; n: Vec3 }> {
+  const out: Array<{ a: Vec3; b: Vec3; n: Vec3 }> = [];
+  // A face's first plate's two ends as points on its centre line, and its axis.
+  const hostEnds = (name: UpperName, k: number, d: PlanDir) => {
+    const [r0, r1] = upperRange(name);
+    if (k < r0 || k >= r1) return undefined;
+    const face = upperFaces(name, k, WEBS_ONLY).find((f) => same(f.d, d) && f.near === undefined);
+    if (face === undefined) return undefined;
+    const { A, Q, T } = upperAxis(name, k);
+    const f = faceFrame(T, d, UPPER_BOX.planHalf);
+    const p = face.pieces[0]!;
+    const off = add(f.mid, scale(f.e, (p.s0 + p.s1) / 2), scale(f.n, (p.o0 + p.o1) / 2));
+    const turn = upperTurns(name, k);
+    const [lo, hi] = pieceEnds(off, T, Math.hypot(...sub(Q, A)), turn.lo, turn.hi);
+    return { T, lo: add(A, off, scale(T, lo)), hi: add(A, off, scale(T, hi)) };
+  };
+  for (const name of names) {
+    const [r0, r1] = upperRange(name);
+    for (let k = Math.max(k0, r0); k < Math.min(k1, r1); k++) {
+      const { A, Q, T } = upperAxis(name, k);
+      const L = Math.hypot(...sub(Q, A));
+      const turn = upperTurns(name, k);
+      for (const { d, rows } of upperRows(name, k, inset)) {
+        const f = faceFrame(T, d, UPPER_BOX.planHalf);
+        const own = hostEnds(name, k, d);
+        const below = turn.lo ? hostEnds(name, k - 1, d) : undefined;
+        const above = turn.hi ? hostEnds(name, k + 1, d) : undefined;
+        for (const r of rows) {
+          const off = add(f.mid, scale(f.e, r.s), scale(f.n, r.o));
+          const meets = (p: Vec3, U: Vec3) => dot(sub(p, add(A, off)), U) / dot(T, U);
+          const crease = -off[1] / T[1];
+          const lo =
+            (turn.lo
+              ? Math.max(crease, own === undefined ? -Infinity : meets(own.lo, T), below === undefined ? -Infinity : meets(below.hi, below.T))
+              : 0) +
+            pitch / 2;
+          let hi =
+            (turn.hi
+              ? Math.min(L + crease, own === undefined ? Infinity : meets(own.hi, T), above === undefined ? Infinity : meets(above.lo, above.T))
+              : L) -
+            pitch / 2;
+          if ((name === "b" || name === "d") && same(d, FACING[name])) {
+            // The facing face stands (inner - H) off the face's centre
+            // plane in plan, the next leg's (inner - H) the other side, and
+            // inner is linear on the panel: stop where the gap is two rises.
+            const p0 = NODES[k]!;
+            const p1 = NODES[k + 1]!;
+            if (p1.inner < p0.inner) {
+              const yStop = p0.y + ((UPPER_BOX.planHalf + head - p0.inner) / (p1.inner - p0.inner)) * (p1.y - p0.y);
+              hi = Math.min(hi, (yStop - A[1] - off[1]) / T[1] - pitch / 2);
+            }
+          }
+          if (hi < lo) continue;
+          const n = Math.floor((hi - lo) / pitch + 1e-9) + 1;
+          const from = (lo + hi - (n - 1) * pitch) / 2;
+          // 0.1 mm short of (n - 1) pitches: spacing mode lands exactly n heads.
+          const to = from + Math.max(0, (n - 1) * pitch - 1e-4);
+          out.push({ a: add(A, off, scale(T, from)), b: add(A, off, scale(T, to)), n: r.across === undefined ? f.n : scale(f.e, r.across) });
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** The legs' upper seam rows, one leg; the caller copies them onto the quadrants. `head` is a rivet head's rise. */
+export function upperLegSeamRows(pitch: number, inset: number, head: number): Array<{ a: Vec3; b: Vec3; n: Vec3 }> {
+  return upperRowsOf(["c", "b", "d"], UPPER_FROM, SHAFT_FROM, pitch, inset, head);
+}
+
+/** The shaft's seam rows, all four quarters. */
+export function shaftSeamRows(pitch: number, inset: number, head: number): Array<{ a: Vec3; b: Vec3; n: Vec3 }> {
+  const one = upperRowsOf(["c", "bd"], SHAFT_FROM, UPPER_TO, pitch, inset, head);
+  return [0, 1, 2, 3].flatMap((q) => one.map((r) => ({ a: turnQ(r.a, q), b: turnQ(r.b, q), n: turnQ(r.n, q) })));
 }

@@ -9,12 +9,19 @@
  * panels, every one a 0.94612 copy of the one below — Plate XXXI's node
  * table already carries that, so the lattice just reads it.
  *
+ * The uprights are PL-XXXI's upper sections as built (`builtup.ts`,
+ * `shaftPlates`): over panel 18 c a closed 500 box and bd the T the two
+ * legs' boxes become, 1,000 wide on the face; from X up c an open L (its
+ * two tower faces), closed over each node's attachments, and bd a T 500 x
+ * 500, its stem pointing in.
+ *
  * The horizontals are 600 against the diagonals' 500 [sourced PL-VII
  * Fig. 3], both laced at the plates' step (`LACING_STEP`), and their plates
  * reach 0.90-1.00 m along them from the upright (Fig. 3's "900" and
  * "1000").
  */
-import { type Graph, type NodeHandle, abs, add, component, le, lt, min, mul, position, ramp } from "pcg-ts";
+import { type Graph, type NodeHandle, abs, add, attribute, component, le, lt, min, mul, position, ramp } from "pcg-ts";
+import { AS_BUILT, WEBS_ONLY, shaftPlates, shaftSeamRows } from "./builtup.js";
 import {
   type SegmentMember,
   type Vec3,
@@ -22,7 +29,6 @@ import {
   edges,
   merge,
   segmentMembers,
-  skin,
   squareRing,
   stationLattice,
 } from "./lattice.js";
@@ -34,17 +40,17 @@ import {
   latticeCrossings,
 } from "./crossing.js";
 import { CROSS_PLATE, type Detail, type Parts } from "./parts.js";
-import { EDOUX_PLAN, MEMBERS, NODES, PLAN_BRACING, node, profileAt, tableAt } from "./spec.js";
+import { EDOUX_PLAN, MEMBERS, NODES, PLAN_BRACING, UPPER_SECTIONS, node, profileAt, tableAt } from "./spec.js";
 import {
   JOINT_REACH,
   LACING_STEP,
+  RIVET_RISE,
   UPRIGHT_SEAMS,
   faceSkin,
   flatBars,
   gussetMeshes,
   lineRivets,
   rivetOutputs,
-  seamRivets,
   webMembers,
 } from "./strut.js";
 
@@ -89,7 +95,19 @@ const AT_FACE = 0.35;
  * half open up to X (the Edoux's lower car) and its s < 0 half from VIII
  * up (the upper car).
  */
-export function planBracingLines(name: string, W: number, w: number, column: number, drift = 0): PlanLine[] {
+export function planBracingLines(
+  name: string,
+  W: number,
+  w: number,
+  column: number,
+  drift = 0,
+  /**
+   * How far from a merged bd's axis a girder along a diagonal stops, where
+   * bd is a T (from X up): in at its stem, not at the corner of a box it
+   * does not have (`stemStop`). Default the column's corner.
+   */
+  stem?: number,
+): PlanLine[] {
   const pattern = planPattern(name);
   if (pattern === undefined) return [];
   const d = PLAN_BRACING.depth;
@@ -149,8 +167,8 @@ export function planBracingLines(name: string, W: number, w: number, column: num
     return lines;
   }
   if (pattern !== "corner") {
-    // The lozenge on the four bd's.
-    const col = atColumn(d);
+    // The lozenge on the four bd's: to the stem of their T, where they are one.
+    const col = stem ?? atColumn(d);
     add([W, 0], [0, W], col, col, "lozenge");
     add([0, W], [-W, 0], col, col, "lozenge");
     add([-W, 0], [0, -W], col, col, "lozenge");
@@ -288,6 +306,27 @@ function clearOfEdoux(a: XZ, u: XZ, L: number, y: number, d: number): Array<[num
 const PLAN_CLEAR = 0.05;
 
 /**
+ * Where a plan girder along a diagonal stops at a merged bd from X up: at
+ * the T's stem, its gussets "sur la branche intérieure du simple T que
+ * forme la section des arbalétriers bd" [sourced text], PLAN_CLEAR off the
+ * stem's angles. The girder meets the stem's plane at 45 degrees, so its
+ * near chord's corner is (a - chord) / sqrt 2 off it at a along the line
+ * [derived]; past the stem's tip angles (100 wide, 0.25 in from the face
+ * line) it runs clear of them. Undefined at and below XI, where the girder's
+ * bottom chord still lies beside the two legs' boxes: the corner stop.
+ */
+export function stemStop(name: string): number | undefined {
+  const i = NODES.findIndex((n) => n.name === name);
+  if (i <= NODES.findIndex((n) => n.name === "XI")) return undefined;
+  // The stems either side of the node: its half-thickness and its angles'.
+  const sides = [NODES[i - 1]!.name, NODES[i]!.name]
+    .map((s) => UPPER_SECTIONS.find((x) => x.section === s)?.bd)
+    .filter((m) => m !== undefined && m.shape === "T")
+    .map((m) => m!.light / 2000 + m!.angles[0]![2] / 1000);
+  return Math.SQRT2 * (Math.max(...sides) + PLAN_CLEAR) + PLAN_BRACING.chord;
+}
+
+/**
  * The plan bracing as members: every girder a flat truss in the vertical
  * plane through its line, chords `depth` apart centred on the node and a
  * post at each end; A (1.00 deep) with an X in every panel, the rest (0.60)
@@ -316,7 +355,7 @@ function planBracing(): { chords: SegmentMember[]; web: SegmentMember[]; bands: 
       return (Math.abs(q.inner - p.inner) + Math.abs(q.outer - p.outer)) / Math.abs(dy);
     };
     const drift = Math.max(slope(-1), slope(1)) / Math.SQRT2;
-    for (const [p, q, t0, t1, d, girder] of planBracingLines(n.name, n.outer, w, column, drift)) {
+    for (const [p, q, t0, t1, d, girder] of planBracingLines(n.name, n.outer, w, column, drift, stemStop(n.name))) {
       const L0 = Math.hypot(q[0] - p[0], q[1] - p[1]);
       const u: XZ = [(q[0] - p[0]) / L0, (q[1] - p[1]) / L0];
       const a0: XZ = [p[0] + u[0] * t0, p[1] + u[1] * t0];
@@ -382,7 +421,8 @@ export function buildShaft(g: Graph, detail: Detail = {}): Parts {
     z1: n.outer,
   }));
   const lat = stationLattice(g, { id: "shaft", ring: squareRing(2), closed: true, levels });
-  const uprights = chains(lat, "Uprights");
+  // The eight axes (tests read them); the steel is `shaftPlates`.
+  chains(lat, "Uprights");
   const horizontals = edges(lat, "Horizontals", 1, 0);
   const crosses = merge(g, "shaftCrosses", [
     edges(lat, "CrossA", 1, 1),
@@ -407,10 +447,14 @@ export function buildShaft(g: Graph, detail: Detail = {}): Parts {
   // apart axis to axis (PL-VII Fig. 3 "250 250"): a member ending on bd
   // there clears both boxes, 0.50 either side of the face centre, not one.
   // Near a face centre line (within 1 m) and at or below XI [derived].
+  // And over panel 18 and at X, where that merged bd is the T of section
+  // XI, its flange 1,000 wide on the face, 0.50 either side of the centre
+  // line (PL-XXXI; `UPPER_SECTIONS`): a member ending on it there, at
+  // either end, stops clear of the flange's edge [derived].
   const P = position();
   const y = component(P, 1);
   const atMerge = mul(
-    le(y, node("XI").y + 0.01),
+    le(y, node("X").y + 0.01),
     lt(min(abs(component(P, 0)), abs(component(P, 2))), 1),
   );
   const uprightAt = add(ramp(y, MEMBERS.upright), mul(atMerge, 0.25));
@@ -433,7 +477,24 @@ export function buildShaft(g: Graph, detail: Detail = {}): Parts {
     lacing,
   );
   return {
-    uprights: [skin(g, "shaftUprightSkin", uprights, MEMBERS.uprightAbove, [1, 0, 0])],
+    // PL-XXXI's upper sections as built (`shaftPlates`): panel 18's c a
+    // closed box and bd the T 1,000 wide; above X, c the open L, closed at
+    // its nodes, and bd the T 500 x 500.
+    uprights: [
+      (() => {
+        const list = shaftPlates(detail.lacedWeb === true || detail.rivets === true ? AS_BUILT : WEBS_ONLY);
+        return flatBars(
+          g,
+          "shaftUprightPlates",
+          segmentMembers(g, "shaftUprightPlates", list, [
+            { name: "plateWidth", values: list.map((p) => [p.width]) },
+            { name: "plateThick", values: list.map((p) => [p.thickness]) },
+          ]),
+          attribute("plateWidth"),
+          attribute("plateThick"),
+        );
+      })(),
+    ],
     horizontals: horizontalWeb.meshes,
     bracing: bracingWeb.meshes,
     // The plan bracing at every node from XVI up but IX (PL-VIII Figs 13-22).
@@ -466,14 +527,14 @@ export function buildShaft(g: Graph, detail: Detail = {}): Parts {
       ...(detail.rivets === true
         ? [
             {
+              // Today's seam rule laid on the steel as built (`shaftSeamRows`).
               name: "shaft.uprights",
-              spawn: seamRivets(
+              spawn: lineRivets(
                 g,
-                "shaftUpright",
-                uprights,
-                MEMBERS.uprightAbove,
-                [1, 0, 0],
-                UPRIGHT_SEAMS,
+                "shaftUprightSeams",
+                segmentMembers(g, "shaftUprightSeamRows", shaftSeamRows(UPRIGHT_SEAMS.pitch, UPRIGHT_SEAMS.inset, RIVET_RISE)),
+                0,
+                UPRIGHT_SEAMS.pitch,
               ),
             },
           ]

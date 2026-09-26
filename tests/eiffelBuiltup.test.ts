@@ -20,8 +20,11 @@ import type { Detail } from "../demos/eiffel/parts.js";
 import {
   MEMBERS,
   NODES,
+  UPPER_BOX,
+  UPPER_SECTIONS,
   UPRIGHT_BOX,
   UPRIGHT_SECTIONS,
+  type UpperMakeup,
   type UprightMakeup,
   profileAt,
   tableAt,
@@ -38,6 +41,7 @@ import {
   rivetBases,
   facePieces,
   slabs,
+  upperCensus,
 } from "./support/eiffelBuiltupCensus.js";
 
 const sub = (p: Vec3, q: Vec3): Vec3 => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
@@ -401,5 +405,172 @@ describe("eiffel built-up uprights", () => {
     expect(c.pierceDeepest["channelLeg"]!).toBeLessThan(0.085);
     expect(c.pierceDeepest["fin"]!).toBeLessThan(0.033);
     expect(c.pierceDeepest["finFlat"]!).toBeLessThan(0.008);
+  }, 600_000);
+
+  // -------------------------------------------------------------------------
+  // THE UPPER UPRIGHTS, XVII to the top of panel 28 (UPPER_SECTIONS).
+  // -------------------------------------------------------------------------
+
+  it("rebuilds every area PL-XXXI prints for the upper arbalétriers from its parts", () => {
+    // Angles t (2 L - t): 100 x 100 x 12 = 2,256; 90 x 90 x 9 = 1,539; 100 x 100 x 10 = 1,900.
+    const angles = (m: UpperMakeup) => m.angles.reduce((s, [n, L, t]) => s + n * t * (2 * L - t), 0);
+    const upperArea = (m: UpperMakeup): number =>
+      angles(m) +
+      (m.shape === "T" ? (m.flange ?? 0) * m.heavy + 500 * m.light : 2 * 500 * m.heavy + (m.shape === "box" ? 2 * 500 * m.light : 0));
+    expect(UPPER_SECTIONS.map((s) => s.section)).toEqual(
+      ["XVII", "XVI", "XV", "XIV", "XIII", "XII", "XI", "X", "IX", "VIII", "VII", "VI", "V", "IV", "III", "II", "I"],
+    );
+    for (const s of UPPER_SECTIONS) {
+      for (const m of [s.c, s.bd]) {
+        expect(upperArea(m), s.section).toBe(m.area);
+        // The plies the drawing labels add up to the printed plate.
+        expect(m.plies.reduce((a, b) => a + b, 0), s.section).toBe(m.heavy);
+      }
+      // Omega is the whole tower's: 4 c + 8 (b | d) up to XII, 4 (c + bd) from XI.
+      const merged = NODES.findIndex((n) => n.name === s.section) >= NODES.findIndex((n) => n.name === "XI");
+      expect(4 * s.c.area + (merged ? 4 : 8) * s.bd.area, s.section).toBe(s.omega);
+      // c a box to XI and an L above; b or d a box to XII, the T from XI.
+      expect(s.c.shape, s.section).toBe(merged && s.section !== "XI" ? "L" : "box");
+      expect(s.bd.shape, s.section).toBe(merged ? "T" : "box");
+    }
+    // XI's T: the two legs' 500 boxes' faces side by side, 1,000 on the face.
+    expect(UPPER_SECTIONS.find((s) => s.section === "XI")!.bd.flange).toBe(2 * 500);
+    // The text quotes 591,084 for XVII; the plate's own arithmetic is 591,684.
+    expect(UPPER_SECTIONS[0]!.omega).toBe(591_684);
+  });
+
+  it("builds the upper uprights in the tower's faces: 500 boxes, the XI T, the L and the T above", async () => {
+    const H = UPPER_BOX.planHalf;
+    const iXI = NODES.findIndex((n) => n.name === "XI");
+    const segmentOf = (y: number) => {
+      let k = NODES.findIndex((n) => n.name === "XVII");
+      while (k < NODES.length - 2 && NODES[k + 1]!.y <= y) k++;
+      return k;
+    };
+    // A member's axis in plan at height y, canonical (+x+z; bd on the +z face).
+    const axisAt = (m: "c" | "b" | "d" | "bd", y: number): readonly [number, number] => {
+      const pr = profileAt(y);
+      return m === "c" ? [pr.outer, pr.outer] : m === "b" ? [pr.inner, pr.outer] : m === "d" ? [pr.outer, pr.inner] : [0, pr.outer];
+    };
+    const unturn = (x: number, z: number, q: number): readonly [number, number] => {
+      let p: readonly [number, number] = [x, z];
+      for (let i = 0; i < q; i++) p = [-p[1], p[0]];
+      return p;
+    };
+    for (const depth of ["plain", "laced"] as const) {
+      const outputs = await probe(["legUprightUpperPlatesLit", "shaftUprightPlatesLit"], depth === "laced" ? { lacedWeb: true } : {});
+      const legs = slabs(firstGeometry(outputs["probe:legUprightUpperPlatesLit"] as never)!).filter((s) => s.c[0] > 0 && s.c[2] > 0);
+      const shaft = slabs(firstGeometry(outputs["probe:shaftUprightPlatesLit"] as never)!);
+      // Plain: a leg's c, b and d, four webs a panel over panels 12-17; the
+      // shaft's four c (a box in 18, the L's two plates and its two closing
+      // plates at each end in 19-28) and four bd (flange and stem, 18-28).
+      // Laced adds the angles: the L's three (4 legs' worth), the T's six.
+      expect(legs).toHaveLength(3 * 6 * 4);
+      expect(shaft).toHaveLength(4 * (4 + 10 * (2 + 2 * 2) + 11 * 2) + (depth === "laced" ? 4 * (10 * 6 + 11 * 12) : 0));
+      if (depth === "laced") continue;
+      const closures = new Map<string, number>();
+      for (const [who, list] of [["legs", legs], ["shaft", shaft]] as const) {
+        for (const sl of list) {
+          const y = sl.c[1];
+          const k = segmentOf(y);
+          const s = UPPER_SECTIONS.find((x) => x.section === NODES[k]!.name)!;
+          // Which member, turned back to its canonical quarter.
+          let found: { m: "c" | "b" | "d" | "bd"; dx: number; dz: number; q: number } | undefined;
+          for (let q = 0; q < 4 && found === undefined; q++) {
+            const [x, z] = unturn(sl.c[0], sl.c[2], q);
+            for (const m of who === "legs" ? (["c", "b", "d"] as const) : (["c", "bd"] as const)) {
+              const [ax, az] = axisAt(m, y);
+              if (Math.max(Math.abs(x - ax), Math.abs(z - az)) < (m === "bd" ? 0.55 : 0.3)) found = { m, dx: x - ax, dz: z - az, q };
+            }
+          }
+          expect(found, `${who} slab at ${sl.c.map((v) => v.toFixed(2))}`).toBeDefined();
+          const { m, dx, dz, q } = found!;
+          const thin = sl.half.indexOf(Math.min(...sl.half));
+          const [nx, nz] = unturn(sl.axes[thin]![0], sl.axes[thin]![2], q);
+          const t = 2 * sl.half[thin]!;
+          const where = `${who} ${m} k${k} at ${sl.c.map((v) => v.toFixed(2))}`;
+          if (m === "bd" && Math.abs(nx) > 0.99) {
+            // The T's stem, square to the face, in its centre plane: two
+            // plies of 10 in panel 18, 8 above; 0.50 deep less the flange.
+            expect(Math.abs(dx), where).toBeLessThan(1e-3);
+            expect(t * 1000, where).toBeCloseTo(k === iXI ? 20 : 8, 2);
+            continue;
+          }
+          // Everything else lies in a face: its outer surface 0.25 out in
+          // plan from the axis, at its own height, along that face's normal.
+          const dir: readonly [number, number] = Math.abs(nx) > Math.abs(nz) ? [Math.sign(dx), 0] : [0, Math.sign(dz)];
+          const outPlan = (dir[0] !== 0 ? Math.abs(dx) : Math.abs(dz)) + (t / 2) * (dir[0] !== 0 ? 1 / Math.abs(nx) : 1 / Math.abs(nz));
+          expect(Math.abs(outPlan - H), `${where} outer surface ${outPlan}`).toBeLessThan(2e-4);
+          const mk = m === "c" ? s.c : s.bd;
+          const heavy =
+            m === "bd" ||
+            (m === "c" ? dir[0] > 0 || dir[1] > 0 : m === "b" ? dir[1] > 0 || dir[0] < 0 : dir[0] > 0 || dir[1] < 0);
+          if (mk.shape === "L" && !heavy) {
+            // The L's closing plates: 8 mm, UPPER_BOX.closure long, one at each end.
+            expect(t * 1000, where).toBeCloseTo(8, 2);
+            expect(2 * Math.max(...sl.half), where).toBeCloseTo(UPPER_BOX.closure, 3);
+            const key = `${q} ${k}`;
+            closures.set(key, (closures.get(key) ?? 0) + 1);
+            continue;
+          }
+          // (f32 at 120-265 m: 0.01 mm.)
+          expect(t * 1000, where).toBeCloseTo(heavy ? mk.heavy : mk.light, 2);
+          if (m === "bd") {
+            // The flange: 1,000 across the face in panel 18, 500 above.
+            const across = [0, 1, 2].filter((i) => i !== thin).map((i) => 2 * sl.half[i]!).sort((a, b) => a - b)[0]!;
+            expect(across, where).toBeCloseTo(k === iXI ? 1.0 : 0.5, 3);
+          }
+        }
+      }
+      // Two closing plates a node end on each of the L's two inner faces: 4 a panel.
+      expect(closures.size).toBe(4 * 10);
+      for (const [key, n] of closures) expect(n, key).toBe(4);
+    }
+  }, 300_000);
+
+  it("takes the upper census: the seams on the steel as built, the joints clear of it, the plan girders on the T's stem", async () => {
+    // Taken first of the tower from before the upper box (HEAD 6cc56d7:
+    // the swept 0.25 skin, riveted on its square), against the same
+    // analytic section (tests/support/eiffelBuiltupCensus.ts, upperCensus):
+    // the numbers in the comments below.
+    const g = buildEiffel(1889, { rivets: true });
+    g.output({ id: "planBracingChordPaths" } as NodeHandle, "out", "probe:planBracingChordPaths");
+    const { outputs } = await cook(g);
+    const c = upperCensus(outputs as Record<string, unknown>, UPPER_BOX.closure);
+    if (process.env.CENSUS_OUT !== undefined) writeFileSync(process.env.CENSUS_OUT, JSON.stringify(c, null, 1));
+    // Every seam head on its own member's steel, none in another's. Before:
+    // 13,539 of the legs' 49,376 and 15,180 of the shaft's 44,039 more than
+    // 2 mm off it (the skin's normal square is not the plan square, and the
+    // open L has no plates where 4 of the box's 8 rows ran), none buried.
+    for (const [k, s] of Object.entries(c.seams)) {
+      expect(s.total, k).toBeGreaterThan(30_000);
+      expect(s.floating, k).toBe(0);
+      expect(s.buried, k).toBe(0);
+    }
+    // No other head in the upper steel (the first floor's chords, `ff.*`,
+    // run into the 2nd floor's boxes at XVII and are firstFloor.ts's).
+    expect(Object.fromEntries(Object.entries(c.buriedHeads).filter(([k]) => !k.startsWith("ff.")))).toEqual({});
+    // What the steel swallows, the same as before the upper box: a joint
+    // plate's acute corner at XI, 2-5 mm into the edge of the 1,000 flange
+    // (6 in a quarter; its near edge meets the flange's edge at its obtuse
+    // corner, strut.ts); a gap-lattice plate's corner in b's and d's corner
+    // (1 a quarter); and the 2nd floor's belt chords at XVII, which run to
+    // the axes inside the deck [measured].
+    expect(c.swallowed).toEqual({ "gussets|bd": 24, "gussets|legB": 4, "gussets|legD": 6, "girders|legB": 26, "girders|legD": 25 });
+    // Every web member clear of the steel it meets. Before, over panel 18,
+    // 0.5 mm INSIDE the T's 1,000 flange (bracing) and 2.1 mm off it
+    // (horizontals): the merge clearance stopped at XI. Now 17 mm at worst
+    // (the legs' horizontals at XII, as before).
+    for (const [k, gap] of Object.entries(c.gap)) expect(gap, k).toBeGreaterThan(0.015);
+    // The plan girders end on what they meet. At c the L is closed over its
+    // attachments, so they end 0.03 off its inner corner (their chords'
+    // lines 0.08). At bd from X up they run in to the T's stem, their lines
+    // 0.09-0.10 off it; before, 0.18, stopped at the corner of a box the T
+    // does not have. At XI, where the bottom chord still lies beside the two
+    // legs' boxes, the corner stop stays: 0.18 from the T's stem above XI.
+    for (const [k, d] of Object.entries(c.planEnds)) {
+      if (k.startsWith("c ") || (k.startsWith("bd ") && k !== "bd XI")) expect(d, k).toBeLessThan(0.1);
+    }
+    expect(c.planEnds["bd XI"]!).toBeLessThan(0.19);
   }, 600_000);
 });

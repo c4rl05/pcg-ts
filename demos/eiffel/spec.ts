@@ -341,9 +341,10 @@ export const ARCH = {
 
 /**
  * Member sizes, as HALF-widths of a square section (Plate XXXI's section
- * tables). Uprights are closed boxes: below the 2nd floor the 0.877 plan
- * square of `UPRIGHT_BOX` (0.800-0.868 square to their axes), 0.50 m
- * above. Web bars are 0.80 m square
+ * tables). Uprights: below the 2nd floor the 0.877 plan square of
+ * `UPRIGHT_BOX` (0.800-0.868 square to their axes), above it the 0.50 plan
+ * square of `UPPER_BOX`, a closed box to XI and the open L and the T of
+ * `UPPER_SECTIONS` above. Web bars are 0.80 m square
  * lattice struts in panels 1-9, 0.60 m in panel 10 and 0.50 m in panels
  * 12-28; horizontals 0.80 m below the 2nd floor and 0.60 m above.
  */
@@ -364,8 +365,15 @@ export const MEMBERS = {
    * taper 0.87 -> 0.50 over panel 12 while its seam rivets, sampled every
    * pitch, stepped a centimetre above the node — the two disagreeing
    * about where the steel is. The uprights are therefore split at XVII
-   * into two chains: the lower built up from `UPRIGHT_SECTIONS`, the upper
-   * skinned AND riveted with `uprightAbove`.
+   * into two chains, and both are now built up plate by plate: the lower
+   * from `UPRIGHT_SECTIONS`, the upper from `UPPER_SECTIONS`
+   * (`builtup.ts`).
+   *
+   * ABOVE XVII 0.25 is the 500 square's plan half, `UPPER_BOX.planHalf`:
+   * what the joint rule clears (nothing stands out of the upper webs; the
+   * T's flange is 0.25 either side of its centre line above X, 0.50 over
+   * panel 18, which `shaft.ts` reads as the merge) and what the plan
+   * bracing's corner stops and panel 29's corners (`summit.ts`) read.
    *
    * BELOW XVII THIS IS NOT WHERE THE STEEL IS. The legs' lower uprights are
    * built as PL-XXXI builds them (`UPRIGHT_SECTIONS`, `builtup.ts`): a
@@ -630,6 +638,148 @@ export const UPRIGHT_SECTIONS: readonly UprightSection[] = [
     },
     omega: 210_772,
   },
+];
+
+/**
+ * THE UPPER UPRIGHTS AS BUILT, XVII to the top of panel 28: PL-XXXI's upper
+ * sections I-XVII (its "Partie supérieure"), read off the scan crops UP1-UP4
+ * (e-rara 8976398) and checked by rebuilding every printed area from its
+ * parts (tests/eiffelBuiltup.test.ts). Section k governs the panel above
+ * node k, as below.
+ *
+ * Every face is "500" [sourced]. The model takes that square IN PLAN, as
+ * the 877 below is, its faces in the tower's face planes, the plies growing
+ * inward [derived: at XI the legs' b and d stand 0.50 apart axis to axis
+ * (PL-VII Fig. 3 "250 250", the node table's 0.25), and panel 18's merged T
+ * is "500 x 500" = 1,000 wide on the face: two 500 boxes touching in the
+ * face's centre plane. Square to the axis a face is then 495.7-500 wide,
+ * the lean being at most 0.08 up here].
+ *
+ * What the drawings put where, in plan with the tower's exterior at the
+ * bottom and left [sourced UP3, UP4]:
+ *   - c, a closed box (panels 12-18): the heavy plies on its two
+ *     tower-exterior faces, 8 on the two inside, a 90 x 90 x 9 angle in the
+ *     corner where the two 8's meet, three 100 x 100 x 12 in the others;
+ *   - b or d, a closed box (panels 12-17): the heavy plies on the face in
+ *     the tower's face AND on the face toward the face's centre line (away
+ *     from c; b's toward d of the next leg), 8 on the other two, the 90 x 90
+ *     where the 8's meet. So at XI the two facing heavy faces become the
+ *     merged T's stem, and the two faces in the tower face its flange;
+ *   - bd, panel 18: the T, "4 Ames 4 x 500 x 10": two flange plates side by
+ *     side in the face, 1,000 wide, the stem two plies of 10; six angles
+ *     100 x 100 x 12 (the flange's two tips turned inward, the stem's root
+ *     either side, its tip back to back and turned out);
+ *   - c, panels 19-28: an open L, only the two heavy exterior plates, the
+ *     heel angle inside the corner and one at each free edge, turned
+ *     inward ("l'arêtier c prend la forme d'un angle droit" [sourced text]),
+ *     "complété et fermé sur ses quatre faces" over the height of each
+ *     bracing attachment [sourced text]: closed by 8 mm plates there;
+ *   - bd, panels 19-28: a T, flange 500 x 10 on the face, stem 500 x 8
+ *     inward, six angles 100 x 100 x 10 placed as panel 18's; the bracing's
+ *     gussets "sur la branche intérieure du simple T" [sourced text].
+ * The ply splits (12 + 12 + 12 + 13 ...) are read off small labels, in
+ * their drawn order [?]; the totals are printed (XII-XIII's c labels add
+ * to 48 against the table's 49: the table is kept).
+ */
+export const UPPER_BOX = {
+  /** Half the 500 plan square [sourced "500"; in plan, derived: the XI merge]. */
+  planHalf: 0.25,
+  /** The closed boxes', the L's and panel 18's T's angles, 100 x 100 x 12 [sourced]. */
+  angle: { leg: 0.1, t: 0.012 },
+  /** The T's angles above XI, 100 x 100 x 10 [sourced]. */
+  angleT: { leg: 0.1, t: 0.01 },
+  /** The 8 mm inside faces, and the L's closing plates [sourced: the boxes' "2 Ames 2 x 500 x 8"]. */
+  light: 0.008,
+  /**
+   * How far either side of a node the L stands closed: over its
+   * attachments, which the face lattice's joint plates span (-0.99 to
+   * +1.04 about every node from X up, within 0.35 of the box) [measured on
+   * the cooked shaft; the text gives no figure].
+   */
+  closure: 1.05,
+} as const;
+
+/** One upper arbalétrier's makeup: its shape, plates (mm) and angles, and the printed area (mm^2). */
+export interface UpperMakeup {
+  /** A closed box, the open L (c above XI) or the T (bd from XI up). */
+  readonly shape: "box" | "L" | "T";
+  /** The heavy plates: a box's or L's heavy faces, a T's flange. */
+  readonly heavy: number;
+  /** Its plies as the drawing labels them [?]. */
+  readonly plies: readonly number[];
+  /** A box's two light faces (8); a T's stem, all plies. */
+  readonly light: number;
+  /** A T's flange, across the face (mm). */
+  readonly flange?: number;
+  /** Angles as [count, leg, thickness] mm. */
+  readonly angles: ReadonlyArray<readonly [number, number, number]>;
+  readonly area: number;
+}
+
+/** An upper section: c, and b or d (b and d apart below XI, merged bd from XI up), and Omega, the whole tower's. */
+export interface UpperSection {
+  readonly section: string;
+  readonly c: UpperMakeup;
+  readonly bd: UpperMakeup;
+  /** Omega: the tower's twelve (XII-XVII: 4 c + 8 b|d) or eight (4 c + 4 bd) arbalétriers, mm^2 [sourced]. */
+  readonly omega: number;
+}
+
+const ANGLES_BOX: ReadonlyArray<readonly [number, number, number]> = [
+  [3, 100, 12],
+  [1, 90, 9],
+];
+const upperBox = (heavy: number, plies: readonly number[], area: number): UpperMakeup => ({
+  shape: "box",
+  heavy,
+  plies,
+  light: 8,
+  angles: ANGLES_BOX,
+  area,
+});
+const upperL = (heavy: number, plies: readonly number[], area: number): UpperMakeup => ({
+  shape: "L",
+  heavy,
+  plies,
+  light: 0,
+  angles: [[3, 100, 12]],
+  area,
+});
+const T500: UpperMakeup = { shape: "T", heavy: 10, plies: [10], light: 8, flange: 500, angles: [[6, 100, 10]], area: 20_400 };
+
+/**
+ * PL-XXXI's upper sections, XVII down to I (the table is printed I-XVII)
+ * [sourced UP1-UP4; every c, b|d and Omega rebuilds from its parts].
+ */
+export const UPPER_SECTIONS: readonly UpperSection[] = [
+  ...(["XVII", "XVI", "XV"] as const).map((section) => ({
+    section,
+    c: upperBox(49, [12, 12, 12, 13], 65_307),
+    bd: upperBox(25, [12, 13], 41_307),
+    omega: 591_684,
+  })),
+  { section: "XIV", c: upperBox(49, [12, 12, 12, 13], 65_307), bd: upperBox(20, [10, 10], 36_307), omega: 551_684 },
+  ...(["XIII", "XII"] as const).map((section) => ({
+    section,
+    c: upperBox(49, [12, 12, 12, 13], 65_307),
+    bd: upperBox(10, [10], 26_307),
+    omega: 471_684,
+  })),
+  {
+    section: "XI",
+    c: upperBox(51, [12, 13, 13, 13], 67_307),
+    bd: { shape: "T", heavy: 10, plies: [10], light: 20, flange: 1000, angles: [[6, 100, 12]], area: 33_536 },
+    omega: 403_372,
+  },
+  { section: "X", c: upperL(51, [12, 13, 13, 13], 57_768), bd: T500, omega: 312_672 },
+  ...(["IX", "VIII"] as const).map((section) => ({ section, c: upperL(48, [11, 12, 12, 13], 54_768), bd: T500, omega: 300_672 })),
+  ...(["VII", "VI", "V", "IV", "III", "II"] as const).map((section) => ({
+    section,
+    c: upperL(32, [7, 12, 13], 38_768),
+    bd: T500,
+    omega: 236_672,
+  })),
+  { section: "I", c: upperL(25, [12, 13], 31_768), bd: T500, omega: 208_672 },
 ];
 
 /**

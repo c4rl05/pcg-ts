@@ -77,6 +77,8 @@ const LACE = 0.0225;
  * diameters, so 38 mm across for a 22 mm rivet [estimated].
  */
 const RIVET_HEAD = 0.019;
+/** How far a rivet head rises off its plate: the host's unit head rises 0.7 of its base radius (main.ts). */
+export const RIVET_RISE = 0.7 * RIVET_HEAD;
 
 /**
  * Solid square members squared to their faces. The members of an edge rule

@@ -47,12 +47,13 @@
  *   just above XXVIII, where no horizontal is (PL-VII Figs 1, 5).
  *
  * The uprights change section at XVII as a STEP, so each is two chains,
- * split there. Below it they are built up as PL-XXXI builds them, the
- * 0.877 plan-square box of plates in the tower's faces (`builtup.ts`);
- * above it, the 0.50 box, skinned and riveted from its table.
+ * split there. Both are built up as PL-XXXI builds them (`builtup.ts`):
+ * below it the 0.877 plan-square box of plates in the tower's faces, above
+ * it the 0.50 one (`UPPER_SECTIONS`), its heavy plies on c's two tower
+ * faces and on b's and d's tower face and the face toward the next leg,
+ * which at XI touch and go on as the shaft's T.
  */
 import {
-  type Field,
   type Graph,
   type NodeHandle,
   attribute,
@@ -80,12 +81,20 @@ import {
   merge,
   placedLattice,
   segmentMembers,
-  skin,
   squareRing,
   stationLattice,
 } from "./lattice.js";
 import { CROSS_PLATE, type CrossPlate, type Detail, type Parts } from "./parts.js";
-import { AS_BUILT, WEBS_ONLY, jointFace, jointUpright, lowerPlates, lowerSeamRows } from "./builtup.js";
+import {
+  AS_BUILT,
+  WEBS_ONLY,
+  jointFace,
+  jointUpright,
+  lowerPlates,
+  lowerSeamRows,
+  upperLegPlates,
+  upperLegSeamRows,
+} from "./builtup.js";
 import {
   CROSS_RIVETS,
   CROSS_THICK,
@@ -114,13 +123,13 @@ import {
   JOINT_PITCH,
   JOINT_REACH,
   LACING_STEP,
+  RIVET_RISE,
   UPRIGHT_SEAMS,
   faceSkin,
   flatBars,
   gussetMeshes,
   lineRivets,
   rivetOutputs,
-  seamRivets,
   webMembers,
 } from "./strut.js";
 
@@ -182,16 +191,12 @@ function legLevels(): NodeLevel[] {
 }
 
 /**
- * The uprights' own levels. A swept chain puts ONE ring at each vertex, in
- * the plane bisecting the two segments there and rolled by the up hint
- * against that bisector; the segments' own frames roll differently, so
- * between two kinked nodes the skin was a twisted blend of two rolls and
- * the seam rows, laid out in each segment's frame, sat up to 11 mm off it.
- * A ring KINK above and below every node where the column turns takes the
- * segment's own frame (its bisector IS the segment), so every panel's box
- * is untwisted and exact, and the turn happens within 2 x KINK of the
- * node, where no seam row is laid (`seamKeep`). The column runs straight
- * from the supports through XXV, so those nodes need none.
+ * The uprights' own levels: the AXES the built-up plates stand on (nothing
+ * is swept along them any more; `builtup.ts` lays each panel's plates from
+ * the node table itself). A ring KINK above and below every node where the
+ * column turns is kept, which tests read: each panel's chain segment is
+ * then its own panel's line to within 2 x KINK of the node. The column
+ * runs straight from the supports through XXV, so those nodes need none.
  */
 const KINK = 0.01;
 /** The rings' offset either side of a kinked node, for tests [estimated: small against a panel]. */
@@ -228,22 +233,6 @@ function uprightLevels(): NodeLevel[] {
     if (kink) out.push(levelAt(n.y + KINK, `${n.name}+`));
   }
   return out;
-}
-
-/** Seam rows everywhere but within the turn at a kinked node. */
-function seamKeep(): Field {
-  const stops: Array<readonly [number, number]> = [[-1, 1]];
-  for (const name of UPRIGHT_KINKS) {
-    const y = node(name).y;
-    stops.push(
-      [y - KINK - 0.003, 1],
-      [y - KINK - 0.002, 0],
-      [y + KINK + 0.002, 0],
-      [y + KINK + 0.003, 1],
-    );
-  }
-  stops.push([400, 1]);
-  return ge(ramp(component(position(), 1), stops), 0.999);
 }
 
 /** The leg's corners c, b, a, d as ring coordinates. */
@@ -1667,7 +1656,7 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
   // Each is cut at XVII, where the section steps: the lower chains run
   // supports to XVII (their steel is built up from the section table,
   // `builtup.ts`; the chains are the axes it stands on), the upper (c, b,
-  // d) XVII to XI, skinned as the 0.50 box.
+  // d) XVII to XI, the 0.50 boxes (`upperLegPlates`).
   const upLevels = uprightLevels();
   const upr = stationLattice(g, {
     id: "legUpr",
@@ -1813,7 +1802,8 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
   const shown = detail.lacedWeb === true || detail.rivets === true ? AS_BUILT : WEBS_ONLY;
   // Below XVII a strut keeps clear of the built-up box and what stands out
   // of the face it lands on, and its plates meet the web
-  // (`jointUpright`, `jointFace`); above, of the 0.50 box.
+  // (`jointUpright`, `jointFace`); above, of the 0.50 box, which has
+  // nothing standing out of its webs (its plies grow inward; no C.J.s).
   const onUpright = {
     upright: jointUpright(MEMBERS.uprightAbove),
     face: jointFace(MEMBERS.uprightAbove),
@@ -1912,10 +1902,10 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     laced,
   );
 
-  // The lower chains copied: the built-up box's axes, which tests read
+  // The chains copied: the built-up boxes' axes, which tests read
   // (nothing is swept along them).
   four("legUprights4", uprights);
-  const upper4 = four("legUprightsUpper4", uprightsUpper);
+  four("legUprightsUpper4", uprightsUpper);
   const seams =
     detail.rivets === true
       ? [
@@ -1934,12 +1924,22 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
             ),
           },
           {
+            // XVII to XI, the same rule on the 500 boxes (`upperLegSeamRows`).
             name: "leg.uprights.upper",
-            spawn: seamRivets(g, "legUprightUpper", upper4, MEMBERS.uprightAbove, [1, 0, 0], {
-              ...UPRIGHT_SEAMS,
-              skipStart: true,
-              keep: seamKeep(),
-            }),
+            spawn: lineRivets(
+              g,
+              "legUprightUpperSeams",
+              fourMembers(
+                "legUprightUpperSeams4",
+                segmentMembers(
+                  g,
+                  "legUprightUpperSeamRows",
+                  upperLegSeamRows(UPRIGHT_SEAMS.pitch, UPRIGHT_SEAMS.inset, RIVET_RISE),
+                ),
+              ),
+              0,
+              UPRIGHT_SEAMS.pitch,
+            ),
           },
         ]
       : [];
@@ -1992,7 +1992,24 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
           attribute("plateThick"),
         );
       })(),
-      skin(g, "legUprightUpperSkin", upper4, MEMBERS.uprightAbove, [1, 0, 0]),
+      // XVII to XI, the 500 boxes of PL-XXXI's upper sections, as built
+      // (`upperLegPlates`).
+      (() => {
+        const list = upperLegPlates(shown);
+        return flatBars(
+          g,
+          "legUprightUpperPlates",
+          fourMembers(
+            "legUprightUpperPlates4",
+            segmentMembers(g, "legUprightUpperPlates", list, [
+              { name: "plateWidth", values: list.map((p) => [p.width]) },
+              { name: "plateThick", values: list.map((p) => [p.thickness]) },
+            ]),
+          ),
+          attribute("plateWidth"),
+          attribute("plateThick"),
+        );
+      })(),
     ],
     horizontals: [...horizontalWeb.meshes, ...entretoiseWeb.meshes, ...gapHorizontalWeb.meshes],
     bracing: [...bracingWeb.meshes, ...postWeb.meshes, ...gapBracingWeb.meshes],

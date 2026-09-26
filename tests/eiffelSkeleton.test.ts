@@ -18,7 +18,7 @@ import {
   serializeGraph,
 } from "pcg-ts";
 import { buildEiffel } from "../demos/eiffel/graph.js";
-import { lowerSeamRows } from "../demos/eiffel/builtup.js";
+import { lowerSeamRows, shaftSeamRows, upperLegSeamRows } from "../demos/eiffel/builtup.js";
 import { UPRIGHT_KINK } from "../demos/eiffel/legs.js";
 import { type Detail, JITTER } from "../demos/eiffel/parts.js";
 import {
@@ -35,7 +35,7 @@ import {
   profileAt,
 } from "../demos/eiffel/spec.js";
 import { planBracingBandLines, planBracingLines, planPattern } from "../demos/eiffel/shaft.js";
-import { UPRIGHT_SEAMS } from "../demos/eiffel/strut.js";
+import { RIVET_RISE, UPRIGHT_SEAMS } from "../demos/eiffel/strut.js";
 
 type Vec3 = readonly [number, number, number];
 
@@ -112,41 +112,6 @@ function crossing(lines: readonly Vec3[][], y: number): number {
     const ys = l.map((v) => v[1]);
     return Math.min(...ys) < y && Math.max(...ys) > y;
   }).length;
-}
-
-/**
- * The nodes where a leg's column turns: the profile's slope (outer or
- * inner) differs between the panels either side. Derived from the plate's
- * table here, not taken from legs.ts, which names its own list.
- */
-function kinkedNodes(from: string, to: string): number[] {
-  const i0 = NODES.findIndex((n) => n.name === from);
-  const i1 = NODES.findIndex((n) => n.name === to);
-  const out: number[] = [];
-  for (let i = Math.max(i0, 1); i < i1; i++) {
-    const [a, b, c] = [NODES[i - 1]!, NODES[i]!, NODES[i + 1]!];
-    const s = (p: typeof a, q: typeof a, k: "outer" | "inner") => (q[k] - p[k]) / (q.y - p.y);
-    if (Math.abs(s(a, b, "outer") - s(b, c, "outer")) > 1e-4 || Math.abs(s(a, b, "inner") - s(b, c, "inner")) > 1e-4) {
-      out.push(b.y);
-    }
-  }
-  return out;
-}
-
-/** Distance from p to the nearest segment of any of the lines. */
-function toAxis(p: Vec3, lines: readonly Vec3[][]): number {
-  let best = Infinity;
-  for (const l of lines) {
-    for (let i = 0; i + 1 < l.length; i++) {
-      const [a, b] = [l[i]!, l[i + 1]!];
-      const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-      const ap = [p[0] - a[0], p[1] - a[1], p[2] - a[2]];
-      const L2 = ab[0]! ** 2 + ab[1]! ** 2 + ab[2]! ** 2;
-      const t = Math.max(0, Math.min(1, (ap[0]! * ab[0]! + ap[1]! * ab[1]! + ap[2]! * ab[2]!) / L2));
-      best = Math.min(best, Math.hypot(ap[0]! - t * ab[0]!, ap[1]! - t * ab[1]!, ap[2]! - t * ab[2]!));
-    }
-  }
-  return best;
 }
 
 /** Instance translations of a rivet output. */
@@ -982,13 +947,15 @@ describe("eiffel skeleton", () => {
     // hypot(0.435, 0.435 - inset) off the axis: that skin was neither the
     // plan square (0.4385) nor square to the tower's faces (rolled 11.6 deg
     // in panels 1-4), so the lower half now reads the plates themselves.
+    // Above XVII the same holds of the 500 box (`UPPER_SECTIONS`): it too
+    // is a plan square of plates in the tower's faces now, not a swept
+    // 0.25 skin, so the upper half reads its plates and rows in plan too.
     const g = buildEiffel(1889, { rivets: true });
-    for (const id of ["legUprightsUpper4", "legUprightPlatesLit", "legUprightUpperSkin"]) {
+    for (const id of ["legUprightPlatesLit", "legUprightUpperPlatesLit"]) {
       g.output({ id } as NodeHandle, "out", `probe:${id}`);
     }
     const { outputs } = await cook(g);
     const geo = (id: string) => firstGeometry(outputs[`probe:${id}`]!)!;
-    const upper = polylines(geo("legUprightsUpper4"));
     const yXVII = node("XVII").y;
     const H = UPRIGHT_BOX.planHalf;
     // Into the +x+z leg: the quadrants are quarter turns of it.
@@ -1044,14 +1011,31 @@ describe("eiffel skeleton", () => {
       if (Math.abs(past) < 5e-4) onTop++;
     }
     expect(onTop).toBeGreaterThan(0);
-    // The upper skin: 0.25 half-wide throughout, and at XVII.
-    const corner = (r: number) => r * Math.SQRT2;
-    const rim = (v: Vec3, lines: Vec3[][]) => toAxis(v, lines) > 1e-3;
-    const upperAll = polylines(geo("legUprightUpperSkin")).flat();
-    for (const v of upperAll) expect(toAxis(v, upper)).toBeLessThan(corner(0.25) * 1.01);
-    for (const v of upperAll.filter((v) => Math.abs(v[1] - yXVII) < 0.02 && rim(v, upper))) {
-      expect(toAxis(v, upper)).toBeCloseTo(corner(0.25), 3);
-    }
+    // The upper plates: inside the 0.50 plan square about their own axis at
+    // their own height (the face planes; to 30 mm of run-on past a turning
+    // node, where the next panel's square is the one, and the jitter), and
+    // at XVII on it: the box steps from the 0.877 to the 0.50 there.
+    const upperPicks = [["outer", "outer"], ["inner", "outer"], ["outer", "inner"]] as const;
+    // (A plate's end lies in XVII's plane square to panel 12's axis, so its
+    // corners dip below the node: read there, that panel's line runs on.)
+    const [n12, n13] = [node("XVII"), node("XVI")];
+    const upperProfile = (y: number) =>
+      y >= yXVII
+        ? profileAt(y)
+        : {
+            outer: n12.outer + ((n13.outer - n12.outer) * (y - n12.y)) / (n13.y - n12.y),
+            inner: n12.inner + ((n13.inner - n12.inner) * (y - n12.y)) / (n13.y - n12.y),
+          };
+    const inPlan = (v: Vec3) => {
+      const pr = upperProfile(v[1]);
+      return Math.min(...upperPicks.map(([xs, zs]) => Math.max(Math.abs(v[0] - pr[xs]), Math.abs(v[2] - pr[zs]))));
+    };
+    const upperAll = polylines(geo("legUprightUpperPlatesLit")).flat().map(fold);
+    expect(upperAll.length).toBeGreaterThan(0);
+    for (const v of upperAll) expect(inPlan(v), `upper plate vertex at y ${v[1].toFixed(3)}`).toBeLessThan(0.25 + 0.004);
+    const atXVII = upperAll.filter((v) => Math.abs(v[1] - yXVII) < 0.02);
+    expect(atXVII.length).toBeGreaterThan(0);
+    expect(Math.max(...atXVII.map(inPlan))).toBeCloseTo(0.25, 2);
     // The lower seam rows lie ON the webs: 0.4385 out in plan across the
     // face they fasten, and inset from its corner square to the axis, which
     // in plan is inset / |h square to T| [derived: builtup.ts, faceFrame].
@@ -1063,17 +1047,45 @@ describe("eiffel skeleton", () => {
       expect(Math.abs(Math.abs(out) - H)).toBeLessThan(SETTLE);
       expect(Math.abs(Math.abs(along) - (H - UPRIGHT_SEAMS.inset / Math.sqrt(1 - h * h)))).toBeLessThan(SETTLE);
     }
-    // The upper rows read the 0.50 box: a row is `inset` in from a corner of
-    // an r-square, so sqrt(r^2 + (r - inset)^2) off the axis.
-    const row = (r: number) => Math.hypot(r, r - UPRIGHT_SEAMS.inset);
+    // The upper rows lie ON the 500 box's webs, as the lower on theirs:
+    // 0.25 out in plan across the face they fasten, and inset from its
+    // corner square to the axis [derived: builtup.ts, upperLegSeamRows].
     // (Up at XI, b and d close to 0.50 apart and a row between them is as
     // near the other leg's axis as its own.)
     const upperRivets = rivetBases(outputs["rivets.leg.uprights.upper"]![0]);
-    const upperBelowXI = upperRivets.filter((p) => p[1] < node("XI").y - 0.5);
-    for (const p of upperBelowXI) expect(Math.abs(toAxis(p, upper) - row(0.25))).toBeLessThan(SETTLE);
-    // The upper box's first row, which would sit on the lower box's top
-    // face, is not laid.
-    expect(Math.min(...upperRivets.map((p) => p[1]))).toBeGreaterThan(yXVII + 0.05);
+    const upperBelowXI = upperRivets.filter((p) => p[1] < node("XI").y - 0.5).map(fold);
+    expect(upperBelowXI.length).toBeGreaterThan(0);
+    for (const p of upperBelowXI) {
+      const pr = profileAt(p[1]);
+      const [xs, zs] = upperPicks.reduce((b, m) =>
+        Math.hypot(p[0] - pr[m[0]], p[2] - pr[m[1]]) < Math.hypot(p[0] - pr[b[0]], p[2] - pr[b[1]]) ? m : b,
+      );
+      let k = NODES.findIndex((n) => n.name === "XVII");
+      while (NODES[k + 1]!.y <= p[1]) k++;
+      const [A, Q] = [NODES[k]!, NODES[k + 1]!];
+      const T0: Vec3 = [Q[xs] - A[xs], Q.y - A.y, Q[zs] - A[zs]];
+      const l = Math.hypot(...T0);
+      const [dx, dz] = [p[0] - pr[xs], p[2] - pr[zs]];
+      const [out, along, h] = Math.abs(dx) > Math.abs(dz) ? [dx, dz, T0[2] / l] : [dz, dx, T0[0] / l];
+      expect(Math.abs(Math.abs(out) - 0.25)).toBeLessThan(SETTLE);
+      expect(Math.abs(Math.abs(along) - (0.25 - UPRIGHT_SEAMS.inset / Math.sqrt(1 - h * h)))).toBeLessThan(SETTLE);
+    }
+    // No upper head at the step: every one stands at least half a pitch up
+    // its panel's axis from XVII's plane square to it, as every row keeps
+    // off a straight node (the lower box's top lies in the 2nd floor's slab,
+    // 115.13-115.73, and has no face to sit on). This used to hold the
+    // swept skin's first resample row off the lower box's top.
+    let firstUp = Infinity;
+    for (const q of upperRivets.map(fold).filter((v) => v[1] < n13.y)) {
+      const [xs, zs] = upperPicks.reduce((b, m) =>
+        Math.hypot(q[0] - n12[m[0]], q[2] - n12[m[1]]) < Math.hypot(q[0] - n12[b[0]], q[2] - n12[b[1]]) ? m : b,
+      );
+      const T0: Vec3 = [n13[xs] - n12[xs], n13.y - n12.y, n13[zs] - n12[zs]];
+      const l = Math.hypot(...T0);
+      firstUp = Math.min(firstUp, ((q[0] - n12[xs]) * T0[0] + (q[1] - n12.y) * T0[1] + (q[2] - n12[zs]) * T0[2]) / l);
+    }
+    expect(firstUp).toBeGreaterThan(UPRIGHT_SEAMS.pitch / 2 - SETTLE);
+    expect(firstUp).toBeLessThan(UPRIGHT_SEAMS.pitch);
   });
 
   it("puts every shaft-upright vertex on a Plate XXXI node", async () => {
@@ -1141,58 +1153,35 @@ describe("eiffel skeleton", () => {
     expect(quadrantsSeen.size).toBe(4);
   });
 
-  it("rivets the uprights' seams at the rule's pitch: 8 rows per upright", async () => {
-    // BELOW XVII, the built-up box (builtup.ts, lowerSeamRows): on each of
-    // its four faces in every panel, a row in from each corner, a head every
-    // pitch, centred on its stretch and at least half a pitch clear of each
-    // end: a straight node, or at a turn the face's fold or its plate's end
-    // (where each head sits is held in tests/eiffelBuiltup.test.ts). Each
-    // row is a line (n - 1) pitches long, less 0.1 mm, so it takes n. ABOVE, the
-    // samples a spacing resample lays on a path of length L at pitch p: one
-    // every p from the start, plus the true end when L is not a whole
-    // number of pitches. Rows are left out where the column turns (within a
-    // kink ring of a node whose slope changes: the skin's turn), and the
-    // upper chains skip their first row, on the lower box's top.
+  it("rivets the uprights' seams at the rule's pitch: 8 rows a box, 4 an open L, 8 a T", async () => {
+    // Every upright's rows are laid on its plates as built (builtup.ts):
+    // BELOW XVII the 0.877 box (lowerSeamRows), XVII-XI the legs' 500 boxes
+    // (upperLegSeamRows), XI up the shaft's box, L and T (shaftSeamRows). On
+    // each face a row in from each edge an angle is riveted along, a head
+    // every pitch, centred on its stretch and at least half a pitch clear of
+    // each end: a straight node, or at a turn the face's fold or its plate's
+    // end (where each head sits is held in tests/eiffelBuiltup.test.ts).
+    // Each row is a line (n - 1) pitches long, less 0.1 mm, so it takes n.
+    // This used to count a spacing resample's samples along the upper
+    // chains, 8 a sample, as the swept 0.25 skin took them: the L of panels
+    // 19-28 has no plates on its two inner faces for 4 of those rows.
     const g = buildEiffel(1889, { rivets: true });
-    g.output({ id: "legUprightsUpper4" } as NodeHandle, "out", "probe:upper");
     const { outputs } = await cook(g);
     const p = UPRIGHT_SEAMS.pitch;
-    let lowerRows = 0;
-    for (const r of lowerSeamRows(p, UPRIGHT_SEAMS.inset)) {
-      lowerRows += Math.round(Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1], r.b[2] - r.a[2]) / p) + 1;
-    }
-    // XVII turns too, but no chain turns THERE: both end on it.
-    const kinks = kinkedNodes("supports", "XI").filter((y) => y !== node("XVII").y);
-    // legs.ts drops rows within 3 mm of the rings either side of the node.
-    const zone = UPRIGHT_KINK + 0.003;
-    const samples = (line: readonly Vec3[]): number[] => {
-      const ys: number[] = [];
-      let L = 0;
-      const cum = [0];
-      for (let i = 1; i < line.length; i++) {
-        const [a, b] = [line[i - 1]!, line[i]!];
-        L += Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
-        cum.push(L);
-      }
-      const at = (s: number) => {
-        let i = 1;
-        while (i < cum.length - 1 && cum[i]! < s) i++;
-        const t = (s - cum[i - 1]!) / (cum[i]! - cum[i - 1]!);
-        return line[i - 1]![1] + (line[i]![1] - line[i - 1]![1]) * t;
-      };
-      const whole = Math.floor(L / p + 1e-6);
-      for (let k = 0; k <= whole; k++) ys.push(at(k * p));
-      if (L - whole * p > 1e-4) ys.push(line[line.length - 1]![1]);
-      return ys;
-    };
-    let upperRows = 0;
-    for (const line of polylines(firstGeometry(outputs["probe:upper"]!)!)) {
-      const ys = samples(line).slice(1);
-      upperRows += 8 * ys.filter((y) => kinks.every((k) => Math.abs(y - k) >= zone)).length;
-    }
+    const heads = (rows: ReadonlyArray<{ a: Vec3; b: Vec3 }>) =>
+      rows.reduce((n, r) => n + Math.round(Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1], r.b[2] - r.a[2]) / p) + 1, 0);
+    const upperLeg = upperLegSeamRows(p, UPRIGHT_SEAMS.inset, RIVET_RISE);
+    const shaft = shaftSeamRows(p, UPRIGHT_SEAMS.inset, RIVET_RISE);
+    // Rows: a leg's c, b and d over panels 12-17, 8 each; the shaft's four
+    // c, a box in panel 18 (8) and an L in 19-28 (4), and four bd, a T in
+    // 18-28 (8: the flange's tips and either side of the stem, and the stem
+    // through its root's and its tip's angles).
+    expect(upperLeg).toHaveLength(3 * 6 * 8);
+    expect(shaft).toHaveLength(4 * (8 + 10 * 4) + 4 * 11 * 8);
     for (const [name, expected] of [
-      ["rivets.leg.uprights", 4 * lowerRows],
-      ["rivets.leg.uprights.upper", upperRows],
+      ["rivets.leg.uprights", 4 * heads(lowerSeamRows(p, UPRIGHT_SEAMS.inset))],
+      ["rivets.leg.uprights.upper", 4 * heads(upperLeg)],
+      ["rivets.shaft.uprights", heads(shaft)],
     ] as const) {
       const item = outputs[name]![0]!;
       expect(item.kind).toBe("instances");

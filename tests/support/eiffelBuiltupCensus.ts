@@ -431,3 +431,272 @@ export function census(
     gap,
   };
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * THE UPPER CENSUS: XVII to the top of panel 28, the legs' c, b and d above
+ * the 2nd floor and the shaft's eight, against PL-XXXI's upper sections as
+ * built, modelled here from the plate's printed parts alone (not from
+ * demos/eiffel/builtup.ts), in plan at a point's own height (a plate's plan
+ * thickness is its own to 1.5 % this high, where no face leans more than
+ * 0.08 horizontal per vertical):
+ *   - every upper box a 0.500 square in plan about its axis, its faces in
+ *     the tower's face planes [derived: at XI b and d stand 0.50 apart axis
+ *     to axis, PL-VII "250 250", and their boxes touch]; panels 12-17's c,
+ *     b and d and panel 18's c are closed boxes, so anything inside one is
+ *     hidden in it;
+ *   - panel 18's bd, the merged T: a flange 1,000 x 10 in the tower face,
+ *     centred on its centre line, and a stem of two plies of 10, 500 deep
+ *     overall, inward; 6 angles 100 x 100 x 12 (at the flange's tips, both
+ *     sides of the stem's root, back to back at its tip);
+ *   - panels 19-28, c: an open L, the two tower-exterior plates (51, 48, 32
+ *     or 25 thick by section, growing inward) with three angles 100 x 100 x
+ *     12 (the heel inside the corner, one at each free edge turned inward),
+ *     closed on its two inner faces (8) only over each node's attachments,
+ *     +-`closure` about it;
+ *   - panels 19-28, bd: a T, flange 500 x 10 in the face, stem 8, 500 deep
+ *     overall; 6 angles 100 x 100 x 10, placed as panel 18's.
+ * ---------------------------------------------------------------------------
+ */
+
+/** A plan rectangle of steel about a member's axis, in its canonical frame (dx, dz). */
+interface Rect {
+  readonly x0: number;
+  readonly x1: number;
+  readonly z0: number;
+  readonly z1: number;
+}
+
+/** The L's exterior plates by section, panels 19-28 [sourced PL-XXXI: X 51, VIII-IX 48, II-VII 32, I 25]. */
+const L_THICK: Record<string, number> = {
+  X: 0.051,
+  IX: 0.048,
+  VIII: 0.048,
+  VII: 0.032,
+  VI: 0.032,
+  V: 0.032,
+  IV: 0.032,
+  III: 0.032,
+  II: 0.032,
+  I: 0.025,
+};
+
+type UpperKind = "legC" | "legB" | "legD" | "c" | "bd";
+
+/** One upper member: its kind, the quarter turns it is of the canonical one, and its segments. */
+interface UpperMember {
+  readonly kind: UpperKind;
+  readonly turn: number;
+  readonly k0: number;
+  readonly k1: number;
+}
+
+const iOf = (name: string): number => NODES.findIndex((n) => n.name === name);
+const I_XVII = iOf("XVII");
+const I_XI = iOf("XI");
+const I_TOP = iOf("top28");
+
+const UPPER: UpperMember[] = [0, 1, 2, 3].flatMap((turn): UpperMember[] => [
+  { kind: "legC", turn, k0: I_XVII, k1: I_XI - 1 },
+  { kind: "legB", turn, k0: I_XVII, k1: I_XI - 1 },
+  { kind: "legD", turn, k0: I_XVII, k1: I_XI - 1 },
+  { kind: "c", turn, k0: I_XI, k1: I_TOP - 1 },
+  { kind: "bd", turn, k0: I_XI, k1: I_TOP - 1 },
+]);
+
+/** (x, z) turned back by `turn` quarter turns ((x, z) -> (-z, x) undoes (x, z) -> (z, -x)). */
+function unturn(x: number, z: number, turn: number): readonly [number, number] {
+  let p: readonly [number, number] = [x, z];
+  for (let i = 0; i < turn; i++) p = [-p[1], p[0]];
+  return p;
+}
+
+/** A member's axis in plan at height y, canonical frame. */
+function axisAt(kind: UpperKind, y: number): readonly [number, number] {
+  const pr = profileAt(y);
+  if (kind === "legB") return [pr.inner, pr.outer];
+  if (kind === "legD") return [pr.outer, pr.inner];
+  if (kind === "bd") return [0, pr.outer];
+  return [pr.outer, pr.outer];
+}
+
+/** A T's six angles (bd on the +z face): flange half-width F, stem half-thickness S, legs a x t, flange tf. */
+function tAngles(F: number, S: number, a: number, t: number, tf: number): Rect[] {
+  const top = 0.25 - tf;
+  const out: Rect[] = [];
+  for (const g of [-1, 1]) {
+    const x = (p: number, q: number) => ({ x0: Math.min(g * p, g * q), x1: Math.max(g * p, g * q) });
+    // The flange's tip: flat leg on its inside, the other turned inward.
+    out.push({ ...x(F - a, F), z0: top - t, z1: top }, { ...x(F - t, F), z0: top - a, z1: top - t });
+    // The stem's root.
+    out.push({ ...x(S, S + a), z0: top - t, z1: top }, { ...x(S, S + t), z0: top - a, z1: top - t });
+    // The stem's tip, back to back, turned out.
+    out.push({ ...x(S, S + t), z0: -0.25 + t, z1: -0.25 + a }, { ...x(S, S + a), z0: -0.25, z1: -0.25 + t });
+  }
+  return out;
+}
+
+/**
+ * A member's steel at height y on segment k, canonical frame; `box` for a
+ * closed box, whose whole square is iron or hidden in it.
+ */
+function steelAt(kind: UpperKind, k: number, y: number, closure: number): { box: boolean; rects: Rect[] } {
+  const H = 0.25;
+  const square = { box: true, rects: [{ x0: -H, x1: H, z0: -H, z1: H }] };
+  if (kind !== "c" && kind !== "bd") return square;
+  if (kind === "c" && k === I_XI) return square;
+  if (kind === "bd") {
+    const wide = k === I_XI;
+    const F = wide ? 0.5 : 0.25;
+    const S = wide ? 0.01 : 0.004;
+    return {
+      box: false,
+      rects: [
+        { x0: -F, x1: F, z0: H - 0.01, z1: H },
+        { x0: -S, x1: S, z0: -H, z1: H - 0.01 },
+        ...tAngles(F, S, 0.1, wide ? 0.012 : 0.01, 0.01),
+      ],
+    };
+  }
+  const t = L_THICK[NODES[k]!.name]!;
+  const a = 0.1;
+  const ta = 0.012;
+  const i = H - t;
+  const rects: Rect[] = [
+    { x0: i, x1: H, z0: -H, z1: H },
+    { x0: -H, x1: H, z0: i, z1: H },
+    // The heel, inside the corner.
+    { x0: i - ta, x1: i, z0: i - a, z1: i },
+    { x0: i - a, x1: i, z0: i - ta, z1: i },
+    // The free edges' angles, turned inward.
+    { x0: i - ta, x1: i, z0: -H, z1: -H + a },
+    { x0: i - a, x1: i, z0: -H, z1: -H + ta },
+    { x0: -H, x1: -H + a, z0: i - ta, z1: i },
+    { x0: -H, x1: -H + ta, z0: i - a, z1: i },
+  ];
+  // Closed on its inner faces over each node's attachments.
+  const near = Math.min(Math.abs(y - NODES[k]!.y), Math.abs(y - NODES[k + 1]!.y));
+  if (near <= closure) rects.push({ x0: -H, x1: -H + 0.008, z0: -H, z1: H }, { x0: -H, x1: H, z0: -H, z1: -H + 0.008 });
+  return { box: false, rects };
+}
+
+/** How far inside a rectangle (positive) or outside it (negative) a point is. */
+function depthIn(r: Rect, x: number, z: number): number {
+  const inside = Math.min(x - r.x0, r.x1 - x, z - r.z0, r.z1 - z);
+  if (inside >= 0) return inside;
+  return -Math.hypot(Math.max(r.x0 - x, 0, x - r.x1), Math.max(r.z0 - z, 0, z - r.z1));
+}
+
+/** The upper segment k (NODES[k] to NODES[k + 1]) holding height y. */
+function upperSegmentAt(y: number): number {
+  let k = I_XVII;
+  while (k < I_TOP - 1 && NODES[k + 1]!.y <= y) k++;
+  return k;
+}
+
+/** The upper members near a point and how deep it is in each one's steel (negative: outside, by that much). */
+function upperWhere(
+  p: Vec3,
+  closure: number,
+  reach = 0.3,
+): Array<{ m: UpperMember; k: number; depth: number }> {
+  const y = p[1];
+  // (To 20 mm short of the top of panel 28: panel 29's own posts and
+  // corners, summit.ts, stand on the shaft's there, their lacing's ends 16
+  // mm below the node.)
+  if (y < NODES[I_XVII]!.y || y > NODES[I_TOP]!.y - 0.02) return [];
+  const k = upperSegmentAt(y);
+  const out: Array<{ m: UpperMember; k: number; depth: number }> = [];
+  for (const m of UPPER) {
+    if (k < m.k0 || k > m.k1) continue;
+    const [x, z] = unturn(p[0], p[2], m.turn);
+    const [ax, az] = axisAt(m.kind, y);
+    const dx = x - ax;
+    const dz = z - az;
+    if (Math.max(Math.abs(dx), Math.abs(dz)) > 0.5 + reach) continue;
+    const s = steelAt(m.kind, k, y, closure);
+    out.push({ m, k, depth: Math.max(...s.rects.map((r) => depthIn(r, dx, dz))) });
+  }
+  return out;
+}
+
+/** The upper census's result. */
+export interface UpperCensus {
+  /** Rivet heads (not the uprights' own) whose base is inside upper steel by more than 2 mm, by output. */
+  readonly buriedHeads: Record<string, number>;
+  /** Mesh vertices of the other classes inside upper steel by more than 2 mm, by class and member kind. */
+  readonly swallowed: Record<string, number>;
+  /** The uprights' own seam heads: how many, how many stand on no steel (> 2 mm off it), how many inside another member's. */
+  readonly seams: Record<string, { total: number; floating: number; buried: number }>;
+  /** The nearest web-member vertex outside the steel, by class, member kind and segment: its gap (m). */
+  readonly gap: Record<string, number>;
+  /** Plan-bracing chord ends near an upper member: the farthest any stands off its steel (m), by member kind and node. */
+  readonly planEnds: Record<string, number>;
+}
+
+/**
+ * Take the upper census of a cooked riveted tower cooked with
+ * probe:planBracingChordPaths. `closure` is how far either side of a node
+ * the L stands closed.
+ */
+export function upperCensus(outputs: Record<string, unknown>, closure: number): UpperCensus {
+  const bump = (r: Record<string, number>, k: string) => {
+    r[k] = (r[k] ?? 0) + 1;
+  };
+  const buriedHeads: Record<string, number> = {};
+  const swallowed: Record<string, number> = {};
+  const seams: Record<string, { total: number; floating: number; buried: number }> = {};
+  const gap: Record<string, number> = {};
+  const planEnds: Record<string, number> = {};
+  const seamOutputs = ["rivets.leg.uprights.upper", "rivets.shaft.uprights"];
+  for (const [key, val] of Object.entries(outputs)) {
+    if (!key.startsWith("rivets.") || key === "rivets.leg.uprights") continue;
+    const own = seamOutputs.includes(key);
+    for (const p of rivetBases((val as unknown[])[0])) {
+      const ws = upperWhere(p, closure);
+      if (ws.length === 0) continue;
+      if (!own) {
+        if (ws.some((w) => w.depth > 0.002)) bump(buriedHeads, key.slice(7));
+        continue;
+      }
+      const s = (seams[key.slice(7)] ??= { total: 0, floating: 0, buried: 0 });
+      s.total++;
+      // Its own member is the one it is nearest (on, or in).
+      const best = ws.reduce((a, b) => (b.depth > a.depth ? b : a));
+      if (best.depth < -0.002) s.floating++;
+      if (ws.some((w) => w !== best && w.depth > 0.002)) s.buried++;
+    }
+  }
+  for (const cls of ["gussets", "bracing", "horizontals", "girders", "platforms"]) {
+    const geo = firstGeometry((outputs[cls] ?? []) as never) as Geometry | undefined;
+    const P = geo?.attrs.point.get("P")?.data;
+    if (geo === undefined || P === undefined) continue;
+    for (let i = 0; i < geo.attrs.point.count; i++) {
+      const p: Vec3 = [P[3 * i]!, P[3 * i + 1]!, P[3 * i + 2]!];
+      const ws = upperWhere(p, closure, 0.15);
+      if (ws.length === 0) continue;
+      const deep = ws.find((w) => w.depth > 0.002);
+      if (deep !== undefined) bump(swallowed, `${cls}|${deep.m.kind}`);
+      else if (cls === "bracing" || cls === "horizontals") {
+        const w = ws.reduce((a, b) => (b.depth > a.depth ? b : a));
+        const g = `${cls}|${w.m.kind}|${w.k}`;
+        gap[g] = Math.min(gap[g] ?? Infinity, -w.depth);
+      }
+    }
+  }
+  const chords = firstGeometry((outputs["probe:planBracingChordPaths"] ?? []) as never) as Geometry | undefined;
+  if (chords !== undefined) {
+    const P = chords.attrs.point.get("P")!.data;
+    for (let i = 0; i < chords.attrs.point.count; i++) {
+      const p: Vec3 = [P[3 * i]!, P[3 * i + 1]!, P[3 * i + 2]!];
+      const ws = upperWhere(p, closure, 0.6);
+      if (ws.length === 0) continue;
+      const w = ws.reduce((a, b) => (b.depth > a.depth ? b : a));
+      let node = NODES[0]!;
+      for (const n of NODES) if (Math.abs(n.y - p[1]) < Math.abs(node.y - p[1])) node = n;
+      const kk = `${w.m.kind} ${node.name}`;
+      planEnds[kk] = Math.max(planEnds[kk] ?? -Infinity, -w.depth);
+    }
+  }
+  return { buriedHeads, swallowed, seams, gap, planEnds };
+}
