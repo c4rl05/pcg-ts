@@ -1,6 +1,8 @@
 /**
  * Surface nodes: the producers that turn a curve into a skin and a
- * footprint into a solid.
+ * footprint into a solid, and `smoothNormals`, which decides how such a
+ * skin SHADES — round across a faceted curve, sharp across an edge —
+ * without changing what it is.
  *
  * Before these, the library could represent, sample, transfer through,
  * filter, serialize and render a triangle mesh, and had exactly one node
@@ -25,6 +27,7 @@
  * field-capable radius resolves there exactly.
  */
 import { adoptTopology } from "../data/adoptTopology.js";
+import { deriveGeometry } from "../data/derive.js";
 import { Geometry, PRIMTYPE_ATTR, type PrimType } from "../data/index.js";
 import { type Column, isField } from "../fields/index.js";
 import { makeGeometryItem } from "../graph/index.js";
@@ -48,13 +51,20 @@ import type {
   ExtrudePolygonInputs,
   ExtrudePolygonOutputs,
   ExtrudePolygonParams,
+  SmoothNormalsInputs,
+  SmoothNormalsOutputs,
+  SmoothNormalsParams,
   SweepProfileInputs,
   SweepProfileOutputs,
   SweepProfileParams,
 } from "./params.generated.js";
 
 // Generated from the param schemas below; see params.generated.ts.
-export type { ExtrudePolygonParams, SweepProfileParams } from "./params.generated.js";
+export type {
+  ExtrudePolygonParams,
+  SmoothNormalsParams,
+  SweepProfileParams,
+} from "./params.generated.js";
 
 /** How often the emit loops check for cancellation. */
 const CANCEL_STRIDE = 1024;
@@ -1470,6 +1480,356 @@ export const extrudePolygon = standardNode<
       "primitive",
     );
     copyElements(src.attrs.detail, out.attrs.detail, undefined, src.attrs.detail.count);
+    return { out: [makeGeometryItem(out)] };
+  },
+});
+
+/**
+ * The corner angle of triangle (a, b, c) at `a`, in radians: the weight a
+ * corner lends its face's normal. Angle weighting, not area weighting, so
+ * a wall band split into two triangles counts once at each of its corners
+ * whichever way its diagonal runs, and a long band does not outvote a
+ * short one around a curve.
+ */
+function cornerAngle(pd: ArrayLike<number>, a: number, b: number, c: number): number {
+  const ux = pd[b] - pd[a];
+  const uy = pd[b + 1] - pd[a + 1];
+  const uz = pd[b + 2] - pd[a + 2];
+  const vx = pd[c] - pd[a];
+  const vy = pd[c + 1] - pd[a + 1];
+  const vz = pd[c + 2] - pd[a + 2];
+  const cx = uy * vz - uz * vy;
+  const cy = uz * vx - ux * vz;
+  const cz = ux * vy - uy * vx;
+  return Math.atan2(Math.sqrt(cx * cx + cy * cy + cz * cz), ux * vx + uy * vy + uz * vz);
+}
+
+/** Root of `p` in a union-find whose roots are always the smallest index. */
+function findRoot(parent: Int32Array, p: number): number {
+  let r = p;
+  while (parent[r] !== r) r = parent[r];
+  // Path compression: every node on the way now points at the root.
+  while (parent[p] !== r) {
+    const next = parent[p];
+    parent[p] = r;
+    p = next;
+  }
+  return r;
+}
+
+/**
+ * Group the points that lie within `weld` of each other: a root per point,
+ * the SMALLEST index of its group, so the grouping is a function of the
+ * positions and the point order alone — never of hash order or of which
+ * pair happened to be found first. Groups close transitively (a chain of
+ * points each within `weld` of the next is one group), which a union-find
+ * gives whatever order the pairs arrive in. A non-finite position is its
+ * own group.
+ */
+function weldRoots(
+  pd: ArrayLike<number>,
+  ps: number,
+  n: number,
+  weld: number,
+  checkCancelled: () => void,
+): Int32Array {
+  const parent = new Int32Array(n);
+  for (let p = 0; p < n; p++) parent[p] = p;
+  if (!(weld > 0) || n < 2) return parent;
+  // Cells four weld distances wide: a point within `weld` of another lies
+  // in its own cell or, only when it is that close to a border, in the one
+  // across it — so a lookup visits one cell per axis almost always and two
+  // at most, where cells one weld wide would need all 27 around it.
+  const inv = 1 / (4 * weld);
+  const limit = weld * weld;
+  // The search reaches a hair past `weld`, so rounding in `x ± reach` can
+  // never drop a pair the distance test below would keep.
+  const reach = weld * (1 + 1e-6);
+  let size = 1;
+  while (size < 2 * n) size *= 2;
+  const mask = size - 1;
+  const head = new Int32Array(size).fill(-1);
+  const next = new Int32Array(n).fill(-1);
+  const cell = new Float64Array(n * 3);
+  const finite = new Uint8Array(n);
+  // Integer-valued cell coordinates, compared exactly; the hash only picks
+  // the bucket, so a wrapped `| 0` there costs a collision, never a wrong
+  // answer.
+  const bucketOf = (cx: number, cy: number, cz: number): number =>
+    ((Math.imul(cx | 0, 0x8da6b343) ^ Math.imul(cy | 0, 0xd8163841) ^ Math.imul(cz | 0, 0xcb1ab31f)) >>> 0) &
+    mask;
+  for (let p = 0; p < n; p++) {
+    const o = p * ps;
+    const x = pd[o];
+    const y = pd[o + 1];
+    const z = pd[o + 2];
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+    finite[p] = 1;
+    const cx = Math.floor(x * inv);
+    const cy = Math.floor(y * inv);
+    const cz = Math.floor(z * inv);
+    cell[p * 3] = cx;
+    cell[p * 3 + 1] = cy;
+    cell[p * 3 + 2] = cz;
+    const b = bucketOf(cx, cy, cz);
+    next[p] = head[b];
+    head[b] = p;
+  }
+  for (let p = 0; p < n; p++) {
+    if ((p & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
+    if (finite[p] === 0) continue;
+    const o = p * ps;
+    const x = pd[o];
+    const y = pd[o + 1];
+    const z = pd[o + 2];
+    const x0 = Math.floor((x - reach) * inv);
+    const x1 = Math.floor((x + reach) * inv);
+    const y0 = Math.floor((y - reach) * inv);
+    const y1 = Math.floor((y + reach) * inv);
+    const z0 = Math.floor((z - reach) * inv);
+    const z1 = Math.floor((z + reach) * inv);
+    for (let qx = x0; qx <= x1; qx++) {
+      for (let qy = y0; qy <= y1; qy++) {
+        for (let qz = z0; qz <= z1; qz++) {
+          for (let q = head[bucketOf(qx, qy, qz)]; q >= 0; q = next[q]) {
+            // Each unordered pair once, from its larger index.
+            if (q >= p) continue;
+            if (cell[q * 3] !== qx || cell[q * 3 + 1] !== qy || cell[q * 3 + 2] !== qz) continue;
+            const oq = q * ps;
+            const ex = pd[oq] - x;
+            const ey = pd[oq + 1] - y;
+            const ez = pd[oq + 2] - z;
+            if (ex * ex + ey * ey + ez * ez > limit) continue;
+            const rp = findRoot(parent, p);
+            const rq = findRoot(parent, q);
+            if (rp < rq) parent[rq] = rp;
+            else if (rq < rp) parent[rp] = rq;
+          }
+        }
+      }
+    }
+  }
+  for (let p = 0; p < n; p++) parent[p] = findRoot(parent, p);
+  return parent;
+}
+
+/**
+ * Rewrite a mesh's point `normal` so a faceted curve shades round and an
+ * edge shades sharp, by a crease angle, without touching its topology.
+ */
+export const smoothNormals = standardNode<
+  SmoothNormalsParams,
+  SmoothNormalsInputs,
+  SmoothNormalsOutputs
+>({
+  type: "smoothNormals",
+  category: "surface",
+  description:
+    "Rewrites the point `normal` (f32 tuple 3) of a triangle mesh so a faceted curve shades as the surface it approximates while a real edge stays sharp. Each point's normal becomes the angle-weighted average of the faces around its POSITION whose normals lie within `angle` degrees of the point's own faces: a cylinder of 16 flat walls (22.5 degrees apart) shades round, a box (90 degrees) keeps every edge, a cap meeting its wall stays a crease. This is what extrudePolygon's output needs to read as a round tank rather than a barrel of planks — extrudePolygon gives every wall band its own four points and one flat normal, on purpose, so its creases are exact, and it cannot know which of them were meant. TOPOLOGY IS UNTOUCHED: no point is merged, split, moved or reordered, and every attribute but `normal` passes through as it came, so connected components, counts, uv seams and anything keyed by point index are exactly the input's. Points are matched by POSITION, not by index — points within `weldDistance` of each other (closing transitively) are one position — which is what lets separately-pointed bands, and separate pieces that meet edge to edge (the staves of a round wall), shade as one surface. The faces around a position are read from the whole input, so two pieces that merely touch at a shared corner at a shallow angle shade together too: run the node on the rounded part alone, before it is merged with its neighbours, when that is not wanted. A point's own faces are the reference, so a point whose faces already disagree (a shared-point mesh folded across a crease) gets the one normal that reference gives rather than being split. A point whose own faces cancel or have no area (a double-sided sheet sharing its points, a sliver) keeps the normal it came with, or [0, 0, 0] when the input had none. Reads the 'poly' primitives of 3 or more vertices, fanned from their first vertex exactly as toBufferGeometry draws them, and ignores every other primitive; an input with none is refused by name. Deterministic: positions are grouped by a union-find rooted at the smallest point index, and every sum runs in point and corner order.",
+  inputs: [{ name: "in", kind: "geometry" }],
+  outputs: [{ name: "out", kind: "geometry" }],
+  params: {
+    angle: {
+      type: "f32",
+      default: 35,
+      min: 0,
+      max: 180,
+      description:
+        "The crease angle, in DEGREES: faces whose normals differ by this much or less shade as one smooth surface, faces that differ by more keep the edge between them. 30-40 is the usual range — the default 35 smooths any circle of 11 or more segments (under 33 degrees apart) while a decagon's 36-degree edges, an octagon's 45 and every right angle stay sharp. 0 reproduces flat shading (a point takes only faces parallel to its own); 180 smooths everything that meets at a position.",
+    },
+    weldDistance: {
+      type: "f32",
+      default: 0.0001,
+      min: 0,
+      description:
+        "How close two points must be, in world units, to count as one position when faces are gathered around it. Points are NOT merged: this only decides whose faces a point may average with. Keep it well under the mesh's point spacing: the pairs inside one neighbourhood are compared each against each, so a distance that gathers thousands of points into one position is slow as well as wrong. The default (a tenth of a millimetre, in metres) absorbs the float rounding between separately computed copies of one corner while staying far below any real feature. 0 matches a point to itself alone, so only faces that already SHARE a point smooth together.",
+    },
+  },
+  execute({ inputs, params, checkCancelled }) {
+    const angle = params.angle;
+    if (!Number.isFinite(angle) || angle < 0 || angle > 180) {
+      throw new Error(
+        `smoothNormals: param "angle" must be a number of degrees from 0 to 180 (35 is the usual crease); got ${angle}`,
+      );
+    }
+    const weld = params.weldDistance;
+    if (!Number.isFinite(weld) || weld < 0) {
+      throw new Error(
+        `smoothNormals: param "weldDistance" must be a finite distance of 0 or more (0 matches a point to itself alone); got ${weld}`,
+      );
+    }
+    const src = requireGeometry(inputs, "in", "smoothNormals");
+    requireReportSlot({
+      attrs: src.attrs.point,
+      nodeType: "smoothNormals",
+      param: "normal",
+      name: "normal",
+      type: "f32",
+      tupleSize: 3,
+      domain: "point",
+      suggestion: "inNormal",
+    });
+    const P = src.attrs.point.get("P");
+    if (!P || P.type !== "f32" || P.tupleSize < 3) {
+      throw new Error('smoothNormals: input "in" needs a point attribute "P" (f32, tupleSize >= 3)');
+    }
+    const pd = P.data;
+    const ps = P.tupleSize;
+    const n = src.pointCount;
+    const v2p = src.vertexToPoint;
+    const starts = src.primVertexStart;
+    const counts = src.primVertexCount;
+    const primType = src.attrs.primitive.get(PRIMTYPE_ATTR);
+
+    // Which primitives are faces: decided once per primitive.
+    const isFace = new Uint8Array(src.primitiveCount);
+    let nTris = 0;
+    for (let p = 0; p < src.primitiveCount; p++) {
+      if (counts[p] < 3) continue;
+      if (primType !== undefined && primType.getString(p) !== "poly") continue;
+      isFace[p] = 1;
+      nTris += counts[p] - 2;
+    }
+    if (nTris === 0) {
+      throw new Error(
+        "smoothNormals: input \"in\" has no 'poly' primitive of 3 or more vertices, so there is no surface to shade — " +
+          "connect a mesh (extrudePolygon, sweepProfile, meshPrimitive, meshFromField), not a point cloud or a path",
+      );
+    }
+
+    // Each triangle's corners, unit face normal, and corner weights.
+    const corner = new Uint32Array(nTris * 3);
+    const faceN = new Float64Array(nTris * 3);
+    const weight = new Float64Array(nTris * 3);
+    {
+      let t = 0;
+      for (let p = 0; p < src.primitiveCount; p++) {
+        if (isFace[p] === 0) continue;
+        const s = starts[p];
+        const a = v2p[s];
+        for (let k = 1; k + 1 < counts[p]; k++, t++) {
+          const b = v2p[s + k];
+          const c = v2p[s + k + 1];
+          corner[t * 3] = a;
+          corner[t * 3 + 1] = b;
+          corner[t * 3 + 2] = c;
+          const oa = a * ps;
+          const ob = b * ps;
+          const oc = c * ps;
+          const ux = pd[ob] - pd[oa];
+          const uy = pd[ob + 1] - pd[oa + 1];
+          const uz = pd[ob + 2] - pd[oa + 2];
+          const vx = pd[oc] - pd[oa];
+          const vy = pd[oc + 1] - pd[oa + 1];
+          const vz = pd[oc + 2] - pd[oa + 2];
+          const nx = uy * vz - uz * vy;
+          const ny = uz * vx - ux * vz;
+          const nz = ux * vy - uy * vx;
+          const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+          // No area, no direction: it lends nothing (its weights stay 0).
+          if (!(len > 0) || !Number.isFinite(len)) continue;
+          faceN[t * 3] = nx / len;
+          faceN[t * 3 + 1] = ny / len;
+          faceN[t * 3 + 2] = nz / len;
+          weight[t * 3] = cornerAngle(pd, oa, ob, oc);
+          weight[t * 3 + 1] = cornerAngle(pd, ob, oc, oa);
+          weight[t * 3 + 2] = cornerAngle(pd, oc, oa, ob);
+        }
+      }
+    }
+
+    // Point -> the corners on it, as CSR, in ascending corner order.
+    const incStart = new Uint32Array(n + 1);
+    for (let i = 0; i < corner.length; i++) incStart[corner[i] + 1]++;
+    for (let p = 0; p < n; p++) incStart[p + 1] += incStart[p];
+    const inc = new Uint32Array(corner.length);
+    {
+      const fill = incStart.slice(0, n);
+      for (let i = 0; i < corner.length; i++) inc[fill[corner[i]]++] = i;
+    }
+
+    // Each point's OWN direction — its own faces, angle-weighted — which is
+    // what the crease angle is measured from.
+    const own = new Float64Array(n * 3);
+    for (let p = 0; p < n; p++) {
+      let x = 0;
+      let y = 0;
+      let z = 0;
+      for (let k = incStart[p]; k < incStart[p + 1]; k++) {
+        const i = inc[k];
+        const w = weight[i];
+        const t = (i / 3) | 0;
+        x += w * faceN[t * 3];
+        y += w * faceN[t * 3 + 1];
+        z += w * faceN[t * 3 + 2];
+      }
+      const len = Math.sqrt(x * x + y * y + z * z);
+      if (len > 0) {
+        own[p * 3] = x / len;
+        own[p * 3 + 1] = y / len;
+        own[p * 3 + 2] = z / len;
+      }
+    }
+
+    // Positions: each point's group, as CSR by root, members ascending.
+    const root = weldRoots(pd, ps, n, weld, checkCancelled);
+    const memStart = new Uint32Array(n + 1);
+    for (let p = 0; p < n; p++) memStart[root[p] + 1]++;
+    for (let p = 0; p < n; p++) memStart[p + 1] += memStart[p];
+    const members = new Uint32Array(n);
+    {
+      const fill = memStart.slice(0, n);
+      for (let p = 0; p < n; p++) members[fill[root[p]]++] = p;
+    }
+
+    // A face joins when its normal is within `angle` of the point's own
+    // direction. The tolerance keeps exactly parallel faces in at angle 0,
+    // where rounding would otherwise drop the point's own face.
+    const cosLimit = angle >= 180 ? -2 : Math.cos((angle * Math.PI) / 180) - 1e-9;
+    const prev = src.attrs.point.get("normal");
+    const prevData = prev !== undefined && prev.type === "f32" && prev.tupleSize === 3 ? prev.data : undefined;
+    const out = deriveGeometry(src);
+    const normal = out.attrs.point.replace("normal", "f32", 3, [0, 0, 0]).writable();
+    for (let p = 0; p < n; p++) {
+      if ((p & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
+      const ox = own[p * 3];
+      const oy = own[p * 3 + 1];
+      const oz = own[p * 3 + 2];
+      if (ox === 0 && oy === 0 && oz === 0) {
+        // On no face with area: keep what it came with.
+        if (prevData !== undefined) {
+          normal[p * 3] = prevData[p * 3];
+          normal[p * 3 + 1] = prevData[p * 3 + 1];
+          normal[p * 3 + 2] = prevData[p * 3 + 2];
+        }
+        continue;
+      }
+      let x = 0;
+      let y = 0;
+      let z = 0;
+      const r = root[p];
+      for (let m = memStart[r]; m < memStart[r + 1]; m++) {
+        const q = members[m];
+        for (let k = incStart[q]; k < incStart[q + 1]; k++) {
+          const i = inc[k];
+          const w = weight[i];
+          if (w === 0) continue;
+          const t = (i / 3) | 0;
+          const fx = faceN[t * 3];
+          const fy = faceN[t * 3 + 1];
+          const fz = faceN[t * 3 + 2];
+          if (fx * ox + fy * oy + fz * oz < cosLimit) continue;
+          x += w * fx;
+          y += w * fy;
+          z += w * fz;
+        }
+      }
+      const len = Math.sqrt(x * x + y * y + z * z);
+      const inv = len > 0 ? 1 / len : 0;
+      normal[p * 3] = len > 0 ? x * inv : ox;
+      normal[p * 3 + 1] = len > 0 ? y * inv : oy;
+      normal[p * 3 + 2] = len > 0 ? z * inv : oz;
+    }
     return { out: [makeGeometryItem(out)] };
   },
 });

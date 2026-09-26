@@ -150,7 +150,7 @@ const ROOT_SURFACE = [
   "resolveField", "sampleNearestPoint", "select", "selfPrune", "serializeGraph",
   "setAttribute", "setBounds", "setPolylineTopology", "sign",
   "simplexNoise", "sin",
-  "smoothstep",
+  "smoothNormals", "smoothstep",
   "spawnInstances", "specChildEntries", "splineSample", "sqrt", "standardNode", "step",
   "strandedGraphParamValues", "sub",
   "subgraphContentHash",

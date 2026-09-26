@@ -4426,6 +4426,50 @@ export type SetBoundsInputs = "in";
 export type SetBoundsOutputs = "out";
 
 /**
+ * Params of the `smoothNormals` node type.
+ */
+export interface SmoothNormalsParams {
+  /**
+   * The crease angle, in DEGREES: faces whose normals differ by this much or less shade as
+   * one smooth surface, faces that differ by more keep the edge between them. 30-40 is the
+   * usual range — the default 35 smooths any circle of 11 or more segments (under 33 degrees
+   * apart) while a decagon's 36-degree edges, an octagon's 45 and every right angle stay
+   * sharp. 0 reproduces flat shading (a point takes only faces parallel to its own); 180
+   * smooths everything that meets at a position.
+   *
+   * - Range: `0..180`
+   *
+   * @defaultValue `35`
+   */
+  angle: number;
+  /**
+   * How close two points must be, in world units, to count as one position when faces are
+   * gathered around it. Points are NOT merged: this only decides whose faces a point may
+   * average with. Keep it well under the mesh's point spacing: the pairs inside one
+   * neighbourhood are compared each against each, so a distance that gathers thousands of
+   * points into one position is slow as well as wrong. The default (a tenth of a millimetre,
+   * in metres) absorbs the float rounding between separately computed copies of one corner
+   * while staying far below any real feature. 0 matches a point to itself alone, so only
+   * faces that already SHARE a point smooth together.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `0.0001`
+   */
+  weldDistance: number;
+}
+
+/**
+ * The input pin names of the `smoothNormals` node type.
+ */
+export type SmoothNormalsInputs = "in";
+
+/**
+ * The output pin names of the `smoothNormals` node type.
+ */
+export type SmoothNormalsOutputs = "out";
+
+/**
  * Params of the `spawnInstances` node type.
  */
 export interface SpawnInstancesParams {
