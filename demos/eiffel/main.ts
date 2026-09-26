@@ -124,6 +124,7 @@ import { PART_CLASSES, type PartClass } from "./parts.js";
 import { type PlateOverlay, loadPlateTool } from "./plateTool.js";
 import { BALUSTER, CABOCHON_RISE, FITTING_ASSETS } from "./platforms.js";
 import { NEUTRAL, createRig } from "./rig.js";
+import { attachSection } from "./section.js";
 import { rivetClass } from "./spec.js";
 import { HEAD_DRIVE_ATTR, driveHead, driveMatrix } from "./heads.js";
 import {
@@ -1005,6 +1006,18 @@ async function main(): Promise<void> {
     lightSiteRivets(params.has("site"));
     overlay.addCheckbox("site rivets", params.has("site"), lightSiteRivets);
   }
+  // The foundations in section (`?section`, section.ts): the ground opened
+  // and what is under it cut on PL-XX's plane through piles 1 and 3.
+  const section = attachSection({
+    scene,
+    meshes,
+    controls,
+    changed: () => {
+      renderer.shadowMap.needsUpdate = true;
+    },
+  });
+  if (params.has("section")) section(true);
+  overlay.addCheckbox("section", params.has("section"), section);
   if (fitted > 0) overlay.addStat("fittings")(fitted.toLocaleString());
   if (linked > 0) overlay.addStat("chain pieces")(linked.toLocaleString());
   // Only when something was overridden: the default page says nothing about

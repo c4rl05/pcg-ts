@@ -1,7 +1,8 @@
 /**
  * THE GROUND AND WHAT IS UNDER IT (SOURCES.md §31): the machine room in
  * pile 3's basement, its flue and chimney; the uprights' supports, their
- * stones, shoes and anchors (`SUPPORT`, §31.3).
+ * stones, shoes and anchors (`SUPPORT`, §31.3); the massifs, the caissons,
+ * the walls and the earthing (`MASSIF`, `CAISSON`, §31.4).
  *
  * THE DATUM. The model's ground is one flat plane at the tower centre's
  * « Sol au centre de la Tour (33.50) », y 0 [sourced PL-I]. The Champ de
@@ -30,10 +31,10 @@
  * round brick chimney « à droite de la pile 4 », 17.23 m over its footing
  * [sourced p. 202, PL-IV Fig. 15; route measured PL-III Fig. 2].
  *
- * THE SUPPORTS stand under the model's uprights, which run down to the
- * sommiers' centre, so they sit 1.10 down each upright's axis from their
- * printed cotes (`SUPPORT.stack`); the machine room and the flue are at
- * theirs.
+ * THE SUPPORTS AND THE FOUNDATIONS stand under the model's uprights,
+ * which run down to the sommiers' centre, so they sit 1.10 down each
+ * upright's axis from their printed cotes (`SUPPORT.stack`); the walls,
+ * the machine room and the flue are at theirs.
  *
  * Everything is built in world coordinates (pile 3 is the +x −z leg,
  * `PILES` in spec.ts), as convex prisms, one mesh per class.
@@ -43,7 +44,7 @@ import { attribute, extrudePolygon, mergePrimitives, pointGrid, pointsToPath, se
 import { type Vec3, indexTable } from "./lattice.js";
 import type { Parts } from "./parts.js";
 import { LEG_UPRIGHTS, type UprightName, segmentAxis } from "./builtup.js";
-import { NODES, PILES, yOfCote } from "./spec.js";
+import { NODES, PEDESTAL, PILES, yOfCote } from "./spec.js";
 
 // ---------------------------------------------------------------------------
 // Vectors and solids
@@ -1106,15 +1107,493 @@ export function supportPieces(f: SupportFrame): { iron: Prism[]; stone: Prism[];
 }
 
 // ---------------------------------------------------------------------------
+// ITEM 29 BEGIN: the foundations (PL-II to PL-V)
+
+/**
+ * The massifs, one under each upright, 16 [sourced E1900-TXT pp. 86-93;
+ * PL-III Figs 3-6, PL-IV Figs 1, 5-7, 25-27]: Souppes rubble in cement
+ * mortar, a truncated pyramid on the tower's diagonal, extending out from
+ * its stones. In the vertical plane of the diagonal, s out along it from
+ * the support point and the height as a cote: a vertical front face 1.22
+ * inside the support point (1.255 at piles 1 and 4) up to « 4,91 » over
+ * its base, 33.91; the top face square to the upright, carrying the
+ * stones, up to its peak « 7,46 » over the base (36.46; 36.50 and
+ * « 8.500 » at piles 1 and 4); the rear face parallel to the leg down to
+ * the base, « 8,90 » long there (« 9.610 » at piles 1 and 4) [sourced
+ * Figs 7, 27; derived]; the base at 29.00 on piles 2 and 3, 28.00 on piles 1 and
+ * 4, which start a metre lower on their caissons [sourced pp. 87, 92].
+ * Across the diagonal 5.00 to 31.00, 4.60 to 33.00 and 4.00 above, its
+ * « redans » [sourced Figs 5, 6, 25]. The courses — level low, fanning to
+ * square to the pressure line higher up — are not drawn.
+ *
+ * Under piles 2 and 3 each stands on a cement-concrete footing « 10 m sur
+ * 6 », 2.00 deep on the gravel [sourced p. 86], 0.20 before the front face
+ * and 0.90 past the rear toe [sourced Fig. 7], its bottom 27.09-27.33
+ * [sourced PL-II Figs 4, 7], taken at 27.25.
+ *
+ * The lift massif A, the inner one under upright a [sourced p. 87, « Massif
+ * A » on PL-IV], was built round the lift's cage and pit (pile 2's on a
+ * footing « 14 m sur 7,40 » with a 5.20 pit, PL-IV Fig. 4; piles 1 and 4
+ * kept at 6.00 on T-irons and brick vaults) [sourced pp. 86, 92-93]: here
+ * it takes the rule like the other three, the 10 × 6 footing too under
+ * piles 2 and 3, and its pit, cage walls, enlargement and the added
+ * masonry (« 194 m³ », p. 96) are not built [estimated]; the lifts' tracks
+ * and pits, which the model runs down to 4.4 under the ground, stand clear
+ * of it.
+ *
+ * Like the stones they carry, the massifs stand 1.10 down the upright's
+ * axis from their printed cotes (`SUPPORT.stack`): a massif's cote c is
+ * drawn at the seat's height plus c − 36.00.
+ */
+export const MASSIF = {
+  /** Piles 2 and 3 (and the profile's printed cotes), then 1 and 4. */
+  byPile: {
+    open: { base: 29.0, front: -1.22, frontTop: 33.91, peak: 36.46, run: 3.6, rearToe: 7.68 },
+    caisson: { base: 28.0, front: -1.255, frontTop: 33.91, peak: 36.5, run: 3.64, rearToe: 8.355 },
+  },
+  /** Widths across the diagonal, each up to a cote. */
+  widths: [
+    [31.0, 5.0],
+    [33.0, 4.6],
+    [Infinity, 4.0],
+  ] as ReadonlyArray<readonly [number, number]>,
+  footing: { bottom: 27.25, before: 0.2, past: 0.9, wide: 6.0 },
+  /** The cote of the upper stone's top centre, which the seat stands for. */
+  sommier: 36.0,
+} as const;
+
+/**
+ * The compressed-air caissons, under piles 1 (Nord) and 4 (Ouest) only
+ * [sourced pp. 88-93; PL-II Figs 10, 12; PL-IV Figs 23, 27, 31], one under
+ * each massif, their long axis on the diagonal: 15.24 × 6.00 « avec coins
+ * arrondis », the first built, pile 4's N°1, 14.24 [sourced p. 90]; the
+ * corners' radius 1.0 from the printed « Surface du Caisson 90,60 m q »
+ * (15.24 × 6.00 − (4 − π) = 90.58; 84.60 for the short one; the tables'
+ * 90.40 a misprint: their concrete ÷ depth gives 90.60) [derived]. The
+ * inner end 0.20 before the massif's front face, toward the tower's centre
+ * [sourced Fig. 27 « 200 »]. The cutting edge where each was sunk, the
+ * « fond définitif » 0.20 over it [sourced tables pp. 92-93, read on the
+ * page images; Figs 27, 31]; the concrete from the fond to the « arasé à
+ * la cote + 28 » [sourced]. In 1889 each was solid concrete, its working
+ * chamber filled too [sourced p. 92, « Caisson rempli de béton »], inside
+ * an iron shell from the edge up 3.00 of wall and two « hausses » of 1.00
+ * [sourced pp. 91-92], drawn 0.03 thick (6 mm plate); the shafts and
+ * airlocks were taken away and are not built [estimated].
+ *
+ * Which caisson under which massif, by the cotes the plans print under
+ * each [sourced PL-II Figs 10, 12, PL-IV Fig. 23, drawn x right, z down as
+ * `PILES` lays them out]: pile 4 A N°3, B N°4, C N°2, D N°1 (the short
+ * one, « 14.00 », « (23.58) »); pile 1 A N°3, B N°4, C N°2, D N°1.
+ */
+export const CAISSON = {
+  length: 15.24,
+  wide: 6.0,
+  radius: 1.0,
+  short: { length: 14.24 },
+  /** The « fond définitif » over the cutting edge [sourced tables pp. 92-93]. */
+  fond: 0.2,
+  before: 0.2,
+  top: 28.0,
+  shell: { high: 5.0, t: 0.03 },
+  /** The cutting edge's cote under each massif [sourced pp. 92-93]. */
+  edge: {
+    4: { a: 22.34, b: 21.72, c: 21.81, d: 23.38 },
+    1: { a: 22.22, b: 21.99, c: 21.55, d: 21.8 },
+  } as Readonly<Record<1 | 4, Readonly<Record<UprightName, number>>>>,
+} as const;
+
+/**
+ * The perimeter walls of piles 1, 2 and 4 (pile 3's are the machine
+ * room's, `ROOM`): the same 26.08 box, 0.75 thick, carried on piers « 1.20 »
+ * wide between arches of « 5.55 » springing at 33.28 [sourced PL-V, PL-III
+ * Fig. 3; p. 87]. The arches spring above the model's ground, so only the
+ * piers are built, from 29.00 (pile 2) or 28.00 (piles 1, 4) [sourced].
+ * The plates print the arcaded faces' run « 4.40 | 5.55 | 1.20 | 5.55 |
+ * 2.70 | 4.98 | 1.70 » (26.08) [sourced PL-V]: its piers, the 1.20 and
+ * the 2.70, are built on every face, from the face's corner at the tower's
+ * centre outward [estimated: which end the run starts from]; where the
+ * face is carried by a massif instead (its « 7.22 » arches and « 2.30 »
+ * piers, PL-V) a pier that would run into a massif is left out.
+ */
+export const WALLS = {
+  thick: 0.75,
+  /** The printed run along a face, from its inner end: [length, pier?]. */
+  run: [
+    [4.4, false],
+    [5.55, false],
+    [1.2, true],
+    [5.55, false],
+    [2.7, true],
+    [4.98, false],
+    [1.7, false],
+  ] as ReadonlyArray<readonly [number, boolean]>,
+} as const;
+
+/**
+ * The earthing (« pour faciliter la déperdition de l'électricité
+ * atmosphérique dans le sol »): two cast-iron pipes a pile, about 20 m, Ø
+ * 0.30, laid 3 m under the platform, 1 m under the Seine's level, between
+ * the massifs, one end turned up to the ground and wired to the iron
+ * [sourced p. 86]: at cote 26.00, 29.00 less 3 [derived]. In two
+ * trenches about 14 apart, « 18.00 » long, running from the leg's middle
+ * toward the +z face, about 13 degrees off square to it [sourced PL-II
+ * Fig. 7, pile 3; measured]; pile 2's as pile 3's mirrored across the
+ * tower's axis, its trenches toward its own +z face [measured PL-II Fig.
+ * 4]. Piles 1 and 4 draw none: their test wells served [sourced pp.
+ * 89-90]. Each turned up just outside the wall, clear of the flue
+ * [estimated].
+ */
+export const EARTHING = {
+  cote: 26.0,
+  d: 0.3,
+  run: 18.0,
+  off: 13,
+  /** Pile 3's two risers, (x, z), just outside its +z wall [estimated]; each run comes 18.00 to it from the leg. */
+  risers: [
+    [41.6, -35.2],
+    [55.8, -35.2],
+  ] as ReadonlyArray<readonly [number, number]>,
+} as const;
+
+/** Clip a convex polygon in (s, cote) to cote in [lo, hi]. */
+function band(poly: ReadonlyArray<readonly [number, number]>, lo: number, hi: number): Array<readonly [number, number]> {
+  const clip = (pts: ReadonlyArray<readonly [number, number]>, keep: (y: number) => boolean, at: number) => {
+    const out: Array<readonly [number, number]> = [];
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i]!;
+      const q = pts[(i + 1) % pts.length]!;
+      if (keep(p[1])) out.push(p);
+      if (keep(p[1]) !== keep(q[1])) {
+        const t = (at - p[1]) / (q[1] - p[1]);
+        out.push([p[0] + (q[0] - p[0]) * t, at]);
+      }
+    }
+    return out;
+  };
+  return clip(clip(poly, (y) => y >= lo, lo), (y) => y <= hi, hi);
+}
+
+/** A support's diagonal frame for its massif: a point from (s along the diagonal, cote, e across). */
+function massifAt(f: SupportFrame): (s: number, cote: number, e: number) => Vec3 {
+  const d = unit3([f.U[0], 0, f.U[2]]);
+  return (s, cote, e) => [
+    f.seat[0] + d[0] * s + f.E[0] * e,
+    f.seat[1] + cote - MASSIF.sommier,
+    f.seat[2] + d[2] * s + f.E[2] * e,
+  ];
+}
+
+/** One massif as its solids, band by band across its redans, and its footing where it has one. */
+export function massifSolids(f: SupportFrame): Prism[] {
+  const caisson = PILES.find((p) => p.n === f.pile)?.caissons === true;
+  const M = caisson ? MASSIF.byPile.caisson : MASSIF.byPile.open;
+  const peakS = M.front + M.run;
+  // The top face is the lower stone's underside, 1.00 of stone down the
+  // axis from the seat, square to the axis: the printed « 4,91 » and
+  // « 7,46 » close on it to 0.035 [derived], and the model takes the
+  // plane, so the stones sit flush on it.
+  const d = unit3([f.U[0], 0, f.U[2]]);
+  const onTop = (sv: number) =>
+    MASSIF.sommier + (-(SUPPORT.stones.lower.t + SUPPORT.stones.upper.t) - sv * dot3(d, f.T)) / f.T[1];
+  const profile: Array<readonly [number, number]> = [
+    [M.front, M.base],
+    [M.front, onTop(M.front)],
+    [peakS, onTop(peakS)],
+    [M.rearToe, M.base],
+  ];
+  const at = massifAt(f);
+  const out: Prism[] = [];
+  let lo: number = M.base;
+  const peak = onTop(peakS);
+  for (const [top, w] of MASSIF.widths) {
+    const hi = Math.min(top, peak);
+    if (hi <= lo) continue;
+    const poly = band(profile, lo, hi);
+    if (poly.length >= 3) out.push({ outline: towards(poly.map(([s, c]) => at(s, c, -w / 2)), f.E), depth: w });
+    lo = hi;
+  }
+  if (!caisson) {
+    const F = MASSIF.footing;
+    const [s0, s1] = [M.front - F.before, M.rearToe + F.past];
+    out.push({
+      outline: towards(
+        [
+          at(s0, F.bottom, -F.wide / 2),
+          at(s1, F.bottom, -F.wide / 2),
+          at(s1, M.base, -F.wide / 2),
+          at(s0, M.base, -F.wide / 2),
+        ],
+        f.E,
+      ),
+      depth: F.wide,
+    });
+  }
+  return out;
+}
+
+/**
+ * The half-spaces a massif is drawn inside: the pedestal's outer faces'
+ * inner surfaces. The model's plinth stands on its own ground, 1.58 lower
+ * than the real one (§31.2), so a massif's peak, at its printed height,
+ * would come out through the skirt's battered block; it is cut back to
+ * 0.03 inside it [derived]. In pile 4's frame x + 0.8115 y ≤ 62.453 −
+ * 0.258 − 0.03, the block's batter (`PEDESTAL.tiers[0]`) less the skirt's
+ * 0.20 measured square to it, and the same in z; turned onto each pile.
+ */
+export function skirtPlanes(pile: 1 | 2 | 3 | 4): Array<{ n: Vec3; c: number }> {
+  const t = PEDESTAL.tiers[0]!;
+  const slope = (t.outer[0] - t.outer[1]) / (t.y1 - t.y0);
+  const c = t.outer[0] - 0.2 * Math.hypot(1, slope) - 0.03;
+  const k = PILES.find((p) => p.n === pile)!.quadrant;
+  return [
+    { n: onQuadrant(k, [1, slope, 0]), c },
+    { n: onQuadrant(k, [0, slope, 1]), c },
+  ];
+}
+
+/** A convex prism's faces, each a polygon. */
+function prismFaces(p: Prism): Vec3[][] {
+  const o = p.outline;
+  const nn: [number, number, number] = [0, 0, 0];
+  for (let i = 0; i < o.length; i++) {
+    const [x0, y0, z0] = o[i]!;
+    const [x1, y1, z1] = o[(i + 1) % o.length]!;
+    nn[0] += (y0 - y1) * (z0 + z1);
+    nn[1] += (z0 - z1) * (x0 + x1);
+    nn[2] += (x0 - x1) * (y0 + y1);
+  }
+  const n = unit3(nn);
+  const top = o.map((q) => add3(q, mul3(n, p.depth)));
+  const faces: Vec3[][] = [[...o], [...top]];
+  for (let i = 0; i < o.length; i++) {
+    const j = (i + 1) % o.length;
+    faces.push([o[i]!, o[j]!, top[j]!, top[i]!]);
+  }
+  return faces;
+}
+
+/**
+ * A convex prism cut by half-spaces n·x ≤ c: unchanged if it lies inside
+ * them all, else its cut faces and the new caps, each drawn as a plate 0.02
+ * thick into the solid (the way the pedestal's skirt is built).
+ */
+function clipPrism(p: Prism, planes: ReadonlyArray<{ n: Vec3; c: number }>): Prism[] {
+  let faces = prismFaces(p);
+  const all = faces.flat();
+  if (planes.every(({ n, c }) => all.every((q) => dot3(n, q) <= c))) return [p];
+  for (const { n, c } of planes) {
+    const cut: Vec3[] = [];
+    const next: Vec3[][] = [];
+    for (const f of faces) {
+      const out: Vec3[] = [];
+      for (let i = 0; i < f.length; i++) {
+        const a = f[i]!;
+        const b = f[(i + 1) % f.length]!;
+        const da = dot3(n, a) - c;
+        const db = dot3(n, b) - c;
+        if (da <= 0) out.push(a);
+        if (da <= 0 !== db <= 0) {
+          const q = add3(a, mul3(sub3(b, a), da / (da - db)));
+          out.push(q);
+          cut.push(q);
+        }
+      }
+      if (out.length >= 3) next.push(out);
+    }
+    if (cut.length >= 3) {
+      // The new cap: the cut points in order round their centre, in the plane.
+      const m = mul3(cut.reduce<Vec3>((s, q) => add3(s, q), [0, 0, 0]), 1 / cut.length);
+      const u = unit3(sub3(cut[0]!, m));
+      const v = cross3(unit3(n), u);
+      const ring = [...cut].sort((a, b) => Math.atan2(dot3(sub3(a, m), v), dot3(sub3(a, m), u)) - Math.atan2(dot3(sub3(b, m), v), dot3(sub3(b, m), u)));
+      const cap: Vec3[] = [];
+      for (const q of ring) if (cap.length === 0 || Math.hypot(...sub3(q, cap[cap.length - 1]!)) > 1e-6) cap.push(q);
+      if (cap.length >= 3) next.push(cap);
+    }
+    faces = next;
+  }
+  const pts = faces.flat();
+  const centre = mul3(pts.reduce<Vec3>((s, q) => add3(s, q), [0, 0, 0]), 1 / pts.length);
+  return faces
+    .filter((f) => f.length >= 3)
+    .map((f) => {
+      const m = mul3(f.reduce<Vec3>((s, q) => add3(s, q), [0, 0, 0]), 1 / f.length);
+      return { outline: towards(f, sub3(centre, m)), depth: 0.02 };
+    });
+}
+
+/** One massif as drawn: its solids, cut back inside the pedestal's skirt where they would come out of it. */
+export function massifPrisms(f: SupportFrame): Prism[] {
+  const planes = skirtPlanes(f.pile);
+  return massifSolids(f).flatMap((p) => clipPrism(p, planes));
+}
+
+/** A rounded rectangle in a massif's frame (s from s0 to s1, e ±w/2, corners r), at cote c. */
+function roundedRect(f: SupportFrame, s0: number, s1: number, w: number, r: number, cote: number, grow = 0): Vec3[] {
+  const at = massifAt(f);
+  const pts: Vec3[] = [];
+  const corners: Array<[number, number, number]> = [
+    [s1 - r, w / 2 - r, 0],
+    [s0 + r, w / 2 - r, 90],
+    [s0 + r, -w / 2 + r, 180],
+    [s1 - r, -w / 2 + r, 270],
+  ];
+  for (const [cs, ce, a0] of corners) {
+    for (let k = 0; k <= 3; k++) {
+      const a = ((a0 + 30 * k) * Math.PI) / 180;
+      pts.push(at(cs + (r + grow) * Math.cos(a), cote, ce + (r + grow) * Math.sin(a)));
+    }
+  }
+  return pts;
+}
+
+/** One caisson under a massif of pile 1 or 4: its concrete, and its iron shell (by class). */
+export function caissonPrisms(f: SupportFrame): { concrete: Prism[]; iron: Prism[] } {
+  const edges = CAISSON.edge[f.pile as 1 | 4];
+  if (edges === undefined) return { concrete: [], iron: [] };
+  const short = f.pile === 4 && f.upright === "d";
+  const len = short ? CAISSON.short.length : CAISSON.length;
+  const r = CAISSON.radius;
+  const s0 = MASSIF.byPile.caisson.front - CAISSON.before;
+  const s1 = s0 + len;
+  const edge = edges[f.upright];
+  const up: Vec3 = [0, 1, 0];
+  const fond = edge + CAISSON.fond;
+  const concrete: Prism = {
+    outline: towards(roundedRect(f, s0, s1, CAISSON.wide, r, fond), up),
+    depth: CAISSON.top - fond,
+  };
+  const shellTop = Math.min(edge + CAISSON.shell.high, CAISSON.top);
+  // The shell: a ring of plates round the concrete, each face of the
+  // rounded outline its own plate standing `t` proud of it.
+  const inner = roundedRect(f, s0, s1, CAISSON.wide, r, edge);
+  const outer = roundedRect(f, s0, s1, CAISSON.wide, r, edge, CAISSON.shell.t);
+  const iron: Prism[] = [];
+  for (let i = 0; i < inner.length; i++) {
+    const j = (i + 1) % inner.length;
+    const piece = [inner[i]!, inner[j]!, outer[j]!, outer[i]!];
+    if (Math.hypot(inner[i]![0] - inner[j]![0], inner[i]![2] - inner[j]![2]) < 1e-6) continue;
+    iron.push({ outline: towards(piece, up), depth: shellTop - edge });
+  }
+  return { concrete: [concrete], iron };
+}
+
+/** The perimeter walls' piers of piles 1, 2 and 4, in world coordinates, clear of the massifs. */
+export function wallPiers(): Prism[] {
+  const out: Prism[] = [];
+  const [a, b] = [ROOM.x[0], ROOM.x[1]];
+  const W = WALLS;
+  const frames = supportFrames();
+  for (const pile of PILES) {
+    if (pile.n === 3) continue;
+    const base = pile.caissons ? MASSIF.byPile.caisson.base : MASSIF.byPile.open.base;
+    const y0 = yOfCote(base);
+    const y1 = -0.25;
+    const massifs = frames.filter((f) => f.pile === pile.n).flatMap(massifSolids);
+    // In pile 4's frame (the +x +z box, x and z from a to b), each face's
+    // run from its inner end (a) outward.
+    let along = a;
+    for (const [len, pier] of W.run) {
+      if (pier) {
+        const m = along + len / 2;
+        for (const [x, z, alongX] of [
+          [m, a + W.thick / 2, true],
+          [m, b - W.thick / 2, true],
+          [a + W.thick / 2, m, false],
+          [b - W.thick / 2, m, false],
+        ] as const) {
+          const [sx, sz] = alongX ? [len, W.thick] : [W.thick, len];
+          const c = onQuadrant(pile.quadrant, [x, 0, z]);
+          const e = onQuadrant(pile.quadrant, [sx, 0, sz]);
+          const [hx, hz] = [Math.abs(e[0]) / 2, Math.abs(e[2]) / 2];
+          const block = blockPrism(aabb(c[0] - hx, c[0] + hx, y0, y1, c[2] - hz, c[2] + hz));
+          if (!overlapsAny(block, massifs)) out.push(block);
+        }
+      }
+      along += len;
+    }
+  }
+  return out;
+}
+
+/** A convex prism's corners, both caps. */
+function prismCorners(p: Prism): Vec3[] {
+  return prismFaces(p).slice(0, 2).flat();
+}
+
+/**
+ * Whether two convex prisms overlap by more than a few millimetres: no
+ * separating axis among their face normals (enough for the boxes and the
+ * massifs' bands this is used on, all of whose edges are face normals' or
+ * the vertical).
+ */
+function overlaps(p: Prism, q: Prism): boolean {
+  const pc = prismCorners(p);
+  const qc = prismCorners(q);
+  const axes: Vec3[] = [];
+  for (const r of [p, q]) {
+    for (const f of prismFaces(r)) {
+      const n = cross3(sub3(f[1]!, f[0]!), sub3(f[2]!, f[1]!));
+      if (Math.hypot(n[0], n[1], n[2]) > 1e-9) axes.push(unit3(n));
+    }
+  }
+  for (const n of axes) {
+    const a = pc.map((v) => dot3(n, v));
+    const b = qc.map((v) => dot3(n, v));
+    if (Math.max(...a) < Math.min(...b) + 0.005 || Math.max(...b) < Math.min(...a) + 0.005) return false;
+  }
+  return true;
+}
+
+function overlapsAny(p: Prism, list: readonly Prism[]): boolean {
+  return list.some((q) => overlaps(p, q));
+}
+
+/** The earthing pipes of piles 2 and 3: a level run and its riser, each. */
+export function earthingPipes(): Prism[] {
+  const out: Prism[] = [];
+  const E = EARTHING;
+  const y = yOfCote(E.cote);
+  const off = (E.off * Math.PI) / 180;
+  for (const mirror of [1, -1]) {
+    for (const [rx, rz] of E.risers) {
+      // Pile 3's (mirror 1) and pile 2's (x mirrored).
+      const end: Vec3 = [mirror * rx, y, rz];
+      const start: Vec3 = [mirror * (rx + E.run * Math.sin(off)), y, rz - E.run * Math.cos(off)];
+      out.push(cylinder(start, end, E.d, 12), cylinder(end, [end[0], CAP, end[2]], E.d, 12));
+    }
+  }
+  return out;
+}
+
+/** Everything of item 29 by class. */
+export function foundationsPrisms(): { foundations: Prism[]; machinery: Prism[] } {
+  const frames = supportFrames();
+  const caissons = frames.map(caissonPrisms);
+  return {
+    foundations: [
+      ...frames.flatMap(massifPrisms),
+      ...caissons.flatMap((c) => c.concrete),
+      ...wallPiers(),
+      ...earthingPipes(),
+    ],
+    machinery: caissons.flatMap((c) => c.iron),
+  };
+}
+
+// ITEM 29 END
+
+// ---------------------------------------------------------------------------
 // The build
 
 /** Everything this module builds, as prism lists by class. */
 export function groundPrisms(): { foundations: Prism[]; machinery: Prism[]; masonry: Prism[] } {
   const room = machineRoomPrisms();
   const supports = supportFrames().map(supportPieces);
+  const found = foundationsPrisms();
   return {
-    foundations: [...room.foundations, ...supports.flatMap((s) => s.buried)],
-    machinery: [...room.plant, ...supports.flatMap((s) => s.iron)],
+    foundations: [...room.foundations, ...supports.flatMap((s) => s.buried), ...found.foundations],
+    machinery: [...room.plant, ...supports.flatMap((s) => s.iron), ...found.machinery],
     masonry: supports.flatMap((s) => s.stone),
   };
 }
