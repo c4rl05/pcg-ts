@@ -31,7 +31,13 @@
  * rolls on their upper side, which faces up and OUT, away from the axis.
  * The Otis base slope is the leg's: « composante … suivant l'inclinaison de
  * la voie … 0.815 » = sin 54.6° [sourced PL-XXI], the leg's diagonal lean
- * (§2.5). Above the 1st floor the track curves with the leg. Where it runs
+ * (§2.5). Above it the track curves with the leg: the book takes « 0,976
+ * et 0,815 comme sinus des angles faits avec l'horizontale du chemin de
+ * roulement de la cabine en haut et en bas de sa course », 77°30' and
+ * 54°35', and 68°10' at 1.50 above the 1st floor [sourced E1900-TXT pp.
+ * 144, 153]; the rail line below, read at every node, stands at 54.6°,
+ * 60.7° under the 1st floor, 70.4° in panel 6, 75.5-77.1° in panels 7-10
+ * and 74.1° in panel 11 (SOURCES.md §11.3). Where it runs
  * in the leg is only drawn, not dimensioned: measured on Plate XX at
  * 1:200 the rail line stands about 3.3 m out from a (along the diagonal)
  * below the 1st floor, 4.6 m at nodes XXI-XX, 4.0 m at the 2nd floor
@@ -56,12 +62,16 @@
  * the decks stack on 65.6°, the slope the plate draws the car level on;
  * wheelbase « 8m109 » [sourced]. Roux (PL-XXIII): 3.27 across, decks about
  * 2.1 high (Fig. 4), 3.9 long (Fig. 11's dotted cabin) [measured]. The
- * floors are level and the upper deck sits further up the slope, the
- * stepped car of PL-XX, and the car rides BETWEEN its girders, each deck's
- * inner end 1.1 into the trough they make above the ties [measured on the
- * Otis]. Where each car stands is a chosen moment [estimated]: on the
- * 54.6° run, where the Otis car's 65.6° stack leaves its upper deck 0.6
- * into the trough, not 1.1.
+ * floors are level on the slope the car was drawn on and the upper deck
+ * sits further up it, the stepped car of PL-XX, and the car rides BETWEEN
+ * its girders, each deck's inner end 1.1 into the trough they make above
+ * the ties [measured on the Otis]. Each car is one rigid body on two axles
+ * and rides its whole run, station to station, tipping where the rail
+ * bends: the Otis by its chord's slope less 65.6°, 11° back on the 54.6°
+ * run and as far forward high in the leg, as E1900-TXT p. 135 says it did;
+ * the Roux level on the straight run (see `carLevel`, `LIFT_CARS`). Where
+ * each car stands when the graph builds it is a chosen moment
+ * [estimated].
  *
  * THE EDOUX [sourced PL-XX, PL-XXIII ter]. Two cars counterbalanced by four
  * cables over pulleys at the top: the upper car, lifted by two pistons 80.20
@@ -242,10 +252,22 @@ const OTIS: TrackSpec = { gauge: 3.8, top: FLOORS.second + 9.9, flange: { out: 0
  */
 const ROUX: TrackSpec = { gauge: 3.57, top: 68.4, flange: { out: 0.1175, in: 0.1175 } };
 
-/** The rail line's stations, (r, y), at every node from the ground to `top`. */
+/**
+ * Where the tracks begin, below the ground: the machine basement's floor,
+ * « Sous-sol des machines » (30.50), z -3.0 [sourced PL-XX Fig. 4]. A car
+ * whose lower floor stands at the rez-de-chaussée (z 1.58) reaches further
+ * down its track than that floor does — the Roux car's lower axle 4.6 m
+ * lower along the rail, the Otis car's chassis 3.3 m under its rail — so
+ * its track runs on into the basement, where both systems had their
+ * machinery (the Otis cylinder, the Roux driving wheels). The line carries
+ * panel 1's lean on down; the ground hides it.
+ */
+const TRACK_FOOT = -3.5;
+
+/** The rail line's stations, (r, y), at every node from the basement to `top`. */
 function railLine(top: number): Array<readonly [number, number]> {
   const railR = (y: number) => cornerA(y) + readTable(RAIL_OFFSET, y);
-  const at: Array<readonly [number, number]> = [[railR(0), 0]];
+  const at: Array<readonly [number, number]> = [[railR(TRACK_FOOT), TRACK_FOOT]];
   for (const n of NODES) {
     if (n.y > 2.5 && n.y < top && n.y <= 115.5) at.push([railR(n.y), n.y]);
   }
@@ -267,17 +289,6 @@ function segFrame(p: readonly [number, number], q: readonly [number, number]): {
   const dy = q[1] - p[1];
   const len = Math.hypot(dr, dy);
   return { t: inPlane(dr / len, dy / len), n: inPlane(dy / len, -dr / len), len };
-}
-
-/** The rail line read at height y: its r, and the frame of its segment there. */
-function railAt(line: ReadonlyArray<readonly [number, number]>, y: number): { r: number; t: Vec3; n: Vec3; tan: number } {
-  let i = 0;
-  while (i < line.length - 2 && (line[i + 1] as readonly [number, number])[1] < y) i++;
-  const p = line[i] as readonly [number, number];
-  const q = line[i + 1] as readonly [number, number];
-  const s = (y - p[1]) / (q[1] - p[1]);
-  const { t, n } = segFrame(p, q);
-  return { r: p[0] + (q[0] - p[0]) * s, t, n, tan: (q[1] - p[1]) / (p[0] - q[0]) };
 }
 
 /** A straight member of square section `w` from p to q; `hint` rolls it. */
@@ -393,25 +404,80 @@ const ROUX_CAR: CarSpec = { deck: [3.9, 2.1, 3.27], gauge: ROUX.gauge, top: ROUX
 const TROUGH = 1.1;
 
 /**
- * A stepped double-deck car whose lower floor is at `floorY`: two level
- * decks, the upper one `step` higher and `setback` further in, on a
- * chassis along the rails, with a hanger under the lower deck's outer end.
+ * A car as ONE RIGID BODY, in the +x+z leg's frame, built the way it was
+ * drawn: on a straight rail at the slope its floors are level on (`level`,
+ * see {@link carLevel}), the axle midpoint at the origin. Two level decks,
+ * the upper one `step` higher and `setback` further in, on a chassis along
+ * the rails, with a hanger under the lower deck's outer end.
+ *
+ * Nothing here reads the leg. Where the car stands and how far it tips are
+ * the run's business ({@link carPose}): the graph turns this body onto its
+ * pose once, and the page turns it on from there, frame by frame.
  */
-function car(spec: CarSpec, floorY: number): Block[] {
+interface CarBody {
+  /** The boxes, about the axle midpoint on the rail. */
+  readonly blocks: readonly Block[];
+  /** The slope, in radians, on which the floors are level. */
+  readonly level: number;
+  /** Axle to axle along the rails: the chassis' length. */
+  readonly wheelbase: number;
+  /** The lower floor's centre, from the axle midpoint. */
+  readonly floor: Vec3;
+}
+
+/**
+ * The slope a car's floors are level on, in radians.
+ *
+ * OTIS: its decks stack on atan(2.376 / 1.080) = 65.6°, the slope PL-XXII
+ * ter Fig. 1 draws the car level on [derived, see `OTIS_CAR`], and Eiffel's
+ * text says why it is not 54.6°: « Comme elles sont invariablement reliées
+ * au truck qui les supporte, elles prennent pendant leur course toutes les
+ * inclinaisons du chemin de roulement … L'attache de la caisse des cabines
+ * au châssis a été disposée de telle sorte que dans leur position moyenne,
+ * c'est-à-dire à la station du premier étage, leur plancher soit
+ * sensiblement horizontal, afin de partager par moitié l'inclinaison
+ * qu'elles prennent en sens inverse aux deux extrémités du trajet, laquelle
+ * est environ de 0,20 m par mètre » [sourced E1900-TXT p. 135]. Half
+ * of 54°35' to 77°30' is 66.0°, and 0.20 m a metre is 11.3°: the plate's
+ * 65.6° is that split, to 0.4°.
+ *
+ * ROUX: the base run's own slope, 54.6°. The book's Roux car is « portée
+ * sur la voie de roulement par l'intermédiaire de deux essieux » [sourced
+ * E1900-TXT p. 160], so as rigid as the Otis, and every force in its
+ * calculation is taken at sin 0.815 [sourced pp. 163-170]: the book puts the
+ * car on the straight run and nothing tips it there. The model's rail bends
+ * at XXIV, 7 m under the 1st floor, where the leg does, and the car's 9.8
+ * wheelbase reaches past it for the last 14 m of the run, tipping it as a
+ * rigid body must (see {@link LIFT_CARS}).
+ */
+function carLevel(spec: CarSpec): number {
+  if (spec.setback !== undefined) return Math.atan2(spec.step, spec.setback);
   const line = railLine(spec.top);
+  const p = line[0] as readonly [number, number];
+  const q = line[1] as readonly [number, number];
+  return Math.atan2(q[1] - p[1], p[0] - q[0]);
+}
+
+function carBody(spec: CarSpec): CarBody {
+  const level = carLevel(spec);
   const [len, high, wide] = spec.deck;
-  const slope = railAt(line, floorY).tan;
+  const slope = Math.tan(level);
+  // The straight rail the car was drawn on, through the origin: r = -y /
+  // slope, its tangent up the track and its normal up and out.
+  const rOf = (y: number) => -y / slope;
+  const n = inPlane(Math.sin(level), Math.cos(level));
   // Level floors on a slope: the lower deck's inner end dips TROUGH below
   // the rail line, square to the track (TROUGH √(1 + slope²) vertically),
-  // which sets the floor's centre above the rail line.
+  // which sets the floor's centre above the rail line. Built with the
+  // floor at 0, then moved onto the axle midpoint.
   const lift = Math.max(0.3, (len / 2) * slope - TROUGH * Math.hypot(1, slope));
-  const yRail = floorY - lift;
-  const r1 = railAt(line, yRail).r;
+  const yRail = -lift;
+  const r1 = rOf(yRail);
   const back = spec.setback ?? spec.step / slope;
   const r2 = r1 - back;
-  const out: Block[] = [
-    levelBox(onDiag(r1, floorY + high / 2), len, high, wide),
-    levelBox(onDiag(r2, floorY + spec.step + high / 2), len, high, wide),
+  const raw: Block[] = [
+    levelBox(onDiag(r1, high / 2), len, high, wide),
+    levelBox(onDiag(r2, spec.step + high / 2), len, high, wide),
   ];
   // The chassis, along the rails: from under the lower deck's outer end to
   // under the upper deck's inner end, or `chassis` long about their middle.
@@ -420,24 +486,31 @@ function car(spec: CarSpec, floorY: number): Block[] {
   let yLow = yOuter;
   let yHigh = yInner;
   if (spec.chassis !== undefined) {
-    const rise = (spec.chassis / 2) * (slope / Math.hypot(1, slope));
+    const rise = (spec.chassis / 2) * Math.sin(level);
     yLow = (yOuter + yInner) / 2 - rise;
     yHigh = (yOuter + yInner) / 2 + rise;
   }
-  const low = railAt(line, yLow);
-  const high2 = railAt(line, yHigh);
-  const pLow = add3(onDiag(low.r, yLow), mul3(low.n, 0.2));
-  const pHigh = add3(onDiag(high2.r, yHigh), mul3(high2.n, 0.2));
+  const pLow = add3(onDiag(rOf(yLow), yLow), mul3(n, 0.2));
+  const pHigh = add3(onDiag(rOf(yHigh), yHigh), mul3(n, 0.2));
   // Between the rails (0.10 wide on the webs), 0.05 clear of them.
-  const chassis = member(pLow, pHigh, 0.3, low.n);
-  out.push({ ...chassis, size: [chassis.size[0], 0.3, spec.gauge - 0.2] });
+  const chassis = member(pLow, pHigh, 0.3, n);
+  raw.push({ ...chassis, size: [chassis.size[0], 0.3, spec.gauge - 0.2] });
   // The hanger: from the chassis up to the lower floor, at its outer end or
   // at the chassis' end, whichever is further in.
-  const rHang = Math.min(r1 + len / 2 - 0.1, low.r);
+  const rHang = Math.min(r1 + len / 2 - 0.1, rOf(yLow));
   const yHang = yRail + (r1 - rHang) * slope;
-  const hang = floorY - yHang;
-  if (hang > 0.3) out.push(levelBox(onDiag(rHang, yHang + hang / 2), 0.2, hang, wide));
-  return out;
+  const hang = -yHang;
+  if (hang > 0.3) raw.push(levelBox(onDiag(rHang, yHang + hang / 2), 0.2, hang, wide));
+  // The axles stand under the chassis' ends, on the rail: their midpoint
+  // is the body's origin.
+  const yMid = (yLow + yHigh) / 2;
+  const mid = onDiag(rOf(yMid), yMid);
+  return {
+    blocks: raw.map((b) => ({ ...b, at: sub3(b.at, mid) })),
+    level,
+    wheelbase: (yHigh - yLow) / Math.sin(level),
+    floor: sub3(onDiag(r1, 0), mid),
+  };
 }
 
 /** A frame to a quaternion [x, y, z, w]; z is x × y. */
@@ -473,10 +546,6 @@ function onLeg(k: number, p: Vec3): Vec3 {
   if (k === 1) return [p[2], p[1], -p[0]];
   if (k === 2) return [-p[0], p[1], -p[2]];
   return [-p[2], p[1], p[0]];
-}
-
-function blockOnLeg(k: number, b: Block): Block {
-  return { at: onLeg(k, b.at), x: onLeg(k, b.x), y: onLeg(k, b.y), size: b.size };
 }
 
 /**
@@ -1110,18 +1179,39 @@ function shaftStairs(): { blocks: Block[]; rails: Vec3[][] } {
 // ---------------------------------------------------------------------------
 
 /**
- * Where each car stands: its lower floor's height, per quadrant target
- * [estimated moment]. Target 0 is pile 4 (Ouest, Roux), 1 pile 3 (Sud,
- * Otis), 2 pile 2 (Est, Roux), 3 pile 1 (Nord, Otis). All on the straight
- * 54.6° run below node XXIV, with level floors: above it the rail line
- * steepens to about 70° with the leg, which the model's cars do not ride.
- * The Otis car is drawn level on a ~65° track (PL-XXII ter Fig. 1); a
- * rigid one would tip about 11° on the 54.6° run, which is not modelled.
+ * Where each car stands when the graph builds it: its lower floor's
+ * height, per quadrant target [estimated moment]. Target 0 is pile 4
+ * (Ouest, Roux), 1 pile 3 (Sud, Otis), 2 pile 2 (Est, Roux), 3 pile 1
+ * (Nord, Otis). All four stand on the straight 54.6° run below node XXIV,
+ * where the Otis car is tipped 11° back from level (see {@link carLevel})
+ * and the Roux car is level.
  *
- * This is where the graph BUILDS each car, which is where the page leaves
- * it when nothing is driving it ({@link LIFT_CARS}).
+ * This is where the page leaves a car when nothing is driving it
+ * ({@link LIFT_CARS}).
  */
 const CAR_AT = [30, 42, 12, 22] as const;
+
+/**
+ * The stations, as the height of the car's LOWER floor. The rez-de-chaussée
+ * is printed at the altitude 35.08, z 1.58 [sourced PL-XX, PL-XXI; §11.2];
+ * the floors are `FLOORS`'. Which deck stands level with the station is not
+ * printed: the book serves each deck at each station, the Otis « par une
+ * petite passerelle », the Roux « par des escaliers terminés par des
+ * paliers » [sourced E1900-TXT pp. 135, 160], so a station is two levels,
+ * and the model takes the lower one at the floor [estimated].
+ */
+const STATION = { ground: 1.58, first: FLOORS.first, second: FLOORS.second } as const;
+
+/**
+ * Where each system stops, bottom to top [sourced PL-XX, PL-XXI]: the Roux
+ * from the ground to the 1st floor; the Otis from the ground to the 2nd
+ * « avec arrêt facultatif au 1er étage ». The page's round runs end to end
+ * and does not take the optional stop; it is published so a host can.
+ */
+const STOPS = {
+  roux: [STATION.ground, STATION.first],
+  otis: [STATION.ground, STATION.first, STATION.second],
+} as const;
 
 /**
  * Which system and which pile, per quadrant target, read off `PILES`:
@@ -1143,71 +1233,66 @@ const carId = (name: string): string =>
 const CAR_PHASE = [0, 0.31, 0.62, 0.83] as const;
 
 /**
- * The run a leg car rides, as its lower floor's height.
+ * A car's wait at each end of its run, in seconds; the trip itself is the
+ * run's length at a metre a second (see {@link legRun}), and the Edoux'
+ * 80.2 m stroke in 80 s is the same.
  *
- * It stops well short of either circuit's real top — the Roux reached the
- * 1st floor (57.63) and the Otis the 2nd (115.73) — because the model's
- * car is the one thing here that cannot follow its track all the way.
- * Below node XXIV (50.4) the rail line is STRAIGHT TO WITHIN A HAIR, and
- * that is what lets the host move a car it never rebuilds. It is not
- * literally one segment — `railLine` stations it at every node, so there
- * are five below XXIV, broken at 6.4, 17.4, 28.4 and 39.4 — but
- * {@link RAIL_OFFSET} is flat at 4.35 over all of them and the inner
- * corner falls at 0.5027/m, so their slopes agree to 1.3e-4 in tan
- * (54.58855° at y 8 against 54.59100° at 44). A car built at one height
- * and translated to another is therefore the same car to 0.51 mm at its
- * worst corner — half the millimetre every output is jittered by anyway,
- * and all of it in the chassis and the hanger, which alone re-read the
- * line; the two decks are `levelBox`es and do not drift at all.
- *
- * Above XXIV the line steepens toward the leg's ~70° and a level-floored
- * car built for 54.6° reads wrong, so the run ends below it.
- *
- * The ends are the CAR's, not the floor's. A car reaches well past the
- * floor height that names it: the Otis' upper deck stands 4.51 over it
- * and its 8.109 chassis 3.30 below the rail, so 44 puts its highest
- * corner at 48.51 and its chassis' top at 46.9, both clear of XXIV, and
- * 8 keeps its lowest corner at 4.07, clear of the ground at 1.58 and of
- * the pedestal. The Roux car is shorter but rides further up its own
- * chassis, and tops out slightly HIGHER, at 48.60 — it is the one that
- * sets the upper end, by 1.80 m.
+ * A metre a second is a walking pace and it is meant to be: the tower is
+ * 312 m tall, so a car at 1 m/s takes the better part of a minute to cross
+ * a tenth of the frame. The book gives the Roux 60 s for its ascent
+ * [sourced E1900-TXT p. 162], about 1.1 m/s over its 66.60, and the Otis a
+ * design speed of 2.00 m/s it did not reach [sourced p. 142]; this is
+ * chosen to read as a lift and not as a lift shown in fast-forward.
  */
-const LEG_RUN = { from: 8, to: 44 } as const;
+const LEG_DWELL = 6;
+const EDOUX_TRIP = { trip: 80, dwell: 10 } as const;
 
 /**
- * A car's trip, end to end, and its wait at each end, in seconds.
- *
- * The leg run is 36 m of floor rise, which is 44.2 m up a 54.6° track, so
- * 44 s is almost exactly a metre a second — and the Edoux' 80.2 m stroke
- * in 80 s is the same. That is a walking pace and it is meant to be: the
- * tower is 312 m tall, so a car crossing a leg at 1 m/s takes the better
- * part of a minute to cross a tenth of the frame. No source here gives a
- * speed; this is chosen to read as a lift and not as a lift shown in
- * fast-forward.
+ * The line a car's wheels ride, arc-length parameterised: its vertices in
+ * world metres, bottom to top, and the arc length at each, 0 at the first.
  */
-const LEG_TRIP = { trip: 44, dwell: 6 } as const;
-const EDOUX_TRIP = { trip: 80, dwell: 10 } as const;
+interface RunLine {
+  readonly path: readonly Vec3[];
+  readonly arc: readonly number[];
+  /**
+   * Axle to axle along the line. The car's two axles stand on the line
+   * `wheelbase / 2` either side of the arc length it is at, and the body
+   * lies along the chord between them — which is how a rigid car on two
+   * axles rides a rail that bends, and why it tips smoothly through a
+   * node rather than snapping there. 0: the car is a point on the line
+   * (the Edoux, whose line is straight).
+   */
+  readonly wheelbase: number;
+}
 
 /**
  * One lift car's run, for the host that moves it.
  *
  * The graph settles WHERE a car can be; the clock is the page's. A car is
- * built at `at` and is a rigid body over its whole run, so the page has
- * only to offset it: `P += (floor - at) * step`, with `floor` swept
- * between `from` and `to`. `step` is world metres per metre of floor
- * RISE, which is [0, 1, 0] in the shaft and leans in along the diagonal
- * on a leg.
+ * a rigid body, built at the arc length `at`: to put it at `s`, read both
+ * poses with {@link carPose} and turn the built mesh by the difference in
+ * angle about `axis`, about the built pose's point, onto the new one. On a
+ * leg the line is the rail line the tracks are built on, station for
+ * station, so the car rides the rail exactly; in the shaft it is vertical.
  */
-export interface CarRun {
+export interface CarRun extends RunLine {
   /** The graph declares this car as the output `car.<name>`. */
   readonly name: string;
-  /** The lower floor's height where the car is BUILT: the page's zero. */
+  /** The horizontal axis, across the line, that the car pitches about (unit, world). */
+  readonly axis: Vec3;
+  /**
+   * The chord slope, in radians, on which the car's floors are level:
+   * where the chord between its axles is steeper, the car tips forward by
+   * the difference, and back where it is shallower.
+   */
+  readonly level: number;
+  /** The arc length where the car is BUILT: the page's zero. */
   readonly at: number;
-  /** The ends of the run, as that same floor height. */
+  /** Every station, as an arc length, in the order the car rises through them. */
+  readonly stops: readonly number[];
+  /** The ends of the run, as arc lengths: the round goes `from` -> `to` and back. */
   readonly from: number;
   readonly to: number;
-  /** World metres the car moves per metre of floor rise. */
-  readonly step: Vec3;
   /** Seconds from end to end, and the wait at each end. */
   readonly trip: number;
   readonly dwell: number;
@@ -1216,56 +1301,228 @@ export interface CarRun {
 }
 
 /**
- * How far a car moves per metre of floor rise, MEASURED on its own rail
- * line rather than restated from the slope: the two ends of the run are
- * read off the line and divided by the rise between them. On the straight
- * segment that is exact, and it stays right if the line is ever re-read.
+ * A line's point at arc length `s`, written to `out[o..o+2]`, clamped at
+ * the ends; returns the segment it fell on. A binary search over the
+ * cumulative arc length, so it is cheap enough for every car every frame.
  */
-function legStep(spec: CarSpec, k: number): Vec3 {
-  const line = railLine(spec.top);
-  const lo = onDiag(railAt(line, LEG_RUN.from).r, LEG_RUN.from);
-  const hi = onDiag(railAt(line, LEG_RUN.to).r, LEG_RUN.to);
-  return onLeg(k, mul3(sub3(hi, lo), 1 / (LEG_RUN.to - LEG_RUN.from)));
+function pathPoint(line: RunLine, s: number, out: Float64Array, o: number): number {
+  const { path, arc } = line;
+  let lo = 0;
+  let hi = arc.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if ((arc[mid] as number) <= s) lo = mid;
+    else hi = mid;
+  }
+  const a0 = arc[lo] as number;
+  const a1 = arc[hi] as number;
+  const u = Math.min(1, Math.max(0, (s - a0) / (a1 - a0)));
+  const p = path[lo] as Vec3;
+  const q = path[hi] as Vec3;
+  out[o] = p[0] + (q[0] - p[0]) * u;
+  out[o + 1] = p[1] + (q[1] - p[1]) * u;
+  out[o + 2] = p[2] + (q[2] - p[2]) * u;
+  return lo;
+}
+
+/** The two axles' points, `carPose`'s scratch: it allocates nothing. */
+const AXLES = new Float64Array(6);
+
+/**
+ * Where a car on `line` stands at arc length `s`: `out` gets the point
+ * midway between its axles (x, y, z, world) and the chord's slope above
+ * the horizontal, in radians. Writes into `out` and allocates nothing.
+ */
+export function carPose(line: RunLine, s: number, out: Float64Array): void {
+  const h = line.wheelbase / 2;
+  if (h > 0) {
+    pathPoint(line, s - h, AXLES, 0);
+    pathPoint(line, s + h, AXLES, 3);
+    out[0] = ((AXLES[0] as number) + (AXLES[3] as number)) / 2;
+    out[1] = ((AXLES[1] as number) + (AXLES[4] as number)) / 2;
+    out[2] = ((AXLES[2] as number) + (AXLES[5] as number)) / 2;
+  } else {
+    const i = pathPoint(line, s, out, 0);
+    const p = line.path[i] as Vec3;
+    const q = line.path[i + 1] as Vec3;
+    AXLES[0] = p[0];
+    AXLES[1] = p[1];
+    AXLES[2] = p[2];
+    AXLES[3] = q[0];
+    AXLES[4] = q[1];
+    AXLES[5] = q[2];
+  }
+  const dx = (AXLES[3] as number) - (AXLES[0] as number);
+  const dy = (AXLES[4] as number) - (AXLES[1] as number);
+  const dz = (AXLES[5] as number) - (AXLES[2] as number);
+  out[3] = Math.atan2(dy, Math.hypot(dx, dz));
+}
+
+/** `p` turned about the unit axis `a` by `angle`, right-handed (Rodrigues). */
+function rotate3(p: Vec3, a: Vec3, angle: number): Vec3 {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const k = dot3(a, p) * (1 - c);
+  const x = cross3(a, p);
+  return [p[0] * c + x[0] * s + a[0] * k, p[1] * c + x[1] * s + a[1] * k, p[2] * c + x[2] * s + a[2] * k];
+}
+
+/** A line through `points`, arc-length parameterised. */
+function lineThrough(points: readonly Vec3[], wheelbase: number): RunLine {
+  const arc = [0];
+  for (let i = 1; i < points.length; i++) {
+    const d = sub3(points[i] as Vec3, points[i - 1] as Vec3);
+    arc.push((arc[i - 1] as number) + Math.hypot(d[0], d[1], d[2]));
+  }
+  return { path: points, arc, wheelbase };
+}
+
+/**
+ * The part of `line` between arc lengths `s0` and `s1`, re-based so that
+ * `s0` is 0: the cut ends become vertices, and every station between them
+ * is kept as it was.
+ */
+function cutLine(line: RunLine, s0: number, s1: number): RunLine {
+  const at = (s: number): Vec3 => {
+    const o = new Float64Array(3);
+    pathPoint(line, s, o, 0);
+    return [o[0] as number, o[1] as number, o[2] as number];
+  };
+  const inner = line.path.filter((_, i) => (line.arc[i] as number) > s0 && (line.arc[i] as number) < s1);
+  return lineThrough([at(s0), ...inner, at(s1)], line.wheelbase);
+}
+
+/**
+ * A leg car and its run: the body turned onto quadrant target k's rail
+ * line, the stations found on it, the line cut to what the wheels use.
+ *
+ * The rail line is `railLine`, the one `track` builds the girders on,
+ * carried onto the leg as `copyToQuadrants` carries the track: the same
+ * stations, so the car's axles are ON the built rail at every moment. A
+ * station is where the lower floor's centre stands at the station's
+ * height, found by bisection along the line (the floor rises with the arc
+ * length, the tipping included, on every run here). The run begins half a
+ * wheelbase below the lowest station and ends half a wheelbase above the
+ * highest, so both axles are on it throughout; that both ends are still on
+ * the built rail is checked here, not assumed.
+ */
+function legRun(k: number): { run: CarRun; blocks: Block[] } {
+  const system = PILES[k]?.lift === "roux" ? "roux" : "otis";
+  const spec = system === "roux" ? ROUX_CAR : OTIS_CAR;
+  const body = carBody(spec);
+  const axis = onLeg(k, E);
+  const rail = lineThrough(
+    railLine(spec.top).map(([r, y]) => onLeg(k, onDiag(r, y))),
+    body.wheelbase,
+  );
+  const floor = onLeg(k, body.floor);
+  const pose = new Float64Array(4);
+  const floorY = (s: number): number => {
+    carPose(rail, s, pose);
+    return (pose[1] as number) + rotate3(floor, axis, (pose[3] as number) - body.level)[1];
+  };
+  const h = body.wheelbase / 2;
+  const end = (rail.arc[rail.arc.length - 1] as number) - h;
+  const solve = (y: number): number => {
+    let lo = h;
+    let hi = end;
+    if (floorY(lo) > y || floorY(hi) < y) {
+      throw new Error(
+        `lifts.ts: ${CAR_NAME[k]}'s lower floor cannot reach ${y} on its rail: with both axles on the track it ` +
+          `spans ${floorY(lo).toFixed(2)} to ${floorY(hi).toFixed(2)}. Lengthen the track or move the station.`,
+      );
+    }
+    for (let i = 0; i < 64; i++) {
+      const mid = (lo + hi) / 2;
+      if (floorY(mid) < y) lo = mid;
+      else hi = mid;
+    }
+    return (lo + hi) / 2;
+  };
+  const stops = STOPS[system].map(solve);
+  const first = stops[0] as number;
+  const last = stops[stops.length - 1] as number;
+  const s0 = first - h;
+  const line = cutLine(rail, s0, last + h);
+  const run: CarRun = {
+    name: CAR_NAME[k] as string,
+    ...line,
+    axis,
+    level: body.level,
+    at: solve(CAR_AT[k] as number) - s0,
+    stops: stops.map((s) => s - s0),
+    from: first - s0,
+    to: last - s0,
+    trip: Math.round(last - first),
+    dwell: LEG_DWELL,
+    phase: CAR_PHASE[k] as number,
+  };
+  carPose(run, run.at, pose);
+  const mid: Vec3 = [pose[0] as number, pose[1] as number, pose[2] as number];
+  const tip = (pose[3] as number) - body.level;
+  const turn = (v: Vec3): Vec3 => rotate3(onLeg(k, v), axis, tip);
+  const placed = body.blocks.map((b) => ({ at: add3(mid, turn(b.at)), x: turn(b.x), y: turn(b.y), size: b.size }));
+  return { run, blocks: placed };
+}
+
+/** The four leg cars, per quadrant target: each run and its body where the graph builds it. */
+const LEG_CARS = CAR_NAME.map((_, k) => legRun(k));
+
+/**
+ * An Edoux car's run: vertical, on the car's axis `s` in the shaft frame,
+ * its line from `lo` to `hi` as the floor height.
+ */
+function edouxRun(name: string, s: number, lo: number, hi: number, at: number, from: number, to: number): CarRun {
+  const line = lineThrough([inShaft(s, lo), inShaft(s, hi)], 0);
+  return { name, ...line, axis: T_HAT, level: Math.PI / 2, at, stops: [from, to], from, to, ...EDOUX_TRIP, phase: 0.2 };
 }
 
 /**
  * Every lift car in the tower and the run it rides — four in the legs and
  * the Edoux pair in the shaft.
  *
- * The Edoux two are ONE machine: counterweighted against each other, they
+ * THE LEG CARS ride their whole runs, bottom station to top, on the rail
+ * line as the track builds it: 54.6° to XXIV, then bending with the leg at
+ * every node — 60.7° to the 1st floor, 70.4° in panel 6, 75.5-77.1° in
+ * panels 7-10, 74.1° in panel 11 (SOURCES.md §11.3 sets these against the
+ * book's). Each is one rigid body on two axles, tipping as the chord
+ * between them turns:
+ * - the OTIS car is level where that chord stands at 65.6° (see
+ *   {@link carLevel}), which on this rail is just above the 1st floor
+ *   (1.6° back at its station there, the book's « sensiblement
+ *   horizontal »); it tips 11.0° back on the 54.6° run and
+ *   up to 11.5° forward in panel 10, the book's « 0,20 m par mètre » either
+ *   way;
+ * - the ROUX car is level on the 54.6° run, which carries all but the last
+ *   14 m of its travel. Above XXIV the model's rail follows the leg's inner
+ *   corner, which bends there — 60.7°, then 70.4° past the 1st floor — so
+ *   at its top station the car's chord stands at 66.3° and it is tipped
+ *   11.7° forward. The book reads its car level throughout; the rail is not
+ *   straightened to agree, since a straight rail to the 1st floor would
+ *   stand 1.05 nearer a than the 4.35 the inner faces' struts need (see
+ *   `RAIL_OFFSET`). SOURCES.md §11.8 keeps it open.
+ *
+ * THE EDOUX two are ONE machine: counterweighted against each other, they
  * leave the landing together and reach their far ends together, which is
  * why they share a phase and why both runs start at the landing (195.93)
  * where the passengers changed cars. The upper runs up to the 3rd floor,
  * the lower down to the 2nd, each 80.2 m — the pistons' stroke.
  */
 export const LIFT_CARS: readonly CarRun[] = [
-  ...CAR_NAME.map((name, k) => ({
-    name,
-    at: CAR_AT[k] as number,
-    from: LEG_RUN.from,
-    to: LEG_RUN.to,
-    step: legStep(PILES[k]?.lift === "roux" ? ROUX_CAR : OTIS_CAR, k),
-    ...LEG_TRIP,
-    phase: CAR_PHASE[k] as number,
-  })),
-  {
-    name: "edoux.nord",
-    at: FLOORS.landing + EDOUX.travel,
-    from: FLOORS.landing,
-    to: FLOORS.third,
-    step: UP,
-    ...EDOUX_TRIP,
-    phase: 0.2,
-  },
-  {
-    name: "edoux.sud",
-    at: FLOORS.landing - EDOUX.travel,
-    from: FLOORS.landing,
-    to: FLOORS.second,
-    step: UP,
-    ...EDOUX_TRIP,
-    phase: 0.2,
-  },
+  ...LEG_CARS.map((c) => c.run),
+  // The upper car: landing -> 3rd floor, built `travel` above the landing.
+  edouxRun("edoux.nord", -EDOUX.carAxis, FLOORS.landing, FLOORS.third, EDOUX.travel, 0, FLOORS.third - FLOORS.landing),
+  // The lower car: its line runs 2nd floor -> landing, and its run from the
+  // landing (the line's top) down to the 2nd, built `travel` below the landing.
+  edouxRun(
+    "edoux.sud",
+    EDOUX.carAxis,
+    FLOORS.second,
+    FLOORS.landing,
+    FLOORS.landing - FLOORS.second - EDOUX.travel,
+    FLOORS.landing - FLOORS.second,
+    0,
+  ),
 ];
 
 /** The lifts and the stairs. `quads` are the four quadrant targets. */
@@ -1292,11 +1549,7 @@ export function buildLifts(g: Graph, quads: NodeHandle, detail: Detail = {}): Pa
   const cars = [
     ...CAR_NAME.map((name, k) => ({
       name,
-      mesh: blocks(
-        g,
-        carId(name),
-        car(PILES[k]?.lift === "roux" ? ROUX_CAR : OTIS_CAR, CAR_AT[k] as number).map((b) => blockOnLeg(k, b)),
-      ),
+      mesh: blocks(g, carId(name), (LEG_CARS[k] as { blocks: Block[] }).blocks),
     })),
     ...edouxCars().map(({ name, block }) => ({ name, mesh: blocks(g, carId(name), [block]) })),
   ];

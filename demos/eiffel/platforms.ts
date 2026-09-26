@@ -665,7 +665,9 @@ const slot = (t0: number, t1: number, half: number): Well => ({
  *   (5.24 clear) from 26.6 to 31.3, chamfered to ±1.9 at the end [measured].
  *   PL-XVIII Fig. 3 (1:250) puts every lift station there, the Roux's and
  *   the Otis's alike: t 24.5-32.5, the car within ±2.2 [measured]. The V is
- *   stepped in three, the chamfers left decked.
+ *   stepped in three, the chamfers left decked. The end stands at 32.4,
+ *   within both readings of it: the rigid Otis car, tipped at its station
+ *   (`lifts.ts`), sweeps its outer end to 32.30 [measured].
  * - 2ND DECK, the Otis legs (quadrant targets 1 and 3) only: PL-XVI Fig. 12
  *   (1:200, on its printed column chain) marks piles 1 and 3 « Ascenseur
  *   inférieur » and leaves them open, piles 2 and 4 joisted: a neck 3.800
@@ -685,7 +687,7 @@ const LIFT_OPENINGS = {
     slot(25.3, 26.0, 1.4),
     slot(26.0, 26.52, 2.1),
     slot(26.52, 31.3, 2.62),
-    slot(31.3, 32.1, 1.9),
+    slot(31.3, 32.4, 1.9),
   ],
   second: [slot(10.3, 12.55, 2.02), slot(12.55, 12.97, 2.33), slot(12.97, 16.25, 2.665), slot(16.25, 16.83, 2.1)],
 } as const satisfies Record<string, readonly Well[]>;

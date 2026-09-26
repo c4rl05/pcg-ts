@@ -8,7 +8,8 @@
  *
  * ONE THING MOVES, AND IT IS THE PAGE'S. The six lift cars ride their
  * runs, slowly, at about a metre a second: four up and down the legs'
- * inclined tracks, and the Edoux pair counterweighted against each other
+ * inclined tracks, station to station, tipping as the rail bends under
+ * them, and the Edoux pair counterweighted against each other
  * in the shaft so one climbs toward the 3rd floor as the other drops
  * toward the 2nd. The graph settles where a car CAN be — each car is its
  * own `car.<name>` output, and `lifts.ts` publishes the run it rides as
@@ -86,7 +87,7 @@ import { attachGraphPanel } from "../../shared/graph/panel.js";
 import { createOverlay } from "../../shared/overlay.js";
 import { attachWordmark } from "../../shared/wordmark.js";
 import { buildEiffel } from "./graph.js";
-import { type CarRun, LIFT_CARS } from "./lifts.js";
+import { type CarRun, LIFT_CARS, carPose } from "./lifts.js";
 import { LOOK } from "./look.js";
 import { PART_CLASSES, type PartClass } from "./parts.js";
 import { NEUTRAL, createRig } from "./rig.js";
@@ -599,7 +600,7 @@ async function main(): Promise<void> {
         // tower into 4096² from the sun, which at the riveted depth is
         // millions of triangles a frame for the shadow of a 4 m box.
         mesh.castShadow = false;
-        cars.push({ mesh, run });
+        cars.push(carOn(mesh, run));
       }
     }
   }
@@ -660,8 +661,36 @@ async function main(): Promise<void> {
 // The lifts.
 // ------------------------------------------------------------------ //
 
-/** A car's mesh and the run it rides. */
-const cars: Array<{ mesh: Mesh; run: CarRun }> = [];
+/**
+ * A car's mesh, the run it rides, and the pose the graph built it at: the
+ * axis it pitches about, the point midway between its axles, and the
+ * chord's slope there. Every later pose is a turn and a move FROM that one.
+ */
+interface Car {
+  readonly mesh: Mesh;
+  readonly run: CarRun;
+  readonly axis: Vector3;
+  readonly home: Vector3;
+  readonly homeSlope: number;
+}
+
+const cars: Car[] = [];
+
+/** One pose, `carPose`'s output: x, y, z midway between the axles, then the chord's slope. */
+const POSE = new Float64Array(4);
+/** The built pose's point turned by the current turn: scratch, so a frame allocates nothing. */
+const TURNED = new Vector3();
+
+function carOn(mesh: Mesh, run: CarRun): Car {
+  carPose(run, run.at, POSE);
+  return {
+    mesh,
+    run,
+    axis: new Vector3(run.axis[0], run.axis[1], run.axis[2]),
+    home: new Vector3(POSE[0], POSE[1], POSE[2]),
+    homeSlope: POSE[3] as number,
+  };
+}
 
 /**
  * Where a car stands in its cycle at `t` seconds: 0 at its run's `from`,
@@ -689,13 +718,21 @@ const ease = (x: number): number => x * x * (3 - 2 * x);
 
 /**
  * Put every car where its run has it at `t` seconds. A car is a rigid
- * body over its whole run (`lifts.ts` explains why that holds), so this
- * is one offset along the run's own direction and never a rebuild.
+ * body, so this is a turn and a move and never a rebuild: the run's line
+ * gives the point between its axles and the chord's slope at the arc
+ * length the clock has reached (`carPose`, a binary search), and the mesh
+ * — built at the run's `at` — is turned about the run's axis by how far
+ * that slope has moved from the built one, about the built point, and
+ * carried onto the new point. On a leg the chord turns where the rail
+ * bends, so the car tips there as the real one did; in the shaft it never
+ * turns.
  */
 function moveCars(t: number): void {
-  for (const { mesh, run } of cars) {
-    const d = run.from + (run.to - run.from) * carPhase(run, t) - run.at;
-    mesh.position.set(run.step[0] * d, run.step[1] * d, run.step[2] * d);
+  for (const { mesh, run, axis, home, homeSlope } of cars) {
+    carPose(run, run.from + (run.to - run.from) * carPhase(run, t), POSE);
+    mesh.quaternion.setFromAxisAngle(axis, (POSE[3] as number) - homeSlope);
+    TURNED.copy(home).applyQuaternion(mesh.quaternion);
+    mesh.position.set((POSE[0] as number) - TURNED.x, (POSE[1] as number) - TURNED.y, (POSE[2] as number) - TURNED.z);
   }
 }
 
