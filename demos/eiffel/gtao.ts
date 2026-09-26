@@ -150,6 +150,7 @@ export function createGtao(
 function skipSeeThrough(pass: GTAOPass): void {
   const inner = pass as unknown as {
     _overrideVisibility?: () => void;
+    _restoreVisibility?: () => void;
     _visibilityCache?: Object3D[];
   };
   const stock = inner._overrideVisibility;
@@ -161,6 +162,10 @@ function skipSeeThrough(pass: GTAOPass): void {
     );
   }
   const scene = (pass as unknown as { scene: Scene }).scene;
+  // A mesh whose vertex shader the pass's one override material cannot
+  // know (the packed rivets, rivetPack.ts) draws the prepass in its own
+  // stand-in, `userData.prepassMaterial`, swapped in here and back after.
+  const swapped: Array<[Mesh, Material | Material[]]> = [];
   inner._overrideVisibility = function (this: typeof inner): void {
     stock.call(this);
     const cache = this._visibilityCache as Object3D[];
@@ -171,7 +176,25 @@ function skipSeeThrough(pass: GTAOPass): void {
         object.visible = false;
         cache.push(object);
       }
+      const own = object.userData.prepassMaterial as Material | undefined;
+      if ((object as Mesh).isMesh === true && own !== undefined && material !== undefined) {
+        swapped.push([object as Mesh, material]);
+        (object as Mesh).material = own;
+      }
     });
+  };
+  const restore = inner._restoreVisibility;
+  if (typeof restore !== "function") {
+    throw new Error(
+      "GTAO prepass patch: this three's GTAOPass no longer has _restoreVisibility. Re-read " +
+        "node_modules/three/examples/jsm/postprocessing/GTAOPass.js and update gtao.ts, or the " +
+        "packed rivets keep their prepass material in the main render.",
+    );
+  }
+  inner._restoreVisibility = function (this: typeof inner): void {
+    restore.call(this);
+    for (const [mesh, material] of swapped) mesh.material = material;
+    swapped.length = 0;
   };
 }
 

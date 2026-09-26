@@ -55,8 +55,11 @@
  *
  * THE RIVETS ARE INSTANCES, not mesh. `?rivets` (which implies `?laced`)
  * makes the cook put out `rivets*` outputs of instance batches — about 1.2 M
- * of them — and the page draws each batch as one instanced unit-size dome
- * whose instance matrix carries the rivet's true size. They receive the
+ * of them — and the page draws each batch as one instanced unit-size dome,
+ * each head packed as its seat, rotation and two scales (24 bytes, not a
+ * 64-byte matrix; rivetPack.ts) and rebuilt in the vertex shader, the
+ * hand's drive (heads.ts) folded in. `?cpuRivets` draws them as matrices
+ * instead, the way they were drawn before. They receive the
  * sun's shadow but do not cast it: a head 13 mm high throws nothing a
  * 4096 map over the fitted 180 x 342 m frustum (4-8 cm a texel) could
  * resolve, and casting would put
@@ -83,6 +86,7 @@ import {
   LatheGeometry,
   DoubleSide,
   FrontSide,
+  type InstancedBufferGeometry,
   type InstancedMesh,
   type Material,
   Mesh,
@@ -122,6 +126,16 @@ import { BALUSTER, CABOCHON_RISE, FITTING_ASSETS } from "./platforms.js";
 import { NEUTRAL, createRig } from "./rig.js";
 import { rivetClass } from "./spec.js";
 import { HEAD_DRIVE_ATTR, driveHead, driveMatrix } from "./heads.js";
+import {
+  PACKED_BYTES,
+  type RivetBatch,
+  type RivetFallback,
+  isFallback,
+  packRivets,
+  packedRivetMaterial,
+  packedRivetMesh,
+  packedShaderProblem,
+} from "./rivetPack.js";
 import { BufferAttribute, DataTexture, NearestFilter, SRGBColorSpace } from "three";
 import { FLAG_BANDS, FLAG_GRID, FLAG_POINTS, flagNormals, flagPose } from "./flag.js";
 
@@ -250,12 +264,17 @@ const RIVET_TONE = {
 } as const;
 const RIVET_SHOP = new MeshStandardMaterial({ ...RIVET_TONE.shop, metalness: 0.18 });
 const RIVET_SITE = new MeshStandardMaterial({ ...RIVET_TONE.site, metalness: 0.18 });
+/** The same two, for packed heads (rivetPack.ts). */
+const PACKED_SHOP = packedRivetMaterial(RIVET_SHOP);
+const PACKED_SITE = packedRivetMaterial(RIVET_SITE);
 
 /** Show the site rivets in their own tone, or lit up against the shop's. */
 function lightSiteRivets(on: boolean): void {
   const tone = on ? RIVET_TONE.lit : RIVET_TONE.site;
-  RIVET_SITE.color.set(tone.color);
-  RIVET_SITE.roughness = tone.roughness;
+  for (const m of [RIVET_SITE, PACKED_SITE]) {
+    m.color.set(tone.color);
+    m.roughness = tone.roughness;
+  }
 }
 
 /**
@@ -364,6 +383,94 @@ function driveHeads(list: readonly Mesh[]): void {
     // Its work is done: the shader never reads it, so it is not uploaded.
     inst.geometry.deleteAttribute(HEAD_DRIVE_ATTR);
   }
+}
+
+/**
+ * `?cpuRivets` draws every rivet the old way — a 4x4 matrix a head, driven
+ * on the CPU — instead of packed (rivetPack.ts): the comparison, and the
+ * way out if a three upgrade breaks the packed shader.
+ */
+const CPU_RIVETS = new URLSearchParams(location.search).has("cpuRivets");
+
+/**
+ * `?build` stages every instanced batch by date at load by permuting its
+ * instance matrices (scrub.ts), which a packed batch does not have: under
+ * it the rivets take the matrix path, and say so, until the staging reads
+ * packed seats too.
+ */
+const STAGED_RIVETS = new URLSearchParams(location.search).has("build");
+
+/** Whether this three's shaders take the packed edit, asked once (rivetPack.ts). */
+const SHADER_PROBLEM = packedShaderProblem();
+
+/** How the rivets were drawn: heads packed, heads on the CPU path and why, and the time it took. */
+const rivetPath = { packed: 0, packedBytes: 0, cpu: 0, ms: 0, fallbacks: [] as Array<RivetFallback & { output: string }> };
+
+/**
+ * One rivet output, drawn: each batch packed (24 bytes a head, driven,
+ * expanded in the vertex shader) where it can be, else as instanced
+ * matrices driven by {@link driveHeads}, the reason recorded. A site
+ * output (`rivetClass`: any share of it driven on site) draws in the site
+ * material either way; every other in the shop's.
+ */
+function drawRivets(name: string, collection: DataCollection, problems: string[]): Drawn {
+  const t0 = performance.now();
+  const site = rivetClass(name).share > 0;
+  const out: Mesh[] = [];
+  let instances = 0;
+  for (const item of collection) {
+    if (item.kind !== "instances") continue;
+    if (item.deviceBatches !== undefined) {
+      problems.push(`${name}: device-resident instances; this page draws CPU batches only`);
+      continue;
+    }
+    for (const batch of item.batches) {
+      const packed: ReturnType<typeof packRivets> = CPU_RIVETS
+        ? { reason: "cpu-requested", detail: "?cpuRivets" }
+        : STAGED_RIVETS
+          ? { reason: "staged-by-date", detail: "?build permutes instance matrices (scrub.ts)" }
+          : SHADER_PROBLEM !== undefined
+            ? { reason: "shader-anchor-missing", detail: SHADER_PROBLEM }
+            : packRivets(batch as RivetBatch);
+      try {
+        if (!isFallback(packed)) {
+          const mesh = packedRivetMesh(packed, ASSETS.rivet!.geometry, site ? PACKED_SITE : PACKED_SHOP);
+          mesh.name = name;
+          out.push(mesh);
+          rivetPath.packed += packed.count;
+          rivetPath.packedBytes += packed.count * PACKED_BYTES;
+          instances += packed.count;
+          continue;
+        }
+        if (packed.reason !== "cpu-requested") {
+          rivetPath.fallbacks.push({ output: name, ...packed });
+          console.info(`rivets: ${name} drawn on the CPU path`, { output: name, ...packed });
+        }
+        const drawn = toInstancedMeshes([batch], ASSETS);
+        for (const mesh of drawn) {
+          mesh.castShadow = false;
+          mesh.receiveShadow = true;
+          mesh.name = name;
+          if (site) mesh.material = RIVET_SITE;
+          out.push(mesh);
+          instances += mesh.count;
+          rivetPath.cpu += mesh.count;
+        }
+        driveHeads(drawn);
+      } catch (err) {
+        problems.push(`${name}: ${message(err)}`);
+      }
+    }
+  }
+  rivetPath.ms += performance.now() - t0;
+  return { meshes: out, triangles: 0, instances };
+}
+
+/** Instances a drawn rivet mesh carries, packed or not. */
+function headsIn(mesh: Mesh): number {
+  return (mesh as InstancedMesh).isInstancedMesh === true
+    ? (mesh as InstancedMesh).count
+    : (mesh.geometry as InstancedBufferGeometry).instanceCount;
 }
 
 /** Does this output carry fittings (globes, cabochons, balusters)? The cook names them `fittings.<name>`. */
@@ -828,7 +935,7 @@ async function main(): Promise<void> {
     // what moves with it is machinery and wears that; only a genuinely
     // unclassed output gets the grey.
     const material = !isCar(name) ? UNCLASSED : isMachine(name) ? MATERIALS.machinery : MATERIALS.platforms;
-    const drawn = draw(name, collection, material, box, problems);
+    const drawn = isRivets(name) ? drawRivets(name, collection, problems) : draw(name, collection, material, box, problems);
     if (!named) {
       overlay.addStat(`${name} (unclassed)`)(
         drawn.meshes.length === 0 ? "no mesh" : drawn.triangles.toLocaleString(),
@@ -836,10 +943,6 @@ async function main(): Promise<void> {
     }
     if (drawn.meshes.length === 0) continue;
     keep(name, drawn);
-    // A site rivet output in its own material (`rivetClass`: any share of
-    // it driven on site); every other rivet keeps the asset's, the shop's.
-    if (isRivets(name) && rivetClass(name).share > 0) for (const mesh of drawn.meshes) mesh.material = RIVET_SITE;
-    if (isRivets(name)) driveHeads(drawn.meshes);
     if (!named) present.push(name);
     if (isChain(name)) {
       const chain = LIFT_CHAINS.findIndex((c) => `chain.${c.name}` === name);
@@ -885,9 +988,20 @@ async function main(): Promise<void> {
   if (riveted > 0) {
     let site = 0;
     for (const [name, list] of meshes) {
-      if (isRivets(name) && rivetClass(name).share > 0) for (const m of list) site += (m as InstancedMesh).count;
+      if (isRivets(name) && rivetClass(name).share > 0) for (const m of list) site += headsIn(m);
     }
     overlay.addStat("site-driven")(`${site.toLocaleString()} (${((100 * site) / riveted).toFixed(0)} %)`);
+    // How the heads went to the GPU device: packed (24 bytes a head,
+    // rivetPack.ts), or as matrices (64) where a batch could not pack.
+    const mb = (b: number): string => (b / 1048576).toFixed(1);
+    const why = [...new Set(rivetPath.fallbacks.map((f) => f.reason))].join(", ");
+    const how =
+      rivetPath.cpu === 0
+        ? `packed, ${mb(rivetPath.packedBytes)} MB`
+        : rivetPath.packed === 0
+          ? `matrices, ${mb(64 * rivetPath.cpu)} MB${why === "" ? "" : ` (${why})`}`
+          : `${rivetPath.fallbacks.length} batch(es) as matrices: ${why}`;
+    overlay.addStat("rivet path")(`${how}, ${rivetPath.ms.toFixed(0)} ms`);
     lightSiteRivets(params.has("site"));
     overlay.addCheckbox("site rivets", params.has("site"), lightSiteRivets);
   }

@@ -132,6 +132,22 @@ export function driveMatrix(h: DrivenHead): number[] {
   return out;
 }
 
+/**
+ * The rotation part of {@link driveMatrix} as a unit quaternion, xyzw:
+ * the lean (about the plate-level axis square to its direction) after the
+ * turn about y, `qLean ⊗ qTurn`. The packed rivets (rivetPack.ts) carry
+ * the head as this rotation, its two scales and its seat instead of a 4x4.
+ */
+export function driveRotation(h: DrivenHead): [number, number, number, number] {
+  const [ax, az] = [Math.sin(h.leanToward), -Math.cos(h.leanToward)];
+  const sl = Math.sin(h.lean / 2);
+  const cl = Math.cos(h.lean / 2);
+  const st = Math.sin(h.turn / 2);
+  const ct = Math.cos(h.turn / 2);
+  // (ax sl, 0, az sl, cl) ⊗ (0, st, 0, ct).
+  return [ax * sl * ct - az * sl * st, cl * st, ax * sl * st + az * sl * ct, cl * ct];
+}
+
 /** `m` (column-major 4x4) applied to the point `v`. */
 export function applyMatrix(m: readonly number[], v: readonly [number, number, number]): [number, number, number] {
   return [0, 1, 2].map((i) => m[i]! * v[0] + m[4 + i]! * v[1] + m[8 + i]! * v[2] + m[12 + i]!) as [
