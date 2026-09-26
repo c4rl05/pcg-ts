@@ -1013,6 +1013,77 @@ Read from PL-XX, PL-XXI, PL-XXII, XXII bis, XXII ter, XXII quater, PL-XXIII, XXI
   - `spec.ts` `EDOUX_PLAN`: the Sud cable guides above the landing (s 4.487–4.877, t ±0.29; s 0.488–0.748, t ±0.13, z 195.93–280.98), and Co2 at its true Ø 0.43 below it (s 0.403–0.833 and 4.467–4.897, t ±0.215, where it lists ±0.17).
 - **Not built:** the Roux cylinders, Galle chains and valve gear under the ground; the Otis garant cables' runs through the pile, the 2nd-floor pulley pylon and the control cables; the Edoux distributors' racks and pipes, the machinists' shelter and glazed booth, the chape de réglage.
 
+### 11.10 The stairs: all 1,710 steps of 1889 (2026-09-26)
+
+`stairs.ts` builds the climb run by run to E1900-TXT p. 304's table (Hénocque, « Tableau des données relatives à la montée à pied »), and `lifts.ts` places it. Heights are z (cote − 33.50).
+
+- **The count** [sourced p. 304]: 347 to the 1st floor, 327 to the 2nd, 456 to the intermediate landing, 455 to the 3rd, 125 to the summit (334.01); cumulative 347, 674, 1,130, 1,585, **1,710**. The table's horizontal walk (119, 77, 102, 100, 39 m) is not modelled.
+- **What a step is.** PL-XXVIII Fig. 5, re-read at full resolution, prints T3 as « 23 marches de 0.15933 = 3.6646 » plus a 0.1720 step onto its landing, 3.8366, on « 23 marches de 250 » = 5.750 plus « 270 », 6.020; and T4 as « 19 marches de 0.15933 = 3.0272 » plus two steps of 0.1498, 3.3268, on « 0.235 », « 4.75 », « 0.235 », 5.220 [sourced]. The text gives e1's joining flights as « dix marches de 0,255 m et … onze contremarches de 0,207 m » [sourced p. 81]. So a plate's « marche » is a tread, and a climber's step is a riser: T3 has 24 risers and T4 21 [derived]. The model counts risers (and a ladder's rung pitches). It builds a tread at the top of every riser, except where the riser lands on a slab the model builds (a landing or a floor); that slab is then the step's tread.
+- **Before this section** (HEAD 352b0c4, one climb): 351 / 320 / 450 / 459 / 0 = 1,580 [measured on the built runs].
+
+| run | built | the plates fix | the count closes | riser |
+|---|---|---|---|---|
+| ground → 1st (piles 2 up, 4 down) | 28 + 4 × (24 + 24 + 21) + 24 + 19 = **347** | the running part, 276 (PL-XXVIII Fig. 5) | the start, 28 of 0.1721 (was 30), and the arrival's last flight, 19 of 0.1786 (was 21) | 0.158–0.179 |
+| 1st → 2nd, e1 (every leg) | 5 helices of 56, 51, 50, 46 and 61; 4 joining flights of 11; 19 to the floor = **327** | 11 × 0.207 joining, 19 × 0.178 last (§21) | the helices, 264 | 0.171–0.1745, against the printed 0.178 (3%) |
+| 2nd → landing, e2 | a helix of 435, then 16 + 5 = **456** | « 16 marches 2.92 », « 5 marches 0.91 », and the helix's top (225.60) | the helix | 0.1756 (1.4%) |
+| landing → 3rd, e3 | 314 + 13 + 128 = **455** | « 314 marches sur une hauteur de 54m88 »; the raccord's « 13 marches », « 2.327 » | the upper helix, to the 3rd floor | 0.1796 |
+| 3rd → summit | 15 + 12 + 9 + 13 + 22 + 30 + 16 + 8 = **125** | the campanile's « 22 marches de 178 = 3.916 » | the little stair, 15 of 0.172; the steep stairs and ladders, 88 of 0.205 | 0.172 / 0.178 / 0.20–0.21 |
+
+- **The ground stair's start and arrival** are the parts no plate counts: 347 − 276 = 71 risers over their 4.82 + 7.23 [sourced heights, p. 81].
+  - **The plates and the book disagree by four steps here.** Fig. 37 prints the start « 7.50 » long [sourced]: 30 treads of 0.250, 5.30 along the diagonal elevation (Fig. 1 draws 4.96–5.3 [measured]). At the plates' own riser the arrival takes 24 + 21, so the plates make 351 against p. 304's 347.
+  - The model keeps the book's count. It takes the four out of the two flights no plate counts, two each: the start becomes 28 of 0.1721, 7.00 long (4.95 in the elevation), and the last flight 19 of 0.1786, both 8–12% over the 0.15933 [open decision; they were 30 and 21].
+  - The arrival keeps the model's T3 and Pm, then 19 risers to the floor.
+- **e1's helices** carry 327 − 44 − 19 = 264 risers, shared by their rises (largest remainder). At the printed 0.178 they were 257, and the run 320 [derived].
+- **e2** carries 456 − 21 = 435 risers in the helix's 76.37 [derived]. Its foot, « 11 marches 1.974 » up to a platform at (151.16) (§20.3), is still not built: the helix starts on the floor.
+- **The service landings.** « De distance en distance de petits paliers correspondant à trois marches facilitent la montée » [sourced p. 81]: each landing takes three treads' angle and rises nothing.
+  - The interval is not printed. The sections sold when the stair was cut up in 1983 were « 2.60 » to a landing, « 14 marches » [sourced, secondary AUC-ARTC], so e2 and e3 take a landing every 14 risers [estimated for 1889]: 31 in e2, and 22 + 9 in e3.
+  - The helices turn more for them: about 15 treads' angle a turn, landings included.
+- **Where the 455 ends.** The row prints « Troisième plate-forme (terrasse) + 312,21 ». That is the level of the gallery and the apartment (« Niveau du plancher (312.21) du logement », PL-XIX Fig. 3), 2.58 over the 3rd floor (309.63).
+  - Counted to 312.21, the upper helix's 128 risers would be 0.1998 each, 14% over the rest of e3. Counted to 309.63 they are 0.1796, close to the helices' 0.178.
+  - And 149.23 → 229.43 and 229.43 → 309.63 are both 80.20: 456 and 455 on the same stair [derived; the verifier's observation].
+  - So the model reads the 455 to the 3rd floor, and counts the 2.58 above it in the 125 [inference].
+- **3rd floor → summit**, by the stairs PL-XIX Fig. 3 names on the elevation [sourced labels], in the order climbed:
+  1. « Escalier conduisant au logement de M. Eiffel », « un petit escalier tournant » [sourced p. 216], "1.60" [sourced PL-XIX Fig. 6], centred 1.85 out on +x [measured, §29]. It carries e3's turn on from the 3rd floor to the apartment's floor, 2.58, in 15 risers [derived].
+  2. « Escalier établi sur la Terrasse du logement de M. Eiffel ». The terrace is the gallery (« galerie à ciel ouvert, placée à la cote + 312,21 », p. 216).
+     - PL-XIX Fig. 8 (the section EF at the roof, 60 px/m on « 10.680 »), labelled « Escaliers d'accès au Campanile », draws two flights. The first runs on the gallery along the pavilion's +x wall, « 2.420 » long [sourced] and « 54 » wide [sourced, read as 0.54], at x 5.37–5.95, z +1.50 to −0.92, climbing toward −z [measured]. At its head is a landing outside the roof's edge. The second runs from there over the roof, diagonally inward, to the foot of stair 3 [measured; its rise estimated].
+     - Fig. 6's 0.62 × 1.00 on the gallery, « Escalier conduisant au Campanile », is only the part of the first flight under Fig. 6's cutting plane (the verifier's reading; the first build took it for the whole flight, 67° steep).
+     - The model: 12 risers up the wall from the balcony's deck (2.43, `summit.ts`) to the roof's top (4.85) over 2.42, at 45°, 0.06 clear of the roof's edge; a 0.58 landing at its head; 9 risers over the roof to a 0.60 square landing at stair 3's foot, at 47°.
+  3. « Escalier établi sur le côté de la poutre en diagonale continue ».
+     - PL-XIX Fig. 5 (the section GH, 59.9 px/m on « 10.680 ») draws it hatched beside the continuous girder, labelled « Escalier conduisant à l'escalier du campanile », « 2.85 » long. Its centre line is 0.98 off the girder's axis toward pile 4 (+t), at s about 1.0–3.8 [measured].
+     - The model runs it from the landing at its foot up and inward to the girders' top in 13 risers, at 43°. The roof flight and this one share the roof-to-girder-top 4.505 in 9 + 13, at one pitch.
+  4. « Escalier du Campanile ».
+     - PL-XV Fig. 2: « 22 marches de 178 = 3.916 » round the core, from the girders' top to the « Palier », "1.980" across, with the landing's railing « 1.200 » and « Porte d'entrée dans le cylindre de l'escalier 2.00 » at the landing [sourced].
+     - Treads are 0.62: the 0.99 envelope less the core's 0.35, kept 0.02 off its sheet [derived].
+     - It starts at 45° between +s and +t, toward stair 3's head, and turns 1.5 to the landing [estimated]. The landing is 1.00 of arc, railed at 1.200.
+  5. The « échelle verticale en fer » inside the core (p. 79), "300" wide in the "700" [sourced PL-XV Fig. 2; the "300" is its width, not a pitch].
+     - It runs from the landing's door to the lantern's floor, 30 rungs, hung 0.2 off the axis opposite the door [estimated].
+     - Its part below the landing, reached by the plate's lower door, is not built.
+  6. The lantern's ladders [sourced PL-XV Fig. 1 labels and chain]:
+     - the « Échelle mobile », from the lantern's floor (329.020) to the cupola's floor (332.360): 16 rungs, leaning from 0.9 to 0.55 off the axis toward −s [estimated];
+     - the cupola's floor itself, 0.792 × 2.44 (§29.3), built as the ladders' landing and laid long across s, so the mobile ladder arrives at its edge;
+     - the « Échelle » on up to the top platform (334.015), beside the "600" at the crown: plumb, drawn about 0.2 off the axis [measured PL-XV Fig. 1], built 0.15 off toward +s and 0.34 wide so it passes the model's 0.60 crown ring [estimated], 8 rungs. The top platform has no hatch in the model, so its deck is the last rung.
+  - The 125, less the campanile's 22 and the little stair's 15, leaves 88 over the steep stairs' and ladders' 18.04 m. That is one pitch, 0.205, shared per flight by height (12, 9 + 13, 30, 16, 8) [derived: the count]. No plate gives a pitch; the core's ladder rungs measure about 0.199 apart on PL-XV Fig. 1 (47 px at 236 px/m, the verifier's reading).
+  - The climb steps down 0.15 from the apartment's floor (2.58, where the little stair arrives) to the balcony (2.43, `summit.ts`, from PL-VII); the text puts the gallery at 312.21, the apartment's level. The step down is not counted.
+- **Frame and rails.**
+  - Straight flights: two stringers (the ground stair's « U de 350 mm », 0.25 elsewhere [estimated]) and a hand rail each side on posts at most 1.2 apart. The rail is 1.00 over the nosing line on the ground stair [sourced PL-XXVIII « 1.000 »] and 0.90 elsewhere [estimated].
+  - Spirals: a newel (the diameter less two treads; the campanile's is `summit.ts`'s core) and the outer rail 0.90 over the treads, on a post every fourth tread.
+  - Ladders: two flat stiles, and round rungs built as 0.025 boxes.
+  - The steep stairs 2 and 3 have stringers only.
+- **What it costs.** Measured on the lifts' graph cooked alone, HEAD against this, interleaved four times. The stairs do not vary with depth, so plain, `?laced` and `?rivets` gain the same.
+  - Stairs: 36,852 → 51,828 triangles. Rails: 12,600 → 19,136. The lifts' mesh classes: 85,708 → 107,220 (+21,512).
+  - Cook: 44–52 → 49–70 ms after the first run, about +8 ms.
+  - Tread boxes: 332 × 2 legs, 326 × 4, 454, 455 and 121, 2,998 in all. One climb's 1,688 treads, plus its 22 steps onto slabs, make the 1,710.
+- **What the stairs needed of the other parts** (each the least change that lets a stair through):
+  - `summit.ts`: the lantern's balcony floor is a ring from the soubassement's wall out, where a full decagon closed the lantern's room at the balcony's level, 0.775 over the lantern's floor; the cupola and the stair core are open at both ends (their caps closed the core's top, which the ladder climbs out of, and the cupola's foot, which the mobile ladder climbs through); the dome's two crown rungs across the axis are gone, because the core rises through the « carré » the arches leave round it [sourced p. 79].
+  - `platforms.ts`: the 1st floor's opening for the ground stair's arrival is t 31.84–36.91, s −1.65…−0.45 (was 31.34, −1.58…−0.52): the landing moved 0.50 out with the shorter last flight, and the new 1.00 rails and posts stand 0.60 either side of T3's lane.
+- **Clearance** (`tests/eiffelStairsClearance.test.ts`): 6,581 stair boxes (every tread, stringer, post, newel, landing, stile and rail segment, on every leg) against 515,702 triangles of every other part, exactly (box against triangle), and every lift car and every body that slides with one swept over its whole run against the stair boxes. Static: none. Swept: none, except one exemption, open and bounded: at their 2nd-floor station (s ≥ 127 on their runs) the Otis cars' outer ends (piles 1 and 3) pass through the last metre of e1's last flight, 18 box meetings. That flight stood there before this section: HEAD's e1 top flight is built by the same code, on the leg's diagonal, and §21's "never a stair" was a sweep to 50.4 only. This section adds its rails, posts and stringers to the same place; PL-XX Fig. 3's section, which it was read from, projects onto the diagonal, so the real flight stood to one side of the car. PL-XIX Fig. 7's 2nd-floor plan draws a short flight along the face near c in pile 3, which may be its arrival; not read far enough to rebuild e1's top here.
+- **Held** by `tests/eiffelStairs.test.ts` (the count per run and in all, the flights the plates fix, every foot and head on a floor, landing or tread within a step, the cooked treads) and `tests/eiffelStairsClearance.test.ts` (the clearance).
+- **Superseded:**
+  - §11.6's "Per 11 m panel the text counts 23, 23 and 19 steps of 0.25 × 0.16": 23 and 19 are treads, and the risers are 24 and 21.
+  - §11.7's "Not built: e3's « escalier de raccord » and the stairs above the 3rd floor".
+  - §20.3's "e3's top": e3 ends at the 3rd floor and the little stair goes on.
+  - §29.3's not-built stairs and the cupola's inner floor, which is now the ladders' landing.
+
 ---
 
 ## 12. The campanile re-read (PL-XIX Figs 3–13, PL-VII Fig. 4)

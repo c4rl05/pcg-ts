@@ -2504,9 +2504,12 @@ function dome(
   // an X in every panel. Round the section, station j meets j + 1 (the -l
   // side, the extrados, the +l side) and 3 meets 0 (the intrados).
   const j = (s: number) => s % 4;
+  // At the crown the extrados' and intrados' rungs would cross the axis,
+  // where the stair's core rises through the « carré » the arches leave
+  // round it [sourced p. 79]: none there.
   const lacing = merge(g, "domeLacing", [
-    edges(ribs, "Rungs", 1, 0, (s) => j(s) < 3),
-    edges(ribs, "RungsIn", -3, 0, (s) => j(s) === 3),
+    edges(ribs, "Rungs", 1, 0, (s, k) => j(s) < 3 && !(k === n && j(s) === 1)),
+    edges(ribs, "RungsIn", -3, 0, (s, k) => j(s) === 3 && k !== n),
     edges(ribs, "LaceA", 1, 1, (s) => j(s) < 3),
     edges(ribs, "LaceB", -1, 1, (s) => j(s) > 0),
     edges(ribs, "LaceInA", 3, 1, (s) => j(s) === 0),
@@ -2718,7 +2721,23 @@ function lantern(g: Graph, crownY: number): NodeHandle[] {
   // The floor round the core's head, which carries it [sourced p. 80].
   const floorPlan = polygon(10, rBase - 0.01, 0).map(([x, , z]): [number, number] => [x, z]);
   out.push(slabs(g, "lanternFloor", slabWithWells(floorPlan, [{ s: [-0.36, 0.36], t: [-0.36, 0.36] }], lv.lanternFloor - L.floorDepth, lv.lanternFloor)));
-  out.push(prism(g, "balconyFloor", 10, [balconyY - 0.1, balconyY], rBalcony));
+  // The balcony's deck is a ring from the soubassement's wall out: inside
+  // it the lantern's room rises from its own floor, 0.775 lower, where the
+  // ladders go on up (`stairs.ts`). Until 2026-09-26 a full decagon closed
+  // the room at the balcony's level.
+  const ring = (r0: number, r1: number): Slab[] => {
+    const i0 = polygon(10, r0, 0);
+    const o0 = polygon(10, r1, 0);
+    return i0.map((_, k) => {
+      const k1 = (k + 1) % 10;
+      const xz: Array<[number, number]> = [i0[k]!, o0[k]!, o0[k1]!, i0[k1]!].map((p) => [p[0], p[2]]);
+      let area = 0;
+      for (let j = 0; j < 4; j++) area += xz[j]![0] * xz[(j + 1) % 4]![1] - xz[(j + 1) % 4]![0] * xz[j]![1];
+      if (area > 0) xz.reverse();
+      return { outline: xz.map(([x, z]): Vec3 => [x, balconyY - 0.1, z]), depth: 0.1 };
+    });
+  };
+  out.push(slabs(g, "balconyFloor", ring(rBase, rBalcony)));
   out.push(prism(g, "balconyParapet", 10, [balconyY, balconyY + L.parapet], rBalcony, false));
   const arcSteps = 8;
   const consoles = placedLattice(
@@ -2769,12 +2788,15 @@ function lantern(g: Graph, crownY: number): NodeHandle[] {
   // The sphere ends at the ring; the platform's structure stands on it.
   const cupola = profile.map(([y, r]) => [Math.min(y, top), r] as const);
   out.push(
+    // Open at both ends: the lantern's ladders rise through it to the
+    // crown ring (`stairs.ts`), and the platform's deck closes the top.
     prism(
       g,
       "cupola",
       L.cupolaSides,
       cupola.map(([y]) => y),
       cupola,
+      false,
     ),
   );
 
@@ -2867,12 +2889,15 @@ export function buildSummit(g: Graph, detail: Detail = {}): Parts {
 
   // The stair core, from the girders' crossing up through the dome's crown
   // and the terrace to the lantern's floor, which it carries.
+  // Open at both ends: its ladder comes out at the top into the lantern
+  // (`stairs.ts`), and its foot stands on the girders' plated top.
   const ladder = prism(
     g,
     "ladderCylinder",
     LADDER.sides,
     [girderTop, lanternLevels().lanternFloor],
     circum(LADDER.diameter, LADDER.sides),
+    false,
   );
   const summit: NodeHandle[] = [
     ...gallery(g),

@@ -1056,13 +1056,15 @@ const LANDING = {
  * to 19.09, 0.35 either side of it; opened from 15.12 and 0.40 either
  * side, since its stringers start at 15.18 and graze 0.35 (§24). The
  * ground stair's last flight, in piles 4 and 2, straddling the diagonal,
- * through the 1st floor's at t
- * 31.34 to 36.91, s -1.58 to -0.52 [measured on the cooked stairs by the
- * lifts unit, §21]. Neither is on the plates read.
+ * through the 1st floor's at t 31.84 to 36.91, s -1.65 to -0.45: its
+ * arrival's landing, 1.30 long, and the flight's treads, stringers, posts
+ * and 1.00 rails 0.60 either side of T3's lane (`stairs.ts`; SOURCES.md
+ * §11.10; until 2026-09-26 t 31.34, s -1.58 to -0.52, for a flight of 21
+ * risers without rails). Neither is on the plates read.
  */
 const STAIR_OPENINGS = {
   e1: { s: 0, t: 17.105, along: 0.8, across: 3.97 },
-  ground: { s: -1.05, t: 34.125, along: 1.06, across: 5.57 },
+  ground: { s: -1.05, t: 34.375, along: 1.2, across: 5.07 },
 } as const satisfies Record<string, Well>;
 
 /** A well centred on pile 4's diagonal, from t0 to t1 along it, `half` either side. */

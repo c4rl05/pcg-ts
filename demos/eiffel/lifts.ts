@@ -92,33 +92,12 @@
  * about 1.0 wide, from the 2nd floor up [estimated, measured on Plate I];
  * the outboard posts are placed from that reading.
  *
- * THE STAIRS [sourced PL-XX legend, PL-XXVIII, E1900-TXT]:
- * - ground → 1st floor: « Un escalier de 1m00 de large … Il y en a un dans
- *   la pile 2 et un dans la pile 4; les piles 1 et 3 n'ont pas d'escalier
- *   partant du rez-de-chaussée ». PL-XXVIII Fig. 5 draws one panel of it,
- *   11.00 high, from the landing P4 at a node: two flights T3 of « 23
- *   marches » of 0.250 inward, « 5.750 » each, with the landing Pm 1.00
- *   between, the landing Pa 1.300, then T4, « 19 marches », back out to the
- *   next P4; risers « 0.15933 » [sourced]. Each panel's P4 stands 7.820 in
- *   from the one below, the leg's own lean, « pente de 1m407 pour 1m00 »,
- *   its outer end 2.05 in from c [sourced Fig. 1]. T3 and T4 run in two
- *   lanes side by side straddling the diagonal, over the car's path (Fig.
- *   1 bis); one flight starts it from the ground (see `groundToFirst`).
- * - 1st → 2nd floor: « Escalier tournant de 1m60 de diamètre … il y en a
- *   quatre semblables, un dans chaque pile ». One helix per panel near the
- *   outer corner c, one through panels 10 and 11 (PL-XX Figs 3–4), joined
- *   by straight flights of 11 risers of 0.207 and treads of 0.255; treads
- *   0.64 wide, risers 0.178 [sourced text]. Their plan position in the leg
- *   [estimated].
- * - 2nd → 3rd floor (service only): e2 « escalier tournant conduisant du 2e
- *   étage à l'étage intermédiaire », Ø 1.600, and e3 from the landing to
- *   the 3rd, Ø 1.680 [sourced PL-XX Fig. 2]. PL-XX's section projects both
- *   onto the car line; the plans place them beside it, on the Ouest side
- *   (PL-XIX Figs 7, 9, 14): e2 under the upper car's berth, stopping 3.83
- *   below the landing and coming up by two straight flights through an
- *   opening off the car's plan; e3 on the landing beside the lower car's
- *   well, shifted toward the axis at an « escalier de raccord » in panels
- *   26-27 where the shaft grows too narrow for it (see `shaftStairs`).
+ * THE STAIRS are `stairs.ts`'s, all 1,710 steps of 1889 from the ground
+ * to the summit (E1900-TXT p. 304): the ground stair in piles 2 and 4
+ * (PL-XXVIII), e1 in every leg, e2 and e3 in the shaft, and the little
+ * stair, the campanile's spiral and the ladders above the 3rd floor. This
+ * module only places them: the leg runs copied onto their legs, the others
+ * as built, each run's treads as their own node.
  *
  * THE MACHINERY [sourced PL-XX to PL-XXIII quater, E1900-TXT pp. 127-192;
  * see each section]: the Roux chains, every piece placed on its circuit,
@@ -129,7 +108,7 @@
  * car, and the page moves it from the car's travel (`LIFT_FOLLOWERS`,
  * `LIFT_CHAINS`).
  *
- * Everything here is boxes except the helices' hand rails, which are paths
+ * Everything here is boxes except the stairs' hand rails, which are paths
  * copied BEFORE they are skinned, and the round machinery (cylinders,
  * shafts, pistons, tanks), which is swept tubes. The boxes carry their
  * local face normals as `normal`, which `rotateAttrs` turns at every
@@ -157,6 +136,7 @@ import {
 import { type Vec3, box, copyToQuadrants, indexTable, merge, skin } from "./lattice.js";
 import type { Detail, Parts } from "./parts.js";
 import { FLOORS, NODES, PILES, profileAt } from "./spec.js";
+import { stairRuns } from "./stairs.js";
 
 type Quat = readonly [number, number, number, number];
 
@@ -704,307 +684,6 @@ function polylines(g: Graph, id: string, lines: ReadonlyArray<readonly Vec3[]>):
   g.connect(place, "out", key, "in");
   g.connect(key, "out", paths, "in");
   return paths;
-}
-
-// ---------------------------------------------------------------------------
-// Stairs
-
-/** A tread's thickness and a landing's [estimated]. */
-const TREAD = 0.05;
-const LANDING = 0.1;
-
-/**
- * A straight flight from `p0` (the foot of its first riser, on its centre
- * line) to `p1` (its top): `steps` treads, each at its riser's top, the
- * last level with `p1`, and two stringers.
- */
-function run(p0: Vec3, p1: Vec3, width: number, steps: number): Block[] {
-  const h: Vec3 = [p1[0] - p0[0], 0, p1[2] - p0[2]];
-  const x = unit3(h);
-  const across = cross3(x, UP);
-  const going = Math.hypot(h[0], h[2]) / steps;
-  const out: Block[] = [];
-  for (let i = 1; i <= steps; i++) {
-    const c = add3(p0, mul3(h, (i - 0.5) / steps));
-    const y = p0[1] + ((p1[1] - p0[1]) * i) / steps;
-    out.push({ at: [c[0], y - TREAD / 2, c[2]], x, y: UP, size: [going + 0.03, TREAD, width] });
-  }
-  // A stringer is a flat bar 0.25 deep [estimated]: widen the square member.
-  for (const side of [-1, 1]) {
-    const off = add3(mul3(across, (side * width) / 2), [0, -0.1, 0]);
-    const s = member(add3(p0, off), add3(p1, off), 0.06, UP);
-    out.push({ ...s, size: [s.size[0], 0.25, 0.06] });
-  }
-  return out;
-}
-
-/** A straight flight from (r0, y0) to (r1, y1) along the diagonal, `l` across it. */
-function flight(r0: number, y0: number, r1: number, y1: number, l: number, width: number, steps: number): Block[] {
-  return run(onDiag(r0, y0, l), onDiag(r1, y1, l), width, steps);
-}
-
-/** A landing: its top at `at`, `along` on the horizontal `x`, `across` beside it. */
-function pad(at: Vec3, x: Vec3, along: number, across: number): Block {
-  return { at: [at[0], at[1] - LANDING / 2, at[2]], x, y: UP, size: [along, LANDING, across] };
-}
-
-/**
- * A spiral stair round a vertical axis: treads of `tread` width radially,
- * risers of about `riser`, from y0 to y1, turning `turns` times from the
- * angle `start` (0 = along `frameX`, a quarter turn = along `frameZ`), a
- * newel, and the outer hand rail's points.
- */
-function helix(
-  axis: (y: number) => Vec3,
-  frameX: Vec3,
-  frameZ: Vec3,
-  y0: number,
-  y1: number,
-  diameter: number,
-  tread: number,
-  turns: number,
-  start: number,
-  riser = 0.178,
-): { blocks: Block[]; rail: Vec3[] } {
-  const steps = Math.max(1, Math.round((y1 - y0) / riser));
-  const rise = (y1 - y0) / steps;
-  const outer = diameter / 2;
-  const dPhi = (turns * 2 * Math.PI) / steps;
-  const dir = (phi: number): Vec3 => add3(mul3(frameX, Math.cos(phi)), mul3(frameZ, Math.sin(phi)));
-  const mid = outer - tread / 2;
-  const out: Block[] = [];
-  for (let i = 1; i <= steps; i++) {
-    const phi = start + (i - 0.5) * dPhi;
-    const y = y0 + i * rise;
-    // Wedge treads as boxes, a little wider than the wedge at mid-radius so
-    // they overlap [estimated].
-    out.push({
-      at: add3(axis(y - TREAD / 2), mul3(dir(phi), mid)),
-      x: dir(phi),
-      y: UP,
-      size: [tread, TREAD, Math.max(0.2, mid * dPhi * 1.4)],
-    });
-  }
-  // The newel: the core tube, about 1.60 − 2 × 0.64 = 0.32 [derived].
-  const core = Math.max(0.16, diameter - 2 * tread);
-  const a0 = axis(y0);
-  out.push({ at: [a0[0], (y0 + y1 + 1) / 2, a0[2]], x: frameX, y: UP, size: [core * 0.7, y1 - y0 + 1, core * 0.7] });
-  const rail: Vec3[] = [];
-  const per = 12;
-  const n = Math.max(2, Math.round(turns * per));
-  for (let j = 0; j <= n; j++) {
-    const phi = start + (turns * 2 * Math.PI * j) / n;
-    const y = y0 + ((y1 - y0) * j) / n + 0.9;
-    rail.push(add3(axis(y), mul3(dir(phi), outer)));
-  }
-  return { blocks: out, rail };
-}
-
-/**
- * The turns of a helix of `steps` risers, about 15 to the turn, that starts
- * at the angle `start` and must end at the angle `end`.
- */
-function turnsBetween(steps: number, start: number, end: number): number {
-  const frac = ((((end - start) / (2 * Math.PI)) % 1) + 1) % 1;
-  return Math.max(frac === 0 ? 1 : frac, Math.round(steps / 15 - frac) + frac);
-}
-
-/** e1's joining flights: 11 risers of 0.207, treads 0.255 [sourced E1900-TXT p. 81]. */
-const E1_FLIGHT = { risers: 11, riser: 0.207, tread: 0.255 } as const;
-/**
- * e1's last helix runs through panels 10 and 11 to about 112.3 (PL-XX Fig.
- * 3), and a straight flight takes it on inward to the 2nd floor, drawn
- * 3.2-3.4 high and about 5 long at 81.5 px/m [measured]: 19 of the
- * helices' 0.178 risers, 3.38, on the joining flights' 0.255 treads, 4.85.
- */
-const E1_TOP_RISERS = 19;
-
-/**
- * The 1st → 2nd floor stair in one leg (e1, the same in all four): a helix
- * of Ø 1.60 per panel 6-9 and one through panels 10-11 (PL-XX Fig. 3), set
- * in from the outer corner c by 2.4 along the diagonal where the leg is
- * narrowest, at the top of the helix's panel [estimated], each at least
- * 3.0 inside the one below it. Straight flights of 11 risers join them,
- * inward along the diagonal, with treads of 0.255 [sourced counts]: where
- * two axes are nearer than the flight's run plus a diameter, it leaves the
- * lower helix and meets the upper one off the diagonal, at the angle that
- * makes its run 2.805 [derived].
- */
-function firstToSecond(): { blocks: Block[]; rails: Vec3[][] } {
-  const ys = NODES.map((n) => n.y).filter((y) => y >= 57.4 && y <= 100.6 + 1e-6);
-  const RISE = E1_FLIGHT.risers * E1_FLIGHT.riser;
-  const RUN = E1_FLIGHT.risers * E1_FLIGHT.tread;
-  const top = FLOORS.second - E1_TOP_RISERS * 0.178;
-  const OUTER = 0.8;
-  // Each helix's rise, and the height where the leg is narrowest for it.
-  const spans: Array<readonly [number, number, number]> = [];
-  for (let k = 0; k + 1 < ys.length; k++) {
-    const y0 = k === 0 ? FLOORS.first : (ys[k] as number) + RISE / 2;
-    spans.push([y0, (ys[k + 1] as number) - RISE / 2, ys[k + 1] as number]);
-  }
-  spans.push([(ys[ys.length - 1] as number) + RISE / 2, top, top]);
-  const axes: number[] = [];
-  for (let k = 0; k < spans.length; k++) {
-    const want = cornerC((spans[k] as readonly [number, number, number])[2]) - 2.4;
-    axes.push(k === 0 ? want : Math.min(want, (axes[k - 1] as number) - 3.0));
-  }
-  // The angle off the diagonal at which each joining flight leaves and
-  // meets the helices: 0 when the axes are far enough apart.
-  const beta = axes.slice(1).map((r, k) => {
-    const gap = (axes[k] as number) - r;
-    return Math.acos(Math.min(1, Math.max(0, (gap - RUN) / (2 * OUTER))));
-  });
-  const out: Block[] = [];
-  const rails: Vec3[][] = [];
-  const last = axes.length - 1;
-  for (let k = 0; k <= last; k++) {
-    const r = axes[k] as number;
-    const [y0, y1] = spans[k] as readonly [number, number, number];
-    const start = k === 0 ? 0 : (beta[k - 1] as number);
-    const end = k === last ? Math.PI : Math.PI - (beta[k] as number);
-    const steps = Math.max(1, Math.round((y1 - y0) / 0.178));
-    const h = helix((y) => onDiag(r, y), U, E, y0, y1, 1.6, 0.64, turnsBetween(steps, start, end), start);
-    out.push(...h.blocks);
-    rails.push(h.rail);
-    if (k < last) {
-      const b = beta[k] as number;
-      const rNext = axes[k + 1] as number;
-      const l = OUTER * Math.sin(b);
-      out.push(
-        ...flight(r - OUTER * Math.cos(b), y1, rNext + OUTER * Math.cos(b), y1 + RISE, l, 0.64, E1_FLIGHT.risers),
-      );
-    }
-  }
-  // Off the last helix's inner side, straight on to the 2nd floor.
-  const rTop = (axes[last] as number) - OUTER;
-  out.push(...flight(rTop, top, rTop - E1_TOP_RISERS * E1_FLIGHT.tread, FLOORS.second, 0, 0.64, E1_TOP_RISERS));
-  return { blocks: out, rails };
-}
-
-/**
- * The ground → 1st floor stair of piles 2 and 4, PL-XXVIII [sourced unless
- * noted]. Each 11.00 panel of the leg, node to node, holds one repeat of
- * Fig. 5: the landing P4 at the node, 1.300; T3, « 23 marches » of 0.250
- * inward, its run « 6.020 » with the nosing and its rise « 3.8366 »; the
- * landing Pm, 1.00; T3 again; the landing Pa, 1.300; then T4, « 19
- * marches », back out « 5.220 » and up « 3.3268 » to the next node's P4,
- * 7.820 further in (Fig. 1). Risers « 0.15933 »: 24, 24 and 21 of them
- * fill the panel [derived]. The running part is « comprise entre … (39.90)
- * et … (83.90) », nodes XXVIII to XXIV; above it a T3 to a Pm and one
- * flight on inward to the 1st floor (Fig. 2's 45-degree turns are not
- * built).
- *
- * WHERE IN THE LEG. Along the diagonal each P4's outer end stands « 2.05 »
- * in from c's axis (Fig. 1, Fig. 5 « 2.050 »; « 12.642 » closes on it).
- * Across it the lanes straddle the diagonal (Fig. 1 bis, the section RS at
- * 1:200, 77.9 px/m on its « 3.927 »): T3's axis 1.05 to one side, T4's
- * 0.92 to the other, 1.00 wide each, over the car's path [measured]. Which
- * side is which follows the section read as a plan from above with c to
- * the left, pile 2 Est: T3 toward pile 3 Sud, T4 toward pile 1 Nord
- * [estimated hand]; pile 4 takes the same, turned (the Nota: « la
- * disposition dans la pile 4 est la même, le départ au Rez-de-Ch.
- * excepté », sending pile 4's start to PL-XVIII Fig. 5, not read here: its
- * start is pile 2's [estimated]). The innermost landing Pa then
- * stands 3.8 above the rail line, square to it (3.71 under its plate), and
- * the car (see `ROUX_CAR`, `TROUGH`) reaches 3.30.
- *
- * THE START (Fig. 1): ONE straight flight from « Sol du Rez-de-Chaussée
- * (35.08) » up to the first P4, at « (39.90) », rise « 4.82 » [sourced],
- * coming up outward to it: 30 risers of 0.1607. The elevation along the
- * diagonal draws its run about 5.0-5.3 [measured, 78.6 px/m], where 29 or
- * 30 of the stair's 0.250 treads need 7.25-7.5: so in plan it runs at 45°
- * to the diagonal, parallel to a face, 7.5 long and 5.30 in the elevation
- * [derived]. It lands on P4's inner edge in T4's lane, from the T4 side
- * [estimated side]. The masonry pedestal of `platforms.ts` covers its
- * foot: the plate starts it at 1.58, under the pedestal's top.
- */
-function groundToFirst(): Block[] {
-  const S = {
-    p4: 1.3,
-    pm: 1.0,
-    pa: 1.3,
-    t3: { risers: 24, rise: 3.8366, run: 6.02 },
-    t4: { risers: 21, rise: 3.3268, run: 5.22 },
-    fromC: 2.05,
-    laneT3: -1.05,
-    laneT4: 0.92,
-    width: 1.0,
-    ground: 1.58,
-    start: { risers: 30, going: 0.25 },
-  } as const;
-  const l0 = Math.min(S.laneT3, S.laneT4) - S.width / 2;
-  const l1 = Math.max(S.laneT3, S.laneT4) + S.width / 2;
-  const out: Block[] = [];
-  // A landing from rOut inward by `along`, over both lanes or T3's alone.
-  // Near c the leg's faces close in at 45°, and at a node their horizontal
-  // struts with them: 0.80 square on the faces' planes, leaning with the
-  // face, they reach 0.44 in from the plane at a landing's top. A landing
-  // keeps 0.50 clear of those planes (in plan, square to them), so a P4
-  // loses the two corners the faces take, 0.08 of T4's lane and 0.21 of
-  // T3's at its outer end [derived]; the plate's P4 hangs from its own
-  // « Poutre P4 » there.
-  const FACE = 0.5 * SQ2;
-  const box2 = (rIn: number, rOut: number, y: number, lo: number, hi: number) => {
-    if (rOut - rIn > 1e-6 && hi - lo > 1e-6) {
-      out.push(pad(onDiag((rIn + rOut) / 2, y, (lo + hi) / 2), U, rOut - rIn, hi - lo));
-    }
-  };
-  const landing = (rOut: number, y: number, along: number, both: boolean) => {
-    const lo = both ? l0 : S.laneT3 - S.width / 2;
-    const hi = both ? l1 : S.laneT3 + S.width / 2;
-    const c = cornerC(y);
-    // The half-width the faces leave at a distance d in from c.
-    const room = (r: number) => c - r - FACE;
-    const rIn = rOut - along;
-    const w = room(rOut);
-    box2(rIn, rOut, y, Math.max(lo, -w), Math.min(hi, w));
-    if (lo < -w) box2(rIn, Math.min(rOut, c - FACE + lo), y, lo, -w);
-    if (hi > w) box2(rIn, Math.min(rOut, c - FACE - hi), y, w, hi);
-  };
-  const t3 = (rFrom: number, y: number) =>
-    flight(rFrom, y, rFrom - S.t3.run, y + S.t3.rise, S.laneT3, S.width, S.t3.risers);
-  const t4 = (rFrom: number, y: number) =>
-    flight(rFrom, y, rFrom + S.t4.run, y + S.t4.rise, S.laneT4, S.width, S.t4.risers);
-  const nodes = NODES.map((n) => n.y).filter((y) => y >= 6.4 - 1e-6 && y <= 50.4 + 1e-6);
-  const first = nodes[0] as number;
-  // The start: one flight at 45° in plan, up and out onto the first P4's
-  // inner edge in T4's lane.
-  const rLand = cornerC(first) - S.fromC - S.p4;
-  const reach = (S.start.risers * S.start.going) / SQ2;
-  const lSide = Math.sign(S.laneT4);
-  out.push(
-    ...run(
-      onDiag(rLand - reach, S.ground, S.laneT4 + lSide * reach),
-      onDiag(rLand, first, S.laneT4),
-      S.width,
-      S.start.risers,
-    ),
-  );
-  // The running part: one repeat per panel.
-  for (let k = 0; k < nodes.length; k++) {
-    const y = nodes[k] as number;
-    const r0 = cornerC(y) - S.fromC;
-    landing(r0, y, S.p4, true);
-    if (k === nodes.length - 1) break;
-    const rPm = r0 - S.p4 - S.t3.run;
-    out.push(...t3(r0 - S.p4, y));
-    landing(rPm, y + S.t3.rise, S.pm, false);
-    out.push(...t3(rPm - S.pm, y + S.t3.rise));
-    const rPa = rPm - S.pm - S.t3.run;
-    landing(rPa, y + 2 * S.t3.rise, S.pa, true);
-    out.push(...t4(rPa, y + 2 * S.t3.rise));
-  }
-  // The arrival: a T3 to a Pm, then straight on to the 1st floor.
-  const yTop = nodes[nodes.length - 1] as number;
-  const rTop = cornerC(yTop) - S.fromC - S.p4;
-  out.push(...t3(rTop, yTop));
-  const rPm = rTop - S.t3.run;
-  landing(rPm, yTop + S.t3.rise, S.pm, false);
-  const lastRisers = Math.round((FLOORS.first - yTop - S.t3.rise) / 0.15933);
-  const rEnd = rPm - S.pm - lastRisers * 0.25;
-  out.push(...flight(rPm - S.pm, yTop + S.t3.rise, rEnd, FLOORS.first, S.laneT3, S.width, lastRisers));
-  landing(rEnd, FLOORS.first, S.p4, false);
-  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -1625,142 +1304,6 @@ const EDOUX_FOLLOWERS: readonly Follower[] = [
     }),
   ),
 ];
-
-/**
- * The service stairs in the shaft, placed from the plans (PL-XIX Fig. 14,
- * the landing, 1:200 at 81.3 px/m on its printed 11.337; Fig. 7, the 2nd
- * floor; Fig. 9, the 3rd floor at 79 px/m on its 16.560), as (s, t): s
- * toward pile 3 Sud, t toward pile 4 Ouest.
- */
-const SHAFT_STAIRS = {
-  /**
-   * e2, Ø 1.600 with 0.600 treads [sourced PL-XX Figs 2-3], at (-2.8, 1.3):
-   * under the upper car's berth, between its cylinders, the same on three
-   * plans within 0.3 [measured]. Its helix stops at (225.60), 3.83 under
-   * the landing, where « 16 marches 2.92 » and « 5 marches 0.91 » take over
-   * [sourced PL-XX Fig. 2]. PL-XX draws the first flight end-on, so it runs
-   * across the car line, Ouest; Fig. 14 has the landing open there, « 2.62 »
-   * × « 2.45 », at s -2.73 … -0.11, t 3.40 … 5.85, labelled « Escalier de
-   * l'étage intermédiaire au 2e étage » [sourced; measured]. So the 16 run
-   * Ouest under the floor, turn on a landing by the edge girder, and the 5
-   * come back up into that opening [the dog-leg and its 0.184 and 0.2
-   * treads estimated].
-   */
-  e2: { s: -2.8, t: 1.3, diameter: 1.6, tread: 0.6, top: FLOORS.landing - 3.83 },
-  e2Flights: { up: 16, upRise: 2.92, upGoing: 0.184, back: 5, backGoing: 0.2, turn: 0.9, width: 0.6 },
-  /**
-   * e3, Ø 1.680 [sourced PL-XX Figs 1-2], at (3.0, 3.3) on the landing,
-   * beside the lower car's well and 0.36 clear of it [measured, Fig. 14;
-   * PL-XX's section draws it over the car only because it projects onto the
-   * car line]. Built at t 3.2, inside the reading's ±0.1: at node III the
-   * plan bracing's diamond side stands at t 4.175, and 3.3 would put its
-   * hand rail on the chord [derived]. « 314 marches sur une hauteur de
-   * 54m88 » to the « escalier de raccord (Panneau 26-27) », « 13 marches »,
-   * « 2.327 » [sourced PL-XX Figs 1-2], which shifts it toward the axis:
-   * to u 1.3 on PL-XX Fig. 1,
-   * and on the 3rd floor's plan the helix stands at (1.36, 1.29)
-   * [measured; Fig. 9 labels that helix for the stair on up to the
-   * apartment, and the model takes e3's upper helix to stand under it].
-   */
-  e3: { s: 3.0, t: 3.2, diameter: 1.68, tread: 0.64, steps: 314, rise: 54.88 },
-  e3Raccord: { risers: 13, rise: 2.327 },
-  e3Upper: { s: 1.36, t: 1.29 },
-} as const;
-
-/** e2 and e3: the service helices in the shaft, and their straight flights. */
-function shaftStairs(): { blocks: Block[]; rails: Vec3[][] } {
-  const out: Block[] = [];
-  const rails: Vec3[][] = [];
-  // Angle a in the shaft's frame: 0 toward +s, a quarter turn toward +t.
-  const dirAt = (a: number): Vec3 => add3(mul3(S_HAT, Math.cos(a)), mul3(T_HAT, Math.sin(a)));
-
-  // e2: up from the 2nd floor, leaving its helix going Ouest (+t) from
-  // the helix's +s side.
-  const { e2, e2Flights: f } = SHAFT_STAIRS;
-  const e2Steps = Math.round((e2.top - FLOORS.second) / 0.178);
-  const e2Start = Math.PI / 2;
-  const e2Helix = helix(
-    (y) => inShaft(e2.s, y, e2.t),
-    S_HAT,
-    T_HAT,
-    FLOORS.second,
-    e2.top,
-    e2.diameter,
-    e2.tread,
-    turnsBetween(e2Steps, e2Start, 0),
-    e2Start,
-  );
-  out.push(...e2Helix.blocks);
-  rails.push(e2Helix.rail);
-  const walk = e2.diameter / 2 - e2.tread / 2;
-  const laneUp = e2.s + walk;
-  const laneBack = laneUp + f.width;
-  const tFoot = e2.t + 0.15;
-  const tTurn = tFoot + f.up * f.upGoing;
-  const yTurn = e2.top + f.upRise;
-  out.push(...run(inShaft(laneUp, e2.top, tFoot), inShaft(laneUp, yTurn, tTurn), f.width, f.up));
-  out.push(pad(inShaft((laneUp + laneBack) / 2, yTurn, tTurn + f.turn / 2), T_HAT, f.turn, 2 * f.width));
-  out.push(
-    ...run(
-      inShaft(laneBack, yTurn, tTurn),
-      inShaft(laneBack, FLOORS.landing, tTurn - f.back * f.backGoing),
-      f.width,
-      f.back,
-    ),
-  );
-
-  // e3: up from the landing, entering on its -s side, to the raccord; the
-  // raccord runs straight along the line of the two axes, tangent to both
-  // helices on their walking line; the upper helix goes on to the 3rd.
-  const { e3, e3Raccord: rc, e3Upper } = SHAFT_STAIRS;
-  const riser = e3.rise / e3.steps;
-  const yRaccord = FLOORS.landing + e3.rise;
-  const yUpper = yRaccord + rc.rise;
-  const ds = e3Upper.s - e3.s;
-  const dt = e3Upper.t - e3.t;
-  // Walking counter-clockwise, the tangent at angle a is (-sin a, cos a):
-  // the angle whose tangent runs from the lower axis toward the upper.
-  const toward = Math.atan2(-ds, dt);
-  const e3Start = Math.PI;
-  const lower = helix(
-    (y) => inShaft(e3.s, y, e3.t),
-    S_HAT,
-    T_HAT,
-    FLOORS.landing,
-    yRaccord,
-    e3.diameter,
-    e3.tread,
-    turnsBetween(e3.steps, e3Start, toward),
-    e3Start,
-    riser,
-  );
-  const upperSteps = Math.round((FLOORS.third - yUpper) / riser);
-  const upper = helix(
-    (y) => inShaft(e3Upper.s, y, e3Upper.t),
-    S_HAT,
-    T_HAT,
-    yUpper,
-    FLOORS.third,
-    e3.diameter,
-    e3.tread,
-    Math.max(1, Math.round(upperSteps / 15)),
-    toward,
-    riser,
-  );
-  out.push(...lower.blocks, ...upper.blocks);
-  rails.push(lower.rail, upper.rail);
-  const mid = e3.diameter / 2 - e3.tread / 2;
-  const side = mul3(dirAt(toward), mid);
-  out.push(
-    ...run(
-      add3(inShaft(e3.s, yRaccord, e3.t), side),
-      add3(inShaft(e3Upper.s, yUpper, e3Upper.t), side),
-      e3.tread,
-      rc.risers,
-    ),
-  );
-  return { blocks: out, rails };
-}
 
 // ---------------------------------------------------------------------------
 
@@ -3498,18 +3041,32 @@ export function buildLifts(g: Graph, quads: NodeHandle, detail: Detail = {}): Pa
     ),
   ];
 
-  const e1 = firstToSecond();
-  const shaft = shaftStairs();
-  const stairs = merge(g, "liftStairs", [
-    copyToQuadrants(g, "liftStairE1", blocks(g, "liftStairE1Leg", e1.blocks), quads, ["normal"]),
-    copyToQuadrants(g, "liftStairGround", blocks(g, "liftStairGroundLeg", groundToFirst()), even, ["normal"]),
-    blocks(g, "liftStairShaft", shaft.blocks),
-  ]);
+  // The stairs, run by run (`stairs.ts`): the leg runs built in pile 4's
+  // leg and copied onto theirs, the others in place. Each run's treads are
+  // their own node, so what the graph cooks can be counted.
+  const legTargets = { ground: even, e1: quads } as const;
+  const stairNodes: NodeHandle[] = [];
+  const railNodes: NodeHandle[] = [];
+  for (const r of stairRuns()) {
+    const name = r.key[0]!.toUpperCase() + r.key.slice(1);
+    const treads = blocks(g, `liftStair${name}Treads`, r.parts.treads);
+    const frame = blocks(g, `liftStair${name}Frame`, [...r.parts.frame, ...r.parts.landings]);
+    const rails = polylines(g, `liftRails${name}`, r.parts.rails);
+    if (r.legs === "world") {
+      stairNodes.push(treads, frame);
+      railNodes.push(rails);
+    } else {
+      const to = legTargets[r.key as keyof typeof legTargets];
+      stairNodes.push(
+        copyToQuadrants(g, `liftStair${name}TreadsLegs`, treads, to, ["normal"]),
+        copyToQuadrants(g, `liftStair${name}FrameLegs`, frame, to, ["normal"]),
+      );
+      railNodes.push(copyToQuadrants(g, `liftRails${name}Legs`, rails, to));
+    }
+  }
+  const stairs = merge(g, "liftStairs", stairNodes);
   // Hand rails: paths copied before they are skinned.
-  const rails = merge(g, "liftRails", [
-    copyToQuadrants(g, "liftRailsE1", polylines(g, "liftRailsE1Leg", e1.rails), quads),
-    polylines(g, "liftRailsShaft", shaft.rails),
-  ]);
+  const rails = merge(g, "liftRails", railNodes);
   return {
     girders: [tracks, guides],
     platforms: [stairs, skin(g, "liftRailSkin", rails, 0.025)],
