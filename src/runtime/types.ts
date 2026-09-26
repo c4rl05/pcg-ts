@@ -571,6 +571,55 @@ export interface LevelDef {
    */
   readonly cookOutputs?: readonly string[];
   /**
+   * Which cells can hold anything at all: a cell this returns `false` for
+   * is never wanted, so it is never cooked, stored or counted as pending,
+   * however near the viewpoint it lies. Called with the cell's coordinate
+   * and its box (`min`/`max` as a cell's context carries them) while the
+   * wanted set is built, so it must be cheap, and — like everything a
+   * level reads — a pure function of the cell: the same cell answers the
+   * same way every update, or a cell could be wanted, cooked and dropped
+   * again as the answer flickered.
+   *
+   * For a level whose content is ONE BOUNDED OBJECT in an unbounded grid —
+   * a tower cooked a cube at a time — most cells round the viewpoint are
+   * sky: each one cooked would cost a full pass of the level's graph to
+   * put out nothing, and the World would keep its empty record. A filter
+   * that is too eager drops real content with no error, so a level that
+   * declares one should hold it to the content it filters (a test that
+   * every element of a whole cook lies in a cell the filter accepts).
+   *
+   * A FILTER ON A CHILD LEVEL MUST ACCEPT EVERY PARENT OF A CELL IT
+   * ACCEPTS. A child cell cooks only once its parent cell has, so a kept
+   * child under a rejected parent waits for ever: it is counted in
+   * `pending` on every update and never cooked. A filter that is monotone
+   * under containment (a box meeting a region keeps every box that holds
+   * it) cannot do this.
+   *
+   * REFUSED on an unbounded level (its one cell is always wanted) and on a
+   * `"path"` level (a sector has an arc range, not a box).
+   */
+  readonly cellFilter?: CellFilter;
+  /**
+   * Whether the World keeps a cell's outputs once `onCellReady` has
+   * delivered them. Default `true`: `getCell`/`cells` serve them, and a
+   * child level reads them as `ctx.parent.outputs`.
+   *
+   * `false` is for a host that turns each cell into its own buffers the
+   * moment it is ready — a renderer's meshes, a worker's transfer — and
+   * reads nothing back: the World then keeps only the cell's record
+   * (coordinate, cook stamp, staleness, residency), and its outputs are
+   * the host's alone to keep or drop. Without it a streamed level holds a
+   * second copy of every resident cell for the whole of its residency
+   * (measured on the eiffel demo's laced level: about 600 MB for 80
+   * cells, beside meshes the page had already built from them).
+   *
+   * After delivery such a cell's `outputs` is an empty record, everywhere
+   * the World hands it out — including to a child level's bind as
+   * `ctx.parent.outputs` — so a level whose CHILD reads its parent's
+   * outputs must keep them.
+   */
+  readonly keepOutputs?: boolean;
+  /**
    * Wire one cell's context into the graph before it cooks — the only
    * channel through which cell data enters the graph. Every level defines
    * exactly one of `bind` (imperative, in-place) or {@link bindPatches}
@@ -653,6 +702,17 @@ export interface LevelDef {
    */
   bindPatches?(ctx: CellContext): readonly ParamPatch[] | BindPatches;
 }
+
+/**
+ * `LevelDef.cellFilter`'s question: can this cell hold anything? Given the
+ * cell's coordinate and its box, exactly as its context would carry them
+ * (`min`/`max` are [x, z] on an `"xz"` level, [x, y, z] on an `"xyz"` one).
+ */
+export type CellFilter = (cell: {
+  readonly coord: CellCoord2 | CellCoord3;
+  readonly min: readonly number[];
+  readonly max: readonly number[];
+}) => boolean;
 
 /**
  * Narrow a cell context to its `"xz"` form, or say why it is not one.

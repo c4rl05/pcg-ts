@@ -105,7 +105,10 @@ import { createFpsMeter } from "../../shared/fps.js";
 import { attachGraphPanel } from "../../shared/graph/panel.js";
 import { createOverlay } from "../../shared/overlay.js";
 import { attachWordmark } from "../../shared/wordmark.js";
+import { bandsFrom } from "./bands.js";
+import { type Bands, startBands } from "./bandsView.js";
 import { buildEiffel } from "./graph.js";
+import { repairZeroNormals } from "./normals.js";
 import {
   CHAIN_ASSETS,
   CHAIN_PIECES,
@@ -130,6 +133,7 @@ import { rivetClass } from "./spec.js";
 import { HEAD_DRIVE_ATTR, driveHead, driveMatrix } from "./heads.js";
 import {
   PACKED_BYTES,
+  RIVET_ASSET,
   type RivetBatch,
   type RivetFallback,
   isFallback,
@@ -672,6 +676,15 @@ const buildSlot = overlay.addSlot();
 /** The scrubber, once `?build` has staged the tower; the loop plays it. */
 let scrubber: ReturnType<typeof attachScrubber> | undefined;
 
+// DETAIL BY DISTANCE (`?bands`, or `?bands=<laced m>,<rivets m>` for the
+// two radii): the plain tower cooked whole as ever, and the laced and
+// riveted depths cooked round the camera by the runtime's World, off the
+// page's thread, a cube at a time (bands.ts, bandsView.ts). Not with
+// `?build`, whose staging dates the whole cook's meshes.
+const BANDS = new URLSearchParams(location.search).has("bands") && !BUILD;
+/** The streamed depths, once the plain tower is drawn; the loop ticks them. */
+let bands: Bands | undefined;
+
 // THE DETAIL LEVELS, as links rather than a control: each is a plain URL
 // (the page reads it once, at load, and cooks at that depth), so a level
 // can be bookmarked or sent, and each link carries the current camera pose
@@ -681,11 +694,12 @@ const DETAILS = [
   { key: "", label: "skeleton", title: "solid members: the panels and their rules" },
   { key: "laced", label: "laced", title: "every web member as four angles laced in X" },
   { key: "rivets", label: "rivets", title: "laced, and every rivet as an instance" },
+  { key: "bands", label: "by distance", title: "laced and riveted round the camera, cooked as it moves" },
 ] as const;
 
 function currentDetail(): string {
   const params = new URLSearchParams(location.search);
-  return params.has("rivets") ? "rivets" : params.has("laced") ? "laced" : "";
+  return BANDS ? "bands" : params.has("rivets") ? "rivets" : params.has("laced") ? "laced" : "";
 }
 
 const detailSlot = overlay.addSlot();
@@ -781,42 +795,6 @@ function report(problems: readonly string[]): void {
   for (const p of problems) console.error(`eiffel: ${p}`);
 }
 
-/**
- * Give every vertex that arrived with a ZERO normal its triangle's face
- * normal. A mesh source that writes no `normal` (meshPrimitive's boxes),
- * merged into a class with one that does, has its normals zero-filled by
- * the merge, and a lit material shades (0, 0, 0) black — see PLAN.md's
- * backlog. The modules write their own normals where they can; this is
- * the page's net for what slips through, and it leaves every real normal
- * as the graph wrote it.
- */
-function repairZeroNormals(geometry: BufferGeometry): void {
-  const normal = geometry.getAttribute("normal");
-  const position = geometry.getAttribute("position");
-  if (normal === undefined || position === undefined) return;
-  const index = geometry.index;
-  const vertexOf = (corner: number): number => (index === null ? corner : index.getX(corner));
-  const corners = index === null ? position.count : index.count;
-  const a = new Vector3();
-  const b = new Vector3();
-  const c = new Vector3();
-  let repaired = 0;
-  for (let t = 0; t + 2 < corners; t += 3) {
-    const v = [vertexOf(t), vertexOf(t + 1), vertexOf(t + 2)] as const;
-    const zero = v.filter(
-      (i) => normal.getX(i) === 0 && normal.getY(i) === 0 && normal.getZ(i) === 0,
-    );
-    if (zero.length === 0) continue;
-    a.fromBufferAttribute(position, v[0]);
-    b.fromBufferAttribute(position, v[1]);
-    c.fromBufferAttribute(position, v[2]);
-    const n = c.sub(b).cross(a.sub(b)).normalize();
-    for (const i of zero) normal.setXYZ(i, n.x, n.y, n.z);
-    repaired += zero.length;
-  }
-  if (repaired > 0) normal.needsUpdate = true;
-}
-
 function triangles(mesh: Mesh): number {
   const g = mesh.geometry;
   return (g.index ? g.index.count : g.getAttribute("position").count) / 3;
@@ -893,9 +871,10 @@ async function main(): Promise<void> {
   // `?rivets=full` adds the built-up uprights' rows as built (about 120,000
   // heads more, `Detail.fullRivets`).
   const params = new URLSearchParams(location.search);
-  const rivets = params.has("rivets");
-  const fullRivets = params.get("rivets") === "full";
-  const laced = params.has("laced") || rivets;
+  // `?bands` cooks the plain tower here and streams the rest (bands.ts).
+  const rivets = !BANDS && params.has("rivets");
+  const fullRivets = rivets && params.get("rivets") === "full";
+  const laced = !BANDS && (params.has("laced") || rivets);
   // `?plateSet=` and `?plateEdge=` are the crossing plates' two by-eye
   // dimensions (`CrossPlate` in parts.ts), in metres, while they are being
   // settled: the plate's depth under the corner angles and its half-width
@@ -1113,6 +1092,40 @@ async function main(): Promise<void> {
     const { ms, bytes } = erection.stats;
     overlay.addStat("dated")(`${ms.toFixed(0)} ms, ${(bytes / 1024).toFixed(0)} KB`);
     window.pcgEiffelBuild = { setDay: (iso) => scrubber?.set(buildDayParam(iso)) };
+  }
+
+  // `?bands`: the finer depths, streamed over the plain tower just drawn.
+  if (BANDS) {
+    bands = startBands({
+      scene,
+      spec: bandsFrom(params.get("bands")),
+      crossPlate,
+      materials: MATERIALS,
+      meshes,
+      rivetMaterial: (name) => (rivetClass(name).share > 0 ? PACKED_SITE : PACKED_SHOP),
+      rivetHead: ASSETS.rivet!.geometry,
+      drawFallback: (name, transforms, drive) => {
+        const batch = {
+          assetId: RIVET_ASSET,
+          count: transforms.length / 16,
+          transforms,
+          ...(drive === undefined ? {} : { attributes: { [HEAD_DRIVE_ATTR]: drive } }),
+        };
+        const drawn = toInstancedMeshes([batch], ASSETS);
+        for (const mesh of drawn) {
+          mesh.castShadow = false;
+          mesh.receiveShadow = true;
+          if (rivetClass(name).share > 0) mesh.material = RIVET_SITE;
+        }
+        driveHeads(drawn);
+        return drawn;
+      },
+      shadowsChanged: () => {
+        renderer.shadowMap.needsUpdate = true;
+      },
+      stat: (label) => overlay.addStat(label),
+    });
+    window.pcgEiffelBands = bands;
   }
 
   report(problems);
@@ -1477,6 +1490,7 @@ renderer.setAnimationLoop(() => {
   // looking up a leg from the ground is outside of.
   if (walk.active) walk.tick();
   else if (!driven) controls.update();
+  bands?.tick(camera);
   if (plates?.active === true) plates.render();
   else rig.render();
   tickFps();

@@ -1379,7 +1379,7 @@ export interface PolylineWalk {
 export function polylineWalks(
   geo: Geometry,
   nodeType: string,
-  onEmpty: "throw" | "none" = "throw",
+  onEmpty: "throw" | "none" | "emptyInput" = "throw",
 ): PolylineWalk[] {
   const v2p = geo.vertexToPoint;
   const starts = geo.primVertexStart;
@@ -1407,7 +1407,18 @@ export function polylineWalks(
   // when the geometry declares one -- in one place. A caller that
   // mirrored those two clauses locally would be a second copy free to
   // drift from this one.
-  if (walks.length === 0 && onEmpty === "throw") throw noPolylines(geo, nodeType);
+  // `onEmpty: "emptyInput"` IS FOR THE NODES THAT HAVE AN ANSWER FOR
+  // NOTHING AT ALL. A geometry with no points is not a cloud with no path
+  // in it: it is what a partitioned cook hands a path node whenever its
+  // cell holds none of the paths — the filter upstream kept nothing, and
+  // was right to — and "walk no paths" has the answer "no walks", so the
+  // node puts out nothing. Points that should have been a path and are
+  // not still get the refusal. Opt-in rather than the default because a
+  // node has to be checked to put out a well-formed EMPTY output before it
+  // may say so; `emptyPaths.test.ts` holds each one that does.
+  if (walks.length === 0 && (onEmpty === "throw" || (onEmpty === "emptyInput" && geo.pointCount > 0))) {
+    throw noPolylines(geo, nodeType);
+  }
   return walks;
 }
 
@@ -1418,9 +1429,15 @@ export function polylineWalks(
  * `primtype` attribute at all has every multi-vertex primitive treated as
  * a polyline). Throws — naming `nodeType` — when the input has no usable
  * polyline, because a path node with no path is always an authoring
- * mistake worth reporting loudly.
+ * mistake worth reporting loudly — except, under `onEmpty: "emptyInput"`,
+ * an input with no points at all, which is nothing to walk rather than a
+ * mistake (see {@link polylineWalks}) and yields no tables.
  */
-export function polylineArcTables(geo: Geometry, nodeType: string): PolylineArcTable[] {
+export function polylineArcTables(
+  geo: Geometry,
+  nodeType: string,
+  onEmpty: "throw" | "emptyInput" = "throw",
+): PolylineArcTable[] {
   const P = geo.attrs.point.get("P");
   if (!P || P.type !== "f32" || P.tupleSize < 3) {
     throw new Error(`${nodeType}: input needs a point attribute "P" (f32, tupleSize >= 3)`);
@@ -1428,7 +1445,7 @@ export function polylineArcTables(geo: Geometry, nodeType: string): PolylineArcT
   const pd = P.data;
   const ps = P.tupleSize;
   const tables: PolylineArcTable[] = [];
-  for (const walk of polylineWalks(geo, nodeType)) {
+  for (const walk of polylineWalks(geo, nodeType, onEmpty)) {
     const { prim: p, points, closed } = walk;
     const nv = points.length;
     const nSeg = nv - 1;

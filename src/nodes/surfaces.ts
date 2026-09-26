@@ -431,7 +431,8 @@ export const sweepProfile = standardNode<
       suggestion: "inUv",
     });
 
-    const tables = polylineArcTables(src, "sweepProfile");
+    // An empty input (a partitioned cook's empty cell) sweeps to an empty mesh.
+    const tables = polylineArcTables(src, "sweepProfile", "emptyInput");
     const profile =
       profileName === "circle"
         ? circleProfile(params.sides)
@@ -564,7 +565,7 @@ export const sweepProfile = standardNode<
       nTris += bands * profile.bandA.length * 2 + (caps ? 2 * profile.cap.length : 0);
       layouts.push({ table, dirs, rings, bands, caps, pointBase, capStart, capEnd });
     }
-    if (nTris === 0) {
+    if (nTris === 0 && tables.length > 0) {
       throw new Error(
         `sweepProfile: none of the input's ${tables.length} path(s) can be swept — a path needs at least 2 distinct points and at least one segment of nonzero length. Drop the degenerate paths upstream, or move the points apart.`,
       );

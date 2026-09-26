@@ -689,7 +689,8 @@ export const pathResample = standardNode<
     // message is the carry's, which names the wrong param and offers the
     // wrong fix — see requireSampleArcSlot.
     requireSampleArcSlot(geo.attrs.primitive, params);
-    const tables = polylineArcTables(geo, "pathResample");
+    // An empty input (a partitioned cook's empty cell) resamples to nothing.
+    const tables = polylineArcTables(geo, "pathResample", "emptyInput");
     // Only needed to name a spacing that would fit the budget below.
     const totalLength = tables.reduce((sum, table) => sum + table.length, 0);
     // Resolved ONCE, before the walk, and only in the mode that reads it:
@@ -1086,7 +1087,8 @@ export const pathSegments = standardNode<
       );
     }
     const geo = requireGeometry(inputs, "in", "pathSegments");
-    const tables = polylineArcTables(geo, "pathSegments");
+    // An empty input (a partitioned cook's empty cell) has no segments.
+    const tables = polylineArcTables(geo, "pathSegments", "emptyInput");
     const radius = requireTuple(
       await resolveOnMaybeGpu(gpu, geo, "point", params.radius, seed, "pathSegments", "radius"),
       [1],
@@ -1116,7 +1118,7 @@ export const pathSegments = standardNode<
         if (table.segLen[k] > 0) total++;
       }
     }
-    if (total === 0) {
+    if (total === 0 && tables.length > 0) {
       throw new Error(
         `pathSegments: every segment of the input's ${tables.length} path(s) has zero length (all of a path's points sit at the same position), so there is nothing to draw; move the points apart, or drop the degenerate paths upstream`,
       );

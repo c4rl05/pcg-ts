@@ -22,12 +22,14 @@ import { buildLegs } from "./legs.js";
 import { buildLifts } from "./lifts.js";
 import { type Detail, assemble, joinParts } from "./parts.js";
 import { buildPlatforms } from "./platforms.js";
+import { makeRegional } from "./region.js";
 import { buildShaft } from "./shaft.js";
 import { buildSummit } from "./summit.js";
 
 /** Build the skeleton graph, at the given depth of detail. */
 export function buildEiffel(seed = 1889, detail: Detail = {}): Graph {
   const g = new Graph(seed);
+  if (detail.region === true) makeRegional(g);
   g.setMeta({
     title: "Eiffel Tower — skeleton",
     description:

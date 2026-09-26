@@ -254,6 +254,9 @@ function cellKey(coord: CellCoord): string {
   return coord.join(",");
 }
 
+/** What a `keepOutputs: false` level's cells hold once the host has had them. */
+const NO_OUTPUTS: CellOutputs = Object.freeze({}) as CellOutputs;
+
 /** Normalize -0 (a Math.ceil/floor artifact) to +0 in cell coordinates. */
 function nz(n: number): number {
   return n === 0 ? 0 : n;
@@ -863,6 +866,33 @@ export class World {
         );
       }
     });
+    // keepOutputs is a flag; anything else is a mistake worth naming.
+    levels.forEach((def, i) => {
+      if (def.keepOutputs !== undefined && typeof def.keepOutputs !== "boolean") {
+        throw new WorldValidationError(
+          `level ${i} ("${def.name}"): keepOutputs must be true or false, got ${JSON.stringify(def.keepOutputs)}; omit it to keep every cell's outputs (the default)`,
+        );
+      }
+    });
+    // A cell filter needs a cell with a box to judge.
+    levels.forEach((def, i) => {
+      if (def.cellFilter === undefined) return;
+      if (typeof def.cellFilter !== "function") {
+        throw new WorldValidationError(
+          `level ${i} ("${def.name}"): cellFilter must be a function (cell) => boolean, got ${typeof def.cellFilter}`,
+        );
+      }
+      if (def.cellSize === "unbounded") {
+        throw new WorldValidationError(
+          `level ${i} ("${def.name}"): declares cellFilter on an unbounded level, whose one global cell is always wanted — there is no cell for the filter to leave out. Remove cellFilter, or give this level a finite cellSize`,
+        );
+      }
+      if ((def.cellMode ?? "xz") === "path") {
+        throw new WorldValidationError(
+          `level ${i} ("${def.name}"): declares cellFilter on a "path" level, whose sectors are arc ranges along a centreline the World never sees, not boxes the filter could judge; filter the sector's content in the graph (bind a range into a filter node), or use an "xz" or "xyz" level`,
+        );
+      }
+    });
     // cookOutputs must name declared outputs of the level's graph.
     levels.forEach((def, i) => {
       if (def.cookOutputs === undefined) return;
@@ -1213,6 +1243,9 @@ export class World {
     const czMin = Math.ceil((vz - r) / s - 0.5);
     const czMax = Math.floor((vz + r) / s - 0.5);
     const out: WantedCell[] = [];
+    // `LevelDef.cellFilter`: asked only of cells already inside the radius,
+    // with the same box a cell's context would carry.
+    const filter = level.def.cellFilter;
     if (level.mode === "xyz") {
       const cyMin = Math.ceil((vy - r) / s - 0.5);
       const cyMax = Math.floor((vy + r) / s - 0.5);
@@ -1223,7 +1256,10 @@ export class World {
             const dy = (cy + 0.5) * s - vy;
             const dz = (cz + 0.5) * s - vz;
             const d2 = dx * dx + dy * dy + dz * dz;
-            if (d2 <= r2) out.push({ coord: [nz(cx), nz(cy), nz(cz)], rank: d2 });
+            if (d2 > r2) continue;
+            const coord: CellCoord3 = [nz(cx), nz(cy), nz(cz)];
+            if (filter !== undefined && !filter({ coord, min: [cx * s, cy * s, cz * s], max: [(cx + 1) * s, (cy + 1) * s, (cz + 1) * s] })) continue;
+            out.push({ coord, rank: d2 });
           }
         }
       }
@@ -1234,7 +1270,10 @@ export class World {
         const dx = (cx + 0.5) * s - vx;
         const dz = (cz + 0.5) * s - vz;
         const d2 = dx * dx + dz * dz;
-        if (d2 <= r2) out.push({ coord: [nz(cx), nz(cz)], rank: d2 });
+        if (d2 > r2) continue;
+        const coord: CellCoord2 = [nz(cx), nz(cz)];
+        if (filter !== undefined && !filter({ coord, min: [cx * s, cz * s], max: [(cx + 1) * s, (cz + 1) * s] })) continue;
+        out.push({ coord, rank: d2 });
       }
     }
     return out;
@@ -1681,6 +1720,9 @@ export class World {
     this.totalCooked++;
     cooked.push({ level: level.def.name, coord: rec.coord });
     this.onCellReady?.(level.def.name, rec.coord, rec.outputs);
+    // `LevelDef.keepOutputs: false`: the host has had them; the World
+    // keeps the cell's record and lets the payload go.
+    if (level.def.keepOutputs === false) rec.outputs = NO_OUTPUTS;
   }
 
   private evict(level: LevelState, rec: CellRecord, evicted: CellId[]): void {

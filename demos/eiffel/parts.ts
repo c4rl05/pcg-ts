@@ -6,6 +6,7 @@
  */
 import type { Graph, NodeHandle } from "pcg-ts";
 import { jitterPoints, mergePrimitives } from "pcg-ts";
+import { gateMesh } from "./region.js";
 
 export const PART_CLASSES = [
   /** The corner uprights ("arbalétriers") of the legs and the shaft. */
@@ -143,6 +144,14 @@ export interface Detail {
    * `?build`; nothing of the tower changes.
    */
   readonly build?: boolean;
+  /**
+   * Build the tower to be cooked a region at a time (`region.ts`): the
+   * same graph, node for node, plus gates and clips whose box
+   * `setRegion` moves, so one cell's output is exactly the whole cook's
+   * inside that cell. The page's `?bands` streams the laced and riveted
+   * depths this way (`bands.ts`).
+   */
+  readonly region?: boolean;
 }
 
 /**
@@ -264,10 +273,14 @@ export function assemble(g: Graph, parts: Parts): void {
   for (const cls of PART_CLASSES) {
     const list = parts[cls];
     if (list === undefined || list.length === 0) continue;
-    let out = list[0] as NodeHandle;
-    if (list.length > 1) {
+    // In a regional build (region.ts) each part is cut to its cell before
+    // the merge, so a cell merges and jitters its own share of the class
+    // and not the tower's; the halo covers the jitter still to come.
+    const kept = list.map((p, k) => gateMesh(g, `${cls}Gate${k}`, p, 10 * JITTER));
+    let out = kept[0] as NodeHandle;
+    if (kept.length > 1) {
       out = g.add(mergePrimitives, {}, `${cls}Out`);
-      for (const p of list) g.connect(p, "out", out, "in");
+      for (const p of kept) g.connect(p, "out", out, "in");
     }
     g.output(jitter(g, `${cls}Jitter`, out), "out", cls);
   }

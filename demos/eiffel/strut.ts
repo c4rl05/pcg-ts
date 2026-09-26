@@ -68,6 +68,18 @@ import {
 import type { PlateFootprint } from "./crossing.js";
 import { END_SINE, END_SINE_MIN, FACE_NORMAL, type Vec3, indexTable, merge, skin } from "./lattice.js";
 import { HEAD_DRIVE_ATTR } from "./heads.js";
+import { clipHeads, gatePaths, gatePoints } from "./region.js";
+
+/**
+ * How far outside its cell a regional build's gates keep (region.ts), in
+ * metres: each is how far what is built from a gate's points can stand
+ * from them, with a margin; the seam test holds every cell to the whole
+ * cook. A lacing sample's rings and heads stand within a strut's
+ * half-width (0.45 at most) of it; a member's end plate reaches from its
+ * tip past its joint start (upright plus clearance over the end sine,
+ * clamped at 0.25) and its reach, a few metres on the steepest.
+ */
+const REGION_HALO = { samples: 1.5, tips: 10, heads: 0.5 } as const;
 import { type Detail, RIVET_ASSET, jitter } from "./parts.js";
 
 /** A corner angle's half-width: 80-100 mm angles (Plate XXXI) [derived]. */
@@ -429,7 +441,9 @@ export function offJointPlates(g: Graph, id: string, heads: readonly NodeHandle[
     { distanceAttr: PLATE_DIST, indexAttr: "", maxDistance: PLATE_CLEAR * 2 },
     `${id}Plates`,
   );
-  g.connect(all, "out", near, "in");
+  // A regional build (region.ts) asks only about its own cell's heads: the
+  // plates' cloud it asks against is the cell's.
+  g.connect(gatePoints(g, `${id}HeadsGate`, all, REGION_HALO.heads), "out", near, "in");
   g.connect(plateCloudOf(g).cloud, "out", near, "source");
   const off = g.add(filterByExpression, { predicate: gt(attribute(PLATE_DIST), PLATE_CLEAR) }, `${id}OffPlates`);
   g.connect(near, "out", off, "in");
@@ -713,14 +727,18 @@ function memberJoints(
   // curveU is 0 at a member's first end and 1 at its second.
   const first = lt(attribute("curveU"), 0.5);
   // Plates only at the ends that take a joint (JointOpts.endFlags).
-  let plateTips: NodeHandle = tips;
+  // The plates are cooked for the region (region.ts); the windows below
+  // read every tip, because the joint samples resampled from them are
+  // array-seeded and gated only after.
+  const regionTips = gatePaths(g, `${id}TipsGate`, tips, REGION_HALO.tips);
+  let plateTips: NodeHandle = regionTips;
   if (joints.endFlags === true) {
     plateTips = g.add(
       filterByExpression,
       { predicate: ge(select(first, endFlag(0), endFlag(1)), 0.5) },
       `${id}PlateTipsJoined`,
     );
-    g.connect(tips, "out", plateTips, "in");
+    g.connect(regionTips, "out", plateTips, "in");
   }
   const start = select(first, clearAt(0), clearAt(1));
   // The plate's near edge, along the member from the node: where a point
@@ -866,7 +884,7 @@ function memberJoints(
   g.connect(windowAt, "out", window, "in");
   g.connect(window, "out", samples, "in");
   g.connect(samples, "out", len, "in");
-  g.connect(len, "out", near, "in");
+  g.connect(gatePoints(g, `${id}JointSamplesGate`, len, REGION_HALO.samples), "out", near, "in");
   const heads = [1, -1].flatMap((side) =>
     [1, -1].map((chord) => {
       const out = mul(N, side);
@@ -1071,7 +1089,10 @@ function isVec3(v: readonly [number, number, number] | Field): v is readonly [nu
  */
 export function rivetSpawn(g: Graph, id: string, sets: readonly NodeHandle[]): NodeHandle {
   const all = g.add(mergePoints, {}, `${id}Rivets`);
-  for (const h of sets) g.connect(h, "out", all, "in");
+  // In a regional build (region.ts) every set is cut to its cell before the
+  // merge, so a set no gate upstream has cut costs the cell a filter and
+  // not the tower's jitter; the clip below, after the jitter, is the seam.
+  sets.forEach((h, k) => g.connect(gatePoints(g, `${id}RivetGate${k}`, h, REGION_HALO.heads), "out", all, "in"));
   const sized = g.add(
     setAttribute,
     { name: "scale", type: "f32", tupleSize: 3, value: RIVET_HEAD },
@@ -1089,7 +1110,7 @@ export function rivetSpawn(g: Graph, id: string, sets: readonly NodeHandle[]): N
   );
   g.connect(jitter(g, `${id}RivetJitter`, all), "out", sized, "in");
   g.connect(sized, "out", drive, "in");
-  g.connect(drive, "out", spawn, "in");
+  g.connect(clipHeads(g, `${id}RivetClip`, drive), "out", spawn, "in");
   return spawn;
 }
 
@@ -1287,6 +1308,10 @@ export function latticeStruts(
   }
   const samples = g.add(pathResample, { mode: "spacing", spacing }, `${id}Samples`);
   g.connect(source, "out", samples, "in");
+  // A regional build (region.ts) is cooked for its cell only past here.
+  // The gate stands AFTER the resample, whose seeds are array-indexed:
+  // before it, it would renumber every later sample.
+  const inRegion = gatePaths(g, `${id}SamplesGate`, samples, REGION_HALO.samples);
 
   const T = attribute("tangent", 3);
   const F = attribute(FACE_NORMAL, 3);
@@ -1298,7 +1323,7 @@ export function latticeStruts(
   };
   const shifted = (name: string, offset: Field): NodeHandle => {
     const node = g.add(transformPoints, { translate: offset }, `${id}${name}`);
-    g.connect(samples, "out", node, "in");
+    g.connect(inRegion, "out", node, "in");
     return node;
   };
 
@@ -1322,7 +1347,7 @@ export function latticeStruts(
   // two faces it borders: two rivets per chord per sample, eight per
   // strut section. Each head sits on its chord's outer face on that side,
   // its axis along the face's outward normal.
-  const clear: NodeHandle = samples;
+  const clear: NodeHandle = inRegion;
   // Per B side (sb), the N-face heads of that side's two corners, kept off
   // the crossing plates. The plates are a pair either side of the face
   // plane, so one test in the plane serves both N faces.
@@ -1349,7 +1374,7 @@ export function latticeStruts(
     g.connect(from, "out", aim, "in");
     return aim;
   };
-  const bHeads = CORNERS.map(([, sb], c) => aimed(`Rivet${c}B`, head(c, "B", mul(B, sb), samples), mul(B, sb)));
+  const bHeads = CORNERS.map(([, sb], c) => aimed(`Rivet${c}B`, head(c, "B", mul(B, sb), inRegion), mul(B, sb)));
   // THE CROSSINGS. A face's two zigzags cross once a bay, half way between
   // two samples on the face's centre line, and the bars are riveted there
   // singly: PL-X Figs. 12-13 (panels 6-9, 1:50) draw one head at every
@@ -1364,8 +1389,9 @@ export function latticeStruts(
   // chords' plane [measured on the swept lacing: 0.0225 on all four faces
   // mid-strut; in a strut's end bays the sweep's frame stands the ±N faces'
   // bars a few mm higher, so the head there is sunk, never lifted].
-  const mids = g.add(pathSegments, { radius: 0 }, `${id}Crossings`);
-  g.connect(samples, "out", mids, "in");
+  const allMids = g.add(pathSegments, { radius: 0 }, `${id}Crossings`);
+  g.connect(samples, "out", allMids, "in");
+  const mids = gatePoints(g, `${id}CrossingsGate`, allMids, REGION_HALO.samples);
   const crossing = (f: number, from: NodeHandle): NodeHandle => {
     const [sn, sb] = FACE_OUT[f]!;
     const out = add(mul(N, sn), mul(B, sb));
