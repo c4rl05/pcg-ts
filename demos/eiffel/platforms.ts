@@ -144,8 +144,10 @@
  *   cornice. Its names band, 0.80 tall [sourced], carries the 72 names of
  *   French scientists and engineers, 18 to a face [sourced PL-XIX's list]:
  *   18 plaques per face on the panel's outer face, 4.02 to 4.82 below the
- *   gallery floor [measured PL-XIX], one to each 3.8825 console bay (see
- *   `NAMES`, `namesBand`).
+ *   gallery floor [measured PL-XIX], one to each 3.8825 console bay, each
+ *   lettered with its name in raised gilt capitals 0.60 tall (see `NAMES`,
+ *   `namesLettering`, `savants.ts`, `letters.ts`). The plaques are painted
+ *   iron with the skirt; only the letters are gilt.
  * - THE UNDERSIDE: cross girders 4.00 deep every 3.8825 [sourced PL-XVI],
  *   tops 0.23 under the floor [sourced], spanning between the main girders
  *   on the outer and inner uprights' lines between the legs (the inner one
@@ -178,17 +180,17 @@ import {
   copyToPoints,
   extrudePolygon,
   mergePrimitives,
-  meshPrimitive,
   pointGrid,
   pointsToPath,
   removeAttribute,
   setAttribute,
   spawnInstances,
-  transformPoints,
   vec,
 } from "pcg-ts";
 import { type Vec3, copyToQuadrants, indexTable } from "./lattice.js";
+import { ALPHABET, glyph, setLine } from "./letters.js";
 import { type Parts, jitter } from "./parts.js";
+import { SAVANTS } from "./savants.js";
 import { FACES, FLOORS, MEMBERS, PANEL29, PEDESTAL, PLATFORMS, profileAt } from "./spec.js";
 
 /** Every deck's thickness [estimated]. */
@@ -451,6 +453,29 @@ const NAMES = {
   thickness: 0.03,
 } as const;
 
+/**
+ * The names' letters (see `savants.ts` for the text and `letters.ts` for
+ * the glyphs): capitals 0.60 tall [sourced secondary: Barral 1892 p. 19;
+ * measured 0.60 on the S.E. face's photograph, scaled by the 3.8825 pilaster
+ * pitch], in relief on the plaques, gilt. How far they stand proud is not
+ * recorded: 0.025 [estimated], seated 0.005 into the plaque so no seam
+ * shows. Each name is centred on its plaque and set within 0.06 of its ends
+ * [estimated]: at 0.20 of the cap height between letters, tracked tighter
+ * down to 0.08 for a long name and then condensed, as the tower's long names
+ * are (LE CHATELIER and GAY-LUSSAC fill their panels on the S.W. face's
+ * photograph), never below 0.70 across. The widest of the 72, LE
+ * CHATELIER, is condensed to 0.778, and seven are condensed at all.
+ */
+const LETTERING = {
+  height: 0.6,
+  relief: 0.025,
+  embed: 0.005,
+  margin: 0.06,
+  tracking: 0.2,
+  minTracking: 0.08,
+  minCondense: 0.7,
+} as const;
+
 /** The skirt plate's drop from the gallery slab's underside to its foot, and its length. */
 const SKIRT_DROP = GALLERY.floor - DECK - SKIRT.bottom;
 const SKIRT_LEN = Math.hypot(SKIRT_DROP, SKIRT.lean);
@@ -504,51 +529,198 @@ const SKIRT_ORNAMENT = {
   pilaster: { top: NAMES.top, bottom: NAMES.top + NAMES.height, width: 0.4, proud: 0.07 },
 } as const;
 
+/** The plaque in the console bay centred at a on the +z face (see `NAMES`). */
+function namePlaque(a: number): Block {
+  const up = SKIRT_LEN / SKIRT_DROP;
+  return onSkirt(a, NAMES.top + NAMES.height / 2, NAMES.pitch - NAMES.gap, NAMES.height * up, NAMES.thickness);
+}
+
+/** One lettered plaque: its face, its place in the row and its name, and its solids in the world. */
+export interface NamePanel {
+  readonly compass: (typeof FACES)[number]["compass"];
+  readonly quadrant: 0 | 1 | 2 | 3;
+  /** 0 to 17, left to right seen from outside the face. */
+  readonly index: number;
+  readonly text: string;
+  /** How the name was set (`setLine`): its width, tracking and condense. */
+  readonly width: number;
+  readonly tracking: number;
+  readonly condense: number;
+  /** The plaque, as the prism the skirt's ornament cooks. */
+  readonly plaque: Prism;
+  /** The letters' convex pieces, each extruded out of the plaque. */
+  readonly letters: readonly Prism[];
+  /**
+   * The same letters as glyphs placed, which is how the graph builds them
+   * (`namesLetters`): each glyph at cap height 1 and 1 deep, scaled by
+   * `scale`, turned by `rot` and moved to `at`, its ink's origin on the
+   * baseline in the letters' seat. Spaces are left out.
+   */
+  readonly glyphs: ReadonlyArray<{ readonly ch: string; readonly at: Vec3 }>;
+  readonly rot: Quat;
+  readonly scale: Vec3;
+}
+
 /**
- * The names band on the +z face: one tilted plaque, copied along the row.
- * The skirt's panel runs from the gallery's edge (y = its floor less the
- * deck, z = EDGE) down to its foot, leaning in SKIRT.lean; the band lies
- * on the panel's outer face, the row centred on the face.
+ * The 72 lettered plaques, face by face (`FACES`, `SAVANTS`): each name set
+ * on the plaque of its console bay, left to right as seen from outside, so
+ * along +a in the face frame. A letter's piece is laid on the plaque's
+ * outer face less `LETTERING.embed`, wound counter-clockwise seen from
+ * outside (a right, up the plate up), so it extrudes outward. The plaques
+ * cook with the skirt's ornament (platforms); the letters are the names
+ * class, and keep no normals.
  */
-function namesBand(g: Graph): NodeHandle {
-  const top = GALLERY.floor - DECK;
-  const drop = top - SKIRT.bottom;
-  const len = Math.hypot(drop, SKIRT.lean);
-  // Down the panel, and its outward normal (it looks slightly down).
-  const down: [number, number] = [-drop / len, -SKIRT.lean / len];
-  const out: [number, number] = [-SKIRT.lean / len, drop / len];
-  // The band's middle, as a distance down the panel from its top.
-  const middle = GALLERY.floor - NAMES.top - NAMES.height / 2;
-  const along = ((top - middle) * len) / drop;
-  const y = top + down[0] * along + out[0] * (NAMES.thickness / 2);
-  const z = EDGE + down[1] * along + out[1] * (NAMES.thickness / 2);
-  const pitch = NAMES.pitch;
-  const plaque = g.add(
-    meshPrimitive,
-    { shape: "box", center: [0, 0, 0], size: [pitch - NAMES.gap, NAMES.height, NAMES.thickness] },
-    "namesPlaque",
-  );
-  const tilt = g.add(
-    transformPoints,
-    { rotateEuler: [(Math.atan2(SKIRT.lean, drop) * 180) / Math.PI, 0, 0] },
-    "namesTilt",
-  );
+export function namesLettering(): NamePanel[] {
+  const L = LETTERING;
+  const up = SKIRT_LEN / SKIRT_DROP;
+  const middle = NAMES.top + NAMES.height / 2;
+  const seat = NAMES.thickness - L.embed;
+  const fit = {
+    height: L.height,
+    width: NAMES.pitch - NAMES.gap - 2 * L.margin,
+    tracking: L.tracking,
+    minTracking: L.minTracking,
+    minCondense: L.minCondense,
+  };
+  const out: NamePanel[] = [];
+  for (const face of FACES) {
+    const names = SAVANTS[face.compass];
+    if (names.length !== NAMES.perFace) {
+      throw new Error(
+        `platforms.ts namesLettering: face ${face.compass} lists ${names.length} names; ` +
+          `the frieze has ${NAMES.perFace} a face (savants.ts SAVANTS.${face.compass})`,
+      );
+    }
+    names.forEach((text, i) => {
+      const a = (i - (NAMES.perFace - 1) / 2) * NAMES.pitch;
+      const set = setLine(text, fit);
+      // Up the plate from the band's middle, v, is a depth v / up higher.
+      const at = ([u, v]: readonly [number, number]): Vec3 => {
+        const [y, r] = skirtAt(middle - (v - L.height / 2) / up);
+        return onFace(face.quadrant, [a + u, y + SKIRT_OUT[0] * seat, r + SKIRT_OUT[1] * seat]);
+      };
+      out.push({
+        compass: face.compass,
+        quadrant: face.quadrant,
+        index: i,
+        text,
+        width: set.width,
+        tracking: set.tracking,
+        condense: set.condense,
+        plaque: blockPrism(allFaces([namePlaque(a)], [face.quadrant])[0] as Block),
+        letters: set.pieces.map((piece) => ({ outline: piece.map(at), depth: L.relief + L.embed })),
+        glyphs: set.placed.filter((x) => x.ch !== " ").map((x) => ({ ch: x.ch, at: at([x.x, 0]) })),
+        // Local x along the face, y up the plate, z out of it: the skirt's tilt, then the face's turn.
+        rot: qmul(turn(1, (face.quadrant * Math.PI) / 2), turn(0, SKIRT_TILT)),
+        scale: [set.condense * L.height, L.height, L.relief + L.embed],
+      });
+    });
+  }
+  return out;
+}
+
+/**
+ * The names class: every glyph the alphabet draws, built once at cap height
+ * 1 and extruded 1 along +z, its points keyed by the glyph's place in
+ * `ALPHABET`, and one copy of it per letter of the 72 names, each target
+ * asking for its own glyph (`sourceGroupAttr` / `targetGroupAttr`) and
+ * carrying its panel's `rot` and `scale` (`namesLettering`). The same
+ * solids as the panels' `letters`, point for point [measured by
+ * tests/eiffelNames.test.ts], at a fraction of the cook: the letters'
+ * 17,844 outline points built as prisms added about 250 ms to the plain
+ * depth's cook (755 to 1,004 ms), the alphabet's 27 glyphs and 491 copies
+ * nothing measurable (586 against 571 ms, medians of 5 interleaved runs)
+ * [measured 2026-09-26]. Keeps no normals (the class has none; the page
+ * computes them).
+ */
+function namesLetters(g: Graph): NodeHandle {
+  const shapes: Array<{ outline: Vec3[]; glyph: number }> = [];
+  [...ALPHABET].forEach((ch, k) => {
+    for (const piece of glyph(ch).pieces) shapes.push({ outline: piece.map(([x, y]): Vec3 => [x, y, 0]), glyph: k });
+  });
+  const pts = shapes.flatMap((s) => s.outline);
   const slots = g.add(
     pointGrid,
-    {
-      countX: NAMES.perFace,
-      countY: 1,
-      countZ: 1,
-      spacing: [pitch, 1, 1],
-      origin: [(-(NAMES.perFace - 1) * pitch) / 2, y, z],
-    },
-    "namesSlots",
+    { countX: pts.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
+    "namesGlyphSlots",
   );
-  const row = g.add(copyToPoints, { topology: "keep" }, "namesRow");
-  g.connect(plaque, "out", tilt, "in");
-  g.connect(tilt, "out", row, "source");
-  g.connect(slots, "out", row, "target");
-  return row;
+  const place = g.add(
+    setAttribute,
+    {
+      name: "P",
+      type: "f32",
+      tupleSize: 3,
+      value: vec(indexTable(pts.map((p) => p[0])), indexTable(pts.map((p) => p[1])), indexTable(pts.map((p) => p[2]))),
+    },
+    "namesGlyphPlace",
+  );
+  const key = g.add(
+    setAttribute,
+    { name: "prism", type: "i32", value: indexTable(shapes.flatMap((s, i) => s.outline.map(() => i))) },
+    "namesGlyphKey",
+  );
+  const which = g.add(
+    setAttribute,
+    { name: "glyph", type: "i32", value: indexTable(shapes.flatMap((s) => s.outline.map(() => s.glyph))) },
+    "namesGlyphWhich",
+  );
+  const paths = g.add(pointsToPath, { groupAttr: "prism", closed: true }, "namesGlyphPaths");
+  const solid = g.add(extrudePolygon, { direction: "polygonNormal", distance: 1, caps: "both" }, "namesGlyphSolid");
+  const bare = g.add(removeAttribute, { names: ["normal"], domain: "point" }, "namesGlyphs");
+  g.connect(slots, "out", place, "in");
+  g.connect(place, "out", key, "in");
+  g.connect(key, "out", which, "in");
+  g.connect(which, "out", paths, "in");
+  g.connect(paths, "out", solid, "in");
+  g.connect(solid, "out", bare, "in");
+  // One target per letter.
+  const letters = namesLettering().flatMap((p) =>
+    p.glyphs.map((x) => ({ at: x.at, rot: p.rot, scale: p.scale, glyph: ALPHABET.indexOf(x.ch) })),
+  );
+  const col = (pick: (x: (typeof letters)[number]) => number) => indexTable(letters.map(pick));
+  const targets = g.add(
+    pointGrid,
+    { countX: letters.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
+    "namesLetterSlots",
+  );
+  const at = g.add(
+    setAttribute,
+    { name: "P", type: "f32", tupleSize: 3, value: vec(col((x) => x.at[0]), col((x) => x.at[1]), col((x) => x.at[2])) },
+    "namesLetterPlace",
+  );
+  const rot = g.add(
+    setAttribute,
+    {
+      name: "rot",
+      type: "f32",
+      tupleSize: 4,
+      value: vec(col((x) => x.rot[0]), col((x) => x.rot[1]), col((x) => x.rot[2]), col((x) => x.rot[3])),
+    },
+    "namesLetterTurn",
+  );
+  const size = g.add(
+    setAttribute,
+    {
+      name: "scale",
+      type: "f32",
+      tupleSize: 3,
+      value: vec(col((x) => x.scale[0]), col((x) => x.scale[1]), col((x) => x.scale[2])),
+    },
+    "namesLetterSize",
+  );
+  const ask = g.add(setAttribute, { name: "glyph", type: "i32", value: col((x) => x.glyph) }, "namesLetterGlyph");
+  const copies = g.add(
+    copyToPoints,
+    { topology: "keep", sourceGroupAttr: "glyph", targetGroupAttr: "glyph" },
+    "namesLetters",
+  );
+  g.connect(targets, "out", at, "in");
+  g.connect(at, "out", rot, "in");
+  g.connect(rot, "out", size, "in");
+  g.connect(size, "out", ask, "in");
+  g.connect(bare, "out", copies, "source");
+  g.connect(ask, "out", copies, "target");
+  return copies;
 }
 
 /**
@@ -3788,6 +3960,8 @@ function skirtOrnament(): Piece {
     prisms.push(slab(a, C.width, bracket(yTop, rTop, C.reach, skirtAt(C.foot), C.segments)));
     blocks.push(onSkirt(a, (P.top + P.bottom) / 2, P.width, (P.bottom - P.top) * up, P.proud));
     if (j === n) continue;
+    // The name's plaque in the console bay from here to the next.
+    blocks.push(namePlaque(a + pitch / 2));
     // The cresting in the console bay from here to the next: its rail, and
     // under it a diamond lattice panel, a diamond over each.
     blocks.push(onSkirt(a + pitch / 2, K.rail, pitch, K.bar, K.proud));
@@ -4290,7 +4464,7 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
   return {
     platforms: [fitBlocks, fitPrisms, ...fitInner, ...fitFlights, ...fitSecond, ...fitPavilions, ...fitArcade],
     fittings,
-    names: [copyToQuadrants(g, "names", namesBand(g), quads)],
+    names: [namesLetters(g)],
     masonry: [copyToQuadrants(g, "pedestals", pedestal, quads)],
   };
 }
