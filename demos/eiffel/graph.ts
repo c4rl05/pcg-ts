@@ -12,6 +12,7 @@
  * class.
  */
 import { Graph } from "pcg-ts";
+import { buildCranes } from "./cranes.js";
 import { buildErection } from "./erection.js";
 import { buildFirstFloor } from "./firstFloor.js";
 import { buildFlag } from "./flag.js";
@@ -46,6 +47,7 @@ export function buildEiffel(seed = 1889, detail: Detail = {}): Graph {
       buildFlag(g),
       buildGround(g),
       detail.build === true ? buildErection(g, quads) : {},
+      detail.build === true ? buildCranes(g) : {},
     ),
   );
   return g;

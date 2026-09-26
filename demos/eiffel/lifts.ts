@@ -208,7 +208,7 @@ function readTable(table: ReadonlyArray<readonly [number, number]>, t: number): 
  * the faces' 0.80 struts clear by 0.15: 4.35]. So the table takes the
  * larger of the two at every node.
  */
-const RAIL_OFFSET: ReadonlyArray<readonly [number, number]> = [
+export const RAIL_OFFSET: ReadonlyArray<readonly [number, number]> = [
   [0, 4.35],
   [50.4, 4.35],
   [57.4, 4.35],

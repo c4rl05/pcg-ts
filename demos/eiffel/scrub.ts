@@ -40,6 +40,7 @@ import {
   stageTriangles,
   worksDown,
 } from "./chronology.js";
+import { CRANE_RUNS, type CraneRun, cranePose } from "./cranes.js";
 import { PART_CLASSES } from "./parts.js";
 import { rivetClass } from "./spec.js";
 
@@ -64,7 +65,8 @@ export const TIMBER = new MeshStandardMaterial({ color: 0xa4865f, roughness: 0.8
 type Stage =
   | { readonly kind: "mesh"; readonly geometry: BufferGeometry; readonly staged: Staged; readonly until: number }
   | { readonly kind: "batch"; readonly items: Items; readonly staged: Staged }
-  | { readonly kind: "whole"; readonly mesh: Mesh; readonly geometry: BufferGeometry; readonly day: number; readonly count: number };
+  | { readonly kind: "whole"; readonly mesh: Mesh; readonly geometry: BufferGeometry; readonly day: number; readonly count: number }
+  | { readonly kind: "crane"; readonly mesh: Mesh; readonly run: CraneRun; readonly home: readonly [number, number, number]; readonly count: number };
 
 /**
  * A batch of instances as the page draws it: an instanced mesh (a matrix a
@@ -154,6 +156,12 @@ export function stageErection(meshes: ReadonlyMap<string, readonly Mesh[]>): Ere
   const surfaces: Array<{ position: ArrayLike<number>; index: ArrayLike<number>; triDays: Float64Array }> = [];
   for (const [name, list] of meshes) {
     if (!(PART_CLASSES as readonly string[]).includes(name) && !isWorks(name)) continue;
+    // A crane is moved whole, day by day, along its climb (cranes.ts).
+    const run = CRANE_RUNS.find((r) => name === `works.crane.${r.name}`);
+    if (run !== undefined) {
+      for (const mesh of list) stages.push({ kind: "crane", mesh, run, home: cranePose(run, run.from).at, count: countOf(mesh) });
+      continue;
+    }
     for (const mesh of list) {
       if (itemsOf(mesh) !== undefined) continue;
       const staged = stageMesh(name, mesh.geometry, stages, isWorks(name) ? (worksDown(name) ?? Infinity) : Infinity);
@@ -237,6 +245,12 @@ export function stageErection(meshes: ReadonlyMap<string, readonly Mesh[]>): Ere
       for (const s of stages) {
         if (s.kind === "mesh") s.geometry.setDrawRange(0, day >= s.until ? 0 : shownThrough(s.staged, day));
         else if (s.kind === "batch") s.items.show(shownThrough(s.staged, day));
+        else if (s.kind === "crane") {
+          const pose = cranePose(s.run, day);
+          s.mesh.geometry.setDrawRange(0, pose.shown ? s.count : 0);
+          s.mesh.position.set(pose.at[0] - s.home[0], pose.at[1] - s.home[1], pose.at[2] - s.home[2]);
+          s.mesh.updateMatrixWorld();
+        }
         else setCount(s.mesh, s.geometry, day >= s.day ? s.count : 0);
       }
     },
