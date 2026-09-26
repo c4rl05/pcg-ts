@@ -2262,6 +2262,19 @@ describe("eiffel skeleton", () => {
     const again = deserializeGraph(JSON.parse(JSON.stringify(serializeGraph(g))));
     const [a, b] = await Promise.all([cook(g), cook(again)]);
     for (const name of Object.keys(a.outputs)) {
+      // The 1st floor's fittings and the Roux chains are instances at every
+      // depth: compare their matrices, as bytes, batch by batch.
+      if (name.startsWith("fittings.") || name.startsWith("chain.")) {
+        const mats = (out: typeof a) =>
+          (out.outputs[name]! as unknown as { batches: { transforms: Float32Array }[] }[]).flatMap((it) =>
+            it.batches.map((bt) => Buffer.from(bt.transforms.buffer, bt.transforms.byteOffset, bt.transforms.byteLength)),
+          );
+        const [ma, mb] = [mats(a), mats(b)];
+        expect(ma.length, name).toBeGreaterThan(0);
+        expect(mb.length, name).toBe(ma.length);
+        ma.forEach((m, i) => expect(mb[i]!.equals(m), name).toBe(true));
+        continue;
+      }
       const ga = firstGeometry(a.outputs[name]!)!;
       const gb = firstGeometry(b.outputs[name]!)!;
       const attrA = ga.attrs.point.get("P")!;

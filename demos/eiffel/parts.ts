@@ -33,6 +33,13 @@ export const PART_CLASSES = [
   "gussets",
   /** The 72 names on the first-floor skirt, gilded. */
   "names",
+  /**
+   * The lifts' machinery that stands still: the Roux chain ducts and
+   * wheels, the Otis cylinder, beams, pulleys and counterweight track, the
+   * Edoux heads and top pulleys. What of it moves comes out as cars and
+   * chains (see `Parts`).
+   */
+  "machinery",
 ] as const;
 
 export type PartClass = (typeof PART_CLASSES)[number];
@@ -186,7 +193,21 @@ export function jitter(g: Graph, id: string, geo: NodeHandle): NodeHandle {
  */
 export type Parts = Partial<Record<PartClass, NodeHandle[]>> & {
   rivets?: Array<{ name: string; spawn: NodeHandle }>;
+  /**
+   * Instanced dressings that are not rivets — the 1st floor's gas globes,
+   * glass cabochons and stoneware balusters — each spawned against its own
+   * asset id and put out as `fittings.<name>`, so the host draws each from
+   * its asset map in its own material, and counts them apart.
+   */
+  fittings?: Array<{ name: string; spawn: NodeHandle }>;
   cars?: Array<{ name: string; mesh: NodeHandle }>;
+  /**
+   * The Roux lifts' articulated chains: every link an instance, each chain
+   * spawned against the chain assets and put out as `chain.<name>`, so the
+   * host can re-place its links as the car it pushes moves (`lifts.ts`
+   * publishes each circuit as `LIFT_CHAINS`).
+   */
+  chains?: Array<{ name: string; spawn: NodeHandle }>;
 };
 
 /**
@@ -205,6 +226,8 @@ export function assemble(g: Graph, parts: Parts): void {
     g.output(jitter(g, `${cls}Jitter`, out), "out", cls);
   }
   for (const { name, spawn } of parts.rivets ?? []) g.output(spawn, "instances", `rivets.${name}`);
+  for (const { name, spawn } of parts.fittings ?? []) g.output(spawn, "instances", `fittings.${name}`);
+  for (const { name, spawn } of parts.chains ?? []) g.output(spawn, "instances", `chain.${name}`);
   for (const { name, mesh } of parts.cars ?? []) {
     g.output(jitter(g, `${carId(name)}Jitter`, mesh), "out", `car.${name}`);
   }
@@ -227,7 +250,9 @@ export function joinParts(...all: Parts[]): Parts {
       if (list !== undefined && list.length > 0) (out[cls] ??= []).push(...list);
     }
     if (parts.rivets !== undefined) (out.rivets ??= []).push(...parts.rivets);
+    if (parts.fittings !== undefined) (out.fittings ??= []).push(...parts.fittings);
     if (parts.cars !== undefined) (out.cars ??= []).push(...parts.cars);
+    if (parts.chains !== undefined) (out.chains ??= []).push(...parts.chains);
   }
   return out;
 }

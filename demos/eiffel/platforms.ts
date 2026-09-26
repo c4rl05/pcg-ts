@@ -77,9 +77,13 @@
  *   under an open braced arch, and a valley gutter over every pier back
  *   from the face (PL-XIII Figs 2, 21, 26-39; see `INNER_ARCADE`); the
  *   corner bays' ends, where two faces' vaults cross, are not drawn on the
- *   plates read and left open. The crown carries a palmette crest to 10.10
- *   [measured PL-XIX: 10.14] and every pier an 8.00 m flag mast [sourced
- *   text] topping out about 12.2 above the gallery floor [estimated].
+ *   plates read and left open. Every pier carries an 8.00 m flag mast
+ *   [sourced text] topping out about 12.2 above the gallery floor
+ *   [estimated]; every arcade its dressing, drawn once and placed on all
+ *   36 (`ARCADE_DRESS`): the palmette crest to 9.97 [measured PL-XIX], a
+ *   yellow glass cabochon in each of the crescent's 12 cells [sourced text;
+ *   counted PL-XIX], and a frosted gas globe [sourced text] hung over the
+ *   gallery [estimated].
  * - THE FOUR PAVILIONS, one per face on its 3 central bays, of one plan
  *   [sourced text: "les mêmes dimensions en plan"]: 23.295 along the face
  *   by 14.9975 deep [sourced PL-XXIX, PL-XXX], their gallery façade
@@ -109,9 +113,11 @@
  *   Français and the Russe (`TERRACE_RAIL`), where a pair of quarter-turn
  *   flights comes up from the gallery to a landing pushed out over it,
  *   cut into the terrace (`ENTRANCE`).
- * - BALUSTRADES: rails and posts, their infill (terracotta balusters, X
- *   panels) left out. The gallery's: 1.150 tall, cast-iron pilasters every
- *   1.74125, mid-arch, where the columns do not stand [sourced PL-XIII].
+ * - BALUSTRADES: rails and posts. The gallery's: 1.150 tall, cast-iron
+ *   pilasters every 1.74125, mid-arch, where the columns do not stand
+ *   [sourced PL-XIII], its infill five glazed stoneware balusters to an
+ *   interval, 720 [sourced PL-XIII, the ledger; the text's 560 disagrees],
+ *   as instances (`BALUSTER`); the others' infill (X panels) left out.
  *   Round the central void ("Balcon") the same, following its edge, which
  *   no plate read prints [estimated]. The 2nd floor's: 1.150 [sourced
  *   13bis].
@@ -177,12 +183,13 @@ import {
   pointsToPath,
   removeAttribute,
   setAttribute,
+  spawnInstances,
   transformPoints,
   vec,
 } from "pcg-ts";
 import { type Vec3, copyToQuadrants, indexTable } from "./lattice.js";
-import type { Parts } from "./parts.js";
-import { FLOORS, MEMBERS, PANEL29, PEDESTAL, PLATFORMS, profileAt } from "./spec.js";
+import { type Parts, jitter } from "./parts.js";
+import { FACES, FLOORS, MEMBERS, PANEL29, PEDESTAL, PLATFORMS, profileAt } from "./spec.js";
 
 /** Every deck's thickness [estimated]. */
 const DECK = 0.6;
@@ -236,8 +243,6 @@ const ARCADE = {
   vaultSegments: 12,
   /** The vault's roof (zinc on boarding and purlins), as a shell. */
   shell: 0.1,
-  /** The palmette over each crown: width, height (to about 10.2), thickness. */
-  crest: [1.2, 1.5, 0.12] as Vec3,
   /** Flag mast: 8.00 long [sourced text], foot 4.2 above the gallery floor, section. */
   mast: { length: 8, foot: 4.2, size: 0.12 },
 } as const;
@@ -1732,7 +1737,7 @@ function innerArcadeFace(): Record<"pilaster" | "head" | "gutter" | "arch", Piec
   return out;
 }
 
-/** The arcade on the +z face: columns, piers, arches, crests and masts. */
+/** The arcade on the +z face: columns, piers, arches and masts (its dressing is `arcadeDressFace`). */
 function arcadeFace(): Block[] {
   const A = GALLERY;
   const out: Block[] = [];
@@ -1771,9 +1776,381 @@ function arcadeFace(): Block[] {
         });
       }
     }
-    // The palmette on the crown.
-    const [w, h, t] = ARCADE.crest;
-    out.push(onLine(c - w / 2, c + w / 2, CROWN_Y - 0.1, CROWN_Y - 0.1 + h, EDGE, t));
+  }
+  return out;
+}
+
+/**
+ * THE ARCADE'S DRESSING: one arcade drawn once (`arcadeDressFace`, the
+ * +z face's nine bays) and turned onto the four faces, 36 in all
+ * [sourced: « 9 arcades » a face; the ledger's « 36 arcades »]. Heights
+ * above the gallery floor, a from the bay's centre [tags per number]:
+ *
+ * - THE CREST. « Le tout est couronné par un grand motif en zinc estampé »
+ *   [sourced E1900-TXT p. 213], with « Cartouches en staff » 36 and
+ *   « Petits cartouches sous les motifs, patinettes » 36 [sourced ledger
+ *   p. 218, as the OCR reads it; « palmettes » presumably]. PL-XIII is the
+ *   iron skeleton and does not draw it; PL-XIX Fig. 1 does, at 1:200
+ *   [measured on the full scan at 59-60 px/m, calibrated on the printed
+ *   7.765 and the 3.80 + 4.90 chain, about ±0.05]: a U-shaped frame
+ *   astride the crown, its legs about 0.15 wide leaning out along the two
+ *   rays that flank the crown's pair of roundels, from the inner rib to
+ *   8.30, then in to scrolls of radius 0.15 at ±0.58, 8.80; between them
+ *   a cartouche 1.20 wide from 8.08 to 8.60; on it a collar and a palmette
+ *   of seven fronds from 8.67, the middle one to 9.97, the next pair's
+ *   tips at ±0.705, 9.42 and the lowest lobes' at ±0.765, 8.84 [measured;
+ *   the pair between, ±0.40, 9.82, estimated], each frond about 0.28
+ *   across [measured]. (An earlier reading on an upscaled crop gave 10.14
+ *   for the top, about 0.15 high throughout: a datum slip. The box built
+ *   before stopped at 10.10.) Stamped zinc, 0.10 thick [estimated],
+ *   standing on the gable's face.
+ * - THE CABOCHONS. « Dans les parties comprises entre les rayons de ces
+ *   croissants existent des cabochons en verre jaune » [sourced text]: one
+ *   in each of the crescent's 12 cells between its 11 rays [counted
+ *   PL-XIX Fig. 1: 12 roundels an arcade], 432 in all [derived]; each a
+ *   boss 0.27 across [measured] in a ring 0.38 across [measured 0.40;
+ *   0.02 less, so that the model's crescent, a fit and narrower at its
+ *   feet than the plate's, holds it clear of its rays and ribs], a
+ *   constant 0.55 in from the outer rib along the cell's middle line
+ *   [measured: the plate's centres sit a constant distance inside the
+ *   outer member, the crown's pair at ±0.32, 7.72; here ±0.34, 7.87 in the
+ *   model's crescent]. The boss is an instance (`fittings.cabochons`,
+ *   asset `cabochon`), so the page can draw it in yellow glass; its ring
+ *   is iron, 0.03 proud of the gable [estimated]. The « verres coulés
+ *   étamés et teintés » over them are glass, left out as the rest of the
+ *   crescent's is.
+ * - THE GLOBE. « Au centre de chaque arcade est disposé un gros ballon en
+ *   verre dépoli enveloppé d'un treillage métallique, dans lequel est un
+ *   bec de gaz » [sourced text]; no plate read draws it. One to an arcade
+ *   [sourced], hung from the vault's crown over the gallery's middle,
+ *   1.30 in from the column axis, centred 5.90 up, 0.60 across [estimated
+ *   all three], on a rod inside two iron hoops [estimated]: 36 globes
+ *   (`fittings.globes`, asset `globe`).
+ */
+const ARCADE_DRESS = {
+  crest: {
+    /** Along the rays either side of the crown's two cells (rays 5 and 7 of 11), up to `top`. */
+    legs: { rays: [5, 7], width: 0.15, top: 8.3 },
+    scroll: { at: 0.58, y: 8.8, radius: 0.15 },
+    cartouche: { half: 0.6, foot: 8.08, top: 8.6, chamfer: 0.08 },
+    collar: { half: 0.25, foot: 8.6, top: 8.7 },
+    /** The fronds' tips, (a, height), from the base at 8.67; mirrored but the middle's. */
+    palmette: {
+      base: 8.67,
+      tips: [
+        [0, 9.97],
+        [0.4, 9.82],
+        [0.705, 9.42],
+        [0.765, 8.84],
+      ] as ReadonlyArray<readonly [number, number]>,
+      width: 0.28,
+    },
+    depth: 0.1,
+  },
+  cabochon: { inFromOuter: 0.55, boss: 0.135, ring: 0.19, ringDepth: 0.03 },
+  globe: { in: 1.3, centre: 5.9, radius: 0.3, rod: 0.03, hoop: 0.02, hoopSides: 12 },
+} as const;
+
+/** The assets the fit-out's instances resolve against: the page models each (main.ts `ASSETS`). */
+export const FITTING_ASSETS = { globe: "globe", cabochon: "cabochon", baluster: "baluster" } as const;
+
+/**
+ * The cabochon asset's shape: a dome of base radius 1 on local y = 0,
+ * rising this far along +y, out of its ring [estimated]. An instance's
+ * matrix carries the boss's true radius, `ARCADE_DRESS.cabochon.boss`.
+ */
+export const CABOCHON_RISE = 0.55;
+
+/** One instance of a fitting: where, turned how, and its size. */
+interface Fitting {
+  readonly at: Vec3;
+  readonly rot: Quat;
+  readonly scale: Vec3;
+}
+
+/** Local +y, the cabochon's axis, out along the +z face's normal: a quarter turn about x. */
+const OUT_OF_FACE: Quat = turn(0, Math.PI / 2);
+const UPRIGHT: Quat = [0, 0, 0, 1];
+
+/** Face-frame fittings, turned onto the faces given, as the quadrant targets turn. */
+function fittingsOnFaces(list: readonly Fitting[], faces: readonly number[] = [0, 1, 2, 3]): Fitting[] {
+  const out: Fitting[] = [];
+  for (const f of faces) {
+    const yaw = turn(1, (f * Math.PI) / 2);
+    for (const x of list) out.push({ at: onFace(f, x.at), rot: qmul(yaw, x.rot), scale: x.scale });
+  }
+  return out;
+}
+
+/**
+ * Fittings as instances of `assetId`: a point per fitting carrying P,
+ * `rot` and `scale`, jittered as the rivets are (they are seated on faces
+ * too), then spawned.
+ */
+function fittingSpawn(g: Graph, id: string, list: readonly Fitting[], assetId: string): NodeHandle {
+  const slots = g.add(
+    pointGrid,
+    { countX: list.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
+    `${id}Slots`,
+  );
+  const col = (pick: (x: Fitting) => number) => indexTable(list.map(pick));
+  const place = g.add(
+    setAttribute,
+    {
+      name: "P",
+      type: "f32",
+      tupleSize: 3,
+      value: vec(col((x) => x.at[0]), col((x) => x.at[1]), col((x) => x.at[2])),
+    },
+    `${id}Place`,
+  );
+  const rot = g.add(
+    setAttribute,
+    {
+      name: "rot",
+      type: "f32",
+      tupleSize: 4,
+      value: vec(col((x) => x.rot[0]), col((x) => x.rot[1]), col((x) => x.rot[2]), col((x) => x.rot[3])),
+    },
+    `${id}Turn`,
+  );
+  const size = g.add(
+    setAttribute,
+    {
+      name: "scale",
+      type: "f32",
+      tupleSize: 3,
+      value: vec(col((x) => x.scale[0]), col((x) => x.scale[1]), col((x) => x.scale[2])),
+    },
+    `${id}Size`,
+  );
+  const spawn = g.add(spawnInstances, { assetId }, `${id}Spawn`);
+  g.connect(slots, "out", place, "in");
+  g.connect(jitter(g, `${id}Jitter`, place), "out", rot, "in");
+  g.connect(rot, "out", size, "in");
+  g.connect(size, "out", spawn, "in");
+  return spawn;
+}
+
+/**
+ * The arcade's dressing on the +z face (see `ARCADE_DRESS`): the crest,
+ * the cabochons' rings and the globes' rods and hoops as solids, and the
+ * bosses and globes as fittings.
+ */
+function arcadeDressFace(): {
+  part: Record<"crest" | "ring" | "hanger", Piece>;
+  cabochons: Fitting[];
+  globes: Fitting[];
+} {
+  const D = ARCADE_DRESS;
+  const C = D.crest;
+  const floor = GALLERY.floor;
+  const part = parted("crest", "ring", "hanger");
+  const cabochons: Fitting[] = [];
+  const globes: Fitting[] = [];
+  // Counter-clockwise seen from +r: every crest outline extrudes out of
+  // the gable's face, from EDGE.
+  const ccw = (pts: Array<readonly [number, number]>): Prism => ({
+    outline: pts.map(([a, y]): Vec3 => [a, y, EDGE]),
+    depth: C.depth,
+  });
+  for (let k = -4; k <= 4; k++) {
+    const c = bayCentre(k);
+    const outerIn = vaultArc(c, EDGE, GABLE.outerRib);
+    const innerOut = innerArc(c, EDGE, GABLE.innerRib);
+    // The crest: legs along two rays, their heads turned in to the
+    // scrolls, cartouche, collar, palmette.
+    const plane = EDGE + C.depth / 2;
+    for (const j of C.legs.rays) {
+      const [ia, iy] = innerOut[j] as Vec3;
+      const [oa, oy] = outerIn[j] as Vec3;
+      const t = (floor + C.legs.top - iy) / (oy - iy);
+      const head: Vec3 = [ia + t * (oa - ia), floor + C.legs.top, plane];
+      const s = Math.sign(head[0] - c);
+      const scroll: Vec3 = [c + s * C.scroll.at, floor + C.scroll.y, plane];
+      part.crest.blocks.push(
+        bar([ia, iy, plane], head, C.legs.width, C.depth),
+        bar(head, [scroll[0] + s * C.scroll.radius * 0.6, scroll[1] - C.scroll.radius * 0.6, plane], C.legs.width, C.depth),
+      );
+      part.crest.prisms.push(disc(scroll[0], scroll[1], EDGE, C.scroll.radius, C.depth, 1));
+    }
+    const K = C.cartouche;
+    const [k0, k1, h, e] = [floor + K.foot, floor + K.top, K.half, K.chamfer];
+    part.crest.prisms.push(
+      ccw([
+        [c - h + e, k0],
+        [c + h - e, k0],
+        [c + h, k0 + e],
+        [c + h, k1 - e],
+        [c + h - e, k1],
+        [c - h + e, k1],
+        [c - h, k1 - e],
+        [c - h, k0 + e],
+      ]),
+    );
+    part.crest.blocks.push(
+      span(c - C.collar.half, c + C.collar.half, floor + C.collar.foot, floor + C.collar.top, EDGE, EDGE + C.depth),
+    );
+    const P = C.palmette;
+    const base = floor + P.base;
+    const tips = P.tips.flatMap(([a, y]): Array<readonly [number, number]> => (a === 0 ? [[0, y]] : [[-a, y], [a, y]]));
+    for (const [ta, ty] of tips) {
+      const L = Math.hypot(ta, floor + ty - base);
+      const [dx, dy] = [ta / L, (floor + ty - base) / L];
+      const [nx, ny] = [dy, -dx];
+      const w = P.width / 2;
+      part.crest.prisms.push(
+        ccw([
+          [c, base],
+          [c + dx * 0.55 * L + nx * w, base + dy * 0.55 * L + ny * w],
+          [c + dx * L, base + dy * L],
+          [c + dx * 0.55 * L - nx * w, base + dy * 0.55 * L - ny * w],
+        ]),
+      );
+    }
+    // The cabochons: one in each cell of the crescent, a constant distance
+    // in from the outer rib's inner edge along the cell's middle line.
+    const B = D.cabochon;
+    for (let i = 0; i + 1 < outerIn.length; i++) {
+      const midOf = (p: readonly Vec3[]): [number, number] => [
+        ((p[i] as Vec3)[0] + (p[i + 1] as Vec3)[0]) / 2,
+        ((p[i] as Vec3)[1] + (p[i + 1] as Vec3)[1]) / 2,
+      ];
+      const [oa, oy] = midOf(outerIn);
+      const [ia, iy] = midOf(innerOut);
+      const f = B.inFromOuter / Math.hypot(oa - ia, oy - iy);
+      const a = oa + f * (ia - oa);
+      const y = oy + f * (iy - oy);
+      part.ring.prisms.push(disc(a, y, EDGE, B.ring, B.ringDepth, 1));
+      cabochons.push({ at: [a, y, EDGE + B.ringDepth], rot: OUT_OF_FACE, scale: [B.boss, B.boss, B.boss] });
+    }
+    // The globe on its rod from the vault's crown, in its two hoops.
+    const G = D.globe;
+    const gr = EDGE - G.in;
+    const gy = floor + G.centre;
+    // The hoops' bars clear the globe at their chords' middles.
+    const hoop = (G.radius + G.hoop / 2 + 0.005) / Math.cos(Math.PI / G.hoopSides);
+    part.hanger.blocks.push(post(c, gr, G.rod, gy + hoop + G.hoop / 2, CROWN_Y - ARCADE.shell));
+    for (let j = 0; j < G.hoopSides; j++) {
+      const t0 = (2 * Math.PI * j) / G.hoopSides;
+      const t1 = (2 * Math.PI * (j + 1)) / G.hoopSides;
+      // One hoop in the face's plane, one square to it.
+      part.hanger.blocks.push(
+        bar(
+          [c + hoop * Math.cos(t0), gy + hoop * Math.sin(t0), gr],
+          [c + hoop * Math.cos(t1), gy + hoop * Math.sin(t1), gr],
+          G.hoop,
+          G.hoop,
+        ),
+        member(
+          [c, gy + hoop * Math.sin(t0), gr + hoop * Math.cos(t0)],
+          [c, gy + hoop * Math.sin(t1), gr + hoop * Math.cos(t1)],
+          G.hoop,
+        ),
+      );
+    }
+    globes.push({ at: [c, gy, gr], rot: UPRIGHT, scale: [G.radius, G.radius, G.radius] });
+  }
+  return { part, cabochons, globes };
+}
+
+/**
+ * THE BALUSTERS of the gallery's outer balustrade. « Enfin, les colonnes
+ * sont réunies par un garde-corps constitué par des balustres en grès
+ * verni maintenus par une lisse en fer et par une large main courante en
+ * bois » [sourced E1900-TXT p. 213], supplied by Émile Muller [sourced].
+ *
+ * HOW MANY. The rule is PL-XIII Fig. 11's: « 5 balustres en terre cuite
+ * dans chaque intervalle de 1.74125 » [sourced], and PL-XIX Fig. 1 draws
+ * five in every interval of every bay, the corner bays too [counted].
+ * Four intervals a bay (pier column, cast-iron pilaster, middle column,
+ * pilaster, pier column), nine bays a face, four faces: 5 × 4 × 9 × 4 =
+ * 720 [derived]. The ledger agrees: « Balustres en grès verni (E. Muller) »
+ * 727 at 8.50 fr = 6,179.50 fr, and « Pose des balustres » 720 at 1 fr =
+ * 720.00 fr [sourced p. 217, both products checked]: 727 bought, 720 set;
+ * and its « Main-courante en bois », 237.60 m [sourced], is 72 small
+ * arches' 3.30 between columns (3.4825 less 0.18) [derived], where 560
+ * would need 4.24 an arch, longer than one.
+ * The text's « Ces balustres, au nombre de 560 » [sourced p. 213] agrees
+ * with neither; 560 is the rule with each face's two corner bays left out
+ * (5 × 4 × 7 × 4) [derived], which no plate draws. The plates and the
+ * ledger are built (SOURCES.md §10.10).
+ *
+ * WHERE. On the column axis, between each interval's two base blocks — the
+ * column's socle 0.250 and the pilaster's 0.220 square, 1.50625 clear
+ * [sourced PL-XIII Fig. 11 "250", "220", "1.50625"] — five evenly, 0.30125
+ * apart [derived]; standing on the plinth rail (0.150) up to the channel
+ * under the handrail, 0.890 [sourced: the cast-iron pilasters' "890"
+ * between the rails; the model's rail is `GALLERY_RAIL`].
+ *
+ * THE PROFILE, turned about its axis, foot to top [measured PL-XIX Fig. 1,
+ * 1:200, about 56 px/m on the full scan, so a pixel is 0.017 and the
+ * thin parts are stroke-limited]: a plinth 0.21 (square on the plate,
+ * read as a disc), a torus 0.17, a stem narrowing to about 0.07 over it
+ * and swelling to 0.12 under a bulb 0.21 at 0.49-0.53, a neck about 0.06,
+ * a cup, and an abacus 0.21 from 0.77 to the top. The host turns it (main.ts, the `baluster` asset); each
+ * baluster is an instance of it at its true size (`fittings.balusters`).
+ * The glaze's colour is not recorded [estimated on the page].
+ */
+export const BALUSTER = {
+  perInterval: 5,
+  clear: 1.50625,
+  socle: 0.25,
+  base: 0.22,
+  height: 0.89,
+  /** (height above the foot, radius) from the axis at the foot to the axis at the top. */
+  profile: [
+    [0, 0],
+    [0, 0.105],
+    [0.1, 0.105],
+    [0.11, 0.085],
+    [0.15, 0.085],
+    [0.18, 0.06],
+    [0.22, 0.035],
+    [0.42, 0.06],
+    [0.47, 0.09],
+    [0.49, 0.105],
+    [0.53, 0.105],
+    [0.56, 0.08],
+    [0.6, 0.035],
+    [0.68, 0.03],
+    [0.73, 0.06],
+    [0.77, 0.1],
+    [0.77, 0.105],
+    [0.89, 0.105],
+    [0.89, 0],
+  ] as ReadonlyArray<readonly [number, number]>,
+} as const;
+
+/**
+ * Every baluster on the +z face (see `BALUSTER`): five in each of a bay's
+ * four intervals, on the column axis, on the gallery rail's plinth.
+ */
+function balustersFace(): Fitting[] {
+  const B = BALUSTER;
+  const A = GALLERY;
+  const pitch = B.clear / B.perInterval;
+  const foot = A.floor + GALLERY_RAIL.plinth;
+  const out: Fitting[] = [];
+  for (let k = -4; k <= 4; k++) {
+    const c = bayCentre(k);
+    // Each interval's clear: from the column's socle to the pilaster's
+    // base, or from the pilaster's base to the middle column's socle.
+    const pier = A.module / 2 - A.pair / 2;
+    const clears: Array<readonly [number, number]> = [
+      [c - pier + B.socle / 2, c - GALLERY_RAIL_PITCH - B.base / 2],
+      [c - GALLERY_RAIL_PITCH + B.base / 2, c - B.socle / 2],
+      [c + B.socle / 2, c + GALLERY_RAIL_PITCH - B.base / 2],
+      [c + GALLERY_RAIL_PITCH + B.base / 2, c + pier - B.socle / 2],
+    ];
+    for (const [a0, a1] of clears) {
+      if (Math.abs(a1 - a0 - B.clear) > 1e-9) {
+        throw new Error(`platforms.ts balustersFace: an interval of ${a1 - a0}, not the plate's ${B.clear}`);
+      }
+      for (let j = 0; j < B.perInterval; j++) {
+        out.push({ at: [a0 + pitch * (j + 0.5), foot, EDGE], rot: UPRIGHT, scale: [1, 1, 1] });
+      }
+    }
   }
   return out;
 }
@@ -1826,8 +2203,13 @@ function tympanum(c: number, r: number): Piece {
  * the annexes stay blocks. Each bay's vault is a shell from the gallery's
  * gable to the building's back, over a glazed tympanum on the façade and
  * a solid one at its end.
+ *
+ * `staff` builds the gallery façade of piers and arched doors and its
+ * glazed tympana: the Français', whose frame is clad [sourced text: « pans
+ * de bois garnis de staff »]. The three pavilions of « bois apparent » get
+ * their frame instead (`screenFront`), outside this shell.
  */
-function pavilionFace(): { walls: Block[]; vaults: Prism[] } {
+function pavilionFace(staff: boolean): { walls: Block[]; vaults: Prism[] } {
   const P = PAVILION;
   const F = FACADE;
   const front = EDGE - P.front;
@@ -1837,10 +2219,12 @@ function pavilionFace(): { walls: Block[]; vaults: Prism[] } {
   const bay = GALLERY.module / 2;
   const floor = FLOORS.first;
   const W = F.wall;
+  // The side walls run to the façade's back face, or to the screen's.
+  const sideEnd = front - (staff ? W : PAVILION_FRAME.post);
   const walls: Block[] = [
     // The side walls, and the rear wall either side of the centre annex.
-    span(-half, -half + W, floor, SPRING_Y, annex, front - W),
-    span(half - W, half, floor, SPRING_Y, annex, front - W),
+    span(-half, -half + W, floor, SPRING_Y, annex, sideEnd),
+    span(half - W, half, floor, SPRING_Y, annex, sideEnd),
     span(-half, -bay, floor, SPRING_Y, annex, annex + W),
     span(bay, half, floor, SPRING_Y, annex, annex + W),
     // The centre bay's annex, up to the valley gutters.
@@ -1856,30 +2240,33 @@ function pavilionFace(): { walls: Block[]; vaults: Prism[] } {
   for (const k of [-1, 0, 1]) {
     const c = bayCentre(k);
     const end = k === 0 ? back : annex;
-    // The gallery façade: a pier either end, one in the middle, and over
-    // each door the wall from its arched head to the gutter.
-    walls.push(
-      span(c - bay, c - bay + F.pier, floor, SPRING_Y, front - W, front),
-      span(c + bay - F.pier, c + bay, floor, SPRING_Y, front - W, front),
-      span(c - F.mid / 2, c + F.mid / 2, floor, SPRING_Y, front - W, front),
-    );
-    for (const s of [-1, 1]) {
-      const head = doorHead(c + s * (F.mid + F.door) / 2, front);
-      const line = head.map(([x, , z]): Vec3 => [x, SPRING_Y, z]);
-      vaults.push(...between(line, head, W));
+    if (staff) {
+      // The gallery façade: a pier either end, one in the middle, and over
+      // each door the wall from its arched head to the gutter.
+      walls.push(
+        span(c - bay, c - bay + F.pier, floor, SPRING_Y, front - W, front),
+        span(c + bay - F.pier, c + bay, floor, SPRING_Y, front - W, front),
+        span(c - F.mid / 2, c + F.mid / 2, floor, SPRING_Y, front - W, front),
+      );
+      for (const s of [-1, 1]) {
+        const head = doorHead(c + s * (F.mid + F.door) / 2, front);
+        const line = head.map(([x, , z]): Vec3 => [x, SPRING_Y, z]);
+        vaults.push(...between(line, head, W));
+      }
+      const glazed = tympanum(c, front);
+      vaults.push(...glazed.prisms);
+      walls.push(...glazed.blocks);
     }
     // The roof: the gallery's gable, the shell back to the building's end,
-    // and the glazed tympana on the façade and at the end.
+    // and the glazed tympanum at the end.
     const gable = gableRibs(c, EDGE);
-    const glazed = tympanum(c, front);
     const rear = tympanum(c, end + ARCADE.plate);
     vaults.push(
       ...gable.prisms,
       ...between(vaultArc(c, EDGE), vaultArc(c, EDGE, ARCADE.shell), EDGE - end),
-      ...glazed.prisms,
       ...rear.prisms,
     );
-    walls.push(...gable.blocks, ...glazed.blocks, ...rear.blocks);
+    walls.push(...gable.blocks, ...rear.blocks);
     const r1 = front - (k === 0 ? P.centreLantern.front : P.outerLantern.front);
     const r0 = k === 0 ? back + P.centreLantern.back : r1 - P.outerLantern.length;
     // The lantern's glazed body, sunk into the vault's crown, and its roof.
@@ -1894,6 +2281,586 @@ function pavilionFace(): { walls: Block[]; vaults: Prism[] } {
     }
   }
   return { walls, vaults };
+}
+
+/**
+ * THE PAVILIONS' FRAME AND DRESSING (PL-XXIX, PL-XXX, E1900-TXT
+ * pp. 213-214; SOURCES.md §10.4). `pavilionFace` is the shell all four
+ * share; this is what stands on it, in two layers.
+ *
+ * THE RULE, the same on all four (`pavilionRule`), heights above the
+ * restaurant floor [tags per number]:
+ * - a cornice at the wall head round the gallery front, the sides and the
+ *   back, 0.20 tall and 0.06 proud [estimated: every elevation draws a
+ *   moulded head band; its section is not printed; 0.06 keeps it behind
+ *   the Russe's gables, which stand in front of it];
+ * - the side walls' posts, one on each of the 3.8825 lines back from the
+ *   front [sourced: « 3 entraxes » of 3.8825 make the 11.65], 0.15 square
+ *   and proud [sourced PL-XXX Fig. 5 "150"];
+ * - on the two terraces the annex makes at 2.95 [sourced text], a
+ *   balustrade 1.00 tall [sourced PL-XXIX Fig. 9 "1.00"] along the back
+ *   and the outer side, posts about every 1.0 [estimated];
+ * - where the centre bay's annex rises past the terraces, a pinnacle post
+ *   by each back corner, outside its side cornice, 0.20 square from the
+ *   terrace to 6.40 under a 0.30 cap at 6.70 [measured PL-XXIX Fig. 9:
+ *   6.57-6.82; Fig. 1: 6.68-6.85].
+ *
+ * THE SCREEN (`screenFront`), the gallery front of the three « en bois
+ * apparent » [sourced text], where the Français has its staff piers and
+ * arched doors (`FACADE`): a post on every 3.8825 line [sourced PL-XXX
+ * Fig. 5, PL-XXIX Fig. 11], 0.150 [sourced "150"]; a boarded sill to
+ * 0.60 [sourced PL-XXIX Fig. 11 "0.60"; PL-XXX Fig. 5's chain 600 + 2.100
+ * = 2.700]; a transom at 2.700 [sourced PL-XXX Fig. 5; the Russe's is
+ * 2.76], its beam and the head beam 0.200 [sourced PL-XXX Fig. 5 "200"];
+ * four leaves to a half-bay below the transom [counted PL-XXX Fig. 5,
+ * PL-XXIX Fig. 11; "645.6" on the Bar, "605.6" on the Russe] on mullions
+ * 0.080 [sourced "80"]; over the transom each pavilion's own sashes: two
+ * on the Bar, three on the Russe (0.56 / 1.29 / 0.56), one arched on the
+ * Flamand [counted]; the glass left out. Over the wall head each vault's
+ * end is BOARDED [sourced drawings:
+ * the vertical boarding of PL-XXX Figs 5, 17 and PL-XXIX Fig. 11], 0.05
+ * thick [estimated], where the Français' is glazed trellis. The Russe
+ * leaves its centre bay open under the transom, as Fig. 11 draws it
+ * (2.76 and 2.96 clear), where the entrance flights arrive.
+ *
+ * THE DRESSING, unique to each [measured on the plates at 1:100, about
+ * 118 px/m on the full scans, unless tagged; heights above the floor]:
+ * - FRANÇAIS (PL-XXIX Figs 1, 3): the nailed trellis on its piers
+ *   [sourced text « treillage »; ledger « Treillage (Pillet et Schmid) »],
+ *   laths on both diagonals 0.20 apart from 0.50 to the doors' springing
+ *   [measured]; a staff archivolt round each door head, 0.25 wide and
+ *   0.05 proud [measured]; and on the back of the centre bay, as it stood
+ *   « pendant l'Exposition de 1889 » [sourced Fig. 1], the crest: a
+ *   round-headed panel 2.40 wide to 8.46, between two posts 3.40 apart to
+ *   7.64 with their finials, on quarter-round shoulders from the wall head
+ *   [measured].
+ * - RUSSE (PL-XXIX Figs 9, 11): over its open centre bay two carved
+ *   gables, about 3.07 tip to tip, feet at 3.55, apex at 5.05 (its board's
+ *   top 5.21), each 0.16 toward the bay's middle from its half-bay's,
+ *   with its king post and a sunburst 0.32 in radius over the apex
+ *   [measured], standing 0.085 proud, in front of the cornice; a carved
+ *   valance of teeth under the front's cornice over the side bays, 0.16
+ *   deep every 0.20 [measured, estimated pitch]; on the back of the centre
+ *   bay the clock, 1.25 across [sourced "1.25"; measured 1.21-1.29]
+ *   centred at 5.45 [measured], under a carved arch band 0.35 wide inside
+ *   the vault [measured]; and on the centre lantern's back end the finial,
+ *   2.60 from the ridge to the ball's top [sourced "2.60"], a wheel of
+ *   radius 0.44 on it 1.28 up, its vane an arrow through it from 0.69 on
+ *   one side to 1.28 on the other [measured].
+ * - ANGLO-AMÉRICAIN (PL-XXX Fig. 5): on every boarded vault end a king
+ *   post, a collar 0.55 of the way from the wall head to the crown with a
+ *   post "110" under each end about 2.5 out; either side a long brace from
+ *   the outer foot to the king post at the collar, a short strut under
+ *   it, and a smaller X over the collar; in the band over the transom,
+ *   raking struts rising from each post's foot out to the head beam, 0.78
+ *   out [measured].
+ * - FLAMAND: « identique au bar Anglo-Américain, sauf la décoration »
+ *   [sourced text], and no plate draws its 1889 dress. The Théâtre it
+ *   became kept its gallery front (PL-XXX Fig. 17), so that front is built
+ *   [estimated]: an arched sash in every half-bay over the transom, rising
+ *   1.50; and on every vault end a king post, a collar with its end posts,
+ *   curved braces from the end posts' feet, 2.45 out, to the king post
+ *   under the collar, and struts from the king post at the collar up and
+ *   out to the arc, 1.24 out [measured on Fig. 17].
+ *
+ * Everything stands at most 0.09 proud of the front, inside the inner
+ * arcade's plane (0.099 in front of it); no two of the rule's and the
+ * dressings' pieces share a face; all is built in the +z face's
+ * frame and turned onto the pavilion's own face, found by name in
+ * `FACES` (never by index).
+ */
+const PAVILION_FRAME = {
+  post: 0.15,
+  mullion: 0.08,
+  leaves: 4,
+  sill: 0.6,
+  panel: 0.05,
+  transom: 2.7,
+  beam: 0.2,
+  board: 0.05,
+  cornice: { height: 0.2, proud: 0.06 },
+  terrace: { height: 1.0, plinth: 0.1, cap: 0.08, rail: 0.08, post: 0.1, pitch: 1.0 },
+  pinnacle: { size: 0.2, top: 6.4, cap: 0.3, capTop: 6.7 },
+} as const;
+
+/** The dressing's numbers, per pavilion (see `PAVILION_FRAME`). */
+const DRESSING = {
+  francais: {
+    trellis: { pitch: 0.2, lath: 0.035, from: 0.5 },
+    archivolt: { width: 0.25, proud: 0.05 },
+    crest: { half: 1.2, top: 8.46, depth: 0.3, posts: 1.7, post: 0.35, postTop: 7.64, finial: 0.25, shoulder: 6.8 },
+  },
+  russe: {
+    gable: { half: 1.46, inward: 0.16, foot: 3.55, apex: 5.05, board: 0.22, tie: 0.12, king: 0.1, t: 0.085, sun: 0.32 },
+    valance: { pitch: 0.2, tooth: 0.07, drop: 0.16, proud: 0.05 },
+    clock: { radius: 0.625, centre: 5.45, depth: 0.1, band: 0.35, bandProud: 0.06 },
+    finial: { height: 2.6, mast: 0.08, wheel: 0.44, wheelAt: 1.28, vane: [-0.69, 1.28] as readonly [number, number] },
+    /** Mullions over the transom, as fractions of a half-bay's clear: three sashes, 0.56 / 1.29 / 0.56. */
+    upper: [0.232, 0.768],
+  },
+  anglo: { collar: 0.55, knee: 0.78, collarPost: 2.5, upper: [0.5] },
+  flamand: { collar: 0.55, braceFoot: 2.45, collarPost: 2.5, strut: 1.24, archRise: 1.5, upper: [] as number[] },
+  /** Facets of a disc and of a curved brace. */
+  discSides: 16,
+  facets: 8,
+} as const;
+
+/** Each pavilion's face, by the name `FACES` gives it. */
+const PAVILION_FACE = {
+  flamand: pavilionOn("Restaurant flamand"),
+  anglo: pavilionOn("Bar anglo-américain"),
+  francais: pavilionOn("Restaurant français"),
+  russe: pavilionOn("Restaurant russe"),
+} as const;
+
+function pavilionOn(name: (typeof FACES)[number]["pavilion"]): number {
+  const f = FACES.find((x) => x.pavilion === name);
+  if (f === undefined) throw new Error(`platforms.ts: FACES names no face for the ${name}`);
+  return f.quadrant;
+}
+
+/** The pavilion's lines in the face frame: its gallery front, back, annex line, half-length. */
+const PAV = {
+  front: EDGE - PAVILION.front,
+  back: EDGE - PAVILION.front - PAVILION.depth,
+  annex: EDGE - PAVILION.front - PAVILION.depth + PAVILION.annex,
+  half: PAVILION.length / 2,
+  bay: GALLERY.module / 2,
+} as const;
+
+/** The vault's underside (under its shell) at height y: its half-width about the bay's centre. */
+function underShell(y: number): number {
+  const half = (GALLERY.module - GALLERY.valley) / 2 - ARCADE.shell;
+  const rise = CROWN_Y - SPRING_Y - ARCADE.shell;
+  const t = (y - SPRING_Y) / rise;
+  return t >= 1 ? 0 : half * Math.sqrt(1 - Math.max(0, t) * t);
+}
+
+/**
+ * A disc of `n` sides in the plane r = const, centred (a, y), extruded
+ * `depth` toward +r (dir 1) or -r (dir -1): counter-clockwise seen from +r
+ * extrudes toward it.
+ */
+function disc(a: number, y: number, r: number, radius: number, depth: number, dir: 1 | -1): Prism {
+  const n = DRESSING.discSides;
+  const pts: Vec3[] = [];
+  for (let i = 0; i < n; i++) {
+    const phi = (2 * Math.PI * i) / n;
+    pts.push([a + radius * Math.cos(phi), y + radius * Math.sin(phi), r]);
+  }
+  if (dir < 0) pts.reverse();
+  return { outline: pts, depth };
+}
+
+/** A curve through `pts` in the plane r = const as bars `w` wide, `t` through it. */
+function curveBars(pts: readonly (readonly [number, number])[], r: number, w: number, t: number): Block[] {
+  const out: Block[] = [];
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const [a0, y0] = pts[i] as readonly [number, number];
+    const [a1, y1] = pts[i + 1] as readonly [number, number];
+    out.push(bar([a0, y0, r], [a1, y1, r], w, t));
+  }
+  return out;
+}
+
+/**
+ * The boarded end of the vault over bay centre `c`, its face at r,
+ * extruded `t` inward: the arc under the shell over the springing line,
+ * cut into convex pieces (a quad per facet, a triangle at each foot).
+ */
+function boardedEnd(c: number, r: number, t: number): Prism[] {
+  const arc = vaultArc(c, r, ARCADE.shell);
+  const out: Prism[] = [];
+  for (let i = 0; i + 1 < arc.length; i++) {
+    const p = arc[i] as Vec3;
+    const q = arc[i + 1] as Vec3;
+    // Clockwise seen from +r (over the top, then back along the line), so
+    // it extrudes inward.
+    const ring: Vec3[] = [p, q];
+    if (q[1] - SPRING_Y > 1e-9) ring.push([q[0], SPRING_Y, r]);
+    if (p[1] - SPRING_Y > 1e-9) ring.push([p[0], SPRING_Y, r]);
+    out.push({ outline: ring, depth: t });
+  }
+  return out;
+}
+
+/** The rule every pavilion carries, on the +z face (see `PAVILION_FRAME`). */
+function pavilionRule(): Record<"cornice" | "sidePost" | "terrace" | "pinnacle", Piece> {
+  const F = PAVILION_FRAME;
+  const { front, back, annex, half, bay } = PAV;
+  const floor = FLOORS.first;
+  const ch = F.cornice.height;
+  const cp = F.cornice.proud;
+  const out = parted("cornice", "sidePost", "terrace", "pinnacle");
+  const head = SPRING_Y - ch;
+  out.cornice.blocks.push(
+    // The gallery front, the sides, the centre annex's back and sides,
+    // and the hall's back wall over the terraces.
+    span(-half - cp, half + cp, head, SPRING_Y, front, front + cp),
+    span(-half - cp, -half, head, SPRING_Y, annex, front),
+    span(half, half + cp, head, SPRING_Y, annex, front),
+    span(-bay - cp, bay + cp, head, SPRING_Y, back - cp, back),
+    span(-bay - cp, -bay, head, SPRING_Y, back, annex),
+    span(bay, bay + cp, head, SPRING_Y, back, annex),
+    span(-half - cp, -bay - cp, head, SPRING_Y, annex - cp, annex),
+    span(bay + cp, half + cp, head, SPRING_Y, annex - cp, annex),
+  );
+  // The side walls' posts on the 3.8825 lines back from the front, the
+  // last one at the hall's back corner.
+  for (const s of [-1, 1]) {
+    for (let j = 1; j <= 3; j++) {
+      const r = j < 3 ? front - j * bay : annex + F.post / 2;
+      out.sidePost.blocks.push(post(s * (half + F.post / 2), r, F.post, floor, head));
+    }
+  }
+  // The terraces' balustrades and the pinnacles on the annex's corners.
+  const T = F.terrace;
+  const P = F.pinnacle;
+  const y0 = floor + PAVILION.annexHeight;
+  const top = y0 + T.height;
+  for (const s of [-1, 1]) {
+    // Past the centre annex's side cornice, then the pinnacle.
+    const lo = bay + cp + P.size;
+    const hi = half - T.rail;
+    const rBack = back + T.rail / 2;
+    const aSide = s * (half - T.rail / 2);
+    for (const [ya, yb] of [
+      [y0, y0 + T.plinth],
+      [top - T.cap, top],
+    ] as const) {
+      out.terrace.blocks.push(onLine(s > 0 ? lo : -hi, s > 0 ? hi : -lo, ya, yb, rBack, T.rail));
+      out.terrace.blocks.push(span(aSide - T.rail / 2, aSide + T.rail / 2, ya, yb, back, annex));
+    }
+    const n = Math.max(1, Math.round((hi - lo) / T.pitch));
+    for (let k = 1; k <= n; k++) {
+      const a = lo + ((hi - lo) * k) / n;
+      out.terrace.blocks.push(post(s * a, rBack, T.post, y0 + T.plinth, top - T.cap));
+    }
+    const m = Math.max(1, Math.round((annex - back - T.rail) / T.pitch));
+    for (let k = 1; k <= m; k++) {
+      const r = back + T.rail + ((annex - back - T.rail) * k) / m - T.post / 2;
+      out.terrace.blocks.push(post(aSide, r, T.post, y0 + T.plinth, top - T.cap));
+    }
+    const pa = s * (bay + cp + P.size / 2);
+    const pr = back + P.size / 2;
+    out.pinnacle.blocks.push(
+      post(pa, pr, P.size, y0, floor + P.top),
+      post(pa, pr, P.cap, floor + P.top, floor + P.capTop),
+    );
+  }
+  return out;
+}
+
+/**
+ * The timber screen on the gallery front, on the +z face (see
+ * `PAVILION_FRAME`): posts, sill, transom and head, leaves and sashes,
+ * and the boarded vault ends. `open` leaves the centre bay open under
+ * the transom and bare over it (the Russe's, under its gables); `upper`
+ * places the mullions over the transom, as fractions of a half-bay's
+ * clear (each pavilion draws its own sashes there).
+ */
+function screenFront(open: boolean, upper: readonly number[]): Record<"post" | "beam" | "sash" | "board", Piece> {
+  const F = PAVILION_FRAME;
+  const { front, half, bay } = PAV;
+  const floor = FLOORS.first;
+  const out = parted("post", "beam", "sash", "board");
+  const rMid = front - F.post / 2;
+  const stations = [-3, -2, -1, 0, 1, 2, 3].map((i) =>
+    Math.abs(i) === 3 ? Math.sign(i) * (half - F.post / 2) : i * bay,
+  );
+  for (const a of stations) out.post.blocks.push(post(a, rMid, F.post, floor, SPRING_Y));
+  const transom = floor + F.transom;
+  for (let j = 0; j + 1 < stations.length; j++) {
+    const a0 = (stations[j] as number) + F.post / 2;
+    const a1 = (stations[j + 1] as number) - F.post / 2;
+    const centre = j === 2 || j === 3;
+    out.beam.blocks.push(
+      span(a0, a1, transom, transom + F.beam, front - F.post, front),
+      span(a0, a1, SPRING_Y - F.beam, SPRING_Y, front - F.post, front),
+    );
+    if (open && centre) continue;
+    out.beam.blocks.push(onLine(a0, a1, floor, floor + F.sill, rMid, F.panel));
+    for (let m = 1; m < F.leaves; m++) {
+      out.sash.blocks.push(post(a0 + ((a1 - a0) * m) / F.leaves, rMid, F.mullion, floor + F.sill, transom));
+    }
+    for (const u of upper) {
+      out.sash.blocks.push(post(a0 + (a1 - a0) * u, rMid, F.mullion, transom + F.beam, SPRING_Y - F.beam));
+    }
+  }
+  for (const k of [-1, 0, 1]) out.board.prisms.push(...boardedEnd(bayCentre(k), front, F.board));
+  return out;
+}
+
+/** The plane the front's dressing stands in: `t` thick, from the front out. */
+function proud(t: number): number {
+  return PAV.front + t / 2;
+}
+
+/** The Français' dressing on the +z face (see `PAVILION_FRAME`, `DRESSING`). */
+function francaisDressing(): Record<"trellis" | "archivolt" | "crest", Piece> {
+  const D = DRESSING.francais;
+  const F = FACADE;
+  const { front, back, bay } = PAV;
+  const floor = FLOORS.first;
+  const out = parted("trellis", "archivolt", "crest");
+  // The trellis on every pier of the façade, clipped to it.
+  const T = D.trellis;
+  // Inset by a lath, so no lath's square end overhangs its pier.
+  const y0 = floor + T.from + T.lath;
+  const y1 = floor + F.spring - T.lath;
+  const r = proud(T.lath);
+  const step = T.pitch * Math.SQRT2;
+  for (const k of [-1, 0, 1]) {
+    const c = bayCentre(k);
+    const piers: Array<readonly [number, number]> = [
+      [c - bay, c - bay + F.pier],
+      [c - F.mid / 2, c + F.mid / 2],
+      [c + bay - F.pier, c + bay],
+    ];
+    for (const [p0, p1] of piers) {
+      const a0 = p0 + T.lath;
+      const a1 = p1 - T.lath;
+      for (const dir of [1, -1]) {
+        // Lines y = kk + dir (a - a0), `pitch` apart square to themselves.
+        const lo = dir > 0 ? y0 - (a1 - a0) : y0;
+        const hi = dir > 0 ? y1 : y1 + (a1 - a0);
+        for (let kk = lo + step / 2; kk < hi; kk += step) {
+          // Where the line is inside the pier's rectangle, as a range of a.
+          const u0 = Math.max(a0, dir > 0 ? a0 + (y0 - kk) : a0 + (kk - y1));
+          const u1 = Math.min(a1, dir > 0 ? a0 + (y1 - kk) : a0 + (kk - y0));
+          if (u1 - u0 < 2 * T.lath) continue;
+          const y = (u: number) => kk + dir * (u - a0);
+          out.trellis.blocks.push(bar([u0, y(u0), r], [u1, y(u1), r], T.lath, T.lath));
+        }
+      }
+    }
+    // The archivolts round the door heads.
+    const A = D.archivolt;
+    for (const s of [-1, 1]) {
+      const a = c + (s * (F.mid + F.door)) / 2;
+      const outer: Vec3[] = [];
+      const inner: Vec3[] = [];
+      for (let i = 0; i <= F.headSegments; i++) {
+        const phi = Math.PI * (1 - i / F.headSegments);
+        const y = floor + F.spring;
+        outer.push([a + (F.door / 2 + A.width) * Math.cos(phi), y + (F.rise + A.width) * Math.sin(phi), front + A.proud]);
+        inner.push([a + (F.door / 2) * Math.cos(phi), y + F.rise * Math.sin(phi), front + A.proud]);
+      }
+      out.archivolt.prisms.push(...between(outer, inner, A.proud));
+    }
+  }
+  // The 1889 crest on the back of the centre bay, standing out from the
+  // back toward the void (extruded -r from the back).
+  const C = D.crest;
+  const ys = floor + C.top - C.half;
+  const tomb: Vec3[] = [];
+  for (let i = 0; i <= DRESSING.facets; i++) {
+    const phi = Math.PI * (1 - i / DRESSING.facets);
+    tomb.push([C.half * Math.cos(phi), ys + C.half * Math.sin(phi), back]);
+  }
+  // Seen from +r: over the top left to right, down, back: clockwise, so -r.
+  tomb.push([C.half, SPRING_Y, back], [-C.half, SPRING_Y, back]);
+  out.crest.prisms.push({ outline: tomb, depth: C.depth });
+  for (const s of [-1, 1]) {
+    const a = s * C.posts;
+    out.crest.blocks.push(
+      post(a, back - C.post / 2, C.post, SPRING_Y, floor + C.postTop),
+      post(a, back - C.post / 2, C.finial, floor + C.postTop, floor + C.postTop + C.finial),
+    );
+    // The shoulder from the wall head at the bay's edge up to the post: a
+    // quarter ellipse, convex, clockwise seen from +r either side.
+    const q: Vec3[] = [[s * (C.posts + C.post / 2), SPRING_Y, back]];
+    const ax = bay - C.posts - C.post / 2;
+    for (let i = 0; i <= DRESSING.facets; i++) {
+      const t = (Math.PI / 2) * (i / DRESSING.facets);
+      q.push([s * (C.posts + C.post / 2 + ax * Math.sin(t)), SPRING_Y + (floor + C.shoulder - SPRING_Y) * Math.cos(t), back]);
+    }
+    out.crest.prisms.push({ outline: s > 0 ? q : [...q].reverse(), depth: C.depth / 2 });
+  }
+  out.crest.blocks.push(post(0, back - C.depth / 2, C.finial, floor + C.top, floor + C.top + C.finial));
+  return out;
+}
+
+/** The Russe's dressing on the +z face (see `PAVILION_FRAME`, `DRESSING`). */
+function russeDressing(): Record<"gable" | "valance" | "clock" | "finial", Piece> {
+  const D = DRESSING.russe;
+  const { front, back, half, bay } = PAV;
+  const floor = FLOORS.first;
+  const out = parted("gable", "valance", "clock", "finial");
+  // The two carved gables over the open centre bay.
+  const G = D.gable;
+  const r = proud(G.t);
+  for (const s of [-1, 1]) {
+    const gc = s * (bay / 2 - G.inward);
+    const foot = floor + G.foot;
+    const apex = floor + G.apex;
+    out.gable.blocks.push(
+      bar([gc - G.half, foot, r], [gc, apex, r], G.board, G.t),
+      bar([gc, apex, r], [gc + G.half, foot, r], G.board, G.t),
+      bar([gc - G.half, foot, r], [gc + G.half, foot, r], G.tie, G.t - 0.02),
+      bar([gc, floor + PAVILION_FRAME.transom + PAVILION_FRAME.beam, r], [gc, apex, r], G.king, G.t - 0.01),
+    );
+    out.gable.prisms.push(disc(gc, apex + G.sun * 0.8, front, G.sun, G.t, 1));
+  }
+  // The valance under the front's cornice.
+  const V = D.valance;
+  const under = SPRING_Y - PAVILION_FRAME.cornice.height;
+  const n = Math.floor((2 * half - V.tooth) / V.pitch);
+  const a0 = -((n - 1) * V.pitch) / 2;
+  for (let i = 0; i < n; i++) {
+    const a = a0 + i * V.pitch;
+    // Not over the centre bay, where the gables stand [sourced drawing Fig. 11].
+    if (Math.abs(a) < bay + V.tooth) continue;
+    out.valance.blocks.push(span(a - V.tooth / 2, a + V.tooth / 2, under - V.drop, under, front, front + V.proud));
+  }
+  // The clock and its carved arch on the back of the centre bay.
+  const K = D.clock;
+  out.clock.prisms.push(disc(0, floor + K.centre, back, K.radius, K.depth, -1));
+  // Wound as a gable's ribs, so it extrudes -r: out of the back.
+  out.clock.prisms.push(
+    ...between(vaultArc(0, back, ARCADE.shell), vaultArc(0, back, ARCADE.shell + K.band), K.bandProud),
+  );
+  // The finial on the centre lantern's back end.
+  const Fi = D.finial;
+  const ridge = PAVILION.lanternEave + PAVILION.lanternRise;
+  const rf = back + PAVILION.centreLantern.back + Fi.mast / 2;
+  const wheel = ridge + Fi.wheelAt;
+  // Standing on the roof slabs' top over the ridge line, not in them.
+  const pitch = Math.atan2(PAVILION.lanternRise, PAVILION.lanternWidth / 2);
+  const onRoof = ridge + PAVILION.roofSlab / 2 / Math.cos(pitch) + 0.002;
+  out.finial.blocks.push(
+    post(0, rf, Fi.mast, onRoof, ridge + Fi.height),
+    bar([Fi.vane[0], wheel, rf], [Fi.vane[1], wheel, rf], Fi.mast, Fi.mast),
+  );
+  out.finial.prisms.push(disc(0, wheel, rf - Fi.mast / 2, Fi.wheel, Fi.mast / 2, -1));
+  return out;
+}
+
+/**
+ * King post, collar and the collar's two end posts on each vault end
+ * (PL-XXX Figs 5, 17: the posts "110" about 2.5 either side [measured]),
+ * each a different depth through the plane so no two faces coincide;
+ * returns the collar's height.
+ */
+function kingAndCollar(c: number, collar: number, posts: number, out: Piece): number {
+  const top = CROWN_Y - ARCADE.shell - 0.02;
+  const yc = SPRING_Y + collar * (top - SPRING_Y);
+  const u = underShell(yc) - 0.2;
+  out.blocks.push(
+    bar([c, SPRING_Y, proud(0.09)], [c, top, proud(0.09)], 0.14, 0.09),
+    bar([c - u, yc, proud(0.07)], [c + u, yc, proud(0.07)], 0.12, 0.07),
+  );
+  for (const s of [-1, 1]) {
+    out.blocks.push(bar([c + s * posts, SPRING_Y, proud(0.06)], [c + s * posts, yc, proud(0.06)], 0.11, 0.06));
+  }
+  return yc;
+}
+
+/** The Anglo-Américain's dressing on the +z face (see `PAVILION_FRAME`, `DRESSING`). */
+function angloDressing(): Record<"brace" | "knee", Piece> {
+  const D = DRESSING.anglo;
+  const F = PAVILION_FRAME;
+  const { half, bay } = PAV;
+  const floor = FLOORS.first;
+  const out = parted("brace", "knee");
+  const r = proud(0.05);
+  const top = CROWN_Y - ARCADE.shell - 0.02;
+  for (const k of [-1, 0, 1]) {
+    const c = bayCentre(k);
+    const yc = kingAndCollar(c, D.collar, D.collarPost, out.brace);
+    const foot = SPRING_Y + 0.15;
+    // Over the collar, a smaller X either side of the king post.
+    const xLow = yc + 0.1;
+    const xHigh = yc + 0.6 * (top - yc);
+    for (const s of [-1, 1]) {
+      const outer = c + s * (underShell(foot) - 0.3);
+      const onKing = c + s * 0.12;
+      out.brace.blocks.push(
+        // The long brace from the outer foot to the king post at the collar,
+        bar([outer, foot, r], [onKing, yc - 0.1, r], 0.12, 0.05),
+        // the short strut under it, from the collar post's foot to its middle,
+        bar([c + s * D.collarPost, foot, proud(0.04)], [(outer + onKing) / 2, (foot + yc - 0.1) / 2, proud(0.04)], 0.1, 0.04),
+        // and the X over the collar, its two bars at two depths.
+        bar([c + s * (underShell(xLow) - 0.3), xLow, proud(0.045)], [onKing, top - 0.3, proud(0.045)], 0.1, 0.045),
+        bar([c + s * (underShell(xHigh) - 0.3), xHigh, proud(0.035)], [onKing, xLow, proud(0.035)], 0.1, 0.035),
+      );
+    }
+  }
+  // The raking struts in the band over the transom, rising from each
+  // post's foot on the transom out to the head beam either side (inward
+  // only at the ends), their heads clear of the cornice.
+  const yTop = SPRING_Y - F.beam - 0.07;
+  const yFoot = floor + F.transom + F.beam + 0.05;
+  for (const i of [-3, -2, -1, 0, 1, 2, 3]) {
+    const a = Math.abs(i) === 3 ? Math.sign(i) * (half - F.post / 2) : i * bay;
+    for (const s of [-1, 1]) {
+      if (Math.abs(a + s * D.knee) > half - F.post) continue;
+      out.knee.blocks.push(bar([a + (s * F.post) / 2, yFoot, r], [a + s * D.knee, yTop, r], 0.1, 0.05));
+    }
+  }
+  return out;
+}
+
+/** The Flamand's dressing on the +z face, from the Théâtre's front (see `PAVILION_FRAME`, `DRESSING`). */
+function flamandDressing(): Record<"arch" | "brace", Piece> {
+  const D = DRESSING.flamand;
+  const F = PAVILION_FRAME;
+  const { half, bay } = PAV;
+  const floor = FLOORS.first;
+  const out = parted("arch", "brace");
+  const r = proud(0.05);
+  const n = DRESSING.facets;
+  for (const k of [-1, 0, 1]) {
+    const c = bayCentre(k);
+    const yc = kingAndCollar(c, D.collar, D.collarPost, out.brace);
+    for (const s of [-1, 1]) {
+      // The curved brace from the collar post's foot to the king post just
+      // under the collar, bowed up and out.
+      const onKing = 0.12;
+      const pts: Array<[number, number]> = [];
+      for (let i = 0; i <= n; i++) {
+        const t = (Math.PI / 2) * (i / n);
+        pts.push([c + s * (onKing + (D.braceFoot - onKing) * Math.cos(t)), SPRING_Y + 0.1 + (yc - 0.16 - SPRING_Y - 0.1) * Math.sin(t)]);
+      }
+      out.brace.blocks.push(...curveBars(pts, r, 0.12, 0.05));
+      // The strut from the king post at the collar up and out to the arc.
+      const tU = Math.sqrt(1 - ((D.strut + 0.25) / underShell(SPRING_Y)) ** 2);
+      const yEnd = SPRING_Y + tU * (CROWN_Y - ARCADE.shell - SPRING_Y) - 0.15;
+      out.brace.blocks.push(bar([c + s * onKing, yc + 0.08, proud(0.04)], [c + s * D.strut, yEnd, proud(0.04)], 0.1, 0.04));
+    }
+  }
+  // An arched sash in every half-bay over the transom.
+  const stations = [-3, -2, -1, 0, 1, 2, 3].map((i) =>
+    Math.abs(i) === 3 ? Math.sign(i) * (half - F.post / 2) : i * bay,
+  );
+  const spring = floor + F.transom + F.beam;
+  for (let j = 0; j + 1 < stations.length; j++) {
+    const a0 = (stations[j] as number) + F.post / 2 + 0.05;
+    const a1 = (stations[j + 1] as number) - F.post / 2 - 0.05;
+    const mid = (a0 + a1) / 2;
+    const pts: Array<[number, number]> = [];
+    for (let i = 0; i <= n; i++) {
+      const phi = Math.PI * (1 - i / n);
+      pts.push([mid + ((a1 - a0) / 2) * Math.cos(phi), spring + D.archRise * Math.sin(phi)]);
+    }
+    out.arch.blocks.push(...curveBars(pts, r, 0.1, 0.05));
+  }
+  return out;
+}
+
+/** Every pavilion piece and the faces it goes on, by name. */
+function pavilionParts(): Array<{ prefix: string; part: Parted; faces: readonly number[] }> {
+  const P = PAVILION_FACE;
+  return [
+    { prefix: "pavilion", part: pavilionRule(), faces: [0, 1, 2, 3] },
+    { prefix: "pavilion", part: screenFront(false, DRESSING.flamand.upper), faces: [P.flamand] },
+    { prefix: "pavilion", part: screenFront(false, DRESSING.anglo.upper), faces: [P.anglo] },
+    { prefix: "pavilion", part: screenFront(true, DRESSING.russe.upper), faces: [P.russe] },
+    { prefix: "francais", part: francaisDressing(), faces: [P.francais] },
+    { prefix: "russe", part: russeDressing(), faces: [P.russe] },
+    { prefix: "anglo", part: angloDressing(), faces: [P.anglo] },
+    { prefix: "flamand", part: flamandDressing(), faces: [P.flamand] },
+  ];
 }
 
 /** The 1st floor's cross girders on the +z face: parallelograms between the legs. */
@@ -3141,16 +4108,20 @@ function secondSkirtRelief(): Piece {
  */
 export function fitOutSolids(): Record<string, { outline: readonly Vec3[]; depth: number }[]> {
   const out: Record<string, Prism[]> = {};
+  // A name met twice (a piece on two sets of faces) gathers both.
   const add = (prefix: string, part: Parted, faces: readonly number[] | null) => {
     for (const [name, piece] of Object.entries(part)) {
       const list = faces === null ? piece.prisms : allFacesPrisms(piece.prisms, faces);
       const boxes = faces === null ? piece.blocks : allFaces(piece.blocks, faces);
-      out[`${prefix}.${name}`] = [...list, ...boxes.map(blockPrism)];
+      const key = `${prefix}.${name}`;
+      out[key] = [...(out[key] ?? []), ...list, ...boxes.map(blockPrism)];
     }
   };
   add("inner", innerArcadeFace(), [0, 1, 2, 3]);
   add("entrance", entranceFace(), TERRACE_RAIL.entrance);
   add("second", secondFitOut(), null);
+  for (const { prefix, part, faces } of pavilionParts()) add(prefix, part, faces);
+  add("arcade", arcadeDressFace().part, [0, 1, 2, 3]);
   return out;
 }
 
@@ -3183,8 +4154,13 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
   // The masonry class carries no normals: the page computes them.
   const pedestal = prisms(g, "pedestal", pedestalFaces(), false);
 
-  // The fit-out, face by face.
-  const pavilion = pavilionFace();
+  // The fit-out, face by face. The pavilions' shell is one, less the
+  // Français' staff front, which the other three have as a timber screen
+  // (`pavilionParts`); each is found on its face by name.
+  const staffFaces = [PAVILION_FACE.francais];
+  const timberFaces = [PAVILION_FACE.flamand, PAVILION_FACE.anglo, PAVILION_FACE.russe];
+  const staffShell = pavilionFace(true);
+  const timberShell = pavilionFace(false);
   const second = secondGalleryFace();
   const ornament = skirtOrnament();
   const panelling = secondSkirtRelief();
@@ -3223,7 +4199,6 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
       ...arcadeFace(),
       ...trellis,
       ...bays.blocks,
-      ...pavilion.walls,
       ...galleryRail,
       ...voidRail,
       ...ornament.blocks,
@@ -3238,6 +4213,8 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
       allFaces(terraceRail(false), TERRACE_RAIL.closed),
       allFaces(stepCut, TERRACE_RAIL.entrance),
       allFaces([step], TERRACE_RAIL.closed),
+      allFaces(staffShell.walls, staffFaces),
+      allFaces(timberShell.walls, timberFaces),
       landingBlocks(),
     ),
   );
@@ -3255,6 +4232,32 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
     prisms(g, "entranceFlights", allFacesPrisms(flights.prisms, TERRACE_RAIL.entrance)),
   ];
   const fitSecond = [blocks(g, "secondFitOut", secondFit.blocks), prisms(g, "secondFitOutCurved", secondFit.prisms)];
+  // The pavilions' frame and dressing, each piece on its own face(s).
+  const dress = pavilionParts();
+  const fitPavilions = [
+    blocks(g, "pavilionDress", dress.flatMap(({ part, faces }) => allFaces(merged(part).blocks, faces))),
+    prisms(g, "pavilionDressCurved", dress.flatMap(({ part, faces }) => allFacesPrisms(merged(part).prisms, faces))),
+  ];
+  // The arcade's dressing: one arcade, on all 36 bays; its glass bosses
+  // and globes as instances.
+  const arcade = arcadeDressFace();
+  const arcadeSolid = merged(arcade.part);
+  const fitArcade = [
+    blocks(g, "arcadeDress", allFaces(arcadeSolid.blocks)),
+    prisms(g, "arcadeDressCurved", allFacesPrisms(arcadeSolid.prisms)),
+  ];
+  const fittings = [
+    {
+      name: "cabochons",
+      spawn: fittingSpawn(g, "cabochons", fittingsOnFaces(arcade.cabochons), FITTING_ASSETS.cabochon),
+    },
+    { name: "globes", spawn: fittingSpawn(g, "globes", fittingsOnFaces(arcade.globes), FITTING_ASSETS.globe) },
+    // The gallery balustrade's stoneware balusters.
+    {
+      name: "balusters",
+      spawn: fittingSpawn(g, "balusters", fittingsOnFaces(balustersFace()), FITTING_ASSETS.baluster),
+    },
+  ];
   // The ground stair arrives in piles 4 and 2: quadrant targets 0 and 2.
   const arrivals = [
     ...[0, 2].map((k) => turnWell(STAIR_OPENINGS.ground, k)),
@@ -3270,8 +4273,9 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
       arrivals,
     ),
     ...secondDeck(),
+    ...allFacesPrisms(staffShell.vaults, staffFaces),
+    ...allFacesPrisms(timberShell.vaults, timberFaces),
     ...allFacesPrisms([
-      ...pavilion.vaults,
       ...bays.prisms,
       skirt,
       ...ornament.prisms,
@@ -3284,7 +4288,8 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
   ]);
 
   return {
-    platforms: [fitBlocks, fitPrisms, ...fitInner, ...fitFlights, ...fitSecond],
+    platforms: [fitBlocks, fitPrisms, ...fitInner, ...fitFlights, ...fitSecond, ...fitPavilions, ...fitArcade],
+    fittings,
     names: [copyToQuadrants(g, "names", namesBand(g), quads)],
     masonry: [copyToQuadrants(g, "pedestals", pedestal, quads)],
   };

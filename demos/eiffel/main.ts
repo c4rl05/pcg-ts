@@ -6,16 +6,20 @@
  * it once and stands the result in daylight. Nothing here generates or
  * corrects anything — what is on screen is what the graph settled.
  *
- * ONE THING MOVES, AND IT IS THE PAGE'S. The six lift cars ride their
+ * ONE THING MOVES, AND IT IS THE PAGE'S: the lifts. The cars ride their
  * runs, slowly, at about a metre a second: four up and down the legs'
  * inclined tracks, station to station, tipping as the rail bends under
  * them, and the Edoux pair counterweighted against each other
  * in the shaft so one climbs toward the 3rd floor as the other drops
- * toward the 2nd. The graph settles where a car CAN be — each car is its
- * own `car.<name>` output, and `lifts.ts` publishes the run it rides as
- * `LIFT_CARS` — and this page owns the clock, which is the same division
- * the lanterns demo draws. `?still` parks them all where the graph built
- * them, which is what every scripted capture of this page asks for.
+ * toward the 2nd. Their machinery moves with them: the Roux chains round
+ * their wheels, the Otis carriages and counterweight trucks, the Edoux
+ * pistons, pulleys and cables. The graph settles where each CAN be —
+ * each car and each moving part is its own `car.<name>` output, each chain
+ * its own `chain.<name>` instances, and `lifts.ts` publishes how they move
+ * (`LIFT_CARS`, `LIFT_FOLLOWERS`, `LIFT_CHAINS`) — and this page owns the
+ * clock, which is the same division the lanterns demo draws. `?still`
+ * parks them all where the graph built them, which is what every scripted
+ * capture of this page asks for.
  *
  * DAYLIGHT, WITH SHADOWS, because that is how the lattice reads. A braced
  * panel seen flat-lit is a hatched silhouette; the same panel under a low
@@ -69,8 +73,12 @@ import { type AssetMap, toBufferGeometry, toInstancedMeshes } from "pcg-ts/three
 import {
   ACESFilmicToneMapping,
   Box3,
+  BoxGeometry,
   type BufferGeometry,
+  CylinderGeometry,
+  LatheGeometry,
   DoubleSide,
+  type InstancedMesh,
   type Material,
   Mesh,
   MeshStandardMaterial,
@@ -78,18 +86,33 @@ import {
   PerspectiveCamera,
   Scene,
   SphereGeometry,
+  Vector2,
   Vector3,
   WebGLRenderer,
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createFpsMeter } from "../../shared/fps.js";
 import { attachGraphPanel } from "../../shared/graph/panel.js";
 import { createOverlay } from "../../shared/overlay.js";
 import { attachWordmark } from "../../shared/wordmark.js";
 import { buildEiffel } from "./graph.js";
-import { type CarRun, LIFT_CARS, carPose } from "./lifts.js";
+import {
+  CHAIN_ASSETS,
+  CHAIN_PIECES,
+  type CarRun,
+  type ChainRun,
+  type Follower,
+  LIFT_CARS,
+  LIFT_CHAINS,
+  LIFT_FOLLOWERS,
+  carPose,
+  chainShift,
+  placeChain,
+} from "./lifts.js";
 import { LOOK } from "./look.js";
 import { PART_CLASSES, type PartClass } from "./parts.js";
+import { BALUSTER, CABOCHON_RISE, FITTING_ASSETS } from "./platforms.js";
 import { NEUTRAL, createRig } from "./rig.js";
 
 // ------------------------------------------------------------------ //
@@ -118,6 +141,9 @@ const PALETTE: Record<PartClass, { color: number; roughness: number; metalness: 
   // The names were gilded; the only thing on the tower that is not iron
   // paint or stone.
   names: { color: 0xc9a14a, roughness: 0.32, metalness: 0.85 },
+  // The lifts' machinery: bare iron, oiled and worn rather than painted —
+  // the family's darkest step, and a touch more metal.
+  machinery: { color: 0x4f3a2e, roughness: 0.5, metalness: 0.3 },
 };
 
 const MATERIALS = Object.fromEntries(
@@ -169,11 +195,77 @@ const ASSETS: AssetMap = {
     geometry: rivetHead(),
     material: new MeshStandardMaterial({ color: 0x5c4232, roughness: 0.58, metalness: 0.18 }),
   },
+  // The 1st floor's fittings (platforms.ts): each a unit shape whose true
+  // size the instance matrix carries, in the one material that is not
+  // iron paint about it. Opaque: glazing is a later pass, not these.
+  // The yellow glass cabochons in the arcades' crescents, « en verre jaune ».
+  [FITTING_ASSETS.cabochon]: {
+    geometry: dome(CABOCHON_RISE, 12, 3),
+    material: new MeshStandardMaterial({ color: 0xd9a51f, roughness: 0.22, metalness: 0 }),
+  },
+  // The gas globes, « en verre dépoli »: a unit sphere about its centre.
+  [FITTING_ASSETS.globe]: {
+    geometry: new SphereGeometry(1, 16, 12),
+    material: new MeshStandardMaterial({ color: 0xf0ece2, roughness: 0.55, metalness: 0 }),
+  },
+  // The gallery's balusters « en grès verni », turned from their profile at
+  // true size; the glaze's colour is not recorded, so a glazed buff.
+  [FITTING_ASSETS.baluster]: {
+    geometry: new LatheGeometry(
+      BALUSTER.profile.map(([h, r]) => new Vector2(r, h)),
+      12,
+    ),
+    material: new MeshStandardMaterial({ color: 0xb58d5c, roughness: 0.32, metalness: 0 }),
+  },
+  // The Roux chains' pieces (lifts.ts), at true size, their axles along z.
+  ...chainAssets(),
 };
+
+/**
+ * The Roux chain's three pieces at true size from `CHAIN_PIECES`, each with
+ * its axle along local z: the axle with its two rollers, the bar (a metre
+ * along x, which each instance scales to its length), and the lead-filled
+ * box of a counterweight piston. Bare, oiled iron like the machinery.
+ */
+function chainAssets(): AssetMap {
+  const { bar, axle, roller, weight } = CHAIN_PIECES;
+  const material = new MeshStandardMaterial({ color: 0x3f2f26, roughness: 0.45, metalness: 0.35 });
+  const alongZ = (g: BufferGeometry): BufferGeometry => g.rotateX(Math.PI / 2);
+  const rollers = [-1, 1].map((side) =>
+    alongZ(new CylinderGeometry(roller.diameter / 2, roller.diameter / 2, roller.width, 12)).translate(
+      0,
+      0,
+      (side * roller.apart) / 2,
+    ),
+  );
+  const pin = alongZ(new CylinderGeometry(axle.diameter / 2, axle.diameter / 2, axle.length, 8, 1, true));
+  return {
+    [CHAIN_ASSETS.axle]: { geometry: mergeGeometries([pin, ...rollers]), material },
+    [CHAIN_ASSETS.bar]: {
+      geometry: new CylinderGeometry(bar / 2, bar / 2, 1, 6, 1, true).rotateZ(Math.PI / 2),
+      material,
+    },
+    [CHAIN_ASSETS.weight]: { geometry: new BoxGeometry(weight.length, weight.side, weight.side), material },
+  };
+}
+
+/**
+ * A spherical cap of base radius 1 seated on y = 0, rising `rise` along
+ * +y, open at the base: the rivet's shape at another rise.
+ */
+function dome(rise: number, around: number, rings: number): BufferGeometry {
+  const r = (1 + rise * rise) / (2 * rise);
+  return new SphereGeometry(r, around, rings, 0, Math.PI * 2, 0, Math.acos((r - rise) / r)).translate(0, rise - r, 0);
+}
 
 /** Does this output carry rivets? The cook names them `rivets`, `rivets.<class>`, ... */
 function isRivets(name: string): boolean {
   return name.startsWith("rivets");
+}
+
+/** Does this output carry fittings (globes, cabochons, balusters)? The cook names them `fittings.<name>`. */
+function isFitting(name: string): boolean {
+  return name.startsWith("fittings.");
 }
 
 /**
@@ -183,6 +275,24 @@ function isRivets(name: string): boolean {
  */
 function isCar(name: string): boolean {
   return name.startsWith("car.");
+}
+
+/**
+ * Does this output carry a Roux chain's links? The cook names them
+ * `chain.<name>`, instances the page re-places as the car they push moves.
+ */
+function isChain(name: string): boolean {
+  return name.startsWith("chain.");
+}
+
+/** Does this `car.<name>` output move WITH a car (`LIFT_FOLLOWERS`) rather than ride a run of its own? */
+function isFollower(name: string): boolean {
+  return LIFT_FOLLOWERS.some((f) => `car.${f.name}` === name);
+}
+
+/** Is it machinery that moves with a car (a wheel, a truck, a piston), rather than a car? */
+function isMachine(name: string): boolean {
+  return LIFT_FOLLOWERS.some((f) => `car.${f.name}` === name && f.car !== true);
 }
 
 /**
@@ -313,9 +423,10 @@ const overlay = createOverlay({
   info:
     "Eiffel's 29 panels from Plate XXXI — four legs merging into one shaft — with every " +
     "member below the panel scale placed by rule. Cooked once, drawn as it came out of the " +
-    "graph, one material per part class. The six lift cars are the one thing that moves: they " +
+    "graph, one material per part class. The lifts are the one thing that moves: the cars " +
     "ride their runs at about a metre a second, the Edoux pair counterweighted against each " +
-    "other. Orbit to judge it; the shadows are how the lattice reads.",
+    "other, their chains, trucks, pistons and pulleys moving with them. Orbit to judge it; the " +
+    "shadows are how the lattice reads.",
 });
 
 const statFps = overlay.addStat("fps");
@@ -545,13 +656,17 @@ async function main(): Promise<void> {
   const box = new Box3();
   let total = 0;
   let riveted = 0;
+  let fitted = 0;
+  let linked = 0;
   /** Drawn outputs the "show" select can isolate one at a time (not rivets). */
   const present: string[] = [];
   const keep = (name: string, drawn: Drawn): void => {
     for (const mesh of drawn.meshes) scene.add(mesh);
     meshes.set(name, drawn.meshes);
     total += drawn.triangles;
-    riveted += drawn.instances;
+    if (isFitting(name)) fitted += drawn.instances;
+    else if (isChain(name)) linked += drawn.instances;
+    else riveted += drawn.instances;
   };
   for (const cls of PART_CLASSES) {
     const collection = outputs[cls];
@@ -574,10 +689,12 @@ async function main(): Promise<void> {
   let carTriangles = 0;
   for (const [name, collection] of Object.entries(outputs)) {
     if ((PART_CLASSES as readonly string[]).includes(name)) continue;
-    const named = isRivets(name) || isCar(name);
+    const named = isRivets(name) || isCar(name) || isFitting(name) || isChain(name);
     // A car is the lifts' own fit-out, so it wears the platforms' paint;
-    // only a genuinely unclassed output gets the grey.
-    const drawn = draw(name, collection, isCar(name) ? MATERIALS.platforms : UNCLASSED, box, problems);
+    // what moves with it is machinery and wears that; only a genuinely
+    // unclassed output gets the grey.
+    const material = !isCar(name) ? UNCLASSED : isMachine(name) ? MATERIALS.machinery : MATERIALS.platforms;
+    const drawn = draw(name, collection, material, box, problems);
     if (!named) {
       overlay.addStat(`${name} (unclassed)`)(
         drawn.meshes.length === 0 ? "no mesh" : drawn.triangles.toLocaleString(),
@@ -586,7 +703,21 @@ async function main(): Promise<void> {
     if (drawn.meshes.length === 0) continue;
     keep(name, drawn);
     if (!named) present.push(name);
-    if (isCar(name)) {
+    if (isChain(name)) {
+      const chain = LIFT_CHAINS.findIndex((c) => `chain.${c.name}` === name);
+      if (chain < 0) problems.push(`${name}: the graph declared this chain but published no circuit for it`);
+      else links.push(linksOn(chain, drawn.meshes, problems));
+    }
+    if (isCar(name) && isFollower(name)) {
+      carTriangles += drawn.triangles;
+      const f = LIFT_FOLLOWERS.find((x) => `car.${x.name}` === name) as Follower;
+      for (const mesh of drawn.meshes) {
+        mesh.castShadow = false;
+        const on = followerOn(mesh, f);
+        if (on === undefined) problems.push(`${name}: moves with "${f.lead}", which publishes no run`);
+        else followers.push(on);
+      }
+    } else if (isCar(name)) {
       carTriangles += drawn.triangles;
       const run = LIFT_CARS.find((r) => `car.${r.name}` === name);
       if (run === undefined) {
@@ -613,6 +744,8 @@ async function main(): Promise<void> {
   if (rivets || riveted > 0) {
     overlay.addStat("rivets")(riveted > 0 ? riveted.toLocaleString() : "absent");
   }
+  if (fitted > 0) overlay.addStat("fittings")(fitted.toLocaleString());
+  if (linked > 0) overlay.addStat("chain pieces")(linked.toLocaleString());
   // Only when something was overridden: the default page says nothing about
   // a knob nobody turned.
   const turned = Object.entries(crossPlate);
@@ -647,7 +780,9 @@ async function main(): Promise<void> {
           (isRivets(name) && (v === "rivets" || name === `rivets.${v}`)) ||
           // A car rides with the fit-out it is painted like; it has no
           // entry of its own, the way a class' rivets have none.
-          (isCar(name) && v === "platforms");
+          (isCar(name) && !isMachine(name) && v === "platforms") ||
+          // What moves with a car is machinery, and rides with that class.
+          ((isChain(name) || isMachine(name)) && v === "machinery");
         for (const m of list) m.visible = on;
       }
       renderer.shadowMap.needsUpdate = true;
@@ -669,6 +804,8 @@ async function main(): Promise<void> {
 interface Car {
   readonly mesh: Mesh;
   readonly run: CarRun;
+  /** The run's index in `LIFT_CARS`: where `RUN_S` keeps its arc length. */
+  readonly index: number;
   readonly axis: Vector3;
   readonly home: Vector3;
   readonly homeSlope: number;
@@ -686,10 +823,95 @@ function carOn(mesh: Mesh, run: CarRun): Car {
   return {
     mesh,
     run,
+    index: LIFT_CARS.indexOf(run),
     axis: new Vector3(run.axis[0], run.axis[1], run.axis[2]),
     home: new Vector3(POSE[0], POSE[1], POSE[2]),
     homeSlope: POSE[3] as number,
   };
+}
+
+/**
+ * Every run's arc length at the clock, by its index in `LIFT_CARS`, and
+ * every chain's shift along its loop, by its index in `LIFT_CHAINS`: what
+ * the machinery that moves with a car reads. Written once a frame, for
+ * every run whether or not its car was drawn, so a chain or a truck never
+ * depends on its car's mesh.
+ */
+const RUN_S = new Float64Array(LIFT_CARS.length);
+const CHAIN_SHIFT = new Float64Array(LIFT_CHAINS.length);
+/** Each chain's car, by the chain's index. */
+const CHAIN_LEAD = LIFT_CHAINS.map((c) => LIFT_CARS.findIndex((r) => r.name === c.lead));
+
+/**
+ * A Roux chain's instanced pieces: which chain, and the instance matrices
+ * of its three kinds of piece, which `placeChain` rewrites in place.
+ */
+interface Links {
+  readonly chain: number;
+  readonly meshes: readonly InstancedMesh[];
+  readonly axles: Float32Array;
+  readonly bars: Float32Array;
+  readonly weights: Float32Array;
+}
+
+const links: Links[] = [];
+
+/** A zero-length stand-in for a kind of piece a chain has none of. */
+const NO_PIECES = new Float32Array(0);
+
+/**
+ * Pair a chain output's instanced meshes with its circuit: each mesh is
+ * one kind of piece, told apart by the asset geometry it was built on.
+ */
+function linksOn(chain: number, drawn: readonly Mesh[], problems: string[]): Links {
+  const run = LIFT_CHAINS[chain] as ChainRun;
+  const kind = (id: string): InstancedMesh | undefined =>
+    drawn.find((m): m is InstancedMesh => "isInstancedMesh" in m && m.geometry === ASSETS[id]?.geometry);
+  const axles = kind(CHAIN_ASSETS.axle);
+  const bars = kind(CHAIN_ASSETS.bar);
+  const weights = kind(CHAIN_ASSETS.weight);
+  if (axles?.count !== run.joints.length || bars?.count !== run.joints.length) {
+    problems.push(`chain.${run.name}: the cooked pieces do not match the ${run.joints.length} joints it publishes`);
+  }
+  const matrices = (m: InstancedMesh | undefined) => (m?.instanceMatrix.array as Float32Array | undefined) ?? NO_PIECES;
+  // The pieces move round the whole loop, so the bounding sphere the mesh
+  // was given as built (the counterweights' cluster, say) is not where they
+  // will be: never cull them on it.
+  for (const m of [axles, bars, weights]) if (m !== undefined) m.frustumCulled = false;
+  return {
+    chain,
+    meshes: [axles, bars, weights].filter((m): m is InstancedMesh => m !== undefined),
+    axles: matrices(axles),
+    bars: matrices(bars),
+    weights: matrices(weights),
+  };
+}
+
+/**
+ * A mesh that moves with a car (`LIFT_FOLLOWERS`): what drives it, by
+ * index — a run's arc length less its `at`, or a chain's shift — and how.
+ */
+interface Moving {
+  readonly mesh: Mesh;
+  readonly f: Follower;
+  /** The lead run's index in `LIFT_CARS`, and its `at`. */
+  readonly run: number;
+  readonly at: number;
+  /** The chain's index in `LIFT_CHAINS`, or -1: driven by the run. */
+  readonly chain: number;
+  readonly axis: Vector3;
+}
+
+const followers: Moving[] = [];
+
+function followerOn(mesh: Mesh, f: Follower): Moving | undefined {
+  const run = LIFT_CARS.findIndex((r) => r.name === f.lead);
+  if (run < 0) return undefined;
+  const chain = f.chain === undefined ? -1 : LIFT_CHAINS.findIndex((c) => c.name === f.chain);
+  const a = f.spin?.axis ?? [0, 1, 0];
+  // A stretched body is placed by its whole matrix, written each frame.
+  if (f.stretch !== undefined) mesh.matrixAutoUpdate = false;
+  return { mesh, f, run, at: (LIFT_CARS[run] as CarRun).at, chain, axis: new Vector3(a[0], a[1], a[2]) };
 }
 
 /**
@@ -717,22 +939,69 @@ function carPhase(run: CarRun, t: number): number {
 const ease = (x: number): number => x * x * (3 - 2 * x);
 
 /**
- * Put every car where its run has it at `t` seconds. A car is a rigid
- * body, so this is a turn and a move and never a rebuild: the run's line
- * gives the point between its axles and the chord's slope at the arc
- * length the clock has reached (`carPose`, a binary search), and the mesh
- * — built at the run's `at` — is turned about the run's axis by how far
- * that slope has moved from the built one, about the built point, and
- * carried onto the new point. On a leg the chord turns where the rail
- * bends, so the car tips there as the real one did; in the shaft it never
- * turns.
+ * Put every car where its run has it at `t` seconds, and everything that
+ * moves with a car where the car has it. A car is a rigid body, so this is
+ * a turn and a move and never a rebuild: the run's line gives the point
+ * between its axles and the chord's slope at the arc length the clock has
+ * reached (`carPose`, a binary search), and the mesh — built at the run's
+ * `at` — is turned about the run's axis by how far that slope has moved
+ * from the built one, about the built point, and carried onto the new
+ * point. On a leg the chord turns where the rail bends, so the car tips
+ * there as the real one did; in the shaft it never turns.
+ *
+ * Then the machinery, from the same arc lengths: each Roux chain shifted
+ * along its loop by as much as its cabin's joint has moved (`chainShift`),
+ * every piece re-placed in its instance matrices (`placeChain`); and each
+ * follower slid, turned or stretched by its lead's travel. Nothing here
+ * allocates: the matrices are written where the meshes keep them.
  */
 function moveCars(t: number): void {
-  for (const { mesh, run, axis, home, homeSlope } of cars) {
-    carPose(run, run.from + (run.to - run.from) * carPhase(run, t), POSE);
+  for (let i = 0; i < LIFT_CARS.length; i++) {
+    const run = LIFT_CARS[i] as CarRun;
+    RUN_S[i] = run.from + (run.to - run.from) * carPhase(run, t);
+  }
+  for (let c = 0; c < cars.length; c++) {
+    const { mesh, run, index, axis, home, homeSlope } = cars[c] as Car;
+    carPose(run, RUN_S[index] as number, POSE);
     mesh.quaternion.setFromAxisAngle(axis, (POSE[3] as number) - homeSlope);
     TURNED.copy(home).applyQuaternion(mesh.quaternion);
     mesh.position.set((POSE[0] as number) - TURNED.x, (POSE[1] as number) - TURNED.y, (POSE[2] as number) - TURNED.z);
+  }
+  for (let c = 0; c < LIFT_CHAINS.length; c++) {
+    CHAIN_SHIFT[c] = chainShift(LIFT_CHAINS[c] as ChainRun, RUN_S[CHAIN_LEAD[c] as number] as number);
+  }
+  for (let i = 0; i < links.length; i++) {
+    const l = links[i] as Links;
+    placeChain(LIFT_CHAINS[l.chain] as ChainRun, CHAIN_SHIFT[l.chain] as number, l.axles, l.bars, l.weights);
+    for (let j = 0; j < l.meshes.length; j++) (l.meshes[j] as InstancedMesh).instanceMatrix.needsUpdate = true;
+  }
+  for (let i = 0; i < followers.length; i++) {
+    const m = followers[i] as Moving;
+    const travel = m.chain >= 0 ? (CHAIN_SHIFT[m.chain] as number) : (RUN_S[m.run] as number) - m.at;
+    const { slide, spin, stretch } = m.f;
+    if (slide !== undefined) {
+      m.mesh.position.set(slide[0] * travel, slide[1] * travel, slide[2] * travel);
+    } else if (spin !== undefined) {
+      // Turned about the axle through the centre: q, then c - q c.
+      m.mesh.quaternion.setFromAxisAngle(m.axis, spin.rate * travel);
+      TURNED.set(spin.centre[0], spin.centre[1], spin.centre[2]).applyQuaternion(m.mesh.quaternion);
+      m.mesh.position.set(spin.centre[0] - TURNED.x, spin.centre[1] - TURNED.y, spin.centre[2] - TURNED.z);
+    } else if (stretch !== undefined) {
+      // Scaled by k along the unit d about the anchor a: I + (k - 1) d dᵀ,
+      // and the anchor held, so the move is -(k - 1)(d · a) d.
+      const k = (stretch.length + stretch.rate * travel) / stretch.length - 1;
+      const dx = stretch.along[0];
+      const dy = stretch.along[1];
+      const dz = stretch.along[2];
+      const da = -k * (dx * stretch.anchor[0] + dy * stretch.anchor[1] + dz * stretch.anchor[2]);
+      m.mesh.matrix.set(
+        1 + k * dx * dx, k * dx * dy, k * dx * dz, da * dx,
+        k * dy * dx, 1 + k * dy * dy, k * dy * dz, da * dy,
+        k * dz * dx, k * dz * dy, 1 + k * dz * dz, da * dz,
+        0, 0, 0, 1,
+      );
+      m.mesh.matrixWorldNeedsUpdate = true;
+    }
   }
 }
 
