@@ -18,7 +18,7 @@ import {
   serializeGraph,
 } from "pcg-ts";
 import { buildEiffel } from "../demos/eiffel/graph.js";
-import { lowerSeamRows, shaftSeamRows, upperLegSeamRows } from "../demos/eiffel/builtup.js";
+import { lowerSeamRows, shaftSeamRows, upperJoints, upperLegSeamRows } from "../demos/eiffel/builtup.js";
 import { UPRIGHT_KINK } from "../demos/eiffel/legs.js";
 import { type Detail, JITTER } from "../demos/eiffel/parts.js";
 import {
@@ -30,6 +30,7 @@ import {
   MEMBERS,
   NODES,
   PLAN_BRACING,
+  SPLICE,
   UPRIGHT_BOX,
   node,
   profileAt,
@@ -1032,7 +1033,23 @@ describe("eiffel skeleton", () => {
     };
     const upperAll = polylines(geo("legUprightUpperPlatesLit")).flat().map(fold);
     expect(upperAll.length).toBeGreaterThan(0);
-    for (const v of upperAll) expect(inPlan(v), `upper plate vertex at y ${v[1].toFixed(3)}`).toBeLessThan(0.25 + 0.004);
+    // (Except over a tronçon's joint, where a cover stands its own
+    // thickness out of the face, and no more: tests/eiffelSplice.test.ts.)
+    const jointYs = (["c", "b", "d"] as const).flatMap((m) =>
+      upperJoints(m).map((j) => {
+        const [A, Q] = [NODES[j.k]!, NODES[j.k + 1]!];
+        // c runs (outer, outer), b and d (inner, outer) and (outer, inner).
+        const L = Math.hypot(Q.y - A.y, Q.outer - A.outer, (m === "c" ? Q.outer - A.outer : Q.inner - A.inner));
+        return A.y + ((Q.y - A.y) * j.t) / L;
+      }),
+    );
+    // (A cover's end is square to its axis, so its corners reach 0.05 m
+    // higher or lower than its centre line's end.)
+    const overJoint = (y: number) => jointYs.some((jy) => Math.abs(y - jy) < SPLICE.upper.length / 2 + 0.1);
+    for (const v of upperAll) {
+      const reach = 0.25 + 0.004 + (overJoint(v[1]) ? SPLICE.upper.t : 0);
+      expect(inPlan(v), `upper plate vertex at y ${v[1].toFixed(3)}`).toBeLessThan(reach);
+    }
     const atXVII = upperAll.filter((v) => Math.abs(v[1] - yXVII) < 0.02);
     expect(atXVII.length).toBeGreaterThan(0);
     expect(Math.max(...atXVII.map(inPlan))).toBeCloseTo(0.25, 2);
@@ -1176,8 +1193,13 @@ describe("eiffel skeleton", () => {
     // c, a box in panel 18 (8) and an L in 19-28 (4), and four bd, a T in
     // 18-28 (8: the flange's tips and either side of the stem, and the stem
     // through its root's and its tip's angles).
-    expect(upperLeg).toHaveLength(3 * 6 * 8);
-    expect(shaft).toHaveLength(4 * (8 + 10 * 4) + 4 * 11 * 8);
+    // Each tronçon joint's cover splits every row on a plate's outer face
+    // it crosses in two (builtup.ts, the splices): a box's 8, the L's 4, the
+    // T flange's 4 (its stem's rows run on). The legs' c, b and d have 12
+    // joints each over panels 12-17; the shaft's c 2 in panel 18 (a box)
+    // and 12 in 19-28, its bd 14.
+    expect(upperLeg).toHaveLength(3 * 6 * 8 + 3 * 12 * 8);
+    expect(shaft).toHaveLength(4 * (8 + 10 * 4) + 4 * 11 * 8 + 4 * (2 * 8 + 12 * 4 + 14 * 4));
     for (const [name, expected] of [
       ["rivets.leg.uprights", 4 * heads(lowerSeamRows(p, UPRIGHT_SEAMS.inset))],
       ["rivets.leg.uprights.upper", 4 * heads(upperLeg)],

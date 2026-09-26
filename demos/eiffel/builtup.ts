@@ -49,7 +49,8 @@
  * independent check; a longer run-on narrows it slowly, 90 mm halves it,
  * at 7 mm more proud]. The real tronçons are
  * spliced there under cover plates ("ils s'infléchissent dans le joint" at
- * XXIV [sourced text]), which the splice item will draw over these ends.
+ * XXIV [sourced text]); the splices (at the end of this file) cover the
+ * bends XXIV and XXIII in two halves, each clear of the fold.
  *
  * THICKNESS steps at the node (section k governs panel k whole): Eiffel's
  * joints, where a step can only fall, are about 2.25 m either side of it,
@@ -75,6 +76,7 @@
 import type { Vec3 } from "./lattice.js";
 import {
   NODES,
+  SPLICE,
   UPPER_BOX,
   UPPER_SECTIONS,
   UPRIGHT_BOX,
@@ -84,6 +86,7 @@ import {
   type UprightMakeup,
   type UprightSection,
 } from "./spec.js";
+import { UPRIGHT_SEAMS } from "./strut.js";
 
 /** A lower upright's name: a (inner corner), b, c (outer corner), d. */
 export type UprightName = "a" | "b" | "c" | "d";
@@ -365,7 +368,7 @@ export interface UprightPlate {
   readonly n: Vec3;
   readonly width: number;
   readonly thickness: number;
-  readonly what: FacePiece["what"];
+  readonly what: FacePiece["what"] | "cover" | "coverAngle" | "filler";
 }
 
 /**
@@ -431,6 +434,8 @@ export function lowerPlates(show: Protrusions): UprightPlate[] {
       }
     }
   }
+  // The covers over the tronçons' joints go with the C.J.s (the splices, below).
+  if (show.cj) out.push(...lowerCoverPlates());
   return out;
 }
 
@@ -446,6 +451,8 @@ export function lowerPlates(show: Protrusions): UprightPlate[] {
  * outward normal, for `lineRivets` with no offset. The rows are today's
  * rule (`UPRIGHT_SEAMS`: the middle of a 100 angle's leg in from the
  * corner), re-seated on the true faces; the rows as built are rivets25's.
+ * A row stops half a pitch short of the cover over it at each tronçon
+ * joint (`lowerCornerCuts`), and runs on over the cover as its own column.
  */
 export function lowerSeamRows(pitch: number, inset: number): Array<{ a: Vec3; b: Vec3; n: Vec3 }> {
   const out: Array<{ a: Vec3; b: Vec3; n: Vec3 }> = [];
@@ -482,12 +489,16 @@ export function lowerSeamRows(pitch: number, inset: number): Array<{ a: Vec3; b:
           const hi =
             (above === undefined ? L : Math.min(L + crease, meets(own.hi, T), meets(above.lo, above.T))) - pitch / 2;
           if (hi < lo) continue;
-          const n = Math.floor((hi - lo) / pitch + 1e-9) + 1;
-          const from = (lo + hi - (n - 1) * pitch) / 2;
-          // 0.1 mm short of (n - 1) pitches: spacing mode then lands exactly
-          // n heads (legs.ts `rowMembers`); a row of one is a point.
-          const to = from + Math.max(0, (n - 1) * pitch - 1e-4);
-          out.push({ a: add(A, off, scale(T, from)), b: add(A, off, scale(T, to)), n: f.n });
+          // Each stretch the tronçons' covers leave it (the splices, below).
+          for (const [s0, s1] of subtract(lo, hi, lowerCornerCuts(name, k, d, off, pitch, inset))) {
+            if (s1 < s0) continue;
+            const n = Math.floor((s1 - s0) / pitch + 1e-9) + 1;
+            const from = (s0 + s1 - (n - 1) * pitch) / 2;
+            // 0.1 mm short of (n - 1) pitches: spacing mode then lands exactly
+            // n heads (legs.ts `rowMembers`); a row of one is a point.
+            const to = from + Math.max(0, (n - 1) * pitch - 1e-4);
+            out.push({ a: add(A, off, scale(T, from)), b: add(A, off, scale(T, to)), n: f.n });
+          }
         }
       }
     }
@@ -732,13 +743,18 @@ function upperPlatesOf(names: readonly UpperName[], k0: number, k1: number, show
 
 /** The legs' upper uprights' plates, XVII to XI, one leg (c, b, d); the caller copies them onto the quadrants. */
 export function upperLegPlates(show: Protrusions): UprightPlate[] {
-  return upperPlatesOf(["c", "b", "d"], UPPER_FROM, SHAFT_FROM, show);
+  const out = upperPlatesOf(["c", "b", "d"], UPPER_FROM, SHAFT_FROM, show);
+  // With the protrusions, the covers over the joints (the splices, below).
+  if (show.cj) out.push(...upperLegCoverPlates());
+  return out;
 }
 
 /** The shaft's eight uprights' plates, XI to the top of panel 28, all four quarters. */
 export function shaftPlates(show: Protrusions): UprightPlate[] {
   const one = upperPlatesOf(["c", "bd"], SHAFT_FROM, UPPER_TO, show);
-  return [0, 1, 2, 3].flatMap((q) => one.map((p) => ({ ...p, a: turnQ(p.a, q), b: turnQ(p.b, q), n: turnQ(p.n, q) })));
+  const out = [0, 1, 2, 3].flatMap((q) => one.map((p) => ({ ...p, a: turnQ(p.a, q), b: turnQ(p.b, q), n: turnQ(p.n, q) })));
+  if (show.cj) out.push(...shaftCoverPlates());
+  return out;
 }
 
 /** A seam row on an upper upright: across its face (s), out of it (o), and which way its heads face. */
@@ -792,7 +808,8 @@ function upperRows(name: UpperName, k: number, inset: number): Array<{ d: PlanDi
  * of its own crossing of the node's horizontal plane, its face's plate's
  * end and the next panel's on that face (as `lowerSeamRows`). On b's and
  * d's faces toward the next leg a row stops where the two facing faces
- * close to two `head` rises apart.
+ * close to two `head` rises apart. A row on a plate's outer face stops
+ * half a pitch short of each joint's cover (the splices).
  */
 function upperRowsOf(
   names: readonly UpperName[],
@@ -854,11 +871,22 @@ function upperRowsOf(
             }
           }
           if (hi < lo) continue;
-          const n = Math.floor((hi - lo) / pitch + 1e-9) + 1;
-          const from = (lo + hi - (n - 1) * pitch) / 2;
-          // 0.1 mm short of (n - 1) pitches: spacing mode lands exactly n heads.
-          const to = from + Math.max(0, (n - 1) * pitch - 1e-4);
-          out.push({ a: add(A, off, scale(T, from)), b: add(A, off, scale(T, to)), n: r.across === undefined ? f.n : scale(f.e, r.across) });
+          // A row on a plate's outer face stops half a pitch short of each
+          // joint's cover over it (the splices, below).
+          const cuts =
+            r.across === undefined && r.o === 0
+              ? upperJoints(name)
+                  .filter((j) => j.k === k)
+                  .map((j) => [j.t - SPLICE.upper.length / 2 - pitch / 2, j.t + SPLICE.upper.length / 2 + pitch / 2] as const)
+              : [];
+          for (const [s0, s1] of subtract(lo, hi, cuts)) {
+            if (s1 < s0) continue;
+            const n = Math.floor((s1 - s0) / pitch + 1e-9) + 1;
+            const from = (s0 + s1 - (n - 1) * pitch) / 2;
+            // 0.1 mm short of (n - 1) pitches: spacing mode lands exactly n heads.
+            const to = from + Math.max(0, (n - 1) * pitch - 1e-4);
+            out.push({ a: add(A, off, scale(T, from)), b: add(A, off, scale(T, to)), n: r.across === undefined ? f.n : scale(f.e, r.across) });
+          }
         }
       }
     }
@@ -875,4 +903,702 @@ export function upperLegSeamRows(pitch: number, inset: number, head: number): Ar
 export function shaftSeamRows(pitch: number, inset: number, head: number): Array<{ a: Vec3; b: Vec3; n: Vec3 }> {
   const one = upperRowsOf(["c", "bd"], SHAFT_FROM, UPPER_TO, pitch, inset, head);
   return [0, 1, 2, 3].flatMap((q) => one.map((r) => ({ a: turnQ(r.a, q), b: turnQ(r.b, q), n: turnQ(r.n, q) })));
+}
+
+/*
+ * ===========================================================================
+ * THE SPLICES (`SPLICE` in spec.ts, SOURCES.md §27.2): where each upright's
+ * tronçons butt, and the cover plates (couvre-joints) over every joint,
+ * each with its own rivet field.
+ *
+ * A tronçon ends square to its axis with every one of its plies in the
+ * same plane ("toutes les pièces ... viennent s'arrêter dans un même plan
+ * normal à l'axe" [sourced text p. 75]), so a joint is one station along
+ * the axis and no ply is staggered past another. What steps along the face
+ * is the covers' ends: three lengths on a panel 1-5 face (PL-IX figs.
+ * 21-24). Every cover is centred on its joint, except at a joint in a bend
+ * (XXIV, XXIII), where it runs further into the long panel than into
+ * panel 5 (PL-X fig. 19); there each half lies on its own panel's face and
+ * ends on the node's fold as the webs do (run on by `KINK_CLOSE`).
+ *
+ * What is drawn is what shows OUTSIDE the box (the covers inside it are
+ * not, as nothing inside is), from the laced depth up, with the C.J.s. The
+ * corner angles' seam rows stop half a pitch short of the cover over them
+ * and run on over it, on its face, at their own pitch; inward of them the
+ * cover's own field. The rivet fields are the riveted depth's.
+ * ===========================================================================
+ */
+
+/**
+ * A tronçon joint: on segment k, `t` along its axis from NODES[k]. `bent`
+ * when it is the node itself (t = 0) and the column bends in it; the cover
+ * then lies half on segment k - 1.
+ */
+export interface TronconJoint {
+  readonly k: number;
+  readonly t: number;
+  readonly bent: boolean;
+}
+
+/** A panel of axis length L in tronçons about `troncon` long: round(L / troncon) joints, at least one, at (i + 1/2) L / n. */
+function stations(L: number, troncon: number): number[] {
+  const n = Math.max(1, Math.round(L / troncon));
+  return Array.from({ length: n }, (_, i) => ((i + 0.5) * L) / n);
+}
+
+const isBent = (node: string): boolean => (SPLICE.bentJoints as readonly string[]).includes(node);
+
+/**
+ * A lower upright's joints, supports to XVII: round(L / 4.5) a panel (L/6,
+ * L/2, 5L/6 in panels 1-4, as the text puts them), and in panel 5 one at
+ * each bend and one between them (`SPLICE`).
+ */
+export function lowerJoints(name: UprightName): TronconJoint[] {
+  const out: TronconJoint[] = [];
+  for (let k = 0; k < LOWER_SEGMENTS; k++) {
+    const { A, Q } = segmentAxis(name, k);
+    const L = Math.hypot(...sub(Q, A));
+    const lo = isBent(NODES[k]!.name);
+    if (lo) out.push({ k, t: 0, bent: true });
+    const ts = lo && isBent(NODES[k + 1]!.name) ? [L / 2] : stations(L, SPLICE.troncon);
+    for (const t of ts) out.push({ k, t, bent: false });
+  }
+  return out;
+}
+
+/** An upper upright's joints over its own segments: round(L / 6) a panel (`SPLICE`). */
+export function upperJoints(name: UpperName): TronconJoint[] {
+  const [k0, k1] = upperRange(name);
+  const out: TronconJoint[] = [];
+  for (let k = k0; k < k1; k++) {
+    const { A, Q } = upperAxis(name, k);
+    for (const t of stations(Math.hypot(...sub(Q, A)), SPLICE.tronconUpper)) out.push({ k, t, bent: false });
+  }
+  return out;
+}
+
+/**
+ * How far a neighbouring web's inner edge may stand out of a face before a
+ * cover keeps off it: the jitter's 1 mm, under which the classes already
+ * interpenetrate (parts.ts). It stands 3.3-3.6 mm out in panels 1-5 (the
+ * covers keep off), 0.6-1.4 mm in 6-11 and under 1 mm on the 500 boxes
+ * [measured on the plates as built].
+ */
+const SLIVER = 0.001;
+
+/** A cover's length class: a web cover, or an angle's (the longer, at a bend too). */
+type CoverClass = "web" | "angle";
+
+/** One cover piece in its face's (s, o) frame, with its length centred on a straight joint. */
+interface CoverSpec {
+  readonly what: "cover" | "coverAngle" | "filler";
+  readonly s0: number;
+  readonly s1: number;
+  readonly o0: number;
+  readonly o1: number;
+  readonly cls: CoverClass;
+  readonly length: number;
+}
+
+/**
+ * One column of a cover's rivet field: at s across the face, its heads'
+ * bases at o (the cover's outer face), facing out along n, or (`across`)
+ * across the face along +-e with a second head at `s2` facing back, every
+ * `pitch` from `end` off the joint (shifted by `phase` pitches) to `end`
+ * short of the cover's end.
+ */
+interface FieldColumn {
+  readonly s: number;
+  readonly o: number;
+  readonly pitch: number;
+  readonly phase: 0 | 0.5;
+  readonly cls: CoverClass;
+  readonly length: number;
+  readonly across?: 1 | -1;
+  readonly s2?: number;
+}
+
+/** A face's covers and its field; `corner` is the cover over the corner angle's row, which that row stops short of. */
+interface FaceCover {
+  readonly pieces: CoverSpec[];
+  readonly cols: FieldColumn[];
+  readonly corner: { readonly cls: CoverClass; readonly length: number };
+}
+
+/** Field columns inward of a seam line at `from`, every `across` toward `to` while at least `stop` short of it, the first a half pitch out of phase. */
+function fieldInward(from: number, toward: 1 | -1, stop: number, o: number, length: number): FieldColumn[] {
+  const out: FieldColumn[] = [];
+  for (let j = 1; ; j++) {
+    const s = from + toward * j * SPLICE.field.across;
+    if (toward * (stop - s) < 0) break;
+    out.push({ s, o, pitch: SPLICE.field.pitch, phase: j % 2 === 1 ? 0.5 : 0, cls: "web", length });
+  }
+  return out;
+}
+
+/**
+ * The covers of face d of lower upright `name` on segment k and their
+ * fields, as PL-IX draws a panel 1-5 face and PL-X a panel 6-11 one (the
+ * `SPLICE` header). `seamPitch` and `inset` are the corner rows'.
+ */
+function lowerCover(name: UprightName, k: number, d: PlanDir, seamPitch: number, inset: number): FaceCover {
+  const { cj, cjWidth } = faceMakeup(name, k, d);
+  const { T } = segmentAxis(name, k);
+  const face = faceFrame(T, d);
+  const W = face.W;
+  const corner = W / 2 - inset;
+  const { t } = UPRIGHT_BOX.angle;
+  // How far out toward the edge on side g a cover may run: SPLICE.edge
+  // short of it, and at an ACUTE corner of the lozenge short of where the
+  // neighbouring web's inner edge stands out of this face (its thickness
+  // times cos 78.36 deg out, 18 mm in from the edge in panels 1-4: the
+  // header's sliver), with 2 mm to spare, where it stands out more than
+  // `SLIVER` [derived].
+  const room = (g: 1 | -1): number => {
+    const nd: PlanDir = [g * Math.abs(d[1]), g * Math.abs(d[0])];
+    const fn = faceFrame(T, nd);
+    const tn = faceMakeup(name, k, nd).web;
+    const standsOut = -tn * dot(fn.n, face.n);
+    return standsOut > SLIVER ? W / 2 - tn * Math.abs(dot(fn.n, face.e)) - 0.002 : W / 2 - SPLICE.edge;
+  };
+  const pieces: CoverSpec[] = [];
+  const cols: FieldColumn[] = [];
+  const both = (f: (g: 1 | -1) => void) => {
+    f(1);
+    f(-1);
+  };
+  const span = (g: number, a: number, b: number) => ({ s0: Math.min(g * a, g * b), s1: Math.max(g * a, g * b) });
+  if (k > 5) {
+    // Panels 6-11: a web cover either side of the C.J., one over it.
+    const web = SPLICE.plain.web;
+    const strip = SPLICE.plain.strip;
+    pieces.push({ what: "cover", s0: -strip.width / 2, s1: strip.width / 2, o0: cj, o1: cj + strip.t, cls: "angle", length: strip.length });
+    both((g) => {
+      pieces.push({ what: "cover", ...span(g, cjWidth / 2, room(g)), o0: 0, o1: web.t, cls: "web", length: web.length });
+      cols.push({ s: g * corner, o: web.t, pitch: seamPitch, phase: 0, cls: "web", length: web.length });
+      cols.push(...fieldInward(g * corner, g === 1 ? -1 : 1, g * (cjWidth / 2 + SPLICE.field.end), web.t, web.length));
+      // Two rows through the strip's cover [estimated: the C.J.'s own rows].
+      cols.push({ s: (g * strip.width) / 4, o: cj + strip.t, pitch: SPLICE.field.pitch, phase: 0, cls: "angle", length: strip.length });
+    });
+    return { pieces, cols, corner: { cls: "web", length: web.length } };
+  }
+  if (!isInterior(name, d)) {
+    // PL-IX figs. 23-24: web covers beside the fin, angles in its angles.
+    const web = SPLICE.exterior.web;
+    const ang = SPLICE.exterior.angle;
+    const top = cj + t;
+    both((g) => {
+      pieces.push(
+        { what: "cover", ...span(g, cjWidth / 2, Math.min(cjWidth / 2 + web.width, room(g))), o0: 0, o1: web.t, cls: "web", length: web.length },
+        { what: "coverAngle", ...span(g, t, t + ang.leg), o0: top, o1: top + ang.t, cls: "angle", length: ang.length },
+        { what: "coverAngle", ...span(g, t, t + ang.t), o0: top + ang.t, o1: top + ang.leg, cls: "angle", length: ang.length },
+      );
+      cols.push({ s: g * corner, o: web.t, pitch: seamPitch, phase: 0, cls: "web", length: web.length });
+      cols.push(...fieldInward(g * corner, g === 1 ? -1 : 1, g * (cjWidth / 2 + SPLICE.field.end), web.t, web.length));
+      // Through the angle cover's flat leg and the fin's flat, and through
+      // its outstanding leg and the fin: a head either side of the fin.
+      cols.push(
+        { s: g * (t + ang.t + (ang.leg - ang.t) / 2), o: top + ang.t, pitch: seamPitch, phase: 0, cls: "angle", length: ang.length },
+        {
+          s: g * (t + ang.t),
+          o: top + ang.t + (ang.leg - ang.t) / 2,
+          pitch: seamPitch,
+          phase: 0.5,
+          cls: "angle",
+          length: ang.length,
+          across: g,
+        },
+      );
+    });
+    return { pieces, cols, corner: { cls: "web", length: web.length } };
+  }
+  // PL-IX figs. 21-22: the centre cover on fillers, the channel's angles
+  // covered, a flat over each corner angle's row.
+  const c = SPLICE.interior.centre;
+  const ang = SPLICE.interior.angle;
+  const cor = SPLICE.interior.corner;
+  const heel = UPRIGHT_BOX.channelHeels / 2;
+  const f = SPLICE.interiorField;
+  pieces.push({ what: "cover", s0: -c.width / 2, s1: c.width / 2, o0: cj, o1: cj + c.t, cls: "web", length: c.length });
+  both((g) => {
+    pieces.push(
+      { what: "filler", ...span(g, cjWidth / 2, c.width / 2), o0: 0, o1: SPLICE.interior.filler, cls: "web", length: c.length },
+      { what: "cover", ...span(g, corner - cor.width / 2, Math.min(corner + cor.width / 2, room(g))), o0: 0, o1: cor.t, cls: "web", length: cor.length },
+      { what: "coverAngle", ...span(g, heel + t, heel + t + ang.leg), o0: t, o1: t + ang.t, cls: "angle", length: ang.length },
+      { what: "coverAngle", ...span(g, heel + t, heel + t + ang.t), o0: t + ang.t, o1: t + ang.leg, cls: "angle", length: ang.length },
+    );
+    cols.push(
+      { s: g * f.inner, o: cj + c.t, pitch: f.pitch, phase: 0, cls: "web", length: c.length },
+      { s: g * f.outer, o: cj + c.t, pitch: f.pitch, phase: 0, cls: "web", length: c.length },
+      { s: g * corner, o: cor.t, pitch: seamPitch, phase: 0, cls: "web", length: cor.length },
+      { s: g * (heel + t + ang.t + (ang.leg - ang.t) / 2), o: t + ang.t, pitch: seamPitch, phase: 0, cls: "angle", length: ang.length },
+      // Through the angle cover's outstanding leg and the channel's: a
+      // head on the cover and one on the channel leg's inner face.
+      {
+        s: g * (heel + t + ang.t),
+        o: t + ang.t + (ang.leg - ang.t) / 2,
+        pitch: seamPitch,
+        phase: 0.5,
+        cls: "angle",
+        length: ang.length,
+        across: g,
+        s2: g * heel,
+      },
+    );
+  });
+  return { pieces, cols, corner: { cls: "web", length: cor.length } };
+}
+
+/**
+ * The run of a cover of class `cls` either side of a bent joint at node j,
+ * [below, above]: the long side into the long panel, the short into panel
+ * 5 (the segment both of whose ends bend) [PL-X fig. 19; `SPLICE.bent`].
+ */
+function bentRun(j: number, cls: CoverClass): readonly [number, number] {
+  const [long, short] = SPLICE.bent[cls];
+  const panel5 = (k: number) => k >= 0 && isBent(NODES[k]!.name) && isBent(NODES[k + 1]!.name);
+  return [panel5(j - 1) ? short : long, panel5(j) ? short : long];
+}
+
+/** A splice's heads grouped by pitch: each group's rows for `lineRivets` at that pitch. */
+export interface SpliceHeads {
+  readonly pitch: number;
+  readonly rows: Array<{ a: Vec3; b: Vec3; n: Vec3 }>;
+}
+
+/** Collects rows by pitch. */
+class HeadSets {
+  private readonly by = new Map<number, Array<{ a: Vec3; b: Vec3; n: Vec3 }>>();
+  add(pitch: number, a: Vec3, b: Vec3, n: Vec3): void {
+    const l = this.by.get(pitch);
+    if (l === undefined) this.by.set(pitch, [{ a, b, n }]);
+    else l.push({ a, b, n });
+  }
+  out(): SpliceHeads[] {
+    return [...this.by.entries()].sort((p, q) => p[0] - q[0]).map(([pitch, rows]) => ({ pitch, rows }));
+  }
+}
+
+/**
+ * The heads of one column on one side of its joint: from `u0` (the joint,
+ * or the fold) along `dir` (+-1 along T), `end` in and every pitch to `end`
+ * short of `run`, as a row of n heads (a line (n - 1) pitches less 0.1 mm,
+ * for `lineRivets`' spacing mode, as the seam rows).
+ */
+function halfRow(
+  heads: HeadSets,
+  A: Vec3,
+  T: Vec3,
+  off: Vec3,
+  u0: number,
+  dir: 1 | -1,
+  run: number,
+  c: FieldColumn,
+  n: Vec3,
+): void {
+  const first = SPLICE.field.end + c.phase * c.pitch;
+  const last = run - SPLICE.field.end;
+  if (last < first - 1e-9) return;
+  const count = Math.floor((last - first) / c.pitch + 1e-9) + 1;
+  const a = u0 + dir * first;
+  const b = a + dir * Math.max(0, (count - 1) * c.pitch - 1e-4);
+  heads.add(c.pitch, add(A, off, scale(T, a)), add(A, off, scale(T, b)), n);
+}
+
+/** One flat box of a cover, from `lo` to `hi` along T from A, off the axis by its piece's centre in face frame f. */
+function coverPlate(A: Vec3, T: Vec3, f: FaceFrame, p: CoverSpec, lo: number, hi: number): UprightPlate {
+  const s = (p.s0 + p.s1) / 2;
+  const o = (p.o0 + p.o1) / 2;
+  const lying = p.s1 - p.s0 >= p.o1 - p.o0;
+  const off = add(f.mid, scale(f.e, s), scale(f.n, o));
+  return {
+    a: add(A, off, scale(T, lo)),
+    b: add(A, off, scale(T, hi)),
+    n: lying ? f.n : f.e,
+    width: lying ? p.s1 - p.s0 : p.o1 - p.o0,
+    thickness: lying ? p.o1 - p.o0 : p.s1 - p.s0,
+    what: p.what,
+  };
+}
+
+/** A face's side of a joint, as its covers and heads need it. */
+interface SpliceSide {
+  /** The segment this side lies on, its axis and the face's frame. */
+  readonly k: number;
+  readonly A: Vec3;
+  readonly T: Vec3;
+  readonly f: FaceFrame;
+  readonly cover: FaceCover;
+  /** Where a piece starts on this side, along T from A: the joint, or at a bend the first station clear of the fold and of the other panel's steel. */
+  readonly from: (p: CoverSpec) => number;
+  /** +1: the cover runs up T from there; -1: down. */
+  readonly dir: 1 | -1;
+  /** A straight joint's one box (drawn by its +1 side), or a bend's half. */
+  readonly draw: "whole" | "half" | "none";
+  /** The run of a class on this side. */
+  readonly run: (cls: CoverClass, length: number) => number;
+}
+
+/** The cover piece a field column lies on: its top under the heads, or (across) the leg face they stand on. */
+function pieceOf(cover: FaceCover, c: FieldColumn): CoverSpec {
+  const e = 1e-9;
+  const p = cover.pieces.find((q) =>
+    c.across === undefined
+      ? q.what !== "filler" && Math.abs(q.o1 - c.o) < e && q.s0 - e <= c.s && c.s <= q.s1 + e
+      : (Math.abs(q.s0 - c.s) < e || Math.abs(q.s1 - c.s) < e) && q.o0 - e <= c.o && c.o <= q.o1 + e,
+  );
+  if (p === undefined) throw new Error(`eiffel builtup: a splice field column at s ${c.s}, o ${c.o} lies on no cover`);
+  return p;
+}
+
+/** Lays one side of a joint: its cover pieces and its heads. */
+function laySide(side: SpliceSide, plates: UprightPlate[] | undefined, heads: HeadSets | undefined): void {
+  const { A, T, f, cover, dir } = side;
+  if (plates !== undefined && side.draw !== "none") {
+    for (const p of cover.pieces) {
+      const u0 = side.from(p);
+      const run = side.run(p.cls, p.length);
+      const [lo, hi] = side.draw === "whole" ? [u0 - run, u0 + run] : [Math.min(u0, u0 + dir * run), Math.max(u0, u0 + dir * run)];
+      plates.push(coverPlate(A, T, f, p, lo, hi));
+    }
+  }
+  if (heads !== undefined) {
+    for (const c of cover.cols) {
+      const p = pieceOf(cover, c);
+      const u0 = side.from(p);
+      const run = side.run(p.cls, p.length);
+      const n1 = c.across === undefined ? f.n : scale(f.e, c.across);
+      halfRow(heads, A, T, add(f.mid, scale(f.e, c.s), scale(f.n, c.o)), u0, dir, run, c, n1);
+      if (c.s2 !== undefined && c.across !== undefined) {
+        halfRow(heads, A, T, add(f.mid, scale(f.e, c.s2), scale(f.n, c.o)), u0, dir, run, c, scale(f.e, -c.across));
+      }
+    }
+  }
+}
+
+/** A box: centre, axes (along, out, across) and half-extents. */
+interface Box {
+  readonly c: Vec3;
+  readonly axes: readonly [Vec3, Vec3, Vec3];
+  readonly half: readonly [number, number, number];
+}
+
+/** A face piece laid from `lo` to `hi` along T from A, in face frame f, as a box. */
+function boxOf(A: Vec3, T: Vec3, f: FaceFrame, p: { s0: number; s1: number; o0: number; o1: number }, lo: number, hi: number): Box {
+  const off = add(f.mid, scale(f.e, (p.s0 + p.s1) / 2), scale(f.n, (p.o0 + p.o1) / 2));
+  return {
+    c: add(A, off, scale(T, (lo + hi) / 2)),
+    axes: [T, f.n, f.e],
+    half: [(hi - lo) / 2, (p.o1 - p.o0) / 2, (p.s1 - p.s0) / 2],
+  };
+}
+
+/** How deep two boxes interpenetrate along their least-separating axis; <= 0 when apart [separating axes]. */
+function boxOverlap(a: Box, b: Box): number {
+  const axes: Vec3[] = [...a.axes, ...b.axes];
+  for (const u of a.axes)
+    for (const v of b.axes) {
+      const c = cross(u, v);
+      const l = Math.hypot(c[0], c[1], c[2]);
+      if (l > 1e-6) axes.push(scale(c, 1 / l));
+    }
+  const d = sub(b.c, a.c);
+  let least = Infinity;
+  for (const L of axes) {
+    const ra = a.half[0] * Math.abs(dot(a.axes[0], L)) + a.half[1] * Math.abs(dot(a.axes[1], L)) + a.half[2] * Math.abs(dot(a.axes[2], L));
+    const rb = b.half[0] * Math.abs(dot(b.axes[0], L)) + b.half[1] * Math.abs(dot(b.axes[1], L)) + b.half[2] * Math.abs(dot(b.axes[2], L));
+    least = Math.min(least, ra + rb - Math.abs(dot(d, L)));
+    if (least <= 0) return least;
+  }
+  return least;
+}
+
+/** `lowerSides` is asked again for every seam row it cuts: its answers, kept. */
+const SIDES = new Map<string, SpliceSide[]>();
+
+/**
+ * Both sides of a lower upright's joint, face d. At a straight joint the
+ * cover is one box centred on it. At a bend each half lies on its own
+ * panel's face and starts where the whole of it is clear of the fold (the
+ * fold crosses a face obliquely, up to 24 degrees in panels 1-4, so a
+ * square end cannot follow it) and of the other panel's plates, which run
+ * on past the fold (`KINK_CLOSE`): a V of web shows between the halves,
+ * where the real covers were bent to the angle [derived].
+ */
+function lowerSides(name: UprightName, j: TronconJoint, d: PlanDir, seamPitch: number, inset: number): SpliceSide[] {
+  const key = `${name}|${j.k}|${j.t}|${d[0]},${d[1]}|${seamPitch}|${inset}`;
+  const known = SIDES.get(key);
+  if (known !== undefined) return known;
+  const sides = lowerSidesOf(name, j, d, seamPitch, inset);
+  SIDES.set(key, sides);
+  return sides;
+}
+
+function lowerSidesOf(name: UprightName, j: TronconJoint, d: PlanDir, seamPitch: number, inset: number): SpliceSide[] {
+  const frameOf = (k: number) => {
+    const { A, Q, T } = segmentAxis(name, k);
+    return { k, A, T, L: Math.hypot(...sub(Q, A)), f: faceFrame(T, d), cover: lowerCover(name, k, d, seamPitch, inset) };
+  };
+  if (!j.bent) {
+    const s = frameOf(j.k);
+    const run = (_: CoverClass, length: number) => length / 2;
+    return ([1, -1] as const).map(
+      (dir): SpliceSide => ({ k: s.k, A: s.A, T: s.T, f: s.f, cover: s.cover, from: () => j.t, dir, draw: dir === 1 ? "whole" : "none", run }),
+    );
+  }
+  const up = frameOf(j.k);
+  const down = frameOf(j.k - 1);
+  const tLo = turns(name, j.k).lo;
+  const side = (own: ReturnType<typeof frameOf>, other: ReturnType<typeof frameOf>, dir: 1 | -1): SpliceSide => {
+    // The other panel's steel on this face as built, and its webs on the
+    // two faces beside it (whose edges stand out of this face at an acute
+    // corner), each as the box `lowerPlates` lays.
+    const oTurn = turns(name, other.k);
+    const beside: PlanDir[] = [1, -1].map((g) => [g * Math.abs(d[1]), g * Math.abs(d[0])] as const);
+    const theirs = [
+      ...facePieces(name, other.k, d, AS_BUILT).map((q) => ({ q, fd: d })),
+      ...beside.map((fd) => ({ q: facePieces(name, other.k, fd, WEBS_ONLY)[0]!, fd })),
+    ].map(({ q, fd }) => {
+      const f = faceFrame(other.T, fd);
+      const off = add(f.mid, scale(f.e, (q.s0 + q.s1) / 2), scale(f.n, (q.o0 + q.o1) / 2));
+      const [lo, hi] = pieceEnds(off, other.T, other.L, oTurn.lo, oTurn.hi);
+      return boxOf(other.A, other.T, f, q, lo, hi);
+    });
+    // A piece starts at the last of its four long edges' folds (so the
+    // whole of it is on its own side of the node's plane), moved on until
+    // it is clear of every one of those boxes: the least move, found by
+    // bisection over 0.6 m, to 0.5 mm [derived].
+    const memo = new Map<CoverSpec, number>();
+    const from = (p: CoverSpec) => {
+      const hit = memo.get(p);
+      if (hit !== undefined) return hit;
+      let u0 = dir === 1 ? -Infinity : Infinity;
+      for (const s of [p.s0, p.s1])
+        for (const o of [p.o0, p.o1]) {
+          const off = add(own.f.mid, scale(own.f.e, s), scale(own.f.n, o));
+          const base = dir === 1 ? 0 : own.L;
+          const fold = tLo ? base - off[1] / own.T[1] : base;
+          u0 = dir === 1 ? Math.max(u0, fold) : Math.min(u0, fold);
+        }
+      const run = bentRun(j.k, p.cls)[dir === 1 ? 1 : 0];
+      const clear = (u: number) => {
+        const mine = boxOf(own.A, own.T, own.f, p, Math.min(u, u + dir * run), Math.max(u, u + dir * run));
+        return theirs.every((q) => boxOverlap(mine, q) <= 2e-4);
+      };
+      let u = u0;
+      if (!clear(u0)) {
+        if (!clear(u0 + dir * 0.6)) {
+          throw new Error(
+            `eiffel builtup: a ${p.what} over the joint at ${NODES[j.k]!.name} on ${name}'s face ${d} is still in the other panel's steel 0.6 m off the fold`,
+          );
+        }
+        let [ok, bad] = [0.6, 0];
+        for (let i = 0; i < 12; i++) {
+          const mid = (ok + bad) / 2;
+          if (clear(u0 + dir * mid)) ok = mid;
+          else bad = mid;
+        }
+        u = u0 + dir * ok;
+      }
+      memo.set(p, u);
+      return u;
+    };
+    const run = (cls: CoverClass) => bentRun(j.k, cls)[dir === 1 ? 1 : 0];
+    return { k: own.k, A: own.A, T: own.T, f: own.f, cover: own.cover, from, dir, draw: "half", run };
+  };
+  return [side(up, down, 1), side(down, up, -1)];
+}
+
+/** The lower uprights' covers, one leg (the caller copies them onto the quadrants), from the laced depth up. */
+export function lowerCoverPlates(): UprightPlate[] {
+  const { pitch: seamPitch, inset } = UPRIGHT_SEAMS;
+  const out: UprightPlate[] = [];
+  for (const [name] of LEG_UPRIGHTS)
+    for (const j of lowerJoints(name))
+      for (const d of BOX_FACES) for (const s of lowerSides(name, j, d, seamPitch, inset)) laySide(s, out, undefined);
+  return out;
+}
+
+/**
+ * Whether a lower joint's covers can lie under a joint plate: at a bend
+ * (the 1st floor's plates), and mid-panel in panels 1-4, where the
+ * intermediate entretoise lands ("celui du milieu correspond à
+ * l'entretoise intermédiaire" [sourced text p. 75]). The others lie at
+ * least 1.9 m from a node, the middle of a tronçon whose node carries its
+ * attachments: every head of theirs was measured at least 12 cm clear of
+ * every joint plate [measured on the cooked tower, all heads asked, and
+ * re-measured independently]. Only
+ * the heads of these are asked about the plates (`offJointPlates` in
+ * strut.ts), which costs about 9 microseconds a head [measured: 2.7 s for
+ * all 290,000].
+ */
+export function nearJointPlates(name: UprightName, j: TronconJoint): boolean {
+  if (j.bent) return true;
+  const { A, Q } = segmentAxis(name, j.k);
+  const panels14 = j.k >= nodeIndex("XXVIII") && j.k < nodeIndex("XXIV");
+  return panels14 && Math.abs(j.t - Math.hypot(...sub(Q, A)) / 2) < 1e-6;
+}
+
+/**
+ * The lower covers' rivet fields, one leg, grouped by pitch: those of the
+ * joints that can lie under a joint plate (`nearJointPlates`), the rest, or
+ * all.
+ */
+export function lowerSpliceHeads(which: "near" | "clear" | "all" = "all"): SpliceHeads[] {
+  const { pitch: seamPitch, inset } = UPRIGHT_SEAMS;
+  const heads = new HeadSets();
+  for (const [name] of LEG_UPRIGHTS)
+    for (const j of lowerJoints(name)) {
+      if (which !== "all" && nearJointPlates(name, j) !== (which === "near")) continue;
+      for (const d of BOX_FACES) for (const s of lowerSides(name, j, d, seamPitch, inset)) laySide(s, undefined, heads);
+    }
+  return heads.out();
+}
+
+/**
+ * Where a lower face's corner row must not run on segment k: under the
+ * cover over it, and half a pitch clear of its ends, as [t0, t1] along
+ * that row (`off` its offset off the axis).
+ */
+function lowerCornerCuts(name: UprightName, k: number, d: PlanDir, off: Vec3, pitch: number, inset: number): Array<readonly [number, number]> {
+  const out: Array<readonly [number, number]> = [];
+  const f = faceFrame(segmentAxis(name, k).T, d);
+  const s = dot(sub(off, f.mid), f.e);
+  for (const j of lowerJoints(name)) {
+    if (j.k !== k && j.k !== k + 1) continue;
+    for (const side of lowerSides(name, j, d, pitch, inset)) {
+      if (side.k !== k || side.draw === "none") continue;
+      const p = side.cover.pieces.find((q) => q.what === "cover" && q.o0 === 0 && q.s0 <= s && s <= q.s1);
+      if (p === undefined) continue;
+      const u0 = side.from(p);
+      const run = side.run(p.cls, p.length);
+      if (side.draw === "whole") out.push([u0 - run - pitch / 2, u0 + run + pitch / 2]);
+      else if (side.dir === 1) out.push([-Infinity, u0 + run + pitch / 2]);
+      else out.push([u0 - run - pitch / 2, Infinity]);
+    }
+  }
+  return out;
+}
+
+/** [lo, hi] less the cut intervals: what is left, in order. */
+function subtract(lo: number, hi: number, cuts: ReadonlyArray<readonly [number, number]>): Array<readonly [number, number]> {
+  let left: Array<readonly [number, number]> = [[lo, hi]];
+  for (const [c0, c1] of cuts) {
+    left = left.flatMap(([a, b]): Array<readonly [number, number]> => {
+      if (c1 <= a || c0 >= b) return [[a, b]];
+      const parts: Array<readonly [number, number]> = [];
+      if (c0 > a) parts.push([a, c0]);
+      if (c1 < b) parts.push([c1, b]);
+      return parts;
+    });
+  }
+  return left;
+}
+
+/** The upper covers of `name` on segment k, face by face: a 12 mm cover over each outer plate, and its field (`SPLICE.upper`). */
+function upperCover(name: UpperName, k: number, inset: number, seamPitch: number): Array<{ d: PlanDir; cover: FaceCover }> {
+  const up = SPLICE.upper;
+  const rowsBy = upperRows(name, k, inset);
+  const { T } = upperAxis(name, k);
+  const faces = upperFaces(name, k, WEBS_ONLY);
+  return faces
+    .filter((face) => face.near === undefined)
+    .map((face) => {
+      const w = face.pieces[0]!.s1;
+      // Short of each edge as below (`lowerCover`'s room): at an acute
+      // corner, of the neighbouring plate's inner edge.
+      const f = faceFrame(T, face.d, UPPER_BOX.planHalf);
+      const room = (g: 1 | -1): number => {
+        const nd: PlanDir = [g * Math.abs(face.d[1]), g * Math.abs(face.d[0])];
+        const nb = faces.find((x) => same(x.d, nd));
+        if (nb === undefined) return w - SPLICE.edge;
+        const fn = faceFrame(T, nd, UPPER_BOX.planHalf);
+        const tn = -nb.pieces[0]!.o0;
+        return -tn * dot(fn.n, f.n) > SLIVER ? f.W / 2 - tn * Math.abs(dot(fn.n, f.e)) - 0.002 : w - SPLICE.edge;
+      };
+      const lines = (rowsBy.find((r) => same(r.d, face.d))?.rows ?? [])
+        .filter((r) => r.across === undefined && r.o === 0)
+        .map((r) => r.s)
+        .sort((p, q) => p - q);
+      const cols: FieldColumn[] = lines.map((s) => ({ s, o: up.t, pitch: seamPitch, phase: 0 as const, cls: "web" as const, length: up.length }));
+      // Between each pair of seam lines, columns about `across` apart,
+      // staggered; not across a T's stem (its root's two lines).
+      const stem = upperMakeupOf(name, k).shape === "T";
+      for (let i = 0; i + 1 < lines.length; i++) {
+        const [a, b] = [lines[i]!, lines[i + 1]!];
+        if (stem && a < 0 && b > 0) continue;
+        const m = Math.max(0, Math.round((b - a) / SPLICE.field.across) - 1);
+        for (let j = 1; j <= m; j++) {
+          cols.push({ s: a + ((b - a) * j) / (m + 1), o: up.t, pitch: SPLICE.field.pitch, phase: j % 2 === 1 ? 0.5 : 0, cls: "web", length: up.length });
+        }
+      }
+      return {
+        d: face.d,
+        cover: {
+          pieces: [{ what: "cover" as const, s0: -Math.min(w - SPLICE.edge, room(-1)), s1: Math.min(w - SPLICE.edge, room(1)), o0: 0, o1: up.t, cls: "web" as const, length: up.length }],
+          cols,
+          corner: { cls: "web" as const, length: up.length },
+        },
+      };
+    });
+}
+
+/** Both sides of every face of an upper upright's joint (all straight): one box, centred on it. */
+function upperSides(name: UpperName, j: TronconJoint, inset: number, seamPitch: number): SpliceSide[] {
+  const { A, T } = upperAxis(name, j.k);
+  return upperCover(name, j.k, inset, seamPitch).flatMap(({ d, cover }) =>
+    ([1, -1] as const).map(
+      (dir): SpliceSide => ({
+        k: j.k,
+        A,
+        T,
+        f: faceFrame(T, d, UPPER_BOX.planHalf),
+        cover,
+        from: () => j.t,
+        dir,
+        draw: dir === 1 ? "whole" : "none",
+        run: (_: CoverClass, length: number) => length / 2,
+      }),
+    ),
+  );
+}
+
+function upperSplices(names: readonly UpperName[], k0: number, k1: number, inset: number, seamPitch: number, plates?: UprightPlate[], heads?: HeadSets): void {
+  for (const name of names)
+    for (const j of upperJoints(name)) if (j.k >= k0 && j.k < k1) for (const s of upperSides(name, j, inset, seamPitch)) laySide(s, plates, heads);
+}
+
+/** The legs' upper covers, XVII to XI, one leg; the caller copies them onto the quadrants. */
+export function upperLegCoverPlates(): UprightPlate[] {
+  const { pitch: seamPitch, inset } = UPRIGHT_SEAMS;
+  const out: UprightPlate[] = [];
+  upperSplices(["c", "b", "d"], UPPER_FROM, SHAFT_FROM, inset, seamPitch, out);
+  return out;
+}
+
+/** The legs' upper covers' fields, one leg, by pitch. */
+export function upperLegSpliceHeads(): SpliceHeads[] {
+  const { pitch: seamPitch, inset } = UPRIGHT_SEAMS;
+  const heads = new HeadSets();
+  upperSplices(["c", "b", "d"], UPPER_FROM, SHAFT_FROM, inset, seamPitch, undefined, heads);
+  return heads.out();
+}
+
+/** The shaft's covers, all four quarters. */
+export function shaftCoverPlates(): UprightPlate[] {
+  const { pitch: seamPitch, inset } = UPRIGHT_SEAMS;
+  const one: UprightPlate[] = [];
+  upperSplices(["c", "bd"], SHAFT_FROM, UPPER_TO, inset, seamPitch, one);
+  return [0, 1, 2, 3].flatMap((q) => one.map((p) => ({ ...p, a: turnQ(p.a, q), b: turnQ(p.b, q), n: turnQ(p.n, q) })));
+}
+
+/** The shaft's covers' fields, all four quarters, by pitch. */
+export function shaftSpliceHeads(): SpliceHeads[] {
+  const { pitch: seamPitch, inset } = UPRIGHT_SEAMS;
+  const heads = new HeadSets();
+  upperSplices(["c", "bd"], SHAFT_FROM, UPPER_TO, inset, seamPitch, undefined, heads);
+  return heads.out().map(({ pitch, rows }) => ({
+    pitch,
+    rows: [0, 1, 2, 3].flatMap((q) => rows.map((r) => ({ a: turnQ(r.a, q), b: turnQ(r.b, q), n: turnQ(r.n, q) }))),
+  }));
 }

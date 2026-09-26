@@ -92,8 +92,11 @@ import {
   jointUpright,
   lowerPlates,
   lowerSeamRows,
+  type SpliceHeads,
+  lowerSpliceHeads,
   upperLegPlates,
   upperLegSeamRows,
+  upperLegSpliceHeads,
 } from "./builtup.js";
 import {
   CROSS_RIVETS,
@@ -128,8 +131,11 @@ import {
   faceSkin,
   flatBars,
   gussetMeshes,
+  lineHeads,
   lineRivets,
+  offJointPlates,
   rivetOutputs,
+  rivetSpawn,
   webMembers,
 } from "./strut.js";
 
@@ -1940,6 +1946,26 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
               0,
               UPRIGHT_SEAMS.pitch,
             ),
+          },
+          {
+            // The covers over the tronçons' joints, supports to XI, each
+            // with its own field (`lowerSpliceHeads`, `upperLegSpliceHeads`):
+            // one set, a row set per pitch, off the joint plates.
+            name: "leg.uprights.splices",
+            spawn: (() => {
+              const rowsOf = (id: string, sets: readonly SpliceHeads[]) =>
+                sets.map(({ pitch, rows }, i) =>
+                  lineHeads(g, `${id}${i}`, fourMembers(`${id}${i}4`, segmentMembers(g, `${id}Rows${i}`, rows)), 0, pitch),
+                );
+              return rivetSpawn(g, "legUprightSplices", [
+                // Where a joint plate can lie over the cover, kept off it.
+                offJointPlates(g, "legUprightSplice", [
+                  ...rowsOf("legUprightSpliceNear", lowerSpliceHeads("near")),
+                  ...rowsOf("legUprightSpliceUpper", upperLegSpliceHeads()),
+                ]),
+                ...rowsOf("legUprightSpliceClear", lowerSpliceHeads("clear")),
+              ]);
+            })(),
           },
         ]
       : [];

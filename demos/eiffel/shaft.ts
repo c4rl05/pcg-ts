@@ -21,7 +21,7 @@
  * "1000").
  */
 import { type Graph, type NodeHandle, abs, add, attribute, component, le, lt, min, mul, position, ramp } from "pcg-ts";
-import { AS_BUILT, WEBS_ONLY, shaftPlates, shaftSeamRows } from "./builtup.js";
+import { AS_BUILT, WEBS_ONLY, shaftPlates, shaftSeamRows, shaftSpliceHeads } from "./builtup.js";
 import {
   type SegmentMember,
   type Vec3,
@@ -49,8 +49,11 @@ import {
   faceSkin,
   flatBars,
   gussetMeshes,
+  lineHeads,
   lineRivets,
+  offJointPlates,
   rivetOutputs,
+  rivetSpawn,
   webMembers,
 } from "./strut.js";
 
@@ -536,6 +539,21 @@ export function buildShaft(g: Graph, detail: Detail = {}): Parts {
                 0,
                 UPRIGHT_SEAMS.pitch,
               ),
+            },
+            {
+              // The covers over the tronçons' joints, each with its own
+              // field (`shaftSpliceHeads`): a row set per pitch, one set, off
+              // the joint plates.
+              name: "shaft.uprights.splices",
+              spawn: rivetSpawn(g, "shaftUprightSplices", [
+                offJointPlates(
+                  g,
+                  "shaftUprightSplice",
+                  shaftSpliceHeads().map(({ pitch, rows }, i) =>
+                    lineHeads(g, `shaftUprightSplice${i}`, segmentMembers(g, `shaftUprightSpliceRows${i}`, rows), 0, pitch),
+                  ),
+                ),
+              ]),
             },
           ]
         : []),

@@ -65,6 +65,10 @@ const LACING_SETS = [
   "ff.entretoises",
   "ff.second.web",
   "summit.p29.posts",
+  // And the covers' own fields over the uprights' tronçon joints (builtup.ts,
+  // the splices), which a joint plate can lap as it laps the lacing.
+  "leg.uprights.splices",
+  "shaft.uprights.splices",
 ] as const;
 
 interface Rivet {

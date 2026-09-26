@@ -699,6 +699,111 @@ export const UPPER_BOX = {
   closure: 1.05,
 } as const;
 
+/**
+ * THE SPLICES: where an arbalétrier's tronçons butt, and the cover plates
+ * (couvre-joints) and rivets over each joint (`builtup.ts`, SOURCES.md
+ * §27.2). Lengths along the axis, in m; widths across the face.
+ *
+ * WHERE. "La longueur d'arbalétrier comprise entre les axes des
+ * entretoises est en nombre rond de 13,50 m et a été divisée en trois
+ * parties de 4,50 m ... il existe trois joints dans chaque panneau ; celui
+ * du milieu correspond à l'entretoise intermédiaire ... les deux autres
+ * sont à des distances égales de l'entretoise principale" [sourced text
+ * p. 75]: joints at L/6, L/2 and 5L/6 of a panel, a node in the middle of
+ * its tronçon. The rule is kept for every lower panel (a panel of length L
+ * takes round(L / 4.5) joints at (i + 1/2) L / n) [sourced for panels 1-4;
+ * derived for the base stretch and panels 6-11, "analogues à ceux du
+ * premier étage", p. 77, whose joint places the text does not give]. Panel
+ * 5 bends "dans le joint qui existe en ce point" at XXIV [sourced text
+ * p. 76], and PL-X fig. 19 dimensions its next joint "4.01335" up of
+ * "8.0267 entre les deux coudes": a joint at XXIV and one at mid-panel
+ * [sourced PL-X fig. 19]; PL-X figs. 15 and 18 section the upper bend,
+ * XXIII, through its covers ("C.J. Sem. 200 x 12", "C.J. d'âme 12 m/m",
+ * "Corn. C.j. 80 x 80 x 15"): a joint there too [sourced]. The other bends
+ * (XXII-XVIII, and above XVII) fall inside a tronçon here: the text does
+ * not place a joint at them [?]. Above XVII: "Les joints sont distants de
+ * 5 à 7 mètres" [sourced text p. 77]: round(L / 6) a panel, placed as
+ * below [the 6 estimated, the middle of the printed range].
+ *
+ * WHAT. "Toutes les pièces qui constituent le tronçon viennent s'arrêter
+ * dans un même plan normal à l'axe" [sourced text p. 75]: every ply of a
+ * tronçon ends in ONE plane, so no ply is staggered past another; what is
+ * staggered is the covers, of three lengths, whose ends step along the
+ * face (PL-IX figs. 21-24). Outside the box, as PL-IX draws them:
+ *   - a montant-EXTERIOR face (figs. 23-24): a web cover "290 x 15" (fig.
+ *     24: "295 x 15") either side of the fin, "0.94" long; over the fin, an
+ *     angle "80 x 80 x 15" either side in the fin's angles, "1.34" long;
+ *   - a montant-INTERIOR face (figs. 21-22): "C.j. 380 x 12" over the C.J.
+ *     between the channel's legs, on 12 mm fillers ("Fourr. ép. 12") beside
+ *     it, "0.54 + 0.54" = 1.08 long; an angle "85 x 85 x 15" in each
+ *     channel angle, "1.34"; a flat "85 x 12" over each corner angle's row,
+ *     "1.02" (fig. 22 prints both lengths, 1.08 on the centre cover's
+ *     extension lines, 1.02 on the strip's; the strips are drawn about 4 cm
+ *     off the joint's centre, here centred on it [simplified]).
+ * Inside the box the "590 x 15", "70 x 13" and the corner angles' own
+ * covers are not drawn (nothing inside is), nor fig. 21's "100 x 12",
+ * whose seat this reading cannot place [?]. Figs. 25-26 draw faces 3, 8,
+ * 9 and 15, the manhole faces, with a longer cover round the "345 x 520"
+ * hole: drawn here as fig. 21's, since no box is cut [simplified].
+ * Panels 6-11 (PL-X figs. 15, 18): a 12 mm web cover each side of the C.J.
+ * and a "200 x 12" over it [sourced]; their lengths are panels 1-4's
+ * [estimated]. Above XVII, a 12 mm cover over each outer plate, 0.94 long
+ * [estimated: no figure of the upper joints is read].
+ * AT A BEND the covers run further down than up: at XXIV PL-X fig. 19
+ * dimensions "380" and "510" into panel 5 and "765" and "965" into panel 4
+ * (which cover each belongs to read off the drawing [estimated]); XXIII is
+ * taken as its mirror, the short side in panel 5 [estimated].
+ */
+export const SPLICE = {
+  /** A lower tronçon, "4,50 m en nombre rond" [sourced text p. 75]. */
+  troncon: 4.5,
+  /** An upper one, "5 à 7 mètres" [sourced text p. 77; 6 estimated]. */
+  tronconUpper: 6.0,
+  /** The nodes where a lower column bends IN a joint [sourced PL-X figs. 15, 18, 19]. */
+  bentJoints: ["XXIV", "XXIII"],
+  /** Montant-exterior faces, panels 1-5 [sourced PL-IX figs. 23-24]. */
+  exterior: {
+    web: { width: 0.29, t: 0.015, length: 0.94 },
+    angle: { leg: 0.08, t: 0.015, length: 1.34 },
+  },
+  /** Montant-interior faces, panels 1-5 [sourced PL-IX figs. 21-22]. */
+  interior: {
+    centre: { width: 0.38, t: 0.012, length: 1.08 },
+    filler: 0.012,
+    angle: { leg: 0.085, t: 0.015, length: 1.34 },
+    corner: { width: 0.085, t: 0.012, length: 1.02 },
+  },
+  /** Panels 6-11 [sourced PL-X figs. 15, 18 for the sizes; lengths estimated as panels 1-4's]. */
+  plain: {
+    web: { t: 0.012, length: 0.94 },
+    strip: { width: 0.2, t: 0.012, length: 1.34 },
+  },
+  /** Above XVII: one 12 mm cover over each outer plate [estimated]. */
+  upper: { t: 0.012, length: 0.94 },
+  /**
+   * How far a web cover stops short of its web's edge: fig. 23's 290 on
+   * the 297.5 of web a 205 C.J. leaves each side [derived].
+   */
+  edge: 0.0075,
+  /** At a bent joint, a web-class and an angle-class cover's run [long side, short side] [PL-X fig. 19; estimated which is which]. */
+  bent: { web: [0.765, 0.38], angle: [0.965, 0.51] },
+  /**
+   * The rivet field on a web cover (fig. 23): the corner angle's row runs
+   * on over the cover at its own pitch; inward of it, columns 0.067 apart
+   * staggered a half pitch, every 0.076, the first and last heads 0.035
+   * off the joint and the cover's ends [measured on PL-IX fig. 23 at its
+   * scale, 290 px/m, twice: 66-67, 74-78 and 33-41 mm].
+   */
+  field: { across: 0.067, pitch: 0.076, end: 0.035 },
+  /**
+   * The interior cover's field (fig. 21): two columns 0.055 either side of
+   * the face's centre line, two more at 0.158, in step, a rectangular grid,
+   * every 0.064 [measured on PL-IX fig. 21 at 291 px/m, twice: 0.055-0.058,
+   * 0.155-0.158, 0.060-0.066].
+   */
+  interiorField: { inner: 0.055, outer: 0.158, pitch: 0.064 },
+} as const;
+
 /** One upper arbalétrier's makeup: its shape, plates (mm) and angles, and the printed area (mm^2). */
 export interface UpperMakeup {
   /** A closed box, the open L (c above XI) or the T (bd from XI up). */

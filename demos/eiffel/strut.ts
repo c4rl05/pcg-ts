@@ -395,6 +395,38 @@ function plateQueryOf(g: Graph, cloud: NodeHandle): PlateQuery {
   return q;
 }
 
+/**
+ * Heads that no strut brought (a splice's covers, `builtup.ts`), kept off
+ * the tower's joint plates as the lacing is: a head within
+ * {@link PLATE_CLEAR} of the plates' cloud goes. Where a joint plate laps a
+ * face the model's plate stands 8 mm off the web, over a cover 12-15 mm
+ * thick (D3 of the built-up study, SOURCES.md §27): the heads under it
+ * would stand in it. They arrive aimed and keep their aim.
+ *
+ * Asked in a query of their own, not the lacing's shared one
+ * (`plateQueryOf`): there every set takes its heads back out by number
+ * with a pass over ALL the query's heads, so 100,000 more heads there cost
+ * every lacing set a pass over them (+2.7 s on the riveted cook for the
+ * splices' 290,000); a second index over the cloud costs a tenth of that
+ * [measured, interleaved runs].
+ */
+export function offJointPlates(g: Graph, id: string, heads: readonly NodeHandle[]): NodeHandle {
+  const all = g.add(mergePoints, {}, `${id}Heads`);
+  for (const h of heads) g.connect(h, "out", all, "in");
+  const near = g.add(
+    sampleNearestPoint,
+    { distanceAttr: PLATE_DIST, indexAttr: "", maxDistance: PLATE_CLEAR * 2 },
+    `${id}Plates`,
+  );
+  g.connect(all, "out", near, "in");
+  g.connect(plateCloudOf(g).cloud, "out", near, "source");
+  const off = g.add(filterByExpression, { predicate: gt(attribute(PLATE_DIST), PLATE_CLEAR) }, `${id}OffPlates`);
+  g.connect(near, "out", off, "in");
+  const done = g.add(removeAttribute, { names: [PLATE_DIST], domain: "point" }, `${id}OffDone`);
+  g.connect(off, "out", done, "in");
+  return done;
+}
+
 /** The joint-plate cloud's step along each plate's centre line. */
 const PLATE_CLOUD_STEP = 0.1;
 /**
@@ -853,6 +885,21 @@ export function lineRivets(
   out: number,
   pitch: number,
 ): NodeHandle {
+  return rivetSpawn(g, id, [lineHeads(g, id, lines, out, pitch)]);
+}
+
+/**
+ * `lineRivets`' heads before they are spawned: for rows of several pitches
+ * that make one rivet set (a splice's covers, `builtup.ts`), each pitch its
+ * own lines, merged by one `rivetSpawn`.
+ */
+export function lineHeads(
+  g: Graph,
+  id: string,
+  lines: NodeHandle,
+  out: number,
+  pitch: number,
+): NodeHandle {
   const samples = g.add(pathResample, { mode: "spacing", spacing: pitch }, `${id}Samples`);
   const N = attribute(FACE_NORMAL, 3);
   const at = g.add(transformPoints, { translate: mul(N, out) }, `${id}At`);
@@ -864,7 +911,7 @@ export function lineRivets(
   g.connect(lines, "out", samples, "in");
   g.connect(samples, "out", at, "in");
   g.connect(at, "out", aim, "in");
-  return rivetSpawn(g, id, [aim]);
+  return aim;
 }
 
 /** The gusset meshes of several web-member sets, skipping the jointless. */

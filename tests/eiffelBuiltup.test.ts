@@ -289,6 +289,10 @@ describe("eiffel built-up uprights", () => {
       // The slab's section in its face's (s, o), measured off the panel's own axis line.
       const f = faceFrame(name, k, d);
       const { A, T } = axis(name, k);
+      // The covers over the tronçons' joints, under 1.5 m long where every
+      // other piece runs its panel: tests/eiffelSplice.test.ts holds them.
+      const run = [0, 1, 2].find((i) => Math.abs(dot(sl.axes[i]!, T)) > 0.99)!;
+      if (2 * sl.half[run]! < 1.5) continue;
       const so = [-1, 1].flatMap((a) =>
         [-1, 1].flatMap((b) =>
           [-1, 1].map((c) => {
@@ -318,7 +322,9 @@ describe("eiffel built-up uprights", () => {
       return sorted[1]! > 0.3; // a web, not a C.J., fin or channel piece
     });
     const heads = rivetBases((outputs["rivets.leg.uprights"] as unknown[])[0]).filter((p) => p[0] > 0 && p[2] > 0);
-    expect(heads.length).toBeGreaterThan(30_000);
+    // (30,000 before the tronçons' covers took their stretches of the rows:
+    // tests/eiffelSplice.test.ts.)
+    expect(heads.length).toBeGreaterThan(20_000);
     // Each head's base on a web's outer face, inside it by a head's radius,
     // and no web standing over it: within the rivet's own jitter (1.7 mm).
     const SLACK = 0.002;
@@ -464,9 +470,15 @@ describe("eiffel built-up uprights", () => {
       // Plain: a leg's c, b and d, four webs a panel over panels 12-17; the
       // shaft's four c (a box in 18, the L's two plates and its two closing
       // plates at each end in 19-28) and four bd (flange and stem, 18-28).
-      // Laced adds the angles: the L's three (4 legs' worth), the T's six.
-      expect(legs).toHaveLength(3 * 6 * 4);
-      expect(shaft).toHaveLength(4 * (4 + 10 * (2 + 2 * 2) + 11 * 2) + (depth === "laced" ? 4 * (10 * 6 + 11 * 12) : 0));
+      // Laced adds the angles: the L's three (4 legs' worth), the T's six;
+      // and a cover over each tronçon joint on every outer plate (the
+      // splices, tests/eiffelSplice.test.ts): the legs' c, b and d 12 joints
+      // each, 4 faces; the shaft's c 2 in panel 18 (4 faces) and 12 above
+      // (the L's 2), its bd 14 (the T's flange).
+      expect(legs).toHaveLength(3 * 6 * 4 + (depth === "laced" ? 3 * 12 * 4 : 0));
+      expect(shaft).toHaveLength(
+        4 * (4 + 10 * (2 + 2 * 2) + 11 * 2) + (depth === "laced" ? 4 * (10 * 6 + 11 * 12) + 4 * (2 * 4 + 12 * 2 + 14) : 0),
+      );
       if (depth === "laced") continue;
       const closures = new Map<string, number>();
       for (const [who, list] of [["legs", legs], ["shaft", shaft]] as const) {
