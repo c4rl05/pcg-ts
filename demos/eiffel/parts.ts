@@ -226,6 +226,13 @@ export type Parts = Partial<Record<PartClass, NodeHandle[]>> & {
    * publishes each circuit as `LIFT_CHAINS`).
    */
   chains?: Array<{ name: string; spawn: NodeHandle }>;
+  /**
+   * Cloth the host moves point by point — the tricolour on the rod
+   * (`flag.ts`) — each put out as `cloth.<name>`, NOT jittered: every one
+   * of its points is re-placed each frame, so a jitter would only be
+   * overwritten.
+   */
+  cloth?: Array<{ name: string; mesh: NodeHandle }>;
 };
 
 /**
@@ -246,6 +253,7 @@ export function assemble(g: Graph, parts: Parts): void {
   for (const { name, spawn } of parts.rivets ?? []) g.output(spawn, "instances", `rivets.${name}`);
   for (const { name, spawn } of parts.fittings ?? []) g.output(spawn, "instances", `fittings.${name}`);
   for (const { name, spawn } of parts.chains ?? []) g.output(spawn, "instances", `chain.${name}`);
+  for (const { name, mesh } of parts.cloth ?? []) g.output(mesh, "out", `cloth.${name}`);
   for (const { name, mesh } of parts.cars ?? []) {
     g.output(jitter(g, `${carId(name)}Jitter`, mesh), "out", `car.${name}`);
   }
@@ -271,6 +279,7 @@ export function joinParts(...all: Parts[]): Parts {
     if (parts.fittings !== undefined) (out.fittings ??= []).push(...parts.fittings);
     if (parts.cars !== undefined) (out.cars ??= []).push(...parts.cars);
     if (parts.chains !== undefined) (out.chains ??= []).push(...parts.chains);
+    if (parts.cloth !== undefined) (out.cloth ??= []).push(...parts.cloth);
   }
   return out;
 }

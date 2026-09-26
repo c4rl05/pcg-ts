@@ -488,6 +488,100 @@ export const ROD = {
   leg: 0.025,
 } as const;
 
+/** A flag's two sides, in metres: `fly` from the hoist out, `hoist` along the rod. */
+export interface FlagSize {
+  readonly fly: number;
+  readonly hoist: number;
+}
+
+/**
+ * The tricolour's size, as the two sources give it, and they disagree.
+ * PL-XIX Fig. 4 draws the flag on the rod, dimensioned « 5.50 » by
+ * « 3.00 » [sourced drawing]; the text's account of 31 March 1889 has
+ * Eiffel hoist « le drapeau national, mesurant 7,50 m de long et 4,50 m de
+ * large » [sourced E1900-TXT p. 311, quoting Le Champ de Mars of 6 April
+ * 1889]. Both are 11:6 and 5:3, near enough the same shape; the plate is the
+ * one drawn on the tower as built, the text the one of the ceremony.
+ */
+export const FLAG_SIZES = {
+  plate: { fly: 5.5, hoist: 3.0 },
+  text: { fly: 7.5, hoist: 4.5 },
+} as const satisfies Record<string, FlagSize>;
+
+/**
+ * THE SWITCH: which of {@link FLAG_SIZES} the tower flies. The plate's, by
+ * default — the rod, pulley and flag are one drawing there, and it is the
+ * size that drawing closes on. Open decision (SOURCES.md §29.4); the text's
+ * is one word away.
+ */
+export const FLAG_SIZE: FlagSize = FLAG_SIZES.plate;
+
+/**
+ * The flag's gear on the rod, PL-XIX Fig. 4: the « Poulie de manœuvre du
+ * drapeau » just under the points' spring, and the « Corde sans fin du
+ * drapeau », an endless cord, down the rod on the flag's side to the
+ * socket's head [sourced drawing]. The cord is carried round a second,
+ * lower sheave above the socket, where the rod is within reach of the
+ * bent angles [estimated: the plate draws the cord to the socket and no
+ * further]. `below` is the pulley's centre under the points' spring
+ * (0.15) and `drop` the flag's head under it (0.39 on the plate, at its
+ * 103 px/m) [measured PL-XIX Fig. 4]. The sheave, the cord, the clips and
+ * the lower block's height over the socket [estimated]. The flag flies
+ * from the cord's outer run toward -x, the tower's north-east, down the
+ * prevailing south-westerly [estimated].
+ */
+export const FLAG_GEAR = {
+  below: 0.15,
+  drop: 0.39,
+  sheave: 0.05,
+  sheaveWidth: 0.03,
+  /** The cord's inner run this far out of the rod's foot radius. */
+  gap: 0.02,
+  cord: 0.006,
+  cheek: 0.006,
+  cheekAt: 0.022,
+  axle: 0.008,
+  collar: 0.05,
+  /** The lower sheave's centre over the socket's head. */
+  lowerOver: 0.2,
+  /** The cloth's hoist edge beyond the cord's outer run, bridged by the clips. */
+  clip: 0.02,
+} as const;
+
+/** Where the flag and its gear stand ({@link FLAG_GEAR}), for a flag of `size`. */
+export function flagHoist(size: FlagSize = FLAG_SIZE): {
+  /** The two sheaves' centres, on the rod's -x side, in the xy plane. */
+  readonly sheaveX: number;
+  readonly pulleyY: number;
+  readonly lowerY: number;
+  /** The cord's two runs, x of their axes. */
+  readonly runs: readonly [number, number];
+  /** The cloth's hoist edge, x, and its head and foot. */
+  readonly x: number;
+  readonly head: number;
+  readonly foot: number;
+  readonly fly: number;
+  readonly hoist: number;
+} {
+  const G = FLAG_GEAR;
+  const lv = lanternLevels();
+  const pulleyY = lv.pointsFrom - G.below;
+  const sheaveX = -(ROD.foot + G.gap + G.sheave);
+  const outer = sheaveX - G.sheave;
+  const head = pulleyY - G.drop;
+  return {
+    sheaveX,
+    pulleyY,
+    lowerY: lv.platform + LANTERN.socket[1] + G.lowerOver,
+    runs: [sheaveX + G.sheave, outer],
+    x: outer - G.clip,
+    head,
+    foot: head - size.hoist,
+    fly: size.fly,
+    hoist: size.hoist,
+  };
+}
+
 /**
  * A rivet head's radius: strut.ts's (38 mm across for a 22 mm rivet
  * [estimated]), which that module does not export.
@@ -2956,7 +3050,76 @@ function lantern(g: Graph, crownY: number): NodeHandle[] {
     points.push([[0, lv.pointsFrom, 0], [out3 * Math.cos(t), lv.rodTip, out3 * Math.sin(t)]]);
   }
   out.push(skin(g, "rodPoints", members(g, "rodPointPaths", points), ROD.tip, [0, 1, 0]));
+  out.push(...flagGear(g));
   return out;
+}
+
+/** Round bars through `pieces`: a circle of `radius` swept along each, capped. */
+function rounds(
+  g: Graph,
+  id: string,
+  pieces: ReadonlyArray<readonly [Vec3, Vec3]>,
+  radius: number,
+  sides: number,
+  up: Vec3,
+): NodeHandle {
+  const node = g.add(
+    sweepProfile,
+    { profile: "circle", sides, radius, caps: true, frame: "upHint", up: [...up] },
+    `${id}Skin`,
+  );
+  g.connect(members(g, `${id}Paths`, pieces), "out", node, "in");
+  return node;
+}
+
+/**
+ * The flag's gear on the rod ({@link FLAG_GEAR}, {@link flagHoist}): the
+ * « poulie de manœuvre » under the points and the lower sheave over the
+ * socket, each a sheave on an axle between two cheeks from a collar round
+ * the rod; the endless cord's two runs between them; and the two clips
+ * from its outer run to the flag's head and foot. The flag itself is the
+ * page's to move (`flag.ts`).
+ */
+function flagGear(g: Graph): NodeHandle[] {
+  const G = FLAG_GEAR;
+  const h = flagHoist();
+  const lv = lanternLevels();
+  // The rod's radius at a height: its taper, foot to the points' spring.
+  const rodR = (y: number) => ROD.foot + ((ROD.head - ROD.foot) * (y - lv.rodBase)) / (lv.pointsFrom - lv.rodBase);
+  const x = h.sheaveX;
+  const blocks = [h.pulleyY, h.lowerY];
+  const collar = (y: number, i: number) =>
+    prism(g, `flagCollar${i}`, 12, [y - G.collar / 2, y + G.collar / 2], rodR(y) + 0.008);
+  const cheeks: Array<readonly [Vec3, Vec3]> = [];
+  const sheaves: Array<readonly [Vec3, Vec3]> = [];
+  const axles: Array<readonly [Vec3, Vec3]> = [];
+  for (const y of blocks) {
+    for (const z of [-G.cheekAt, G.cheekAt]) cheeks.push([[-rodR(y), y, z], [x - G.axle, y, z]]);
+    sheaves.push([[x, y, -G.sheaveWidth / 2], [x, y, G.sheaveWidth / 2]]);
+    axles.push([[x, y, -(G.cheekAt + G.cheek)], [x, y, G.cheekAt + G.cheek]]);
+  }
+  return [
+    ...blocks.map(collar),
+    skin(g, "flagCheeks", members(g, "flagCheekPaths", cheeks), G.cheek, [0, 1, 0]),
+    rounds(g, "flagSheaves", sheaves, G.sheave, 16, [0, 1, 0]),
+    rounds(g, "flagAxles", axles, G.axle, 8, [0, 1, 0]),
+    rounds(
+      g,
+      "flagCord",
+      h.runs.map((rx) => [[rx, h.pulleyY, 0], [rx, h.lowerY, 0]] as const),
+      G.cord,
+      6,
+      [1, 0, 0],
+    ),
+    rounds(
+      g,
+      "flagClips",
+      [h.head, h.foot].map((y) => [[h.runs[1], y, 0], [h.x, y, 0]] as const),
+      G.axle,
+      8,
+      [0, 1, 0],
+    ),
+  ];
 }
 
 /** Build panel 29, the 3rd-floor gallery and Eiffel's pavilion, and the campanile, at the given detail. */

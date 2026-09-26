@@ -21,6 +21,10 @@
  * parks them all where the graph built them, which is what every scripted
  * capture of this page asks for.
  *
+ * AND THE FLAG, on the rod: the graph builds it flat (`cloth.flag`) and the
+ * page flies it, every point every frame, from a pose that is a pure
+ * function of time (`flag.ts`), so `?still` shows it as it flies at t = 0.
+ *
  * DAYLIGHT, WITH SHADOWS, because that is how the lattice reads. A braced
  * panel seen flat-lit is a hatched silhouette; the same panel under a low
  * sun throws its web onto the members behind it and onto the ground, and
@@ -116,6 +120,8 @@ import { PART_CLASSES, type PartClass } from "./parts.js";
 import { BALUSTER, CABOCHON_RISE, FITTING_ASSETS } from "./platforms.js";
 import { NEUTRAL, createRig } from "./rig.js";
 import { rivetClass } from "./spec.js";
+import { BufferAttribute, DataTexture, NearestFilter, SRGBColorSpace } from "three";
+import { FLAG_BANDS, FLAG_GRID, FLAG_POINTS, flagNormals, flagPose } from "./flag.js";
 
 // ------------------------------------------------------------------ //
 // The look.
@@ -486,9 +492,10 @@ const overlay = createOverlay({
   info:
     "Eiffel's 29 panels from Plate XXXI — four legs merging into one shaft — with every " +
     "member below the panel scale placed by rule. Cooked once, drawn as it came out of the " +
-    "graph, one material per part class. The lifts are the one thing that moves: the cars " +
+    "graph, one material per part class. The lifts are what moves: the cars " +
     "ride their runs at about a metre a second, the Edoux pair counterweighted against each " +
-    "other, their chains, trucks, pistons and pulleys moving with them. Orbit to judge it; the " +
+    "other, their chains, trucks, pistons and pulleys moving with them; and the tricolour " +
+    "flies from the rod. Orbit to judge it; the " +
     "shadows are how the lattice reads.",
 });
 
@@ -757,6 +764,13 @@ async function main(): Promise<void> {
   let carTriangles = 0;
   for (const [name, collection] of Object.entries(outputs)) {
     if ((PART_CLASSES as readonly string[]).includes(name)) continue;
+    if (isCloth(name)) {
+      // The flag: the page moves it, so it is kept apart (`hang`).
+      const drawn = draw(name, collection, FLAG_MATERIAL, box, problems);
+      keep(name, drawn);
+      hang(name, drawn.meshes, problems);
+      continue;
+    }
     const named = isRivets(name) || isCar(name) || isFitting(name) || isChain(name);
     // A car is the lifts' own fit-out, so it wears the platforms' paint;
     // what moves with it is machinery and wears that; only a genuinely
@@ -862,7 +876,9 @@ async function main(): Promise<void> {
           // entry of its own, the way a class' rivets have none.
           (isCar(name) && !isMachine(name) && v === "platforms") ||
           // What moves with a car is machinery, and rides with that class.
-          ((isChain(name) || isMachine(name)) && v === "machinery");
+          ((isChain(name) || isMachine(name)) && v === "machinery") ||
+          // The flag flies from the rod, which is the summit's.
+          (isCloth(name) && v === "summit");
         for (const m of list) m.visible = on;
       }
       renderer.shadowMap.needsUpdate = true;
@@ -1086,6 +1102,118 @@ function moveCars(t: number): void {
 }
 
 // ------------------------------------------------------------------ //
+// The flag.
+// ------------------------------------------------------------------ //
+
+/** Does this output carry cloth the page moves? The cook names it `cloth.<name>`. */
+function isCloth(name: string): boolean {
+  return name.startsWith("cloth.");
+}
+
+/**
+ * The tricolour's bands as a three-texel texture, hoist to fly, sampled
+ * NEAREST so the bands' edges stay hard where they fall mid-quad: the
+ * cloth's `uv` runs 0 at the hoist to 1 at the fly (`flag.ts`).
+ */
+function flagBands(): DataTexture {
+  const data = new Uint8Array(4 * FLAG_BANDS.length);
+  FLAG_BANDS.forEach((c, i) => data.set([(c >> 16) & 255, (c >> 8) & 255, c & 255, 255], 4 * i));
+  const tex = new DataTexture(data, FLAG_BANDS.length, 1);
+  tex.magFilter = NearestFilter;
+  tex.minFilter = NearestFilter;
+  tex.colorSpace = SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/** Wool bunting: matte, both sides seen. */
+const FLAG_MATERIAL = new MeshStandardMaterial({
+  map: flagBands(),
+  roughness: 0.9,
+  metalness: 0,
+  side: DoubleSide,
+});
+
+/**
+ * A cloth mesh and, for each of its vertices, its point of `flagPose`'s
+ * grid, found once from its `uv` (the conversion keeps the graph's point
+ * order, but the page does not lean on that).
+ */
+interface Cloth {
+  readonly mesh: Mesh;
+  readonly slot: Uint16Array;
+  readonly position: BufferAttribute;
+  readonly normal: BufferAttribute;
+}
+
+const cloths: Cloth[] = [];
+const FLAG_AT = new Float32Array(3 * FLAG_POINTS);
+const FLAG_NORMAL = new Float32Array(3 * FLAG_POINTS);
+
+/**
+ * THE FLAG'S CLOCK is its own. It runs whenever the page is not `?still`
+ * or paused by the capture probe — not with the lifts' checkbox, which
+ * parks the cars, not the wind — and `setClock` sets it with the lifts',
+ * so a probed frame at t shows the cars AND the flag as any run has them
+ * at t: `flagPose` is pure in time.
+ */
+let windClock = 0;
+let windRunning = !STILL;
+
+/**
+ * Take a `cloth.<name>` output's meshes over: map each vertex to its grid
+ * point, give it normals the page writes, and fly it at the current time.
+ */
+function hang(name: string, drawn: readonly Mesh[], problems: string[]): void {
+  const { nu, nv } = FLAG_GRID;
+  for (const mesh of drawn) {
+    const geometry = mesh.geometry;
+    const uv = geometry.getAttribute("uv");
+    const position = geometry.getAttribute("position");
+    if (uv === undefined || !(position instanceof BufferAttribute) || position.count !== FLAG_POINTS) {
+      problems.push(`${name}: not the flag's ${FLAG_POINTS}-point grid with a uv; left flat`);
+      continue;
+    }
+    const slot = new Uint16Array(position.count);
+    for (let v = 0; v < position.count; v++) {
+      slot[v] = Math.round(uv.getY(v) * nv) * (nu + 1) + Math.round(uv.getX(v) * nu);
+    }
+    const normal = new BufferAttribute(new Float32Array(3 * position.count), 3);
+    geometry.setAttribute("normal", normal);
+    // The map is drawn once and the cloth never stands still; it takes the
+    // tower's shadow but throws none. It moves off its cooked bounds, so
+    // it is never culled against them.
+    mesh.castShadow = false;
+    mesh.frustumCulled = false;
+    cloths.push({ mesh, slot, position, normal });
+  }
+  waveFlags(windClock);
+}
+
+/** Put every cloth where `flagPose` has it at `t`. Allocates nothing. */
+function waveFlags(t: number): void {
+  if (cloths.length === 0) return;
+  flagPose(t, FLAG_AT);
+  flagNormals(FLAG_AT, FLAG_NORMAL);
+  for (let c = 0; c < cloths.length; c++) {
+    const { slot, position, normal } = cloths[c] as Cloth;
+    const p = position.array as Float32Array;
+    const n = normal.array as Float32Array;
+    for (let v = 0; v < slot.length; v++) {
+      const s = 3 * (slot[v] as number);
+      p[3 * v] = FLAG_AT[s] as number;
+      p[3 * v + 1] = FLAG_AT[s + 1] as number;
+      p[3 * v + 2] = FLAG_AT[s + 2] as number;
+      n[3 * v] = FLAG_NORMAL[s] as number;
+      n[3 * v + 1] = FLAG_NORMAL[s + 1] as number;
+      n[3 * v + 2] = FLAG_NORMAL[s + 2] as number;
+    }
+    position.needsUpdate = true;
+    normal.needsUpdate = true;
+  }
+}
+
+// ------------------------------------------------------------------ //
 // The loop.
 // ------------------------------------------------------------------ //
 
@@ -1106,6 +1234,10 @@ renderer.setAnimationLoop(() => {
   if (liftsRunning) {
     clock += Math.min((now - lastFrame) / 1000, 0.1);
     moveCars(clock);
+  }
+  if (windRunning) {
+    windClock += Math.min((now - lastFrame) / 1000, 0.1);
+    waveFlags(windClock);
   }
   lastFrame = now;
   // A driven camera is not an orbited one: `update()` would re-derive the
@@ -1148,11 +1280,11 @@ declare global {
         fov?: number,
       ): void;
       /**
-       * Stop the page advancing its own lift clock, so `setClock` is the
-       * only thing that moves the cars.
+       * Stop the page advancing its own lift and wind clocks, so `setClock`
+       * is the only thing that moves the cars and the flag.
        */
       pause(on: boolean): void;
-      /** Put every car where its run has it at `t` seconds. */
+      /** Put every car where its run has it, and the flag as the wind has it, at `t` seconds. */
       setClock(t: number): void;
     };
   }
@@ -1178,10 +1310,13 @@ window.pcgEiffel = {
   },
   pause(on) {
     liftsRunning = !on;
+    windRunning = !on;
   },
   setClock(t) {
     clock = t;
     moveCars(clock);
+    windClock = t;
+    waveFlags(windClock);
   },
 };
 

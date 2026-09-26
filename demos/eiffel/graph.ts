@@ -13,6 +13,7 @@
  */
 import { Graph } from "pcg-ts";
 import { buildFirstFloor } from "./firstFloor.js";
+import { buildFlag } from "./flag.js";
 import { quadrants } from "./lattice.js";
 import { buildLegs } from "./legs.js";
 import { buildLifts } from "./lifts.js";
@@ -40,6 +41,7 @@ export function buildEiffel(seed = 1889, detail: Detail = {}): Graph {
       buildSummit(g, detail),
       buildPlatforms(g, quads),
       buildLifts(g, quads, detail),
+      buildFlag(g),
     ),
   );
   return g;
