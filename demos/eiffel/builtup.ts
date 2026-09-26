@@ -76,6 +76,7 @@
 import type { Vec3 } from "./lattice.js";
 import {
   NODES,
+  SEAMS_AS_BUILT,
   SPLICE,
   UPPER_BOX,
   UPPER_SECTIONS,
@@ -450,7 +451,8 @@ export function lowerPlates(show: Protrusions): UprightPlate[] {
  * panels' heads never meet at a node, and none stands under a plate. Each row carries its face's
  * outward normal, for `lineRivets` with no offset. The rows are today's
  * rule (`UPRIGHT_SEAMS`: the middle of a 100 angle's leg in from the
- * corner), re-seated on the true faces; the rows as built are rivets25's.
+ * corner), re-seated on the true faces; the other rows as built are
+ * `lowerBuiltRows`' (at the end of this file).
  * A row stops half a pitch short of the cover over it at each tronçon
  * joint (`lowerCornerCuts`), and runs on over the cover as its own column.
  */
@@ -1601,4 +1603,186 @@ export function shaftSpliceHeads(): SpliceHeads[] {
     pitch,
     rows: [0, 1, 2, 3].flatMap((q) => rows.map((r) => ({ a: turnQ(r.a, q), b: turnQ(r.b, q), n: turnQ(r.n, q) }))),
   }));
+}
+
+/*
+ * ===========================================================================
+ * THE ROWS AS BUILT (`SEAMS_AS_BUILT` in spec.ts, SOURCES.md §27.3): every
+ * row PL-IX draws on a lower upright's face besides the corner angles',
+ * at the `fullRivets` depth.
+ *
+ * On a montant-exterior face in panels 1-5 (figs. 23-24) a row down each of
+ * the fin's flat legs, through the flat, the C.J. and the web, and one
+ * through the fin itself, its two heads either side of it, a half pitch
+ * out of step with the flats' (drawn as half circles along the fin). On a
+ * montant-interior face (figs. 21-22) the two rows of the C.J. either side
+ * of the half plates' butt and a row down each channel angle's flat leg
+ * (the channel legs' rivets are drawn only over a joint). In panels 6-11 (PL-X
+ * figs. 15, 18) the C.J.'s two rows. Every row at the seam pitch
+ * (`UPRIGHT_SEAMS`, measured on PL-IX's gussets at 1:20; figs. 21-24 at
+ * 1:40 draw them 0.10-0.15 apart), centred on its stretch
+ * as the corner rows are, and cut half a pitch short of any cover over its
+ * line: over a joint the cover's own field carries on (the C.J. rows are
+ * the interior cover's inner columns, the same lines).
+ * ===========================================================================
+ */
+
+/** A row of a lower face as built: across (s) and out (o) in the face, which piece it fastens, which way its heads face. */
+interface BuiltRow {
+  readonly s: number;
+  readonly o: number;
+  readonly on: FacePiece["what"];
+  /** Heads facing across the face, this way along e (a row through a fin or channel leg); else out along n. */
+  readonly across?: 1 | -1;
+  /** A row through a leg: its rivets' other heads, at s2 facing the other way, at the same stations. */
+  readonly s2?: number;
+  /** Half a pitch out of step with the face's other rows. */
+  readonly stagger?: boolean;
+}
+
+/** The rows face d of lower upright `name` carries on segment k besides the corner rows (the section header). */
+function builtRows(name: UprightName, k: number, d: PlanDir): BuiltRow[] {
+  const { cj } = faceMakeup(name, k, d);
+  const { leg, t } = UPRIGHT_BOX.angle;
+  const c = SEAMS_AS_BUILT.cjRow;
+  const out: BuiltRow[] = [];
+  // Through the fin: a head either side of it.
+  if (k <= 5 && !isInterior(name, d)) out.push({ s: t, o: cj + (t + leg) / 2, on: "fin", across: 1, s2: -t, stagger: true });
+  for (const g of [-1, 1] as const) {
+    if (k > 5) {
+      out.push({ s: g * c, o: cj, on: "cj" });
+    } else if (!isInterior(name, d)) {
+      out.push({ s: g * (t + (leg - t) / 2), o: cj + t, on: "finFlat" });
+    } else {
+      const heel = UPRIGHT_BOX.channelHeels / 2;
+      // (No row through the channel's legs: figs. 21-22 draw their rivets
+      // only over a joint, the leg covers' own, `SPLICE`.)
+      out.push({ s: g * c, o: cj, on: "cj" }, { s: g * (heel + t + (leg - t) / 2), o: t, on: "channelFlat" });
+    }
+  }
+  return out;
+}
+
+/**
+ * Where a head at (s, o) on face d of segment k, facing `facing` in the
+ * face's (s, o), lies under a cover: the stretches along the segment's
+ * axis a cover's piece covers just in front of it, each half a pitch
+ * wider (the splices' `laySide` extents).
+ */
+function coverCutsAt(
+  name: UprightName,
+  k: number,
+  d: PlanDir,
+  s: number,
+  o: number,
+  facing: readonly [number, number],
+  pitch: number,
+): Array<readonly [number, number]> {
+  const out: Array<readonly [number, number]> = [];
+  const ps = s + facing[0] * 1e-4;
+  const po = o + facing[1] * 1e-4;
+  for (const j of lowerJoints(name)) {
+    if (j.k !== k && j.k !== k + 1) continue;
+    for (const side of lowerSides(name, j, d, UPRIGHT_SEAMS.pitch, UPRIGHT_SEAMS.inset)) {
+      if (side.k !== k || side.draw === "none") continue;
+      for (const p of side.cover.pieces) {
+        if (ps < p.s0 || ps > p.s1 || po < p.o0 || po > p.o1) continue;
+        const u0 = side.from(p);
+        const run = side.run(p.cls, p.length);
+        if (side.draw === "whole") out.push([u0 - run - pitch / 2, u0 + run + pitch / 2]);
+        else if (side.dir === 1) out.push([-Infinity, u0 + run + pitch / 2]);
+        else out.push([u0 - run - pitch / 2, Infinity]);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * The lower faces' rows as built besides the corner rows, one leg (the
+ * caller copies them onto the quadrants): every row a head every `pitch`,
+ * centred on its stretch and at least half a pitch short of its ends (a
+ * straight node; at a turn the first of its own crossing of the fold, its
+ * piece's end and the next panel's same piece's end), cut round the
+ * covers. A row through a leg (the fin) is laid on the leg's centre
+ * plane twice, once facing each way, with `half` the leg's half thickness:
+ * the caller asks the joint plates about both heads at one point, so a
+ * rivet keeps both heads or neither, then moves each out by `half` along
+ * its own facing. Every other row has `half` 0.
+ */
+export function lowerBuiltRows(): Array<{ a: Vec3; b: Vec3; n: Vec3; half: number }> {
+  const pitch = UPRIGHT_SEAMS.pitch;
+  const out: Array<{ a: Vec3; b: Vec3; n: Vec3; half: number }> = [];
+  // A piece's two ends (the one of `what` over s on face d of segment k),
+  // as points on its centre line, and its panel's axis.
+  const pieceEndsOf = (name: UprightName, k: number, d: PlanDir, what: FacePiece["what"], s: number) => {
+    if (k < 0 || k >= LOWER_SEGMENTS) return undefined;
+    const q = facePieces(name, k, d, AS_BUILT).find((x) => x.what === what && x.s0 - 1e-9 <= s && s <= x.s1 + 1e-9);
+    if (q === undefined) return undefined;
+    const { A, Q, T } = segmentAxis(name, k);
+    const f = faceFrame(T, d);
+    const off = add(f.mid, scale(f.e, (q.s0 + q.s1) / 2), scale(f.n, (q.o0 + q.o1) / 2));
+    const turn = turns(name, k);
+    const [lo, hi] = pieceEnds(off, T, Math.hypot(...sub(Q, A)), turn.lo, turn.hi);
+    return { T, lo: add(A, off, scale(T, lo)), hi: add(A, off, scale(T, hi)) };
+  };
+  for (const [name] of LEG_UPRIGHTS) {
+    for (let k = 0; k < LOWER_SEGMENTS; k++) {
+      const { A, Q, T } = segmentAxis(name, k);
+      const L = Math.hypot(...sub(Q, A));
+      const turn = turns(name, k);
+      for (const d of BOX_FACES) {
+        const f = faceFrame(T, d);
+        for (const r of builtRows(name, k, d)) {
+          const off = add(f.mid, scale(f.e, r.s), scale(f.n, r.o));
+          const meets = (p: Vec3, U: Vec3) => dot(sub(p, add(A, off)), U) / dot(T, U);
+          const crease = -off[1] / T[1];
+          const own = pieceEndsOf(name, k, d, r.on, r.s);
+          const below = turn.lo ? pieceEndsOf(name, k - 1, d, r.on, r.s) : undefined;
+          const above = turn.hi ? pieceEndsOf(name, k + 1, d, r.on, r.s) : undefined;
+          const lo =
+            (turn.lo
+              ? Math.max(crease, own === undefined ? -Infinity : meets(own.lo, T), below === undefined ? -Infinity : meets(below.hi, below.T))
+              : 0) +
+            pitch / 2;
+          const hi =
+            (turn.hi
+              ? Math.min(L + crease, own === undefined ? Infinity : meets(own.hi, T), above === undefined ? Infinity : meets(above.lo, above.T))
+              : L) -
+            pitch / 2;
+          if (hi < lo) continue;
+          const facing: readonly [number, number] = r.across === undefined ? [0, 1] : [r.across, 0];
+          const n = r.across === undefined ? f.n : scale(f.e, r.across);
+          // A rivet's two heads at the same stations: cut wherever either lies under a cover.
+          const cuts = coverCutsAt(name, k, d, r.s, r.o, facing, pitch);
+          if (r.s2 !== undefined && r.across !== undefined) cuts.push(...coverCutsAt(name, k, d, r.s2, r.o, [-r.across, 0], pitch));
+          // A through row on the leg's centre plane (the header).
+          const through = r.s2 === undefined ? undefined : { off: add(f.mid, scale(f.e, (r.s + r.s2) / 2), scale(f.n, r.o)), half: Math.abs(r.s - r.s2) / 2 };
+          for (const [s0, s1] of subtract(lo, hi, cuts)) {
+            if (s1 < s0) continue;
+            let count = Math.floor((s1 - s0) / pitch + 1e-9) + 1;
+            let from = (s0 + s1 - (count - 1) * pitch) / 2;
+            if (r.stagger === true) {
+              // Half a pitch on, and one fewer if the last would pass the end.
+              from += pitch / 2;
+              if (from + (count - 1) * pitch > s1 + 1e-9) count--;
+            }
+            // A resample always lands both ends of a path, so a row of one
+            // head cannot be laid as a line: the few stubs that short (between
+            // a cover and a node) are left bare.
+            if (count < 2) continue;
+            // 0.1 mm short of (n - 1) pitches: spacing mode lands exactly n heads.
+            const to = from + ((count - 1) * pitch - 1e-4);
+            if (through === undefined) {
+              out.push({ a: add(A, off, scale(T, from)), b: add(A, off, scale(T, to)), n, half: 0 });
+            } else {
+              const [a, b2] = [add(A, through.off, scale(T, from)), add(A, through.off, scale(T, to))];
+              out.push({ a, b: b2, n, half: through.half }, { a, b: b2, n: scale(n, -1), half: through.half });
+            }
+          }
+        }
+      }
+    }
+  }
+  return out;
 }

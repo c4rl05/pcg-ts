@@ -111,6 +111,12 @@ export interface Detail {
    * gusset plates. Implies `lacedWeb`. About 894,000 instances.
    */
   readonly rivets?: boolean;
+  /**
+   * With `rivets`, also every row the built-up uprights' faces carry as
+   * PL-IX draws them besides the corner angles' (the C.J.s', the fins' and
+   * the channels' flats: builtup.ts, `lowerBuiltRows`). About 120,000 heads more.
+   */
+  readonly fullRivets?: boolean;
 }
 
 /**

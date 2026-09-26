@@ -444,7 +444,7 @@ Level check: 309.63 + 17.035 = 326.665, against the printed lantern-terrace floo
 | Item | Value | Source / tag |
 |---|---|---|
 | Iron parts | **18,038** | TE-KF, TE-FER ("Très exactement 18 038 pièces de fer"), TS-FR, WP-EN [sourced]. "18,000" in running text (TE-HIST, THESIS) [sourced]. Outlier "12 000 pièces métalliques" (TE-RIVET) [sourced] |
-| Rivets | **2,500,000** | TE-KF, TE-HIST, TS-FR, WP-EN, THESIS [sourced] |
+| Rivets | **2,500,000** | TE-KF, TE-HIST, TS-FR, WP-EN, THESIS [sourced, secondary]. **Never printed in the text**, whose one count is the 1,050,846 driven on site (p. 113): flagged, §27.4 |
 | Rivets set on site | "un tiers seulement" (TE-HIST) · **1,050,846** = 42 % (WP-FR, from Eiffel 1900) · 1,050,846 (WOW) | [sourced]. THESIS: "Two-thirds … inserted … at the Levallois-Perret factory" [sourced] |
 | Rivet diameters | **14, 16 and 18–25 mm** (price list: "rivets from 18 to 25 mm", "rivets of 16 mm", "14 mm rivets") | WOW [sourced, secondary; it appears to quote Eiffel 1900] |
 | Rivet material | 36 kg/mm² strength, 12 % minimum elongation on a 100 mm specimen | WOW [sourced, secondary] |
@@ -1904,7 +1904,7 @@ The lower arbalétriers (sixteen, supports to node XVII) were a swept square ski
 
 **How it is built** (`builtup.ts`): one flat box per plate per panel, in its face, node to node (a tronçon is cut square to its axis [sourced text]), one plate set per leg copied onto the quadrants. Where the column turns (XXIV-XVIII) the two panels' faces meet on the node's HORIZONTAL line (both boxes have the node's plan square there) [derived], which crosses a plate's square end at up to 24° (panels 1-4): no box can mitre on it. Each plate ends where its centre line crosses the node's horizontal plane, run on 30 mm to close the sliver between its end and the next panel's. Sampled over the true faces within 0.35 m of every turn (1.7 M points, 5 mm in from the corners), none is left uncovered and the plate a point shows stands at most 21 mm proud of it or 14 mm short [measured]; at the corners themselves a notch under 10 mm wide stays open 10-40 mm above the node, up to 7.3 mm deep at XXIV and XXIII (2.8 at XXII, under 1.5 above), where the upper panel's face is wider than the lower plate [measured]; the first build ran each end on to the plane bisecting the two panels' normal sections, which left 304 points uncovered and 28-32 mm steps (found by the independent check). Eiffel's tronçons are spliced there under cover plates ("ils s'infléchissent dans le joint", at XXIV [sourced text]), which the splice item will draw. The thickness steps at the node (D5 of the study: Eiffel's joints, where a step can fall, are about 2.25 m either side of it, which side unstated; the plates grow inward, so it cannot be seen). At an ACUTE corner of the lozenge a web's inner edge stands t cos 78.36° past the neighbouring web's outer face, 3.7 mm for the thickest (18.5): a sliver along the edge [derived]. The box's top at XVII lies inside the 2nd floor's slab (its ends 115.34-115.66, the slab 115.13-115.73) and its foot at the supports (2.21-2.79) inside the pedestal, so neither end is capped [derived].
 
-**Depth** (D2 of the study): the webs at every depth, so every rule fitted to the box sees one envelope; the C.J.s, fins and channels from the laced depth up; the seam rows at the riveted depth, today's rule (a row 0.055 in from each corner of each face, every 0.125) re-seated on the true faces, centred on each panel and at least half a pitch off each node. Where the column turns, a row stops half a pitch short of its own crossing of the fold or its plate's end, whichever is first, so no head sits under the next panel's plate. The rows as built (the corner angles' lines, which moved so that the outside stayed constant, and the C.J.s' and flat legs' rows) are rivets25's. Nothing inside the box is drawn (the inside angles, the diaphragms): a closed box shows none of it.
+**Depth** (D2 of the study): the webs at every depth, so every rule fitted to the box sees one envelope; the C.J.s, fins and channels from the laced depth up; the seam rows at the riveted depth, today's rule (a row 0.055 in from each corner of each face, every 0.125) re-seated on the true faces, centred on each panel and at least half a pitch off each node. Where the column turns, a row stops half a pitch short of its own crossing of the fold or its plate's end, whichever is first, so no head sits under the next panel's plate. The rows as built (the C.J.s' and the flat legs' rows) are §27.3's, at the `fullRivets` depth. Nothing inside the box is drawn (the inside angles, the diaphragms): a closed box shows none of it.
 
 **What reads it.** The legs' joint rule (`jointUpright`, `jointFace`): a strut keeps the joint's CLEAR off the box's widest in-plane half-width in its panel PLUS what stands out of the face it lands on (every leg-face member lands on an interior face: the channel's 100 in panels 1-5, 0.102 in the member's plane since the face's normal is the lozenge's skew off it; the C.J. in 6-11), and its gusset plates' near edges meet the web itself, the panel's narrowest in-plane half-width. The entretoises meet b and d at the plan square's corner, 0.4385 √2. Measured against the true box by tests/eiffelBuiltup.test.ts's census, which models the box itself and was taken first of the tower from before it: no leg rivet head inside the box (before: 116, lacing heads 13-16 mm deep, where the true box is larger than the rolled skin was), no web-member vertex inside it (before: 888, up to 25 mm), and every strut at least 31 mm off the webs. The lacing that moved with the joint starts turned four post-landing plates at XXII from "lacing behind" to clean by 0.11 mm (tests/eiffelSkeleton.test.ts).
 
@@ -1960,13 +1960,73 @@ Every arbalétrier is now cut into its tronçons, and every joint carries its co
 
 **Rivets** (riveted depth). Each cover carries its own field [measured on PL-IX fig. 23 at its scale, 290 px/m, twice, independently]: the corner angle's row runs on over the cover at its own 0.125; inward of it columns 0.067 apart, staggered, every 0.076 (0.074-0.078), the first and last heads 0.035 off the joint and the cover's ends. Fig. 21's centre cover: a rectangular grid, columns ±0.055 and ±0.158, every 0.064 (0.060-0.066) [measured, 291 px/m, twice]. The angle covers: a row on the flat leg and one through the outstanding leg at the seam pitch, a head either side (on the fin's two covers; on a channel's, one on the cover and one on the channel leg's inner face). The upper covers: the plate's seam rows run on over them, with columns about 0.067 apart between (none across a T's stem). The corner rows stop half a pitch short of the cover over them. Heads under a joint plate go, as the lacing's do (`offJointPlates` in `strut.ts`): 17,440 of 288,224. Only the joints a plate can reach are asked (the bends, the mid-panel joints of panels 1-4 where the intermediate entretoise lands, everything above XVII): with every head asked, no head of the other joints came within 12 cm of a joint plate, and asking costs about 9 µs a head [measured]. Measured on the cooked tower: every splice head on a cover's face (or on a channel leg's inner face), none in any plate, none within a head of another but the two back-to-back heads of a rivet through a channel's leg; no seam head under a cover.
 
-**Counts and cost** [measured, interleaved runs against the same tree without the splices, four each]. Joints: 480 below XVII (30 an upright, 2 bent), 144 on the legs above, 112 in the shaft. Covers: 11,800 boxes, 141,600 triangles, laced and riveted depths. Rivets: +270,784 splice heads (258,208 on the legs, 12,576 in the shaft), −45,064 seam heads under the covers (212,240 → 167,176): 878,000 → **1,103,720** on the riveted tower (+26 %), +14.4 MB of instance matrices at 64 bytes a head. Riveted cook 6.0-6.3 s → 7.3-7.5 s median (+1.1-1.2 s, of which the joint-plate query is about 0.9 s: asked of every head it was +2.7 s). The book's 1,050,846 is the rivets driven ON SITE (rivets25 takes the count up).
+**Counts and cost** [measured, interleaved runs against the same tree without the splices, four each]. Joints: 480 below XVII (30 an upright, 2 bent), 144 on the legs above, 112 in the shaft. Covers: 11,800 boxes, 141,600 triangles, laced and riveted depths. Rivets: +270,784 splice heads (258,208 on the legs, 12,576 in the shaft), −45,064 seam heads under the covers (212,240 → 167,176): 878,000 → **1,103,720** on the riveted tower (+26 %), +14.4 MB of instance matrices at 64 bytes a head. Riveted cook 6.0-6.3 s → 7.3-7.5 s median (+1.1-1.2 s, of which the joint-plate query is about 0.9 s: asked of every head it was +2.7 s). The book's 1,050,846 is the rivets driven ON SITE (the count against it: §27.4).
 
 **Residuals, measured, left to other items.**
 - **The joint plates (D3)**: they lap an upright's faces 8 mm off the web, over the covers: 1,104 covers stand 1-10 mm into one, an angle cover up to 41 mm through one. 640 at the mid-panel joints of panels 1-4 (the intermediate entretoise's plates; PL-IX fig. 19 seats that entretoise's gusset square to the face, beside the cover), 440 at the bends (the 1st floor's), 16 in panel 16 (XIII-XII). Seating the joint plates as built (D3b) clears them.
 - **The first floor's arches**, whose ends stand 2-11 mm off the webs (§27): 444 of their vertices in a cover at the joints of panels 2-3. **The 2nd floor's chords**, clipped at the old skin inside the web (§27): 242 vertices in panel 11's cover.
 - **The first floor's rows** on the uprights' webs over the bends XXIV and XXIII (`ff.girders.main`, `ff.girders.endPosts`, `ff.arches.montants`) run under the covers there: 98 splice heads stand within a head of one of theirs.
 - The seam heads that stand in a joint plate (not the splices' doing): 65 before, 50 now.
+
+### 27.3 The rows as built, at the `fullRivets` depth (2026-09-26)
+
+Until now the built-up uprights carried only today's corner-angle rows. PL-IX draws more on every lower face, and they are now laid: `lowerBuiltRows` in `builtup.ts`, `SEAMS_AS_BUILT` in `spec.ts`, the rivet output `leg.uprights.built`.
+
+**Readings** [sourced PL-IX figs. 21-24 at 1:40, the rows outside the covers; figs. 10-17 at 1:20].
+- A montant-exterior face in panels 1-5 carries a row down each of the fin's flat legs, through the flat, the C.J. and the web, 0.056-0.057 off the centre line [measured, fig. 23]. It also carries a row through the fin itself, drawn as half circles along it, half a pitch out of step with the flats' rows.
+- A montant-interior face carries the two rows of the strip over the half plates' butt (fig. 21 labels it "Sem. 200 × 12", the table's C.J.), 0.052-0.058 off the centre line, on the lines the joint cover's inner columns continue. It also carries a row down each channel angle's flat leg. The channel legs' own rivets (half circles) are drawn only over a joint, where they are the leg covers' (§27.2), so no row runs through them elsewhere.
+- In panels 6-11 each face carries the C.J.'s two rows (PL-X figs. 15, 18 section the C.J.; the rows are taken as in panels 1-5 [estimated]).
+- Every row is at the seam pitch, 0.125 (`UPRIGHT_SEAMS`, measured on the 1:20 gussets). The 1:40 joint figures draw them 0.10-0.15 apart: 0.15 in fig. 21, about 0.12 in fig. 22, 0.10-0.14 in fig. 23.
+- The "double staggered rows" of the backlog are figs. 10-17's strips where a gusset is riveted to the tronçon. Those are shop rivets on plates the model does not seat where PL-IX does (D3, §27), so they are not drawn. The staggered fields of the joints' covers are §27.2's.
+
+**What is built.** Each row is centred on its stretch and at least half a pitch short of its ends: a straight node, or at a turn the first of its fold, its piece's end and the next panel's same piece's end. Each row stops half a pitch short of any cover over its line. A rivet through the fin is laid as its two heads, back to back at the same stations. Both heads are asked about the joint plates at one point on the fin's centre plane (`throughHeads` in `strut.ts`), so a rivet keeps both heads or neither. Asked one head at a time, 912 heads had lost their partner. A stretch too short for two heads is left bare: a resample always lands both ends of a path. Heads a joint plate stands over go (`offJointPlates`).
+
+**Counts and cost** [measured, interleaved runs, four each]:
+- Heads: 133,000 laid, 120,368 kept. The riveted tower goes from 1,103,720 instances to 1,224,088 at `fullRivets`, +7.7 MB of instance matrices.
+- Cook time: 6.85 s → 8.01 s median (the independent check measured 6.73 → 8.24).
+- The default riveted depth is unchanged: 1,103,720 instances, bit-identical to the tree without this change, 6.85 s against 6.79 s.
+- Because it adds that much, the rows are gated behind their own flag (`Detail.fullRivets`, with `rivets`). The page does not expose it yet (a `?rivets=full` would be one line in `main.ts`).
+
+**Measured on the cooked tower** (`tests/eiffelRivetCount.test.ts`):
+- Every head is seated on a plate of the upright and none is inside any plate: the upright's, a joint plate, a cover.
+- No head lies under a cover.
+- No head is on another head, except up to 50 heads (50 measured) near the first floor's girders' own rows on the faces at XXIV-XXIII.
+- Every head on the fin has its other head back to back with it.
+
+### 27.4 The rivet count against the book (2026-09-26)
+
+**Readings** [sourced].
+- "Le nombre total des rivets posés sur place, a été de 1.050.846" [text p. 113]: the rivets driven ON SITE, not the tower's. The same page splits them by period of the erection: 189,580 for the four first panels (to 4 Dec 1887), 235,809, 283,898, 162,184, 100,739 and 50,868, and 27,768 to finish the riveting.
+- The legs stood 28 m high, at panel 2's top entretoise, with "le nombre des rivets posés à 98.000" [text p. 103].
+- The shop drove the rest: the pieces arrived "préparées jusqu'à l'extrême limite ... la plupart des rivets étaient posés" [text p. 100], and the shop's 6,360 t exclude "le poids des rivets posés sur place" [p. 101]. No shop count is printed anywhere in the text.
+- **The 2,500,000 for the whole tower (§7) is a secondary figure the text never prints: flagged.** If it holds, the shop drove about 1.45 M.
+
+**Site or shop** (`rivetClass` in `spec.ts`). A rivet joining two pieces that came to the Champ de Mars separately is a site rivet; one within a piece is a shop rivet [derived]. The pieces were: a tronçon, with its gussets riveted on in the shop ("les tronçons portent en outre rivés sur les cornières les goussets découpés", p. 75); a laced bar or entretoise; a chord flat with its angles. That gives:
+
+| Class | Site share taken | Range | Why |
+|---|---|---|---|
+| member ends on their gussets (`.joints`) | 1 | 1 | the bar and the tronçon came separately |
+| tronçon joints (`.splices`) | 1 | 0.5–1 | "un trou d'homme ... au droit de chacun des joints ... permet d'effectuer la rivure" (p. 75); a cover may have come shop-riveted to one tronçon [?] |
+| crossings (`.crossings`) | 1 | 0.5–1 | one bar may have run through, its half of the plate shop-riveted [?] |
+| a bar or post on a chord flat (`…Lap`) | 1 | 1 | two pieces |
+| everything else (seams, lacing, a flat's own rows, the rows as built) | 0 | 0 | along one piece |
+
+**Counted** as rivets, not heads: a rivet whose two ends the model draws counts once (two heads facing apart on one axis, within 3 mm of it). That covers rivets through a fin or a channel leg, a T's stem, or a belt's flat seen from both sides: 21,647 of 1,103,720 heads.
+- The riveted tower is 1,082,073 rivets. Of these, 336,153 are site rivets (32 % of the book), or 191,833 if every cover and crossing was half shop-riveted.
+- Shop rivets: 745,920; at `fullRivets`, 856,408.
+
+**Against the book** [measured, `tests/eiffelRivetCount.test.ts`; the tolerance reasoned there]:
+- **Never more than the book.** Every site rivet the model draws is one the book counts. At the high share the model stays under 1,050,846 tower-wide and under each period's count by the height that period finished at (10 % for the period edges, estimated).
+- **The lower legs.** Here the model builds every piece the text joins on site: the tronçons' joints and covers, the bars' ends, the crossings, the ties.
+  - Its site rivets are 60 % of the book's 189,580 for the four first panels, and 61 % of the 98,000 at 28 m. The two checkpoints agree, so the model is as complete in panels 1-2 as in 1-4. Moving either band's edge 0.5 m moves them 3 %.
+  - The rest is what the model leaves out: the joints' inside covers' own rows, the corner angles' covers, the manhole faces' longer covers (figs. 25-26), the diaphragms and the anchorages. We reckon that at under half, so the test holds each checkpoint between half the book's count and all of it.
+  - **That floor holds at the central reading only**, the covers and crossings all site-riveted. The splices are 90,209 of the 113,185 in period a. Were they half shop-riveted (the low end of their range), the model would stand at 34 % and 35 %.
+- **Tower-wide the model draws a third**, pinned at ±2 %. What is missing is site riveting not drawn at all (the platforms' floors, galleries and stairs, the lifts' girders, the campanile) or drawn without being told apart. The first floor's girders carry about 224,000 heads, all classed shop, though their joints were driven on site; 24 of their heads sit on the uprights' plates, which by the rule are site rivets.
+- Per period at the high share the model stands at 61 %, 16 %, 41 %, 31 %, 19 % and under 1 % of periods a-f [measured independently].
+
+**Open.**
+- Whether the splice covers and crossing plates came half shop-riveted: this is the 0.5-1 range.
+- Unit 12 (shop and field tagging) reads `rivetClass`.
 
 ---
 

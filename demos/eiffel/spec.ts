@@ -1280,8 +1280,89 @@ export const MASQUE = {
   barThickness: 0.01,
 } as const;
 
-/** Headline counts (Eiffel, and the operating company). */
-export const COUNTS = { parts: 18038, rivets: 2_500_000, ironTonnes: 7300 } as const;
+/**
+ * The lower uprights' rows as built besides the corner angles' (PL-IX
+ * figs. 21-24, PL-X figs. 15, 18; `builtup.ts`, SOURCES.md §27.3), at the
+ * `fullRivets` depth. The C.J.'s two rows lie 0.055 either side of the
+ * face's centre line: the interior cover's inner columns carry on the
+ * same lines over a joint [measured on PL-IX figs. 21-22, 0.052-0.058]; the
+ * fin's and the channel's rows run down the middle of the free leg
+ * (fig. 23 measures the flats' at 0.056-0.057 off the centre line)
+ * [derived]; panels 6-11's C.J. rows as panels 1-5's [estimated].
+ */
+export const SEAMS_AS_BUILT = { cjRow: 0.055 } as const;
+
+/**
+ * Headline counts (Eiffel, and the operating company).
+ *
+ * THE RIVETS. The text prints one total, and it is not the tower's: "Le
+ * nombre total des rivets posés sur place, a été de 1.050.846" [sourced
+ * text p. 113], the rivets driven ON SITE, by period of the erection
+ * [sourced, same page; the periods sum to it], and 98,000 of them when the
+ * four legs stood 28 m high, panel 2's top entretoise [sourced text
+ * p. 103]. The rest were driven at Levallois-Perret: the pieces "arrivaient
+ * ... préparées jusqu'à l'extrême limite ... la plupart des rivets étaient
+ * posés" [sourced text p. 100], and the 6,360 t the shop delivered do "not
+ * include the weight of the rivets driven on site" [p. 101]. **No shop
+ * count is printed.** The 2,500,000 often quoted for the whole tower is a
+ * secondary figure the text never prints [flagged: SOURCES.md §7]; if it
+ * holds, the shop drove about 1.45 M.
+ */
+export const COUNTS = {
+  parts: 18038,
+  /** The tower's rivets, shop and site [flagged: secondary, never printed in the text]. */
+  rivets: 2_500_000,
+  /** Driven on the Champ de Mars [sourced text p. 113]. */
+  rivetsSite: 1_050_846,
+  /** The same, by period of the erection, as the text splits it, with the height each period finished at [sourced text p. 113; the heights estimated from what each period finished: XXIV, the 1st floor's gallery, the 2nd floor's, the intermediate floor mid-panel 19, the 3rd floor]. */
+  rivetsSiteByPeriod: [
+    { period: "a", until: "4 Dec 1887", what: "the four first panels", upTo: 50.4, n: 189_580 },
+    { period: "b", until: "1 Apr 1888", what: "the first platform", upTo: 65, n: 235_809 },
+    { period: "c", until: "14 Aug 1888", what: "the second platform", upTo: 122, n: 283_898 },
+    { period: "d", until: "30 Nov 1888", what: "the intermediate floor", upTo: 194, n: 162_184 },
+    { period: "e", until: "24 Feb 1889", what: "the third platform", upTo: 280, n: 100_739 },
+    { period: "f", until: "15 Apr 1889", what: "the erection finished", upTo: Infinity, n: 50_868 },
+    { period: "", until: "1 Jun 1889", what: "the riveting finished", upTo: Infinity, n: 27_768 },
+  ],
+  /** Driven when the four legs stood 28 m high, the top of panel 2 (10 Oct 1887) [sourced text p. 103]. */
+  rivetsSiteAt28m: 98_000,
+  ironTonnes: 7300,
+} as const;
+
+/**
+ * Which of the model's rivets were driven on site, by rivet output (the
+ * name after "rivets."), for the count against `COUNTS.rivetsSite` and
+ * for tagging shop and field later. A rivet joining two pieces that came
+ * to the Champ de Mars separately is a site rivet; one within a piece is a
+ * shop rivet [derived from the text's "la plupart des rivets étaient
+ * posés", p. 100]. What was a piece: a tronçon, with the gussets "rivés
+ * sur les cornières" [sourced text p. 75]; a laced bar or entretoise; a
+ * chord flat with its angles. `share` is the site fraction taken, `low`
+ * and `high` the fractions the sources leave open.
+ */
+export interface RivetClass {
+  readonly what: string;
+  readonly share: number;
+  readonly low: number;
+  readonly high: number;
+}
+
+export function rivetClass(output: string): RivetClass {
+  const name = output.startsWith("rivets.") ? output.slice("rivets.".length) : output;
+  // A strut's end on its gusset: the bar and the tronçon came apart.
+  if (name.endsWith(".joints")) return { what: "a member's end on its gusset", share: 1, low: 1, high: 1 };
+  // A tronçon's joint: "un trou d'homme ... au droit de chacun des joints
+  // ... permet d'effectuer la rivure" [sourced text p. 75], the holder-on
+  // inside; a cover may have come shop-riveted to one tronçon [?].
+  if (name.endsWith(".splices")) return { what: "a tronçon's joint", share: 1, low: 0.5, high: 1 };
+  // Two bars crossing, fastened through their plate; one bar may have run
+  // through, its half of the plate riveted at the shop [?].
+  if (name.includes(".crossings")) return { what: "two bars' crossing", share: 1, low: 0.5, high: 1 };
+  // A bar or post lapping a belt's or tie's chord flat.
+  if (name.endsWith("Lap")) return { what: "a bar on a chord flat", share: 1, low: 1, high: 1 };
+  // Along one member: a box's seams, a strut's lacing, a flat's rows.
+  return { what: "along one member", share: 0, low: 0, high: 0 };
+}
 
 /**
  * Linear read of a (y, w) table, clamped: what `ramp` does, before the

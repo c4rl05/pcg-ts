@@ -91,6 +91,7 @@ import {
   jointFace,
   jointUpright,
   lowerPlates,
+  lowerBuiltRows,
   lowerSeamRows,
   type SpliceHeads,
   lowerSpliceHeads,
@@ -133,9 +134,11 @@ import {
   gussetMeshes,
   lineHeads,
   lineRivets,
+  THROUGH_HALF,
   offJointPlates,
   rivetOutputs,
   rivetSpawn,
+  throughHeads,
   webMembers,
 } from "./strut.js";
 
@@ -1967,6 +1970,29 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
               ]);
             })(),
           },
+          ...(detail.fullRivets === true
+            ? [
+                {
+                  // The rows as built besides the corner angles' (the C.J.s',
+                  // the fins' and the channels': `lowerBuiltRows`), off the
+                  // joint plates, which lap the faces they run on.
+                  name: "leg.uprights.built",
+                  spawn: (() => {
+                    // A rivet through the fin comes as its two heads on the
+                    // fin's centre plane, asked about the plates together,
+                    // then moved out to its faces (`throughHeads`).
+                    const rows = lowerBuiltRows();
+                    const lines = segmentMembers(g, "legUprightBuiltLines", rows, [
+                      { name: THROUGH_HALF, values: rows.map((r) => [r.half]) },
+                    ]);
+                    const heads = lineHeads(g, "legUprightBuiltRows", fourMembers("legUprightBuiltRows4", lines), 0, UPRIGHT_SEAMS.pitch);
+                    return rivetSpawn(g, "legUprightBuilt", [
+                      throughHeads(g, "legUprightBuilt", offJointPlates(g, "legUprightBuilt", [heads])),
+                    ]);
+                  })(),
+                },
+              ]
+            : []),
         ]
       : [];
   const webs = [

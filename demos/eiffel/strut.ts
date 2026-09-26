@@ -427,6 +427,27 @@ export function offJointPlates(g: Graph, id: string, heads: readonly NodeHandle[
   return done;
 }
 
+/** A head's move out along its own facing after the plate test (`throughHeads`), a primitive attribute on its row. */
+export const THROUGH_HALF = "throughHalf";
+
+/**
+ * The two heads of a rivet through a leg, laid together on the leg's
+ * centre plane (so `offJointPlates` keeps both or neither), moved out to
+ * the leg's two faces: each by its row's {@link THROUGH_HALF} along its own
+ * facing ({@link FACE_NORMAL}). Heads whose row carries 0 stay put.
+ */
+export function throughHeads(g: Graph, id: string, heads: NodeHandle): NodeHandle {
+  const moved = g.add(
+    transformPoints,
+    { translate: mul(attribute(FACE_NORMAL, 3), attribute(THROUGH_HALF)) },
+    `${id}Through`,
+  );
+  g.connect(heads, "out", moved, "in");
+  const done = g.add(removeAttribute, { names: [THROUGH_HALF], domain: "point" }, `${id}ThroughDone`);
+  g.connect(moved, "out", done, "in");
+  return done;
+}
+
 /** The joint-plate cloud's step along each plate's centre line. */
 const PLATE_CLOUD_STEP = 0.1;
 /**

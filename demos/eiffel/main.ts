@@ -635,9 +635,12 @@ async function main(): Promise<void> {
   statCook("cooking…");
   // `?laced` builds the web bars as laced lattice struts (about 2.9M
   // triangles more): the second of the tower's self-similar scales.
-  // `?rivets` sets rivets on them as instances, and so implies `?laced`.
+  // `?rivets` sets rivets on them as instances, and so implies `?laced`;
+  // `?rivets=full` adds the built-up uprights' rows as built (about 120,000
+  // heads more, `Detail.fullRivets`).
   const params = new URLSearchParams(location.search);
   const rivets = params.has("rivets");
+  const fullRivets = params.get("rivets") === "full";
   const laced = params.has("laced") || rivets;
   // `?plateSet=` and `?plateEdge=` are the crossing plates' two by-eye
   // dimensions (`CrossPlate` in parts.ts), in metres, while they are being
@@ -645,7 +648,7 @@ async function main(): Promise<void> {
   // across its member. They are the only numbers on this page that can be
   // changed from outside, because they are the only ones nothing derives.
   const crossPlate = tuned(params, { set: "plateSet", edge: "plateEdge" });
-  const graph = buildEiffel(1889, { lacedWeb: laced, rivets, crossPlate });
+  const graph = buildEiffel(1889, { lacedWeb: laced, rivets, fullRivets, crossPlate });
   // Shown before the cook, so a graph that fails to cook can still be read.
   attachGraphPanel([{ name: "eiffel skeleton", graph }], { into: graphSlot, title: "graph" });
 
