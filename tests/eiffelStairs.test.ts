@@ -203,13 +203,17 @@ describe("Eiffel stairs: the flights the plates fix", () => {
 
   it("puts every spiral's treads inside its diameter and out to it", () => {
     for (const r of RUNS) {
-      // A spiral's treads are the boxes whose x points away from its axis.
+      // A spiral's treads are the boxes whose x points away from its axis
+      // and that span its walking line. (Their centres stood on the walking
+      // line until 2026-09-26, when the treads were taken in to the newel,
+      // `stairs.ts` spiral's `inner`: the walking line stayed.)
       for (const f of r.parts.flights.filter((x) => x.kind === "spiral")) {
         const a = f.axis as Vec3;
+        const walk = ((f.diameter as number) - f.width) / 2;
         const own = r.parts.treads.filter((b) => {
           if (b.at[1] < f.foot[1] - 0.1 || b.at[1] > f.head[1] + 0.1) return false;
           const d: Vec3 = [b.at[0] - a[0], 0, b.at[2] - a[2]];
-          return Math.abs(flat(d) - ((f.diameter as number) - f.width) / 2) < 1e-6 && Math.abs(dot3(d, b.x) - flat(d)) < 1e-6;
+          return Math.abs(flat(d) - walk) <= b.size[0] / 2 - f.width / 2 + 1e-6 && Math.abs(dot3(d, b.x) - flat(d)) < 1e-6;
         });
         expect(own.length, f.name).toBeGreaterThanOrEqual(f.risers - 1);
         const reach = Math.max(...own.map((b) => flat([b.at[0] - a[0], 0, b.at[2] - a[2]]) + b.size[0] / 2));

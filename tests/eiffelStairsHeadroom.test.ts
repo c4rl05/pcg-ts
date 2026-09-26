@@ -227,11 +227,16 @@ describe("Eiffel stairs: the room over them", () => {
       const r = RUNS.find((x) => x.parts.flights.includes(f))!;
       const axis = f.axis!;
       const outer = f.diameter! / 2;
-      // Its rail: the one whose points stand on the outer circle round its axis.
-      const rail = r.parts.rails.find((l) => l.length > 10 && l.every((p) => Math.abs(Math.hypot(p[0] - axis[0], p[2] - axis[2]) - outer) < 1e-6))!;
+      // Its rail: the one whose points stand on the outer circle round its
+      // axis, but for its ends: since 2026-09-26 e1's run on off the circle
+      // to the posts of the flights either side (`stairs.ts`
+      // firstToSecond), and those last chords are not the circle's.
+      const on = (p: Vec3) => Math.abs(Math.hypot(p[0] - axis[0], p[2] - axis[2]) - outer) < 1e-6;
+      const rail = r.parts.rails.find((l) => l.length > 10 && l.slice(1, -1).every(on))!;
       expect(rail, name).toBeDefined();
       let worst = 0;
       for (let k = 1; k < rail.length; k++) {
+        if (!on(rail[k - 1]!) || !on(rail[k]!)) continue;
         const m = [(rail[k - 1]![0] + rail[k]![0]) / 2 - axis[0], (rail[k - 1]![2] + rail[k]![2]) / 2 - axis[2]];
         worst = Math.max(worst, outer - Math.hypot(m[0]!, m[1]!));
       }

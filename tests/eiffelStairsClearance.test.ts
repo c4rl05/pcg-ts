@@ -39,7 +39,7 @@
  * parallel to the faces and 2.6 long with arrows that disagree, do not
  * match PL-XX's 4.5 run up the diagonal. Still not settled, so the flight
  * stays where it is and the exemption with it. So the Otis cars (piles 1 and 3) may meet
- * that flight's boxes, and only there, at the top of their run (s beyond
+ * that flight's boxes and the landing at its head, and only there, at the top of their run (s beyond
  * `E1_TOP_FROM`). Nothing else that moves may meet a stair.
  *
  * Every zero-check is paired with a control that proves the comparator can
@@ -636,7 +636,11 @@ const label = (b: SBox): string => `${b.run}${b.pile ? ` P${b.pile}` : ""} ${b.l
 const fmt = (p: Vec3): string => `(${p.map((v) => v.toFixed(3)).join(", ")})`;
 
 /** Whether a swept hit is the one the file exempts: an Otis car on e1's last flight, at the top of its run. */
-const exempt = (h: SweepHit, b: SBox): boolean => OTIS.has(h.body) && b.flight === E1_TOP && h.s >= E1_TOP_FROM;
+// The flight's own boxes, and (since 2026-09-26) the landing at its head
+// that fills the deck's opening from its last riser in to the deck, which
+// the car's outer end reaches the same way (`stairs.ts` firstToSecond).
+const exempt = (h: SweepHit, b: SBox): boolean =>
+  OTIS.has(h.body) && (b.flight === E1_TOP || b.flight === `landing(${E1_TOP})`) && h.s >= E1_TOP_FROM;
 
 function writeReport(file: string, body: unknown): void {
   mkdirSync(OUT_DIR, { recursive: true });
