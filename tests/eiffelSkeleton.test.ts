@@ -35,7 +35,7 @@ import {
   node,
   profileAt,
 } from "../demos/eiffel/spec.js";
-import { planBracingBandLines, planBracingLines, planPattern } from "../demos/eiffel/shaft.js";
+import { edouxMoves, frameInto, planBracingBandLines, planBracingLines, planPattern } from "../demos/eiffel/shaft.js";
 import { RIVET_RISE, UPRIGHT_SEAMS } from "../demos/eiffel/strut.js";
 
 type Vec3 = readonly [number, number, number];
@@ -1630,6 +1630,11 @@ describe("eiffel skeleton", () => {
       expect(n.outer - reach).toBeGreaterThan(0.25);
     }
     // No chord enters the Edoux: its posts, its columns or its cars' runs.
+    // Beside what moves (the runs, the pistons above the landing) a chord
+    // keeps its half-width and more; what stands still it frames into, its
+    // end post bearing on it, so there only its axis stays out, the post's
+    // half-width less 5 mm, or round the cylinders, whose tube is 0.38 in
+    // EDOUX_PLAN's 0.40 square, tangent to the tube (shaft.ts `frameInto`).
     for (const [a, b] of chords) {
       for (let i = 0; i <= 50; i++) {
         const x = a![0] + ((b![0] - a![0]) * i) / 50;
@@ -1639,7 +1644,8 @@ describe("eiffel skeleton", () => {
         for (const o of EDOUX_PLAN) {
           if (y < o.y[0] || y > o.y[1]) continue;
           const gap = Math.max(o.s[0] - s, s - o.s[1], o.t[0] - t, t - o.t[1]);
-          expect(gap, `${o.what} at y ${y.toFixed(2)}`).toBeGreaterThan(PLAN_BRACING.chord);
+          const least = edouxMoves(o, y) ? PLAN_BRACING.chord : frameInto(o) - 1e-6;
+          expect(gap, `${o.what} at y ${y.toFixed(2)}`).toBeGreaterThan(least);
         }
       }
     }
@@ -1647,9 +1653,9 @@ describe("eiffel skeleton", () => {
     expect(chords.filter(([a]) => a![1] < node(PLAN_BRACING.from).y - 1)).toHaveLength(0);
     // The entretoises: d to b of every leg at the tops of panels 1-3, 6, 7;
     // where something of the lifts crosses their line, two, each from its
-    // upright to `openHalf` short of the leg's diagonal: at XXVII-XXV and
-    // XXI in the two Otis legs, where their car crosses it. Whole in the
-    // Roux legs.
+    // upright to `openHalf` short of the leg's diagonal: at XXI in the two
+    // Otis legs, where their car crosses it (at XXVII-XXV it runs under
+    // it). Whole in the Roux legs.
     const ent = polylines(legEntretoises4!);
     const halves = new Map<string, number>();
     const wholes = new Map<string, number>();

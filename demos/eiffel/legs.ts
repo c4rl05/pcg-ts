@@ -1014,6 +1014,9 @@ const tieDepth = (f: number) => {
 /** A post's clearance past the member it stands on [estimated, as the joints']. */
 const POST_CLEAR = 0.05;
 
+/** How far a post's near corner laps past the node line onto a belt's chord plate it bears on [derived: the plate's 0.01, so the cap is on it, not beside it]. */
+const POST_BEAR = 0.01;
+
 /**
  * The member a central post stands on at node `name` reaches this far past
  * the node line: a node horizontal is centred on it, but the belts' chord
@@ -1051,7 +1054,12 @@ const postSeat = (name: string): number =>
  * posts take against b's face, "so no notch shows". The pull-back is
  * capped at hw, so a member with nothing under the node line to bury into
  * — hw = 0, the belts' chord plates, whose faces lie ON it and whose
- * bodies stand inside panels 5 and 11 — keeps the end it always had.
+ * bodies stand inside panels 5 and 11 — is met by the cap's NEAR corner,
+ * `POST_BEAR` past the node line: the post bears on the plate's edge, lapping
+ * it (with the clearance, panel 4's post stopped 0.05 short of panel 5's
+ * chord and stood on nothing; with its corner exactly on the line the cap
+ * still read 4-6 mm off the plate), and its far corner stays out of the
+ * plate [derived].
  */
 function postStretch(
   f: number,
@@ -1070,7 +1078,7 @@ function postStretch(
   const Bp = unit3(cross3(F, D));
   const w = tableAt(MEMBERS.web, (y0 + y1) / 2);
   const half = w * Math.abs(dot3(U, Bp));
-  const along = (hw: number) => (hw + POST_CLEAR + half - 2 * Math.min(half, hw)) / dot3(U, D);
+  const along = (hw: number) => (hw + (hw > 0 ? POST_CLEAR : -POST_BEAR) + half - 2 * Math.min(half, hw)) / dot3(U, D);
   return { lo: add3(c0, scale3(D, along(hw0))), hi: sub3(c1, scale3(D, along(hw1))) };
 }
 
@@ -1422,6 +1430,29 @@ function entretoiseMembers(openAt: readonly string[]): {
  */
 const MASQUE_STANDOFF = 0.44;
 
+/**
+ * Where the Masque bears on the leg. Standing clear of everything on the
+ * face, it would hang in the air; the plate draws it riveted over panel 4,
+ * 15.000 wide, axis to axis. So its "750" chord runs on over the uprights'
+ * exterior webs, and a packing block under each of its ends fills the
+ * space from the web to the chord's back. The block is squared to the
+ * RAKING upright, not to the chord: `from` to `to` off the web's centre
+ * line measured square to it, `length` along it, centred on the chord's
+ * centre line. Square to the axis the web is bare between the C.J.
+ * (0.1025) and the corner angles' seam heads (the box's 0.4385 plan half
+ * square to the axis, about 0.40 in panel 4, less the rows' 0.055 inset
+ * and a head's 0.019: 0.326); the block keeps to the outer part of that,
+ * 0.016 inside the heads, so that the chord, cut 5 mm past the block's
+ * nearest corner, stays clear of the fin that stands on the web's centre
+ * line up past the chord's plane (as it rakes, the fin swings 0.17 across
+ * the chord's 0.75) [derived; the fixings are not drawn, estimated]. The
+ * "630" and the top band stop at the screen's sides with the rest: near
+ * XXV and XXIV the web carries the nodes' gusset plates and the splice,
+ * and above XXIV panel 5's upright turns. The screen hangs from the 750;
+ * the 630 and the top band are riveted to its flats.
+ */
+const MASQUE_BEARING = { from: 0.25, to: 0.31, length: 0.2 } as const;
+
 /** The width of each band that fills a Masque corner [estimated: fine against its 1.0 radius]. */
 const FILLET_BAND = 0.1;
 
@@ -1500,7 +1531,8 @@ function masqueFillets(
  * Everything is clipped to the face, 0.45 short of the uprights' axes
  * (11.5 mm off the built-up box's 0.4385 plan half, in front of the
  * channels on the faces the lattice lands on, 0.17 in front of their
- * reach [derived]). Flat
+ * reach [derived]); the 750 chord alone runs on over the uprights' webs,
+ * where packing under its ends carries the screen (`MASQUE_BEARING`). Flat
  * bars in layers, so that no two crossing plates share a plane; returned
  * as member paths by width.
  */
@@ -1537,6 +1569,7 @@ function masque(g: Graph): Array<{ paths: NodeHandle; width: number; thickness: 
       [p[0] + t1 * d[0], p[1] + t1 * d[1]],
     ];
   };
+  // The chords, between the uprights (the 750 runs on over their webs: `bearing`).
   const horizontal = (v: number) => clip([0, v], [1, 0], v - 1e-6, v + 1e-6);
   const post = M.postPitch;
   const ks = Array.from({ length: 12 }, (_, i) => i + 3);
@@ -1561,14 +1594,59 @@ function masque(g: Graph): Array<{ paths: NodeHandle; width: number; thickness: 
     return add3([u, y, profileAt(y).outer], scale3(n, off));
   };
   const layer = (i: number, t: number) => MASQUE_STANDOFF + 0.012 * i + t / 2;
+  // Where the screen bears on the uprights (`MASQUE_BEARING`). Seen along
+  // the face's normal from `off` out, an upright's line lies s^2 off / F
+  // further in along u than on the face plane: out along n is s off / F
+  // higher, where the leaning upright stands s times that further in. So
+  // the web the packing sits on (the box's plan half along the normal) is
+  // placed on its own line, not the face plane's, and each chord end is
+  // cut where the block under it stays wholly covered.
+  const bearing = (() => {
+    const B = MASQUE_BEARING;
+    const v = (midLo + midHi) / 2;
+    const back = layer(3, M.plate) - M.plate / 2 + 0.001;
+    const webOff = UPRIGHT_BOX.planHalf / F;
+    const web = webOff - 0.002;
+    const shift = (s * s * webOff) / F;
+    const k = Math.hypot(1, q);
+    const along: UV = [-q / k, 1 / k];
+    const e = (B.from + B.to) / 2;
+    const corners: UV[][] = [];
+    const block = (axisU: number, inward: 1 | -1): [UV, UV] => {
+      // On the web's centre line at the chord's centre line, then `e` square to it, into the screen.
+      const p: UV = [inward / k, (inward * q) / k];
+      const c: UV = [axisU - shift + p[0] * e, v + p[1] * e];
+      const cs: UV[] = [];
+      for (const a of [-1, 1]) for (const b of [-1, 1]) {
+        cs.push([c[0] + (a * along[0] * B.length) / 2 + (b * p[0] * (B.to - B.from)) / 2, c[1] + (a * along[1] * B.length) / 2 + (b * p[1] * (B.to - B.from)) / 2]);
+      }
+      corners.push(cs);
+      return [
+        [c[0] - (along[0] * B.length) / 2, c[1] - (along[1] * B.length) / 2],
+        [c[0] + (along[0] * B.length) / 2, c[1] + (along[1] * B.length) / 2],
+      ];
+    };
+    const blocks = [block(foot.inner - q * v, 1), block(foot.outer - q * v, -1)];
+    // The 750 from just over the inner block's nearest corner to the outer's.
+    const u0 = Math.min(...corners[0]!.map((c) => c[0])) - 0.005;
+    const u1 = Math.max(...corners[1]!.map((c) => c[0])) + 0.005;
+    const chord: [UV, UV] = [
+      [u0, v],
+      [u1, v],
+    ];
+    return { blocks, chord, off: (back + web) / 2, width: B.to - B.from, thickness: back - web };
+  })();
   const groups: Array<{ id: string; segs: Array<[UV, UV] | undefined>; off: number; width: number; thickness: number }> = [
     { id: "Posts", segs: posts, off: layer(0, M.barThickness), width: M.post, thickness: M.barThickness },
-    { id: "LowA", segs: lower(1), off: layer(0, M.barThickness), width: M.lowerBar, thickness: M.barThickness },
-    { id: "LowB", segs: lower(-1), off: layer(1, M.barThickness), width: M.lowerBar, thickness: M.barThickness },
+    // The lower lattice one layer forward of the posts' (nothing of the
+    // upper screen is in its zone), so its front layer lies on the chords'
+    // backs, as the flats are riveted to them.
+    { id: "LowA", segs: lower(1), off: layer(1, M.barThickness), width: M.lowerBar, thickness: M.barThickness },
+    { id: "LowB", segs: lower(-1), off: layer(2, M.barThickness), width: M.lowerBar, thickness: M.barThickness },
     { id: "UpA", segs: upper(1), off: layer(1, M.barThickness), width: M.bar, thickness: M.barThickness },
     { id: "UpB", segs: upper(-1), off: layer(2, M.barThickness), width: M.bar, thickness: M.barThickness },
     { id: "Low", segs: [horizontal(M.lowLift + M.lowChord / 2)], off: layer(3, M.plate), width: M.lowChord, thickness: M.plate },
-    { id: "Mid", segs: [horizontal((midLo + midHi) / 2)], off: layer(3, M.plate), width: M.midChord, thickness: M.plate },
+    { id: "Mid", segs: [bearing.chord], off: layer(3, M.plate), width: M.midChord, thickness: M.plate },
     { id: "Top", segs: [horizontal(topLo + M.topBand / 2)], off: layer(3, M.plate), width: M.topBand, thickness: M.plate },
     // The corners' bands, just behind the top band (which hides their ends
     // above it) and in front of the bars they end: alternate bands 1 mm
@@ -1580,6 +1658,8 @@ function masque(g: Graph): Array<{ paths: NodeHandle; width: number; thickness: 
       width: FILLET_BAND * 1.02,
       thickness: M.plate,
     })),
+    // The packing under the 750's ends (`masqueBearing`).
+    { id: "MidFill", segs: bearing.blocks, off: bearing.off, width: bearing.width, thickness: bearing.thickness },
   ];
   return groups.map(({ id, segs, off, width, thickness }) => {
     const rows: Vec3[][] = [];
@@ -1700,7 +1780,8 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
   // Inside the leg, the "entretoise diagonale" from d to b at the tops of
   // panels 1-3 and 6-7 (PL-VIII Figs 1, 8), open where the lift runs.
   // Whole in the Roux legs, whose car and stair clear it; open where the
-  // Otis car crosses its line, at XXVII-XXV and XXI (ENTRETOISE.openAt).
+  // Otis car crosses its line, at XXI only (ENTRETOISE.openAt): at
+  // XXVII-XXV that car runs under it.
   // The quadrant targets split as lifts.ts splits them: even = Roux (piles
   // 4, 2), odd = Otis (piles 3, 1).
   const entRoux = entretoiseMembers([]);

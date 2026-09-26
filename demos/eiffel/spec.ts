@@ -1202,16 +1202,21 @@ export const ENTRETOISE = {
    * stops either side of it, ±1.75 about the leg's diagonal, each half
    * ending free [derived from lifts.ts; PL-VIII Figs 1 and 8 draw it whole,
    * and PL-XX, the section along the diagonal, projects it onto b and d and
-   * cannot show an opening]. Only the Otis car reaches it: slid along its
-   * whole run it clips the 1.20 girder at XXVII-XXV (its upper deck's
-   * outer top corner, 0.02 into it) and at XXI (0.15, where its track bends
-   * above the 1st floor), ±1.58 across the diagonal. In the Roux legs the
-   * girder is whole: their car clears it by 1.11 at least, their tracks by
-   * 4.2, and their ground stair by 2.97 (its flights cross the girder's
-   * line in plan 3.3 above it). Nothing reaches it at XXII. So `openAt`
-   * holds in the Otis legs (piles 3 and 1) only.
+   * cannot show an opening]. Only the Otis car reaches it, and only at
+   * XXI: slid along its whole run (the car's faces sampled every 0.10, every
+   * 0.10 of travel) it passes clean through the girder there, its roof 1.17
+   * over the girder's underside, ±1.58 across the diagonal, where its track
+   * bends above the 1st floor. At XXVII-XXV it runs under the girder, its
+   * highest point inside the girder's plan 0.61 below the underside and
+   * 0.28 clear of the whole girder at least [measured on lifts.ts as it
+   * stands, 2026-09-26: the "0.02 into it" read there once was a car or a
+   * rail line since moved], so there the girder is whole, as drawn. In the
+   * Roux legs the girder is whole: their car clears it by 1.11 at least,
+   * their tracks by 4.2, and their ground stair by 2.97 (its flights cross
+   * the girder's line in plan 3.3 above it). Nothing reaches it at XXII. So
+   * `openAt` holds at XXI in the Otis legs (piles 3 and 1) only.
    */
-  openAt: ["XXVII", "XXVI", "XXV", "XXI"],
+  openAt: ["XXI"],
   openHalf: 1.75,
 } as const;
 

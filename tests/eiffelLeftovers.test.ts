@@ -248,13 +248,17 @@ describe("Eiffel leftovers: Plate I's 18.65, the plan bracing's H, the arch's hi
         const inner = Math.min(S(a!), S(b!));
         // It starts at the long girder's chord (PLAN_BRACING.chord short of its axis)...
         expect(outer).toBeCloseTo(at - PLAN_BRACING.chord, 3);
-        // ...and ends on the post: its face, grown by the chord and 0.05.
-        expect(inner).toBeCloseTo(post.s[1] + PLAN_BRACING.chord + 0.05, 3);
+        // ...and ends on the post, framing into it: its end post's face on
+        // the post's, so its axis stops the end post's half-width less 5 mm
+        // off it (shaft.ts `FRAME_INTO`).
+        expect(inner).toBeCloseTo(post.s[1] + PLAN_BRACING.web - 0.005, 3);
         expect(outer - inner).toBeGreaterThanOrEqual(d);
-        // Clear of the whole Edoux, by more than its chord's half-width.
+        // Clear of the whole Edoux: its axis out of the post it frames into,
+        // and more than its chord's half-width off everything else.
         for (const pt of samples(a!, b!)) {
           const { gap, what } = edouxGap(pt);
-          expect(gap, `${n.name} H vs ${what}`).toBeGreaterThan(PLAN_BRACING.chord);
+          const least = what === "outboard post S" ? PLAN_BRACING.web - 0.005 - 1e-6 : PLAN_BRACING.chord;
+          expect(gap, `${n.name} H vs ${what}`).toBeGreaterThan(least);
         }
       }
       // Control: H drawn whole to the apex, uncut, would run into the post:

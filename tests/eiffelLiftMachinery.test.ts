@@ -668,7 +668,15 @@ describe("eiffel lift machinery: the Roux chains", () => {
       /** How far the cabin's piston stands from its place under the car, at arc s, with the shift scaled by k. */
       const gap = (s: number, k: number): number => {
         carPose(run, s, pose);
-        const P: Vec3 = [pose[0] as number, pose[1] as number, pose[2] as number];
+        // The Roux car's pose rides its running wheels' centres, 0.45 over
+        // the rail line up the chord's normal (lifts.ts `CarBody.ride`: the
+        // rail heads 0.15 over it, the « galets … de 600 mm »): the car's
+        // axle line is that far under it.
+        const slope = pose[3] as number;
+        // Out along the leg's diagonal: across × up.
+        const out: Vec3 = [-c.across[2], 0, c.across[0]];
+        const n = add3(mul3(out, Math.sin(slope)), [0, Math.cos(slope), 0]);
+        const P: Vec3 = sub3([pose[0] as number, pose[1] as number, pose[2] as number], mul3(n, 0.15 + 0.6 / 2));
         const js = joints(c, chainShift(c, s) * k);
         // The cabin's piston: the last piece, from the last joint to the first.
         const mid = mul3(add3(js[0] as Vec3, js[js.length - 1] as Vec3), 0.5);

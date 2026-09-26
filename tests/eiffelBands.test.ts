@@ -193,7 +193,12 @@ describe("every rivet cube is the whole cook's heads seated in it", () => {
       heads += all.length;
       expect(diffSorted(all, unionSorted(got.get(name) ?? [])), name).toEqual({ missing: 0, extra: 0 });
     }
-    expect(heads).toBe(1_207_672);
+    // 1,207,672 + 252: the Otis legs' entretoises whole at XXVII-XXV
+    // (spec.ts ENTRETOISE.openAt), laced and riveted across the old opening;
+    // + 208: the central posts under and over the belts' chord plates
+    // (XXIV, XXIII, XVIII) bearing on them, 0.05 longer (legs.ts
+    // `postStretch`), their lacing rivets with them.
+    expect(heads).toBe(1_208_132);
     expect(cells.length).toBe(532);
   }, 900_000);
 });

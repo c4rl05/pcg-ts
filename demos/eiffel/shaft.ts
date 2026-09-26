@@ -217,10 +217,28 @@ export function planBracingLines(
  * ended by the other two long girders (|x - z| = W - w), a grid of angles
  * parallel to the tower's faces, one in the plane of the top chords and
  * one in the bottom's. Plan segments; A, which crosses two of the bands,
- * cuts the lines it meets.
+ * cuts the lines it meets: they end on a post in its web there
+ * (`planBracingBandCrossings`).
  */
 export function planBracingBandLines(name: string, W: number, w: number): Array<[XZ, XZ]> {
-  if (planPattern(name) !== "hash" || w <= 0) return [];
+  return bandGrid(name, W, w).lines;
+}
+
+/**
+ * Where A crosses the bands' lines at a node, (x, z) on x = z: two lines
+ * of the grid (x = c and z = c) meet there, and A cuts both. A is 1.00
+ * deep and the bands lie in the 0.60 girders' chord planes, 0.20 inside
+ * A's chords, where A's web is an open X, so nothing of A stands where
+ * their angles meet it. Each crossing has a post in A's web, chord to
+ * chord, that the four angles end on [estimated: the plates draw A over the
+ * bands in plan and do not show the joint].
+ */
+export function planBracingBandCrossings(name: string, W: number, w: number): XZ[] {
+  return bandGrid(name, W, w).crossings;
+}
+
+function bandGrid(name: string, W: number, w: number): { lines: Array<[XZ, XZ]>; crossings: XZ[] } {
+  if (planPattern(name) !== "hash" || w <= 0) return { lines: [], crossings: [] };
   const m = W - w;
   const cells = Math.max(2, Math.round(m / ((w * Math.SQRT2) / PLAN_BRACING.bandCells)));
   const p = m / cells;
@@ -232,9 +250,13 @@ export function planBracingBandLines(name: string, W: number, w: number): Array<
   }
   // Ends stop at the girders' chords: they meet them at 45 degrees.
   const trim = PLAN_BRACING.chord * Math.SQRT2;
-  // A's cut, either side of its plane.
-  const cut = (Math.max(PLAN_BRACING.chord, PLAN_BRACING.web) + PLAN_BRACING.band + 0.02) * Math.SQRT2;
+  // A's cut, either side of its plane: to the post at the crossing, a
+  // PLAN_BRACING.web square squared to A's plane, so at 45 degrees to the
+  // band, its corner web sqrt 2 along the band from the crossing; the
+  // band's end runs 5 mm onto it [derived].
+  const cut = PLAN_BRACING.web * Math.SQRT2 - 0.005;
   const out: Array<[XZ, XZ]> = [];
+  const crossings: XZ[] = [];
   for (const c of cs) {
     const lo = Math.max(m - c, c - m) + trim;
     const hi = Math.min(W + w - c, c + m) - trim;
@@ -247,8 +269,9 @@ export function planBracingBandLines(name: string, W: number, w: number): Array<
     ] as const) {
       // The line x = c, z in [lo, hi] (and its mirror z = c), in the leg
       // at (sx, sz). A (x = z) runs through the legs where sx = sz.
-      const pieces: Array<[number, number]> =
-        sx === sz && c > lo && c < hi ? [[lo, c - cut], [c + cut, hi]] : [[lo, hi]];
+      const cuts = sx === sz && c > lo && c < hi;
+      if (cuts) crossings.push([sx * c, sz * c]);
+      const pieces: Array<[number, number]> = cuts ? [[lo, c - cut], [c + cut, hi]] : [[lo, hi]];
       for (const [a, b] of pieces) {
         if (b - a < 0.2) continue;
         out.push([[sx * c, sz * a], [sx * c, sz * b]]);
@@ -256,27 +279,27 @@ export function planBracingBandLines(name: string, W: number, w: number): Array<
       }
     }
   }
-  return out;
+  return { lines: out, crossings };
 }
 
 /**
  * The stretches of the plan line from a (x, z) along unit u for L that
  * stay clear of the Edoux (EDOUX_PLAN) at a girder d deep centred on
  * height y: each obstacle standing over its depth, grown by the girder's
- * half-width and a clearance, is cut out of it; stretches shorter than the
- * girder's depth are dropped. Returned as [from, to] distances along it.
+ * half-width and a clearance, is cut out of it, or, where the line runs
+ * into a column that stands still, only as far as its end post bearing on
+ * it (`edouxMoves`, `FRAME_INTO`); stretches shorter than the girder's depth
+ * are dropped. Returned as [from, to] distances along it.
  */
 function clearOfEdoux(a: XZ, u: XZ, L: number, y: number, d: number): Array<[number, number]> {
-  const grow = PLAN_BRACING.chord + PLAN_CLEAR;
   const S = (x: number, z: number) => (x - z) / Math.SQRT2;
   const T = (x: number, z: number) => (x + z) / Math.SQRT2;
   const s0 = S(a[0], a[1]);
   const t0 = T(a[0], a[1]);
   const ds = S(u[0], u[1]);
   const dt = T(u[0], u[1]);
-  const cuts: Array<[number, number]> = [];
-  for (const o of EDOUX_PLAN) {
-    if (o.y[1] < y - d / 2 || o.y[0] > y + d / 2) continue;
+  // Where the line runs within `grow` of the obstacle: the stretch of it to cut.
+  const within = (o: (typeof EDOUX_PLAN)[number], grow: number): [number, number] => {
     let lo = 0;
     let hi = L;
     // Keep lo <= tau <= hi with v0 + tau dv inside [min - grow, max + grow].
@@ -292,7 +315,21 @@ function clearOfEdoux(a: XZ, u: XZ, L: number, y: number, d: number): Array<[num
     };
     slab(s0, ds, o.s[0], o.s[1]);
     slab(t0, dt, o.t[0], o.t[1]);
-    if (hi > lo) cuts.push([lo, hi]);
+    return [lo, hi];
+  };
+  const cuts: Array<[number, number]> = [];
+  for (const o of EDOUX_PLAN) {
+    if (o.y[1] < y - d / 2 || o.y[0] > y + d / 2) continue;
+    // Anything the girder's chords would come within PLAN_CLEAR of is cut
+    // out of it. Beside a car's run (or a piston, which rises with its car)
+    // it then ends free there; a post, a guide or a standing cylinder it
+    // runs INTO is what it frames into, so it stops on it instead: its end
+    // post's face on the column's (`FRAME_INTO`). A line that only passes
+    // beside a column keeps the clearance.
+    const [lo, hi] = within(o, PLAN_BRACING.chord + PLAN_CLEAR);
+    if (hi <= lo) continue;
+    const [lo2, hi2] = edouxMoves(o, y) ? [lo, hi] : within(o, frameInto(o));
+    cuts.push(hi2 > lo2 ? [lo2, hi2] : [lo, hi]);
   }
   cuts.sort((p, q) => p[0] - q[0]);
   const out: Array<[number, number]> = [];
@@ -307,6 +344,44 @@ function clearOfEdoux(a: XZ, u: XZ, L: number, y: number, d: number): Array<[num
 
 /** A plan girder's clearance past what it stops at [estimated]. */
 const PLAN_CLEAR = 0.05;
+
+/**
+ * How far from a column's face a plan girder's line stops where it frames
+ * into it: its end post's half-width (`PLAN_BRACING.web`) less 5 mm, so the
+ * post bears on the column [derived]. The girder is riveted to it there
+ * rather than clear of it; the cylinders' bracing collars are not built
+ * [estimated].
+ */
+const FRAME_INTO = PLAN_BRACING.web - 0.005;
+
+/**
+ * The same, into the upper car's round cylinders: EDOUX_PLAN gives each a
+ * 0.40 square, but the tube is Ø 0.380 (lifts.ts, PL-XXIII ter Fig. 19), so
+ * the line runs on until its end post's face is tangent to the tube, 0.5 mm
+ * off it: it bears on the tube without entering it (the class jitter moves
+ * it by a millimetre or so either way) [derived]. The collars that held the
+ * cylinders are not drawn.
+ */
+const FRAME_INTO_TUBE = PLAN_BRACING.web + 0.19 + 0.0005 - 0.2;
+
+/** How far from an Edoux column's rectangle a plan girder's line stops where it frames into it (`FRAME_INTO`, `FRAME_INTO_TUBE`). */
+export function frameInto(o: (typeof EDOUX_PLAN)[number]): number {
+  return o.what.startsWith("cylinder") ? FRAME_INTO_TUBE : FRAME_INTO;
+}
+
+/**
+ * Whether an Edoux obstacle moves past a plan girder at node height y (as
+ * deep as A, the deepest, either way of it): the cars' runs, and the upper
+ * car's two cylinders above the landing, where they are its piston columns
+ * rising with it (EDOUX_PLAN: the upper car's run starts at the landing).
+ * The posts, the lower car's guides and the cylinders below the landing
+ * stand still: a girder frames into those.
+ */
+export function edouxMoves(o: (typeof EDOUX_PLAN)[number], y: number): boolean {
+  if (o.what.endsWith("car run")) return true;
+  const landing = EDOUX_PLAN.find((p) => p.what === "upper car run")?.y[0] ?? Number.POSITIVE_INFINITY;
+  return o.what.startsWith("cylinder") && y + PLAN_BRACING.depthA / 2 > landing;
+}
 
 /**
  * Where a plan girder along a diagonal stops at a merged bd from X up: at
@@ -388,6 +463,12 @@ function planBracing(): { chords: SegmentMember[]; web: SegmentMember[]; bands: 
       for (const k of [-0.5, 0.5]) {
         bands.push({ a: [p[0], n.y + k * d, p[1]], b: [q[0], n.y + k * d, q[1]], n: [0, 1, 0] });
       }
+    }
+    // A post in A's web where A cuts the bands, chord to chord, that
+    // their angles end on (`planBracingBandCrossings`); squared to A's plane.
+    const dA = PLAN_BRACING.depthA;
+    for (const [x, z] of planBracingBandCrossings(n.name, n.outer, w)) {
+      web.push({ a: [x, n.y - dA / 2, z], b: [x, n.y + dA / 2, z], n: [-Math.SQRT1_2, 0, Math.SQRT1_2] });
     }
   }
   return { chords, web, bands };

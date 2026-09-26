@@ -3114,13 +3114,43 @@ function lantern(g: Graph, crownY: number): NodeHandle[] {
   const rPost = rTop - a;
   const postFoot = topY - L.postsBelow;
   const railTop = topY + L.rails[L.rails.length - 1]!;
+  // Under the 0.275 each post is cranked out and down onto the cupola's
+  // rib and riveted there (PL-XV Fig. 1 [sourced]): that is what carries
+  // it, the deck's 0.125 edge only steadying it. The foot is drawn about
+  // 0.14 long [measured PL-XV Fig. 1, ~0.11 out and ~0.10 down; Detail E,
+  // Fig. 14, "10 attaches semblables", lays it along the rib]; its slope is
+  // solved so its end's centre stands 0.025 off the sphere as built here
+  // [derived: the bar's square end then sets its lower corners 0.0035
+  // into the sphere, and 0.0006 OFF the polygon, whose facets stand up to
+  // 0.013 inside it [measured]; a centre 0.015 into the sphere put the
+  // corners 0.032-0.037 through the skin, into the cupola where the
+  // ladders rise, and one 0.015 out still 0.009 [measured]]. Until
+  // 2026-09-26 the posts stopped at the 0.275 in the air, 0.10 over the
+  // cupola.
+  const footLen = 0.14;
+  const land = R + 0.025;
+  const hFoot = postFoot - lv.springing;
+  let lo = 0;
+  let hi = Math.PI / 2;
+  for (let k = 0; k < 40; k++) {
+    // Out along the deck (0) the foot stays outside the sphere; plumb
+    // (pi/2) it reaches inside: bisect the slope between the two.
+    const th = (lo + hi) / 2;
+    const r = rPost + footLen * Math.cos(th);
+    const y = hFoot - footLen * Math.sin(th);
+    if (r * r + y * y > land * land) lo = th;
+    else hi = th;
+  }
+  const footOut = rPost + footLen * Math.cos(lo);
+  const footY = postFoot - footLen * Math.sin(lo);
   const straightPosts: Array<readonly [Vec3, Vec3]> = [];
   const straightN: Vec3[] = [];
   for (let i = 0; i < 5; i++) {
     const t = ((2 * i + 1) * Math.PI) / 5;
     const dir: Vec3 = [Math.cos(t), 0, Math.sin(t)];
     straightPosts.push([[dir[0] * rPost, postFoot, dir[2] * rPost], [dir[0] * rPost, railTop, dir[2] * rPost]]);
-    straightN.push(dir);
+    straightPosts.push([[dir[0] * footOut, footY, dir[2] * footOut], [dir[0] * rPost, postFoot, dir[2] * rPost]]);
+    straightN.push(dir, dir);
   }
   out.push(faceSkin(g, "topRailPost", members(g, "topRailPostPaths", straightPosts, straightN), a));
   const socketR = L.socketRadius;
@@ -3131,6 +3161,8 @@ function lantern(g: Graph, crownY: number): NodeHandle[] {
     g,
     "topBent",
     [
+      // The bent ones stand on the same cranked foot.
+      Array.from({ length: 5 }, (_, i) => [footOut * Math.cos((2 * i * Math.PI) / 5), footY, footOut * Math.sin((2 * i * Math.PI) / 5)] as Vec3),
       ...[postFoot, bendFrom].map((y) => Array.from({ length: 5 }, (_, i) => [rPost * Math.cos((2 * i * Math.PI) / 5), y, rPost * Math.sin((2 * i * Math.PI) / 5)] as Vec3)),
       ...Array.from({ length: steps }, (_, k) => {
         const f = (k + 1) / steps;

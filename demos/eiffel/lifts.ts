@@ -139,6 +139,7 @@ import { type Vec3, box, copyToQuadrants, indexTable, merge, skin } from "./latt
 import type { Detail, Parts } from "./parts.js";
 import { FLOORS, NODES, PILES, profileAt } from "./spec.js";
 import { stairRuns } from "./stairs.js";
+import { SUPPORT } from "./ground.js";
 
 type Quat = readonly [number, number, number, number];
 
@@ -359,6 +360,8 @@ interface CarSpec {
   readonly setback?: number;
   /** The chassis' length along the rails. Absent: from deck end to deck end. */
   readonly chassis?: number;
+  /** Running wheels on the rails, one at each end of each axle: their diameter and width. Absent: none built. */
+  readonly running?: { readonly diameter: number; readonly width: number };
 }
 
 /**
@@ -392,9 +395,18 @@ const OTIS_CAR: CarSpec = {
  * that length the car would reach 3.75 above the rail line, into the
  * plate's own stair (its landings Pa 3.71 above it), so PL-XXVIII bounds
  * the deck under 4.4 and the shorter reading stands. Stacked along the
- * slope, both decks dip alike.
+ * slope, both decks dip alike. « La cabine est portée sur la voie de
+ * roulement par l'intermédiaire de deux essieux munis de galets à double
+ * boudin de 600 mm de diamètre » [sourced E1900-TXT p. 160]: the running
+ * wheels, their width the rail head's 0.09 [estimated].
  */
-const ROUX_CAR: CarSpec = { deck: [3.9, 2.1, 3.27], gauge: ROUX.gauge, top: ROUX.top, step: 2.5 };
+const ROUX_CAR: CarSpec = {
+  deck: [3.9, 2.1, 3.27],
+  gauge: ROUX.gauge,
+  top: ROUX.top,
+  step: 2.5,
+  running: { diameter: 0.6, width: 0.09 },
+};
 
 /**
  * How far a deck's floor dips at its inner end below the rail line, square
@@ -425,6 +437,13 @@ interface CarBody {
   readonly wheelbase: number;
   /** The lower floor's centre, from the axle midpoint. */
   readonly floor: Vec3;
+  /**
+   * How far over the rail line, square to it, the line the car's pose
+   * rides stands: 0 (its axles' points on the rail line), or with running
+   * wheels their centres' height, so the pose keeps each wheel's circle
+   * tangent to the rail head it is on, the bends included.
+   */
+  readonly ride: number;
 }
 
 /**
@@ -517,15 +536,55 @@ function carBody(spec: CarSpec): CarBody {
       raw.push({ at: add3(at, mul3(E, (side * spec.gauge) / 2)), x: t, y: n, size: [1.3, 0.184, 0.286] });
     }
   }
-  // The axles stand under the chassis' ends, on the rail: their midpoint
-  // is the body's origin.
+  // The running gear (the Roux's): at each end of the chassis an axle across
+  // the gauge 0.45 over the rail line, its wheels on the rails' heads (0.15
+  // over it, `track`) with a rim chord square under each centre, and two
+  // axle boxes from the chassis' top up round it [the axle's section and
+  // the boxes estimated]. The car's pose rides the wheels' centres' line
+  // (`ride`), so where the rail bends under the wheelbase each circle stays
+  // tangent to its head; what is left is the rim's flats tipping on it,
+  // their corners proud of the circle by 0.93 mm at 40 chords: the rim is
+  // cut to that 1 mm of contact, not to a look [derived]. One more thing
+  // sinks them: the page puts the axles an arc length apart on the line
+  // (`carPose`), and across a bend the chord is shorter than the arc, so
+  // the rigid wheelbase stands each centre a centimetre or two past its
+  // point, off the line, up to 2.55 mm into the head near the top of the
+  // run. The wheels are hung 1.6 mm higher for it: parked on the straight
+  // they clear the heads by that, and nowhere on the run are they more
+  // than 1 mm in [measured on the cooked cars slid the page's way].
+  let ride = 0;
+  if (spec.running !== undefined) {
+    const { diameter, width } = spec.running;
+    const t = inPlane(-Math.cos(level), Math.sin(level));
+    ride = 0.15 + diameter / 2;
+    const up = ride + 0.0016;
+    const sag = 0.001;
+    const chords = wheelRimChords(diameter, sag);
+    const ref = rotate3(mul3(n, -1), E, -Math.PI / chords);
+    for (const y of [yLow, yHigh]) {
+      const c = add3(onDiag(rOf(y), y), mul3(n, up));
+      const ends = [-1, 1].map((side) => add3(c, mul3(E, (side * spec.gauge) / 2)));
+      for (const w of ends) {
+        raw.push(...wheelBlocks(w, E, ref, { diameter, rim: 0.06, width, spokes: 6, spoke: 0.05, hub: 0.16, sag }));
+      }
+      raw.push(member(ends[0] as Vec3, ends[1] as Vec3, 0.12, n));
+      // The chassis' top stands 0.35 over the rail line; the axle's 0.51.
+      for (const side of [-1, 1]) {
+        const at = add3(add3(onDiag(rOf(y), y), mul3(n, (0.35 + up + 0.06) / 2)), mul3(E, side * (spec.gauge / 2 - 0.185)));
+        raw.push({ at, x: t, y: n, size: [0.25, up + 0.06 - 0.35, 0.14] });
+      }
+    }
+  }
+  // The axles stand under the chassis' ends, on the rail: their midpoint,
+  // `ride` over it, is the body's origin.
   const yMid = (yLow + yHigh) / 2;
-  const mid = onDiag(rOf(yMid), yMid);
+  const mid = add3(onDiag(rOf(yMid), yMid), mul3(n, ride));
   return {
     blocks: raw.map((b) => ({ ...b, at: sub3(b.at, mid) })),
     level,
     wheelbase: (yHigh - yLow) / Math.sin(level),
     floor: sub3(onDiag(r1, 0), mid),
+    ride,
   };
 }
 
@@ -848,6 +907,16 @@ const EDOUX_GEAR = {
     at: 4.064,
     /** Between the girder's webs, 0.770 apart: the axle spans them. */
     webs: 0.77,
+    /**
+     * The axle runs through the web's window (`summit.ts` GIRDER_AT, 0.500
+     * wide) and turns in a bearing bolted over it on the web plate's outer
+     * face [the form estimated]: 0.56 along s, 0.03 onto the plate either
+     * side of the window, and 0.70 high, stopped at the chords, the girder's
+     * foot 280.98 and top 285.48 less their « Âme 400 » [sourced, `summit.ts`
+     * GIRDER]. The web plate 0.03 [estimated there], so the bearing stands
+     * from 0.40 off the axis out to the axle's end.
+     */
+    bearing: { along: 0.56, high: 0.7, webPlate: 0.03, chords: [281.38, 285.08] as readonly [number, number] },
   },
   cable: { across: 0.2, thick: 0.032, a: 4.712, c: 4.652, d: 0.648, b: 0.588 },
   cableGuide: { s: 4.682, along: 0.39, across: 0.58, light: { s: 0.618, side: 0.26 }, top: 280.98, wall: 0.012, slot: 0.2 },
@@ -856,6 +925,30 @@ const EDOUX_GEAR = {
     { s: 1.7, t: -1.8, bottom: 270.83, top: 274.63 },
   ],
   tank: { diameter: 3.0 },
+  /**
+   * What carries the tanks [the form estimated]. The return tank's console
+   * off the Est girder: three bearers square to it, 0.20 wide, from the
+   * landing's deck (195.93) up to the tank's bottom, running out over the
+   * deck's edge (t -5.67, the girder under it) under the tank's outboard
+   * half, each as long as the tank's circle leaves room for; under each,
+   * the console's strut, 0.10 square, from the Est girder's lattice out
+   * and up to the bearer's end, 0.12 in from it. The girder's members'
+   * outer face stands at t -5.729 [measured on the cooked landing]: its
+   * verticals at s ±1.133, 193.53-195.59, carry the outer bearers' struts
+   * at 194.20, and its diagonal between them, whose axis crosses s 0 at
+   * 194.56, the middle one's. The supply
+   * tank's four hangers, 0.08 square on a 1.50 square, from its top up to
+   * the underside of the 3rd floor's 0.86 deck (275.27, `platforms.ts`).
+   */
+  tankSupports: {
+    bearers: [-1.133, 0, 1.133] as readonly number[],
+    bearer: 0.2,
+    /** `foot`: where each bearer's strut meets the girder, by bearer; the middle one's inner corner lands on the diagonal's axis. */
+    strut: { width: 0.1, web: -5.729, foot: [194.2, 194.53, 194.2] as readonly number[], fromEnd: 0.12 },
+    hanger: 0.08,
+    hangerAt: 0.75,
+    underside: 275.27,
+  },
   machinists: { y: 193.67, s: [-5.54, -1.54] as readonly [number, number], t: [-5.54, -2.2] as readonly [number, number], thick: 0.06 },
   distributors: { s: [-4.68, -3.79] as readonly number[], t: -2.3, diameter: 0.35 },
 } as const;
@@ -973,6 +1066,36 @@ function edouxGear(): Block[] {
   // The machinists' floor.
   const M = G.machinists;
   out.push(shaftBox(M.s, [M.y - M.thick, M.y], M.t));
+  // The tanks' supports: the return tank's bearers on the landing, the
+  // supply tank's hangers from the 3rd floor.
+  const TS = G.tankSupports;
+  const [ret, supply] = G.tanks;
+  const rTank = G.tank.diameter / 2 - 0.05;
+  for (const [i, bs] of TS.bearers.entries()) {
+    const reach = Math.sqrt(rTank ** 2 - (Math.abs(bs) + TS.bearer / 2) ** 2);
+    out.push(shaftBox([ret.s + bs - TS.bearer / 2, ret.s + bs + TS.bearer / 2], [FLOORS.landing, ret.bottom], [ret.t - reach, ret.t + reach]));
+    // Its strut, in the bearer's plane: its ends square to it, so the foot
+    // stands off the web by as much as its section leans, its inner corner
+    // on the web's face, and the head's lower corner 0.01 into the bearer.
+    const S = TS.strut;
+    const foot = S.foot[i] as number;
+    const tTop = ret.t - reach + S.fromEnd;
+    let tFoot = S.web;
+    let yTop = FLOORS.landing;
+    for (let k = 0; k < 3; k++) {
+      const L = Math.hypot(tTop - tFoot, yTop - foot);
+      tFoot = S.web - ((S.width / 2) * (yTop - foot)) / L;
+      yTop = FLOORS.landing + 0.01 + ((S.width / 2) * (tFoot - tTop)) / L;
+    }
+    out.push(member(inShaft(ret.s + bs, foot, tFoot), inShaft(ret.s + bs, yTop, tTop), S.width, S_HAT));
+  }
+  const hh = TS.hanger / 2;
+  for (const ds of [-TS.hangerAt, TS.hangerAt]) {
+    for (const dt of [-TS.hangerAt, TS.hangerAt]) {
+      const at = [supply.s + ds, supply.t + dt] as const;
+      out.push(shaftBox([at[0] - hh, at[0] + hh], [supply.top, TS.underside], [at[1] - hh, at[1] + hh]));
+    }
+  }
   // The pulleys' axles, across the girder's webs.
   const P = G.pulley;
   for (const [s, ys] of [
@@ -980,7 +1103,20 @@ function edouxGear(): Block[] {
     [0, P.middle],
     [P.at, P.outer],
   ] as const) {
-    for (const y of ys) out.push({ at: inShaft(s, y), x: T_HAT, y: UP, size: [P.webs + 0.2, P.axle, P.axle] });
+    for (const y of ys) {
+      out.push({ at: inShaft(s, y), x: T_HAT, y: UP, size: [P.webs + 0.2, P.axle, P.axle] });
+      // Its bearings, one on each web's outer face over the window.
+      const B = P.bearing;
+      const face = P.webs / 2 + B.webPlate / 2;
+      const end = (P.webs + 0.2) / 2;
+      const yb: readonly [number, number] = [Math.max(B.chords[0], y - B.high / 2), Math.min(B.chords[1], y + B.high / 2)];
+      for (const t of [
+        [face, end],
+        [-end, -face],
+      ] as const) {
+        out.push(shaftBox([s - B.along / 2, s + B.along / 2], yb, t));
+      }
+    }
   }
   return out;
 }
@@ -1157,8 +1293,14 @@ function edouxCarB(floor: number): Block[] {
   const h = F.half;
   const q = F.post / 2;
   const tb = 0.6;
+  // Its posts carried on up to the floor frame's underside, 0.20 under the
+  // floor, which the frame hangs from [derived: the frame's top 0.40 under
+  // the floor, the floor frame 0.20 deep]; and at each end a cross member
+  // at the frame's top and foot tying its two sides, which the arms run
+  // out from and the walkway's hangers hang from [the form estimated].
   for (const ds of [-h, h]) {
-    for (const t of [-tb, tb]) out.push(box([ds - q, ds + q], [-F.bottom, -F.top], [t - q, t + q]));
+    for (const t of [-tb, tb]) out.push(box([ds - q, ds + q], [-F.bottom, -EDOUX_BODY.under], [t - q, t + q]));
+    for (const y of [F.top, F.bottom]) out.push(box([ds - q, ds + q], [-y - q, -y + q], [-tb, tb]));
   }
   for (const t of [-tb, tb]) {
     out.push(box([-h, h], [-F.bottom - q, -F.bottom + q], [t - q, t + q]));
@@ -1171,6 +1313,14 @@ function edouxCarB(floor: number): Block[] {
     }
     const at = side * EDOUX.guide;
     out.push(box([at - 0.07, at + 0.07], [-F.spindle[1], -F.spindle[0]], [-0.07, 0.07]));
+    // The spindle's journals, on up and down into the arms' ends, which
+    // carry it [derived: the arms at 0.40 and 1.91, the spindle 0.58-1.72].
+    for (const [y0, y1] of [
+      [-F.bottom, -F.spindle[1]],
+      [-F.spindle[0], -F.top],
+    ] as const) {
+      out.push(box([at - 0.04, at + 0.04], [y0, y1], [-0.04, 0.04]));
+    }
   }
   // The walkway, hung from the frame's foot.
   const W = G.walkway;
@@ -1549,7 +1699,9 @@ function cutLine(line: RunLine, s0: number, s1: number): RunLine {
  *
  * The rail line is `railLine`, the one `track` builds the girders on,
  * carried onto the leg as `copyToQuadrants` carries the track: the same
- * stations, so the car's axles are ON the built rail at every moment. A
+ * stations, so the car's axles are ON the built rail at every moment (a
+ * car on running wheels, the Roux, rides that line offset to its wheels'
+ * centres, `CarBody.ride`, so its wheels are on the rail heads). A
  * station is where the lower floor's centre stands at the station's
  * height, found by bisection along the line (the floor rises with the arc
  * length, the tipping included, on every run here). The run begins half a
@@ -1562,8 +1714,11 @@ function legRun(k: number): { run: CarRun; blocks: Block[]; rail: RunLine; railS
   const spec = system === "roux" ? ROUX_CAR : OTIS_CAR;
   const body = carBody(spec);
   const axis = onLeg(k, E);
+  // A car on running wheels rides their centres' line, the rail line offset
+  // `ride` up its normal with mitred joins (see `CarBody`).
+  const rides = body.ride > 0 ? offsetLine(railLine(spec.top), () => body.ride) : railLine(spec.top);
   const rail = lineThrough(
-    railLine(spec.top).map(([r, y]) => onLeg(k, onDiag(r, y))),
+    rides.map(([r, y]) => onLeg(k, onDiag(r, y))),
     body.wheelbase,
   );
   const floor = onLeg(k, body.floor);
@@ -2201,7 +2356,7 @@ const ROUX_CIRCUIT = {
   lateral: 2.04,
   lower: 0.243,
   upper: 0.448,
-  duct: { from: 0.13, to: 0.63, across: 0.29, plate: 0.012, slot: 0.085 },
+  duct: { from: 0.13, to: 0.63, across: 0.29, plate: 0.012, slot: 0.085, bracket: { every: 2.3, along: 0.1 } },
   wheel: { pitch: 3.864, rim: 3.616, y: -0.03, wrap: (250 * Math.PI) / 180, width: 0.24, spokes: 12 },
   pulley: { pitch: 3.646, rim: 3.506, y: 69.33, wrap: (218 * Math.PI) / 180, width: 0.24, spokes: 8 },
   shaft: { wheel: 0.26, pulley: 0.175 },
@@ -2543,6 +2698,21 @@ function rouxDuct(k: number, side: number): Block[] {
     out.push(sideAt(inboard * half, mid, D.to));
     out.push(sideAt(inboard * half, C.lower + D.slot / 2, mid));
     out.push(sideAt(inboard * half, D.from, C.lower - D.slot / 2));
+    // The brackets, one every 2.30 or less, each midway in its share of the
+    // run, so none falls on a node where the girders overlap: a plate 0.10
+    // along the track from the girder's top flange up to the duct's
+    // underside, from 0.025 outboard of the rail (0.10 on the web) over the
+    // flange's outer 0.04 and out under the duct's whole width [the form
+    // estimated; « 2,30 » sourced, see above].
+    const n = Math.max(1, Math.ceil(len / D.bracket.every));
+    const lIn = side * (ROUX.gauge / 2 + 0.075) - side * C.lateral;
+    const lOut = side * half;
+    for (let j = 0; j < n; j++) {
+      const u = (j + 0.5) / n;
+      const top = D.from - D.plate / 2;
+      const p: P2 = [a[0] + (b[0] - a[0]) * u + f.n[0] * (top / 2 - C.upper), a[1] + (b[1] - a[1]) * u + f.n[1] * (top / 2 - C.upper)];
+      out.push({ at: lift(p, (lIn + lOut) / 2), x: along, y: n3, size: [D.bracket.along, top, Math.abs(lOut - lIn)] });
+    }
   }
   return out;
 }
@@ -2785,6 +2955,15 @@ function otisMotor(k: number): { blocks: Block[]; cylinder: readonly [Vec3, Vec3
   const cOut = M.cylinder.out;
   const cFoot = OTIS_FRAMES.toY(f, M.cylinder.foot, cOut);
   const cylinder = [onLegAt(k, at2f(f, cFoot, cOut)), onLegAt(k, at2f(f, cFoot + M.cylinder.length, cOut))] as const;
+  // What it lies in: a cradle across between the girders' webs 0.5 in
+  // from each end, from the girders' bottom up to the cylinder's underside
+  // and 0.01 into it, so the cylinder bears on the girders and not on
+  // nothing (the ties are 0.28 under it) [estimated: PL-XX draws the
+  // cylinder between the girders, not how it is seated].
+  const cradleTop = cOut - M.cylinder.diameter / 2 + 0.01;
+  for (const along of [cFoot + 0.5, cFoot + M.cylinder.length - 0.5]) {
+    out.push(frameBox(k, f, along, (cradleTop - M.depth / 2) / 2, 0, [0.3, cradleTop + M.depth / 2, M.apart]));
+  }
   const wheels: Block[] = [];
   // Three fixed pulleys in the lower group and two in the upper, and the
   // guide pulley « a » over them the garant leaves by: « 5 poulies fixes »
@@ -2799,6 +2978,37 @@ function otisMotor(k: number): { blocks: Block[]; cylinder: readonly [Vec3, Vec3
     for (const l of across) {
       wheels.push(...wheelBlocks(onLegAt(k, at2f(f, along, M.pulleyOut), l), onLeg(k, E), UP, pulley(M.pulley)));
     }
+    // The shafts [estimated: « poulies fixes » the girders carry]. The
+    // upper pair's axis and the guide's are 0.51 apart, inside their rims
+    // (0.68), so neither shaft may cross the other's discs. The lower group
+    // turns on one shaft through its three hubs, girder to girder; the
+    // upper pair on two stubs, each from its hub's inner end out to its
+    // girder; each in a bearing on the girder's top flange. The guide « a »
+    // turns on a short shaft between two hanger plates in the gaps between
+    // its hub and the pair's discs, down to the last cross girder under the
+    // girders.
+    const hub = pulley(M.pulley).width; // half the hub's length along the shaft
+    const reach = (M.apart + M.flange) / 2;
+    if (across.length === 1) {
+      const plate = 0.05;
+      const inner = hub + 0.005;
+      const lastTie = 1 + 4.2 * Math.floor((M.length - 1) / 4.2);
+      const a0 = Math.min(lastTie - 0.05, along - 0.06);
+      const a1 = Math.max(lastTie + 0.05, along + 0.06);
+      const top = M.pulleyOut + 0.08;
+      out.push(frameBox(k, f, along, M.pulleyOut, 0, [0.12, 0.12, 2 * (inner + plate)]));
+      for (const side of [-1, 1]) {
+        out.push(frameBox(k, f, (a0 + a1) / 2, (top - M.depth / 2) / 2, side * (inner + plate / 2), [a1 - a0, top + M.depth / 2, plate]));
+      }
+      continue;
+    }
+    if (across.length === 3) {
+      out.push(frameBox(k, f, along, M.pulleyOut, 0, [0.12, 0.12, 2 * reach]));
+    } else {
+      const from = M.across / 2 - hub;
+      for (const side of [-1, 1]) out.push(frameBox(k, f, along, M.pulleyOut, (side * (from + reach)) / 2, [0.12, 0.12, reach - from]));
+    }
+    for (const side of [-1, 1]) out.push(frameBox(k, f, along, M.depth / 2 + 0.08, (side * M.apart) / 2, [0.3, 0.16, M.flange]));
   }
   return { blocks: out, cylinder, wheels };
 }
@@ -2828,6 +3038,9 @@ function otisCarriage(k: number): { blocks: Block[]; follower: Follower } {
     for (const l of [-M.across, 0, M.across]) {
       out.push(...wheelBlocks(onLegAt(k, at2f(f, along, M.pulleyOut), l), onLeg(k, E), UP, pulley(M.pulley)));
     }
+    // The group's shaft, across through its hubs into both side plates
+    // [estimated: the frame carries its pulleys].
+    out.push(frameBox(k, f, along, M.pulleyOut, 0, [0.1, 0.1, 2 * (M.across + 0.23)]));
   }
   // The rollers, on the girders' top flanges; the rods, from the frame's
   // lower end down into the cylinder.
@@ -2840,6 +3053,10 @@ function otisCarriage(k: number): { blocks: Block[]; follower: Follower } {
   }
   const rodTop = mid - C.length / 2;
   for (const side of [-1, 1]) out.push(frameBox(k, f, rodTop - 7, M.cylinder.out, side * 0.3, [14, C.rod, C.rod]));
+  // The crosshead the rods' upper ends are keyed into, across the frame's
+  // lower end from side plate to side plate [estimated: the rods « tirent »
+  // the carriage, so they end in its frame, not beside it].
+  out.push(frameBox(k, f, rodTop, (M.cylinder.out + M.pulleyOut) / 2, 0, [0.2, 0.25, 2 * (M.across + 0.23)]));
   const up = unit3(sub3(onLegAt(k, at2f(f, 1, 0)), onLegAt(k, at2f(f, 0, 0))));
   return { blocks: out, follower: { name, lead: run.name, slide: mul3(up, -1 / 12) } };
 }
@@ -2855,10 +3072,19 @@ function otisCounterTrack(k: number): { blocks: Block[]; wheels: Block[]; foot: 
   const foot = OTIS_FRAMES.toY(f, C.foot);
   const head = OTIS_FRAMES.toY(f, C.head);
   const len = head - foot;
+  // The girders run on down to the stones they start on: the upper
+  // course's top, square to a's axis (which the track runs parallel to
+  // below XXIV), `SUPPORT.stack` down that axis from the model's upright's
+  // end at the supports' node. The plates' z 2.9 is the stones' place
+  // before every support was set 1.10 down a's axis (ground.ts `SUPPORT`,
+  // SOURCES.md §31.3), which left the girders' foot 0.61 up the track from
+  // them [derived]. The rails and the truck keep the plates' foot.
+  const support = NODES[0] as (typeof NODES)[number]; // "supports", y 2.50
+  const stone = (cornerA(support.y) - f.o[0]) * f.t[0] + (support.y - f.o[1]) * f.t[1] - SUPPORT.stack;
   const out: Block[] = [];
   for (const side of [-1, 1]) {
     const l = (side * C.apart) / 2;
-    out.push(frameBox(k, f, (foot + head) / 2, -C.depth / 2, l, [len, C.depth, C.flange]));
+    out.push(frameBox(k, f, (stone + head) / 2, -C.depth / 2, l, [head - stone, C.depth, C.flange]));
     out.push(frameBox(k, f, (foot + head) / 2, C.rail / 2, l, [len, C.rail, 0.07]));
   }
   for (let along = foot; along <= head + 1e-6; along += C.tronçon) {
@@ -2870,18 +3096,47 @@ function otisCounterTrack(k: number): { blocks: Block[]; wheels: Block[]; foot: 
   const n3 = unit3(sub3(onLegAt(k, at2f(f, 0, 1)), onLegAt(k, at2f(f, 0, 0))));
   const t3 = unit3(sub3(onLegAt(k, at2f(f, 1, 0)), onLegAt(k, at2f(f, 0, 0))));
   const R = OTIS_REEVING;
+  // Each hangs « sous la grande poutre » [sourced PL-XXI, of the track]: a
+  // cross beam under the car track's two girders, flush with their bottom
+  // flanges across their whole width, in the frame of the rail's segment
+  // above XXIV where both pulleys stand, and a pin along the pulley's axis
+  // from its hub up into the beam [estimated: the plates draw no mounting;
+  // the leg's steel below them rakes under the pulleys, the car track's
+  // girders are flat and 0.3-0.4 over them].
+  const rail = railLine(OTIS.top) as P2[];
+  const beamDepth = 0.2;
   for (const [y, l, d] of [
     [C.pou7.y, R.pou7, C.pou7.diameter],
     [C.n1.y, R.n1, C.n1.diameter],
   ] as const) {
     const along = OTIS_FRAMES.toY(f, y, R.out);
-    wheels.push(...wheelBlocks(onLegAt(k, at2f(f, along, R.out), l), n3, t3, { ...pulley(d), width: 0.08 }));
+    const hub = at2f(f, along, R.out);
+    wheels.push(...wheelBlocks(onLegAt(k, hub, l), n3, t3, { ...pulley(d), width: 0.08 }));
+    const seg = rail.findIndex((_, i) => i + 1 < rail.length && (rail[i + 1] as P2)[1] > hub[1]);
+    const g = frame2(rail[seg] as P2, rail[seg + 1] as P2);
+    // The beam's mid-depth, under the girders' bottom, square to g.
+    const mid = -GIRDER.depth - beamDepth / 2;
+    // Up the pulley's axis (f's normal) from the hub to that plane.
+    const rise = (mid - ((hub[0] - g.o[0]) * g.n[0] + (hub[1] - g.o[1]) * g.n[1])) / (f.n[0] * g.n[0] + f.n[1] * g.n[1]);
+    const top = at2f(f, along, R.out + rise);
+    const s = (top[0] - g.o[0]) * g.t[0] + (top[1] - g.o[1]) * g.t[1];
+    out.push(frameBox(k, g, s, mid, 0, [0.15, beamDepth, OTIS.gauge + 2 * OTIS.flange.out]));
+    out.push(frameBox(k, f, along, R.out + rise / 2, l, [0.12, rise, 0.12]));
   }
   // N°2 at the 1st floor, 2.401 out from a [sourced PL-XXII quater Fig.
   // 36], turning the cables up the leg in the diagonal plane [orientation
   // estimated], at the floor, z 57.8 [measured].
   const n2: P2 = [cornerA(FLOORS.first) + C.n2.a, 57.8];
   wheels.push(...wheelBlocks(onLegAt(k, n2), onLeg(k, E), UP, pulley(C.n2.diameter)));
+  // It hangs in the floor's slot for the cables (open 0.65 either side of
+  // it, its edge 0.15-0.2 in from its axis [measured on the model]): its
+  // shaft across to a bracket on the floor each side, 0.3 on the deck and
+  // reaching out under the shaft [estimated].
+  out.push({ at: onLegAt(k, n2), x: onLeg(k, E), y: UP, size: [1.9, 0.1, 0.1] });
+  const high = n2[1] + 0.08 - FLOORS.first;
+  for (const side of [-1, 1]) {
+    out.push({ at: onLegAt(k, [n2[0] - 0.175, FLOORS.first + high / 2], side * 0.85), x: onLeg(k, U), y: UP, size: [0.55, high, 0.2] });
+  }
   return { blocks: out, wheels, foot, head };
 }
 
@@ -2909,6 +3164,10 @@ function otisTruck(k: number): { truck: Block[]; strands: Array<{ name: string; 
   }
   // The cast-iron blocks between them.
   out.push(frameBox(k, f, mid, head + T.high - T.block / 2 - 0.02, 0, [T.length - 0.8, T.block, T.sides - 0.14]));
+  // The transom across the sides' upper ends, over the grande poulie's
+  // rim and hub, so the frame closes there [estimated: Figs 1-2's break
+  // lines hide the end].
+  out.push(frameBox(k, f, upper - 0.06, head + T.high - 0.1, 0, [0.12, 0.2, T.sides + 0.12]));
   // Six wheels on their three axles, riding the rail head.
   for (const a of T.axles) {
     const along = lower + a;
