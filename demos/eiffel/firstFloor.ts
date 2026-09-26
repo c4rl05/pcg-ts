@@ -1199,7 +1199,42 @@ function arches(): {
     const wind = (p: InPlane[]) => (signedArea(p) > 0 === decorated > 0 ? p : [...p].reverse());
     out.plates.push(...h.plates.map((p) => wind(p).map(off)));
     // The ironwork (`ironwork.ts`): the frame and the three bars at every
-    // depth, the volutes and their macarons with the laced web.
+    // depth, the volutes and their macarons with the laced web. It is laid
+    // out once, to b's web at the face plane, but lies PLATE_OFFSET to
+    // IRON_DEPTH more out of the plane, where the web leans nearer (the
+    // outer arch's face 1: `toTheWeb` cuts the ends back onto it) or
+    // farther (the inner's face 4, at a). There each frame or bar end cut
+    // square to the web is run on along itself until both its corners are
+    // past the web of its farthest layer, and `toTheWeb` brings everything
+    // past its own layer's web back onto it, the end flush with the web. Laid out alone, those ends stopped 45 mm
+    // short of a, in the air [derived]. The layout, and so every count, is
+    // the same in both planes.
+    const far = Math.max(D_BF, webLineAt(decorated * (PLATE_OFFSET + IRON_DEPTH)));
+    const reach = (half: number) => (line: InPlane[]): InPlane[] => {
+      if (far <= D_BF || line.length < 2) return line;
+      const out = [...line];
+      for (const [i, j] of [
+        [0, 1],
+        [line.length - 1, line.length - 2],
+      ] as const) {
+        const p = line[i]!;
+        const q = line[j]!;
+        const len = Math.hypot(p[0] - q[0], p[1] - q[1]);
+        const d: InPlane = [(p[0] - q[0]) / len, (p[1] - q[1]) / len];
+        // b's web line in the half p is in (mirrored on the left), and how
+        // far p's square end stands clear of it (`squareEndClearance`).
+        const n: InPlane = [Math.sign(p[0]) * Math.sin(PHI_H), Math.cos(PHI_H)];
+        const into = n[0] * d[0] + n[1] * d[1];
+        const reachAcross = half * Math.abs(n[0] * -d[1] + n[1] * d[0]);
+        const clear = D_BF - (n[0] * p[0] + n[1] * p[1]) - reachAcross;
+        if (Math.abs(clear) > 1e-6 || into < LAND_SINE) continue;
+        // Far enough that the TRAILING corner reaches the far web too, so the
+        // cut lays the whole end on the web, flush, as it does at b.
+        const run = (far - D_BF + 2 * reachAcross) / into;
+        out[i] = [p[0] + d[0] * run, p[1] + d[1] * run];
+      }
+      return out;
+    };
     const bar = (width: number) => (line: InPlane[]): Piece => {
       const r = ribbon(line, width);
       return {
@@ -1213,7 +1248,10 @@ function arches(): {
       return { outline: o, caps: [o], depth };
     };
     for (const { panel, work: w } of work) {
-      out.fans.push(...w.frame.map(bar(FRAME_WIDTH)), ...w.bars.map(bar(BAR_WIDTH)));
+      out.fans.push(
+        ...w.frame.map(reach(FRAME_WIDTH / 2)).map(bar(FRAME_WIDTH)),
+        ...w.bars.map(reach(BAR_WIDTH / 2)).map(bar(BAR_WIDTH)),
+      );
       out.scrolls.push(
         ...w.volutes.map(bar(VOLUTE_WIDTH)),
         ...w.eyes.map((c) => disc(c, MACARON_R)).map(convex(PLATE_OFFSET, MACARON_DEPTH)),

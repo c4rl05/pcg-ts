@@ -1341,13 +1341,20 @@ const BALCONY = {
  * arc the lunette is « un treillis de bois » [sourced]: laths on both
  * diagonals, 0.40 apart [estimated from PL-XIX's diamonds], over the small
  * arches between the plate piers, with the three rays PL-XIX draws from
- * the middle column's head to the inner arc [sourced drawing].
+ * the middle column's head to the inner arc [sourced drawing]. A lath is
+ * nailed to the frame round the opening, so each runs `bed` past the
+ * opening's edge into the member it ends on (the inner rib, the sill or
+ * the outer rib's foot, a small arch) [estimated: 0.03 buries a 0.04
+ * lath's square end whole at 45°], and `pierBed` into a plate pier, whose
+ * edge has the inner arcade's valley gutter right behind it (0.02 in from
+ * it), which the laths' far corners must not reach [derived]; they used
+ * to stop 0.03 short of every edge, and read as hanging in the air.
  */
 const GABLE = {
   outerRib: 0.25,
   innerRib: 0.2,
   ray: 0.1,
-  trellis: { pitch: 0.4, lath: 0.04, ray: 0.08, step: 0.02, clear: 0.03 },
+  trellis: { pitch: 0.4, lath: 0.04, ray: 0.08, step: 0.02, bed: 0.03, pierBed: 0.005 },
 } as const;
 
 /**
@@ -1843,15 +1850,16 @@ function lunetteTrellis(c: number): Block[] {
   const spring = A.floor + A.columnHeight + A.archSpring;
   const extrados = A.archRadius + A.archRib;
   const plateHalf = (A.pair + A.column) / 2;
-  const side = A.module / 2 - plateHalf - T.clear;
+  // The opening's edges, each moved `bed` (`pierBed`) into the member that makes it.
+  const side = A.module / 2 - plateHalf + T.pierBed;
   const R = A.innerRadius;
   const cy = A.floor + A.innerCrown - R;
   const foot = Math.sqrt(R * R - (SPRING_Y - cy) ** 2);
   const top = (u: number) =>
-    (Math.abs(u) < foot ? cy + Math.sqrt(R * R - u * u) : SPRING_Y) - T.clear;
+    (Math.abs(u) < foot ? cy + Math.sqrt(R * R - u * u) : SPRING_Y) + T.bed;
   const bottom = (u: number) => {
     const dx = Math.abs(Math.abs(u) - GALLERY_RAIL_PITCH);
-    return (dx < extrados ? spring + Math.sqrt(extrados ** 2 - dx * dx) : spring) + T.clear;
+    return (dx < extrados ? spring + Math.sqrt(extrados ** 2 - dx * dx) : spring) - T.bed;
   };
   const inside = (u: number, y: number) => Math.abs(u) <= side && y <= top(u) && y >= bottom(u);
   const r = EDGE - ARCADE.plate / 2;
@@ -1863,26 +1871,36 @@ function lunetteTrellis(c: number): Block[] {
   };
   // Lines y = k + dir u, both families through the middle column's head,
   // `pitch` apart square to themselves; each marched along u and cut into
-  // its runs inside the opening.
+  // its runs inside the opening, each run's ends then found on the edge by
+  // bisection between the samples either side of it (the march alone left
+  // an end up to a step short).
   const step = T.pitch * Math.SQRT2;
   const n = Math.ceil((A.floor + A.innerCrown - spring + 2 * side) / step);
   for (const dir of [1, -1]) {
     for (let i = -n; i <= n; i++) {
       const k = spring + i * step;
+      const edge = (uIn: number, uOut: number): number => {
+        for (let b = 0; b < 40; b++) {
+          const m = (uIn + uOut) / 2;
+          if (inside(m, k + dir * m)) uIn = m;
+          else uOut = m;
+        }
+        return uIn;
+      };
       let start: number | undefined;
       let last = -side;
       const count = Math.round((2 * side) / T.step);
       for (let j = 0; j <= count; j++) {
         const u = -side + (2 * side * j) / count;
         const ok = inside(u, k + dir * u);
-        if (ok && start === undefined) start = u;
+        if (ok && start === undefined) start = j === 0 ? u : edge(u, last);
         if (!ok && start !== undefined) {
-          lath(k, dir, start, last);
+          lath(k, dir, start, edge(last, u));
           start = undefined;
         }
-        if (ok) last = u;
+        last = u;
       }
-      if (start !== undefined) lath(k, dir, start, last);
+      if (start !== undefined) lath(k, dir, start, side);
     }
   }
   // The rays: to the inner arc's crown and a third of the way to its feet.
@@ -2513,8 +2531,25 @@ function pavilionFace(staff: boolean): { walls: Block[]; vaults: Prism[] } {
     const r1 = front - (k === 0 ? P.centreLantern.front : P.outerLantern.front);
     const r0 = k === 0 ? back + P.centreLantern.back : r1 - P.outerLantern.length;
     // The lantern's glazed body, sunk into the vault's crown, and its roof.
+    // The eave is the roof's edge, 0.575 outside the body, so the body's
+    // sides rise past it to the roof slabs' mid-line, and its ends close
+    // the gable under the ridge [derived]: a flat-topped body stopped at
+    // the eave left the roof 0.17 over it, standing on nothing. A house
+    // shape, clockwise seen from outside at its gallery end, so it
+    // extrudes back toward r0.
     const body = P.lanternBody / 2;
-    walls.push(span(c - body, c + body, CROWN_Y - P.bodySink, P.lanternEave, r0, r1));
+    const wallTop = P.lanternEave + P.lanternRise * (1 - body / (P.lanternWidth / 2));
+    const sunk = CROWN_Y - P.bodySink;
+    vaults.push({
+      outline: [
+        [c - body, sunk, r1],
+        [c - body, wallTop, r1],
+        [c, ridge, r1],
+        [c + body, wallTop, r1],
+        [c + body, sunk, r1],
+      ],
+      depth: r1 - r0,
+    });
     for (const side of [-1, 1]) {
       walls.push({
         at: [c + (side * P.lanternWidth) / 4, (P.lanternEave + ridge) / 2, (r0 + r1) / 2],
@@ -3064,14 +3099,20 @@ function angloDressing(): Record<"brace" | "knee", Piece> {
   }
   // The raking struts in the band over the transom, rising from each
   // post's foot on the transom out to the head beam either side (inward
-  // only at the ends), their heads clear of the cornice.
-  const yTop = SPRING_Y - F.beam - 0.07;
+  // only at the ends), each head cut square with its upper corner on the
+  // cornice's underside, which covers the head beam's face there: the
+  // strut butts against it and stays out of it [derived]. (They stopped
+  // 0.07 under it once, and hung 5 cm clear of anything.)
+  const kneeWidth = 0.1;
   const yFoot = floor + F.transom + F.beam + 0.05;
+  const underCornice = SPRING_Y - F.cornice.height;
+  const kneeRun = D.knee - F.post / 2;
+  const yTop = underCornice - (kneeWidth / 2) * (kneeRun / Math.hypot(kneeRun, underCornice - yFoot));
   for (const i of [-3, -2, -1, 0, 1, 2, 3]) {
     const a = Math.abs(i) === 3 ? Math.sign(i) * (half - F.post / 2) : i * bay;
     for (const s of [-1, 1]) {
       if (Math.abs(a + s * D.knee) > half - F.post) continue;
-      out.knee.blocks.push(bar([a + (s * F.post) / 2, yFoot, r], [a + s * D.knee, yTop, r], 0.1, 0.05));
+      out.knee.blocks.push(bar([a + (s * F.post) / 2, yFoot, r], [a + s * D.knee, yTop, r], kneeWidth, 0.05));
     }
   }
   return out;

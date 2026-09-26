@@ -267,7 +267,7 @@ describe("the first floor meets the lower uprights on their true webs", () => {
     expect(narrow).toBe(spans);
   });
 
-  it("brings the arcade's plates and heads to the web in both planes; the ironwork stops short at a", () => {
+  it("brings the arcade's plates and heads, and the ironwork, to the web in both planes", () => {
     for (const cooked of [plain, laced]) {
       for (const [cut, raw] of [CUT.plates, CUT.heads]) {
         const gap = nearestGap(cooked.probe(cut));
@@ -279,13 +279,27 @@ describe("the first floor meets the lower uprights on their true webs", () => {
       }
       // The ironwork is laid out once, to the web at the face plane, and
       // placed on face 1 of the outer arch and face 4 of the inner: at b the
-      // cut brings it to the web, at a it stands 45 mm short (the web there
-      // lies farther in the ironwork's layer; SOURCES.md §24.5). Pinned, and the
-      // control that the plates' check can fail.
+      // cut brings it to the web; at a, where the web lies farther in the
+      // ironwork's layer, its ends are run on to it (firstFloor.ts
+      // `arches`; SOURCES.md §24.5) and the cut brings them to the web too.
+      // Until 2026-09-26 they stood 45 mm short of it, in the air.
       const fans = nearestGap(cooked.probe(CUT.fans[0]));
       expect(Math.abs(fans["b"]!)).toBeLessThan(ON);
-      expect(fans["a"]!).toBeGreaterThan(0.04);
-      expect(fans["a"]!).toBeLessThan(0.05);
+      expect(Math.abs(fans["a"]!)).toBeLessThan(ON);
+      // Control: before the cut, the run-on ends stood inside a.
+      expect(nearestGap(cooked.probe(CUT.fans[1]))["a"]!).toBeLessThan(-ON);
+      // Flush, not just touching: no fewer of the ironwork's points lie on
+      // a's web than on b's, where every end lands flush (the same ends,
+      // laid out once; 96 at a, 68 at b, measured). Met by its leading
+      // corner alone, a had 48.
+      const onWeb: Record<string, number> = {};
+      for (const p of pointsOf(cooked.probe(CUT.fans[0]))) {
+        if (p[1] >= XXIV) continue;
+        const w = near(p, 0.3);
+        if (w !== undefined && Math.abs(w.depth) < ON) onWeb[w.member] = (onWeb[w.member] ?? 0) + 1;
+      }
+      expect(onWeb["b"]!).toBeGreaterThan(0);
+      expect(onWeb["a"]!).toBeGreaterThanOrEqual(onWeb["b"]!);
     }
   });
 
