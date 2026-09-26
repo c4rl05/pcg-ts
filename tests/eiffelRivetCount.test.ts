@@ -216,10 +216,13 @@ describe("eiffel rivet count", () => {
       if (q !== undefined) crowdedBy.set(q.set, (crowdedBy.get(q.set) ?? 0) + 1);
     }
     // Save by the first floor's girders' own rows, which run on the
-    // uprights' faces at XXIV-XXIII (as the splices' do, eiffelSplice).
+    // uprights' faces at XXIV-XXIII (as the splices' do, eiffelSplice):
+    // 50 measured, and 22 more since the lacing's crossings (§27.5): the
+    // first floor's girder web runs its struts onto the uprights unjointed,
+    // so the last bay's crossing lands on the upright's face.
     const ff = [...crowdedBy].filter(([k]) => k.startsWith("rivets.ff.")).reduce((n, [, v]) => n + v, 0);
     expect(Object.fromEntries([...crowdedBy].filter(([k]) => !k.startsWith("rivets.ff.")))).toEqual({});
-    expect(ff).toBeLessThanOrEqual(50);
+    expect(ff).toBeLessThanOrEqual(75);
 
     // Under no cover: each row stops half a pitch short of the cover over
     // its line (the cover's own field carries on). A cover is the one

@@ -48,6 +48,7 @@ import {
   normalize,
   orientAlongVector,
   pathResample,
+  pathSegments,
   pointGrid,
   pointsToPath,
   position,
@@ -298,6 +299,14 @@ export interface WebOpts {
    * plate covers (see {@link StrutOpts.covers}).
    */
   readonly covers?: readonly PlateFootprint[];
+  /**
+   * Which lacing heads to keep, as a predicate on each head where it
+   * stands (1 keeps it): for members whose cooked ends are cut back to a
+   * web they ran past (the first floor's girder web, `toTheWeb` in
+   * firstFloor.ts), so no head stands in the upright's box where the
+   * lacing under it no longer is (see {@link StrutOpts.keepHeads}).
+   */
+  readonly keepHeads?: Field;
 }
 
 /**
@@ -546,6 +555,7 @@ export function webMembers(
     ...(opts.lacingBands === undefined ? {} : { stepBands: opts.lacingBands }),
     ...(opts.covers === undefined || opts.covers.length === 0 ? {} : { covers: opts.covers }),
     ...(riveted ? { plateCloud: plateCloudOf(g).cloud } : {}),
+    ...(opts.keepHeads === undefined ? {} : { keepHeads: opts.keepHeads }),
   });
   if (plateLines !== undefined) g.connect(plateLines, "out", plateCloudOf(g).lines, "in");
   return {
@@ -1090,12 +1100,13 @@ export interface StrutOpts {
   readonly step?: ReadonlyArray<readonly [number, number]>;
   /** Steps by the member's mean height, overriding `step` (or `pitch`) inside each band. */
   readonly stepBands?: ReadonlyArray<LacingBand>;
-  /** Also spawn a rivet wherever a lacing bar meets a chord. */
+  /** Also spawn a rivet wherever a lacing bar meets a chord, and at every crossing of a face's two zigzags. */
   readonly rivets?: boolean;
   /**
    * Crossing plates over these struts (crossing.ts `crossFootprints`). A
    * crossing plate is set UNDER the corner angles' outer face, covering the
-   * lacing between them, so a lacing head on a face the plate lies on,
+   * lacing between them, so a lacing head (at a chord or at a crossing of
+   * the lacing) on a face the plate lies on,
    * within its rectangle (plus a head's radius), would stand in the plate
    * and beside the plate's own edge rows: none is spawned there. Each
    * section corner's heads are tested where they sit, against the plate
@@ -1104,6 +1115,8 @@ export interface StrutOpts {
   readonly covers?: readonly PlateFootprint[];
   /** The joint plates' sample points (`plateCloudOf`): no lacing head within {@link PLATE_CLEAR}. */
   readonly plateCloud?: NodeHandle;
+  /** Keep only the heads where this predicate is 1 (`WebOpts.keepHeads`). */
+  readonly keepHeads?: Field;
 }
 
 /** The primitive attribute a member's mean height rides on to its step. */
@@ -1127,6 +1140,17 @@ const CORNERS = [
   [-1, 1],
   [-1, -1],
   [1, -1],
+] as const;
+
+/**
+ * The four faces in ring order, face f running from corner f to corner
+ * f + 1, as the (sN, sB) of its outward normal.
+ */
+const FACE_OUT = [
+  [0, 1],
+  [-1, 0],
+  [0, -1],
+  [1, 0],
 ] as const;
 
 /**
@@ -1308,9 +1332,48 @@ export function latticeStruts(
     return aim;
   };
   const bHeads = CORNERS.map(([, sb], c) => aimed(`Rivet${c}B`, head(c, "B", mul(B, sb), samples), mul(B, sb)));
+  // THE CROSSINGS. A face's two zigzags cross once a bay, half way between
+  // two samples on the face's centre line, and the bars are riveted there
+  // singly: PL-X Figs. 12-13 (panels 6-9, 1:50) draw one head at every
+  // crossing of the 45 x 45 x 5 lacing of the 800 struts [sourced
+  // drawing]; every laced strut is taken to be riveted so [inferred].
+  // `pathSegments` puts a point at every segment's midpoint — the crossing,
+  // on the short last bay too, since both zigzags run corner to corner over
+  // the same segment (exact for a constant section; a tapering one moves
+  // the true crossing a little off the midpoint, and the head still lands
+  // on the bars) — with the segment's tangent, and carries the member's
+  // face normal. The head stands on the outer bar, `lacing` off the
+  // chords' plane [measured on the swept lacing: 0.0225 on all four faces
+  // mid-strut; in a strut's end bays the sweep's frame stands the ±N faces'
+  // bars a few mm higher, so the head there is sunk, never lifted].
+  const mids = g.add(pathSegments, { radius: 0 }, `${id}Crossings`);
+  g.connect(samples, "out", mids, "in");
+  const crossing = (f: number, from: NodeHandle): NodeHandle => {
+    const [sn, sb] = FACE_OUT[f]!;
+    const out = add(mul(N, sn), mul(B, sb));
+    const at = g.add(
+      transformPoints,
+      { translate: add(add(mul(N, mul(w, sn)), mul(B, mul(wB, sb))), mul(out, o.lacing)) },
+      `${id}Cross${f}`,
+    );
+    g.connect(from, "out", at, "in");
+    return at;
+  };
+  // The ±N faces' crossings (1 and 3) are kept off the crossing plates as
+  // their chord heads are, tested in the strut's mid-plane (both faces at
+  // once); the ±B faces carry no crossing plate.
+  const midsClear =
+    o.covers === undefined || o.covers.length === 0
+      ? mids
+      : coverFilter(g, `${id}CrossCover`, mids, o.covers, position());
+  const crossOut = (f: number): Field => add(mul(N, FACE_OUT[f]![0]), mul(B, FACE_OUT[f]![1]));
+  const crossAt = (f: number): NodeHandle => crossing(f, f % 2 === 1 ? midsClear : mids);
   let nHeads: NodeHandle[];
   if (o.plateCloud === undefined) {
-    nHeads = CORNERS.map(([sn, sb], c) => aimed(`Rivet${c}N`, head(c, "N", mul(N, sn), clearFor(sb)), mul(N, sn)));
+    nHeads = [
+      ...CORNERS.map(([sn, sb], c) => aimed(`Rivet${c}N`, head(c, "N", mul(N, sn), clearFor(sb)), mul(N, sn))),
+      ...FACE_OUT.map((_, f) => aimed(`Cross${f}`, crossAt(f), crossOut(f))),
+    ];
   } else {
     // Off every joint plate in the tower (`plateCloudOf`), asked with every
     // other set's heads in one query (`plateQueryOf`): the four N faces'
@@ -1328,6 +1391,17 @@ export function latticeStruts(
       g.connect(at, "out", tag, "in");
       g.connect(tag, "out", q.heads, "in");
     });
+    // All four faces' crossings: a ±B face carries no plate of its own,
+    // but a neighbour's joint plate can reach over it where members meet.
+    FACE_OUT.forEach((_, f) => {
+      const tag = g.add(
+        setAttribute,
+        { name: RIVET_AXIS, type: "f32", tupleSize: 4, value: vec(crossOut(f), set) },
+        `${id}Cross${f}Tag`,
+      );
+      g.connect(crossAt(f), "out", tag, "in");
+      g.connect(tag, "out", q.heads, "in");
+    });
     const mine = g.add(
       filterByExpression,
       { predicate: lt(abs(sub(component(attribute(RIVET_AXIS, 4), 3), set)), 0.5) },
@@ -1340,7 +1414,14 @@ export function latticeStruts(
     g.connect(aim, "out", done, "in");
     nHeads = [done];
   }
-  const heads = [...nHeads, ...bHeads];
+  let heads = [...nHeads, ...bHeads];
+  if (o.keepHeads !== undefined) {
+    const all = g.add(mergePoints, {}, `${id}RivetHeads`);
+    for (const h of heads) g.connect(h, "out", all, "in");
+    const kept = g.add(filterByExpression, { predicate: o.keepHeads }, `${id}RivetKept`);
+    g.connect(all, "out", kept, "in");
+    heads = [kept];
+  }
   const spawn = rivetSpawn(g, id, heads);
   return { ...meshes, rivets: spawn };
 }

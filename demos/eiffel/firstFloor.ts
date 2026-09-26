@@ -1615,7 +1615,13 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}
   const covers = (list: readonly Crossing[]) => ({
     covers: riveted ? [0, 1, 2, 3].flatMap((k) => turnFootprints(crossFootprints(list, tune), k)) : [],
   });
-  const web = webMembers(g, "ffWeb", four("ffBars", gd.bars), GIRDER_WEB, detail, undefined, covers(crossLists.bars));
+  // The web's struts run past the uprights' webs and are cut back onto
+  // them (`onWeb` below); their lacing heads in the boxes go with the steel
+  // (`WebOpts.keepHeads`).
+  const web = webMembers(g, "ffWeb", four("ffBars", gd.bars), GIRDER_WEB, detail, undefined, {
+    ...covers(crossLists.bars),
+    keepHeads: outside,
+  });
   const cross = webMembers(
     g,
     "ffEntretoise",

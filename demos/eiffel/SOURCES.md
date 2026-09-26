@@ -1990,7 +1990,7 @@ Until now the built-up uprights carried only today's corner-angle rows. PL-IX dr
 **Measured on the cooked tower** (`tests/eiffelRivetCount.test.ts`):
 - Every head is seated on a plate of the upright and none is inside any plate: the upright's, a joint plate, a cover.
 - No head lies under a cover.
-- No head is on another head, except up to 50 heads (50 measured) near the first floor's girders' own rows on the faces at XXIV-XXIII.
+- No head is on another head, except up to 50 heads (50 measured) near the first floor's girders' own rows on the faces at XXIV-XXIII; 72 since the lacing's crossings (§27.5).
 - Every head on the fin has its other head back to back with it.
 
 ### 27.4 The rivet count against the book (2026-09-26)
@@ -2027,6 +2027,38 @@ Until now the built-up uprights carried only today's corner-angle rows. PL-IX dr
 **Open.**
 - Whether the splice covers and crossing plates came half shop-riveted: this is the 0.5-1 range.
 - Unit 12 (shop and field tagging) reads `rivetClass`.
+
+### 27.5 The lacing: its crossings riveted, and no batten plates (2026-09-26)
+
+The backlog asked for "tie plates across the chord angles at every strut end, and lacing bars with rounded ends riveted singly at each crossing of the zigzag" (PL-VII, PL-IX). Read against the plates, only the crossings hold, and they are built (`latticeStruts` in `strut.ts`).
+
+**Readings.**
+- **The text** [sourced E1900-TXT p. 75]: the panels 1-4 entretoise is a box of "cornières de 80 × 80 × 10 reliées par des cornières de 45 × 45 × 5 disposées pour des raisons d'aspect en treillis double dans les plans verticaux et en treillis simple dans les plans horizontaux (voir fig. 8 de la planche IX). L'attache de ces cornières est indiquée dans la figure 27."
+- **The crossings** [sourced drawing PL-X Figs. 12-13, panels 6-9, 1:50]: on the 800 struts' 45 × 45 × 5 double lattice, one rivet at every crossing of the two zigzags, on the face's centre line. At 1:100 (PL-IX Fig. 31) no rivet is drawn on the lacing at all, so that scale says nothing either way. Riveting every laced strut's crossings so, panels 1-4's included, is inferred from those two figures [inferred].
+- **The bars' ends on the chords** [sourced drawing PL-IX Fig. 27, "Attaches sur cornières 80 × 80", 1:10]: two rivets a bar, the ends cut straight (not rounded, and not square to the bar). Two layouts are drawn: the two bars side by side in a V, four rivets; or lapped, three, the middle one through both. PL-X Figs. 12-13 draw one head a bar end at 1:50. The model keeps its one head where a zigzag's vertex meets a chord.
+- **"Rounded ends riveted singly"** is PL-X Fig. 8, "Attache O" (1:10): flats 55 × 7 with rounded ends, lapped under one rivet on a 70 angle [sourced drawing]. The text puts them in one place only: the base entretoises A and B, whose two walls they tie ("réunies elles-mêmes d'une paroi à l'autre par des plats de 55 × 7 (voir fig. 3 et 8)", p. 76). They are not the web's lacing, and the model builds no such wall ties, so there are none to round.
+- **Batten plates.** None are drawn at a strut's end. The gusset sends tongues along the chords, and nothing crosses between them (PL-IX Figs. 10-17 at 1:50). The lacing runs to the gusset's edge (PL-IX Figs. 8 and 31 at 1:100, PL-X Figs. 12-13 at 1:50). The gusset is the end tie, so none are built.
+
+**What is built.** A face's two zigzags cross once a bay, half way between two lacing samples. That holds on the short last bay too, since both run corner to corner over the same segment.
+- The crossing points are those segments' midpoints (`pathSegments`). That is exact for a constant section. A strongly tapered strut moves the true crossing up to 12 mm off the midpoint, and the head still lands on the bars [measured by the independent check].
+- A head stands on each face's centre line there, on the outer bar, `LACE` (0.0225) off the chords' plane. On the swept lacing that is 0.0225 on all four faces mid-strut. In a strut's end bays the sweep's frame stands the ±N faces' bars 2-4 mm higher, so the head there is sunk, never lifted [measured].
+- The crossings are shop rivets, since they fasten the lacing within a bar (`rivetClass`: "along one member").
+- A ±N face's crossings are kept off the crossing plates, like its chord heads.
+- All four faces' crossings are asked about the joint plates in the lacing's shared query (`plateQueryOf`). A ±B face carries no plate of its own, but a neighbour's joint plate can reach over it. Tested first without that query, 8 heads stood in a joint plate at y 68.
+- **The first floor's girder web** runs its struts past the uprights' webs, and `toTheWeb` cuts the cooked steel back onto them. Its lacing heads inside the upright's box now go with the steel (`WebOpts.keepHeads`, `outsideUprights`). That removes 696 heads that stood inside the boxes, most of them there before this change.
+
+**Counts and cost** [measured, `?rivets`, interleaved runs; checked independently]:
+- The crossings add +104,680 heads, and the box filter removes 696: 1,103,688 → 1,207,672 rivet instances.
+- Per set: the first floor's girder web +36,560 (then −696), the legs' bracing +22,408, the first floor's entretoises +11,760, the legs' horizontals +10,228, and the rest under 9,000 each.
+- Cook time: 7.4-7.5 → 8.1-8.3 s. No triangles are added, and the plain and `?laced` depths are unchanged (every output hashes identical): the crossings exist only with rivets.
+- The count against the book (§27.4) is unchanged, since these are shop rivets.
+
+**Open.**
+- **One head a vertex where Fig. 27 draws three or four.** Going to two a bar would add about 220,000-440,000 heads. That waits for device-resident rivets.
+- **The model laces every face with an X.** The text gives the entretoises single lattice in their horizontal faces.
+- **Where the girder web meets the uprights (y 48.9-49.1).** In the struts' last bays the cut-back lacing leaves about 49 crossing heads with no bar under them, 9 of them 3-6 cm up. 22 crowd the rows as built on the uprights (§27.3).
+- **Heads under other steel.** About 1,100 crossing heads have steel within 3 cm above them, 870 of them in the girder web, about the rate of that set's chord heads. About 200 stand 12-23 mm from a `decoTop` head facing the same way at y ≈ 50.1 [measured by the independent check].
+- **Heads inside the uprights' steel from before this change.** The first floor's sets keep 672 such heads: `main` 424, the arches' chords 154, their montants 61, and 33 across five more sets [measured]. They are the first floor's to settle.
 
 ---
 

@@ -107,8 +107,9 @@ export interface Detail {
   readonly lacedWeb?: boolean;
   /**
    * Rivets as instances (asset id {@link RIVET_ASSET}): one wherever a
-   * lacing bar meets a chord, along the box members' seams, and over the
-   * gusset plates. Implies `lacedWeb`. About 894,000 instances.
+   * lacing bar meets a chord or crosses another, along the box members'
+   * seams, and over the gusset plates. Implies `lacedWeb`. About 1,208,000
+   * instances.
    */
   readonly rivets?: boolean;
   /**
