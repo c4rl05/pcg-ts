@@ -59,9 +59,11 @@
  *   11.45, an X down to a tie at 9.11, and a strut from b down to the arch
  *   at 6.68 [sourced drawing PL-XI Fig. 1 and PL-VII Fig. 1, which agree;
  *   heights measured on both, see `BRACKET_TIES`].
- * - FANS: the ornament in each band panel, a half-disc of radiating bars
- *   on the intrados [sourced drawing PL-VII, PL-XI; reduced to a rim and
- *   three spokes], on the decorated side.
+ * - THE IRONWORK in each band panel, crown to montant 14, on the decorated
+ *   side: a round-headed frame, three bars rising together from the
+ *   intrados' middle (the fan), four cast volutes and a macaron in each
+ *   one's eye [sourced PL-XI Fig. 14, E1900-TXT p. 80; the rule and the
+ *   curve grammar in `ironwork.ts`, the readings in SOURCES.md §28].
  *
  * THE ARCADE between the band and the decorative girder: plates on the
  * decorated side, "découpées en arc de cercle ou laissées pleines au
@@ -120,7 +122,8 @@
  * members. The arcade's plates are closed outlines, copied and then
  * extruded along their own normals.
  *
- * DETAIL, as for the legs. With `lacedWeb` the girders' diagonals and the
+ * DETAIL, as for the legs. With `lacedWeb` the arches' volutes and
+ * macarons appear, and the girders' diagonals and the
  * 2nd floor's 600 web become laced struts (`webMembers`), and wherever two
  * of them cross a pair of plates covers the crossing, by the legs' own
  * rule (`crossing.ts`; see `crossingsOf`); with `rivets` those struts
@@ -161,6 +164,25 @@ import {
   crossPlateSets,
   turnFootprints,
 } from "./crossing.js";
+import {
+  BAR_WIDTH,
+  CROSS_DEPTH,
+  type Edge,
+  FRAME_WIDTH,
+  IRON_DEPTH,
+  MACARON_DEPTH,
+  MACARON_R,
+  type Panel,
+  type PanelIronwork,
+  type Piece,
+  VOLUTE_WIDTH,
+  disc,
+  ironworkSolid,
+  macaronCross,
+  panelIronwork,
+  ribbon,
+  signedArea,
+} from "./ironwork.js";
 import { CROSS_PLATE, type Detail, type Parts } from "./parts.js";
 import { ARCH, FIRST_FLOOR, MEMBERS, PEDESTAL, node, profileAt, tableAt } from "./spec.js";
 import {
@@ -230,8 +252,6 @@ const GIRDER_WEB = [
  * angle [sourced PL-VII "C: 50 x 50 x 6"], as a square member [estimated].
  */
 const HEAD_EDGE = 0.04;
-/** The fans' bars [estimated: drawn about 0.05 wide at 1:200]. */
-const FAN_BAR = 0.025;
 /** The rounded top corner of the decorative girder: radius, bar [estimated]. */
 const FILLET_R = 1.5;
 const FILLET_BAR = 0.12;
@@ -328,9 +348,8 @@ const PIER = [
 const PLATE = 0.01;
 const PLATE_OFFSET = MONTANT;
 
-/** Segments per round head, per fan, per fillet [estimated: drawing resolution]. */
+/** Segments per round head, per fillet [estimated: drawing resolution]. */
 const HEAD_SEGMENTS = 12;
-const FAN_SEGMENTS = 8;
 const FILLET_SEGMENTS = 6;
 
 /** 2nd floor: panel 10's lintel band depth, in the plane [sourced PL-VII "3,6071"]. */
@@ -530,22 +549,66 @@ function montantPieces(k: number): InPlane[][] {
   return pieces;
 }
 
-/** The ornament of band panel k|k+1: a rim and three spokes. */
-function fan(k: number): InPlane[][] {
+/**
+ * Band panel k|k+1 of the right half, as the ironwork reads it: its frame
+ * (the intrados' face on its axis) and the faces round its clear opening —
+ * the intrados' and the extrados' chords, montants k and k + 1, and b's
+ * inner face where b cuts the band (panels 12|13 and 13|14).
+ */
+function bandPanel(k: number): Panel {
   const phi = (k - 0.5) * THETA;
-  const ri = R_IN + 2 * ARCH_CHORD;
-  const ro = Math.min(R_OUT - 2 * ARCH_CHORD, toB(phi));
-  const halfGap = ri * Math.sin(THETA / 2) - MONTANT;
-  const rho = 0.9 * Math.min(halfGap, ro - ri);
-  const c = polar(ri, phi);
-  const er: InPlane = [Math.sin(phi), Math.cos(phi)];
-  const ep: InPlane = [Math.cos(phi), -Math.sin(phi)];
-  const at = (a: number): InPlane => [
-    c[0] + rho * (Math.cos(a) * ep[0] + Math.sin(a) * er[0]),
-    c[1] + rho * (Math.cos(a) * ep[1] + Math.sin(a) * er[1]),
+  const face = (m: number) => {
+    const p = phiOf(m);
+    return [Math.cos(p), -Math.sin(p)] as const;
+  };
+  const [lc, ls] = face(k);
+  const [hc, hs] = face(k + 1);
+  return {
+    origin: polar(R_IN + 2 * ARCH_CHORD, phi),
+    up: [Math.sin(phi), Math.cos(phi)],
+    across: [Math.cos(phi), -Math.sin(phi)],
+    bottom: { kind: "circle", c: [0, 0], r: R_IN + 2 * ARCH_CHORD, within: false },
+    low: { kind: "line", n: [-lc, -ls], d: -MONTANT },
+    high: { kind: "line", n: [hc, hs], d: -MONTANT },
+    top: [
+      { kind: "circle", c: [0, 0], r: R_OUT - 2 * ARCH_CHORD, within: true },
+      { kind: "line", n: [Math.sin(PHI_H), Math.cos(PHI_H)], d: D_BF },
+    ],
+  };
+}
+
+/** Every band panel's ironwork on the +z face's arch plane: panels 1|2 ... 13|14, right half then mirrored. */
+export function bandIronwork(): Array<{ k: number; side: 1 | -1; panel: Panel; work: PanelIronwork }> {
+  const right = Array.from({ length: MONTANTS - 1 }, (_, i) => {
+    const panel = bandPanel(i + 1);
+    return { k: i + 1, panel, work: panelIronwork(panel) };
+  });
+  const flip = (lines: InPlane[][]) => lines.map((l) => l.map(mirror));
+  const flipEdge = (e: Edge): Edge =>
+    e.kind === "line" ? { ...e, n: mirror(e.n) } : { ...e, c: mirror(e.c) };
+  return [
+    ...right.map((r) => ({ ...r, side: 1 as const })),
+    ...right.map(({ k, panel, work }) => ({
+      k,
+      side: -1 as const,
+      panel: {
+        origin: mirror(panel.origin),
+        up: mirror(panel.up),
+        across: mirror(panel.across),
+        bottom: flipEdge(panel.bottom),
+        low: flipEdge(panel.low),
+        high: flipEdge(panel.high),
+        top: panel.top.map(flipEdge),
+      },
+      work: {
+        frame: flip(work.frame),
+        bars: flip(work.bars),
+        volutes: flip(work.volutes),
+        eyes: work.eyes.map(mirror),
+        which: work.which,
+      },
+    })),
   ];
-  const rim = Array.from({ length: FAN_SEGMENTS + 1 }, (_, i) => at((Math.PI * i) / FAN_SEGMENTS));
-  return [rim, ...[0.25, 0.5, 0.75].map((f) => [c, at(Math.PI * f)])];
 }
 
 /** A line n . p = d in the plane, n a unit normal pointing into the region it bounds. */
@@ -660,19 +723,16 @@ function archHalves(): {
   chords: InPlane[][];
   montants: InPlane[][];
   heads: InPlane[][];
-  fans: InPlane[][];
   plates: InPlane[][];
 } {
   const both = (paths: InPlane[][]) => [...paths, ...paths.map((p) => p.map(mirror))];
   const opens = Array.from({ length: OPEN_TO - OPEN_FROM + 1 }, (_, i) => opening(OPEN_FROM + i));
-  const fans = Array.from({ length: MONTANTS - 1 }, (_, i) => fan(i + 1)).flat();
   const right = Array.from({ length: MONTANTS - 1 }, (_, i) => montantPieces(i + 2)).flat();
   return {
     chords: both([intradosAxis(), extradosAxis()]),
     // Montant 1 stands on the axis, once.
     montants: [...montantPieces(1), ...both(right)],
     heads: both(opens.map((o) => o.head)),
-    fans: both(fans),
     plates: both([...crownPlates(), ...opens.flatMap((o) => o.plates)]),
   };
 }
@@ -799,18 +859,21 @@ function arches(): {
   chords: Member[];
   montants: Member[];
   heads: Member[];
-  fans: Member[];
+  fans: Piece[];
+  scrolls: Piece[];
   bracket: Member[];
   feet: Member[];
   plates: Vec3[][];
   piers: Array<{ c: Vec3; size: Vec3 }>;
 } {
   const h = archHalves();
+  const work = bandIronwork();
   const out = {
     chords: [] as Member[],
     montants: [] as Member[],
     heads: [] as Member[],
-    fans: [] as Member[],
+    fans: [] as Piece[],
+    scrolls: [] as Piece[],
     bracket: [] as Member[],
     feet: [] as Member[],
     plates: [] as Vec3[][],
@@ -818,26 +881,42 @@ function arches(): {
   };
   for (const { dz, decorated } of PLANES) {
     const at = (p: InPlane) => fromPlane(p, dz);
-    // The decorated side: plates and fans lie against the montants' faces.
-    const off = (p: InPlane): Vec3 => {
+    // The decorated side: plates and ironwork lie against the montants' faces.
+    const lift = (base: number) => (p: InPlane): Vec3 => {
       const q = at(p);
-      const o = decorated * PLATE_OFFSET;
+      const o = decorated * base;
       return [q[0] + o * N4[0], q[1] + o * N4[1], q[2] + o * N4[2]];
     };
+    const off = lift(PLATE_OFFSET);
     out.chords.push(...along(h.chords.map((p) => p.map(at)), N4));
     out.montants.push(...along(h.montants.map((p) => p.map(at)), N4));
     out.heads.push(...along(h.heads.map((p) => p.map(off)), N4));
-    out.fans.push(...along(h.fans.map((p) => p.map(off)), N4));
     // Wound so each plate's own normal points away from the montants: the
     // extrusion then thickens it outward from their faces, never into them.
-    const area = (p: InPlane[]) =>
-      p.reduce((s, q, i) => {
-        const n = p[(i + 1) % p.length]!;
-        return s + q[0] * n[1] - n[0] * q[1];
-      }, 0);
-    out.plates.push(
-      ...h.plates.map((p) => (area(p) > 0 === decorated > 0 ? p : [...p].reverse()).map(off)),
-    );
+    const wind = (p: InPlane[]) => (signedArea(p) > 0 === decorated > 0 ? p : [...p].reverse());
+    out.plates.push(...h.plates.map((p) => wind(p).map(off)));
+    // The ironwork (`ironwork.ts`): the frame and the three bars at every
+    // depth, the volutes and their macarons with the laced web.
+    const bar = (width: number) => (line: InPlane[]): Piece => {
+      const r = ribbon(line, width);
+      return {
+        outline: wind(r.outline).map(off),
+        caps: r.quads.map((q) => wind(q).map(off)),
+        depth: IRON_DEPTH,
+      };
+    };
+    const convex = (base: number, depth: number) => (p: InPlane[]): Piece => {
+      const o = wind(p).map(lift(base));
+      return { outline: o, caps: [o], depth };
+    };
+    for (const { panel, work: w } of work) {
+      out.fans.push(...w.frame.map(bar(FRAME_WIDTH)), ...w.bars.map(bar(BAR_WIDTH)));
+      out.scrolls.push(
+        ...w.volutes.map(bar(VOLUTE_WIDTH)),
+        ...w.eyes.map((c) => disc(c, MACARON_R)).map(convex(PLATE_OFFSET, MACARON_DEPTH)),
+        ...w.eyes.flatMap((c) => macaronCross(c, panel.up)).map(convex(PLATE_OFFSET + MACARON_DEPTH, CROSS_DEPTH)),
+      );
+    }
     for (const side of [1, -1]) {
       const b = (y: number) => onFace(side * profileAt(y).inner, y, dz);
       const arch = (y: number) => onFace(side * lowerArchX(y), y, dz);
@@ -1337,7 +1416,11 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}
     ),
     solid("ffMontants", four("ffMontantPaths", ar.montants), MONTANT, "ff.arches.montants"),
     solid("ffHeads", four("ffHeadPaths", ar.heads), HEAD_EDGE, null),
-    solid("ffFans", four("ffFanPaths", ar.fans), FAN_BAR, null),
+    // The fans' frames and bars at every depth; the volutes and their
+    // macarons only with the laced web: 192k triangles, sub-pixel
+    // from where the plain depth is looked at (SOURCES.md §28).
+    ironworkSolid(g, "ffFans", ar.fans, quads),
+    ...(laced ? [ironworkSolid(g, "ffScrolls", ar.scrolls, quads)] : []),
     solid("ffBracket", four("ffBracketPaths", ar.bracket), BRACKET_BAR, null),
     plates(g, "ffArcadePlates", ar.plates, quads),
     // Last, and apart from the chords: hidden in the stone, it has no rows,
