@@ -113,6 +113,15 @@ export interface Block {
   readonly size: Vec3;
 }
 
+/**
+ * A point of a flight's walking line: where a climber's foot stands, and
+ * the flight's steps climbed on reaching it.
+ */
+export interface WalkPoint {
+  readonly at: Vec3;
+  readonly step: number;
+}
+
 /** One flight, stair or ladder, as the tests and the step count read it. */
 export interface Flight {
   readonly name: string;
@@ -136,6 +145,14 @@ export interface Flight {
   /** A spiral's axis at its foot and its outer diameter. */
   readonly axis?: Vec3;
   readonly diameter?: number;
+  /**
+   * The walking line, as the walk (`walk.ts`) follows it: the foot, the
+   * middle of every tread at its top (a spiral's at its walking radius,
+   * with the middle of every landing slot between; a ladder's rungs), then
+   * the head. Built with the treads from the same numbers, so the path a
+   * climber takes is the stair's own and not a copy of it.
+   */
+  readonly line: readonly WalkPoint[];
 }
 
 /** A stair's pieces: the treads (one per riser, less those a slab takes), frame, landings, rails. */
@@ -228,11 +245,14 @@ export function straight(o: StraightSpec): StairParts {
   const going = run / o.risers;
   const rise = (o.head[1] - o.foot[1]) / o.risers;
   const last = o.slab ? o.risers - 1 : o.risers;
-  for (let i = 1; i <= last; i++) {
+  const line: WalkPoint[] = [{ at: o.foot, step: 0 }];
+  for (let i = 1; i <= o.risers; i++) {
     const c = add3(o.foot, mul3(h, (i - 0.5) / o.risers));
     const y = o.foot[1] + rise * i;
-    out.treads.push({ at: [c[0], y - TREAD / 2, c[2]], x, y: UP, size: [going + 0.03, TREAD, o.width] });
+    line.push({ at: [c[0], y, c[2]], step: i });
+    if (i <= last) out.treads.push({ at: [c[0], y - TREAD / 2, c[2]], x, y: UP, size: [going + 0.03, TREAD, o.width] });
   }
+  line.push({ at: o.head, step: o.risers });
   const st = o.stringer ?? { depth: 0.25, thick: 0.06 };
   const from = add3(o.foot, mul3(sub3(o.head, o.foot), (o.stringerFoot ?? 0) / o.risers));
   for (const side of [-1, 1]) {
@@ -254,7 +274,7 @@ export function straight(o: StraightSpec): StairParts {
       }
     }
   }
-  out.flights.push({ name: o.name, kind: "straight", risers: o.risers, rise, going, foot: o.foot, head: o.head, enter: x, leave: x, slab: o.slab, width: o.width });
+  out.flights.push({ name: o.name, kind: "straight", risers: o.risers, rise, going, foot: o.foot, head: o.head, enter: x, leave: x, slab: o.slab, width: o.width, line });
   return out;
 }
 
@@ -365,6 +385,16 @@ export function spiral(o: SpiralSpec): StairParts {
   }
   const foot = add3(o.axis(o.y0), mul3(dir(o.start), mid));
   const head = add3(o.axis(o.y1), mul3(dir(o.start + slots * dPhi), mid));
+  const on = (slot: number, y: number): Vec3 => add3(o.axis(y), mul3(dir(o.start + slot * dPhi), mid));
+  const line: WalkPoint[] = [{ at: foot, step: 0 }];
+  for (let i = 1; i <= o.risers; i++) {
+    const y = o.y0 + i * rise;
+    line.push({ at: on(slotOf(i) + 0.5, y), step: i });
+    if (o.landings !== undefined && i % o.landings.every === 0 && i < o.risers) {
+      for (let s = 1; s <= o.landings.span; s++) line.push({ at: on(slotOf(i) + 0.5 + s, y), step: i });
+    }
+  }
+  line.push({ at: head, step: o.risers });
   out.flights.push({
     name: o.name,
     kind: "spiral",
@@ -380,6 +410,7 @@ export function spiral(o: SpiralSpec): StairParts {
     width: o.tread,
     axis: o.axis(o.y0),
     diameter: o.diameter,
+    line,
   });
   return out;
 }
@@ -405,9 +436,11 @@ export function ladder(o: LadderSpec): StairParts {
   const across = unit3(cross3(o.facing, UP));
   const rise = (o.head[1] - o.foot[1]) / o.risers;
   const last = o.slab ? o.risers - 1 : o.risers;
-  for (let i = 1; i <= last; i++) {
+  const line: WalkPoint[] = [{ at: o.foot, step: 0 }];
+  for (let i = 1; i <= o.risers; i++) {
     const c = add3(o.foot, mul3(sub3(o.head, o.foot), i / o.risers));
-    out.treads.push({ at: c, x: o.facing, y: UP, size: [RUNG, RUNG, o.width] });
+    line.push({ at: c, step: i });
+    if (i <= last) out.treads.push({ at: c, x: o.facing, y: UP, size: [RUNG, RUNG, o.width] });
   }
   const top = o.above ?? (o.slab ? -LANDING : 0.9);
   const lift = sub3(o.head, o.foot);
@@ -419,7 +452,7 @@ export function ladder(o: LadderSpec): StairParts {
     out.frame.push({ ...s, size: [s.size[0], 0.06, 0.012] });
   }
   const going = Math.hypot(lift[0], lift[2]) / o.risers;
-  out.flights.push({ name: o.name, kind: "ladder", risers: o.risers, rise, going, foot: o.foot, head: o.head, enter: o.facing, leave: o.facing, slab: o.slab, width: o.width });
+  out.flights.push({ name: o.name, kind: "ladder", risers: o.risers, rise, going, foot: o.foot, head: o.head, enter: o.facing, leave: o.facing, slab: o.slab, width: o.width, line });
   return out;
 }
 

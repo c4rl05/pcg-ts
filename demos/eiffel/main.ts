@@ -125,6 +125,7 @@ import { type PlateOverlay, loadPlateTool } from "./plateTool.js";
 import { BALUSTER, CABOCHON_RISE, FITTING_ASSETS } from "./platforms.js";
 import { NEUTRAL, createRig } from "./rig.js";
 import { attachSection } from "./section.js";
+import { attachWalk } from "./walkView.js";
 import { rivetClass } from "./spec.js";
 import { HEAD_DRIVE_ATTR, driveHead, driveMatrix } from "./heads.js";
 import {
@@ -740,6 +741,21 @@ void loadPlateTool({
 })?.then((p) => {
   plates = p;
 });
+
+// THE WALK (`?walk`, or `?walk=<step>` to open on a step; walkView.ts):
+// first person up the 1,710 steps of 1889, on the path walk.ts builds from
+// the stairs themselves. The orbit is off while it is on, and comes back
+// as it was.
+const walk = attachWalk({
+  camera,
+  controls,
+  canvas: renderer.domElement,
+  slot: overlay.addSlot(),
+  shadow: { near: (box) => rig.fitShadowNear(box), texel: () => rig.shadowTexel() },
+});
+const WALK = new URLSearchParams(location.search).get("walk");
+overlay.addCheckbox("walk", WALK !== null, (on) => walk.set(on));
+if (WALK !== null) walk.go(Number(WALK) || 0);
 
 // Claimed here, where the panel is built, so the graph sits under the
 // readouts.
@@ -1459,7 +1475,8 @@ renderer.setAnimationLoop(() => {
   // pose from the controls' own spherical and clamp it back inside
   // `maxPolarAngle` and the distance limits, which is exactly what a shot
   // looking up a leg from the ground is outside of.
-  if (!driven) controls.update();
+  if (walk.active) walk.tick();
+  else if (!driven) controls.update();
   if (plates?.active === true) plates.render();
   else rig.render();
   tickFps();

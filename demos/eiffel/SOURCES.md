@@ -1126,6 +1126,17 @@ Read from PL-XX, PL-XXI, PL-XXII, XXII bis, XXII ter, XXII quater, PL-XXIII, XXI
   - §20.3's "e3's top": e3 ends at the 3rd floor and the little stair goes on.
   - §29.3's not-built stairs and the cupola's inner floor, which is now the ladders' landing.
 
+### 11.11 The walk: the climb at eye level (2026-09-26)
+
+`walk.ts` strings §11.10's flights into the path one climber's feet take, and `walkView.ts` puts the page's camera on it (`?walk`, `?walk=<step>`, or the panel's "walk").
+
+- **Which way up** [sourced E1900-TXT p. 81]: « L'escalier de la pile 2 sert à la montée, l'autre à la descente »: the ground stair and e1 in pile 2 (Est), then e2, e3 and the summit stairs, which are built once.
+- **The path on a stair is the stair's.** Every flight hands back its walking line (`Flight.line`), made in the same loop as its treads: the foot, the middle of each tread at its top (a spiral's at its walking radius, with its landing slots; a ladder's rungs), the head. No point on a flight is placed by hand.
+- **Between flights** [estimated unless noted]: a turn on a landing, 0.125 onto it (on the ground stair's P4 landings the leg's face diagonal crosses at head height: 0.15 onto it puts the eye 0.24 from it, 0.10 the body 0.08 from the flights' end posts); four walks across floors, found by a clearance search over the cooked decks (a 0.10 grid, a body 0.25 clear from 0.6 to 1.6 over the floor) and held by the test: the 1st floor in pile 2, the 2nd floor to e2, the intermediate landing to e3, and from the little stair through Eiffel's apartment and out by the +x wall's door (`summit.ts` PAVILION_OPENINGS, u −2.57) onto the terrace; from the campanile's head along its landing to the core's door (« Porte d'entrée dans le cylindre de l'escalier 2.00 » [sourced PL-XV Fig. 2]) and in; from the core's top round the lantern's floor to behind the mobile ladder; a pace onto the top platform.
+- **The eye**: 1.60 over the feet; on a ladder 0.25 behind the rungs, leaning with it; in the cupola, whose floor is 1.655 under the platform [sourced PL-XV Fig. 1] and whose sphere is « de 2,686 m de diamètre » [sourced p. 79], it keeps 0.20 under the shell (a climber crouches).
+- **Measured**: 591.7 m of path; its steps, riser by riser, 347, 674, 1,130, 1,585, **1,710**. The shadow map at eye level: 9.1-10.2 cm a texel fitted to the whole tower (it grows with what is built), 2.2 cm fitted to a 60 × 40 × 60 m box round the walker (the panel's "near shadow", off by default: it loses the tower's shadow on the ground and the steel reads the same).
+- **What eye level found** (`tests/eiffelWalk.test.ts` `FOUND`, each bounded, each open): e2's 16 start over its helix's last turn (1.3 m of headroom) and pass under the landing deck's edge; e3's raccord overhangs its lower helix's last turn; the spiral landings are straight boxes whose ends overhang the turn below (e3's upper helix, the campanile); the core has no door cut; the top platform has no hatch (the « 600 »); the terrace deck is 0.15 under the apartment's floor, where the book has both at 312.21. Off the flights (the test's body and floor checks): e1's joining flights meet each helix through its unbroken outer rail; the little stair's rail runs on round its head, and it ends 0.45 inside the floor's square well; the campanile's first tread stands 0.55 from the girder stair's head with no floor between; e2's and e3's service landings are straight boxes that overhang the turn below all the way up.
+
 ---
 
 ## 12. The campanile re-read (PL-XIX Figs 3–13, PL-VII Fig. 4)

@@ -57,6 +57,14 @@ export interface Rig {
   apply(look: Look): void;
   /** Re-aim the shadow camera at what was actually built. */
   fitShadow(box: Box3): void;
+  /**
+   * Fit the shadow camera to a box round a viewer instead (the walk's), or
+   * with null, back to what was built. Returns the texel's size across the
+   * light, in metres.
+   */
+  fitShadowNear(box: Box3 | null): number;
+  /** The shadow map's texel across the light as fitted now, in metres. */
+  shadowTexel(): number;
   setSize(width: number, height: number): void;
   /** Draw. Replaces `renderer.render(scene, camera)`. */
   render(): void;
@@ -135,6 +143,8 @@ export function createRig(
   let envKey = "";
   let current: Look | undefined;
   let lastBox: Box3 | undefined;
+  /** The viewer's box while the shadow is fitted round one (`fitShadowNear`). */
+  let nearBox: Box3 | null = null;
 
   function apply(look: Look): void {
     const wanted = JSON.stringify(look.env);
@@ -198,7 +208,8 @@ export function createRig(
     applyAo(gtao, look.ao);
     applyVignette(vignette, look.vignette ?? VIGNETTE_DEFAULT);
     current = look;
-    if (lastBox !== undefined) fitShadow(lastBox);
+    if (nearBox !== null) fitNear(nearBox);
+    else if (lastBox !== undefined) fitShadow(lastBox);
     renderer.shadowMap.needsUpdate = true;
   }
 
@@ -218,6 +229,10 @@ export function createRig(
    */
   function fitShadow(box: Box3): void {
     lastBox = box;
+    if (nearBox !== null) {
+      fitNear(nearBox);
+      return;
+    }
     if (current === undefined || box.isEmpty()) return;
     const centre = box.getCenter(new Vector3());
     const reach = box.getSize(new Vector3()).length();
@@ -271,6 +286,62 @@ export function createRig(
     renderer.shadowMap.needsUpdate = true;
   }
 
+  /**
+   * The shadow fitted round a viewer: the box's own bounds across the
+   * light, so the map's texels are spent where the viewer is (a 60 m box
+   * on a 4096 map is a texel of about 2 cm, where the whole tower and its
+   * shadow leave one of 9 cm), and along the light all the way back
+   * past the tower's top, so everything between the sun and the box still
+   * casts into it. Nothing outside the box is shadowed while it holds:
+   * the ground's, from high up, is the price.
+   */
+  function fitNear(box: Box3): void {
+    if (current === undefined || box.isEmpty()) return;
+    const centre = box.getCenter(new Vector3());
+    const dir = key.position.clone().sub(key.target.position);
+    if (dir.lengthSq() < 1e-9) dir.set(0, 1, 0);
+    dir.normalize();
+    // Back far enough that the light stands clear of anything built.
+    const built = lastBox !== undefined && !lastBox.isEmpty() ? lastBox.getSize(new Vector3()).length() : 600;
+    key.target.position.copy(centre);
+    key.target.updateMatrixWorld();
+    key.position.copy(centre).addScaledVector(dir, built);
+    key.updateMatrixWorld();
+    const cam = key.shadow.camera;
+    cam.position.copy(key.position);
+    cam.lookAt(key.target.position);
+    cam.updateMatrixWorld(true);
+    const toLight = cam.matrixWorld.clone().invert();
+    const lo = new Vector3(Infinity, Infinity, Infinity);
+    const hi = new Vector3(-Infinity, -Infinity, -Infinity);
+    const p = new Vector3();
+    for (let i = 0; i < 8; i++) {
+      p.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).applyMatrix4(toLight);
+      lo.min(p);
+      hi.max(p);
+    }
+    cam.left = lo.x;
+    cam.right = hi.x;
+    cam.bottom = lo.y;
+    cam.top = hi.y;
+    cam.near = 0.5;
+    cam.far = -lo.z;
+    cam.updateProjectionMatrix();
+    renderer.shadowMap.needsUpdate = true;
+  }
+
+  function fitShadowNear(box: Box3 | null): number {
+    nearBox = box === null ? null : box.clone();
+    if (nearBox !== null) fitNear(nearBox);
+    else if (lastBox !== undefined) fitShadow(lastBox);
+    return shadowTexel();
+  }
+
+  function shadowTexel(): number {
+    const cam = key.shadow.camera;
+    return Math.max(cam.right - cam.left, cam.top - cam.bottom) / key.shadow.mapSize.x;
+  }
+
   function setSize(width: number, height: number): void {
     composer.setSize(width, height);
     gtao.setSize(width, height);
@@ -280,6 +351,8 @@ export function createRig(
   return {
     apply,
     fitShadow,
+    fitShadowNear,
+    shadowTexel,
     setSize,
     render: () => composer.render(),
     ao: gtao,
