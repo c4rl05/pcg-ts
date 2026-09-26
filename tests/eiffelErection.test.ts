@@ -22,7 +22,8 @@ import {
   scaffoldBlocks,
   undersideAt,
 } from "../demos/eiffel/erection.js";
-import type { Block, Prism } from "../demos/eiffel/ground.js";
+import { SAG } from "../demos/eiffel/chord.js";
+import { type Block, type Prism, flatsSides } from "../demos/eiffel/ground.js";
 import { buildEiffel } from "../demos/eiffel/graph.js";
 import { PART_CLASSES } from "../demos/eiffel/parts.js";
 import { ARCH, profileAt, yOfCote } from "../demos/eiffel/spec.js";
@@ -295,10 +296,14 @@ describe("the erection's temporary works", () => {
     expect(clashes([prismSolid(plate)], Infinity).length).toBeGreaterThan(5);
     // Every sand box sits on a cap: its foot's centre over timber.
     const caps = pylonBlocks().filter((b) => Math.abs(b.at[1] - (PYLON.top - 0.125)) < 1e-6);
-    const boxes = pylonBearings().filter((p) => p.outline.length === 12);
+    // A sand box is the one round solid: its sides are its smoothness
+    // (`SAG.near` on its 0.40), 16 since 2026-09-26, 12 before.
+    const sides = flatsSides(BEARING.box.d, SAG.near);
+    expect(sides).toBe(16);
+    const boxes = pylonBearings().filter((p) => p.outline.length === sides);
     expect(boxes.length).toBe(4);
     for (const bx of boxes) {
-      const c = [0, 1, 2].map((e) => bx.outline.reduce((a, p) => a + p[e]!, 0) / 12) as unknown as Vec3;
+      const c = [0, 1, 2].map((e) => bx.outline.reduce((a, p) => a + p[e]!, 0) / sides) as unknown as Vec3;
       expect(caps.some((cap) => inside(cap, [c[0], PYLON.top - 0.125, c[2]], 0.1))).toBe(true);
     }
 

@@ -12,7 +12,8 @@
  */
 import type { Graph } from "pcg-ts";
 import { FRONT, MILESTONES, dayOf } from "./chronology.js";
-import { type Block, type Prism, blockPrism, cylinder, prisms } from "./ground.js";
+import { SAG } from "./chord.js";
+import { type Block, type Prism, blockPrism, cylinder, flatsSides, prisms } from "./ground.js";
 import type { Vec3 } from "./lattice.js";
 import { RAIL_OFFSET } from "./lifts.js";
 import type { Parts } from "./parts.js";
@@ -148,7 +149,8 @@ export function craneParts(track: Vec3, reach: number = CRANE.reach): { blocks: 
   out.push(member([tip[0], tip[1] - 0.2, 0], [tip[0], tip[1] - 3.5, 0], 0.03, u));
   out.push({ at: [tip[0], tip[1] - 3.75, 0], x: u, y: UP, size: [0.3, 0.5, 0.2] });
   // The winch (S) on the jib's heel, under it.
-  const drum = cylinder([C.winch, 0.55, -0.45], [C.winch, 0.55, 0.45], 0.8, 12);
+  // The crane works up the tower, seen from well under it: `SAG.near`.
+  const drum = cylinder([C.winch, 0.55, -0.45], [C.winch, 0.55, 0.45], 0.8, flatsSides(0.8, SAG.near));
   return { blocks: out, drum };
 }
 

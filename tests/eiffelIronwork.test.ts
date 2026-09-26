@@ -276,9 +276,12 @@ describe("the arches' ironwork (PL-XI Fig. 14)", () => {
         panels.reduce((s, { work }) => s + barTris(work.volutes), 0) + eyes * (prism(MACARON_SIDES) + 2 * prism(4));
       expect(fans.primitiveCount).toBe(FACES * PLANES * fanTris);
       expect(scrolls.primitiveCount).toBe(FACES * PLANES * scrollTris);
-      // The numbers SOURCES.md §28 quotes.
-      expect(FACES * PLANES * fanTris).toBe(27_456);
-      expect(FACES * PLANES * scrollTris).toBe(191_872);
+      // The numbers SOURCES.md §28 quotes. Until 2026-09-26 the curves were
+      // cut at a fixed 18 degrees (27,456 and 191,872); now every chord's
+      // outer edge stands within CURVE_SAG of its curve, the frame's arch
+      // taking the most of it (tests/eiffelRoundnessLower.test.ts).
+      expect(FACES * PLANES * fanTris).toBe(38_464);
+      expect(FACES * PLANES * scrollTris).toBe(194_688);
       expect(FACES * PLANES * eyes).toBe(752);
       expect(segs(panels.flatMap((p) => p.work.volutes))).toBeGreaterThan(0);
     });

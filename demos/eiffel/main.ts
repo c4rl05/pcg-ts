@@ -126,6 +126,7 @@ import { LOOK } from "./look.js";
 import { PART_CLASSES, type PartClass } from "./parts.js";
 import { type PlateOverlay, loadPlateTool } from "./plateTool.js";
 import { BALUSTER, CABOCHON_RISE, FITTING_ASSETS } from "./platforms.js";
+import { FITTING_SEGMENTS } from "./fittingSegments.js";
 import { NEUTRAL, createRig } from "./rig.js";
 import { attachSection } from "./section.js";
 import { attachWalk } from "./walkView.js";
@@ -300,12 +301,12 @@ const ASSETS: AssetMap = {
   // iron paint about it. Opaque: glazing is a later pass, not these.
   // The yellow glass cabochons in the arcades' crescents, « en verre jaune ».
   [FITTING_ASSETS.cabochon]: {
-    geometry: dome(CABOCHON_RISE, 12, 3),
+    geometry: dome(CABOCHON_RISE, FITTING_SEGMENTS.cabochon.around, FITTING_SEGMENTS.cabochon.rings),
     material: new MeshStandardMaterial({ color: 0xd9a51f, roughness: 0.22, metalness: 0 }),
   },
   // The gas globes, « en verre dépoli »: a unit sphere about its centre.
   [FITTING_ASSETS.globe]: {
-    geometry: new SphereGeometry(1, 16, 12),
+    geometry: new SphereGeometry(1, FITTING_SEGMENTS.globe.around, FITTING_SEGMENTS.globe.rings),
     material: new MeshStandardMaterial({ color: 0xf0ece2, roughness: 0.55, metalness: 0 }),
   },
   // The gallery's balusters « en grès verni », turned from their profile at
@@ -313,7 +314,7 @@ const ASSETS: AssetMap = {
   [FITTING_ASSETS.baluster]: {
     geometry: new LatheGeometry(
       BALUSTER.profile.map(([h, r]) => new Vector2(r, h)),
-      12,
+      FITTING_SEGMENTS.baluster.around,
     ),
     material: new MeshStandardMaterial({ color: 0xb58d5c, roughness: 0.32, metalness: 0 }),
   },

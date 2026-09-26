@@ -33,6 +33,7 @@
  */
 import { beforeAll, describe, expect, it } from "vitest";
 import { type Geometry, type NodeHandle, cook, firstGeometry } from "pcg-ts";
+import { SAG, circleSegments } from "../demos/eiffel/chord.js";
 import { buildEiffel } from "../demos/eiffel/graph.js";
 import { PART_CLASSES } from "../demos/eiffel/parts.js";
 import { BALUSTER, fitOutSolids } from "../demos/eiffel/platforms.js";
@@ -560,8 +561,10 @@ describe("eiffel 1st-floor fit-out, 1889", () => {
 
   it("sets the Russe's clock and finial and the Français' crest at the plates' heights", () => {
     const clock = solids["russe.clock"]!;
-    // The dial: the disc whose outline is a 16-gon.
-    const dial = clock.find((s) => s.pts.length === 16)!;
+    // The dial: the disc, the clock's one outline of more than four points
+    // (the carved arch round it is quads).
+    const dial = clock.find((s) => s.pts.length > 4)!;
+    expect(clock.filter((s) => s.pts.length > 4).length).toBe(1);
     const c = centre(dial);
     expect(c[1]).toBeCloseTo(CLOCK_Y, 6);
     expect(dial.hi[1] - dial.lo[1]).toBeCloseTo(CLOCK_D, 6);
@@ -596,10 +599,13 @@ describe("eiffel 1st-floor fit-out, 1889", () => {
 
   it("crowns each of the 36 arcades with its crest, 12 cabochons and a gas globe", () => {
     // One arcade drawn once: its crest (2 legs of 2 bars, 2 scrolls, a
-    // cartouche, a collar, 7 fronds), 12 rings, and a rod in two 12-bar hoops.
+    // cartouche, a collar, 7 fronds), 12 rings, and a rod in two hoops of
+    // as many bars as keep each within 5 mm of its circle, about 0.33
+    // across the bars' outer edges (`chord.ts`).
+    const hoopBars = circleSegments(0.3 + 0.02 + 0.01, SAG.near);
     expect(solids["arcade.crest"]!.length).toBe(ARCADES * 15);
     expect(solids["arcade.ring"]!.length).toBe(ARCADES * CABOCHONS_PER_ARCADE);
-    expect(solids["arcade.hanger"]!.length).toBe(ARCADES * 25);
+    expect(solids["arcade.hanger"]!.length).toBe(ARCADES * (1 + 2 * hoopBars));
     const cab = fittings["cabochons"]!;
     const globes = fittings["globes"]!;
     expect(cab.length).toBe(ARCADES * CABOCHONS_PER_ARCADE);

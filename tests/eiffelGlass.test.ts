@@ -29,9 +29,10 @@
  */
 import { beforeAll, describe, expect, it } from "vitest";
 import { type Geometry, cook, firstGeometry } from "pcg-ts";
+import { SAG, halfEllipseSegments } from "../demos/eiffel/chord.js";
 import { buildEiffel } from "../demos/eiffel/graph.js";
 import { PART_CLASSES } from "../demos/eiffel/parts.js";
-import { fitOutSolids, glazing } from "../demos/eiffel/platforms.js";
+import { VAULT_SEGMENTS, fitOutSolids, glazing } from "../demos/eiffel/platforms.js";
 import { summitGlass } from "../demos/eiffel/summit.js";
 import { FACES, FLOORS } from "../demos/eiffel/spec.js";
 
@@ -312,6 +313,14 @@ function convex(pts: readonly V[], n: V): boolean {
   return true;
 }
 
+/** Whether a fan from the first point covers the outline with no triangle turned against `n` (its winding's). */
+function fansFromFirst(pts: readonly V[], n: V): boolean {
+  for (let i = 1; i + 1 < pts.length; i++) {
+    if (dot(cross(sub(pts[i]!, pts[0]!), sub(pts[i + 1]!, pts[0]!)), n) < -1e-12) return false;
+  }
+  return true;
+}
+
 // ------------------------------------------------------------ the cook
 
 let geo: Record<string, Geometry>;
@@ -444,8 +453,21 @@ describe("eiffel glass", () => {
     for (const s of all) {
       expect(s.depth).toBeCloseTo(PANE, 9);
       for (const p of s.pts) expect(Math.abs(dot(sub(p, s.pts[0]!), s.n))).toBeLessThan(1e-9);
-      expect(convex(s.pts, s.n)).toBe(true);
     }
+    // Convex, but for a crescent's plates, whose inner rib's edge bows into
+    // them chord by chord: those are fanned from their first point with no
+    // triangle turned over, which is what the cook needs (a cap is a fan
+    // from its first point).
+    for (const s of sheets("glass")) expect(convex(s.pts, s.n)).toBe(true);
+    const silvered = sheets("silvered");
+    const bowed = silvered.filter((s) => !convex(s.pts, s.n));
+    expect(bowed.length).toBeLessThanOrEqual(listed.count.crescents!);
+    for (const s of bowed) expect(fansFromFirst(s.pts, s.n)).toBe(true);
+    // Control: a bowed plate fanned from some other corner of it (one on
+    // the inner rib) turns triangles over.
+    expect(bowed.length).toBeGreaterThan(0);
+    const b = bowed[0]!;
+    expect(b.pts.some((_, k) => !fansFromFirst([...b.pts.slice(k), ...b.pts.slice(0, k)], b.n))).toBe(true);
     // The summit's slabs are vertical sheets: 6 mm across the wall, however tall.
     for (const s of [...top.gallery, ...top.pavilion]) {
       const o = s.outline;
@@ -675,10 +697,13 @@ describe("eiffel glass", () => {
     // The Français' doors: the panel to the head.
     const doorPanes = panes.filter((p) => p.f === FRANCAIS && Math.abs(p.r - rDoor) < 1e-6).map((p) => p.ring);
     const doorMembers = membersOn(FRANCAIS, rDoor, ["francais.doorFrame", "francais.doorFan"]);
+    // The head in as many chords as keep the archivolt round it within
+    // 5 mm (`chord.ts`; the archivolt 0.25 wide), the head's own.
+    const headChords = halfEllipseSegments(DOOR / 2 + 0.25, DOOR_RISE + 0.25, SAG.near);
     const doorRegion = (a: number): Ring[] => {
       const head: Array<readonly [number, number]> = [];
-      for (let i = 0; i <= 8; i++) {
-        const phi = Math.PI * (1 - i / 8);
+      for (let i = 0; i <= headChords; i++) {
+        const phi = Math.PI * (1 - i / headChords);
         head.push([a + (DOOR / 2) * Math.cos(phi), FLOOR + DOOR_SPRING + DOOR_RISE * Math.sin(phi)]);
       }
       return [rectRing(a - DOOR / 2, a + DOOR / 2, FLOOR, FLOOR + DOOR_SPRING), head];
@@ -701,10 +726,14 @@ describe("eiffel glass", () => {
   it("fills the tympana and the crescents, no gap and no light over another", () => {
     const half = VAULT_HALF;
     const rise = VAULT_RISE;
-    // A vault's arc over bay centre c, shrunk by `inset`, as `vaultArc` builds it: 12 facets.
+    // A vault's arc over bay centre c, shrunk by `inset`, as `vaultArc`
+    // builds it: N chords, S to each of the crescent's 12 cells, so cell
+    // boundary k (a ray's foot) is point k S.
+    const N = VAULT_SEGMENTS;
+    const S = N / 12;
     const arc = (c: number, inset: number) =>
-      Array.from({ length: 13 }, (_, i) => {
-        const phi = Math.PI * (1 - i / 12);
+      Array.from({ length: N + 1 }, (_, i) => {
+        const phi = Math.PI * (1 - i / N);
         return [c + (half - inset) * Math.cos(phi), SPRING + (rise - inset) * Math.sin(phi)] as const;
       });
     const bar = (p: readonly [number, number], q: readonly [number, number], w: number): Ring => {
@@ -725,7 +754,7 @@ describe("eiffel glass", () => {
       const span = half - SHELL;
       const members: Ring[] = [
         rectRing(c - span, c + span, SPRING, SPRING + TYMPANUM_RIB),
-        ...[2, 4, 6, 8, 10].map((i) => bar([c, SPRING], rib[i]!, i === 6 ? OUTER_RIB : 0.1)),
+        ...[2, 4, 6, 8, 10].map((i) => bar([c, SPRING], rib[i * S]!, i === 6 ? OUTER_RIB : 0.1)),
       ];
       return coverage([rib], mine, members);
     };
@@ -747,22 +776,29 @@ describe("eiffel glass", () => {
       const outer = arc(c, OUTER_RIB);
       const R = INNER_R + INNER_RIB;
       const psi0 = Math.asin((SPRING - cy) / R);
-      const inner = Array.from({ length: 13 }, (_, i) => {
-        const psi = Math.PI - psi0 - ((Math.PI - 2 * psi0) * i) / 12;
+      const inner = Array.from({ length: N + 1 }, (_, i) => {
+        const psi = Math.PI - psi0 - ((Math.PI - 2 * psi0) * i) / N;
         return [c + R * Math.cos(psi), cy + R * Math.sin(psi)] as const;
       });
-      const cells: Ring[] = Array.from({ length: 12 }, (_, i) => [outer[i]!, outer[i + 1]!, inner[i + 1]!, inner[i]!]);
+      // Cell k between the ribs' edges, chord by chord on both.
+      const cells: Ring[] = Array.from({ length: 12 }, (_, k) => [
+        ...outer.slice(k * S, (k + 1) * S + 1),
+        ...inner.slice(k * S, (k + 1) * S + 1).reverse(),
+      ]);
       const members: Ring[] = [
-        ...Array.from({ length: 11 }, (_, i) => bar(inner[i + 1]!, outer[i + 1]!, 0.1)),
+        ...Array.from({ length: 11 }, (_, i) => bar(inner[(i + 1) * S]!, outer[(i + 1) * S]!, 0.1)),
         // The sills, 0.10 tall [estimated], from the outer rib's foot to
-        // the inner rib's edge at the sill's top.
+        // the inner rib's edge at the sill's top: on the chord of it that
+        // reaches that height, from the foot.
         ...[
           [0, 1],
-          [12, 11],
-        ].map(([i, j]) => {
-          const [p, q] = [inner[i!]!, inner[j!]!];
-          const x = p[0] + ((q[0] - p[0]) * 0.1) / (q[1] - p[1]);
-          return rectRing(Math.min(outer[i!]![0], x), Math.max(outer[i!]![0], x), SPRING, SPRING + 0.1);
+          [N, -1],
+        ].map(([foot, step]) => {
+          let i = foot!;
+          while (inner[i + step!]![1] < SPRING + 0.1) i += step!;
+          const [p, q] = [inner[i]!, inner[i + step!]!];
+          const x = p[0] + ((q[0] - p[0]) * (SPRING + 0.1 - p[1])) / (q[1] - p[1]);
+          return rectRing(Math.min(outer[foot!]![0], x), Math.max(outer[foot!]![0], x), SPRING, SPRING + 0.1);
         }),
       ];
       const mine = list.filter((p) => p.f === FLAMAND && Math.abs(p.ring.reduce((s, q) => s + q[0], 0) / p.ring.length - c) < BAY / 2).map((p) => p.ring);
@@ -799,15 +835,15 @@ describe("eiffel glass", () => {
     let outside = 0;
     const cy = INNER_CROWN - INNER_R;
     const R = INNER_R + INNER_RIB - REBATE;
-    const step = (Math.PI - 2 * Math.asin((SPRING - cy) / R)) / 12;
+    const step = (Math.PI - 2 * Math.asin((SPRING - cy) / R)) / VAULT_SEGMENTS;
     const outsideOf = (list: typeof plates) => {
       let n = 0;
       for (const p of list) {
         for (const [x, y] of p.ring) {
           const u = x - Math.round(x / BAY) * BAY;
           const e = (u / (VAULT_HALF - OUTER_RIB + REBATE)) ** 2 + ((y - SPRING) / (VAULT_RISE - OUTER_RIB + REBATE)) ** 2;
-          // The inner rib is faceted, twelve chords from foot to foot, so its
-          // edge comes as close to the centre as a chord's middle.
+          // The inner rib is faceted, VAULT_SEGMENTS chords from foot to
+          // foot, so its edge comes as close to the centre as a chord's middle.
           if (e > 1 + 1e-9 || Math.hypot(u, y - cy) < R * Math.cos(step / 2) - 1e-9 || y < SPRING + 0.1 - REBATE - 1e-9) n++;
         }
       }

@@ -307,9 +307,16 @@ export const PEDESTAL = {
   /**
    * The curved inner corner: its centre on the diagonal, 3.29 in from both
    * inner faces' foot, so the arc's radius is 3.29 at the foot and the
-   * centre's distance to the inner faces above; drawn in `segments`.
+   * centre's distance to the inner faces above; drawn in `segments` over
+   * its quarter turn, and so is the bench round it [derived: the fewest
+   * whose chords stand at most 3 mm (`chord.ts` `SAG.eye`, the visitor
+   * sitting on it) off the widest arc drawn in them, the bench sill's
+   * front at 3.29 + 0.70: 21, where 12 stood 8.5 mm off].
    */
-  corner: { radius: 3.29, segments: 12 },
+  corner: {
+    radius: 3.29,
+    segments: Math.ceil(Math.PI / 2 / (2 * Math.acos(1 - 0.003 / (3.29 + 0.7)))),
+  },
 } as const;
 
 /** The first-floor girders between the legs, in the tower's face plane. */

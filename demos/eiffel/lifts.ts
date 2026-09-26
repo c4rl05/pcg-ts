@@ -133,12 +133,20 @@ import {
   sweepProfile,
   vec,
 } from "pcg-ts";
+import { SAG, circleSegments } from "./chord.js";
+import { flatsSides } from "./ground.js";
 import { type Vec3, box, copyToQuadrants, indexTable, merge, skin } from "./lattice.js";
 import type { Detail, Parts } from "./parts.js";
 import { FLOORS, NODES, PILES, profileAt } from "./spec.js";
 import { stairRuns } from "./stairs.js";
 
 type Quat = readonly [number, number, number, number];
+
+/**
+ * The rim chords every wheel had until 2026-09-26, kept as a floor under
+ * `wheelRimChords`. Up here because wheels are built at load.
+ */
+export const RIM_CHORDS_MIN = 36;
 
 /**
  * A box by its frame: centre, the directions of its local x and y (unit,
@@ -643,9 +651,18 @@ function blocks(g: Graph, id: string, list: readonly Block[]): NodeHandle {
 /**
  * Straight round members of one diameter, each from `a` to `b`, as tubes
  * with their ends capped (the paths are swept after they are placed, so
- * nothing downstream turns them).
+ * nothing downstream turns them). Their sides by default keep each chord
+ * within `sag` of the circle (`chord.ts`), never fewer than the 16 every
+ * tube had before, however thin.
  */
-function tubes(g: Graph, id: string, list: ReadonlyArray<readonly [Vec3, Vec3]>, diameter: number, sides = 16): NodeHandle {
+function tubes(
+  g: Graph,
+  id: string,
+  list: ReadonlyArray<readonly [Vec3, Vec3]>,
+  diameter: number,
+  sag: number = SAG.near,
+  sides: number = tubeSides(diameter, sag),
+): NodeHandle {
   const node = g.add(
     sweepProfile,
     { profile: "circle", sides, radius: diameter / 2, caps: true, frame: "upHint", up: [1, 0, 0] },
@@ -653,6 +670,11 @@ function tubes(g: Graph, id: string, list: ReadonlyArray<readonly [Vec3, Vec3]>,
   );
   g.connect(polylines(g, `${id}Axes`, list), "out", node, "in");
   return node;
+}
+
+/** A tube's sides: its chords within `sag` of its circle, never fewer than 16. */
+export function tubeSides(diameter: number, sag: number): number {
+  return circleSegments(diameter / 2, sag, { min: 16 });
 }
 
 /** Polylines as paths, one per list, in order. */
@@ -2030,10 +2052,24 @@ function chainSpawn(g: Graph, id: string, chain: ChainRun): NodeHandle {
 }
 
 /**
- * A spoked wheel as blocks, about its centre: a rim of 36 chords,
- * `spokes` spokes, a hub, and (with `teeth`, their size along the rim,
- * out, and across) a tooth at every spoke on the rim's outer face. `axis`
- * is the axle (unit), `ref` any direction the first spoke lies toward.
+ * The rim chords of a wheel `diameter` over its rim: each rim block is a
+ * chord standing tangent to the wheel's circle, so its outer corners stand
+ * proud of it as a circumscribed polygon's do (`ground.ts`' flatsSides).
+ * Never fewer than the {@link RIM_CHORDS_MIN} every rim had before, so a
+ * small pulley is not cut coarser than it was.
+ */
+export function wheelRimChords(diameter: number, sag: number): number {
+  return Math.max(RIM_CHORDS_MIN, flatsSides(diameter, sag));
+}
+
+/**
+ * A spoked wheel as blocks, about its centre: a rim of chords, `spokes`
+ * spokes, a hub, and (with `teeth`, their size along the rim, out, and
+ * across) a tooth at every spoke on the rim's outer face. `axis` is the
+ * axle (unit), `ref` any direction the first spoke lies toward. The rim's
+ * chords are smoothness, not structure: the fewest whose outer corners
+ * stand within `sag` (default `SAG.near`) of the wheel's circle
+ * ({@link wheelRimChords}); the spokes are the wheel's own count.
  */
 function wheelBlocks(
   centre: Vec3,
@@ -2047,6 +2083,7 @@ function wheelBlocks(
     readonly spoke: number;
     readonly hub: number;
     readonly teeth?: Vec3;
+    readonly sag?: number;
   },
 ): Block[] {
   const r = o.diameter / 2 - o.rim / 2;
@@ -2054,7 +2091,7 @@ function wheelBlocks(
   const e2 = cross3(axis, e1);
   const dir = (a: number): Vec3 => add3(mul3(e1, Math.cos(a)), mul3(e2, Math.sin(a)));
   const out: Block[] = [];
-  const segments = 36;
+  const segments = wheelRimChords(o.diameter, o.sag ?? SAG.near);
   const chord = 2 * (r + o.rim / 2) * Math.sin(Math.PI / segments);
   for (let i = 0; i < segments; i++) {
     const d = dir(((i + 0.5) * 2 * Math.PI) / segments);
@@ -2434,6 +2471,9 @@ function rouxWheels(chain: ChainRun, k: number, side: number): Array<{ name: str
       spokes: spec.spokes,
       spoke: 0.1,
       hub: which === "wheel" ? 0.6 : 0.4,
+      // The driving wheel turns in its pit at the leg's foot, at a visitor's
+      // eye; the return pulley is overhead at the 1st floor.
+      sag: which === "wheel" ? SAG.eye : SAG.near,
       // The teeth « 445 » long on the rim [sourced PL-XXIII bis Fig. 36],
       // up to the bars' underside midway between two axles.
       ...(which === "wheel" ? { teeth: [0.445, 0.035, 0.12] as Vec3 } : {}),
@@ -2948,7 +2988,7 @@ function edouxParts(g: Graph): { machinery: NodeHandle[]; cars: Array<{ name: st
   const machinery = [
     blocks(g, "liftEdouxGear", [...edouxGear(), ...edouxCableTops()]),
     ...edouxTubes().map(({ id, diameter, tubes: list }) =>
-      tubes(g, `liftEdoux${id}`, list.map(tube), diameter, diameter > 1 ? 32 : 16),
+      tubes(g, `liftEdoux${id}`, list.map(tube), diameter),
     ),
   ];
   const pistons = edouxPistons();
@@ -3023,7 +3063,8 @@ export function buildLifts(g: Graph, quads: NodeHandle, detail: Detail = {}): Pa
   const otis = OTIS_LEGS.map((k) => ({ motor: otisMotor(k), counter: otisCounterTrack(k) }));
   const otisStill = [
     blocks(g, "liftOtisGear", otis.flatMap(({ motor, counter }) => [...motor.blocks, ...motor.wheels, ...counter.blocks, ...counter.wheels])),
-    tubes(g, "liftOtisCylinders", otis.map(({ motor }) => motor.cylinder), OTIS_GEAR.motor.cylinder.diameter, 24),
+    // The cylinders lie in the legs' feet, at a visitor's eye.
+    tubes(g, "liftOtisCylinders", otis.map(({ motor }) => motor.cylinder), OTIS_GEAR.motor.cylinder.diameter, SAG.eye),
   ];
   const roux = ROUX_LEGS.map((k) => rouxFrames(k));
   const rouxStill = [
@@ -3075,3 +3116,29 @@ export function buildLifts(g: Graph, quads: NodeHandle, detail: Detail = {}): Pa
     chains: LIFT_CHAINS.map((c) => ({ name: c.name, spawn: chainSpawn(g, carId(`chain.${c.name}`), c) })),
   };
 }
+
+/**
+ * The lifts' round parts whose segment counts are smoothness, for the
+ * checks: each a wheel's rim (`wheelRimChords`) or a swept tube (`tubes`'
+ * default), its diameter, the tolerance it is cut to and the count that
+ * gives. Spokes and every other structural count are not here: they are
+ * the machines' own.
+ */
+export const LIFT_ROUNDS: ReadonlyArray<{ what: string; kind: "rim" | "tube"; diameter: number; sag: number; count: number }> = [
+  ...([
+    ["Roux driving wheel", ROUX_CIRCUIT.wheel.rim, SAG.eye],
+    ["Roux return pulley", ROUX_CIRCUIT.pulley.rim, SAG.near],
+    ["Otis fixed and travelling pulleys", OTIS_GEAR.motor.pulley, SAG.near],
+    ["Otis grande poulie", OTIS_GEAR.counter.poulie, SAG.near],
+    ["Otis Pou7", OTIS_GEAR.counter.pou7.diameter, SAG.near],
+    ["Otis N°1", OTIS_GEAR.counter.n1.diameter, SAG.near],
+    ["Otis N°2", OTIS_GEAR.counter.n2.diameter, SAG.near],
+    ...EDOUX_GEAR.pulley.flange.map((d, i) => [`Edoux pulley flange ${i}`, d, SAG.near] as const),
+  ] as const).map(([what, diameter, sag]) => ({ what, kind: "rim" as const, diameter, sag, count: wheelRimChords(diameter, sag) })),
+  ...([
+    ["Edoux tanks", EDOUX_GEAR.tank.diameter, SAG.near],
+    ["Edoux cylinders", EDOUX_GEAR.cylinder.diameter, SAG.near],
+    ["Edoux glands", EDOUX_GEAR.cylinder.gland, SAG.near],
+    ["Otis cylinders", OTIS_GEAR.motor.cylinder.diameter, SAG.eye],
+  ] as const).map(([what, diameter, sag]) => ({ what, kind: "tube" as const, diameter, sag, count: tubeSides(diameter, sag) })),
+];

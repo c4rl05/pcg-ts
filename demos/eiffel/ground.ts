@@ -41,6 +41,7 @@
  */
 import type { Graph, NodeHandle } from "pcg-ts";
 import { attribute, extrudePolygon, mergePrimitives, pointGrid, pointsToPath, setAttribute, vec } from "pcg-ts";
+import { CREASE, SAG, type SegmentLimits, arcSegments, circleSegments, smoothed } from "./chord.js";
 import { type Vec3, indexTable } from "./lattice.js";
 import type { Parts } from "./parts.js";
 import { LEG_UPRIGHTS, type UprightName, segmentAxis } from "./builtup.js";
@@ -154,10 +155,24 @@ export function levelBlock(x: number, z: number, dir: Vec3, along: number, acros
 }
 
 /**
- * A round solid, a regular `sides`-gon across its flats `d`, from `a` to
- * `b` along its axis (a taper is `roundWall`'s).
+ * Sides for a regular polygon cut round a circle of diameter `d` with its
+ * flats on the circle, the way `cylinder` and `roundWall` cut one, so its
+ * corners stand at most `sag` proud of the circle. A corner of an n-gon on
+ * radius r stands r (sec(π/n) − 1) proud: `chord.ts`' chord sagitta
+ * r (1 − cos(π/n)) over cos(π/n), so asking it for `sag` × cos(π/12) bounds
+ * the corner for any n from its floor of 12 up.
  */
-export function cylinder(a: Vec3, b: Vec3, d: number, sides = 16): Prism {
+export function flatsSides(d: number, sag: number = SAG.eye, limits: Omit<SegmentLimits, "min"> = {}): number {
+  return circleSegments(d / 2, sag * Math.cos(Math.PI / 12), limits);
+}
+
+/**
+ * A round solid, a regular `sides`-gon across its flats `d`, from `a` to
+ * `b` along its axis (a taper is `roundWall`'s). Its sides by default
+ * keep the corners within `SAG.eye` of the circle ({@link flatsSides}):
+ * the plant stands where a visitor walks.
+ */
+export function cylinder(a: Vec3, b: Vec3, d: number, sides: number = flatsSides(d)): Prism {
   const axis = sub3(b, a);
   const len = Math.hypot(axis[0], axis[1], axis[2]);
   const t = unit3(axis);
@@ -187,7 +202,7 @@ export function roundWall(
   d0: number,
   d1: number,
   wall: number,
-  sides = 16,
+  sides: number = flatsSides(Math.max(d0, d1)),
   skip: (i: number) => boolean = () => false,
 ): Prism[] {
   const out: Prism[] = [];
@@ -214,10 +229,13 @@ const PRISM_RUN = 1024;
 
 /**
  * Many convex prisms as one mesh, each extruded along its own outline's
- * normal by its depth; every wall and cap gets its own points and a flat
- * `normal`. A prism with no volume is a slip, refused by its index.
+ * normal by its depth; every wall and cap gets its own points and a
+ * `normal`, flat, then smoothed across any edge under `chord.ts`' crease
+ * angle (`crease`, degrees) — a cylinder or a round wall's staves shade
+ * round, a box keeps its edges. A prism with no volume is a slip, refused
+ * by its index.
  */
-export function prisms(g: Graph, id: string, list: readonly Prism[]): NodeHandle {
+export function prisms(g: Graph, id: string, list: readonly Prism[], crease = CREASE): NodeHandle {
   list.forEach((p, i) => {
     if (!(p.depth > 1e-6) || p.outline.length < 3) {
       throw new Error(`ground.ts prisms("${id}"): prism ${i} at [${p.outline[0]?.join(", ")}] has depth ${p.depth} and ${p.outline.length} points; it needs a positive depth and three points`);
@@ -233,10 +251,15 @@ export function prisms(g: Graph, id: string, list: readonly Prism[]): NodeHandle
     (runs[runs.length - 1] as Prism[]).push(p);
     count += p.outline.length;
   }
-  if (runs.length === 1) return prismRun(g, id, list);
-  const out = g.add(mergePrimitives, {}, id);
-  runs.forEach((run, i) => g.connect(prismRun(g, `${id}Run${i}`, run), "out", out, "in"));
-  return out;
+  // Smoothed by the crease angle (`chord.ts`) after the runs are merged,
+  // so a round part cut across two runs still welds.
+  let out: NodeHandle;
+  if (runs.length === 1) out = prismRun(g, `${id}Flat`, list);
+  else {
+    out = g.add(mergePrimitives, {}, `${id}Flat`);
+    runs.forEach((run, i) => g.connect(prismRun(g, `${id}Run${i}`, run), "out", out, "in"));
+  }
+  return smoothed(g, id, out, crease);
 }
 
 function prismRun(g: Graph, id: string, list: readonly Prism[]): NodeHandle {
@@ -619,7 +642,7 @@ function roomPlant(): Prism[] {
     // The flywheel: a disc in the vertical plane of the axis, its foot in the pit.
     const hub = along(len, axisY);
     const across = cross3(d, UP);
-    out.push(cylinder(add3(hub, mul3(across, -0.15)), add3(hub, mul3(across, 0.15)), PLANT.flywheel, 24));
+    out.push(cylinder(add3(hub, mul3(across, -0.15)), add3(hub, mul3(across, 0.15)), PLANT.flywheel));
   }
   // The Worthington pumps (long axes along n) and their condensers.
   for (const [x, z] of PLANT.worthingtons) {
@@ -649,7 +672,7 @@ function roomPlant(): Prism[] {
     // Its belt pulley toward the dynamos.
     const toward = unit3(sub3([dm[0], 0, dm[1]], [x, 0, z]));
     const pc: Vec3 = [x + toward[0] * 1.1, bed + 0.9, z + toward[2] * 1.1];
-    out.push(cylinder(add3(pc, mul3(T3, -0.12)), add3(pc, mul3(T3, 0.12)), 1.5, 20));
+    out.push(cylinder(add3(pc, mul3(T3, -0.12)), add3(pc, mul3(T3, 0.12)), 1.5));
     // Its outboard bearing, a pedestal from the floor to the shaft.
     const bp = add3(pc, mul3(T3, 0.3));
     out.push(blockPrism(levelBlock(bp[0], bp[2], T3, 0.25, 0.3, f, pc[1] + 0.1)));
@@ -777,6 +800,20 @@ export const CHIMNEY = {
   crown: { corbel: 0.88, band: 0.59, parapet: 0.89, d: 2.98, wall: 0.3, merlons: 16 },
 } as const;
 
+/**
+ * The chimney's staves, one count from footing to parapet so the lifts
+ * meet stave on stave: the fewest that keep every corner within `SAG.eye`
+ * of the widest circle (the footing's), rounded up to a whole number per
+ * crown slot so each merlon and crenel is a run of whole staves on the
+ * slot it always had. The merlon count is the crown's own; this is
+ * smoothness only.
+ */
+export const CHIMNEY_STAVES = flatsSides(
+  Math.max(CHIMNEY.footing.d, CHIMNEY.a.d, CHIMNEY.crown.d),
+  SAG.eye,
+  { multiple: CHIMNEY.crown.merlons },
+);
+
 /** The chimney as prisms, above and below the model's ground. */
 function chimney(): { above: Prism[]; below: Prism[] } {
   const [x, z] = CHIMNEY.at;
@@ -784,27 +821,30 @@ function chimney(): { above: Prism[]; below: Prism[] } {
   const below: Prism[] = [];
   const above: Prism[] = [];
   const g = 0;
+  const n = CHIMNEY_STAVES;
+  // Staves per crown slot: a merlon, then a crenel, round the parapet.
+  const per = n / C.crown.merlons;
   const aFoot = g - C.a.high;
-  below.push(cylinder([x, aFoot - C.footing.t, z], [x, aFoot, z], C.footing.d, 24));
-  below.push(...roundWall(x, z, aFoot, g, C.a.d, C.a.d, C.a.wall, 24));
+  below.push(cylinder([x, aFoot - C.footing.t, z], [x, aFoot, z], C.footing.d, n));
+  below.push(...roundWall(x, z, aFoot, g, C.a.d, C.a.d, C.a.wall, n));
   let y = g;
   for (const b of C.b) {
     // Each lift in two, so the wall thins as it rises.
     const ym = y + b.high / 2;
     const dm = (b.d0 + b.d1) / 2;
-    above.push(...roundWall(x, z, y, ym, b.d0, dm, b.wall0, 24));
-    above.push(...roundWall(x, z, ym, y + b.high, dm, b.d1, b.wall1, 24));
+    above.push(...roundWall(x, z, y, ym, b.d0, dm, b.wall0, n));
+    above.push(...roundWall(x, z, ym, y + b.high, dm, b.d1, b.wall1, n));
     y += b.high;
   }
   // The crown: corbels flaring out, the bands, the crenellated parapet.
   const K = C.crown;
   const top = C.b[C.b.length - 1]!.d1;
-  above.push(...roundWall(x, z, y, y + K.corbel, top, K.d, 0.5, 24));
+  above.push(...roundWall(x, z, y, y + K.corbel, top, K.d, 0.5, n));
   y += K.corbel;
-  above.push(...roundWall(x, z, y, y + K.band, K.d, K.d, 0.6, 24));
+  above.push(...roundWall(x, z, y, y + K.band, K.d, K.d, 0.6, n));
   y += K.band;
-  above.push(...roundWall(x, z, y, y + K.parapet / 2, K.d, K.d, K.wall, 24));
-  above.push(...roundWall(x, z, y + K.parapet / 2, y + K.parapet, K.d, K.d, K.wall, K.merlons, (i) => i % 2 === 1));
+  above.push(...roundWall(x, z, y, y + K.parapet / 2, K.d, K.d, K.wall, n));
+  above.push(...roundWall(x, z, y + K.parapet / 2, y + K.parapet, K.d, K.d, K.wall, n, (i) => Math.floor(i / per) % 2 === 1));
   return { above, below };
 }
 
@@ -952,8 +992,12 @@ function slab(f: SupportFrame, ring: ReadonlyArray<readonly [number, number]>, t
   return { outline: towards(ring.map(([u, e]) => at(f, u, e, t)), f.T), depth };
 }
 
-/** A square `flats` across with its corners rounded to r, its sides at 45 degrees to U and E, as (u, e). */
-function roundedDiamond(flats: number, r: number, per = 4): Array<readonly [number, number]> {
+/**
+ * A square `flats` across with its corners rounded to r, its sides at 45
+ * degrees to U and E, as (u, e); each corner `per` chords, by default the
+ * fewest within `SAG.eye` of the arc (the shoes stand at a visitor's feet).
+ */
+function roundedDiamond(flats: number, r: number, per: number = arcSegments(r, Math.PI / 2, SAG.eye)): Array<readonly [number, number]> {
   const h = flats / 2;
   const out: Array<readonly [number, number]> = [];
   // In the square's own axes (a, b) = ((u + e), (u − e)) / √2, then turned back.
@@ -1428,6 +1472,15 @@ export function massifPrisms(f: SupportFrame): Prism[] {
   return massifSolids(f).flatMap((p) => clipPrism(p, planes));
 }
 
+/**
+ * Chords per quarter round a caisson's corner: the fewest that keep the
+ * shell's outer face (radius + plate) within `SAG.far` of its arc — the
+ * caissons are only ever seen through the ground, from well away. The
+ * concrete and both faces of the shell take the same count, so each plate
+ * pairs an inner chord with its outer one.
+ */
+export const CAISSON_CORNER_CHORDS = arcSegments(CAISSON.radius + CAISSON.shell.t, Math.PI / 2, SAG.far);
+
 /** A rounded rectangle in a massif's frame (s from s0 to s1, e ±w/2, corners r), at cote c. */
 function roundedRect(f: SupportFrame, s0: number, s1: number, w: number, r: number, cote: number, grow = 0): Vec3[] {
   const at = massifAt(f);
@@ -1439,8 +1492,8 @@ function roundedRect(f: SupportFrame, s0: number, s1: number, w: number, r: numb
     [s1 - r, -w / 2 + r, 270],
   ];
   for (const [cs, ce, a0] of corners) {
-    for (let k = 0; k <= 3; k++) {
-      const a = ((a0 + 30 * k) * Math.PI) / 180;
+    for (let k = 0; k <= CAISSON_CORNER_CHORDS; k++) {
+      const a = ((a0 + (90 * k) / CAISSON_CORNER_CHORDS) * Math.PI) / 180;
       pts.push(at(cs + (r + grow) * Math.cos(a), cote, ce + (r + grow) * Math.sin(a)));
     }
   }
@@ -1560,7 +1613,7 @@ export function earthingPipes(): Prism[] {
       // Pile 3's (mirror 1) and pile 2's (x mirrored).
       const end: Vec3 = [mirror * rx, y, rz];
       const start: Vec3 = [mirror * (rx + E.run * Math.sin(off)), y, rz - E.run * Math.cos(off)];
-      out.push(cylinder(start, end, E.d, 12), cylinder(end, [end[0], CAP, end[2]], E.d, 12));
+      out.push(cylinder(start, end, E.d), cylinder(end, [end[0], CAP, end[2]], E.d));
     }
   }
   return out;
@@ -1607,11 +1660,18 @@ export function machineRoomPrisms(): { foundations: Prism[]; plant: Prism[] } {
   };
 }
 
+/** The crease angle, degrees, for the foundations class (see `buildGround`). */
+const FOUNDATION_CREASE = 20;
+
 /** Build the ground's parts: the machine room, the flue, the chimney and the supports. */
 export function buildGround(g: Graph): Parts {
   const p = groundPrisms();
   return {
-    foundations: [prisms(g, "groundFoundations", p.foundations)],
+    // A tighter crease for the masonry: the chimney's 64 staves (5.6
+    // degrees apart) and the caissons' corners (18) shade round, and the
+    // chimney's corbel (21 degrees off its shaft and its band) keeps the
+    // two breaks that make it a corbel rather than a swelling.
+    foundations: [prisms(g, "groundFoundations", p.foundations, FOUNDATION_CREASE)],
     machinery: [prisms(g, "groundIron", p.machinery)],
     masonry: [prisms(g, "groundStones", p.masonry)],
   };

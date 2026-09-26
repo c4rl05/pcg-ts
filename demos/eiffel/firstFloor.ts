@@ -195,6 +195,7 @@ import {
   ribbon,
   signedArea,
 } from "./ironwork.js";
+import { SAG, arcSegments, smoothed } from "./chord.js";
 import { CROSS_PLATE, type Detail, type Parts } from "./parts.js";
 import { ARCH, FIRST_FLOOR, NODES, PEDESTAL, UPRIGHT_BOX, node, profileAt, tableAt } from "./spec.js";
 import {
@@ -377,9 +378,18 @@ export function archPierBases(): Array<{ x: number; z: number; side: number }> {
 const PLATE = 0.01;
 const PLATE_OFFSET = MONTANT;
 
-/** Segments per round head, per fillet [estimated: drawing resolution]. */
-const HEAD_SEGMENTS = 12;
-const FILLET_SEGMENTS = 6;
+/**
+ * How finely the arcade's round heads and the decorative girder's fillets
+ * are cut: the fewest chords that keep each within `SAG.near` of its arc —
+ * the arcade is read from the ground 15 m and more under it, and from the
+ * 1st floor's gallery beside it — and never fewer than the 6 a head's half
+ * and 6 a fillet had until 2026-09-26 [estimated: drawing resolution].
+ */
+export const ARCADE_SAG = SAG.near;
+const MIN_ARC_SEGMENTS = 6;
+/** Chords on an arc of `sweep` radians on radius `r`, as {@link ARCADE_SAG} asks. */
+export const arcadeArcSegments = (r: number, sweep: number): number =>
+  arcSegments(r, sweep, ARCADE_SAG, { min: MIN_ARC_SEGMENTS });
 
 /** 2nd floor: panel 10's lintel band depth, in the plane [sourced PL-VII "3,6071"]. */
 const BAND10_DEPTH = 3.6071;
@@ -949,7 +959,8 @@ function opening(k: number, d = D_BF): Opening {
       );
     }
   }
-  const half = HEAD_SEGMENTS / 2;
+  // Each half of the head in the same count, so the head stays symmetric.
+  const half = arcadeArcSegments(r, Math.max(Math.abs(a1 - a0), Math.abs(a2 - a1)));
   const arc = (from: number, to: number) =>
     Array.from({ length: half + 1 }, (_, i) => at(from + ((to - from) * i) / half));
   const toTop = arc(a0, a1);
@@ -979,11 +990,14 @@ function crownPlates(d = D_BF): InPlane[][] {
   return out;
 }
 
-/** Every opening's head radius as built on the outer arch's face 1, for the checks. */
-export function arcadeOpenings(): Array<{ k: number; radius: number }> {
-  const out: Array<{ k: number; radius: number }> = [];
+/** Every opening's head as built on the outer arch's face 1 — its radius and its outline in the plane — for the checks. */
+export function arcadeOpenings(): Array<{ k: number; radius: number; head: ReadonlyArray<readonly [number, number]> }> {
+  const out: Array<{ k: number; radius: number; head: ReadonlyArray<readonly [number, number]> }> = [];
   const d = webLineAt(PLATE_OFFSET + PLATE / 2);
-  for (let k = OPEN_FROM; k <= OPEN_TO; k++) out.push({ k, radius: opening(k, d).radius });
+  for (let k = OPEN_FROM; k <= OPEN_TO; k++) {
+    const o = opening(k, d);
+    out.push({ k, radius: o.radius, head: o.head });
+  }
   return out;
 }
 
@@ -1129,9 +1143,11 @@ function plates(g: Graph, id: string, outlines: readonly Vec3[][], quads: NodeHa
   // platforms' prisms keep theirs, since the arches class merges these with
   // skins that carry one and would fill a missing one with zeros, which
   // the page shades black (PLAN.md).
-  const solid = g.add(extrudePolygon, { direction: "polygonNormal", distance: PLATE, caps: "both" }, id);
+  const solid = g.add(extrudePolygon, { direction: "polygonNormal", distance: PLATE, caps: "both" }, `${id}Flat`);
   g.connect(four, "out", solid, "in");
-  return solid;
+  // Smoothed by the crease angle (`chord.ts`): an opening's round head
+  // shades round, the plate's faces and square edges stay as they are.
+  return smoothed(g, id, solid);
 }
 
 /** The two planes: the face (the outer arch and girders) and 15.00 inboard. */
@@ -1332,8 +1348,9 @@ function girders(): {
     const cx = (D_BF - FILLET_R - Math.cos(PHI_H) * ct) / Math.sin(PHI_H);
     const a0 = Math.PI / 2;
     const a1 = Math.PI / 2 - PHI_H;
-    const arc = Array.from({ length: FILLET_SEGMENTS + 1 }, (_, i): InPlane => {
-      const a = a0 + ((a1 - a0) * i) / FILLET_SEGMENTS;
+    const fillet = arcadeArcSegments(FILLET_R, Math.abs(a1 - a0));
+    const arc = Array.from({ length: fillet + 1 }, (_, i): InPlane => {
+      const a = a0 + ((a1 - a0) * i) / fillet;
       return [cx + FILLET_R * Math.cos(a), ct + FILLET_R * Math.sin(a)];
     });
     for (const path of [arc, arc.map(mirror)]) {

@@ -27,9 +27,10 @@
  */
 import { beforeAll, describe, expect, it } from "vitest";
 import { type Geometry, type NodeHandle, cook, firstGeometry } from "pcg-ts";
+import { SAG, circleSegments } from "../demos/eiffel/chord.js";
 import { buildEiffel } from "../demos/eiffel/graph.js";
 import { PART_CLASSES } from "../demos/eiffel/parts.js";
-import { fitOutSolids } from "../demos/eiffel/platforms.js";
+import { VAULT_SEGMENTS, fitOutSolids } from "../demos/eiffel/platforms.js";
 import { FACES, FLOORS, PILES } from "../demos/eiffel/spec.js";
 
 type V = readonly [number, number, number];
@@ -315,10 +316,13 @@ describe("eiffel platforms fit-out", () => {
     const pilasters = solids["inner.pilaster"]!;
     expect(pilasters.length).toBe(32);
     expect(solids["inner.gutter"]!.length).toBe(32);
-    // Each arch is its bay's two ribs as quads between arcs (12 + 12) and
-    // its 11 rays, all a plate (0.15) thick.
+    // Each arch is its bay's two ribs as quads between arcs, as many as
+    // the vault's arc has chords (VAULT_SEGMENTS, cut by size: a whole
+    // number to each of the crescent's 12 cells), and its 11 rays, all a
+    // plate (0.15) thick.
     const arch = solids["inner.arch"]!;
-    expect(arch.length).toBe(28 * (24 + 11));
+    expect(VAULT_SEGMENTS % 12).toBe(0);
+    expect(arch.length).toBe(28 * (2 * VAULT_SEGMENTS + 11));
     // On the +z face: every 7.765 from ±3.8825 to ±27.18, in front of a
     // leg (19.41, 27.18) against the step, else 4.1875 inside the column axis.
     const zFace = pilasters.filter((s) => centre(s)[2] > EDGE - 5 && centre(s)[2] < EDGE);
@@ -472,9 +476,16 @@ describe("eiffel platforms fit-out", () => {
     const all = byPrefix("second.");
     const reach = Math.max(...all.flatMap((s) => [Math.abs(s.lo[0]), Math.abs(s.hi[0]), Math.abs(s.lo[2]), Math.abs(s.hi[2])]));
     expect(reach).toBeLessThan(16.33);
-    // Two round tents of 10 facets, one queue's tent of 2.
+    // Two round tents, their canvas a facet to each chord of a rim cut
+    // within 3 mm of its circle (`chord.ts`) and a whole number of chords
+    // to each of the decagon's sides; one queue's tent of 2.
+    const chords = circleSegments(3.7, SAG.eye, { multiple: 10 });
     const canvas = solids["second.tent"]!.filter((s) => s.pts.length === 3);
-    expect(canvas.length).toBe(20);
+    expect(canvas.length).toBe(2 * chords);
+    // Still a post at each of the decagon's corners [sourced drawing]: ten
+    // to a tent, up to the eave.
+    const tentPosts = solids["second.tent"]!.filter((s) => s.pts.length === 4 && Math.abs(s.hi[1] - floor - 2.2) < 1e-6);
+    expect(tentPosts.length).toBe(20);
     expect(solids["second.queue"]!.filter((s) => s.depth < 0.05).length).toBe(2);
   });
 

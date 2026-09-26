@@ -161,6 +161,7 @@ import {
   stationLattice,
   stationRows,
 } from "./lattice.js";
+import { SAG, arcSegments, smoothed } from "./chord.js";
 import { CROSS_RIVETS, CROSS_THICK, type Crossing, crossPlateSets } from "./crossing.js";
 import { CROSS_PLATE_AT, type Detail, type Parts, joinParts } from "./parts.js";
 import { GLAZING } from "./platforms.js";
@@ -341,6 +342,17 @@ const GIRDER_MESH = { spacing: 1.21, rise: 1.21 * Math.tan((43 * Math.PI) / 180)
  * does not bear out: 1.300 deep, and 0.77 in the webs' planes.
  */
 const DOME = { radius: 7.435, depth: 1.2, breadth: 0.87, chord: 0.05, lacing: 0.025, segments: 9 } as const;
+
+/**
+ * Chord runs per panel of the dome's ribs. The panels are the plate's
+ * (`DOME.segments`, a node every 10 degrees); a chord is a curved box, and
+ * drawn straight from node to node its extrados would stand 28 mm off the
+ * 7.435 arc. Its skin alone is swept through this many runs a panel, the
+ * fewest that keep the extrados within `SAG.far` of the arc (the dome is
+ * only ever seen from well away); nodes, rungs, lacing and rivets stay on
+ * the panels.
+ */
+export const DOME_CHORD_SPLIT = Math.ceil(arcSegments(DOME.radius, Math.PI / 2, SAG.far) / DOME.segments);
 
 /**
  * The campanile's stair core, "le cylindre en tôle de 690 mm de diamètre
@@ -858,6 +870,54 @@ function seamRuns(
     return [at(from), at(from + steps * pitch - RUN_SHORT)] as const;
   });
   return members(g, id, runs, faces);
+}
+
+/**
+ * {@link seamRuns} over polylines rather than straight pieces: each line
+ * (all with one point count) cut to a whole number of pitches along its
+ * own length, centred, and kept as a polyline through the line's inner
+ * points, so the rows a pitch apart along it lie on a curved member's
+ * skin. Two-point lines give seamRuns' runs exactly.
+ */
+function curvedSeamRuns(g: Graph, id: string, lines: ReadonlyArray<readonly Vec3[]>, faces: readonly Vec3[]): NodeHandle {
+  const pitch = UPRIGHT_SEAMS.pitch;
+  const runs = lines.map((line, i) => {
+    const cum = [0];
+    for (let j = 1; j < line.length; j++) {
+      const [a, b] = [line[j - 1]!, line[j]!];
+      cum.push(cum[j - 1]! + Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]));
+    }
+    const len = cum[cum.length - 1]!;
+    const steps = Math.floor((len - pitch) / pitch);
+    if (steps < 1) {
+      throw new Error(
+        `eiffel summit "${id}": line ${i} is ${len.toFixed(3)} m long, too short for a seam run ` +
+          `of pitch ${pitch} with half a pitch clear at each end; a line needs at least ${2 * pitch} m`,
+      );
+    }
+    const at = (d: number): Vec3 => {
+      let j = 1;
+      while (j < line.length - 1 && cum[j]! < d) j++;
+      const [a, b] = [line[j - 1]!, line[j]!];
+      const t = (d - cum[j - 1]!) / (cum[j]! - cum[j - 1]!);
+      return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+    };
+    const from = (len - steps * pitch) / 2;
+    const to = from + steps * pitch - RUN_SHORT;
+    // The cut ends must fall in the first and last segments, so every run
+    // keeps the line's point count.
+    if (from >= cum[1]! || to <= cum[cum.length - 2]!) {
+      throw new Error(`eiffel summit "${id}": line ${i}'s run ends leave its end segments; lengthen the segments or shorten the pitch`);
+    }
+    return [at(from), ...line.slice(1, -1), at(to)];
+  });
+  const count = runs[0]?.length ?? 0;
+  const lat = placedLattice(
+    g,
+    id,
+    Array.from({ length: count }, (_, j) => runs.map((r) => r[j]!)),
+  );
+  return withFaces(g, `${id}Faces`, chains(lat, "Paths"), faces);
 }
 
 /** A point's distance outside a rectangle (0 inside). */
@@ -2665,10 +2725,15 @@ function dome(
   };
   const rows = stationRows(16, n + 1, at);
   const ribs = placedLattice(g, "dome", rows);
+  // The chords' own line, each panel cut in DOME_CHORD_SPLIT runs on the
+  // arc (`at` takes a fractional level), so the skin follows the curve.
+  const split = DOME_CHORD_SPLIT;
+  const chordRows = stationRows(16, n * split + 1, (s, k) => at(s, k / split));
+  const chordLine = placedLattice(g, "domeChordLine", chordRows);
   // Each station carries its arch's plane normal, which squares its
   // chord's section: a normal read off the position (the old rib's) turns
   // near the crown, where the chords sit off the arch's plane.
-  const perPoint = rows.flatMap((row) => row.map((_, s) => normalOf(Math.floor(s / 4))));
+  const perPoint = chordRows.flatMap((row) => row.map((_, s) => normalOf(Math.floor(s / 4))));
   const planeN = g.add(
     setAttribute,
     {
@@ -2679,8 +2744,8 @@ function dome(
     },
     "domePlaneN",
   );
-  g.connect(ribs.stations, "out", planeN, "in");
-  const chordLat: Lattice = { ...ribs, stations: planeN };
+  g.connect(chordLine.stations, "out", planeN, "in");
+  const chordLat: Lattice = { ...chordLine, stations: planeN };
   const chords = chains(chordLat, "Chords");
   const chordSkin = g.add(
     sweepProfile,
@@ -2712,19 +2777,21 @@ function dome(
   //
   // SEAMS: a chord is a box member like an upright, so it takes the
   // uprights' seam rows [estimated], one run per segment between nodes,
-  // squared, like its skin, to the arch's plane.
-  const pieces: Array<readonly [Vec3, Vec3]> = [];
+  // squared, like its skin, to the arch's plane. Each run follows the
+  // chord's own line through the panel (its DOME_CHORD_SPLIT runs), so
+  // the rows lie on the curved skin rather than on the chord across it.
+  const lines: Vec3[][] = [];
   const faces: Vec3[] = [];
   for (let s = 0; s < 16; s++) {
     for (let k = 0; k < n - 1; k++) {
-      pieces.push([rows[k]![s]!, rows[k + 1]![s]!]);
+      lines.push(Array.from({ length: split + 1 }, (_, j) => chordRows[k * split + j]![s]!));
       faces.push(normalOf(Math.floor(s / 4)));
     }
   }
   const seams = seamRivets(
     g,
     "domeChord",
-    seamRuns(g, "domeSeam", pieces, faces),
+    curvedSeamRuns(g, "domeSeam", lines, faces),
     DOME.chord,
     attribute(FACE_NORMAL, 3),
     UPRIGHT_SEAMS,
@@ -2735,7 +2802,7 @@ function dome(
   // two OUTER faces, the ones on the girder's outside (the inner heads are
   // under the lacing bars themselves). On a node the mitred section is
   // stretched along the bend, radially, by 1 / cos(half the turn).
-  const stretch = 1 / Math.cos(Math.PI / (4 * n));
+  const stretch = 1 / Math.cos(Math.PI / (4 * n * split));
   const nodeAt: Vec3[] = [];
   const nodeDir: Vec3[] = [];
   for (let s = 0; s < 16; s++) {
@@ -2809,6 +2876,28 @@ function prism(
     `${id}Skin`,
   );
   g.connect(chains(axis, "Axis"), "out", node, "in");
+  return node;
+}
+
+/**
+ * An open prism on the axis whose walls are FLAT: a `sides`-gon of
+ * circumradius `radius` from y0 to y1, vertices where {@link polygon}
+ * puts them, each wall a ribbon of its own. A circle sweep shares its
+ * ring's points round the section and so shades any polygon round; the
+ * lantern's decagons are decagons [sourced p. 79], and each wall keeps its
+ * own points and its own normal here.
+ */
+function flatPrism(g: Graph, id: string, sides: number, y0: number, y1: number, radius: number): NodeHandle {
+  const ring = polygon(sides, radius, (y0 + y1) / 2);
+  const walls = ring.map((p, i) => [p, ring[(i + 1) % sides]!] as const);
+  const node = g.add(
+    sweepProfile,
+    // A ribbon faces the frame's up; a quarter roll back stands it upright,
+    // facing out of the decagon (the walls run anticlockwise seen from +y).
+    { profile: "ribbon", width: y1 - y0, frame: "upHint", up: [0, 1, 0], roll: -0.25 },
+    `${id}Skin`,
+  );
+  g.connect(members(g, `${id}Walls`, walls), "out", node, "in");
   return node;
 }
 
@@ -2905,7 +2994,7 @@ function lantern(g: Graph, crownY: number): NodeHandle[] {
   const rBalcony = circum(L.balconyFlats, 10);
   const balconyY = lv.balcony;
   const consoleY = balconyY - L.console;
-  out.push(prism(g, "lanternBase", 10, [deckTop, baseTop], rBase, false));
+  out.push(flatPrism(g, "lanternBase", 10, deckTop, baseTop, rBase));
   // The floor round the core's head, which carries it [sourced p. 80].
   const floorPlan = polygon(10, rBase - 0.01, 0).map(([x, , z]): [number, number] => [x, z]);
   out.push(slabs(g, "lanternFloor", slabWithWells(floorPlan, [{ s: [-0.36, 0.36], t: [-0.36, 0.36] }], lv.lanternFloor - L.floorDepth, lv.lanternFloor)));
@@ -2926,7 +3015,7 @@ function lantern(g: Graph, crownY: number): NodeHandle[] {
     });
   };
   out.push(slabs(g, "balconyFloor", ring(rBase, rBalcony)));
-  out.push(prism(g, "balconyParapet", 10, [balconyY, balconyY + L.parapet], rBalcony, false));
+  out.push(flatPrism(g, "balconyParapet", 10, balconyY, balconyY + L.parapet, rBalcony));
   const arcSteps = 8;
   const consoles = placedLattice(
     g,
@@ -2978,13 +3067,21 @@ function lantern(g: Graph, crownY: number): NodeHandle[] {
   out.push(
     // Open at both ends: the lantern's ladders rise through it to the
     // crown ring (`stairs.ts`), and the platform's deck closes the top.
-    prism(
+    // The sweep's normals lie in each ring's plane, a cylinder's, whatever
+    // the radius does; recomputed from the faces (`chord.ts`), the sphere
+    // shades as a dome, tilting up to its crown. On the cupola alone, so
+    // nothing it touches is averaged into it.
+    smoothed(
       g,
-      "cupola",
-      L.cupolaSides,
-      cupola.map(([y]) => y),
-      cupola,
-      false,
+      "cupolaSmooth",
+      prism(
+        g,
+        "cupola",
+        L.cupolaSides,
+        cupola.map(([y]) => y),
+        cupola,
+        false,
+      ),
     ),
   );
 

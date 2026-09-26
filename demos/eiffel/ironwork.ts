@@ -68,6 +68,7 @@ import {
   setAttribute,
   vec,
 } from "pcg-ts";
+import { SAG, smoothed } from "./chord.js";
 import { copyToQuadrants, indexTable, merge, type Vec3 } from "./lattice.js";
 
 /** A point in the arch's plane, or in a panel's frame. */
@@ -142,8 +143,27 @@ export const VOLUTES = [
 
 /** Where a volute ends: its bar's inner edge on the macaron's rim [derived]. */
 export const VOLUTE_END = MACARON_R + VOLUTE_WIDTH / 2;
-/** Turtle steps on arcs and spirals: 18° a step [estimated: drawing resolution]. */
+/**
+ * Turtle steps on arcs and spirals: never coarser than 18° a step
+ * [estimated: drawing resolution], and finer wherever the radius asks for
+ * it, so no chord stands more than {@link CURVE_SAG} off its curve.
+ */
 export const CURVE_STEP = Math.PI / 10;
+/**
+ * The most a traced chord may stand off its arc or spiral, in metres:
+ * `chord.ts`' `near`, the arches' ironwork being read from the ground and
+ * the 1st floor, a few metres off at the nearest.
+ */
+export const CURVE_SAG = SAG.near;
+
+/**
+ * The step, in radians, a chord may turn through on a curve of radius of
+ * curvature `rho` and stand at most `sag` off it — rho (1 − cos(θ/2)) ≤
+ * sag — capped at {@link CURVE_STEP}.
+ */
+export function curveStep(rho: number, sag: number): number {
+  return Math.min(CURVE_STEP, sag >= rho ? Math.PI : 2 * Math.acos(1 - sag / rho));
+}
 /** Sides of a macaron's disc [estimated]. */
 export const MACARON_SIDES = 12;
 
@@ -193,8 +213,15 @@ export function spiralEye(at: Pose, s: { r0: number; k: number; turn: 1 | -1 }):
   return sub(at.p, scale(ur, s.r0));
 }
 
-/** Run a turtle program: the polyline it draws, from the start pose's point on. */
-export function trace(start: Pose, strokes: readonly Stroke[], step = CURVE_STEP): Pt[] {
+/**
+ * Run a turtle program: the polyline it draws, from the start pose's point
+ * on. Arcs and spirals are cut so no chord stands more than `sag` off the
+ * curve (see {@link curveStep}): an arc in equal steps, a spiral in steps
+ * that lengthen as it winds in, each set by the radius where it starts.
+ * `halfWidth` is the bar's, drawn round the line: its outer edge, on the
+ * larger radius, is the one held to `sag`.
+ */
+export function trace(start: Pose, strokes: readonly Stroke[], halfWidth = 0, sag = CURVE_SAG): Pt[] {
   const out: Pt[] = [start.p];
   let p = start.p;
   let h = start.heading;
@@ -206,7 +233,7 @@ export function trace(start: Pose, strokes: readonly Stroke[], step = CURVE_STEP
       const side = Math.sign(s.turn);
       const c = add(p, scale(rot(dir(h), side * (Math.PI / 2)), s.radius));
       const from = sub(p, c);
-      const n = Math.max(1, Math.ceil(Math.abs(s.turn) / step));
+      const n = Math.max(1, Math.ceil(Math.abs(s.turn) / curveStep(s.radius + halfWidth, sag)));
       for (let i = 1; i <= n; i++) out.push(add(c, rot(from, (s.turn * i) / n)));
       p = out[out.length - 1]!;
       h += s.turn;
@@ -214,11 +241,15 @@ export function trace(start: Pose, strokes: readonly Stroke[], step = CURVE_STEP
       const eye = spiralEye({ p, heading: h }, s);
       const ur = unit(sub(p, eye));
       const total = Math.log(s.r0 / s.rEnd) / s.k;
-      const n = Math.max(1, Math.ceil(total / step));
-      for (let i = 1; i <= n; i++) {
-        const phi = (total * i) / n;
-        out.push(add(eye, scale(rot(ur, s.turn * phi), s.r0 * Math.exp(-s.k * phi))));
+      // A log spiral's radius of curvature is its radius times √(1 + k²);
+      // winding in, a step's largest is at its start.
+      const phis: number[] = [];
+      for (let phi = 0; phi < total - 1e-12; ) {
+        phi = Math.min(total, phi + curveStep(s.r0 * Math.exp(-s.k * phi) * Math.hypot(1, s.k) + halfWidth, sag));
+        phis.push(phi);
       }
+      if (phis.length === 0) phis.push(total);
+      for (const phi of phis) out.push(add(eye, scale(rot(ur, s.turn * phi), s.r0 * Math.exp(-s.k * phi))));
       p = out[out.length - 1]!;
       // The heading at the end: the circle's tangent turned atan(k) inward.
       const t = rot(unit(sub(p, eye)), s.turn * (Math.PI / 2 + Math.atan(s.k)));
@@ -424,7 +455,7 @@ export function panelIronwork(panel: Panel): PanelIronwork {
     { op: "line", length: rise },
     { op: "arc", radius: a, turn: -Math.PI },
     { op: "line", length: rise },
-  ]);
+  ], FRAME_WIDTH / 2);
   // Every piece is cut square where its corner meets the face it ends on:
   // the frame at the top edge (b's face, where b cuts it), the axis bar at
   // the extrados, the two outer bars in the opening's top corners, aimed at
@@ -473,7 +504,7 @@ export function panelIronwork(panel: Panel): PanelIronwork {
     }
     const sc = scroll(tail);
     if (sc === undefined) return;
-    const line = trace(sc.start, sc.strokes);
+    const line = trace(sc.start, sc.strokes, VOLUTE_WIDTH / 2);
     if (fits(panel, line, eye, others)) {
       volutes.push(line);
       eyes.push(eye);
@@ -638,6 +669,10 @@ export function ironworkSolid(g: Graph, id: string, pieces: readonly Piece[], qu
     `${id}Walls`,
   );
   g.connect(outlines(g, `${id}Rim`, pieces, quads), "out", walls, "in");
+  // The walls alone are smoothed by the crease angle (`chord.ts`): a
+  // scroll's rim shades as the bent bar it is, its tips and the faces (90
+  // degrees off every wall) keep their edges.
+  const rim = smoothed(g, `${id}WallsSmooth`, walls);
   const faces = g.add(
     extrudePolygon,
     { direction: "polygonNormal", distance: attribute("ironDepth"), caps: "both", sides: false },
@@ -645,7 +680,7 @@ export function ironworkSolid(g: Graph, id: string, pieces: readonly Piece[], qu
   );
   const caps = pieces.flatMap((p) => p.caps.map((outline) => ({ outline, depth: p.depth })));
   g.connect(outlines(g, `${id}Cap`, caps, quads), "out", faces, "in");
-  const both = merge(g, `${id}Solid`, [walls, faces]);
+  const both = merge(g, `${id}Solid`, [rim, faces]);
   const done = g.add(removeAttribute, { names: ["ironDepth"], domain: "point" }, id);
   g.connect(both, "out", done, "in");
   return done;

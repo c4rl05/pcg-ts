@@ -15,7 +15,8 @@
  * legs and faces are.
  */
 import type { Graph } from "pcg-ts";
-import { type Block, type Prism, blockPrism, cylinder, prisms } from "./ground.js";
+import { SAG } from "./chord.js";
+import { type Block, type Prism, blockPrism, cylinder, flatsSides, prisms } from "./ground.js";
 import { type Vec3, copyToQuadrants } from "./lattice.js";
 import type { Parts } from "./parts.js";
 import { ARCH, ENTRETOISE, NODES, UPRIGHT_BOX, node, profileAt, yOfCote } from "./spec.js";
@@ -332,7 +333,8 @@ export function pylonBearings(): Prism[] {
   const out: Prism[] = [];
   const b = BEARING;
   const box = (p: Vec3): void => {
-    out.push(cylinder([p[0], PYLON.top, p[2]], [p[0], PYLON.top + b.box.h, p[2]], b.box.d, 12));
+    // Seen from the ground under the scaffold: `SAG.near`.
+    out.push(cylinder([p[0], PYLON.top, p[2]], [p[0], PYLON.top + b.box.h, p[2]], b.box.d, flatsSides(b.box.d, SAG.near)));
   };
   // Under a.
   {

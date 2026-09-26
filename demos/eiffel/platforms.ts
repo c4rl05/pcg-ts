@@ -171,8 +171,10 @@
  * 152,652 points; those left are `lifts.ts`'s cars and stairs, which write
  * none). Nothing here is copied by the quadrant targets, whose
  * copies would not turn a normal: every part is laid out on the +z face
- * and turned in TypeScript. The pedestals (masonry) and the names keep no
- * normals, as their classes carry none and the page computes them.
+ * and turned in TypeScript. The names keep no normals, as their class
+ * carries none and the page computes them; the pedestals (masonry) keep
+ * theirs, smoothed, so their round corner shades round — the page gives
+ * the rest of that class flat ones (normals.ts).
  */
 import type { Graph, NodeHandle } from "pcg-ts";
 import {
@@ -188,6 +190,7 @@ import {
   vec,
 } from "pcg-ts";
 import { type Vec3, copyToQuadrants, indexTable } from "./lattice.js";
+import { SAG, arcSegments, circleSegments, halfEllipseSegments, smoothed } from "./chord.js";
 import { archPierBases } from "./firstFloor.js";
 import { ALPHABET, glyph, setLine } from "./letters.js";
 import { type Parts, jitter } from "./parts.js";
@@ -237,18 +240,46 @@ const GALLERY = {
 } as const;
 
 /** The arcade's lesser members [estimated: thicknesses, crest and mast sections]. */
-const ARCADE = {
+export const ARCADE = {
   /** Plate pier and arch rib thickness through the face. */
   plate: 0.15,
-  /** Facets per small arch. */
-  archFacets: 6,
-  /** Segments of each vault's half-ellipse. */
-  vaultSegments: 12,
+  /**
+   * Facets per small arch [derived: chord ≤ 5 mm (`SAG.near`) on the
+   * extrados, 1.538 + 0.20, over the half turn].
+   */
+  archFacets: arcSegments(GALLERY.archRadius + GALLERY.archRib, Math.PI, SAG.near),
+  /**
+   * A crescent's cells: 12, between its 11 rays [sourced PL-XIX Fig. 1:
+   * « 12 roundels an arcade », one in each cell (SOURCES.md §10.3)]. The
+   * rays' feet are points of the vault's arc, so this sets the count of
+   * rays, cabochons and silvered plates, not how round the arc reads
+   * (`VAULT_SEGMENTS`).
+   */
+  cells: 12,
   /** The vault's roof (zinc on boarding and purlins), as a shell. */
   shell: 0.1,
   /** Flag mast: 8.00 long [sourced text], foot 4.2 above the gallery floor, section. */
   mast: { length: 8, foot: 4.2, size: 0.12 },
 } as const;
+
+/**
+ * Chords to each of a crescent's cells [derived: the vault's half-ellipse,
+ * 3.5175 across by 2.65, at chord ≤ 5 mm (`SAG.near`), rounded up to a
+ * whole number a cell]. Every arc that follows the vault's (`vaultArc`,
+ * `innerArc`) is cut into VAULT_SEGMENTS, so cell boundary k — a ray's
+ * foot — is its point k × CELL_STEPS, where the 12-chord arc had its
+ * point k: what is counted stays put, and only the outline between
+ * gets rounder.
+ */
+const CELL_STEPS = Math.ceil(
+  halfEllipseSegments(
+    (GALLERY.module - GALLERY.valley) / 2,
+    GALLERY.crown - GALLERY.columnHeight - GALLERY.pierHeight,
+    SAG.near,
+  ) / ARCADE.cells,
+);
+/** Segments of each vault's half-ellipse and of the arcs that follow it (see `CELL_STEPS`). */
+export const VAULT_SEGMENTS = ARCADE.cells * CELL_STEPS;
 
 /**
  * The inner arcade, « Arcades des Pilastres en fer » (PL-XIII Figs 2, 21,
@@ -865,7 +896,7 @@ const SECOND_MAST = { top: 7.8, size: 0.12 } as const;
  * are their own parts.
  */
 const SECOND_FITOUT = {
-  tank: { diameter: 3.0, length: 6.0, foot: 0.6, facets: 16, s: 0.25, t: 7.9 },
+  tank: { diameter: 3.0, length: 6.0, foot: 0.6, s: 0.25, t: 7.9 },
   saddle: { at: 2.0, along: 0.3, across: 2.4 },
   figaro: {
     plan: [
@@ -891,6 +922,7 @@ const SECOND_FITOUT = {
       [0.05, 12.22],
     ] as ReadonlyArray<readonly [number, number]>,
     radius: 3.7,
+    /** The decagon's corners, a post at each [sourced drawing]; the canvas over them is round (`secondFitOut`). */
     sides: 10,
     eave: 2.2,
     apex: 3.4,
@@ -1149,7 +1181,19 @@ const CROSS_GIRDER = {
  * 4,200 [derived], where the plain 28.245 square this replaces was
  * derived from that 4,200.
  */
-const VOID = { half: 14.5, chamfer: 24.0, apex: 13.35, bowEnd: 7.2, bowSegments: 12 } as const;
+const VOID = { half: 14.5, chamfer: 24.0, apex: 13.35, bowEnd: 7.2 } as const;
+
+/**
+ * The bow's chords: as many as keep it within `SAG.eye` of its circle,
+ * the visitors leaning on its rail [derived: 20 on R 23.1 over its 36
+ * degrees, where 12 stood 8 mm off]. The rail's posts are spaced along
+ * it, not a post a chord (`railAlong`).
+ */
+const BOW_SEGMENTS = ((): number => {
+  const sag = VOID.half - VOID.apex;
+  const R = (VOID.bowEnd ** 2 + sag ** 2) / (2 * sag);
+  return arcSegments(R, 2 * Math.asin(VOID.bowEnd / R), SAG.eye);
+})();
 
 /**
  * The step from the gallery up to the platform, at the gallery's inner
@@ -1327,7 +1371,6 @@ const FACADE = {
   spring: 2.43,
   rise: 1.12,
   wall: 0.25,
-  headSegments: 8,
 } as const;
 
 /** A unit quaternion [x, y, z, w]. */
@@ -1483,9 +1526,12 @@ function blocks(g: Graph, id: string, list: readonly Block[]): NodeHandle {
 /**
  * Many prisms as one mesh: every outline a closed path, extruded along its
  * own normal by its depth. The extrusion gives every wall and cap its own
- * points and a flat `normal`, which the platforms class keeps; `normals`
- * false removes it, for a class that carries none (see the file comment).
- * Each outline must be convex: a cap is a fan from its first point.
+ * points and a flat `normal`, which the platforms class keeps — smoothed
+ * across any edge under `chord.ts`' crease angle, so a round part shades
+ * round and a box keeps its edges; `normals` false removes it, for a class
+ * that carries none (see the file comment). Each outline must be convex,
+ * or at least all in sight of its first point (a crescent's silvered
+ * plate, `crescentGlass`): a cap is a fan from its first point.
  */
 function prisms(g: Graph, id: string, list: readonly Prism[], normals = true): NodeHandle {
   // An index table is a ramp, whose lookup scans its stops, so a table's
@@ -1501,10 +1547,17 @@ function prisms(g: Graph, id: string, list: readonly Prism[], normals = true): N
     (runs[runs.length - 1] as Prism[]).push(p);
     count += p.outline.length;
   }
-  if (runs.length === 1) return prismRun(g, id, list, normals);
-  const out = g.add(mergePrimitives, {}, id);
-  runs.forEach((run, i) => g.connect(prismRun(g, `${id}Run${i}`, run, normals), "out", out, "in"));
-  return out;
+  // With normals, the whole list is smoothed by the crease angle
+  // (`chord.ts`) after the runs are merged, so a round part cut across two
+  // runs still welds; without, the page computes them as before.
+  const tail = normals ? `${id}Flat` : id;
+  let out: NodeHandle;
+  if (runs.length === 1) out = prismRun(g, tail, list, normals);
+  else {
+    out = g.add(mergePrimitives, {}, tail);
+    runs.forEach((run, i) => g.connect(prismRun(g, `${id}Run${i}`, run, normals), "out", out, "in"));
+  }
+  return normals ? smoothed(g, id, out) : out;
 }
 
 /**
@@ -1640,13 +1693,17 @@ function bayCentre(k: number): number {
   return k * GALLERY.module;
 }
 
-/** A vault's outer arc over bay centre `c`, at r, left foot to right foot, shrunk by `inset`. */
-function vaultArc(c: number, r: number, inset = 0): Vec3[] {
+/**
+ * A vault's outer arc over bay centre `c`, at r, left foot to right foot,
+ * shrunk by `inset`: VAULT_SEGMENTS chords at equal steps of the angle,
+ * so point k × CELL_STEPS is the foot of the crescent's ray k.
+ */
+export function vaultArc(c: number, r: number, inset = 0): Vec3[] {
   const half = (GALLERY.module - GALLERY.valley) / 2 - inset;
   const rise = CROWN_Y - SPRING_Y - inset;
   const out: Vec3[] = [];
-  for (let i = 0; i <= ARCADE.vaultSegments; i++) {
-    const phi = Math.PI * (1 - i / ARCADE.vaultSegments);
+  for (let i = 0; i <= VAULT_SEGMENTS; i++) {
+    const phi = Math.PI * (1 - i / VAULT_SEGMENTS);
     out.push([c + half * Math.cos(phi), SPRING_Y + rise * Math.sin(phi), r]);
   }
   return out;
@@ -1684,14 +1741,14 @@ function between(upper: readonly Vec3[], lower: readonly Vec3[], depth: number):
  * per point of `vaultArc`. `grow` widens the circle about the same centre
  * (a rib's outer edge).
  */
-function innerArc(
+export function innerArc(
   c: number,
   r: number,
   grow = 0,
   radius: number = GALLERY.innerRadius,
   crown: number = GALLERY.innerCrown,
 ): Vec3[] {
-  const n = ARCADE.vaultSegments;
+  const n = VAULT_SEGMENTS;
   const R = radius + grow;
   const cy = GALLERY.floor + crown - radius;
   const psi0 = Math.asin((SPRING_Y - cy) / R);
@@ -1734,7 +1791,8 @@ function merged(part: Parted): Piece {
 /**
  * A gable's crescent over bay centre `c`, its face at r (see `GABLE`): a
  * rib under the vault's arc, a rib over the inner arc, and a ray from each
- * point of the one to the matching point of the other, all ARCADE.plate
+ * cell boundary of the one to the matching boundary of the other (11,
+ * `ARCADE.cells`; the ribs have `CELL_STEPS` chords a cell), all ARCADE.plate
  * thick and extruded inward from r as the vault is. `arc` gives the ribs'
  * depths, how far under the vault's arc the outer rib hangs, and the inner
  * arc (the face gable's unless given: the inner arcade's are
@@ -1762,9 +1820,10 @@ function gableRibs(
   ];
   const mid = r - ARCADE.plate / 2;
   const blocks: Block[] = [];
-  for (let i = 1; i < outer.length - 1; i++) {
-    const [ax, ay] = innerOut[i] as Vec3;
-    const [bx, by] = outerIn[i] as Vec3;
+  // A ray at every cell boundary but the feet.
+  for (let k = 1; k < ARCADE.cells; k++) {
+    const [ax, ay] = innerOut[k * CELL_STEPS] as Vec3;
+    const [bx, by] = outerIn[k * CELL_STEPS] as Vec3;
     blocks.push(bar([ax, ay, mid], [bx, by, mid], GABLE.ray, ARCADE.plate));
   }
   return { prisms, blocks };
@@ -2023,7 +2082,8 @@ const ARCADE_DRESS = {
     depth: 0.1,
   },
   cabochon: { inFromOuter: 0.55, boss: 0.135, ring: 0.19, ringDepth: 0.03 },
-  globe: { in: 1.3, centre: 5.9, radius: 0.3, rod: 0.03, hoop: 0.02, hoopSides: 12 },
+  /** Each hoop's bars are as many as keep it round to `SAG.near` (`arcadeDressFace`). */
+  globe: { in: 1.3, centre: 5.9, radius: 0.3, rod: 0.03, hoop: 0.02 },
 } as const;
 
 /** The assets the fit-out's instances resolve against: the page models each (main.ts `ASSETS`). */
@@ -2137,8 +2197,8 @@ function arcadeDressFace(): {
     // scrolls, cartouche, collar, palmette.
     const plane = EDGE + C.depth / 2;
     for (const j of C.legs.rays) {
-      const [ia, iy] = innerOut[j] as Vec3;
-      const [oa, oy] = outerIn[j] as Vec3;
+      const [ia, iy] = innerOut[j * CELL_STEPS] as Vec3;
+      const [oa, oy] = outerIn[j * CELL_STEPS] as Vec3;
       const t = (floor + C.legs.top - iy) / (oy - iy);
       const head: Vec3 = [ia + t * (oa - ia), floor + C.legs.top, plane];
       const s = Math.sign(head[0] - c);
@@ -2184,12 +2244,15 @@ function arcadeDressFace(): {
       );
     }
     // The cabochons: one in each cell of the crescent, a constant distance
-    // in from the outer rib's inner edge along the cell's middle line.
+    // in from the outer rib's inner edge along the cell's middle line (from
+    // the middle of the chord between its two rays' feet on the one rib to
+    // the same on the other).
     const B = D.cabochon;
-    for (let i = 0; i + 1 < outerIn.length; i++) {
+    for (let k = 0; k < ARCADE.cells; k++) {
+      const [i, j] = [k * CELL_STEPS, (k + 1) * CELL_STEPS];
       const midOf = (p: readonly Vec3[]): [number, number] => [
-        ((p[i] as Vec3)[0] + (p[i + 1] as Vec3)[0]) / 2,
-        ((p[i] as Vec3)[1] + (p[i + 1] as Vec3)[1]) / 2,
+        ((p[i] as Vec3)[0] + (p[j] as Vec3)[0]) / 2,
+        ((p[i] as Vec3)[1] + (p[j] as Vec3)[1]) / 2,
       ];
       const [oa, oy] = midOf(outerIn);
       const [ia, iy] = midOf(innerOut);
@@ -2203,12 +2266,15 @@ function arcadeDressFace(): {
     const G = D.globe;
     const gr = EDGE - G.in;
     const gy = floor + G.centre;
-    // The hoops' bars clear the globe at their chords' middles.
-    const hoop = (G.radius + G.hoop / 2 + 0.005) / Math.cos(Math.PI / G.hoopSides);
+    // The hoops' bars clear the globe at their chords' middles; as many as
+    // keep each hoop's outer edge within `SAG.near` of its circle
+    // [derived: 20 on about 0.33].
+    const sides = circleSegments(G.radius + G.hoop + 0.01, SAG.near);
+    const hoop = (G.radius + G.hoop / 2 + 0.005) / Math.cos(Math.PI / sides);
     part.hanger.blocks.push(post(c, gr, G.rod, gy + hoop + G.hoop / 2, CROWN_Y - ARCADE.shell));
-    for (let j = 0; j < G.hoopSides; j++) {
-      const t0 = (2 * Math.PI * j) / G.hoopSides;
-      const t1 = (2 * Math.PI * (j + 1)) / G.hoopSides;
+    for (let j = 0; j < sides; j++) {
+      const t0 = (2 * Math.PI * j) / sides;
+      const t1 = (2 * Math.PI * (j + 1)) / sides;
       // One hoop in the face's plane, one square to it.
       part.hanger.blocks.push(
         bar(
@@ -2332,13 +2398,14 @@ function balustersFace(): Fitting[] {
 
 /**
  * A glazed door's arched head in the pavilion's gallery façade, centred on
- * a along the face, at r, left foot to right foot (see `FACADE`).
+ * a along the face, at r, left foot to right foot (see `FACADE`), in
+ * `HEAD_SEGMENTS` chords.
  */
 function doorHead(a: number, r: number): Vec3[] {
   const F = FACADE;
   const out: Vec3[] = [];
-  for (let i = 0; i <= F.headSegments; i++) {
-    const phi = Math.PI * (1 - i / F.headSegments);
+  for (let i = 0; i <= HEAD_SEGMENTS; i++) {
+    const phi = Math.PI * (1 - i / HEAD_SEGMENTS);
     const y = FLOORS.first + F.spring + F.rise * Math.sin(phi);
     out.push([a + (F.door / 2) * Math.cos(phi), y, r]);
   }
@@ -2354,7 +2421,7 @@ function tympanum(c: number, r: number): Piece {
   const arc = vaultArc(c, r, ARCADE.shell);
   const rib = vaultArc(c, r, ARCADE.shell + GABLE.innerRib);
   const mid = r - ARCADE.plate / 2;
-  const n = ARCADE.vaultSegments;
+  const n = ARCADE.cells;
   const hub: Vec3 = [c, SPRING_Y, mid];
   const blocks: Block[] = [];
   const halfSpan = (GALLERY.module - GALLERY.valley) / 2 - ARCADE.shell;
@@ -2364,8 +2431,9 @@ function tympanum(c: number, r: number): Piece {
     [c + halfSpan, sill, mid],
   ];
   blocks.push(bar(ends[0], ends[1], GABLE.innerRib, ARCADE.plate));
+  // The post and rays to every second cell boundary of the rib.
   for (let i = 2; i <= n - 2; i += 2) {
-    const [x, y] = rib[i] as Vec3;
+    const [x, y] = rib[i * CELL_STEPS] as Vec3;
     blocks.push(bar(hub, [x, y, mid], i === n / 2 ? GABLE.outerRib : GABLE.ray, ARCADE.plate));
   }
   return { prisms: between(arc, rib, ARCADE.plate), blocks };
@@ -2575,10 +2643,36 @@ const DRESSING = {
   },
   anglo: { collar: 0.55, knee: 0.78, collarPost: 2.5, upper: [0.5] },
   flamand: { collar: 0.55, braceFoot: 2.45, collarPost: 2.5, strut: 1.24, archRise: 1.5, upper: [] as number[] },
-  /** Facets of a disc and of a curved brace. */
-  discSides: 16,
-  facets: 8,
 } as const;
+
+/*
+ * The dressing's curves are cut by size, not by count (`chord.ts`): every
+ * one of them is overhead or a few metres off, so each keeps its chords
+ * within `SAG.near` of the true curve. A disc takes its own from its
+ * radius (`disc`); the crest's head and shoulders and the Flamand's
+ * braces take theirs where they are drawn. Those that two parts must
+ * share are here.
+ */
+
+/**
+ * Segments of a Français door's arched head, shared by the wall over it,
+ * its archivolt and its glass, which must meet chord for chord
+ * [derived: chord ≤ 5 mm on the archivolt's outer edge, a half-ellipse
+ * 1.30 + 0.25 across by 1.12 + 0.25].
+ */
+const HEAD_SEGMENTS = halfEllipseSegments(
+  FACADE.door / 2 + DRESSING.francais.archivolt.width,
+  FACADE.rise + DRESSING.francais.archivolt.width,
+  SAG.near,
+);
+
+/**
+ * Segments of the Flamand's arched sashes over the transom, shared by the
+ * dressing's arch and the fanlight glazed to it [derived: chord ≤ 5 mm on
+ * a half-ellipse a quarter-bay across (1.94, more than any sash's) by the
+ * 1.50 rise].
+ */
+const FLAMAND_ARCH_SEGMENTS = halfEllipseSegments(GALLERY.module / 4, DRESSING.flamand.archRise, SAG.near);
 
 /** Each pavilion's face, by the name `FACES` gives it. */
 const PAVILION_FACE = {
@@ -2612,12 +2706,14 @@ function underShell(y: number): number {
 }
 
 /**
- * A disc of `n` sides in the plane r = const, centred (a, y), extruded
- * `depth` toward +r (dir 1) or -r (dir -1): counter-clockwise seen from +r
- * extrudes toward it.
+ * A disc in the plane r = const, centred (a, y), extruded `depth` toward
+ * +r (dir 1) or -r (dir -1): counter-clockwise seen from +r extrudes
+ * toward it. Its sides are as many as keep it within `SAG.near` of its
+ * circle [derived: 16 for a cabochon's 0.19 ring, 28 for the Russe's
+ * 0.625 clock].
  */
 function disc(a: number, y: number, r: number, radius: number, depth: number, dir: 1 | -1): Prism {
-  const n = DRESSING.discSides;
+  const n = circleSegments(radius, SAG.near);
   const pts: Vec3[] = [];
   for (let i = 0; i < n; i++) {
     const phi = (2 * Math.PI * i) / n;
@@ -2815,8 +2911,8 @@ function francaisDressing(): Record<"trellis" | "archivolt" | "crest", Piece> {
       const a = c + (s * (F.mid + F.door)) / 2;
       const outer: Vec3[] = [];
       const inner: Vec3[] = [];
-      for (let i = 0; i <= F.headSegments; i++) {
-        const phi = Math.PI * (1 - i / F.headSegments);
+      for (let i = 0; i <= HEAD_SEGMENTS; i++) {
+        const phi = Math.PI * (1 - i / HEAD_SEGMENTS);
         const y = floor + F.spring;
         outer.push([a + (F.door / 2 + A.width) * Math.cos(phi), y + (F.rise + A.width) * Math.sin(phi), front + A.proud]);
         inner.push([a + (F.door / 2) * Math.cos(phi), y + F.rise * Math.sin(phi), front + A.proud]);
@@ -2829,13 +2925,19 @@ function francaisDressing(): Record<"trellis" | "archivolt" | "crest", Piece> {
   const C = D.crest;
   const ys = floor + C.top - C.half;
   const tomb: Vec3[] = [];
-  for (let i = 0; i <= DRESSING.facets; i++) {
-    const phi = Math.PI * (1 - i / DRESSING.facets);
+  // Its round head within `SAG.near` [derived: 18 chords on the 1.20].
+  const head = halfEllipseSegments(C.half, C.half, SAG.near);
+  for (let i = 0; i <= head; i++) {
+    const phi = Math.PI * (1 - i / head);
     tomb.push([C.half * Math.cos(phi), ys + C.half * Math.sin(phi), back]);
   }
   // Seen from +r: over the top left to right, down, back: clockwise, so -r.
   tomb.push([C.half, SPRING_Y, back], [-C.half, SPRING_Y, back]);
   out.crest.prisms.push({ outline: tomb, depth: C.depth });
+  // The shoulders' quarter ellipses within `SAG.near` [derived: 12 chords
+  // on 2.0 by 0.75, half a half-ellipse's].
+  const ax = bay - C.posts - C.post / 2;
+  const shoulder = halfEllipseSegments(ax, floor + C.shoulder - SPRING_Y, SAG.near) / 2;
   for (const s of [-1, 1]) {
     const a = s * C.posts;
     out.crest.blocks.push(
@@ -2845,9 +2947,8 @@ function francaisDressing(): Record<"trellis" | "archivolt" | "crest", Piece> {
     // The shoulder from the wall head at the bay's edge up to the post: a
     // quarter ellipse, convex, clockwise seen from +r either side.
     const q: Vec3[] = [[s * (C.posts + C.post / 2), SPRING_Y, back]];
-    const ax = bay - C.posts - C.post / 2;
-    for (let i = 0; i <= DRESSING.facets; i++) {
-      const t = (Math.PI / 2) * (i / DRESSING.facets);
+    for (let i = 0; i <= shoulder; i++) {
+      const t = (Math.PI / 2) * (i / shoulder);
       q.push([s * (C.posts + C.post / 2 + ax * Math.sin(t)), SPRING_Y + (floor + C.shoulder - SPRING_Y) * Math.cos(t), back]);
     }
     out.crest.prisms.push({ outline: s > 0 ? q : [...q].reverse(), depth: C.depth / 2 });
@@ -2984,14 +3085,16 @@ function flamandDressing(): Record<"arch" | "brace", Piece> {
   const floor = FLOORS.first;
   const out = parted("arch", "brace");
   const r = proud(0.05);
-  const n = DRESSING.facets;
+  const onKing = 0.12;
   for (const k of [-1, 0, 1]) {
     const c = bayCentre(k);
     const yc = kingAndCollar(c, D.collar, D.collarPost, out.brace);
+    // A brace's quarter ellipse within `SAG.near` [derived: 12 chords on
+    // 2.33 by 1.13, half a half-ellipse's].
+    const n = halfEllipseSegments(D.braceFoot - onKing, yc - 0.16 - SPRING_Y - 0.1, SAG.near) / 2;
     for (const s of [-1, 1]) {
       // The curved brace from the collar post's foot to the king post just
       // under the collar, bowed up and out.
-      const onKing = 0.12;
       const pts: Array<[number, number]> = [];
       for (let i = 0; i <= n; i++) {
         const t = (Math.PI / 2) * (i / n);
@@ -3014,8 +3117,8 @@ function flamandDressing(): Record<"arch" | "brace", Piece> {
     const a1 = (stations[j + 1] as number) - F.post / 2 - 0.05;
     const mid = (a0 + a1) / 2;
     const pts: Array<[number, number]> = [];
-    for (let i = 0; i <= n; i++) {
-      const phi = Math.PI * (1 - i / n);
+    for (let i = 0; i <= FLAMAND_ARCH_SEGMENTS; i++) {
+      const phi = Math.PI * (1 - i / FLAMAND_ARCH_SEGMENTS);
       pts.push([mid + ((a1 - a0) / 2) * Math.cos(phi), spring + D.archRise * Math.sin(phi)]);
     }
     out.arch.blocks.push(...curveBars(pts, r, 0.1, 0.05));
@@ -3216,7 +3319,7 @@ function clipConvex(poly: readonly P2[], clip: readonly P2[]): P2[] {
  * into six lights.
  */
 function tympanumGlass(c: number, r: number): Prism[] {
-  const n = ARCADE.vaultSegments;
+  const n = ARCADE.cells;
   const inset = ARCADE.shell + GABLE.innerRib;
   const rib = vaultArc(c, r, inset);
   let poly: P2[] = vaultArc(c, r, inset - GLAZING.rebate).map(([a, y]): P2 => [a, y]);
@@ -3226,7 +3329,7 @@ function tympanumGlass(c: number, r: number): Prism[] {
   // Left to right, each pointing out of the hub: a light lies to the
   // right of the ray before it.
   for (let i = 2; i <= n - 2; i += 2) {
-    const [x, y] = rib[i] as Vec3;
+    const [x, y] = rib[i * CELL_STEPS] as Vec3;
     bars.push({ from: hub, to: [x, y], w: i === n / 2 ? GABLE.outerRib : GABLE.ray });
   }
   // Each ray's square end meets the rib at a slant: the glass beyond it.
@@ -3449,8 +3552,8 @@ function francaisDoors(c: number): Glazed {
     // of the axis.
     // The head, `rebate` out along its normal: the same facets on an
     // ellipse grown by it both ways.
-    const grown = Array.from({ length: F.headSegments + 1 }, (_, i): P2 => {
-      const phi = Math.PI * (1 - i / F.headSegments);
+    const grown = Array.from({ length: HEAD_SEGMENTS + 1 }, (_, i): P2 => {
+      const phi = Math.PI * (1 - i / HEAD_SEGMENTS);
       return [a + (h + e) * Math.cos(phi), spring + (F.rise + e) * Math.sin(phi)];
     });
     const opening: P2[] = [[a - h - e, spring - e], ...grown, [a + h + e, spring - e]];
@@ -3573,8 +3676,8 @@ function screenGlazing(which: keyof typeof GLAZING_BARS.screen, open: boolean, u
       const f1 = a1 - 0.05;
       const mid = (f0 + f1) / 2;
       const arch: P2[] = [];
-      for (let i = 0; i <= D.facets; i++) {
-        const phi = Math.PI * (1 - i / D.facets);
+      for (let i = 0; i <= FLAMAND_ARCH_SEGMENTS; i++) {
+        const phi = Math.PI * (1 - i / FLAMAND_ARCH_SEGMENTS);
         arch.push([mid + ((f1 - f0) / 2) * Math.cos(phi), u0 + D.flamand.archRise * Math.sin(phi)]);
       }
       const archAt = (x: number): number => {
@@ -3668,7 +3771,8 @@ function francaisDoorsAll(): Glazed {
  * [estimated: the plates draw the crescent's foot on the pier's head].
  */
 function crescentGlass(c: number): { plates: Prism[]; ends: Prism[]; sills: Block[] } {
-  const n = ARCADE.vaultSegments;
+  const n = ARCADE.cells;
+  const S = CELL_STEPS;
   const e = GLAZING.rebate;
   const outerIn = vaultArc(c, EDGE, GABLE.outerRib);
   const innerOut = innerArc(c, EDGE, GABLE.innerRib);
@@ -3677,31 +3781,51 @@ function crescentGlass(c: number): { plates: Prism[]; ends: Prism[]; sills: Bloc
   const p2 = (p: Vec3): P2 => [p[0], p[1]];
   const sill = SPRING_Y + GABLE.ray;
   // Each sill runs from the outer rib's foot to where the inner rib's edge
-  // stands at the sill's top, which leans out over its own foot.
-  const sills: Block[] = [
-    [0, 1],
-    [n, n - 1],
-  ].map(([i, j]) => {
-    const [p, q] = [innerOut[i as number] as Vec3, innerOut[j as number] as Vec3];
+  // stands at the sill's top, which leans out over its own foot: on the
+  // first chord of that edge, from the foot, to reach the sill's height.
+  const last = VAULT_SEGMENTS;
+  const sills: Block[] = (
+    [
+      [0, 1],
+      [last, -1],
+    ] as const
+  ).map(([foot, step]) => {
+    let i: number = foot;
+    while ((innerOut[i + step] as Vec3)[1] < sill) i += step;
+    const [p, q] = [innerOut[i] as Vec3, innerOut[i + step] as Vec3];
     const x = p[0] + ((q[0] - p[0]) * (sill - p[1])) / (q[1] - p[1]);
-    const [a0, a1] = [(outerIn[i as number] as Vec3)[0], x].sort((u, v) => u - v) as [number, number];
+    const [a0, a1] = [(outerIn[foot] as Vec3)[0], x].sort((u, v) => u - v) as [number, number];
     return span(a0, a1, SPRING_Y, sill, EDGE - ARCADE.plate, EDGE);
   });
-  // Cell i, over the sill.
-  const cell = (i: number): P2[] => {
-    const quad: P2[] = [p2(top[i] as Vec3), p2(top[i + 1] as Vec3), p2(bottom[i + 1] as Vec3), p2(bottom[i] as Vec3)];
-    return clipHalf(quad, [c, sill - e], [0, 1], 0);
+  // Cell k, over the sill: under the outer rib's edge and over the inner
+  // rib's, chord by chord. The inner rib's edge bows into the cell, so a
+  // plate is not convex: it is fanned (`extrudePolygon` fans a cap from
+  // its first point) from its corner farthest from the inner arc's
+  // centre, on the outer rib, from which all of it is in sight.
+  const cell = (k: number): P2[] => {
+    const ring: P2[] = top.slice(k * S, (k + 1) * S + 1).map(p2);
+    ring.push(...bottom.slice(k * S, (k + 1) * S + 1).map(p2).reverse());
+    return clipHalf(ring, [c, sill - e], [0, 1], 0);
+  };
+  const centre: P2 = [c, GALLERY.floor + GALLERY.innerCrown - GALLERY.innerRadius];
+  const fanned = (p: Prism): Prism => {
+    const far = (q: Vec3) => Math.hypot(q[0] - centre[0], q[1] - centre[1]);
+    let at = 0;
+    p.outline.forEach((q, i) => {
+      if (far(q) > far(p.outline[at] as Vec3)) at = i;
+    });
+    return { ...p, outline: [...p.outline.slice(at), ...p.outline.slice(0, at)] };
   };
   const rays: PlaneBar[] = [];
-  for (let i = 1; i < n; i++) {
-    rays.push({ from: p2(innerOut[i] as Vec3), to: p2(outerIn[i] as Vec3), w: GABLE.ray });
+  for (let k = 1; k < n; k++) {
+    rays.push({ from: p2(innerOut[k * S] as Vec3), to: p2(outerIn[k * S] as Vec3), w: GABLE.ray });
   }
   const r = EDGE - GLAZING.silveredSet;
   const plates: Prism[] = [];
   for (let i = 0; i < n; i++) {
     const light = lightBetween(cell(i), rays[i - 1], rays[i]);
     if (light === undefined) throw new Error(`platforms.ts crescentGlass: cell ${i} of the gable at ${c} is empty`);
-    plates.push(sheet(light, r));
+    plates.push(fanned(sheet(light, r)));
   }
   // Ray i + 1 runs between cells i (on its left) and i + 1 (on its right).
   const ends: Prism[] = [];
@@ -4128,9 +4252,13 @@ function secondFitOut(): Record<
   const F = SECOND_FITOUT;
   const floor = FLOORS.second;
   const out = parted("tank", "saddle", "figaro", "tickets", "boutique", "tent", "queue");
-  // The reservoirs: a cylinder of `facets` sides about an axis along s,
-  // wound counter-clockwise seen from +s so it extrudes along it.
+  // The reservoirs: a cylinder about an axis along s, wound counter-
+  // clockwise seen from +s so it extrudes along it; its sides as many as
+  // keep it within `SAG.eye` of its circle, the platform's visitors
+  // walking round it [derived: 52 on the 1.50 radius], a multiple of 4
+  // so a corner is its lowest point and one its highest, 3.00 apart.
   const T = F.tank;
+  const facets = circleSegments(T.diameter / 2, SAG.eye);
   const axis: Vec3 = [Math.SQRT1_2, 0, -Math.SQRT1_2];
   const u: Vec3 = [axis[2], 0, -axis[0]];
   const yAxis = floor + T.foot + T.diameter / 2;
@@ -4139,8 +4267,8 @@ function secondFitOut(): Record<
     const [cx, cz] = fromDiagonals([T.s, side * T.t]);
     const start: Vec3 = [cx - (axis[0] * T.length) / 2, yAxis, cz - (axis[2] * T.length) / 2];
     const ring: Vec3[] = [];
-    for (let i = 0; i < T.facets; i++) {
-      const th = (2 * Math.PI * i) / T.facets;
+    for (let i = 0; i < facets; i++) {
+      const th = (2 * Math.PI * i) / facets;
       const cu = (Math.cos(th) * T.diameter) / 2;
       const cv = (Math.sin(th) * T.diameter) / 2;
       ring.push([start[0] + u[0] * cu, start[1] + cv, start[2] + u[2] * cu]);
@@ -4161,24 +4289,31 @@ function secondFitOut(): Record<
   out.figaro.prisms.push(standing(F.figaro.plan, floor, floor + F.figaro.height));
   out.tickets.prisms.push(standing(diagonalRect(F.tickets), floor, floor + F.booth));
   for (const b of F.boutiques) out.boutique.prisms.push(standing(diagonalRect(b), floor, floor + F.booth));
-  // The round tents: a pole, a post at every corner, and a canvas facet
-  // from each side of the rim up to the apex.
+  // The round tents: a pole, a post at every corner of the decagon, and
+  // the canvas a cone from the rim up to the apex, a facet to each chord
+  // of a rim cut finer than the decagon: as many as keep it within
+  // `SAG.eye` of its circle, the visitors under it [derived: 80 on the
+  // 3.70], a multiple of the posts so each post is under a corner.
   const N = F.tents;
+  const chords = circleSegments(N.radius, SAG.eye, { multiple: N.sides });
+  const perSide = chords / N.sides;
   for (const [cx, cz] of N.at) {
     // A corner on the face's normal: the axis-side direction to the centre.
     const phase = Math.atan2(cz, cx);
     const rim: Vec3[] = [];
-    for (let i = 0; i < N.sides; i++) {
-      const th = phase + (2 * Math.PI * i) / N.sides;
+    for (let i = 0; i < chords; i++) {
+      const th = phase + (2 * Math.PI * i) / chords;
       rim.push([cx + N.radius * Math.cos(th), floor + N.eave, cz + N.radius * Math.sin(th)]);
     }
     const apex: Vec3 = [cx, floor + N.apex, cz];
     out.tent.blocks.push(post(cx, cz, N.pole, floor, floor + N.apex));
     rim.forEach((p, i) => {
       // The posts stand a post inside the rim, under the canvas.
-      const inX = cx + ((p[0] - cx) * (N.radius - N.post)) / N.radius;
-      const inZ = cz + ((p[2] - cz) * (N.radius - N.post)) / N.radius;
-      out.tent.blocks.push(post(inX, inZ, N.post, floor, floor + N.eave));
+      if (i % perSide === 0) {
+        const inX = cx + ((p[0] - cx) * (N.radius - N.post)) / N.radius;
+        const inZ = cz + ((p[2] - cz) * (N.radius - N.post)) / N.radius;
+        out.tent.blocks.push(post(inX, inZ, N.post, floor, floor + N.eave));
+      }
       out.tent.prisms.push(facet([apex, p, rim[(i + 1) % rim.length] as Vec3], N.canvas));
     });
   }
@@ -4263,7 +4398,7 @@ function secondGalleryFace(): { posts: Block[]; roof: Prism[] } {
  * diagonal at its +a end, as plan points (a, r) (see `VOID`); `off` moves
  * it that far onto the deck, square to itself.
  */
-function voidOutline(off: number): [number, number][] {
+export function voidOutline(off: number): [number, number][] {
   const V = VOID;
   const sag = V.half - V.apex;
   const R = (V.bowEnd ** 2 + sag ** 2) / (2 * sag);
@@ -4276,9 +4411,12 @@ function voidOutline(off: number): [number, number][] {
     [-cut / 2, cut / 2],
     [-(cut - edge), edge],
   ];
-  for (let i = 0; i <= V.bowSegments; i++) {
-    const a = -bow + (2 * bow * i) / V.bowSegments;
-    out.push([a, rc - Math.sqrt(rr * rr - a * a)]);
+  // At equal steps of the angle about the bow's centre, so every chord
+  // stands the same distance off it.
+  const end = Math.asin(bow / rr);
+  for (let i = 0; i <= BOW_SEGMENTS; i++) {
+    const th = end * ((2 * i) / BOW_SEGMENTS - 1);
+    out.push([rr * Math.sin(th), rc - rr * Math.cos(th)]);
   }
   out.push([cut - edge, edge], [cut / 2, cut / 2]);
   return out;
@@ -4334,9 +4472,12 @@ function firstDeck(): Prism[] {
 /**
  * A balustrade along a plan polyline (a, r) of the face frame, standing on
  * y0: its plinth and top rail along every segment, lapped half a rail at
- * the joints, and posts about `pitch` apart along each segment, at its end
+ * the joints, and posts about `pitch` apart along each leg, at its end
  * but not its start, so the polyline's first point is left to the
- * neighbouring face (pinwheel fashion).
+ * neighbouring face (pinwheel fashion). A leg runs from corner to corner,
+ * where the line turns by more than `RAIL_BEND`: a straight segment, or a
+ * curve cut into chords (the void's bow), whose posts are spaced along
+ * its length rather than one to a chord.
  */
 function railAlong(
   spec: RailSpec,
@@ -4360,14 +4501,41 @@ function railAlong(
     const p = line[i] as readonly [number, number];
     const q = line[i + 1] as readonly [number, number];
     out.push(run(p, q, y0, y0 + spec.plinth), run(p, q, top - spec.cap, top));
-    const n = Math.max(1, Math.round(Math.hypot(q[0] - p[0], q[1] - p[1]) / pitch));
+  }
+  const heading = (i: number): number => {
+    const [p, q] = [line[i] as Plan, line[i + 1] as Plan];
+    return Math.atan2(q[1] - p[1], q[0] - p[0]);
+  };
+  let from = 0;
+  for (let i = 1; i < line.length; i++) {
+    // Leg [from, i] ends at the line's end or at a corner.
+    if (i + 1 < line.length) {
+      const d = heading(i) - heading(i - 1);
+      if (Math.abs(Math.atan2(Math.sin(d), Math.cos(d))) <= RAIL_BEND) continue;
+    }
+    const lengths: number[] = [];
+    for (let j = from; j < i; j++) {
+      const [p, q] = [line[j] as Plan, line[j + 1] as Plan];
+      lengths.push(Math.hypot(q[0] - p[0], q[1] - p[1]));
+    }
+    const total = lengths.reduce((s, l) => s + l, 0);
+    const n = Math.max(1, Math.round(total / pitch));
+    let j = 0;
+    let before = 0;
     for (let k = 1; k <= n; k++) {
-      const t = k / n;
+      const s = (total * k) / n;
+      while (j + 1 < lengths.length && before + (lengths[j] as number) < s) before += lengths[j++] as number;
+      const [p, q] = [line[from + j] as Plan, line[from + j + 1] as Plan];
+      const t = Math.min(1, (s - before) / (lengths[j] as number));
       out.push(post(p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, spec.post, y0, top));
     }
+    from = i;
   }
   return out;
 }
+
+/** The turn, in radians, past which `railAlong` starts a new leg: a corner, not a chord of a curve. */
+const RAIL_BEND = (10 * Math.PI) / 180;
 
 /**
  * The terrace balustrade in the +z face's frame (see `TERRACE_RAIL`):
@@ -5278,9 +5446,11 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
     span(ENTRANCE.outer, terrace - STEP.thickness, GALLERY.floor, FLOORS.first - DECK, terrace - STEP.thickness, terrace),
   ];
 
-  // The masonry class carries no normals: the page computes them.
+  // The pedestal keeps its normals, smoothed like the rest (`prisms`), so
+  // its round inner corner and bench shade round; the rest of the masonry
+  // class carries none and the page gives it flat ones (normals.ts).
   const pedestalDress = pedestalDressing();
-  const pedestal = prisms(g, "pedestal", [...pedestalFaces(), ...pedestalDress.masonry], false);
+  const pedestal = prisms(g, "pedestal", [...pedestalFaces(), ...pedestalDress.masonry]);
   // The doors' grilles are iron, painted with the fit-out.
   const grilles = copyToQuadrants(g, "pedestalGrilles", prisms(g, "pedestalGrille", pedestalDress.platforms), quads, ["normal"]);
 

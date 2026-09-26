@@ -524,21 +524,41 @@ describe("eiffel splices", () => {
     //  - the first floor's arches, whose ends stand 2-11 mm off the webs
     //    (§27, left for the first floor), and the 2nd floor's chords, which
     //    clip at the old skin inside the web: their vertices in a cover.
-    for (const [cls, most] of [
-      ["arches", 444],
-      ["girders", 242],
-      ["bracing", 0],
-      ["horizontals", 0],
-      ["platforms", 0],
+    //    The arches are counted by the COVERS they reach and how deep, not
+    //    by vertices: their round parts are cut by a chord tolerance
+    //    (`chord.ts`), so the vertex count on the same grazes follows the
+    //    segmentation (444 at 12 segments a head, 1,301 at 22-26), and the
+    //    finer curve sits nearer the true one, which reaches 5.7 mm into a
+    //    15 mm cover at the leg corners where the polygon reached 2.2
+    //    [measured 2026-09-26: 44 covers, then 43]. The girders' count
+    //    rose with the same change, 242 to 310: the 1st floor's decorative
+    //    girders' rounded corners, cut finer (6 to 8 chords), graze 20 more
+    //    covers at y 48-50 by the legs, 7.5 mm deep at most (6.6 before).
+    for (const [cls, most, covered, depth] of [
+      ["arches", Infinity, 44, 0.006],
+      ["girders", 310, 53, 0.008],
+      ["bracing", 0, 0, 0],
+      ["horizontals", 0, 0, 0],
+      ["platforms", 0, 0, 0],
     ] as const) {
       const gm = geo(cls);
       const P = gm.attrs.point.get("P")!.data;
       let n = 0;
+      const hit = new Set<Box>();
+      let deepest = 0;
       for (let i = 0; i < gm.attrs.point.count; i++) {
         const p: Vec3 = [P[3 * i]!, P[3 * i + 1]!, P[3 * i + 2]!];
-        if (nearCover(p).some((b) => inside(p, b, 0.001))) n++;
+        const boxes = nearCover(p).filter((b) => inside(p, b, 0.001));
+        if (boxes.length > 0) n++;
+        for (const b of boxes) {
+          hit.add(b);
+          const d = sub(p, b.c);
+          deepest = Math.max(deepest, Math.min(...b.half.map((h, k) => h - Math.abs(dot(d, b.axes[k]!)))));
+        }
       }
       expect(n, cls).toBeLessThanOrEqual(most);
+      expect(hit.size, `${cls} covers`).toBeLessThanOrEqual(covered);
+      expect(deepest, `${cls} depth`).toBeLessThanOrEqual(depth);
     }
   }, 600_000);
 });
