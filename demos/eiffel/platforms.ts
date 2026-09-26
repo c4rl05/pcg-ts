@@ -188,6 +188,7 @@ import {
   vec,
 } from "pcg-ts";
 import { type Vec3, copyToQuadrants, indexTable } from "./lattice.js";
+import { archPierBases } from "./firstFloor.js";
 import { ALPHABET, glyph, setLine } from "./letters.js";
 import { type Parts, jitter } from "./parts.js";
 import { SAVANTS } from "./savants.js";
@@ -4708,10 +4709,12 @@ function skirtOrnament(): Piece {
 }
 
 /**
- * The pedestals (`PEDESTAL`, SOURCES.md §24; tags as in the file comment):
- * a hollow masonry skirt round each leg's foot, stepped as PL-I draws it,
- * its top only where the uprights come out of it. Each tier's four faces
- * (battered or upright) and the ring between one tier and the next (a
+ * The pedestals (`PEDESTAL`, SOURCES.md §24, §31.2; tags as in the file
+ * comment): a hollow masonry skirt round each leg's foot, its block,
+ * cornice and gorge as PL-V draws them and its inner corner on an arc,
+ * its top only where the uprights come out of it. Each tier's faces (the
+ * four sides, battered or upright, and the corner's arc) and the ring
+ * between one tier and the next (a
  * tread where the tier above steps back, a soffit under the cornice's
  * projection) are plates extruded into the masonry, `shell` thick or less:
  * never so thick that they reach the HOLE the leg stands in, the leg's own
@@ -4743,28 +4746,108 @@ function towards(outline: readonly Vec3[], into: Vec3): Vec3[] {
   return along ? [...outline] : [...outline].reverse();
 }
 
+/** Drop consecutive repeats (and a closing repeat) from an outline. */
+function distinct(outline: readonly Vec3[]): Vec3[] {
+  const out: Vec3[] = [];
+  for (const p of outline) {
+    const q = out[out.length - 1];
+    if (q === undefined || Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) > 1e-6) out.push(p);
+  }
+  while (out.length > 1) {
+    const [a, b] = [out[0] as Vec3, out[out.length - 1] as Vec3];
+    if (Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) > 1e-6) break;
+    out.pop();
+  }
+  return out;
+}
+
 /**
- * The ring between two nested plan squares [a0, a1]² ⊇ [b0, b1]² at height
- * y, as its four mitred trapezoids (the +x +z quadrant's plan: x and z both
- * run from the inner faces, a0, to the outer, a1). Pieces narrower than a
- * millimetre are left out.
+ * A pedestal's plan at height y, as a closed loop in the +x +z quadrant:
+ * the square [i, o]² (x and z both from the inner faces, i, to the outer,
+ * o) with its inner corner turned on an arc about (c, c), of radius c − i
+ * (`PEDESTAL.corner`). Every loop has the same points in the same order —
+ * the arc's end on the z = i face, the three square corners, the arc's end
+ * on the x = i face, then the arc — so two loops' corresponding edges
+ * bound one face, or one piece of the ring between them. With c = i the
+ * arc closes to the square's corner (the hole's loop).
  */
-function squareRing(a0: number, a1: number, b0: number, b1: number, y: number): Vec3[][] {
-  const p = (x: number, z: number): Vec3 => [x, y, z];
-  const pieces: Array<[Vec3[], number]> = [
-    [[p(a0, a0), p(a1, a0), p(b1, b0), p(b0, b0)], b0 - a0],
-    [[p(a1, a0), p(a1, a1), p(b1, b1), p(b1, b0)], a1 - b1],
-    [[p(a1, a1), p(a0, a1), p(b0, b1), p(b1, b1)], a1 - b1],
-    [[p(a0, a1), p(a0, a0), p(b0, b0), p(b0, b1)], b0 - a0],
+function planLoop(i: number, o: number, y: number, c: number): Vec3[] {
+  const n = PEDESTAL.corner.segments;
+  const r = c - i;
+  const loop: Vec3[] = [
+    [c, y, i],
+    [o, y, i],
+    [o, y, o],
+    [i, y, o],
+    [i, y, c],
   ];
-  return pieces.filter(([, w]) => w > 1e-3).map(([o]) => o);
+  for (let k = 1; k < n; k++) {
+    const a = Math.PI + (k / n) * (Math.PI / 2);
+    loop.push([c + r * Math.cos(a), y, c + r * Math.sin(a)]);
+  }
+  return loop;
+}
+
+/** The arc's centre, on both axes: 3.29 in from the inner faces' foot. */
+const CORNER_C = PEDESTAL.innerFoot + PEDESTAL.corner.radius;
+
+/**
+ * Edge k of a loop (to its next point): its horizontal normal INTO the
+ * pedestal's body, toward the leg's hole, and a point on it.
+ */
+function edgeInto(loop: readonly Vec3[], k: number): { into: Vec3; at: Vec3 } {
+  const a = loop[k] as Vec3;
+  const b = loop[(k + 1) % loop.length] as Vec3;
+  const dx = b[0] - a[0];
+  const dz = b[2] - a[2];
+  const l = Math.hypot(dx, dz);
+  let into: Vec3 = [dz / l, 0, -dx / l];
+  // Toward the leg, whose centre is inside every loop.
+  const m = (PEDESTAL.innerFoot + PEDESTAL.outer) / 2;
+  if (into[0] * (m - a[0]) + into[2] * (m - a[2]) < 0) into = [-into[0], 0, -into[2]];
+  return { into, at: a };
+}
+
+/**
+ * How far the line of a loop's edge k stands from the hole [hi, ho]², along
+ * its `into`: the hole is convex, so its nearest point along a direction is
+ * one of its corners.
+ */
+function roomTo(loop: readonly Vec3[], k: number, hole: readonly [number, number]): number {
+  const { into, at } = edgeInto(loop, k);
+  const [hi, ho] = hole;
+  let best = Infinity;
+  for (const x of [hi, ho]) {
+    for (const z of [hi, ho]) best = Math.min(best, into[0] * (x - at[0]) + into[2] * (z - at[2]));
+  }
+  return best;
+}
+
+/**
+ * The ring between two loops at one height, `outer` round `inner`, as one
+ * convex piece per pair of corresponding edges (a trapezoid, or a triangle
+ * where the inner loop's arc has closed to a point); pieces narrower than
+ * a millimetre are left out.
+ */
+function loopRing(outer: readonly Vec3[], inner: readonly Vec3[]): Vec3[][] {
+  const out: Vec3[][] = [];
+  for (let k = 0; k < outer.length; k++) {
+    const j = (k + 1) % outer.length;
+    const [a0, a1, b0, b1] = [outer[k], outer[j], inner[k], inner[j]] as Vec3[];
+    const w = Math.max(Math.hypot(a0[0] - b0[0], a0[2] - b0[2]), Math.hypot(a1[0] - b1[0], a1[2] - b1[2]));
+    if (w <= 1e-3) continue;
+    const piece = distinct([a0, a1, b1, b0]);
+    if (piece.length >= 3) out.push(piece);
+  }
+  return out;
 }
 
 /**
  * One pedestal, in the +x +z quadrant (see `PEDESTAL_SKIRT`): per tier its
- * four faces, then the rings between tiers, then the coping.
+ * faces between its foot's and its head's loops (four straight faces and
+ * the inner corner's arc), then the rings between tiers, then the coping.
  */
-function pedestalFaces(): Prism[] {
+export function pedestalFaces(): Prism[] {
   const { shell, margin, coping, lean } = PEDESTAL_SKIRT;
   const tiers = PEDESTAL.tiers;
   // The hole: the leg's footprint at y, out to its uprights' outer faces.
@@ -4775,35 +4858,21 @@ function pedestalFaces(): Prism[] {
   };
   const out: Prism[] = [];
   for (const t of tiers) {
-    const [i0, i1] = t.inner;
-    const [o0, o1] = t.outer;
-    const b = (x: number, z: number): Vec3 => [x, t.y0, z];
-    const h = (x: number, z: number): Vec3 => [x, t.y1, z];
-    // Each face and the direction into the masonry behind it; its depth is
-    // the least horizontal room between it and the hole, over its height.
-    const room = (d0: number, d1: number, side: 0 | 1) =>
-      Math.min(
-        ...[t.y0, t.y1].map((y, k) => {
-          const d = k === 0 ? d0 : d1;
-          const [hi, ho] = hole(y);
-          return side === 0 ? hi - d : d - ho;
-        }),
-      );
-    const faces: Array<[Vec3[], Vec3, number]> = [
-      [[b(i0, i0), b(o0, i0), h(o1, i1), h(i1, i1)], [0, 0, 1], room(i0, i1, 0)],
-      [[b(o0, i0), b(o0, o0), h(o1, o1), h(o1, i1)], [-1, 0, 0], room(o0, o1, 1)],
-      [[b(o0, o0), b(i0, o0), h(i1, o1), h(o1, o1)], [0, 0, -1], room(o0, o1, 1)],
-      [[b(i0, o0), b(i0, i0), h(i1, i1), h(i1, o1)], [1, 0, 0], room(i0, i1, 0)],
-    ];
-    for (const [f, into, space] of faces) {
+    const foot = planLoop(t.inner[0], t.outer[0], t.y0, CORNER_C);
+    const head = planLoop(t.inner[1], t.outer[1], t.y1, CORNER_C);
+    for (let k = 0; k < foot.length; k++) {
+      const j = (k + 1) % foot.length;
+      // Its depth: the least room between it and the hole, over its height.
+      const space = Math.min(roomTo(foot, k, hole(t.y0)), roomTo(head, k, hole(t.y1)));
       const depth = Math.min(shell, space - 0.02);
       if (!(depth > 0.01)) {
         throw new Error(
-          `platforms.ts pedestalFaces: the tier ${t.y0}-${t.y1} leaves ${space.toFixed(3)} m between its face and the leg's uprights; ` +
+          `platforms.ts pedestalFaces: the tier ${t.y0}-${t.y1} leaves ${space.toFixed(3)} m between its face ${k} and the leg's uprights; ` +
             "move that tier's face out in PEDESTAL.tiers (spec.ts), or the skirt reaches into the leg",
         );
       }
-      out.push({ outline: towards(f, into), depth });
+      const f = distinct([foot[k] as Vec3, foot[j] as Vec3, head[j] as Vec3, head[k] as Vec3]);
+      if (f.length >= 3) out.push({ outline: towards(f, edgeInto(foot, k).into), depth });
     }
   }
   // Between tiers: a tread where the one above steps back (into the tier
@@ -4822,15 +4891,18 @@ function pedestalFaces(): Prism[] {
           "make PEDESTAL.tiers (spec.ts) nest there",
       );
     }
-    const ring = tread ? squareRing(li, lo1, ui, uo, y) : squareRing(ui, uo, li, lo1, y);
+    const lower = planLoop(li, lo1, y, CORNER_C);
+    const upper = planLoop(ui, uo, y, CORNER_C);
+    const ring = tread ? loopRing(lower, upper) : loopRing(upper, lower);
+    if (ring.length === 0) continue;
     // A tread hangs down into the tier below, where the uprights lean
     // further out: it stops 0.02 short of the height at which the hole
     // reaches its inner edge.
     let depth = Math.min(shell, tread ? lo.y1 - lo.y0 : hi.y1 - hi.y0);
     if (tread) {
       for (let d = 0.01; d <= depth; d += 0.01) {
-        const [hIn, hOut] = hole(y - d);
-        if (hIn - ui < 0.02 || uo - hOut < 0.02) {
+        const h = hole(y - d);
+        if (upper.some((_, e) => roomTo(upper, e, h) < 0.02)) {
           depth = d - 0.02;
           break;
         }
@@ -4847,10 +4919,165 @@ function pedestalFaces(): Prism[] {
   // The coping: the top tier's head closed onto the hole.
   const top = tiers[tiers.length - 1] as (typeof tiers)[number];
   const [hi, ho] = hole(top.y1 - coping);
-  for (const f of squareRing(top.inner[1], top.outer[1], hi, ho, top.y1)) {
+  const head = planLoop(top.inner[1], top.outer[1], top.y1, CORNER_C);
+  for (const f of loopRing(head, planLoop(hi, ho, top.y1, hi))) {
     out.push({ outline: towards(f, [0, -1, 0]), depth: coping });
   }
   return out;
+}
+
+/**
+ * The pedestals' dressing (SOURCES.md §31.2; `PEDESTAL`): the cast
+ * artificial stone « à gros bossages » on the battered block, the bench
+ * and its sill round the inner corner, and the doors' grilles.
+ *
+ * - THE COURSES [sourced drawing PL-V Fig. 15; measured at 58.4 and 104
+ *   px/m]: a plain base course, then two courses of rusticated blocks,
+ *   « 0.717 / 0.681 / 0.681 » over the plinth's 2.08; the blocks' faces
+ *   0.50 high [measured 0.43-0.53] at 0.87-1.39 and 1.52-2.04 over the
+ *   plinth's foot, here scaled to the model's 2.00 block; 1.53 long with
+ *   0.15 joints, the courses staggered, the end blocks at the outer
+ *   corners about 0.98 on the lower course and 1.40 on the upper; 0.06
+ *   proud [measured 0.05-0.08]. On the inner faces they are cut back to
+ *   the arch's two piers (`archPierBases`), the door and the curved
+ *   corner, as Fig. 16 draws them.
+ * - THE DOORS, one on each inner face, « 2.58 » clear on the leg's centre
+ *   line [sourced PL-V Fig. 16] with an iron grille [sourced]: the grille
+ *   is drawn as a plate 0.02 proud over the block, 1.90 high [estimated].
+ * - THE BENCH round the curved corner: its front on the « Banc » line,
+ *   the arc's 3.29, its sill « 0.70 » wide × « 0.10 » in front of it, its
+ *   seat « 0.48 » over the sill [sourced PL-V Figs 12, 19], run back 0.45
+ *   under the battered face, which stands for the concave back that
+ *   sweeps into the plinth [estimated]; between the two near piers, whose
+ *   bases reach 0.13 past the arc's ends.
+ */
+export const PEDESTAL_DRESS = {
+  /** Each rusticated course's block faces' foot over the block's (the lower, the upper). */
+  rows: [0.84, 1.46],
+  /** The end block at the outer corners, each course's [measured PL-V Fig. 15]. */
+  ends: [0.98, 1.4],
+  /** The shortest block a cut leaves [estimated]. */
+  least: 0.3,
+  block: { length: 1.53, joint: 0.15, high: 0.5, relief: 0.06 },
+  door: { clear: 2.58, high: 1.9, relief: 0.02, at: 50.704 },
+  /** Clear left round a pier's base and a door by the blocks. */
+  keepOff: 0.1,
+  /** `lip`: how far each runs back under the battered face, so no slot shows behind it. */
+  sill: { wide: 0.7, high: 0.1, lip: 0.05 },
+  seat: { over: 0.48, deep: 0, lip: 0.45 },
+} as const;
+
+/** The battered block's face at height y, along the tier-0 batter: out from the axis. */
+function blockFace(side: "inner" | "outer", y: number): number {
+  const t = PEDESTAL.tiers[0] as (typeof PEDESTAL.tiers)[number];
+  const [a, b] = t[side];
+  return a + ((b - a) * (y - t.y0)) / (t.y1 - t.y0);
+}
+
+/** A face of the +x +z pedestal's battered block: which axis it faces along, and which side. */
+export type BlockFace = "x-outer" | "z-outer" | "x-inner" | "z-inner";
+
+/**
+ * One block on the battered face `face` of the +x +z pedestal, from `s0` to
+ * `s1` along it and `y0` to `y1` up it, standing `relief` proud: a planar
+ * rectangle in the face, extruded outward.
+ */
+function onBlockFace(face: BlockFace, s0: number, s1: number, y0: number, y1: number, relief: number): Prism {
+  const inner = face.endsWith("inner");
+  const r = (y: number) => blockFace(inner ? "inner" : "outer", y);
+  const onX = face.startsWith("x");
+  const p = (s: number, y: number): Vec3 => (onX ? [r(y), y, s] : [s, y, r(y)]);
+  // Outward: away from the leg, +x / +z on an outer face, −x / −z on an inner one.
+  const sign = inner ? -1 : 1;
+  const out: Vec3 = onX ? [sign, 0, 0] : [0, 0, sign];
+  return { outline: towards([p(s0, y0), p(s1, y0), p(s1, y1), p(s0, y1)], out), depth: relief };
+}
+
+/**
+ * Everything on the pedestals' faces, one pedestal in the +x +z quadrant,
+ * by class, with each block's face and its span along it (for the tests).
+ */
+export function pedestalDressing(): {
+  masonry: Prism[];
+  platforms: Prism[];
+  blocks: Array<{ face: BlockFace; s0: number; s1: number; y0: number; y1: number }>;
+} {
+  const D = PEDESTAL_DRESS;
+  const { length, joint, high, relief } = D.block;
+  const pitch = length + joint;
+  const masonry: Prism[] = [];
+  const platforms: Prism[] = [];
+  const blocks: Array<{ face: BlockFace; s0: number; s1: number; y0: number; y1: number }> = [];
+  // What the blocks keep off on each inner face, as intervals along it:
+  // the piers (the +z face's at its +x end for the x-inner face, the same
+  // mirrored for the z-inner), the door, and the curved corner.
+  const piers = archPierBases().filter((b) => b.x > 0);
+  const keep: Array<readonly [number, number]> = [
+    ...piers.map((b): readonly [number, number] => [b.z - b.side / 2 - D.keepOff, b.z + b.side / 2 + D.keepOff]),
+    [D.door.at - D.door.clear / 2 - D.keepOff, D.door.at + D.door.clear / 2 + D.keepOff],
+    [-Infinity, CORNER_C + D.keepOff],
+  ];
+  const faces: readonly BlockFace[] = ["x-outer", "z-outer", "x-inner", "z-inner"];
+  const put = (face: BlockFace, s0: number, s1: number, y0: number, y1: number) => {
+    masonry.push(onBlockFace(face, s0, s1, y0, y1, relief));
+    blocks.push({ face, s0, s1, y0, y1 });
+  };
+  for (const face of faces) {
+    const inner = face.endsWith("inner");
+    D.rows.forEach((y0, row) => {
+      const y1 = y0 + high;
+      // The face's extent along itself at the block's top, where the
+      // batter makes it narrowest: between the other faces' planes there.
+      const lo = blockFace("inner", y1);
+      const hi = blockFace("outer", y1);
+      // From the outer corner, its end block, then whole blocks toward the
+      // inner faces; on an inner face each block is cut back to what the
+      // piers, the door and the corner leave of it, down to `least`.
+      const end = D.ends[row] as number;
+      let [a, b] = [hi - end, hi];
+      while (a >= lo + joint) {
+        let pieces: Array<readonly [number, number]> = [[a, b]];
+        if (inner) {
+          for (const [k0, k1] of keep) {
+            pieces = pieces.flatMap(([p0, p1]): Array<readonly [number, number]> =>
+              k1 <= p0 || k0 >= p1
+                ? [[p0, p1]]
+                : ([[p0, Math.min(p1, k0)], [Math.max(p0, k1), p1]] as Array<readonly [number, number]>).filter(([q0, q1]) => q1 - q0 > 0),
+            );
+          }
+        }
+        for (const [p0, p1] of pieces) if (p1 - p0 >= D.least) put(face, p0, p1, y0, y1);
+        b = a - joint;
+        a = b - length;
+      }
+    });
+    // The door's grille, on the inner faces.
+    if (inner) {
+      const { clear, high: h, relief: r, at } = D.door;
+      platforms.push(onBlockFace(face, at - clear / 2, at + clear / 2, 0.05, 0.05 + h, r));
+    }
+  }
+  // The bench round the curved corner: the sill, and the seat on it, as
+  // arc pieces between radii about the corner's centre. It runs between
+  // the two near piers, whose bases reach a little past the arc's ends.
+  const R = PEDESTAL.corner.radius;
+  const n = PEDESTAL.corner.segments;
+  const { sill, seat } = D;
+  const near = Math.min(...piers.map((b) => b.z - b.side / 2));
+  const past = Math.max(0, CORNER_C - (near - 0.02));
+  const skip = Math.asin(Math.min(1, past / (R + sill.wide)));
+  const span = Math.PI / 2 - 2 * skip;
+  const arcPiece = (r0: number, r1: number, y0: number, y1: number, k: number): Prism => {
+    const a0 = Math.PI + skip + (k / n) * span;
+    const a1 = Math.PI + skip + ((k + 1) / n) * span;
+    const q = (r: number, a: number): Vec3 => [CORNER_C + r * Math.cos(a), y0, CORNER_C + r * Math.sin(a)];
+    return { outline: towards([q(r0, a0), q(r1, a0), q(r1, a1), q(r0, a1)], [0, 1, 0]), depth: y1 - y0 };
+  };
+  for (let k = 0; k < n; k++) {
+    masonry.push(arcPiece(R - sill.lip, R + sill.wide, 0, sill.high, k));
+    masonry.push(arcPiece(R - seat.lip, R + seat.deep, sill.high, sill.high + seat.over, k));
+  }
+  return { masonry, platforms, blocks };
 }
 
 /**
@@ -5050,7 +5277,10 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
   ];
 
   // The masonry class carries no normals: the page computes them.
-  const pedestal = prisms(g, "pedestal", pedestalFaces(), false);
+  const pedestalDress = pedestalDressing();
+  const pedestal = prisms(g, "pedestal", [...pedestalFaces(), ...pedestalDress.masonry], false);
+  // The doors' grilles are iron, painted with the fit-out.
+  const grilles = copyToQuadrants(g, "pedestalGrilles", prisms(g, "pedestalGrille", pedestalDress.platforms), quads, ["normal"]);
 
   // The fit-out, face by face. The pavilions' shell is one, less the
   // Français' staff front, which the other three have as a timber screen
@@ -5189,7 +5419,7 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
   ]);
 
   return {
-    platforms: [fitBlocks, fitPrisms, ...fitInner, ...fitFlights, ...fitSecond, ...fitPavilions, ...fitArcade],
+    platforms: [grilles, fitBlocks, fitPrisms, ...fitInner, ...fitFlights, ...fitSecond, ...fitPavilions, ...fitArcade],
     glass: [prisms(g, "restaurantGlass", glazed.glass)],
     silvered: [prisms(g, "crescentGlass", glazed.silvered)],
     fittings,

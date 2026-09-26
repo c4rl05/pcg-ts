@@ -354,6 +354,23 @@ const PIER = [
   { side: 0.9, top: ARCH_END, inboard: 0 },
 ] as const;
 /**
+ * The piers' bases on the +z face, one per plane and side: x along the
+ * face, z out from the tower's axis, and the base's side. The pedestals'
+ * rustication stops short of them (`platforms.ts`, `pedestalDressing`).
+ */
+export function archPierBases(): Array<{ x: number; z: number; side: number }> {
+  const base = PIER[0];
+  const out: Array<{ x: number; z: number; side: number }> = [];
+  for (const { dz } of PLANES) {
+    for (const side of [-1, 1] as const) {
+      const foot = onFace(side * lowerArchX(ARCH_END), ARCH_END, dz);
+      out.push({ x: foot[0] - side * base.inboard, z: foot[2], side: base.side });
+    }
+  }
+  return out;
+}
+
+/**
  * The arcade plates: 3 mm [sourced PL-VII "3m/m"], drawn 10 mm so they
  * render, on the decorated side against the montants' faces.
  */

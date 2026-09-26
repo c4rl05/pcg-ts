@@ -252,16 +252,32 @@ export interface PedestalTier {
  * - a cornice to 2.72 [measured PL-I 2.72-2.73], its nose 60.96 out [PL-I
  *   1.49 inside the ground chain's 62.453; PL-VII's torus nose 1.48 inside
  *   the batter's foot: 60.97] and 38.90 in [PL-VII's torus, 38.88];
- * - then five steps and a top slab, receding 3.51 on the outer faces and
- *   1.55 on the inner [measured PL-I: step lines at 3.14, 3.55, 4.16-4.22,
- *   4.75-4.81, 5.21-5.27, set back 0.71 / 1.67 / 2.4-3.0 / 3.10 / 3.50 /
- *   4.15 from the nose at 16.13 px/m; PL-VII draws the same recession, 3.7
- *   outer and 1.5 inner, as a concave sweep under a cyma]. The top slab
- *   ends where PL-VII's lip does, at the upright: 57.45, 0.23 outside the
- *   model upright's horizontal section at the top and 0.08 at the slab's
- *   foot, and 40.45 inside [PL-VII 40.42]. PL-I draws its upright about 0.7
- *   further in than the node table puts it, so its set-backs are kept in
- *   proportion (×0.90) between the nose and that lip [estimated].
+ * - then the « gorge », the cement cornice « traînée » on the fermettes'
+ *   hoops that runs up « presque au contact des faces des arbalétriers »
+ *   [sourced E1900-TXT p. 95]: a stretched cavetto, nearly level where it
+ *   leaves the fillet and steepening to 45 degrees, a bead, then a nosing
+ *   to the top [sourced drawing PL-V Figs 15-18; traced on Fig. 17, « Coupe
+ *   IJ », 1:100, the set-back from the foot at heights over the plinth's
+ *   foot: 1.98 at 3.33, 2.30 at 3.36, 2.64 at 3.44, 2.97 at 3.55, 3.31 at
+ *   3.70, 3.65 at 3.90, 3.99 at 4.14, 4.33 at 4.44, 4.66 at 5.00, 4.83 at
+ *   5.13, 5.00 at 5.32, « 2,088 + 2,965 » = 5.05 at the top, 5.40; the
+ *   inner faces « 1,022 + 1,281 » = 2.30, Fig. 18; PL-VII draws the same
+ *   concave sweep under a cyma, §24]. It replaces PL-I's five steps (§24),
+ *   which are that plate's schematic of it. Its heights are PL-V's scaled
+ *   to this plinth's 3.14-5.55 (×1.164), its set-backs PL-V's from 3.70
+ *   up, run in from the fillet's 2.13 below that; the inner faces recede
+ *   in proportion, 1.03 to 2.30 [derived]. The bead's 0.3 at 4.45-4.9 is
+ *   left out, and the sweep carried smooth across it (4.60 at 4.82, 4.83
+ *   at 5.18 in the model's heights) so it stays concave. At the top the plinth stops 0.16 outside the model upright's
+ *   horizontal section.
+ * - the INNER CORNER, the one nearest the tower's centre, follows an arc
+ *   with a bench along it [sourced p. 95, on the page image: « l'angle le
+ *   plus près du centre de la Tour est disposé suivant une courbe, le
+ *   long de laquelle règne un banc »]: the bench's front, the « Banc »
+ *   line, radius 3.29 and tangent to both inner faces' foot, concentric
+ *   above as the faces recede, the « Seuil » 0.70 in front of it [measured
+ *   PL-V Fig. 12 at 58.6 px/m, the arcs concentric to about 1 px; « 0.70 »,
+ *   « 0.10 », « 0.48 », Fig. 19] (`corner`).
  *
  * Plate I's ground chain 25.334 + 74.238 + 25.334 puts the outer faces'
  * FOOT at 62.453 [derived]; its 74.238 ticks are the arch's own feet
@@ -275,12 +291,25 @@ export const PEDESTAL = {
     { y0: 0, y1: 2.0, outer: [62.453, 60.83], inner: [38.17, 39.05] },
     { y0: 2.0, y1: 2.72, outer: [60.96, 60.96], inner: [38.9, 38.9] },
     { y0: 2.72, y1: 3.14, outer: [60.32, 60.32], inner: [39.2, 39.2] },
-    { y0: 3.14, y1: 3.55, outer: [59.46, 59.46], inner: [39.3, 39.3] },
-    { y0: 3.55, y1: 4.2, outer: [58.81, 58.27], inner: [39.35, 39.8] },
-    { y0: 4.2, y1: 4.75, outer: [58.18, 58.18], inner: [39.9, 39.9] },
-    { y0: 4.75, y1: 5.25, outer: [57.82, 57.82], inner: [40.1, 40.1] },
-    { y0: 5.25, y1: 5.55, outer: [57.45, 57.45], inner: [40.45, 40.45] },
+    // The gorge.
+    { y0: 3.14, y1: 3.175, outer: [60.32, 60.015], inner: [39.2, 39.334] },
+    { y0: 3.175, y1: 3.268, outer: [60.015, 59.708], inner: [39.334, 39.468] },
+    { y0: 3.268, y1: 3.396, outer: [59.708, 59.422], inner: [39.468, 39.593] },
+    { y0: 3.396, y1: 3.571, outer: [59.422, 59.143], inner: [39.593, 39.714] },
+    { y0: 3.571, y1: 3.804, outer: [59.143, 58.803], inner: [39.714, 39.863] },
+    { y0: 3.804, y1: 4.083, outer: [58.803, 58.463], inner: [39.863, 40.011] },
+    { y0: 4.083, y1: 4.432, outer: [58.463, 58.123], inner: [40.011, 40.159] },
+    { y0: 4.432, y1: 4.82, outer: [58.123, 57.853], inner: [40.159, 40.277] },
+    { y0: 4.82, y1: 5.18, outer: [57.853, 57.623], inner: [40.277, 40.377] },
+    { y0: 5.18, y1: 5.457, outer: [57.623, 57.453], inner: [40.377, 40.451] },
+    { y0: 5.457, y1: 5.55, outer: [57.453, 57.403], inner: [40.451, 40.473] },
   ] as readonly PedestalTier[],
+  /**
+   * The curved inner corner: its centre on the diagonal, 3.29 in from both
+   * inner faces' foot, so the arc's radius is 3.29 at the foot and the
+   * centre's distance to the inner faces above; drawn in `segments`.
+   */
+  corner: { radius: 3.29, segments: 12 },
 } as const;
 
 /** The first-floor girders between the legs, in the tower's face plane. */
