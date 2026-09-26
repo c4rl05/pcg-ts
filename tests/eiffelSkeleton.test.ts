@@ -776,6 +776,101 @@ function laceOverPlate(q: Pts, p: Plate): number {
   return best;
 }
 
+/**
+ * Every place the cooked lacing stands over a plate's footprint, as (d, e,
+ * h) in the plate's frame, h above its INNER face: the mitred vertices and
+ * the clipped corners of the flat outer faces, read exactly as
+ * {@link laceOverPlate} and {@link overPlate} read them, but kept one by
+ * one so that each can be asked whether it is already inside steel.
+ */
+function laceSamples(q: Pts, f: Faces, p: Plate): Array<{ d: number; e: number; h: number }> {
+  const out: Array<{ d: number; e: number; h: number }> = [];
+  const R = Math.hypot(p.half, p.across) + 0.2;
+  for (let i = 0; i < q.n; i++) {
+    const j = q.order[i] as number;
+    const r: Vec3 = [(q.p[3 * j] as number) - p.o[0], (q.p[3 * j + 1] as number) - p.o[1], (q.p[3 * j + 2] as number) - p.o[2]];
+    if (Math.abs(r[1]) > R) continue;
+    const h = dot3(r, p.n);
+    if (h > 0.1 || h < -0.25) continue;
+    const d = dot3(r, p.D);
+    const e = dot3(r, p.B);
+    if (Math.abs(d) > p.half || Math.abs(e) > p.across) continue;
+    out.push({ d, e, h: h + CROSS.thick / 2 });
+  }
+  for (const s of facePolys(f, p, 0.999, 0.3, 0.12)) {
+    for (const [d, e] of s.poly) out.push({ d: d!, e: e!, h: s.at(d!, e!) });
+  }
+  return out;
+}
+
+/**
+ * The faces of `f` over a plate's footprint whose outward normal is within
+ * `gate` of the plate's own, clipped to it: each as its clipped polygon in
+ * (d, e) and its plane, as height above the plate's inner face.
+ */
+function facePolys(f: Faces, p: Plate, gate: number, reach: number, off: number) {
+  const R = Math.hypot(p.half, p.across) + reach;
+  const out: Array<{ poly: number[][]; at: (d: number, e: number) => number }> = [];
+  for (let i = fromHeight(f, p.o[1] - R); i < fromHeight(f, p.o[1] + R); i++) {
+    const j = f.order[i] as number;
+    const F: Vec3 = [f.fn[3 * j] as number, f.fn[3 * j + 1] as number, f.fn[3 * j + 2] as number];
+    const Fn = dot3(F, p.n);
+    if (Fn < gate) continue;
+    const poly: number[][] = [];
+    let d0 = 0;
+    let e0 = 0;
+    let h0 = 0;
+    const s = f.start[j] as number;
+    const n = f.count[j] as number;
+    for (let v = 0; v < n; v++) {
+      const r: Vec3 = [(f.p[3 * (s + v)] as number) - p.o[0], (f.p[3 * (s + v) + 1] as number) - p.o[1], (f.p[3 * (s + v) + 2] as number) - p.o[2]];
+      const d = dot3(r, p.D);
+      const e = dot3(r, p.B);
+      d0 += d / n;
+      e0 += e / n;
+      h0 += dot3(r, p.n) / n;
+      poly.push([d, e]);
+    }
+    if (Math.abs(h0) > off) continue;
+    const kept = clipToFootprint(poly, p.half, p.across);
+    if (kept.length < 3) continue;
+    const Fd = dot3(F, p.D);
+    const Fe = dot3(F, p.B);
+    out.push({ poly: kept, at: (d, e) => h0 - (Fd * (d - d0) + Fe * (e - e0)) / Fn + CROSS.thick / 2 });
+  }
+  return out;
+}
+
+/**
+ * Whether a point over a plate is INSIDE A CORNER ANGLE already: under the
+ * outer face of some web class' chord, within the chord's own 90 mm
+ * (strut.ts, `CHORD` 0.045 a side), laterally within 2 mm of the face.
+ * Such a point is enclosed by steel whether or not a plate is there, so it
+ * cannot show through one. The lacing is inside the angles BY CONSTRUCTION
+ * â€” it runs from chord axis to chord axis â€” which is why this has to be
+ * asked before a plate is blamed for it.
+ */
+function inAngle(chords: Record<string, Faces>, p: Plate): (s: { d: number; e: number; h: number }) => boolean {
+  const polys = WEB_CLASSES.flatMap((c) => facePolys(chords[c]!, p, 0.95, 1.4, 0.2));
+  const near = (poly: number[][], d: number, e: number) => {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i]!;
+      const [xj, yj] = poly[j]!;
+      if (yi! > e !== yj! > e && d < ((xj! - xi!) * (e - yi!)) / (yj! - yi!) + xi!) inside = !inside;
+      const dx = xj! - xi!;
+      const dy = yj! - yi!;
+      const t = Math.max(0, Math.min(1, ((d - xi!) * dx + (e - yi!) * dy) / (dx * dx + dy * dy || 1)));
+      if (Math.hypot(d - xi! - t * dx, e - yi! - t * dy) < 0.002) return true;
+    }
+    return inside;
+  };
+  return (s) => polys.some((q) => {
+    const over = q.at(s.d, s.e) - s.h;
+    return over >= -1e-6 && over <= 0.09 && near(q.poly, s.d, s.e);
+  });
+}
+
 /** The cooked skins the crossing plates are measured against, and the plates. */
 interface CrossingProbe {
   /** Each web class' CHORDS: the corner angles, whose outer faces are the plate's datum. */
@@ -1825,7 +1920,7 @@ describe("eiffel skeleton", () => {
   });
 
   it("keeps every crossing plate's inner face outside the lacing it covers, and counts the ones it does not", async () => {
-    const { lacing, laceFaces, plates } = await crossingProbe({ lacedWeb: true });
+    const { chords, lacing, laceFaces, plates } = await crossingProbe({ lacedWeb: true });
     // The bound the DEPTH is chosen against, re-measured from the cooked
     // lacing rather than from CHORD - LACE: a lacing bar's swept square is
     // mitred at the zigzag's vertices, so MID-SPAN its outer surface stands
@@ -1833,8 +1928,12 @@ describe("eiffel skeleton", () => {
     // table implies. At `set` 0.02 the plate sat 2.6 mm behind it.
     const behind: string[] = [];
     const through: string[] = [];
+    const seenBehind: string[] = [];
+    const seenThrough: string[] = [];
     let clean = Infinity;
     let worst = -Infinity;
+    let seenWorst = -Infinity;
+    let seenClean = Infinity;
     for (const p of plates) {
       // Read two ways, because neither alone sees all of it: the mitred
       // VERTICES, which are the lacing's peaks but stand a whole lacing
@@ -1842,37 +1941,62 @@ describe("eiffel skeleton", () => {
       // which run the length of every bar and so cover the plates no vertex
       // falls under.
       let top = -Infinity;
+      let seen = -Infinity;
+      const hidden = inAngle(chords, p);
       for (const c of WEB_CLASSES) {
         top = Math.max(top, laceOverPlate(lacing[c]!, p), ...overPlate(laceFaces[c]!, p, 0.3));
+        for (const s of laceSamples(lacing[c]!, laceFaces[c]!, p)) if (s.h > seen && !hidden(s)) seen = s.h;
       }
       expect(Number.isFinite(top), `no lacing under the plate at y=${p.o[1].toFixed(3)}`).toBe(true);
       worst = Math.max(worst, top);
+      seenWorst = Math.max(seenWorst, seen);
       if (top <= 0) clean = Math.min(clean, -top);
       else {
         behind.push(p.c.label ?? "");
         if (top > CROSS.thick) through.push(p.c.label ?? "");
       }
+      if (seen <= 0) seenClean = Math.min(seenClean, -seen);
+      else {
+        seenBehind.push(p.c.label ?? "");
+        if (seen > CROSS.thick) seenThrough.push(p.c.label ?? "");
+      }
     }
-    // WHERE IT HOLDS â€” every X crossing in the tower and every post landing
-    // clear of a turn, 816 of the 888 plates â€” the tightest clearance
+    // WHERE IT HOLDS — every X crossing in the tower and every post landing
+    // clear of a turn, 816 of the 888 plates — the tightest clearance
     // anywhere is 1.57 mm.
     expect(behind.length + through.length).toBeGreaterThan(0);
     expect(clean, "the tightest clean clearance").toBeGreaterThan(0.0015);
-    // WHERE IT DOES NOT. Two things eat it, both only at the four kinked
-    // post landings. The bisector's tilt (above) spends the clearance the
-    // depth was chosen for; and a strut's lacing blows out past its mitre
-    // in the last rings before a CUT end, reaching 2.6 mm inside the
-    // angles' outer face where mid-span it is 17.4. Counted and bounded
-    // rather than asserted to zero, so that the figure is on the record and
-    // cannot GROW without this failing.
+    // WHERE IT DOES NOT, READ RAW. Only at the four kinked post landings:
+    // the bisector's tilt (above) spends the clearance the depth was chosen
+    // for, and a strut's lacing blows out past its mitre in the last rings
+    // before a CUT end, reaching 2.6 mm inside the angles' outer face where
+    // mid-span it is 17.4. Counted and bounded rather than asserted to zero.
     const tally = (v: string[]) => [...new Set(v)].sort().map((k) => `${k}=${v.filter((x) => x === k).length}`);
     expect(tally(behind)).toEqual(["XX=8", "XXI=32", "XXII=32"]);
     expect(tally(through)).toEqual(["XXI=8"]);
     expect(behind).toHaveLength(72);
     expect(through).toHaveLength(8);
-    // 3.1 mm PAST the angles' outer face at the worst of them, which is the
-    // tilt and the blow-out at once.
     expect(1000 * worst, "the deepest the lacing reaches").toBeCloseTo(18.09, 1);
+    // BUT MOST OF THAT IS INSIDE AN ANGLE ALREADY. The lacing runs from
+    // chord axis to chord axis, so its ends are inside the corner angles'
+    // 90 mm by construction, and so is every point the raw count blames on
+    // XXI and XX — the blow-out included: the 8 plates "through" at XXI are
+    // lacing 2.6 mm under the post's OWN angle's outer face, which no plate
+    // lets through because the angle encloses it. Discounting what an angle
+    // already encloses, 16 plates remain, all at XXII, each with the
+    // lacing inside the plate's own 10 mm (6.17 mm at worst, 3.8 short of
+    // its front face) — so nothing shows through any plate in the tower.
+    // A plate PLANE cannot take these 16 out either: solved per plate
+    // against the cooked steel and lacing, the best flat plane at XXII
+    // still leaves the lacing within 0.57 mm of needing a proud plate, i.e.
+    // it buys the 16 back only at 11 mm proud and 1 mm of daylight
+    // (legs.ts, postCrossings).
+    expect(tally(seenBehind)).toEqual(["XXII=16"]);
+    expect(seenThrough).toHaveLength(0);
+    expect(1000 * seenWorst, "the deepest the lacing reaches outside an angle").toBeCloseTo(6.17, 1);
+    // And where it is clean, at the turns too: 0.13 mm at the tightest, a
+    // XXII plate on the other side of the pair.
+    expect(seenClean).toBeGreaterThan(0.0001);
   });
 
   it("covers the post's cut cap with the plate over it, at every node landing", async () => {

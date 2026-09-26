@@ -463,8 +463,9 @@ interface GirderBelt {
 /**
  * A girder belt filling a panel between two chord plates `chord` wide whose
  * outer edges lie on the panel's node lines: posts square to the chords
- * every `pitch` from the tower's axis, standing between the chords' inner
- * edges; a double lattice whose bars start every `barPitch` and each run
+ * every `pitch` from the tower's axis, running over the bottom chord's web
+ * to its edge angle's toe and stopping on the top chord's inner edge
+ * ({@link beltPostsOf}); a double lattice whose bars start every `barPitch` and each run
  * `span` along the chords, their working lines node line to node line
  * (PL-VII prints panel 11's angle "55°49′49″", atan(4.95368 / 3.36268)),
  * the bars themselves ending on the chords' axes, the rivet lines; and at
@@ -486,11 +487,7 @@ function girderBelt(
 ): GirderBelt {
   const r = uprightHalf(y0, y1);
   const margin = r + POST_CLEAR;
-  const inside = (pl: FacePlane) => ({ lo: chord, hi: pl.H - chord, D: pl.H - 2 * chord });
-  const postsOf = (pl: FacePlane) => {
-    const { lo, hi, D } = inside(pl);
-    return family(pitch, lo, [0, 1]).map((l) => pl.clip(l.p, l.d, lo, hi, margin, D / 2));
-  };
+  const postsOf = (pl: FacePlane) => beltPostsOf(pl, chord, pitch, margin);
   const posts = onFaces(y0, y1, postsOf);
   const bars = (dir: 1 | -1) =>
     onFaces(
@@ -564,6 +561,369 @@ function belt2(): GirderBelt {
   const P = LEG_BELTS.belt2PostPitch;
   return girderBelt(node("XVIII").y, node("XVII").y, LEG_BELTS.belt2Chord, P, P / 2, P, LEG_BELTS.belt2Gusset);
 }
+
+/**
+ * A belt's posts on one face, square to the chords every `pitch` from the
+ * tower's axis. At the BOTTOM chord a post runs on over the web to the
+ * edge angle's toe, `toe` in from the chord's outer edge, as PL-X Figs 14,
+ * 17 and PL-XII Fig. 1 draw it ("Corn: 80x80x8" riveted on the "Ame de
+ * 500x10", 2 lines of 4), rather than butting on the web's inner edge. At
+ * the TOP chord it still stops on the inner edge: both top chords lie in a
+ * floor deck ({@link TOP_CHORD_IN_DECK}), and running the post on there
+ * put 48 of panel 5's 64 and all 48 of panel 11's into the slabs
+ * [measured]. One shorter than half the clear depth is dropped as before.
+ */
+function beltPostsOf(pl: FacePlane, chord: number, pitch: number, margin: number): Array<[UV, UV] | undefined> {
+  const D = pl.H - 2 * chord;
+  const toe = beltJoints(chord).toe;
+  return family(pitch, toe, [0, 1]).map((l) => pl.clip(l.p, l.d, toe, pl.H - chord, margin, D / 2));
+}
+
+/**
+ * The belts' and ties' chord rivets [sourced PL-X Figs 2, 7, 14-17; PL-XII
+ * Figs 1, 4]. NO PLATE: every lattice member of the ties and of panels 5
+ * and 11 rivets straight onto its chord's web ("Attache sur âme"), and the
+ * only gussets these girders carry are the posts' mid-height plates and
+ * the upright's own at a chord's end. So what a chord lacks is rivets:
+ *
+ *   - its EDGE ROW, one line through the edge angle along the chord's
+ *     outer edge, `inset` in, every `pitch`, on both faces, stopping
+ *     `endClear` short of the uprights' faces;
+ *   - a LAP GROUP where each member lands: two lines of rivets `gauge`
+ *     either side of the member's axis, the first `endClear` off the web's
+ *     inner edge, then every `pitch` toward the outer edge, `count` a line
+ *     at most and never nearer the member's own end than `onMember`; heads
+ *     on the member's two faces.
+ *
+ * A chord whose outer edge lies inside a floor deck (panel 5's at XXIII,
+ * panel 11's at XVII) takes none: its rows would sit in the slab.
+ *
+ * Every spacing is read off the drawings at 1:50 (0.2365 scan px per mm,
+ * checked on Fig. 17's printed "3,8825", the "500" web and PL-XII's
+ * "1,681.3"). A bar's drawn group runs on toward the angle's toe, past the
+ * chord's axis where the model's bars end, so a bar takes as many of its
+ * drawn heads as fit between the web's inner edge and the axis: 3 of
+ * panel 5's 4-5 and 3 of panel 11's 5 (running the bars on is not built:
+ * at the toe they close on the post's own group at the V).
+ */
+export interface BeltJoints {
+  /** The edge angle's toe, in from the chord's outer edge; a post runs on to it. */
+  readonly toe: number;
+  readonly edge: { readonly pitch: number; readonly inset: number; readonly endClear: number };
+  readonly post: { readonly gauge: number; readonly pitch: number; readonly count: number };
+  readonly bar: { readonly gauge: number; readonly pitch: number; readonly count: number };
+}
+/** Lap groups' shared margins [estimated; the first head 30-40 mm off the inner edge, measured]. */
+export const LAP_ROWS = { endClear: 0.035, onMember: 0.03 } as const;
+/**
+ * Panel 5 (PL-X Figs 14, 17) [measured]: the toe 108-118 in; the edge row
+ * 51-65 in and 31 heads over the 3,8825 bay (0.129; local 131-139); posts
+ * 2 lines of 4, the lines 91-96 apart, pitch 92-107; bars 2 lines of 4-5,
+ * 100-108 apart, pitch 105-117 along the bar.
+ */
+export const BELT5_JOINTS: BeltJoints = {
+  toe: 0.113,
+  edge: { pitch: 0.129, inset: 0.06, endClear: 0.12 },
+  post: { gauge: 0.047, pitch: 0.1, count: 4 },
+  bar: { gauge: 0.052, pitch: 0.11, count: 5 },
+};
+/**
+ * Panel 11 (PL-XII Fig. 1) [measured]: the toe about 100 in; the edge row
+ * 48-51 in, pitch 128 on the BOTTOM chord over 13 pitches (the top chord,
+ * not riveted here, reads 146 over 20); posts 2 lines of 4, 93 apart,
+ * pitch 68-108 (irregular; 0.08 taken); bars 2 lines of 5, 92-95 apart,
+ * pitch about 75.
+ */
+export const BELT11_JOINTS: BeltJoints = {
+  toe: 0.1,
+  edge: { pitch: 0.128, inset: 0.05, endClear: 0.12 },
+  post: { gauge: 0.046, pitch: 0.08, count: 4 },
+  bar: { gauge: 0.047, pitch: 0.075, count: 5 },
+};
+/** A belt's joint spacings, by its chord's width (the two belts' chords differ). */
+const beltJoints = (chord: number): BeltJoints => (chord === LEG_BELTS.belt1Chord ? BELT5_JOINTS : BELT11_JOINTS);
+/**
+ * The ties (PL-X Figs 2, 7 at 1:10, calibrated on the printed "200")
+ * [measured]: the edge row 38-39 in, pitch 130-133.
+ */
+export const TIE_EDGE_ROW = { pitch: 0.13, inset: 0.04 } as const;
+/**
+ * A tie bar's two rivets sit at fixed DEPTHS in the web, whatever the
+ * bar's angle: Fig. 2 prints "42" below the working line where a joint's
+ * two bars meet ("70" from the outer edge) and "58" beyond that, the
+ * second "30" off the web's inner edge; Fig. 7 prints "112" to the first
+ * line and draws the second at 166-172 [sourced]. The pitch ALONG the bar
+ * follows: Fig. 2's "64,5" (measured 68-69) on its steep bars, Fig. 7's
+ * "100" on its shallow one, both 58 / sin of the bar's angle.
+ *
+ * The model's working line is the chord's AXIS, 110 in on its 0.22, not
+ * 70: its bars meet there. Taken from the outer edge (112, 170) the first
+ * heads of a joint's two bars then sat 12-30 mm apart, a head being 38
+ * [measured: 320 pairs]. So the depths are taken as drawn FROM THE WORKING
+ * LINE: the first `fromApex` past it, the second `pitch` beyond but no
+ * nearer the inner edge than `innerClear` — 152 and 190 in, the second
+ * held 20 mm short of the drawn 58 by the model's narrower web below its
+ * axis (110 against 130). On a steep bar that leaves the two heads
+ * under `minPitch` apart along it (a head is 38 across; measured: 9
+ * pairs), so the second is pushed on to it; the drawn pitch is never less
+ * than 64.5.
+ */
+export const TIE_LAP = { fromApex: 0.042, pitch: 0.058, innerClear: 0.03, minPitch: 0.042 } as const;
+
+/** One rivet row in a face's (u, v): `n` heads from `from` along `dir`, `off` along the face normal. */
+interface RivetRow {
+  readonly from: UV;
+  readonly dir: UV;
+  readonly n: number;
+  readonly off: number;
+}
+
+/** Rows as the two-point lines `lineRivets` resamples at `pitch`, each head's axis out of its own face. */
+function rowMembers(pl: FacePlane, rows: readonly RivetRow[], pitch: number): SegmentMember[] {
+  return rows.map((r) => {
+    // 0.1 mm short of (n - 1) pitches, so spacing mode lands n samples and no
+    // remainder: a relative shortfall below f32's epsilon lands an n + 1-th
+    // head on top of the last one (measured: 96 of them).
+    const L = (r.n - 1) * pitch - 1e-4;
+    const l = Math.hypot(r.dir[0], r.dir[1]);
+    const b: UV = [r.from[0] + (r.dir[0] / l) * L, r.from[1] + (r.dir[1] / l) * L];
+    return { a: pl.world(r.from, r.off), b: pl.world(b, r.off), n: r.off >= 0 ? pl.n : scale3(pl.n, -1) };
+  });
+}
+
+/** Both faces of a member lying `layer` off the plane, `thick` thick. */
+const faces2 = (layer: number, thick: number): [number, number] => [layer + thick / 2, layer - thick / 2];
+
+/**
+ * A girder belt's chord rivets (see {@link BeltJoints}): its members
+ * rebuilt exactly as {@link girderBelt} builds them, each landing read in
+ * the chord's own face frame.
+ */
+function beltRivets(
+  y0: number,
+  y1: number,
+  chord: number,
+  chordThick: number,
+  pitch: number,
+  barPitch: number,
+  span: number,
+  topInDeck: boolean,
+): { edge: SegmentMember[]; posts: SegmentMember[]; bars: SegmentMember[] } {
+  const J = beltJoints(chord);
+  const r = uprightHalf(y0, y1);
+  const margin = r + POST_CLEAR;
+  const T = LEG_BELTS.beltFlatThickness;
+  const edge: SegmentMember[] = [];
+  const posts: SegmentMember[] = [];
+  const bars: SegmentMember[] = [];
+  for (let f = 0; f < 4; f++) {
+    const pl = facePlane(f, y0, y1);
+    // The chords riveted: (axis v, outer-edge v, the sign pointing into the belt).
+    const chords: Array<{ axis: number; outer: number; s: 1 | -1 }> = [{ axis: chord / 2, outer: 0, s: 1 }];
+    if (!topInDeck) chords.push({ axis: pl.H - chord / 2, outer: pl.H, s: -1 });
+    const eRows: RivetRow[] = [];
+    const pRows: RivetRow[] = [];
+    const bRows: RivetRow[] = [];
+    for (const c of chords) {
+      const v = c.outer + c.s * J.edge.inset;
+      // Inside both the chord (clipped at its axis) and the uprights' faces at the row's own height.
+      const seg = pl.clip([0, v], [1, 0], v - 1e-6, v + 1e-6, r);
+      const own = pl.clip([0, c.axis], [1, 0], c.axis - 1e-6, c.axis + 1e-6, r);
+      if (seg !== undefined && own !== undefined) {
+        // endClear, not inset, off the uprights: the ADJACENT face's joint
+        // gusset at the corner reaches 0.45 along this face (measured: 16
+        // heads through it at 0.06).
+        const u0 = Math.max(seg[0][0], own[0][0]) + J.edge.endClear;
+        const u1 = Math.min(seg[1][0], own[1][0]) - J.edge.endClear;
+        const n = Math.floor((u1 - u0) / J.edge.pitch) + 1;
+        for (const off of faces2(0, chordThick)) eRows.push({ from: [u0, v], dir: [1, 0], n, off });
+      }
+      // A landing: a member's end on this chord, the member running into
+      // the belt along D, riveted with `k`'s lines into `rows`.
+      const land = (end: UV, D: UV, layer: number, k: BeltJoints["post"], rows: RivetRow[]) => {
+        const P: UV = [-D[1], D[0]];
+        for (const g of [-k.gauge, k.gauge]) {
+          // Along the member from its end: the first head `endClear` short
+          // of the web's inner edge, then back toward the end.
+          const inner = c.axis + (c.s * chord) / 2 - c.s * LAP_ROWS.endClear;
+          const base: UV = [end[0] + g * P[0], end[1] + g * P[1]];
+          const tTop = (inner - base[1]) / D[1];
+          const n = Math.min(k.count, Math.floor((tTop - LAP_ROWS.onMember) / k.pitch + 1e-9) + 1);
+          if (n < 2) continue;
+          const from: UV = [base[0] + tTop * D[0], base[1] + tTop * D[1]];
+          for (const off of faces2(layer, T)) rows.push({ from, dir: [-D[0], -D[1]], n, off });
+        }
+      };
+      const on = (p: UV, at: number) => Math.abs(p[1] - at) < 1e-6;
+      // A post ends at the bottom chord's toe (beltPostsOf).
+      const postEnd = c.s > 0 ? J.toe : pl.H - chord;
+      for (const post of beltPostsOf(pl, chord, pitch, margin)) {
+        if (post === undefined) continue;
+        for (const [end, other] of [[post[0], post[1]], [post[1], post[0]]] as const) {
+          if (on(end, postEnd)) land(end, unitUV([other[0] - end[0], other[1] - end[1]]), 0, J.post, pRows);
+        }
+      }
+      for (const dir of [1, -1] as const) {
+        for (const l of family(barPitch, dir > 0 ? 0 : pl.H, [span, dir * pl.H])) {
+          const bar = pl.clip(l.p, l.d, chord / 2, pl.H - chord / 2, margin);
+          if (bar === undefined) continue;
+          for (const [end, other] of [[bar[0], bar[1]], [bar[1], bar[0]]] as const) {
+            if (on(end, c.axis)) land(end, unitUV([other[0] - end[0], other[1] - end[1]]), dir * BAR_LAYER, J.bar, bRows);
+          }
+        }
+      }
+    }
+    edge.push(...rowMembers(pl, eRows, J.edge.pitch));
+    posts.push(...rowMembers(pl, pRows, J.post.pitch));
+    bars.push(...rowMembers(pl, bRows, J.bar.pitch));
+  }
+  return { edge, posts, bars };
+}
+
+/**
+ * The tie laps' rows are each exactly their two heads, so they are spawned
+ * at a spacing longer than any of them (at most 0.07 m): a resample in
+ * spacing mode lands the start and the true endpoint and nothing between.
+ */
+const TIE_LAP_SPAWN = 1;
+
+const pointUV = (p: UV, d: UV, t: number): UV => [p[0] + t * d[0], p[1] + t * d[1]];
+
+const unitUV = (d: UV): UV => {
+  const l = Math.hypot(d[0], d[1]);
+  return [d[0] / l, d[1] / l];
+};
+
+/**
+ * The base ties' chord rivets: each tie bar ("70 x 70 x 8") laps onto its
+ * chord's web with TWO rivets on its axis (PL-X Figs 2, 7, "Barres de
+ * treillis — Attache sur âme"), and each chord carries its edge row
+ * through the "Corn 80x80x10" along its outer edge. The bars are rebuilt
+ * exactly as {@link tie} places them. Nothing is put where the central
+ * post stands: it crosses both chords there, and a head at the web would
+ * sit inside its box.
+ */
+function tieRivets(): { edge: SegmentMember[]; lap: SegmentMember[] } {
+  const top = node("XXVIII");
+  const width = top.outer - top.inner;
+  const s1 = faceSlopes(top.y - 1);
+  const yT = tieTop();
+  const yA = top.y - vertical(LEG_BELTS.tieOuterDepth, s1.outer);
+  const r = tableAt(MEMBERS.upright, top.y);
+  const half = LEG_BELTS.tieChord / 2;
+  const thick = LEG_BELTS.tieChordThickness;
+  const bar = MEMBERS.beltBar;
+  const postHalf = tableAt(MEMBERS.web, top.y) + 0.02;
+  const edge: SegmentMember[] = [];
+  const lap: SegmentMember[] = [];
+  const station = (uv: readonly [number, number], y: number): Vec3 => {
+    const p = profileAt(y);
+    return [p.inner + (p.outer - p.inner) * uv[0], y, p.inner + (p.outer - p.inner) * uv[1]];
+  };
+  const specs = [
+    { faces: [3, 0], pitch: LEG_BELTS.tieOuterPitch, depth: vertical(LEG_BELTS.tieOuterDepth, s1.outer), phase: LEG_BELTS.tieOuterPhase },
+    { faces: [1, 2], pitch: LEG_BELTS.tieInnerPitch, depth: vertical(LEG_BELTS.tieInnerDepth, s1.inner), phase: 0 },
+  ];
+  for (const sp of specs) {
+    const offsets: number[] = [];
+    for (let k = -20; k <= 20; k++) {
+      if (sp.phase <= 0) offsets.push(k * sp.pitch);
+      else if (k >= 0) offsets.push(sp.phase + k * sp.pitch, -(sp.phase + k * sp.pitch));
+    }
+    const ts = [0];
+    for (const o of offsets) {
+      const t = 0.5 + o / width;
+      if (t > 0.3 / width && t < 1 - 0.3 / width) ts.push(t);
+    }
+    ts.sort((a, b) => a - b);
+    const ring = faceRing(sp.faces, ts);
+    const perFace = ts.length;
+    const left = sp.phase > 0 ? ts.findIndex((t) => Math.abs(t - (0.5 - sp.phase / width)) < 1e-9) : -2;
+    const yB = top.y - sp.depth;
+    // The bars, as (face, bottom end, top end).
+    const bars: Array<{ f: number; lo: Vec3; hi: Vec3 }> = [];
+    for (let s = 0; s + 1 < ring.length; s++) {
+      if (s % perFace !== left) bars.push({ f: sp.faces[Math.floor(s / perFace)]!, lo: station(ring[s]!, yB), hi: station(ring[s + 1]!, yT) });
+    }
+    for (let s = 1; s < ring.length; s++) {
+      if (s % perFace !== left + 1) bars.push({ f: sp.faces[Math.floor((s - 1) / perFace)]!, lo: station(ring[s]!, yB), hi: station(ring[s - 1]!, yT) });
+    }
+    for (const f of sp.faces) {
+      // Two planes: the bottom chord's, and the top chord's (built from A's depth on every face).
+      const planes = [
+        { pl: facePlane(f, yB, yT), y0: yB, axisAtTop: false },
+        { pl: facePlane(f, yA, yT), y0: yA, axisAtTop: true },
+      ];
+      for (const { pl, y0, axisAtTop } of planes) {
+        const F = pl.H / (yT - y0);
+        const toUV = (p: Vec3): UV => [f === 0 || f === 2 ? p[0] : p[2], (p[1] - y0) * F];
+        const axis = axisAtTop ? pl.H : 0;
+        const sgn = axisAtTop ? -1 : 1; // into the tie
+        const centre = toUV(faceCentre(f, y0 + axis / F))[0];
+        const span = pl.clip([0, axis], [1, 0], axis - 1e-6, axis + 1e-6, r);
+        if (span === undefined) continue;
+        // Clear of both uprights' faces AT the head's own height (the leg
+        // leans, so the chord's ends move out below its axis), and of the post.
+        const clear = (u: number, v: number) => {
+          const at = pl.clip([0, v], [1, 0], v - 1e-6, v + 1e-6, r + 0.03);
+          const lo = Math.max(span[0][0], at === undefined ? Infinity : at[0][0]) + 0.02;
+          const hi = Math.min(span[1][0], at === undefined ? -Infinity : at[1][0]) - 0.02;
+          return u > lo && u < hi && Math.abs(u - centre) > postHalf;
+        };
+        const eRows: RivetRow[] = [];
+        // The edge row, broken where the post stands.
+        const v = axis - sgn * (half - TIE_EDGE_ROW.inset);
+        const row = pl.clip([0, v], [1, 0], v - 1e-6, v + 1e-6, r);
+        if (row === undefined) continue;
+        const u0 = row[0][0] + TIE_EDGE_ROW.inset;
+        const u1 = row[1][0] - TIE_EDGE_ROW.inset;
+        const us: number[] = [];
+        for (let u = u0; u <= u1 + 1e-9; u += TIE_EDGE_ROW.pitch) if (clear(u, v)) us.push(u);
+        // Consecutive runs become rows.
+        let run: number[] = [];
+        const flush = () => {
+          if (run.length >= 2) for (const off of [thick / 2, -thick / 2]) eRows.push({ from: [run[0]!, v], dir: [1, 0], n: run.length, off });
+          run = [];
+        };
+        for (const u of us) {
+          if (run.length > 0 && u - run[run.length - 1]! > TIE_EDGE_ROW.pitch * 1.5) flush();
+          run.push(u);
+        }
+        flush();
+        // The bars landing on this chord: two heads at TIE_LAP's depths past
+        // the working line, which is the chord's axis, where each bar ends.
+        const d1 = TIE_LAP.fromApex;
+        const d2 = Math.min(d1 + TIE_LAP.pitch, half - TIE_LAP.innerClear);
+        for (const b of bars) {
+          if (b.f !== f) continue;
+          const [end, other] = axisAtTop ? [toUV(b.hi), toUV(b.lo)] : [toUV(b.lo), toUV(b.hi)];
+          const D = unitUV([other[0] - end[0], other[1] - end[1]]);
+          const t1 = d1 / Math.abs(D[1]);
+          const from = pointUV(end, D, t1);
+          const last = pointUV(end, D, Math.max(d2 / Math.abs(D[1]), t1 + TIE_LAP.minPitch));
+          // At an upright the bar lands on the chord-end plate (PL-X Fig. 6),
+          // under the post inside its box: neither is this rule's.
+          if (!clear(from[0], from[1]) || !clear(last[0], last[1])) continue;
+          for (const off of [bar, -bar]) {
+            const n = off >= 0 ? pl.n : scale3(pl.n, -1);
+            lap.push({ a: pl.world(from, off), b: pl.world(last, off), n });
+          }
+        }
+        edge.push(...rowMembers(pl, eRows, TIE_EDGE_ROW.pitch));
+      }
+    }
+  }
+  return { edge, lap };
+}
+
+/**
+ * Both belts' TOP chords lie mostly inside a floor deck: panel 5's at XXIII
+ * (y 56.94-57.40) in the 1st floor's 0.60 slab (57.03-57.63), panel 11's
+ * at XVII (115.06-115.50) in the 2nd's (115.13-115.73) [measured: all 16
+ * of each intersect the platforms class]. Their edge rows and laps would
+ * sit in the slab, so they take none.
+ */
+const TOP_CHORD_IN_DECK = true;
 
 /** The top of panel 10's base band [derived: its printed depth over the outer faces' slope]. */
 function band10Top(): number {
@@ -836,21 +1196,46 @@ const POST_NODES = ["XXVII", "XXVI", "XXV", "XXIV", "XXIII", "XXII", "XXI", "XX"
  * at panels 1-4's mid-panel levels, where a post landing and a span-2 X
  * cross at the same point and could each have claimed it.
  *
- * WHAT IT DOES NOT DO. The lacing comes through 72 of the 888 plates, 8 of
- * them out through the front, worst 8.1 mm at XXI. Every one is an 800 at
- * the four kinked leg nodes and every breach is near a plate's END
- * (|t| / half 0.74 to 1.00); the middle 100 mm of every plate in the tower
- * is clean, every X crossing is clean, every 600 and 500 is clean, and the
- * tightest clearance among the 816 clean plates is 1.57 mm. The
- * cause is the tilt above, not the mitre: across a half-length the kink
- * lifts the chords' outer face to 0.414 against the 0.400 the plate
- * assumes, which is 14 mm on a clearance of 2.40. (The lacing does blow
- * out past its mitre near a cut end — 1.6 mm inside the angles' outer face
- * at the PENULTIMATE ring, against 17.4 mid-span — but the end cap itself
- * is the safest place on a member, at the full 22.5 the section table
- * implies, because a cap has no bisector to mitre.) The same 128 plates
- * are the only ones whose depth is off the set at all, worst 14.3 mm; the
- * other 760 are exact to f32.
+ * WHAT IT DOES NOT DO. Read raw, the lacing stands above the inner face
+ * of 72 of the 888 plates, above the FRONT of 8, worst 8.1 mm past it at
+ * XXI — every one an 800 at the four kinked leg nodes, near a plate's END
+ * (|t| / half 0.74 to 1.00); every X crossing, 600 and 500 is clean, and
+ * the tightest clearance among the 816 clean plates is 1.57 mm. But the
+ * lacing runs chord axis to chord axis, so its ends are inside the corner
+ * angles' 90 mm by construction, and so is every point the raw count
+ * blames at XXI and XX: the 8 "through" are lacing 2.6 mm under the POST'S
+ * OWN angle's outer face, where it blows out past its mitre at the
+ * penultimate ring before the cut end (1.6 mm at worst, against 17.4
+ * mid-span; the cap itself is at the full 22.5). An angle encloses that,
+ * plate or no plate — in THIS model, whose angle is a closed 90 mm square
+ * tube drawn opaque. A real angle is an L, open on its inside, so what the
+ * box hides is lacing filling the angle's volume, and at XXII much of it
+ * is the post's lacing inside the HORIZONTAL's angle: a clash of two
+ * members the solid box keeps out of sight, not clearance. Discounting it,
+ * 16 plates remain, all at XXII, the
+ * lacing inside the plate's own 10 mm (6.17 at worst, 3.8 short of its
+ * front) — nothing shows through any plate [all measured]. The cause at
+ * XXII is the tilt above: across a half-length the kink lifts the chords'
+ * outer face to 0.414 against the 0.400 the plate assumes. The same 128
+ * plates are the only ones whose depth is off the set at all, worst
+ * 14.3 mm; the other 760 are exact to f32.
+ *
+ * NO PLATE CAN TAKE THE 16 OUT, and the plane per kink was measured
+ * rather than assumed. The steel under a XXII plate is not one plane
+ * within the 7.4 mm between the lacing (17.4) and a flush plate (10): the
+ * horizontal lies in the panel ABOVE and covers the plate to within 0.07
+ * of both ends, the post below lies in the panel below, and where the
+ * post's buried end passes under the horizontal's lower chord the two
+ * faces stand 21 mm apart — at one such point the post's lacing is 2.3 mm
+ * under the horizontal's chord face, so no plate of ANY shape is flush
+ * there and clear of it. Solved per plate (each of a pair its own plane,
+ * minimax against the cooked angles and lacing), the best flat plane at
+ * XXII leaves a window of -1.5 to 3.6 mm where 10 is needed, and the best
+ * plate bent on a line parallel to the horizontal gains 1 mm on that. So
+ * clearing the lacing costs 11-12 mm proud and 1-2 mm of daylight at XXII
+ * — visible, where the lacing inside the plate is not — and a plane solved
+ * from the members' planes rather than the mesh costs 16 and 6. At XXI and
+ * XX nothing needs clearing. The bisector stays.
  *
  * The same rule plates the first floor's own laced-strut crossings and the
  * summit's two diagonal girders — whose crossing plate, PL-XIV Fig. 5
@@ -882,16 +1267,23 @@ function postCrossings(): Crossing[] {
     { y: () => band10Top(), hw: LEG_BELTS.band10TopChord },
     //
     // NOT the ties' chords or the belts' chord plates at XXIV, XXIII and
-    // XVIII, though a post does end on each of them. They were built once
-    // and measured: a crossing plate is set under the POST's corner angles,
-    // and those chords are flats lying in the face plane a third of a metre
-    // below that — 0.285 to 0.517 m from the plate's inner face to the
-    // nearest steel [measured], so the plate plates nothing. Worse, panels
-    // 5 and 11 carry no central post, so 96 of those plates had no steel of
-    // ANY kind under them and hung in mid air with 2,497 rivets, and the 64
-    // at XXIII ran through the first floor's deck. A chord plate needs a
-    // rule of its own — a plate ON the flat, not under angles it has none
-    // of — or it needs nothing.
+    // XVIII, though a post does end on each of them, and not by oversight.
+    // They were built once as crossing plates and measured: set under the
+    // POST's corner angles, they stood 0.285 to 0.517 m off the flats, which
+    // lie in the face plane; 96 in panels 5 and 11 (no central post) had no
+    // steel of any kind under them and 64 at XXIII ran through the first
+    // floor's deck. And the plates say there is no plate to build: every
+    // member of the ties and of panels 5 and 11 rivets straight onto its
+    // chord's web ("Barres de treillis — Attache sur âme", PL-X Figs 2, 7;
+    // Figs 14-17; PL-XII Fig. 1), the only gussets on those girders being
+    // the posts' mid-height plates and the upright's own at a chord's end,
+    // and the "877" post crosses the ties' chords at a web SPLICE (PL-X
+    // Fig. 9, "C.j. d'âme"), not a gusset. What a chord lacks is its rivets:
+    // `beltRivets` and `tieRivets`. Nor could a plate ON the flat reach the
+    // post in this model: the post is a hollow box whose corner angles
+    // stand 0.31-0.40 m either side of the face plane (0.21-0.30 for panel
+    // 10's 600), the flats lie within 40 mm of it, and at XXIV, XXIII and
+    // XVIII the post stops POST_CLEAR short of the flat's edge.
   ];
   const out: Crossing[] = [];
   for (const landing of landings) {
@@ -922,7 +1314,10 @@ function postCrossings(): Crossing[] {
       // 5.8 mm of its lacing THROUGH the plate, and the two halves, each
       // square to its own panel, left up to 77.6 mm of daylight at the seam
       // they were meant to butt on [all measured]. The bisector's error is
-      // symmetric and smaller, so the bisector stays.
+      // symmetric and smaller, so the bisector stays. A plane solved per
+      // plate, and a plate bent parallel to the horizontal, were measured
+      // too, and lose to it on what shows (see "NO PLATE CAN TAKE THE 16
+      // OUT" above).
       const along = unit3(sub3(faceCentre(f, y + CROSS_STEP), faceCentre(f, y - CROSS_STEP)));
       const n = unit3(cross3(H, along));
       let U = unit3(cross3(n, H));
@@ -1590,6 +1985,31 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
             ),
           }))
         : []),
+      // The chords' rivets: panels 5 and 11 and the base ties ({@link BeltJoints}).
+      ...(detail.rivets === true
+        ? (() => {
+            const P = LEG_BELTS;
+            const b5 = beltRivets(node("XXIV").y, node("XXIII").y, P.belt1Chord, P.belt1ChordThickness, P.belt1PostPitch, P.belt1PostPitch, 2 * P.belt1PostPitch, TOP_CHORD_IN_DECK);
+            const b11 = beltRivets(node("XVIII").y, node("XVII").y, P.belt2Chord, P.belt2ChordThickness, P.belt2PostPitch, P.belt2PostPitch / 2, P.belt2PostPitch, TOP_CHORD_IN_DECK);
+            const tr = tieRivets();
+            const sets: Array<[string, SegmentMember[], number]> = [
+              ["legBelt5Edge", b5.edge, BELT5_JOINTS.edge.pitch],
+              ["legBelt5PostLap", b5.posts, BELT5_JOINTS.post.pitch],
+              ["legBelt5BarLap", b5.bars, BELT5_JOINTS.bar.pitch],
+              ["legBelt11Edge", b11.edge, BELT11_JOINTS.edge.pitch],
+              ["legBelt11PostLap", b11.posts, BELT11_JOINTS.post.pitch],
+              ["legBelt11BarLap", b11.bars, BELT11_JOINTS.bar.pitch],
+              ["legTieEdge", tr.edge, TIE_EDGE_ROW.pitch],
+              ["legTieLap", tr.lap, TIE_LAP_SPAWN],
+            ];
+            return sets
+              .filter(([, list]) => list.length > 0)
+              .map(([id, list, pitch]) => ({
+                name: `leg.chords.${id}`,
+                spawn: lineRivets(g, `${id}Rivets`, fourMembers(`${id}Rivets4`, segmentMembers(g, `${id}Rows`, list)), 0, pitch),
+              }));
+          })()
+        : []),
       ...rivetOutputs({
         "leg.horizontals": horizontalWeb,
         "leg.entretoises": entretoiseWeb,
@@ -1601,3 +2021,4 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     ],
   };
 }
+

@@ -46,7 +46,7 @@
  * and the names are gilded.
  *
  * THE RIVETS ARE INSTANCES, not mesh. `?rivets` (which implies `?laced`)
- * makes the cook put out `rivets*` outputs of instance batches — about 875,000
+ * makes the cook put out `rivets*` outputs of instance batches — about 894,000
  * of them — and the page draws each batch as one instanced unit-size dome
  * whose instance matrix carries the rivet's true size. They receive the
  * sun's shadow but do not cast it: a head 13 mm high throws nothing a
@@ -144,7 +144,7 @@ const UNCLASSED = new MeshStandardMaterial({
  * y = 0 and rising 0.7 along +y, the rivet's axis out of the plate. Each
  * instance matrix carries the rivet's true size, so this is the shape
  * only. Open at the base, which lies against the plate and is never seen;
- * 16 around and 3 rings is 80 triangles, and there are about 875,000 of these.
+ * 16 around and 3 rings is 80 triangles, and there are about 894,000 of these.
  */
 function rivetHead(): BufferGeometry {
   const base = 1;
