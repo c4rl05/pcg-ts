@@ -38,6 +38,7 @@
 import type { Vec3 } from "./lattice.js";
 import { PILES } from "./spec.js";
 import { type Flight, type StairRun, stairRuns, summitLevels } from "./stairs.js";
+import { CORE_DOOR } from "./summit.js";
 
 /** The eye over the feet [estimated]. */
 export const EYE = 1.6;
@@ -150,6 +151,11 @@ export const DECK_WALKS: Readonly<Record<string, readonly Vec3[]>> = {
   // terrace, 0.15 lower (`summit.ts` balcony 2.43 against the floor's
   // 2.58), to the terrace stair's foot.
   "summit.little>summit.gallery": [
+    // Off the floor that closes the stair's circle on the tower's side
+    // (`stairs.ts`), across the well's -s edge, and round it; until
+    // 2026-09-26 the stair ended in the open well and the walk left it by
+    // its (-s, +t) corner, 0.45 of well.
+    [1.17, 278.71, 0.6],
     [1.76, 278.71, 1.21],
     [3.0, 278.71, 1.55],
     [3.6, 278.71, 2.4],
@@ -238,11 +244,12 @@ export function walkRoute(runs: readonly StairRun[] = stairRuns()): WalkRoute {
         if (via !== undefined) {
           for (const p of via) walkTo(p, last.run, lf.name, "deck");
         } else if (lf.kind === "spiral" && ladder && lf.axis !== undefined && lf.diameter !== undefined) {
-          // Off a spiral's head along its landing to the core's door (the
-          // side the ladder's climber has at his back), then in.
+          // Off a spiral's head along its landing to the core's door
+          // (`summit.ts` CORE_DOOR, its middle; the diagonals' frame's
+          // angle less an eighth of a turn in the world), then in.
           const axis = last.place(lf.axis);
           const r = Math.hypot(head[0] - axis[0], head[2] - axis[2]);
-          const door = Math.atan2(-facing[2], -facing[0]);
+          const door = CORE_DOOR.angle - Math.PI / 4;
           for (const p of arc(axis, r, angleOf(axis, head), door, head[1]).slice(1)) walkTo(p, last.run, lf.name, "landing");
         } else if (lf.kind === "ladder" && ladder && flat) {
           // Out of one ladder's head and round the floor to the next one's

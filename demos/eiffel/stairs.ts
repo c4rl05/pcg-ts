@@ -62,7 +62,7 @@
  */
 import type { Vec3 } from "./lattice.js";
 import { FLOORS, NODES, profileAt } from "./spec.js";
-import { STAIR_ENVELOPE, lanternLevels } from "./summit.js";
+import { STAIR_ENVELOPE, coreDoorArc, lanternLevels } from "./summit.js";
 
 // ---------------------------------------------------------------------------
 // Vectors and frames
@@ -229,6 +229,12 @@ export interface StraightSpec {
    * square-cut end would otherwise dip into.
    */
   readonly stringerFoot?: number;
+  /**
+   * The risers under the head the stringers stop short of: 0, to the head;
+   * 1 where the head lands on a deck's edge, which a stringer's square-cut
+   * end would otherwise run into.
+   */
+  readonly stringerHead?: number;
 }
 
 /**
@@ -255,9 +261,10 @@ export function straight(o: StraightSpec): StairParts {
   line.push({ at: o.head, step: o.risers });
   const st = o.stringer ?? { depth: 0.25, thick: 0.06 };
   const from = add3(o.foot, mul3(sub3(o.head, o.foot), (o.stringerFoot ?? 0) / o.risers));
+  const to = add3(o.foot, mul3(sub3(o.head, o.foot), 1 - (o.stringerHead ?? 0) / o.risers));
   for (const side of [-1, 1]) {
     const off = add3(mul3(across, (side * (o.width + st.thick)) / 2), [0, -0.1, 0]);
-    const s = member(add3(from, off), add3(o.head, off), st.thick, UP);
+    const s = member(add3(from, off), add3(to, off), st.thick, UP);
     out.frame.push({ ...s, size: [s.size[0], st.depth, st.thick] });
   }
   const railH = o.rail ?? 0;
@@ -293,35 +300,119 @@ export interface SpiralSpec {
   /** The angle of the first riser's edge and the turns to the last's. */
   readonly start: number;
   readonly turns: number;
-  /** A landing after every `every` risers, `span` treads' angle wide, rising nothing. */
-  readonly landings?: { readonly every: number; readonly span: number };
+  /** A landing after every `every` risers, `span` treads' angle wide, rising nothing (see `landingSteps`). */
+  readonly landings?: Landings;
   readonly slab: boolean;
   /** The outer rail's height over the treads; 0 for none. */
   readonly rail?: number;
+  /**
+   * The outer rail left open over this angle at the foot and at the head,
+   * where a flight joins the helix across its outer edge and the walker
+   * steps over it (radians; 0, the default, for a rail that runs the whole
+   * helix). Rail posts in an opening are left out too.
+   */
+  readonly railOpen?: { readonly foot: number; readonly head: number };
   /** The newel's reach below the foot and above the head; null for none (a core the caller builds). */
   readonly newel?: { readonly below: number; readonly above: number } | null;
 }
 
-/** The angular slots a spiral of `risers` with landings every `every` of `span` needs. */
-export function spiralSlots(risers: number, landings?: { readonly every: number; readonly span: number }): number {
-  if (landings === undefined) return risers;
-  return risers + landings.span * Math.floor((risers - 1) / landings.every);
+/**
+ * A helix's landings: one after every `every` risers, `span` treads' angle
+ * wide; none within `headClear` risers of the head, where the flight that
+ * leaves the helix crosses over its last turn (see `SERVICE_LANDINGS`).
+ */
+export interface Landings {
+  readonly every: number;
+  readonly span: number;
+  readonly headClear?: number;
+}
+
+/** The risers a helix of `risers` has a landing after, in order. */
+export function landingSteps(risers: number, landings?: Landings): number[] {
+  if (landings === undefined) return [];
+  const out: number[] = [];
+  for (let k = landings.every; k < risers; k += landings.every) if (risers - k >= (landings.headClear ?? 0)) out.push(k);
+  return out;
+}
+
+/** The angular slots a spiral of `risers` with `landings` needs. */
+export function spiralSlots(risers: number, landings?: Landings): number {
+  return risers + (landings === undefined ? 0 : landings.span * landingSteps(risers, landings).length);
 }
 
 /**
- * The turns of a spiral of `slots` treads' angle, about 15 to the turn,
- * that starts at the angle `start` and must end at the angle `end`.
+ * The most a helix's hand rail may stand off its true circle between two
+ * vertices, 5 mm: at eye level, from the next turn, a rail drawn one chord
+ * per tread (24° on the service helices) reads as a polygon [estimated].
+ * Each tread's arc is cut into as many chords as its radius needs, so a
+ * wider helix gets more.
  */
-export function turnsBetween(slots: number, start: number, end: number): number {
+export const RAIL_SAG = 0.005;
+
+/** The chords an arc of `angle` at radius `r` needs to stand within `RAIL_SAG` of it. */
+export function railChords(angle: number, r: number): number {
+  const most = 2 * Math.acos(Math.max(-1, 1 - RAIL_SAG / r));
+  return Math.max(1, Math.ceil(Math.abs(angle) / most - 1e-9));
+}
+
+/**
+ * The turns of a spiral of `slots` treads' angle, about `perTurn` (15) to
+ * the turn, that starts at the angle `start` and must end at the angle
+ * `end`.
+ */
+export function turnsBetween(slots: number, start: number, end: number, perTurn = 15): number {
   const frac = ((((end - start) / (2 * Math.PI)) % 1) + 1) % 1;
-  return Math.max(frac === 0 ? 1 : frac, Math.round(slots / 15 - frac) + frac);
+  return Math.max(frac === 0 ? 1 : frac, Math.round(slots / perTurn - frac) + frac);
+}
+
+/**
+ * A landing round a vertical axis, as a sector: from the angle `from` on
+ * `angle` further (counter-clockwise from `frameX` toward `frameZ`),
+ * between the radii `inner` and `outer`, its top at `y`. Built of boxes
+ * no wider than `most` of angle each, every one square to the sector's
+ * radius at its FORWARD edge and reaching back from it: so no box stands
+ * past the sector's forward edge, where the helix below climbs toward it
+ * (a box centred on its slot overhangs that edge near the newel, and there
+ * the turn below is a riser nearer), and the backward overhang lies over
+ * the landing's own pieces and the tread before it, at their level or
+ * lower [derived].
+ */
+export function sectorLanding(
+  axis: Vec3,
+  frameX: Vec3,
+  frameZ: Vec3,
+  y: number,
+  from: number,
+  angle: number,
+  inner: number,
+  outer: number,
+  most: number,
+): Block[] {
+  const dir = (phi: number): Vec3 => add3(mul3(frameX, Math.cos(phi)), mul3(frameZ, Math.sin(phi)));
+  const n = Math.max(1, Math.ceil(angle / most - 1e-9));
+  const d = angle / n;
+  const back = outer * Math.sin(d);
+  const out: Block[] = [];
+  for (let j = 1; j <= n; j++) {
+    const edge = from + j * d;
+    const r = dir(edge);
+    // Backward: a quarter turn against the direction of travel.
+    const b = dir(edge - Math.PI / 2);
+    // In from `inner` a little, so the piece's back corner still reaches
+    // the inner circle at the slot's back edge.
+    const from0 = inner * Math.cos(d);
+    const at = add3(add3(axis, mul3(r, (from0 + outer) / 2)), mul3(b, back / 2));
+    out.push({ at: [at[0], y - LANDING / 2, at[2]], x: r, y: UP, size: [outer - from0, LANDING, back] });
+  }
+  return out;
 }
 
 /**
  * A spiral stair round a vertical axis: wedge treads (boxes a little wider
  * than the wedge at mid radius, so they overlap), landings of `span`
- * treads' angle where asked, a newel, the outer hand rail on posts every
- * fourth tread.
+ * treads' angle where asked (`sectorLanding`, a box a tread), a newel, the
+ * outer hand rail on posts every fourth tread, cut into chords by
+ * `railChords`.
  */
 export function spiral(o: SpiralSpec): StairParts {
   const out = empty();
@@ -333,9 +424,14 @@ export function spiral(o: SpiralSpec): StairParts {
   const dir = (phi: number): Vec3 => add3(mul3(o.frameX, Math.cos(phi)), mul3(o.frameZ, Math.sin(phi)));
   const wide = Math.max(0.2, mid * dPhi * 1.4);
   // The slot each riser's tread takes, and the landings between.
-  const slotOf = (i: number) => (i - 1) + (o.landings === undefined ? 0 : o.landings.span * Math.floor((i - 1) / o.landings.every));
+  const after = landingSteps(o.risers, o.landings);
+  const span = o.landings?.span ?? 0;
+  const slotOf = (i: number) => (i - 1) + span * after.filter((k) => k < i).length;
   const last = o.slab ? o.risers - 1 : o.risers;
   const railH = o.rail ?? 0;
+  // The rail's open arcs, in slots from each end.
+  const openFoot = (o.railOpen?.foot ?? 0) / dPhi;
+  const openHead = slots - (o.railOpen?.head ?? 0) / dPhi;
   // The walking line's height at a slot boundary u (0 … slots).
   const heightAt = (u: number): number => {
     let risers = 0;
@@ -343,27 +439,18 @@ export function spiral(o: SpiralSpec): StairParts {
     return o.y0 + risers * rise;
   };
   for (let i = 1; i <= last; i++) {
-    const phi = o.start + (slotOf(i) + 0.5) * dPhi;
+    const u = slotOf(i) + 0.5;
+    const phi = o.start + u * dPhi;
     const y = o.y0 + i * rise;
     out.treads.push({ at: add3(o.axis(y - TREAD / 2), mul3(dir(phi), mid)), x: dir(phi), y: UP, size: [o.tread, TREAD, wide] });
-    if (railH > 0 && i % 4 === 0) {
+    if (railH > 0 && i % 4 === 0 && u > openFoot && u < openHead) {
       const foot = add3(o.axis(y), mul3(dir(phi), outer - 0.03));
       out.frame.push(member(add3(foot, [0, -TREAD, 0]), add3(foot, [0, railH, 0]), POST, dir(phi)));
     }
   }
-  if (o.landings !== undefined) {
-    const { every, span } = o.landings;
-    for (let k = every; k < o.risers; k += every) {
-      const s0 = slotOf(k) + 1;
-      const phi = o.start + (s0 + span / 2) * dPhi;
-      const y = o.y0 + k * rise;
-      out.landings.push({
-        at: add3(o.axis(y - LANDING / 2), mul3(dir(phi), mid)),
-        x: dir(phi),
-        y: UP,
-        size: [o.tread, LANDING, Math.max(0.2, mid * dPhi * span * 1.1)],
-      });
-    }
+  for (const k of after) {
+    const s0 = slotOf(k) + 1;
+    out.landings.push(...sectorLanding(o.axis(o.y0 + k * rise), o.frameX, o.frameZ, o.y0 + k * rise, o.start + s0 * dPhi, span * dPhi, outer - o.tread, outer, dPhi));
   }
   // The newel: the core tube, the diameter less two treads [derived].
   const core = Math.max(0.16, o.diameter - 2 * o.tread);
@@ -374,14 +461,21 @@ export function spiral(o: SpiralSpec): StairParts {
     const n1 = o.y1 + nb.above;
     out.frame.push({ at: [a0[0], (n0 + n1) / 2, a0[2]], x: o.frameX, y: UP, size: [core * 0.7, n1 - n0, core * 0.7] });
   }
-  if (railH > 0) {
-    const rail: Vec3[] = [];
-    for (let u = 0; u <= slots; u++) {
-      const phi = o.start + u * dPhi;
-      const y = heightAt(u + 0.5);
-      rail.push(add3(o.axis(y + railH), mul3(dir(phi), outer)));
-    }
-    out.rails.push(rail);
+  if (railH > 0 && openHead > openFoot) {
+    // Over each tread's slot the rail climbs from its tread's height to the
+    // next one's (at a slot boundary, the tread it starts); each slot is cut
+    // into `railChords` chords, and the ends into the open arcs.
+    const railY = (u: number): number => {
+      const a = Math.min(Math.floor(u), slots);
+      const f = u - a;
+      const ya = heightAt(a + 0.5);
+      return f < 1e-12 ? ya : ya + (heightAt(a + 1.5) - ya) * f;
+    };
+    const per = railChords(dPhi, outer);
+    const us: number[] = [openFoot];
+    for (let k = Math.ceil(openFoot * per + 1e-9); k / per < openHead - 1e-9; k++) us.push(k / per);
+    us.push(openHead);
+    out.rails.push(us.map((u) => add3(o.axis(railY(u) + railH), mul3(dir(o.start + u * dPhi), outer))));
   }
   const foot = add3(o.axis(o.y0), mul3(dir(o.start), mid));
   const head = add3(o.axis(o.y1), mul3(dir(o.start + slots * dPhi), mid));
@@ -390,8 +484,8 @@ export function spiral(o: SpiralSpec): StairParts {
   for (let i = 1; i <= o.risers; i++) {
     const y = o.y0 + i * rise;
     line.push({ at: on(slotOf(i) + 0.5, y), step: i });
-    if (o.landings !== undefined && i % o.landings.every === 0 && i < o.risers) {
-      for (let s = 1; s <= o.landings.span; s++) line.push({ at: on(slotOf(i) + 0.5 + s, y), step: i });
+    if (after.includes(i)) {
+      for (let s = 1; s <= span; s++) line.push({ at: on(slotOf(i) + 0.5 + s, y), step: i });
     }
   }
   line.push({ at: head, step: o.risers });
@@ -428,6 +522,12 @@ export interface LadderSpec {
   readonly slab: boolean;
   /** The stiles' reach above the head (below it, negative): by default 0.9, or under a slab's 0.10. */
   readonly above?: number;
+  /**
+   * Rungs the ladder goes on down with below its foot, at its pitch, and
+   * its stiles with them: a ladder the walk joins part way up. They are
+   * frame, not steps.
+   */
+  readonly down?: number;
 }
 
 /** A ladder: a rung at every pitch (the last left out where a slab takes it) between two flat stiles. */
@@ -445,10 +545,15 @@ export function ladder(o: LadderSpec): StairParts {
   const top = o.above ?? (o.slab ? -LANDING : 0.9);
   const lift = sub3(o.head, o.foot);
   const toTop = mul3(lift, 1 + top / lift[1]);
+  const down = o.down ?? 0;
+  const step = mul3(lift, 1 / o.risers);
+  for (let k = 0; k < down; k++) out.frame.push({ at: sub3(o.foot, mul3(step, k)), x: o.facing, y: UP, size: [RUNG, RUNG, o.width] });
+  const base = down > 0 ? sub3(o.foot, mul3(step, down)) : o.foot;
+  const toTopFromBase = add3(toTop, sub3(o.foot, base));
   for (const side of [-1, 1]) {
     // A few millimetres off the floor they stand on.
-    const a = add3(add3(o.foot, mul3(across, (side * (o.width + 0.012)) / 2)), [0, 0.005, 0]);
-    const s = member(a, add3(a, toTop), 0.012, o.facing);
+    const a = add3(add3(base, mul3(across, (side * (o.width + 0.012)) / 2)), [0, 0.005, 0]);
+    const s = member(a, add3(a, toTopFromBase), 0.012, o.facing);
     out.frame.push({ ...s, size: [s.size[0], 0.06, 0.012] });
   }
   const going = Math.hypot(lift[0], lift[2]) / o.risers;
@@ -699,6 +804,14 @@ export function firstToSecond(): StairParts {
   });
   const parts: StairParts[] = [];
   const last = axes.length - 1;
+  // Every helix is entered and left across its outer edge: from the floor
+  // at the first one's foot, by a joining flight or the last flight
+  // otherwise, each running along the diagonal and meeting the edge at the
+  // angle b off it. Its rail stops where the flight's band, its half width
+  // and a stringer either side of its centre line, crosses the edge
+  // [derived].
+  const band = (E1.tread / 2 + 0.06) / OUTER;
+  const open = (b: number) => Math.asin(Math.min(1, Math.sin(b) + band)) - b;
   for (let k = 0; k <= last; k++) {
     const r = axes[k] as number;
     const [y0, y1] = spans[k] as readonly [number, number, number];
@@ -720,6 +833,7 @@ export function firstToSecond(): StairParts {
         turns: turnsBetween(n, start, end),
         slab: false,
         rail: E1.rail,
+        railOpen: { foot: open(start), head: open(Math.PI - end) },
         // The first stands on the 1st floor; the others hang in the air.
         newel: k === 0 ? { below: 0, above: 0.5 } : { below: 0.5, above: 0.5 },
       }),
@@ -767,8 +881,26 @@ export function firstToSecond(): StairParts {
  * sections sold when the stair was cut up in 1983 were « 2.60 » to a
  * landing, « 14 marches » [sourced, secondary AUC-ARTC], so a landing
  * every 14 risers [estimated for 1889].
+ *
+ * None in the last turn: the flight that leaves each helix at its head
+ * (e2's dog-leg, e3's raccord) and the pad it starts from cross over that
+ * turn, and a turn with a landing in it climbs three treads' angle less, so
+ * under them it gave 1.3 m of headroom (the walk found it, frame 06). With
+ * a whole turn of treads, 15 slots, the last turn stands 14 risers, 2.46,
+ * under the head [derived; the landings' spacing is the estimate above,
+ * and where the plates put the last one is not read].
+ *
+ * And a turn to each landing: 14 risers and the landing's three treads'
+ * angle, 17 slots, where the helices without landings take about 15. Read
+ * as one turn, the 1983 sections' « 2.60 » with « 14 marches » is that
+ * pitch [inference]; at 15 slots a turn, a turn with a landing in it
+ * climbed 12 risers, 2.1, and the tread above and behind the walker came
+ * to 1.76 over his feet (the walk's clearance, every turn). At 17 each
+ * turn climbs 14 risers, 2.46, and the landings stand one above the other
+ * (e3's upper helix, which must end where the little stair starts, takes
+ * a little more, 18.2, never less).
  */
-export const SERVICE_LANDINGS = { every: 14, span: 3 } as const;
+export const SERVICE_LANDINGS = { every: 14, span: 3, headClear: 15, perTurn: 17 } as const;
 
 /**
  * The service stairs in the shaft, placed from the plans (PL-XIX Fig. 14,
@@ -787,14 +919,26 @@ export const SHAFT_STAIRS = {
    * × « 2.45 », at s -2.73 … -0.11, t 3.40 … 5.85, labelled « Escalier de
    * l'étage intermédiaire au 2e étage » [sourced; measured]. So the 16 run
    * Ouest under the floor, turn on a landing by the edge girder, and the 5
-   * come back up into that opening [the dog-leg and its 0.184 and 0.2
-   * treads estimated]. The helix carries the rest of the row's 456: 435
+   * come back up into that opening [the dog-leg and the 16's 0.184 treads
+   * estimated]. The 16 start where the helix's walking line, run on
+   * straight from its head, leaves its circle, 0.62 on, with a pad from
+   * the head to there over the last turn (2.18 of headroom under it, the
+   * last turn having no landing: `SERVICE_LANDINGS`); started on the
+   * walking line (until 2026-09-26, 0.15 on) their first 0.65 and
+   * stringers stood 1.3 over the last turn, and they passed the deck's
+   * edge 0.12 from the eye. They turn on a landing as deep as a lane is
+   * wide, 0.60 (0.90 until 2026-09-26), which stops 0.08 short of the edge
+   * girder facing pile 4 [estimated], and the 5, on 0.20 goings
+   * [estimated], land on a landing at the deck's level that runs on to the
+   * opening's near edge, t 3.22 (`platforms.ts` LANDING.wells, restated):
+   * 0.85 of it, inside the opening. The helix carries the rest of the
+   * row's 456: 435
    * risers of 0.1756 in its 76.37, 1.4% under the helices' 0.178 [derived:
    * the count]. Its foot, « 11 marches 1.974 » up to a platform at (151.16)
    * [sourced PL-XX Fig. 2], is not built: the helix starts on the floor.
    */
   e2: { s: -2.8, t: 1.3, diameter: 1.6, tread: 0.6, top: FLOORS.landing - 3.83, helixRisers: 435, rail: 0.9 },
-  e2Flights: { up: 16, upRise: 2.92, upGoing: 0.184, back: 5, backGoing: 0.2, turn: 0.9, width: 0.6 },
+  e2Flights: { up: 16, upRise: 2.92, upGoing: 0.184, back: 5, backGoing: 0.2, turn: 0.6, width: 0.6, opening: 4.4435 - 2.45 / 2 },
   /**
    * e3, Ø 1.680 [sourced PL-XX Figs 1-2], at (3.0, 3.3) on the landing,
    * beside the lower car's well and 0.36 clear of it [measured, Fig. 14;
@@ -836,7 +980,7 @@ export function secondToLanding(): StairParts {
     diameter: e2.diameter,
     tread: e2.tread,
     start,
-    turns: turnsBetween(slots, start, 0),
+    turns: turnsBetween(slots, start, 0, SERVICE_LANDINGS.perTurn),
     landings: SERVICE_LANDINGS,
     slab: false,
     rail: e2.rail,
@@ -845,8 +989,11 @@ export function secondToLanding(): StairParts {
   const walk = e2.diameter / 2 - e2.tread / 2;
   const laneUp = e2.s + walk;
   const laneBack = laneUp + f.width;
-  const tFoot = e2.t + 0.15;
+  // Straight on from the head, over a pad, to where the walking line
+  // leaves the helix's circle.
+  const tFoot = e2.t + Math.sqrt((e2.diameter / 2) ** 2 - walk ** 2);
   const tTurn = tFoot + f.up * f.upGoing;
+  const onPad = pad(inShaft(laneUp, e2.top, (e2.t + tFoot) / 2), T_HAT, tFoot - e2.t, f.width);
   const yTurn = e2.top + f.upRise;
   const up = straight({
     name: "e2.up",
@@ -856,16 +1003,24 @@ export function secondToLanding(): StairParts {
     width: f.width,
     slab: true,
   });
-  const turn: StairParts = { ...empty(), landings: [pad(inShaft((laneUp + laneBack) / 2, yTurn, tTurn + f.turn / 2), T_HAT, f.turn, 2 * f.width)] };
+  const turn: StairParts = { ...empty(), landings: [onPad, pad(inShaft((laneUp + laneBack) / 2, yTurn, tTurn + f.turn / 2), T_HAT, f.turn, 2 * f.width)] };
+  const tBack = tTurn - f.back * f.backGoing;
   const back = straight({
     name: "e2.back",
     foot: inShaft(laneBack, yTurn, tTurn),
-    head: inShaft(laneBack, FLOORS.landing, tTurn - f.back * f.backGoing),
+    head: inShaft(laneBack, FLOORS.landing, tBack),
     risers: f.back,
     width: f.width,
     slab: true,
+    stringerHead: 1,
   });
-  return joinStairs(helix, up, turn, back);
+  // Their last riser lands on a landing at the deck's level, from its
+  // last going on to the opening's near edge.
+  const arrive: StairParts = {
+    ...empty(),
+    landings: [pad(inShaft(laneBack, FLOORS.landing, (f.opening + tBack + f.backGoing) / 2), T_HAT, tBack + f.backGoing - f.opening, f.width)],
+  };
+  return joinStairs(helix, up, turn, back, arrive);
 }
 
 /**
@@ -875,6 +1030,19 @@ export function secondToLanding(): StairParts {
  * (-sin a, cos a): the angle whose tangent runs from the lower axis toward
  * the upper.
  */
+/**
+ * The angle the little stair starts at, where e3's upper helix arrives:
+ * the far edge of the sector the apartment's floor closes, which its head
+ * steps onto. PL-XIX Fig. 6 draws that sector from 146° to 229° round the
+ * stair's axis in the world's plan (atan2(z, x), toward the tower's axis,
+ * -x) [measured], so in the diagonals' frame from 191°
+ * (`SUMMIT_STAIRS.little.closed`) on 83° (`arrival`).
+ */
+function littleFoot(): number {
+  const lt = SUMMIT_STAIRS.little;
+  return lt.closed + lt.arrival;
+}
+
 function e3Toward(): number {
   const { e3, e3Upper } = SHAFT_STAIRS;
   return Math.atan2(-(e3Upper.s - e3.s), e3Upper.t - e3.t);
@@ -900,7 +1068,7 @@ export function landingToThird(): StairParts {
     diameter: e3.diameter,
     tread: e3.tread,
     start,
-    turns: turnsBetween(lowerSlots, start, toward),
+    turns: turnsBetween(lowerSlots, start, toward, SERVICE_LANDINGS.perTurn),
     landings: SERVICE_LANDINGS,
     slab: false,
     rail: e3.rail,
@@ -918,6 +1086,8 @@ export function landingToThird(): StairParts {
     rail: e3.rail,
   });
   const upperSlots = spiralSlots(e3Upper.risers, SERVICE_LANDINGS);
+  const frac = ((((littleFoot() - toward) / (2 * Math.PI)) % 1) + 1) % 1;
+  const upperTurns = Math.max(1, Math.floor(upperSlots / SERVICE_LANDINGS.perTurn - frac)) + frac;
   const upper = spiral({
     name: "e3.upper",
     axis: (y) => inShaft(e3Upper.s, y, e3Upper.t),
@@ -929,7 +1099,9 @@ export function landingToThird(): StairParts {
     diameter: e3.diameter,
     tread: e3.tread,
     start: toward,
-    turns: Math.max(1, Math.round(upperSlots / 15)),
+    // It ends where the little stair starts (`littleFoot`), a turn to
+    // every landing or a little more.
+    turns: upperTurns,
     landings: SERVICE_LANDINGS,
     // It arrives inside the 3rd floor's well, where the little stair
     // starts from its last tread (`thirdToSummit`): no slab, and the newel
@@ -954,7 +1126,16 @@ export function landingToThird(): StairParts {
  *    Fig. 6], centred 1.85 out on the +x axis [measured PL-XIX Figs 6, 9]
  *    (`summit.ts` ROOM_WELLS opens the balcony and the pavilion's floor for
  *    it), from the 3rd floor to the apartment's floor, « Niveau du plancher
- *    (312.21) du logement », 2.58 [sourced].
+ *    (312.21) du logement », 2.58 [sourced]. Fig. 6 draws the apartment's
+ *    floor closing 83° of its circle on the tower's axis side (146° to
+ *    229° round its axis in the world's plan) [measured, 63.5 px/m at full
+ *    resolution]: the stair turns the other 277°, from that sector's far
+ *    edge, where e3's upper helix now arrives (`littleFoot`), round to its
+ *    near edge, and its head steps onto it (`arrival`, `closed`); until
+ *    2026-09-26 it turned a whole turn from e3's raccord's line and ended
+ *    in the open well, 0.45 from the floor. Figs 6, 9 and 3 may turn it
+ *    the other way round [low-medium confidence]; the model keeps e3's
+ *    hand.
  * 2. « Escalier établi sur la Terrasse du logement de M. Eiffel », from the
  *    gallery (« Cette galerie à ciel ouvert, placée à la cote + 312,21 »,
  *    the terrace) up to the roof and over it toward the girder: PL-XIX
@@ -981,23 +1162,38 @@ export function landingToThird(): StairParts {
  *    landing's railing « 1.200 » [sourced PL-XV Fig. 2], and « Porte
  *    d'entrée dans le cylindre de l'escalier 2.00 » at the landing [sourced
  *    ibid.]. Treads 0.62 radially: the 0.99 envelope less the core's 0.35,
- *    0.02 off its sheet [derived]. It starts toward stair 3's head, at 45° between +s and +t,
- *    and turns 1.5 to its landing on the far side [estimated].
+ *    0.02 off its sheet [derived]. Read on PL-XV Fig. 2 (which faces -t:
+ *    its treads cross in front of the core going down and behind it going
+ *    up, the extremities 0.62 and 2.51 up), it turns once, in the other
+ *    stairs' hand, from +z, the Seine side (-s + t), round to the Palier
+ *    over its first step [measured; until 2026-09-26 1.5 turns from +x,
+ *    [estimated]]. The landing is a sector of the treads' reach from the
+ *    last riser's slot to past the door's far jamb: the door, edge-on at
+ *    the core's -s silhouette on Fig. 2 with its near jamb over the
+ *    arrival, is `summit.ts` CORE_DOOR, cut in the core. The walk goes
+ *    along the landing to it and in.
  * 5. « une échelle verticale en fer » inside the 690 core « permettant
  *    d'accéder au phare » [sourced p. 79], "300" wide in the "700" [sourced
  *    PL-XV Fig. 2]: from the landing's door to the lantern's floor, which
- *    the core carries. The model hangs it 0.2 off the axis, facing the door
- *    [estimated]; its part below the landing (PL-XV draws a lower door) is
- *    not built.
+ *    the core carries. Its rungs run along s and it faces +t, toward the
+ *    core's foot opening (« Ouverture dans le cylindre de l'escalier
+ *    2.000 », sill 0.130 [sourced], not cut in the model), drawn face-on
+ *    there on PL-XV Figs 1-2 [measured]; the model hangs it 0.2 off the
+ *    axis toward -t, the climber on its +t side (until 2026-09-26 it faced
+ *    the door). It runs on down to the girders' deck, as Fig. 2 draws its
+ *    rungs the whole height: those below the landing are frame, not steps.
  * 6. « Échelle mobile » in the lantern, from its floor (329.020) to the
  *    cupola's floor (332.360), and the « Échelle » from there up through
- *    the top platform (334.015) beside its "600" hatch [sourced PL-XV Fig.
- *    1 labels and chain]; the first leaning 0.35 over its height 0.55-0.9
- *    off the axis toward -s [estimated], the second plumb, drawn about 0.2
- *    off it [measured], built 0.15 off toward +s and 0.34 wide so it passes
- *    the model's 0.60 crown ring [estimated]. The cupola's floor, 0.792 ×
- *    2.44 [SOURCES.md §29], is the two ladders' landing. The top platform
- *    has no hatch in the model, so the last rung is the deck's.
+ *    the top platform (334.015) through the "600" [sourced PL-XV Fig. 1
+ *    labels and chain]; the first leaning 0.35 over its height 0.55-0.9
+ *    off the axis toward -s [estimated], the second plumb, drawn 0.21-0.28
+ *    off it toward +s, its rungs along t, at most 0.36 wide inside the Ø
+ *    0.60 ring [measured], built 0.21 off and 0.30 wide, its stiles inside
+ *    the model's ring. The « 600 » is a sheet collar flush with the
+ *    platform's deck, which PL-XIX Fig. 10 draws open over it: the manhole
+ *    (`summit.ts` opens it; until 2026-09-26 the deck was whole and the
+ *    last rung was the deck's). The cupola's floor, 0.792 × 2.44
+ *    [SOURCES.md §29], is the two ladders' landing.
  *
  * THE COUNT. The campanile's 22 are printed. The little stair takes 15 of
  * the 2.58, 0.172 each, on the tower's other helices' riser [derived]. The
@@ -1007,16 +1203,18 @@ export function landingToThird(): StairParts {
  * beside the girder, 30, 16 and 8.
  */
 export const SUMMIT_STAIRS = {
-  little: { s: 1.308, t: 1.308, diameter: 1.6, tread: 0.6, risers: 15, rail: 0.9 },
+  little: { s: 1.308, t: 1.308, diameter: 1.6, tread: 0.6, risers: 15, rail: 0.9, arrival: (83 * Math.PI) / 180, closed: ((146 + 45) * Math.PI) / 180 },
   /** The wall flight: its axis x, its width, its foot and head z; the landing at its head, along z. */
   gallery: { x: 5.7, width: 0.5, z: [1.5, -0.92] as const, risers: 12, landing: 0.58 },
   /** Over the roof: its risers, to a 0.60 square landing whose centre is the girder flight's foot plus `landing` / 2 along it. */
   roofFlight: { risers: 9, width: 0.5 },
   girder: { t: 0.98, s: [3.8, 0.95] as const, width: 0.6, risers: 13, landing: 0.6 },
-  campanile: { risers: 22, riser: 0.178, tread: 0.62, start: Math.PI / 4, turns: 1.5 },
-  core: { width: 0.3, off: 0.2, risers: 30 },
+  /** The girders' plated tops reach this far off their axes: half their « 1.130 » over the flanges (`summit.ts` GIRDER.breadth, restated). */
+  girderPlate: 1.13 / 2,
+  campanile: { risers: 22, riser: 0.178, tread: 0.62, start: (3 * Math.PI) / 4, turns: 1 },
+  core: { width: 0.3, off: 0.2, risers: 30, facing: -Math.PI / 2 },
   mobile: { foot: 0.9, head: 0.55, width: 0.4, risers: 16 },
-  top: { off: 0.15, width: 0.34, risers: 8 },
+  top: { off: 0.21, width: 0.3, risers: 8 },
   cupolaFloor: { along: 2.44, across: 0.792 },
 } as const;
 
@@ -1072,14 +1270,24 @@ export function thirdToSummit(): StairParts {
       risers: lt.risers,
       diameter: lt.diameter,
       tread: lt.tread,
-      start: e3Toward(),
-      turns: lt.risers / 15,
+      start: littleFoot(),
+      turns: 1 - lt.arrival / (2 * Math.PI),
       // It arrives in the pavilion's floor's well: its last tread is the floor.
       slab: false,
       rail: lt.rail,
+      // Its rail stops a walker's width short of the head, where he steps
+      // off across the well's -s edge onto the floor [estimated].
+      railOpen: { foot: 0, head: Math.asin(0.35 / (lt.diameter / 2)) },
       newel: { below: 0, above: 0.9 },
     }),
   );
+  // The floor that closes its circle between its head and its foot, which
+  // the head steps onto (PL-XIX Fig. 6).
+  const headAt = lt.closed;
+  parts.push({
+    ...empty(),
+    landings: sectorLanding(inShaft(lt.s, 0, lt.t), S_HAT, T_HAT, lv.apartment, headAt, lt.arrival, lt.diameter / 2 - lt.tread, lt.diameter / 2, lt.arrival / 6),
+  });
   // 2. The gallery's stairs: up the pavilion's side to a landing at the
   // roof's level, then over the roof to a landing at stair 3's foot. The
   // three steep flights share one pitch (the count's): the roof to the
@@ -1141,6 +1349,21 @@ export function thirdToSummit(): StairParts {
       stringer: { depth: 0.2, thick: 0.05 },
     }),
   );
+  // Its head is beside the continuous girder, outside both girders'
+  // plated tops, and the campanile's first step is round at +z over their
+  // crossing (PL-XIX Fig. 5, PL-XV Fig. 2 [measured]); nothing is drawn
+  // between (the plates are too small to show plating). The model lays a
+  // plate from the flight's head to the flanges' edges, in the corner the
+  // two girders leave, so the step across is not over the void
+  // [estimated; PL-XIX Fig. 3 may put the head 0.35 under the girders'
+  // top, low confidence, not followed].
+  const flange = S.girderPlate;
+  const padS: readonly [number, number] = [flange, gd.s[1]];
+  const padT: readonly [number, number] = [flange, gd.t + gd.width / 2];
+  parts.push({
+    ...empty(),
+    landings: [pad(inShaft((padS[0] + padS[1]) / 2, lv.girderTop, (padT[0] + padT[1]) / 2), S_HAT, padS[1] - padS[0], padT[1] - padT[0])],
+  });
   // 4. The campanile's spiral round the core, and its landing.
   const cp = S.campanile;
   const outer = STAIR_ENVELOPE.radius;
@@ -1164,30 +1387,37 @@ export function thirdToSummit(): StairParts {
   });
   parts.push(spiralParts);
   const end = cp.start + cp.turns * 2 * Math.PI;
-  const mid = (outer + core) / 2;
-  const landingArc = 1.0;
+  const dPhi = (cp.turns * 2 * Math.PI) / cp.risers;
+  // The door in the core (`summit.ts` CORE_DOOR), its jambs brought round
+  // to the landing's turn.
+  const near = (a: number): number => end + ((((a - end) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
+  const jambs = coreDoorArc().map(near);
+  // The landing: a sector round the core, of the spiral's own treads'
+  // reach, from the last riser's slot (the landing is its tread) on past
+  // the door's far jamb by a hand's breadth at the core.
+  const from = end - dPhi;
+  const to = (jambs[1] as number) + 0.1 / core;
+  const railN = railChords(to - end, outer - 0.03);
   parts.push({
     ...empty(),
-    landings: [
-      {
-        at: add3([0, lv.campanileLanding - LANDING / 2, 0], mul3(dirST(end + landingArc / (2 * mid)), mid)),
-        x: dirST(end + landingArc / (2 * mid)),
-        y: UP,
-        size: [cp.tread, LANDING, landingArc],
-      },
-    ],
+    landings: sectorLanding([0, 0, 0], S_HAT, T_HAT, lv.campanileLanding, from, to - from, core, outer, dPhi),
     // The landing's railing, « 1.200 », round its outer edge.
     rails: [
-      Array.from({ length: 7 }, (_, i) => {
-        const a = end + (i / 6) * (landingArc / mid);
+      Array.from({ length: railN + 1 }, (_, i) => {
+        const a = end + (i / railN) * (to - end);
         return add3([0, lv.campanileLanding + STAIR_ENVELOPE.railing, 0], mul3(dirST(a), outer - 0.03));
       }),
     ],
   });
   // 5. The ladder in the core, from the landing's door to the lantern's floor.
   const cl = S.core;
-  const door = end + landingArc / (2 * mid);
-  const back = mul3(dirST(door + Math.PI), cl.off);
+  // Its rungs run along s and it faces +t, toward the core's foot opening
+  // (PL-XV Figs 1-2, drawn face-on there): the climber, in by the landing's
+  // door, stands on its +t side facing -t. It runs on down to the girders'
+  // deck, rungs the walk does not climb.
+  const facing = dirST(cl.facing);
+  const back = mul3(facing, cl.off);
+  const corePitch = (lv.lanternFloor - lv.campanileLanding) / cl.risers;
   parts.push(
     ladder({
       name: "summit.core",
@@ -1195,11 +1425,12 @@ export function thirdToSummit(): StairParts {
       head: add3([0, lv.lanternFloor, 0], back),
       risers: cl.risers,
       width: cl.width,
-      facing: dirST(door + Math.PI),
+      facing,
       // It comes up inside the core's top, where the lantern's floor is
       // open round it: the last rung is its own.
       slab: false,
       above: 0,
+      down: Math.floor((lv.campanileLanding - lv.girderTop) / corePitch - 1e-9),
     }),
   );
   // 6. The lantern's ladders: the mobile one leaning, then the plumb one.

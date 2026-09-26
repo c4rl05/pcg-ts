@@ -54,48 +54,44 @@ const BODY = { heights: [0.3, 0.6, 0.9, 1.2], clear: 0.1 } as const;
  */
 const FLOOR_OPEN: ReadonlyArray<{ flight: string; most: number; why: string }> = [
   {
-    flight: "summit.little",
-    most: 0.5,
-    why: "the little stair ends inside the apartment floor's square well (summit.ts ROOM_WELLS, 1.70 square round a 1.60 stair): off its last tread, 0.45 of well before the floor",
+    flight: "summit.mobile",
+    most: 0.45,
+    why: "off the mobile ladder's head onto the cupola's floor: the ladder arrives beside the floor (stairs.ts), and the climber, 0.25 behind its rungs, steps 0.40 across to the floor's edge; sampled at another phase the top rung splits it in two",
   },
   {
-    flight: "summit.girder",
-    most: 0.6,
-    why: "the girder stair's head is on the girders' top and the campanile's first tread is 0.178 up, between the diagonal girders: 0.55 with nothing under the feet",
+    flight: "summit.campanile",
+    most: 0.4,
+    why: "in through the core's door (summit.ts CORE_DOOR) onto its ladder: inside the tube there is no floor at the landing's level, the feet go from the sill onto a rung; 0.35, 0.36 sampled at 1 cm",
   },
   {
     flight: "summit.core",
     most: 0.45,
-    why: "in through the core's door onto its ladder: inside the tube there is no floor at the landing (the ladder below the landing is not built), the feet go onto the rungs",
+    why: "off the core ladder's head onto the lantern's floor: the ladder comes up inside the core's top, and the floor is open round it (summit.ts, its 0.72 well); 0.24 and 0.15 sampled at 1 cm, split by the floor's rim, one gap at another phase",
   },
 ];
 /**
  * Where the body, off a flight, meets a solid, and why: by flight, the most
  * samples (heights counted apart). Each a follow-up.
  */
-const BODY_FOUND: ReadonlyArray<{ flights: RegExp; most: number; why: string }> = [
+const BODY_FOUND: ReadonlyArray<{ flights: RegExp; most: number; why: string; phase?: boolean }> = [
   {
     flights: /^ground\.start$/,
     most: 4,
     why: "on the first P4 the turn between the lanes is squeezed: 0.125 onto the landing passes the start flight's end post at 0.097, further out puts the eye within 0.25 of the leg's face diagonal, which crosses P4 at head height",
   },
   {
-    flights: /^e1\.(helix|flight)\d$/,
-    most: 30,
-    why: "e1's joining flights meet each helix at its outer edge, where the helix's hand rail (0.90) runs unbroken: the walk from one to the other goes through the rail",
+    flights: /^e1\.helix\d$/,
+    most: 7,
+    why: "the helices' rails stop where a flight crosses their edge (stairs.ts railOpen); left, where a flight leaves a helix at an angle off the diagonal, the walk's straight step from the helix's head to the flight's foot passes under the back edge of the flight's first tread, 0.093 under the knee sample",
   },
   {
-    flights: /^summit\.little$/,
-    most: 8,
-    why: "the little stair's rail runs on round its head, where the walker steps off; and the terrace flight's foot stringer at 0.1",
+    flights: /^(e3\.upper|summit\.little)$/,
+    most: 4,
+    why: "at 0.096-0.100, found at a 1 cm pitch and by the 5 cm one only at some phases: stepping from e3's upper helix onto the little stair, whose axes stand 0.055 apart, past its newel; and the terrace flight's foot stringer at 0.098 on the way to its foot",
+    phase: true,
   },
   {
-    flights: /^summit\.campanile$/,
-    most: 18,
-    why: "no door in the core (as in FOUND)",
-  },
-  {
-    flights: /^summit\.(girder|core|top|roof|gallery)$/,
+    flights: /^summit\.(girder|core|mobile|top|roof|gallery)$/,
     most: 20,
     why: "the steep stairs' and ladders' joins at the top (the girder stair's head under the campanile's first turn, the lantern round the mobile ladder's foot, the cupola, the terrace landings' stringers): cramped, 0.06-0.10",
   },
@@ -120,66 +116,31 @@ const OPEN_DOOR = { x: [4.95, 5.3], y: [278.7, 278.71 + 1.96], z: [2.57 - 0.46, 
  * samples each may take, and why. Every one is a follow-up
  * (node_modules/.cache/eiffel-next/walk/units.txt has the frames).
  */
-const FOUND: ReadonlyArray<{ flight: string; cls: string; most: number; why: string }> = [
-  {
-    flight: "e2.helix",
-    cls: "platforms",
-    most: 320,
-    why: "e2's service landings, every 14 risers, are straight boxes whose ends overhang the turn below (all the way up, 1.84 over the feet); and at its top, the dog-leg starts on the helix's walking line (stairs.ts: tFoot = e2.t + 0.15), so the 16's first 0.65 m and stringers stand over the last turn: 1.3 m of headroom",
-  },
-  {
-    flight: "e2.up",
-    cls: "platforms",
-    most: 15,
-    why: "the same: the 16 pass under the landing deck's edge (t 3.22) short of its opening, where a flight started past the helix would be inside it",
-  },
-  {
-    flight: "e3.lower",
-    cls: "platforms",
-    most: 230,
-    why: "e3's service landings overhang the turn below, as e2's, all the way up; and at its top the raccord leaves tangent to the walking line, so its inner half and stringer stand over the last turn",
-  },
-  {
-    flight: "e3.upper",
-    cls: "platforms",
-    most: 55,
-    why: "a service landing is a straight box: near the newel its ends overhang the turn below",
-  },
-  {
-    flight: "summit.campanile",
-    cls: "platforms",
-    most: 12,
-    why: "the campanile's landing is a straight box 1.00 long: its inner end overhangs the spiral's last turn",
-  },
-  {
-    flight: "summit.campanile",
-    cls: "summit",
-    most: 8,
-    why: "the core has no door: « Porte d'entrée dans le cylindre de l'escalier 2.00 » (PL-XV Fig. 2) is not cut in summit.ts' ladder cylinder",
-  },
+const FOUND: ReadonlyArray<{ flight: string; cls: string; most: number; why: string; phase?: boolean }> = [
   {
     flight: "summit.core",
     cls: "summit",
-    most: 24,
+    most: 19,
     why: "the lantern's floor is 2.46 across the flats (summit.ts LANTERN), with the core's 0.72 well in the middle and the mobile ladder leaning in: the walk round to its back keeps 0.21 of the wall, not 0.25",
   },
   {
     flight: "summit.core",
     cls: "platforms",
-    most: 8,
+    most: 7,
     why: "the same walk passes the mobile ladder's stiles at 0.19",
   },
   {
     flight: "summit.mobile",
     cls: "platforms",
     most: 2,
-    why: "the cupola is 1.655 from its floor to the platform's underside: crossing to the last ladder, crouched, the eye passes its stile at 0.23",
+    why: "the cupola is 1.655 from its floor to the platform's underside: crossing to the last ladder, crouched, the eye comes round close to the axis, 0.24 from its rungs (a stretch of 1-2 samples, so by the phase)",
+    phase: true,
   },
   {
     flight: "summit.top",
     cls: "summit",
-    most: 25,
-    why: "the top platform has no hatch: the last ladder comes up through the solid deck where PL-XV draws the « 600 »",
+    most: 14,
+    why: "the manhole (summit.ts, the « 600 ») is open now, but the paratonnerre's tripod stands over it, its three legs on the collar's rim and meeting 1.00 over the deck on the axis (PL-XV Fig. 1, PL-XIX Fig. 10): the climber's head comes up inside it, beside the rod",
   },
 ];
 /** The walk's sampling pitch, well under the clearance, so no surface is stepped over. */
@@ -514,8 +475,11 @@ describe("Eiffel walk: the climb on foot", () => {
         else expect(n, `${k}: ${f.why}`).toBeLessThanOrEqual(f.most);
       }
       expect(unexplained, unexplained.join("\n")).toEqual([]);
-      // Each finding is still there: when one is fixed, its entry goes.
+      // Each finding is still there: when one is fixed, its entry goes. One
+      // a sample may or may not land in, as the walk's length moves the
+      // sampling's phase, is bounded but not required (`phase`).
       for (const f of FOUND) {
+        if (f.phase === true) continue;
         expect(groups.has(`${f.flight} | ${f.cls}`), `${f.flight} | ${f.cls} no longer found: remove it from FOUND`).toBe(true);
       }
     });
@@ -562,7 +526,7 @@ describe("Eiffel walk: the climb on foot", () => {
       for (const f of BODY_FOUND) {
         const n = counts.get(f.flights) ?? 0;
         expect(n, `${f.flights}: ${f.why}`).toBeLessThanOrEqual(f.most);
-        expect(n, `${f.flights} no longer found: remove it from BODY_FOUND`).toBeGreaterThan(0);
+        if (f.phase !== true) expect(n, `${f.flights} no longer found: remove it from BODY_FOUND`).toBeGreaterThan(0);
       }
     });
 

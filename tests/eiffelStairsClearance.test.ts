@@ -32,7 +32,13 @@
  * onto the diagonal plane, so the real flight stands to one side of the
  * car's line; where, the plates read so far do not settle (e1's plan
  * position is [estimated] since §11.6), and the model has had the flight
- * on the diagonal since §21. So the Otis cars (piles 1 and 3) may meet
+ * on the diagonal since §21. Re-read for it (2026-09-26, SOURCES.md
+ * §11.12): PL-XX Fig. 3 lands the head about 6.2 in from the corner post,
+ * right beside the Otis cabin at its station, and cannot show which side
+ * of the car's line; PL-XIX Fig. 7's four flights by the corner posts,
+ * parallel to the faces and 2.6 long with arrows that disagree, do not
+ * match PL-XX's 4.5 run up the diagonal. Still not settled, so the flight
+ * stays where it is and the exemption with it. So the Otis cars (piles 1 and 3) may meet
  * that flight's boxes, and only there, at the top of their run (s beyond
  * `E1_TOP_FROM`). Nothing else that moves may meet a stair.
  *

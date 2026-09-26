@@ -366,6 +366,22 @@ const LADDER = { diameter: 0.7, sides: 16, height: 10.035 } as const;
 export const STAIR_ENVELOPE = { radius: 0.99, rise: 22 * 0.178, railing: 1.2 } as const;
 
 /**
+ * The door in the core at the campanile stair's landing, « Porte d'entrée
+ * dans le cylindre de l'escalier 2.00 » [sourced PL-XV Fig. 2], through
+ * which the climber goes in onto the core's ladder: 2.00 its height over
+ * the « Palier » [measured 2.02 on the plate's dimension line], its sill on
+ * the landing (the girders' top + `STAIR_ENVELOPE.rise`). PL-XV Fig. 2,
+ * which faces -t, draws it edge-on at the core's -s silhouette with its
+ * near jamb about 47° round toward +t [measured], so it opens from over the
+ * stair's arrival toward -s; its width is not drawn: three of the core's
+ * sides, 0.42 [estimated; about 0.5 were it centred on -s]. `angle` is its
+ * middle round the axis in the diagonals' frame (0 toward +s, a quarter
+ * turn toward +t), `from` its near jamb. The core's sides it takes are left
+ * out over its height (`coreWithDoor`).
+ */
+export const CORE_DOOR = { height: 2.0, sides: 3, from: (3 * Math.PI) / 4, angle: (3 * Math.PI) / 4 + (3 * Math.PI) / 16 } as const;
+
+/**
  * The lantern stack. Its heights are the chain PL-XV Fig. 1 prints (1:50,
  * 236-240 px/m; readings in SOURCES.md §29): terrace 326.715, +2.305 the
  * lantern's floor 329.020, +1.675 the "sablière inférieure" 330.695 (so the
@@ -2972,9 +2988,28 @@ function lantern(g: Graph, crownY: number): NodeHandle[] {
     ),
   );
 
-  // The top platform, Ø 1.70, on the crown ring.
+  // The top platform, Ø 1.70, on the crown ring, open over the ring: the
+  // « 600 », a sheet collar flush with the deck, is the manhole the last
+  // ladder comes up through (PL-XV Fig. 1; PL-XIX Fig. 10 draws the deck
+  // with a central opening about 0.58 across [measured]), the tripod's
+  // legs standing on its rim. The deck's inner face is the collar's.
   const rTop = L.topDiameter / 2;
-  out.push(prism(g, "topDeck", L.cupolaSides, [top, topY], rTop));
+  const hatch = polygon(L.cupolaSides, rRing, 0);
+  const rim = polygon(L.cupolaSides, rTop, 0);
+  out.push(
+    slabs(
+      g,
+      "topDeckSkin",
+      hatch.map((_, k) => {
+        const k1 = (k + 1) % L.cupolaSides;
+        const xz: Array<[number, number]> = [hatch[k]!, rim[k]!, rim[k1]!, hatch[k1]!].map((p) => [p[0], p[2]]);
+        let area = 0;
+        for (let j = 0; j < 4; j++) area += xz[j]![0] * xz[(j + 1) % 4]![1] - xz[(j + 1) % 4]![0] * xz[j]![1];
+        if (area > 0) xz.reverse();
+        return { outline: xz.map(([x, z]): Vec3 => [x, top, z]), depth: topY - top };
+      }),
+    ),
+  );
 
   // Its railing: ten posts on the rim from 0.275 under the platform, the
   // five bent ones on to the socket; the rails round the posts' line.
@@ -3122,6 +3157,61 @@ function flagGear(g: Graph): NodeHandle[] {
   ];
 }
 
+/**
+ * The core's sides the door takes: `CORE_DOOR.sides` of the prism's from
+ * its near jamb on (in the world, the diagonals' frame's angle less an
+ * eighth of a turn; side i runs from vertex i to i + 1, vertex 0 on +x).
+ * Exported for the tests.
+ */
+export function coreDoorSides(): number[] {
+  const n = LADDER.sides;
+  const first = Math.round((CORE_DOOR.from - Math.PI / 4) / ((2 * Math.PI) / n));
+  return Array.from({ length: CORE_DOOR.sides }, (_, k) => (((first + k) % n) + n) % n);
+}
+
+/** The door's opening round the axis, from jamb to jamb, as angles in the diagonals' frame (increasing). */
+export function coreDoorArc(): readonly [number, number] {
+  const sides = coreDoorSides();
+  const step = (2 * Math.PI) / LADDER.sides;
+  const from = sides[0]! * step + Math.PI / 4;
+  return [from, from + sides.length * step];
+}
+
+/**
+ * The stair core (`LADDER`) from `y0` to `y1`, with the door (`CORE_DOOR`)
+ * cut at the campanile stair's landing: the prism below the sill and above
+ * the head, and between them its other sides as plates of the core's
+ * sheet, « tôle » [estimated 4 mm], standing inside the prism's faces.
+ */
+function coreWithDoor(g: Graph, y0: number, y1: number): NodeHandle[] {
+  const n = LADDER.sides;
+  const r = circum(LADDER.diameter, n);
+  const sill = y0 + STAIR_ENVELOPE.rise;
+  const head = sill + CORE_DOOR.height;
+  const door = new Set(coreDoorSides());
+  const sheet = 0.004;
+  const v = polygon(n, r, 0);
+  const vi = polygon(n, r - sheet / Math.cos(Math.PI / n), 0);
+  const walls: Slab[] = [];
+  for (let i = 0; i < n; i++) {
+    if (door.has(i)) continue;
+    const j = (i + 1) % n;
+    const xz: Array<[number, number]> = [v[i]!, v[j]!, vi[j]!, vi[i]!].map((p) => [p[0], p[2]]);
+    let area = 0;
+    for (let k = 0; k < 4; k++) area += xz[k]![0] * xz[(k + 1) % 4]![1] - xz[(k + 1) % 4]![0] * xz[k]![1];
+    if (area > 0) xz.reverse();
+    walls.push({ outline: xz.map(([x, z]): Vec3 => [x, sill, z]), depth: head - sill });
+  }
+  // One mesh, under the id the whole prism had.
+  return [
+    merge(g, "ladderCylinderSkin", [
+      prism(g, "ladderCylinderFoot", n, [y0, sill], r, false),
+      slabs(g, "ladderCylinderDoor", walls),
+      prism(g, "ladderCylinderHead", n, [head, y1], r, false),
+    ]),
+  ];
+}
+
 /** Build panel 29, the 3rd-floor gallery and Eiffel's pavilion, and the campanile, at the given detail. */
 export function buildSummit(g: Graph, detail: Detail = {}): Parts {
   const girderTop = roomTop + GIRDER.height;
@@ -3132,21 +3222,14 @@ export function buildSummit(g: Graph, detail: Detail = {}): Parts {
   // and the terrace to the lantern's floor, which it carries.
   // Open at both ends: its ladder comes out at the top into the lantern
   // (`stairs.ts`), and its foot stands on the girders' plated top.
-  const ladder = prism(
-    g,
-    "ladderCylinder",
-    LADDER.sides,
-    [girderTop, lanternLevels().lanternFloor],
-    circum(LADDER.diameter, LADDER.sides),
-    false,
-  );
+  const ladder = coreWithDoor(g, girderTop, lanternLevels().lanternFloor);
   const summit: NodeHandle[] = [
     ...gallery(g),
     ...pavilion(g),
     contrefiches(g),
     ...(girders.summit ?? []),
     ribs,
-    ladder,
+    ...ladder,
     ...lantern(g, crownY),
   ];
   const glazed = summitGlass();
