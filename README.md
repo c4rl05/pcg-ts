@@ -693,7 +693,11 @@ full XYZ distance and all three coordinates hashed into the cell seed
 leading `cellSize: "unbounded"` level covers the world with one global
 cell and needs no `generationRadius`. `cookOutputs: [...]` on a level
 cooks only those declared outputs per cell — a terminal branch another
-consumer uses costs the level nothing.
+consumer uses costs the level nothing. `cellFilter: (cell) => boolean`
+leaves out cells that can hold nothing (the sky round a streamed
+tower), and `keepOutputs: false` lets the World drop a cell's outputs
+once `onCellReady` has handed them to a host that keeps its own copy —
+see `docs/authoring.md` for the rules both carry.
 
 `cellMode: "path"` partitions **arc length** instead of space: a cell is
 the half-open range `[sMin, sMax)` along a centreline, addressed by a

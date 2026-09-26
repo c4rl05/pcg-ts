@@ -4226,6 +4226,99 @@ nothing, so `cellMode` is ignored there too, `"path"` included: sectors
 need a table to mean anything, and a directional window on an unbounded
 level is refused outright rather than dropped.
 
+## Empty cells and delivered outputs (cellFilter, keepOutputs)
+
+Two `LevelDef` options for a level that streams ONE BOUNDED OBJECT
+through an unbounded grid — a tower cooked a cube at a time — to a host
+that turns every cell into its own buffers. Neither changes what a
+cooked cell contains; they change which cells cook at all, and who holds
+the result afterwards.
+
+**`cellFilter: (cell) => boolean`** says which cells can hold anything.
+A cell it returns `false` for is never wanted: never cooked, never
+stored, never counted in `pending`, however near the viewpoint it lies.
+It is asked only of cells already inside the generation radius, while
+the wanted set is built, with `{ coord, min, max }` exactly as that
+cell's context would carry them (`min`/`max` are `[x, z]` on an `"xz"`
+level, `[x, y, z]` on an `"xyz"` one). Round a tower most cubes are sky,
+and each one cooked is a full pass of the level's graph that puts out
+nothing and leaves an empty record behind.
+
+- **A pure function of the cell.** The wanted set is rebuilt every
+  update, so an answer that reads the clock, cook state or a random draw
+  lets a cell be wanted, cooked and dropped again as it flickers — and
+  "the same cells whatever the cook order" goes with it. A kept cell's
+  seed is the one it would have had without the filter.
+- **Cheap.** It runs for every candidate cell on every update.
+- **Too eager drops content with no error.** Hold the filter to what it
+  filters: a test that every element of a whole, unpartitioned cook lies
+  in a cell the filter accepts.
+- **On a child level, it must accept every parent of a cell it
+  accepts.** A child cell cooks only once its parent has, so a kept
+  child under a rejected parent waits for ever — counted in `pending` on
+  every update, never cooked. A filter that is monotone under
+  containment (a box meeting a region keeps every box that holds it)
+  cannot do this, which is why one such filter can serve every level of
+  a chain.
+- **Refused at construction** on an unbounded level — its one global
+  cell is always wanted, so there is nothing to leave out — and on a
+  `"path"` level, whose sectors are arc ranges along a centreline the
+  `World` never sees, not boxes to judge (filter a sector's content in
+  the graph instead, by binding its range into a filter node). A
+  non-function is refused too.
+
+**`keepOutputs: false`** lets the `World` drop a cell's outputs once
+`onCellReady` has delivered them. The default, `true`, keeps them:
+`getCell`/`cells` serve them, and a child level reads them as
+`ctx.parent.outputs`. A host that builds its own buffers from each cell
+the moment it arrives — a renderer's meshes, a transfer to another
+thread — and reads nothing back otherwise holds every resident cell
+twice for the whole of its residency: about 600 MB for 80 cells on the
+eiffel demo's laced level, beside meshes the page had already built.
+With `false` the `World` keeps only the cell's record (coordinate, cook
+stamp, staleness, residency), and after delivery the cell's `outputs`
+is an empty record everywhere it is handed out — a child level's bind
+included — so a level whose CHILD reads its parent's outputs must keep
+them. Anything but a boolean is refused at construction; omit it for the
+default.
+
+The eiffel demo's detail levels (`demos/eiffel/bands.ts`) use both: a
+laced level of 32 m cubes and a rivet level of 16 m cubes nested under
+it, its `World` running off the page's thread and handing each cell to
+the page as it finishes.
+One envelope filter serves both levels, because a cube meeting the
+tower's outline is contained only by cubes that meet it too:
+
+```ts
+// Can this cube hold any iron? The uprights' outer line (profileAt),
+// widened by a margin, between the ground and the flag.
+function inEnvelope({ min, max }: { min: readonly number[]; max: readonly number[] }): boolean {
+  const [x0, y0, z0] = min, [x1, y1, z1] = max;
+  if (y1 <= -10 || y0 >= 320) return false;
+  // The line only narrows going up, so the widest the cube can meet is at its foot.
+  const w = Math.max(profileAt(Math.max(y0, -10)).outer, 10) + 6;
+  return x0 < w && x1 > -w && z0 < w && z1 > -w;
+}
+
+const levels: LevelDef[] = [
+  { name: "laced", cellMode: "xyz", cellSize: 32, generationRadius: 120,
+    graph: laced, cellFilter: inEnvelope, keepOutputs: false, bind },
+  { name: "rivets", cellMode: "xyz", cellSize: 16, generationRadius: 40,
+    graph: rivets, cellFilter: inEnvelope, keepOutputs: false, bind },
+];
+
+const world = new World({
+  seed: 1889,
+  levels,
+  onCellReady: (level, coord, outputs) => post(level, coord, outputs), // the host's copy now
+});
+```
+
+The rivet level's bind reads only its own box, never
+`ctx.parent.outputs`, which is what lets the laced level above it drop
+its outputs too. `tests/eiffelBands.test.ts` holds the envelope to every
+element of the whole cooks.
+
 ## GPU evaluation of field expressions (pcg-ts/gpu)
 
 Every field expression written in the JSON grammar above is also the
