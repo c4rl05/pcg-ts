@@ -604,8 +604,10 @@ export const LEG_GAP_LACING_500: ReadonlyArray<readonly [string, string, number]
  *   lines x +- z = +-(W - w), their crossings a diamond just inside the face
  *   centres; four short ones across each leg's corner, its own b to its own
  *   d (x +- z = +-(W + w)); H' from the middle of one long girder to A's
- *   centre; on the opposite long girder the K bracket, a stub toward the
- *   centre and two struts parallel to the faces back to the girder; and,
+ *   centre; on the opposite long girder H, a stub toward the centre,
+ *   tinted as H' is, ending at the Edoux's guides, and the K bracket, two
+ *   struts parallel to the faces from H's end back to the girder (the
+ *   dashed curve beside H is its letter's leader; `shaft.ts`); and,
  *   between each corner girder and its parallel long girder, the
  *   "contreventements des poutres en haut et en bas": a grid of light
  *   angles parallel to the tower's faces in the planes of the chords

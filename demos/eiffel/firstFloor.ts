@@ -48,7 +48,9 @@
  *   how the junction is placed at the parallel point rather than lower].
  *   The member comes down to y 4.30, 1.25 under the pedestal's 5.55 top,
  *   into the collar of a stone pier [measured: PL-I Fig. 1, PL-VII Fig. 1;
- *   see `ARCH_END`], within 2° of vertical there. The pier stands upright
+ *   see `ARCH_END`], within 2° of vertical there, and runs on hidden,
+ *   plumb, to the iron's own end at 3.42 in the capital [measured PL-XI;
+ *   the plumb foot derived, see `IRON_END`]. The pier stands upright
  *   under the member's end, in front of the pedestal, whose inner faces
  *   step back from the pier's foot to 3 m outboard of its axis at the top
  *   [sourced drawing PL-I, PL-VII; `platforms.ts`, SOURCES.md §24].
@@ -267,12 +269,32 @@ const GHIJ = [-2 * BAY * 2, -2 * BAY, 0, 2 * BAY, 2 * BAY * 2] as const;
  * lines); 1.25 under the 5.55 pedestal (`PEDESTAL`)]. PL-XI Fig. 1 ends the
  * iron itself at 3.42 (its node lines, 32.17 px/m), at PL-VII's shaft top:
  * the member runs on about a metre down inside the collar and capital,
- * hidden, and is not built there. The 2.95 this replaces came from PL-XI
+ * hidden (`IRON_END`). The 2.95 this replaces came from PL-XI
  * read with its horizontal scale (31.75) carried 36 m down from the crown.
  * The lower arc turns vertical at y 3.90, so over its last metres the
  * member stands within 2° of vertical, as all three plates draw it.
  */
 const ARCH_END = 4.3;
+/**
+ * Where the iron itself ends, inside the pier: PL-XI Fig. 1's 3.42 (±0.05
+ * on its node lines, 32.17 px/m; SOURCES.md §24), at PL-VII's shaft top
+ * [measured; a blind re-read, 2026-09-26, puts the tint's end at 3.47 and
+ * the drawn end line at 3.27-3.30, so ±0.10 is the honest band, every
+ * part of it inside the stone]. Below the collar's top the member cannot go on in the face
+ * plane: the face leans 0.503 per metre, so over the 0.88 down to 3.42
+ * its axis would move 0.44 off the pier's, and its side would stand 0.13
+ * out of the 0.72 neck at the neck's top [derived]. The pier is upright
+ * and holds it, so the hidden foot is plumb, on the pier's axis, a 0.60
+ * square like the chord above, from the height of the chord's square end
+ * (`END_Y`, inside the collar; there the chord's axis stands 0.07 out
+ * from the pier's, the two overlapping over 0.53 of the 0.60, hidden)
+ * down to 3.42 in the capital's block [the plumb foot
+ * derived; the joint inside the stone, and so its form, estimated]. It
+ * carries no rivets: the chord's rows stop at the collar (`aboveCollar`),
+ * and the foot is its own member set (`ffArchFeet`), so the chord's rows
+ * are untouched by it.
+ */
+const IRON_END = 3.42;
 /**
  * The pier, upright under the member's end, from the ground up: a moulded
  * base, a rusticated shaft, a neck band, the capital's block, its flared
@@ -779,6 +801,7 @@ function arches(): {
   heads: Member[];
   fans: Member[];
   bracket: Member[];
+  feet: Member[];
   plates: Vec3[][];
   piers: Array<{ c: Vec3; size: Vec3 }>;
 } {
@@ -789,6 +812,7 @@ function arches(): {
     heads: [] as Member[],
     fans: [] as Member[],
     bracket: [] as Member[],
+    feet: [] as Member[],
     plates: [] as Vec3[][],
     piers: [] as Array<{ c: Vec3; size: Vec3 }>,
   };
@@ -837,6 +861,9 @@ function arches(): {
         });
         from = top;
       }
+      // The iron's hidden foot, plumb on the pier's axis (`IRON_END`); the
+      // horizontal normal squares it to the pier.
+      out.feet.push({ a: [foot[0], END_Y, foot[2]], b: [foot[0], IRON_END, foot[2]], n: [0, 0, 1] });
     }
   }
   return out;
@@ -1313,6 +1340,9 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}
     solid("ffFans", four("ffFanPaths", ar.fans), FAN_BAR, null),
     solid("ffBracket", four("ffBracketPaths", ar.bracket), BRACKET_BAR, null),
     plates(g, "ffArcadePlates", ar.plates, quads),
+    // Last, and apart from the chords: hidden in the stone, it has no rows,
+    // and the chords' member set (and so their rivets) stays as it was.
+    solid("ffArchFeet", four("ffArchFeetPaths", ar.feet), ARCH_CHORD, null),
   ];
 
   // The piers, from the ground to the arch's end, in front of the pedestals.
@@ -1327,6 +1357,16 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}
     throw new Error(
       `firstFloor: the pier's collar starts at ${collarFoot}, above the arch member's lowest corner at ${endLow.toFixed(3)}, so the member's end would stand out of the neck — lower the neck's top in PIER below ${endLow.toFixed(3)}`,
     );
+  }
+  // The hidden foot: every tier it passes through must hold its 0.60.
+  let below = 0;
+  for (const { side: w, top } of PIER) {
+    if (top > IRON_END && below < END_Y && w / 2 <= ARCH_CHORD) {
+      throw new Error(
+        `firstFloor: the arch's hidden foot (${IRON_END} to ${END_Y.toFixed(3)}, ${2 * ARCH_CHORD} square) passes a pier tier ${w} wide at ${below}-${top}, so it would stand out of the stone — widen that tier or raise IRON_END`,
+      );
+    }
+    below = top;
   }
   const piers = ar.piers.map((p, i) => box(g, `ffPier${i}`, p.c, p.size));
   const pierFour = copyToQuadrants(g, "ffPiers4", merge(g, "ffPiers", piers), quads);

@@ -108,12 +108,13 @@ export function planBracingLines(name: string, W: number, w: number, column: num
 
   // A, corner to corner along x = z [sourced, every figure].
   add([W, W], [-W, -W], atColumn(dA), atColumn(dA), "A");
-  // The K bracket: a stub in along the diagonal from the girder at s =
-  // `at` to its apex, and two struts parallel to the faces from the apex
-  // back to that girder, `reach` either side (they meet it at 45 degrees).
+  // The K bracket: two struts parallel to the faces from its apex, `reach`
+  // in along the diagonal from the girder at s = `at`, back to that girder
+  // `reach` either side (they meet it at 45 degrees); with `stub`, H in
+  // along the diagonal from the girder to the apex.
   const kBracket = (at: number, reach: number, stub: boolean) => {
     const apex = st(at - reach);
-    if (stub) add(st(at), apex, atGirder, 0, "K");
+    if (stub) add(st(at), apex, atGirder, 0, "H");
     add(apex, st(at, reach), 0, atGirder, "K");
     add(apex, st(at, -reach), 0, atGirder, "K");
     return apex;
@@ -134,7 +135,16 @@ export function planBracingLines(name: string, W: number, w: number, column: num
     const at = (W - w) / Math.SQRT2;
     // H', from the middle of the s < 0 one to A's centre [Figs 13-15].
     add(st(-at), centre, atGirder, 0, "H'");
-    // K on the s > 0 one; H beyond it is drawn dashed, not built.
+    // On the s > 0 one, H in along the diagonal to the K bracket's apex
+    // [sourced Figs 13-15]. The plates tint H as they tint H' and end both
+    // on an I-section: H' at the central post on A, H among the lower car's
+    // outer guides, 4.4 ±0.5 out [measured Fig. 14, 11.9 px/m on its
+    // "9.2314"; EDOUX_PLAN has them at 4.68 and 5.15]. The dashed curve
+    // beside H is its letter's leader, not a member: in all three figures it
+    // runs from the letter to the tinted stub's end, and the captions list
+    // H at every one of these nodes (Fig. 13's "Poutre H", 596 wide; Figs
+    // 14, 15). The stub is cut where it meets the outboard post
+    // (`clearOfEdoux`), so it frames into it.
     kBracket(at, PLAN_BRACING.kReach, true);
     return lines;
   }

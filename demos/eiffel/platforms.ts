@@ -35,8 +35,8 @@
  *   flats, 0.85 deep, flush with the glass [sourced PL-XIX Figs 3, 9],
  *   less the wells of the upper Edoux car and the stair from the landing;
  *   on two curved consoles a face (see `THIRD`, `CONSOLE`). Plate I's
- *   "côté extérieur 18m65" matches nothing drawn there, so no deck is
- *   18.65 wide.
+ *   "côté extérieur 18m65" is carried by no element: the text closes the
+ *   floor at 16.56 (see `THIRD`), so no deck is 18.65 wide.
  * - PEDESTALS: the four decorative masonry "soubassements", hollow skirts
  *   round the legs' feet, 5.55 high to where the uprights come out of them
  *   [measured PL-I, PL-VII; SOURCES.md §24]: a battered block, a cornice at
@@ -73,8 +73,11 @@
  *   6.95 [sourced PL-XIX], glazed between rays, so built as its ribs and
  *   rays; the lunette under the inner arc is a wooden trellis [sourced],
  *   built as its laths; the vault behind is a shell (see `GABLE`,
- *   `bayRoof`). The inner arcade is not built: the vault ends in a gable
- *   drawn as the outer one. The crown carries a palmette crest to 10.10
+ *   `bayRoof`). It ends on the INNER ARCADE, iron pilasters one to a pier
+ *   under an open braced arch, and a valley gutter over every pier back
+ *   from the face (PL-XIII Figs 2, 21, 26-39; see `INNER_ARCADE`); the
+ *   corner bays' ends, where two faces' vaults cross, are not drawn on the
+ *   plates read and left open. The crown carries a palmette crest to 10.10
  *   [measured PL-XIX: 10.14] and every pier an 8.00 m flag mast [sourced
  *   text] topping out about 12.2 above the gallery floor [estimated].
  * - THE FOUR PAVILIONS, one per face on its 3 central bays, of one plan
@@ -103,7 +106,9 @@
  *   print 99.39 and 99.40], its length [estimated from the roof plan].
  *   In front of each, along the terrace's edge to the mid-bay columns at
  *   ±15.53, the terrace balustrade, open over the centre bay on the
- *   Français and the Russe (`TERRACE_RAIL`).
+ *   Français and the Russe (`TERRACE_RAIL`), where a pair of quarter-turn
+ *   flights comes up from the gallery to a landing pushed out over it,
+ *   cut into the terrace (`ENTRANCE`).
  * - BALUSTRADES: rails and posts, their infill (terracotta balusters, X
  *   panels) left out. The gallery's: 1.150 tall, cast-iron pilasters every
  *   1.74125, mid-arch, where the columns do not stand [sourced PL-XIII].
@@ -114,10 +119,12 @@
  *   tall [sourced 13bis], on two lines 2.096 clear apart [sourced, one
  *   digit ambiguous], under a pitched roof whose ridge runs along the face,
  *   eaves about 3.0 and ridge about 3.6 [estimated], behind a 0.62 attic
- *   band on the outer posts [sourced height]. Nothing that stood on
- *   the 2nd platform in 1889 is dimensioned on the plates (the 1900 album's
- *   buffet and tents may be later), so the deck carries only the gallery.
- *   A flag mast stands on each outer post (`SECOND_MAST`).
+ *   band on the outer posts [sourced height]. A flag mast stands on each
+ *   outer post (`SECOND_MAST`). Inside it, what stood on the platform in
+ *   1889 as PL-XIX Fig. 7 places it and the text describes it — the lifts'
+ *   two reservoirs, Le Figaro's printing pavilion, the ticket office and
+ *   water-closets, two boutiques, three tents — as massing at the plate's
+ *   places (`SECOND_FITOUT`, which says what is left out and why).
  *   Under the deck's edge hangs its SKIRT, a curved plate 5.15 deep
  *   [sourced PL-XIX Fig. 2] leaning in 1.3 to its foot at node XVIII,
  *   unbroken across the faces, which hides panel 11's belt (see
@@ -233,6 +240,102 @@ const ARCADE = {
   crest: [1.2, 1.5, 0.12] as Vec3,
   /** Flag mast: 8.00 long [sourced text], foot 4.2 above the gallery floor, section. */
   mast: { length: 8, foot: 4.2, size: 0.12 },
+} as const;
+
+/**
+ * The inner arcade, « Arcades des Pilastres en fer » (PL-XIII Figs 2, 21,
+ * 26-32, 37, 39; heights above the gallery floor, tags as in the file
+ * comment). Every vault's inner end rests on it, 4.1875 from the column
+ * axis to the pilasters' inboard face [sourced Fig. 21: 0.6725 + 3.515,
+ * measured there from the face member's inner face, 0.095 inside the axis,
+ * so 4.2825 from the axis itself; Fig. 31's frame, 4.2745 overall, less
+ * its 0.18 column head, gives 4.185-4.20, derived: 4.1875 is kept, within
+ * both readings' spread], which is where the
+ * vault shells already end (`GALLERY.depth`).
+ *
+ * - PILASTERS, one per pier, every 7.765, single, none mid-bay [sourced
+ *   Figs 26, 27]: a built-up plate member 0.497 deep square to the face
+ *   [sourced Fig. 32 "497"], 0.130 across it [sourced Fig. 32 "130/5";
+ *   drawn 0.15-0.16 with its cover plates, measured]. Each stands on the platform (the terrace, 1.23 above the
+ *   gallery [sourced Figs 2, 6 "1.230"]) up to a head 0.980 wide and 1.600
+ *   tall whose underside is 0.438 above the column tops, 4.238 [sourced
+ *   Fig. 26 "487.5 + 5 + 487.5", "1.600", "438"; sum derived], rounded
+ *   into the shaft by two quarters of R 0.500 [sourced], drawn finishing
+ *   0.25-0.27 up the shaft [measured], here a chamfer over 0.26
+ *   [estimated]. Fig. 26 tops the head at 5.838 [derived],
+ *   the gutter line PL-XIX prints "5.84"; the model springs its vaults
+ *   from the face's 6.05 (`SPRING_Y`), so the head stops under the
+ *   gutter, which spans the 0.21 [derived].
+ * - Where a pier stands in front of a leg, Figs 2 and 28-30 move the
+ *   pilaster out to the platform's edge, "2.420", "2.427", "2.600" from
+ *   the columns, and carry the frame on to the leg by a 2.265 bracket,
+ *   4.947 overall [sourced] — the leg's face is 4.08 inside the column
+ *   axis at the platform (its outer uprights' line 31.27 from the axis),
+ *   so a pilaster at 4.1875 would stand in the leg's belt [inference: the
+ *   model's leg leaves that spot open]. Here it stands on the gallery
+ *   floor against the step's face, 2.35 from the column axis [derived:
+ *   the step is at 2.60, the pilaster 0.497 deep; the plates' 2.420 runs
+ *   to its outboard face, which with the drawn stem puts its axis near
+ *   2.67, measured, 0.32 further in, where the model's step stands], and the gutter over it
+ *   runs the 4.947 [sourced] back to the leg. Which piers those are is a
+ *   rule, not a list: a pier whose station along the face lies within the
+ *   leg's width at the gallery floor (`profileAt`), with a pilaster's
+ *   clearance to spare.
+ * - THE ARCH between two pilasters' heads, Fig. 26 [sourced]: two ribs
+ *   0.200 deep, braced by radial angles (50 × 50 × 5, 40 × 40 × 5), its
+ *   lunette open — no trellis, no glazing [sourced drawing]. The outer rib
+ *   lies under the vault's arc (here under its shell, which it carries),
+ *   crowned 2.862 above the gutter line, 8.70
+ *   above the floor as at the face [sourced Figs 26, 28, 31 "4.900" above
+ *   the column tops; PL-XIII's 8.940 is the same crown on a datum 0.24
+ *   lower, so the vault is level, derived]. The inner rib crowns 1.950
+ *   under the outer crown, 6.75 [sourced "1.950"; derived], as an arc of
+ *   R 3.5675 [the printed R read 3.5675 and 3.0675 by two readers; a fit
+ *   to the drawn curve gives 3.62, measured], where the face gable's is
+ *   R 3.3675 at 6.95 (`GALLERY.innerCrown`). Fig. 26 draws each half from
+ *   its own centre, 0.325 off the axis (« 325 », « 3.3925 »), running down
+ *   past the gutter line to about 5.0-5.2 at ±3.39 [sourced; measured];
+ *   the model makes it one circle cut at its 6.05 springing, 2.12 either
+ *   side of the middle against the drawn 2.35-2.44 [simplified]. Rays as the face gable's; the thickness
+ *   through the plane as the face's plate [estimated].
+ * - THE VALLEY GUTTER over each pier, the top of the transverse frame
+ *   from the column head back to the pilaster (Figs 28-31, 37, 39):
+ *   0.940 overall, 0.730 clear, the valley between two bays' vault feet
+ *   [sourced Fig. 39], the frame's top chord 0.350 deep [sourced Fig. 37
+ *   "200 + 150"], under the springing line.
+ * - NOT BUILT: the corner square, where two faces' corner bays meet over
+ *   the leg's corner upright and their vaults cross at the crown — the
+ *   « arcades avec caisson d'angle » of the accounts [sourced E1900-TXT
+ *   p. 218], which no plate read draws. So the corner piers get no
+ *   pilaster or gutter, and the corner bays no inner arch: their vaults
+ *   end open where the neighbouring face's corner vault crosses them (the
+ *   gable "drawn as the outer one" that closed them before ran through
+ *   that vault). Nor the leg zone's shell running on past the arch to the
+ *   leg (Figs 28-30): the gutter carries the arch's foot there.
+ */
+const INNER_ARCADE = {
+  /** Column axis to the pilasters' inboard face [sourced]. */
+  depth: 4.1875,
+  /** Pilaster: across the face, square to it [sourced]. */
+  width: 0.13,
+  deep: 0.497,
+  /** Head: width along the face, underside and top (the gutter line) [sourced]. */
+  headWidth: 0.98,
+  headFoot: 4.238,
+  headTop: 5.838,
+  /** The R 0.500 quarters at the head's foot, as a chamfer's height [measured, chamfer estimated]. */
+  flare: 0.26,
+  /** In front of a leg: column axis to the pilaster's axis [derived], and the frame's reach [sourced]. */
+  legAxis: 2.35,
+  legReach: 4.947,
+  /** The inner rib's arc: radius and the crown of its underside [sourced; derived]. */
+  innerRadius: 3.5675,
+  innerCrown: 6.75,
+  /** Both ribs' depth [sourced]. */
+  rib: 0.2,
+  /** Valley gutter: overall width [sourced], depth [sourced]. */
+  gutter: 0.94,
+  gutterDepth: 0.35,
 } as const;
 
 /** The four pavilions (face frame; tags as in the file comment). */
@@ -505,6 +608,123 @@ const SECOND_SKIRT_RELIEF = {
 const SECOND_MAST = { top: 7.8, size: 0.12 } as const;
 
 /**
+ * What stood on the 2nd platform in 1889, as massing. « Pendant
+ * l'Exposition de 1889, la plate-forme était occupée (Pl. XIX, fig. 2 et
+ * 7) par » the Otis lifts' upper framing and their queues, « les grands
+ * réservoirs cylindriques alimentant ces ascenseurs », the unused Roux
+ * girders of piles 2 and 4 « auxquelles on avait relié deux plates-formes
+ * polygonales » (a shelter below; above, Neurdein's photographic studio
+ * and an observation deck), the Edoux's approaches in the middle, the
+ * four helical stairs from the 1st floor and the one on up; and in what
+ * room was left « un pavillon en bois servant d'imprimerie au Figaro et
+ * transformé depuis en buffet », « un bar affecté à la boulangerie
+ * Viennoise », « un bâtiment compris entre l'un des réservoirs et
+ * l'ascenseur Edoux » of ticket offices and water-closets, « quelques
+ * boutiques et bars, et enfin des tentes-abris » [sourced E1900-TXT
+ * pp. 214-215]. So PL-XIX Fig. 7, « Plan du deuxième étage » (1:200), is
+ * the 1889 platform, the Figaro's pavilion labelled by its later use,
+ * « Buffet ». It is drawn as PL-XVIII is, piles 2 and 3 at the top, so its
+ * x right and z down are the render's top view [sourced]. Read on the
+ * e-rara scan at 59.15 px/m against the printed 3.36 post pitch (eight
+ * pitches of 3.36268, 1,591 px) and centred on the gallery's middle
+ * posts [measured]; the positions below are world (x, z), or (s, t) in
+ * the diagonals' frame, ±0.3 [measured]. The same figure's gallery posts
+ * stand on a square 36.80 on their axes (« 36m80 »), its corners cut 1.21
+ * back [sourced], and the text's « 57,90 » outside the gutter is 37,90 in
+ * the OCR's commonest slip (36.80 + 2 × 0.55, « deux chéneaux de 0,55 »)
+ * [derived], against the model's 37.63 deck (`PLATFORMS`); the massing
+ * keeps the plate's places, all of it inside the gallery.
+ *
+ * - THE TWO RESERVOIRS, horizontal cylinders « de 3 m de diamètre et 7 m
+ *   de longueur … 46,339 m³ » [sourced E1900-TXT p. 199], drawn "3.00"
+ *   across and "6.00" along with « 45 m³ » [sourced Fig. 7]: 6.00 is
+ *   built, the plate's shell between its dished ends [estimated]. One on
+ *   the Roux legs' diagonal each side of the middle, piles 2 and 4, their
+ *   axes square to it, at t ±7.9, s 0.25 [measured: 7.76 and 8.03, 0.2
+ *   and 0.3]; their underside 0.6 above the floor [measured PL-XIX Fig. 2,
+ *   where the pile-4 tank's end shows 3.07 across], on two saddles each
+ *   (« Fers et supports des réservoirs cylindriques », sourced p. 327;
+ *   their place and size estimated).
+ * - THE FIGARO'S PAVILION (« Buffet »), timber [sourced]: the hatched
+ *   hexagon on the Russe's side between piles 2 and 1, near the North
+ *   pile's Otis as the text has it [sourced p. 321], (-15.8, -6.0),
+ *   (-12.3, -6.0), (-8.2, -1.85), (-8.2, 1.0), (-13.3, 5.83), (-15.8,
+ *   5.83) [measured]. Its wall wraps round the uprights b of piles 2 and 1
+ *   on the plate; the massing stops at x -15.0, inside them [derived:
+ *   their inner faces lean in to -15.19 at the eaves]. Its height is not
+ *   printed: 3.00, the gallery's eaves [estimated].
+ * - THE TICKETS AND WATER-CLOSETS, between the pile-2 reservoir and the
+ *   Edoux's cage (« Urinoirs et Water-closets », « Téléphone », « Billets
+ *   pour le 3e »): s -2.95 to 4.10, t -6.3 to -2.55 [measured; its back
+ *   set 0.1 clear of the reservoir, derived], 2.84 tall, the height PL-XIX
+ *   Fig. 2 prints for the boutique beside it, which draws the W.C. to the
+ *   same line [sourced "2.840"; measured].
+ * - TWO BOUTIQUES flanking the Edoux's approach on its pile-4 side, s 3.23
+ *   to 5.29 and s -4.65 to -2.62, t 2.57 to 3.58 and 2.52 to 3.52
+ *   [measured, re-read on a 3x crop],
+ *   2.84 tall [sourced Fig. 2, the second of them, seen from the Seine].
+ * - THE TENTS: two « Tente-abri pour les consommateurs », decagons 3.7 to
+ *   a corner [measured 3.58-3.76] about centre poles at (12.56, -0.11) on
+ *   the Bar's side and (0.05, 12.22) on the Flamand's, a corner on the
+ *   face's normal, a post at every corner [sourced drawing]; and « Tente-
+ *   abri pour les visiteurs du 3e étage », the Edoux's queue, 7.2 along s
+ *   by 4.6 [measured] about (0.87, -11.18) on the Français's side, its
+ *   ridge along s [sourced drawing]. Their heights, eaves 2.2 and apex 3.4
+ *   (the queue's ridge 3.2), and every section, are [estimated]: canvas
+ *   left no printed height.
+ *
+ * Not built, each for a reason: the two polygonal shelters with their
+ * decks at « (151.85) », 2.62 up [sourced Fig. 7], stand on the plate
+ * where the model brings e1 up the leg's diagonal (`STAIR_OPENINGS`,
+ * estimated), which Fig. 7 draws instead beside each pile's corner
+ * upright; they wait on the stairs' arrivals being moved, and the studio
+ * and the deck over them on the Roux girders' unused extensions, which
+ * the model does not carry above the 1st floor. The Viennese bakery's
+ * bar is named but not drawn, so it has no place. The 6 m³ fresh-water
+ * tank, the fountain, the « Cabinet pour l'étude de la résistance de
+ * l'air » and the benches are in or against the Edoux's central block,
+ * which is the Edoux's head. The Otis framing, the Edoux and the stairs
+ * are their own parts.
+ */
+const SECOND_FITOUT = {
+  tank: { diameter: 3.0, length: 6.0, foot: 0.6, facets: 16, s: 0.25, t: 7.9 },
+  saddle: { at: 2.0, along: 0.3, across: 2.4 },
+  figaro: {
+    plan: [
+      [-15.0, -6.0],
+      [-12.3, -6.0],
+      [-8.2, -1.85],
+      [-8.2, 1.0],
+      [-13.3, 5.83],
+      [-15.0, 5.83],
+    ] as ReadonlyArray<readonly [number, number]>,
+    height: 3.0,
+  },
+  /** Rectangles in the diagonals' frame: [s0, s1, t0, t1]. */
+  tickets: [-2.95, 4.1, -6.3, -2.55] as readonly [number, number, number, number],
+  boutiques: [
+    [3.23, 5.29, 2.57, 3.58],
+    [-4.65, -2.62, 2.52, 3.52],
+  ] as ReadonlyArray<readonly [number, number, number, number]>,
+  booth: 2.84,
+  tents: {
+    at: [
+      [12.56, -0.11],
+      [0.05, 12.22],
+    ] as ReadonlyArray<readonly [number, number]>,
+    radius: 3.7,
+    sides: 10,
+    eave: 2.2,
+    apex: 3.4,
+    pole: 0.12,
+    post: 0.08,
+    canvas: 0.03,
+  },
+  /** The queue's tent about (s, t), world (0.87, -11.18). */
+  queue: { s: 8.52, t: -7.29, along: 7.2, across: 4.6, ridge: 3.2 },
+} as const;
+
+/**
  * The Edoux lift's two cars run on the N-S diagonal, their axes 2.650 out
  * either side of the tower's axis [sourced PL-XX], the lower car toward
  * pile 3 (+x -z), the upper toward pile 1. A floor a car rises through, or
@@ -535,9 +755,34 @@ interface Well {
  * rive … de 850 mm de hauteur » [sourced text, PL-XIX "850"], stand flush
  * with the glazed octagon over them: 16.56 across the flats, 10.90 straight
  * sides [sourced PL-XIX Fig. 9], so the floor is that octagon, 0.85 deep.
- * PL-I's "côté extérieur 18m65" matches nothing drawn at this level (the
- * widest element on every plate is 16.56; PL-I's own strokes reach 17.7),
- * so it is not built.
+ *
+ * PL-I's "côté extérieur 18m65, Surface 350 mètres carrés" is carried by
+ * no element, and nothing is built at it. The text describes the floor
+ * twice, and both close it inside 16.56:
+ * - « un carré de 16,56 m de côté à angles abattus », long sides 10,90
+ *   [sourced E1900-TXT p. 79]; its gallery « de 3,00 m de largeur libre …
+ *   au-dessus des consoles », which the top horizontal carries « sur
+ *   3,00 m de longueur » out from the corner uprights to the edge beams,
+ *   and they carry the 1.20 plate parapet [sourced ibid.]: from the
+ *   uprights' outer faces at 5.25, 8.25 out, the 16.56's 8.28 within 0.03
+ *   [derived];
+ * - « une galerie-promenade en encorbellement … de 3,23 m de largeur … La
+ *   largeur est de 16,30 m et la surface de 231 m² » [sourced E1900-TXT
+ *   p. 215].
+ * Neither names anything outboard of the parapet. The 4th platform above
+ * is « un carré de 16,60 m » on posts riveted to that parapet [sourced
+ * ibid. p. 79]; Eiffel's balcony, 0.52 proud (`summit.ts`), is PL-I's
+ * widest stroke at this level, 17.6-17.7 [measured, SOURCES.md §15.1;
+ * 16.56 + 2 x 0.52 = 17.60, derived]. On the 1st floor PL-I's "côté
+ * extérieur 70m695" is the text's « 70,69 m de côté, mesuré dans l'axe
+ * des colonnes extérieures » (71.69 « à l'extérieur du chéneau ») [sourced
+ * p. 212]; read the same way the 3rd floor's is 16.56. 18.65 is 2.09
+ * wider than the floor and 1.05 wider than the balcony. The text's own
+ * areas are 270 m², « avec les consoles extérieures » (fully covered,
+ * glazed), and 272 m² for visitors [sourced E1900-TXT], against the
+ * octagon's 258 [derived] and an 18.65 square's 348: PL-I's 350 fits the
+ * square, not the floor. Whence PL-I took 18.65 is not recorded; an
+ * earlier scheme's side is a guess [weak inference].
  */
 const THIRD = {
   across: 16.56,
@@ -752,7 +997,8 @@ const STEP = { thickness: 0.3 } as const;
  * middle, on all four faces [measured PL-XVIII: ends at ±15.48-15.67]. On
  * the Français (face 2, -z) and the Russe (face 3, -x) it breaks over the
  * centre bay, ±3.8825, the « Entrée », where paired curved flights come up
- * from the gallery [sourced PL-XVIII; the flights are not built]; on the
+ * from the gallery (`ENTRANCE`), its end posts standing on the terrace
+ * beside the flights' outer strings [derived]; on the
  * Bar (face 1, +x) it runs unbroken from -15.53 to +15.53, and so on the
  * +z face, which PL-XVIII draws as the Théâtre that replaced the Flamand
  * after 1889 [measured; the Flamand's own 1889 front estimated from it].
@@ -766,6 +1012,71 @@ const TERRACE_RAIL = {
   /** The faces with the centre-bay entrance, and those without. */
   entrance: [2, 3],
   closed: [0, 1],
+} as const;
+
+/**
+ * The entrance flights on the Français and the Russe (PL-XVIII Fig. 3,
+ * 1:250, « Entrée »; PL-XXIX Figs 4, 10, 1:200; PL-XIX Fig. 1). A mirrored
+ * pair in the centre bay, one either side of its middle, each a
+ * quarter-turn about a newel at its front inner corner: up from the
+ * gallery square to the face, round 90 degrees, and off toward the bay's
+ * middle onto a landing at the terrace's level [sourced drawings]. In the
+ * face frame, u along the face from the bay's middle toward the flight's
+ * own pier, v out from the terrace's edge (the step's face, 2.60 inside
+ * the column axis) [tags per number]:
+ *
+ * - The outer string on the pier's axis, u 3.8825 [sourced: the balustrade
+ *   ends there, PL-XXIX Fig. 10's jog between its printed 3.8825s]; the
+ *   back string cut into the terrace, -0.88 on Fig. 4 and -0.77 to -0.86
+ *   on XVIII [measured], here -0.72: the model's grande poutre stands
+ *   under the terrace with its top chord's outer face 0.74 inside the
+ *   step's (32.01 from the axis, measured on the cooked girder), and a
+ *   flight cut deeper would run through it [derived]; the newel at u 2.33, v +0.45 [measured
+ *   Fig. 4 2.27-2.37, XVIII 2.20-2.37; XIX Fig. 1's tall posts at ±2.39],
+ *   0.13 square [measured].
+ * - 7 risers, 6 treads [counted, Fig. 4]: two rounded bottom steps, u
+ *   2.06-4.17 to v +0.98 and u 2.31-3.93 to v +0.66 [measured], their
+ *   round ends squared [estimated]; then 4 winders about the newel, their
+ *   risers on rays 22, 46 and 63 degrees below the face's line [measured
+ *   Fig. 4 by two readers: 22-22.5, 45.8-46, 62-63.2], the first along the
+ *   face (drawn at about 7.5) and the last square to it (drawn as a curve
+ *   ending at about 79-81) [estimated, straightened]; the newel read at
+ *   u 2.33 and 2.44 on Fig. 4, 2.32 on XVIII [measured]. No riser is printed; the model's 1.23 [sourced PL-XIX; PL-XVIII
+ *   prints 89.93 and 91.13, 1.20] in 7 is 0.176 [derived]. Each tread is
+ *   solid to the gallery floor [estimated: no soffit is drawn].
+ * - The landing between the newels, pushed 0.43 out over the gallery
+ *   [measured Figs 4, 10: 0.41-0.44; XVIII 0.60-0.66], on its own edge
+ *   girder, as the step's [estimated].
+ * - Balustrades [estimated: none is printed for the flights]: the terrace
+ *   balustrade's section (`TERRACE_RAIL`), level at the terrace along the
+ *   flights' outer and back strings, where the terrace stands above them,
+ *   and across the landing's front between the newels, where PL-XIX Fig. 1
+ *   draws it unbroken [sourced drawing]; a handrail raking down the outer
+ *   string over the gallery, from the terrace balustrade's end post to a
+ *   post at its front corner, u 3.8825, v +0.45 [measured], at the rail's
+ *   height over the tread beside it at either end. The
+ *   newels stand 0.20 over the rails [estimated: « taller posts »].
+ *
+ * The Bar and the Flamand's front have no flights and no break [sourced
+ * PL-XVIII, PL-XXX Figs 4, 16]. PL-XXIX Fig. 10 draws the Russe's centre
+ * front pushed out the same 0.44 but closed, with no flights: perhaps
+ * another state [open, SOURCES.md §10.10]; PL-XVIII is followed.
+ */
+const ENTRANCE = {
+  outer: 3.8825,
+  back: -0.72,
+  newel: [2.33, 0.45] as readonly [number, number],
+  newelPost: 0.13,
+  newelProud: 0.2,
+  /** The bottom steps, outer first: [u0, u1, front v]; each reaches back to the next. */
+  bottom: [
+    [2.06, 4.17, 0.98],
+    [2.31, 3.93, 0.66],
+  ] as ReadonlyArray<readonly [number, number, number]>,
+  /** The winders' risers, degrees below the face's line, from the newel; the first is its front. */
+  rays: [0, 22, 46, 63, 90],
+  risers: 7,
+  landing: 0.43,
 } as const;
 
 /**
@@ -895,10 +1206,10 @@ function allFaces(list: readonly Block[], faces: readonly number[] = [0, 1, 2, 3
   return out;
 }
 
-/** Face-frame prisms, turned onto all four faces. */
-function allFacesPrisms(list: readonly Prism[]): Prism[] {
+/** Face-frame prisms, turned onto all four faces (or onto the `faces` given). */
+function allFacesPrisms(list: readonly Prism[], faces: readonly number[] = [0, 1, 2, 3]): Prism[] {
   const out: Prism[] = [];
-  for (let f = 0; f < 4; f++) {
+  for (const f of faces) {
     for (const p of list) out.push({ outline: p.outline.map((q) => onFace(f, q)), depth: p.depth });
   }
   return out;
@@ -1187,14 +1498,21 @@ function between(upper: readonly Vec3[], lower: readonly Vec3[], depth: number):
 
 /**
  * A gable's inner arc over bay centre `c`, at r, left foot to right foot:
- * the circle of GALLERY.innerRadius through the inner crown, cut by the
- * vault's springing line, one point per point of `vaultArc`. `grow`
- * widens the circle about the same centre (a rib's outer edge).
+ * the circle of `radius` through the inner `crown` (the face gable's,
+ * GALLERY's, unless given), cut by the vault's springing line, one point
+ * per point of `vaultArc`. `grow` widens the circle about the same centre
+ * (a rib's outer edge).
  */
-function innerArc(c: number, r: number, grow = 0): Vec3[] {
+function innerArc(
+  c: number,
+  r: number,
+  grow = 0,
+  radius: number = GALLERY.innerRadius,
+  crown: number = GALLERY.innerCrown,
+): Vec3[] {
   const n = ARCADE.vaultSegments;
-  const R = GALLERY.innerRadius + grow;
-  const cy = GALLERY.floor + GALLERY.innerCrown - GALLERY.innerRadius;
+  const R = radius + grow;
+  const cy = GALLERY.floor + crown - radius;
   const psi0 = Math.asin((SPRING_Y - cy) / R);
   const out: Vec3[] = [];
   for (let i = 0; i <= n; i++) {
@@ -1216,17 +1534,47 @@ interface Piece {
   readonly blocks: Block[];
 }
 
+/** A part in named pieces, so an inspection can tell them apart (`fitOutSolids`). */
+type Parted = Record<string, Piece>;
+
+/** Empty pieces under the names given. */
+function parted<K extends string>(...names: K[]): Record<K, Piece> {
+  const out = {} as Record<K, Piece>;
+  for (const n of names) out[n] = { prisms: [], blocks: [] };
+  return out;
+}
+
+/** A parted part's pieces, merged. */
+function merged(part: Parted): Piece {
+  const pieces = Object.values(part);
+  return { prisms: pieces.flatMap((p) => p.prisms), blocks: pieces.flatMap((p) => p.blocks) };
+}
+
 /**
  * A gable's crescent over bay centre `c`, its face at r (see `GABLE`): a
  * rib under the vault's arc, a rib over the inner arc, and a ray from each
  * point of the one to the matching point of the other, all ARCADE.plate
- * thick and extruded inward from r as the vault is.
+ * thick and extruded inward from r as the vault is. `arc` gives the ribs'
+ * depths, how far under the vault's arc the outer rib hangs, and the inner
+ * arc (the face gable's unless given: the inner arcade's are
+ * `INNER_ARCADE`'s, its outer rib under the shell).
  */
-function gableRibs(c: number, r: number): Piece {
-  const outer = vaultArc(c, r);
-  const outerIn = vaultArc(c, r, GABLE.outerRib);
-  const inner = innerArc(c, r);
-  const innerOut = innerArc(c, r, GABLE.innerRib);
+function gableRibs(
+  c: number,
+  r: number,
+  arc: {
+    readonly outerRib: number;
+    readonly innerRib: number;
+    readonly radius: number;
+    readonly crown: number;
+    readonly under?: number;
+  } = { outerRib: GABLE.outerRib, innerRib: GABLE.innerRib, radius: GALLERY.innerRadius, crown: GALLERY.innerCrown },
+): Piece {
+  const under = arc.under ?? 0;
+  const outer = vaultArc(c, r, under);
+  const outerIn = vaultArc(c, r, under + arc.outerRib);
+  const inner = innerArc(c, r, 0, arc.radius, arc.crown);
+  const innerOut = innerArc(c, r, arc.innerRib, arc.radius, arc.crown);
   const prisms = [
     ...between(outer, outerIn, ARCADE.plate),
     ...between(innerOut, inner, ARCADE.plate),
@@ -1306,22 +1654,82 @@ function lunetteTrellis(c: number): Block[] {
 
 /**
  * A bay's roof over the gallery, face at r: the gable (`gableRibs`), the
- * vault behind it a shell back to the inner arcade, `depth` in, where the
- * inner arcade's gable closes it, drawn as the outer one [estimated: the
- * inner arcade is not dimensioned]. The pavilions' bays are
- * `pavilionFace`'s.
+ * vault behind it a shell back to the inner arcade, `depth` in, whose arch
+ * ends it (`innerArcadeFace`). The pavilions' bays are `pavilionFace`'s.
  */
 function bayRoof(c: number, r: number, depth: number): Piece {
   const front = gableRibs(c, r);
-  const back = gableRibs(c, r - depth + ARCADE.plate);
   return {
-    prisms: [
-      ...front.prisms,
-      ...between(vaultArc(c, r), vaultArc(c, r, ARCADE.shell), depth),
-      ...back.prisms,
-    ],
-    blocks: [...front.blocks, ...back.blocks],
+    prisms: [...front.prisms, ...between(vaultArc(c, r), vaultArc(c, r, ARCADE.shell), depth)],
+    blocks: front.blocks,
   };
+}
+
+/**
+ * Whether the pier at station `a` along the face stands in front of a leg
+ * (see `INNER_ARCADE`): within the leg's width at the gallery floor, its
+ * uprights' half-width and a pilaster's depth to spare either side.
+ */
+function inFrontOfLeg(a: number): boolean {
+  const { outer, inner } = profileAt(GALLERY.floor);
+  const spare = uprightAt(GALLERY.floor) + INNER_ARCADE.deep;
+  return Math.abs(a) > inner - spare && Math.abs(a) < outer + spare;
+}
+
+/**
+ * The inner arcade on the +z face (see `INNER_ARCADE`): a pilaster and a
+ * valley gutter at every pier, and over every bay the arch its vault ends
+ * on, in the plane `INNER_ARCADE.depth` inside the column axis, extruded
+ * outward from it by the plate as the face gable is inward.
+ */
+function innerArcadeFace(): Record<"pilaster" | "head" | "gutter" | "arch", Piece> {
+  const I = INNER_ARCADE;
+  const A = GALLERY;
+  const rIn = EDGE - I.depth;
+  const gutterFoot = SPRING_Y - I.gutterDepth;
+  const out = parted("pilaster", "head", "gutter", "arch");
+  // The piers between bays -4 and 4, not the corners' (see `INNER_ARCADE`).
+  for (let k = -4; k <= 3; k++) {
+    const p = (k + 0.5) * A.module;
+    const leg = inFrontOfLeg(p);
+    // The shaft: on the platform against the vault's end, or, before a
+    // leg, on the gallery floor against the step's face.
+    const r0 = leg ? EDGE - I.legAxis - I.deep / 2 : rIn;
+    const r1 = r0 + I.deep;
+    const foot = leg ? A.floor : FLOORS.first;
+    const headFoot = A.floor + I.headFoot;
+    out.pilaster.blocks.push(span(p - I.width / 2, p + I.width / 2, foot, headFoot, r0, r1));
+    // The head: its flare (a trapezoid across the face, extruded through
+    // the pilaster's depth), then its block up to the gutter.
+    const w = I.width / 2;
+    const h = I.headWidth / 2;
+    out.head.prisms.push({
+      // Counter-clockwise seen from +r, so it extrudes toward +r.
+      outline: [
+        [p - w, headFoot, r0],
+        [p + w, headFoot, r0],
+        [p + h, headFoot + I.flare, r0],
+        [p - h, headFoot + I.flare, r0],
+      ],
+      depth: I.deep,
+    });
+    out.head.blocks.push(span(p - h, p + h, headFoot + I.flare, gutterFoot, r0, r1));
+    // The valley gutter: from the face's plate pier back to the arch's
+    // plane, or on to the leg.
+    const back = leg ? EDGE - I.legReach : rIn;
+    out.gutter.blocks.push(
+      span(p - I.gutter / 2, p + I.gutter / 2, gutterFoot, SPRING_Y, back, EDGE - ARCADE.plate / 2),
+    );
+  }
+  const arc = { outerRib: I.rib, innerRib: I.rib, radius: I.innerRadius, crown: I.innerCrown, under: ARCADE.shell };
+  for (let k = -3; k <= 3; k++) {
+    // gableRibs extrudes inward from its r: set it a plate outside the
+    // plane, so the arch stands from the vault's end outward.
+    const arch = gableRibs(bayCentre(k), rIn + ARCADE.plate, arc);
+    out.arch.prisms.push(...arch.prisms);
+    out.arch.blocks.push(...arch.blocks);
+  }
+  return out;
 }
 
 /** The arcade on the +z face: columns, piers, arches, crests and masts. */
@@ -1821,6 +2229,119 @@ function secondSkirtFace(): Prism[] {
   return out;
 }
 
+/** An (s, t) rectangle of the diagonals' frame as a plan outline (x, z). */
+function diagonalRect([s0, s1, t0, t1]: readonly [number, number, number, number]): [number, number][] {
+  return [
+    fromDiagonals([s0, t0]),
+    fromDiagonals([s1, t0]),
+    fromDiagonals([s1, t1]),
+    fromDiagonals([s0, t1]),
+  ];
+}
+
+/** A flat convex facet (three or four points) as a slab `t` thick, extruded up its outward side. */
+function facet(pts: readonly Vec3[], t: number): Prism {
+  const [a, b, c] = pts as [Vec3, Vec3, Vec3];
+  const n = cross3(sub3(b, a), sub3(c, a));
+  return { outline: n[1] < 0 ? [...pts].reverse() : [...pts], depth: t };
+}
+
+const sub3 = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const cross3 = (a: Vec3, b: Vec3): Vec3 => [
+  a[1] * b[2] - a[2] * b[1],
+  a[2] * b[0] - a[0] * b[2],
+  a[0] * b[1] - a[1] * b[0],
+];
+
+/**
+ * The 2nd platform's 1889 massing, in the world (see `SECOND_FITOUT`):
+ * blocks and prisms.
+ */
+function secondFitOut(): Record<
+  "tank" | "saddle" | "figaro" | "tickets" | "boutique" | "tent" | "queue",
+  Piece
+> {
+  const F = SECOND_FITOUT;
+  const floor = FLOORS.second;
+  const out = parted("tank", "saddle", "figaro", "tickets", "boutique", "tent", "queue");
+  // The reservoirs: a cylinder of `facets` sides about an axis along s,
+  // wound counter-clockwise seen from +s so it extrudes along it.
+  const T = F.tank;
+  const axis: Vec3 = [Math.SQRT1_2, 0, -Math.SQRT1_2];
+  const u: Vec3 = [axis[2], 0, -axis[0]];
+  const yAxis = floor + T.foot + T.diameter / 2;
+  const yaw = turn(1, Math.PI / 4);
+  for (const side of [1, -1]) {
+    const [cx, cz] = fromDiagonals([T.s, side * T.t]);
+    const start: Vec3 = [cx - (axis[0] * T.length) / 2, yAxis, cz - (axis[2] * T.length) / 2];
+    const ring: Vec3[] = [];
+    for (let i = 0; i < T.facets; i++) {
+      const th = (2 * Math.PI * i) / T.facets;
+      const cu = (Math.cos(th) * T.diameter) / 2;
+      const cv = (Math.sin(th) * T.diameter) / 2;
+      ring.push([start[0] + u[0] * cu, start[1] + cv, start[2] + u[2] * cu]);
+    }
+    out.tank.prisms.push({ outline: ring, depth: T.length });
+    // Two saddles under it, square to its axis: a box turned 45 degrees
+    // about +y has its x along s and its z along t.
+    for (const k of [-1, 1]) {
+      const [sx, sz] = fromDiagonals([T.s + k * F.saddle.at, side * T.t]);
+      out.saddle.blocks.push({
+        at: [sx, floor + T.foot / 2, sz],
+        size: [F.saddle.along, T.foot, F.saddle.across],
+        rot: yaw,
+      });
+    }
+  }
+  // The Figaro's pavilion, the tickets and the boutiques.
+  out.figaro.prisms.push(standing(F.figaro.plan, floor, floor + F.figaro.height));
+  out.tickets.prisms.push(standing(diagonalRect(F.tickets), floor, floor + F.booth));
+  for (const b of F.boutiques) out.boutique.prisms.push(standing(diagonalRect(b), floor, floor + F.booth));
+  // The round tents: a pole, a post at every corner, and a canvas facet
+  // from each side of the rim up to the apex.
+  const N = F.tents;
+  for (const [cx, cz] of N.at) {
+    // A corner on the face's normal: the axis-side direction to the centre.
+    const phase = Math.atan2(cz, cx);
+    const rim: Vec3[] = [];
+    for (let i = 0; i < N.sides; i++) {
+      const th = phase + (2 * Math.PI * i) / N.sides;
+      rim.push([cx + N.radius * Math.cos(th), floor + N.eave, cz + N.radius * Math.sin(th)]);
+    }
+    const apex: Vec3 = [cx, floor + N.apex, cz];
+    out.tent.blocks.push(post(cx, cz, N.pole, floor, floor + N.apex));
+    rim.forEach((p, i) => {
+      // The posts stand a post inside the rim, under the canvas.
+      const inX = cx + ((p[0] - cx) * (N.radius - N.post)) / N.radius;
+      const inZ = cz + ((p[2] - cz) * (N.radius - N.post)) / N.radius;
+      out.tent.blocks.push(post(inX, inZ, N.post, floor, floor + N.eave));
+      out.tent.prisms.push(facet([apex, p, rim[(i + 1) % rim.length] as Vec3], N.canvas));
+    });
+  }
+  // The queue's tent: posts at its corners and mid-sides, two slopes.
+  const Q = F.queue;
+  const [s0, s1] = [Q.s - Q.along / 2, Q.s + Q.along / 2];
+  const [t0, t1] = [Q.t - Q.across / 2, Q.t + Q.across / 2];
+  const inset = N.post / 2;
+  for (const ss of [s0 + inset, Q.s, s1 - inset]) {
+    for (const tt of [t0 + inset, t1 - inset]) {
+      const [x, z] = fromDiagonals([ss, tt]);
+      out.queue.blocks.push(post(x, z, N.post, floor, floor + N.eave));
+    }
+  }
+  const pt = (ss: number, tt: number, y: number): Vec3 => {
+    const [x, z] = fromDiagonals([ss, tt]);
+    return [x, y, z];
+  };
+  const yE = floor + N.eave;
+  const yR = floor + Q.ridge;
+  out.queue.prisms.push(
+    facet([pt(s0, t0, yE), pt(s1, t0, yE), pt(s1, Q.t, yR), pt(s0, Q.t, yR)], N.canvas),
+    facet([pt(s0, Q.t, yR), pt(s1, Q.t, yR), pt(s1, t1, yE), pt(s0, t1, yE)], N.canvas),
+  );
+  return out;
+}
+
 /** The 2nd floor's covered gallery on the +z face: posts, balustrade, roof. */
 function secondGalleryFace(): { posts: Block[]; roof: Prism[] } {
   const S = SECOND_GALLERY;
@@ -1995,10 +2516,12 @@ function terraceRail(entrance: boolean): Block[] {
   const r = EDGE - GALLERY.width - S.rail / 2;
   const y0 = FLOORS.first;
   const out: Block[] = [];
+  // Broken over the flights, its end posts on the terrace beside them.
+  const gap = ENTRANCE.outer + S.post / 2;
   const runs: ReadonlyArray<readonly [number, number]> = entrance
     ? [
-        [-T.end, -GALLERY.module / 2],
-        [GALLERY.module / 2, T.end],
+        [-T.end, -gap],
+        [gap, T.end],
       ]
     : [[-T.end, T.end]];
   for (const [lo, hi] of runs) {
@@ -2012,6 +2535,179 @@ function terraceRail(entrance: boolean): Block[] {
       out.push(post(lo + ((hi - lo) * k) / n, r, S.post, y0, y0 + S.height));
     }
   }
+  return out;
+}
+
+/** The terrace's edge, the step's face: the platform stops 2.60 inside the column axis. */
+const TERRACE_EDGE = EDGE - GALLERY.width;
+
+/**
+ * The deck cut away under the flights, in the face frame (a, r): per
+ * flight a rectangle from the newel's line to the outer string, from the
+ * back string to the terrace's edge (see `ENTRANCE`).
+ */
+function entranceNotches(): Array<readonly [number, number, number, number]> {
+  const E = ENTRANCE;
+  const [u0] = E.newel;
+  return [1, -1].map((side) => {
+    const [a0, a1] = side > 0 ? [u0, E.outer] : [-E.outer, -u0];
+    return [a0, a1, TERRACE_EDGE + E.back, TERRACE_EDGE] as const;
+  });
+}
+
+/**
+ * Face-frame deck prisms (outlines at one y, extruded up) less rectangles
+ * (a0, a1, r0, r1): each prism a rectangle overlaps is cut into the convex
+ * pieces either side of it, and behind and before it.
+ */
+function cutNotches(
+  list: readonly Prism[],
+  notches: ReadonlyArray<readonly [number, number, number, number]>,
+): Prism[] {
+  const big = 1e3;
+  let out = [...list];
+  for (const [a0, a1, r0, r1] of notches) {
+    const next: Prism[] = [];
+    for (const p of out) {
+      const y0 = (p.outline[0] as Vec3)[1];
+      const plan = p.outline.map(([a, , r]): [number, number] => [a, r]);
+      if (clipToBox(plan, a0 + 1e-9, a1 - 1e-9, r0 + 1e-9, r1 - 1e-9).length < 3) {
+        next.push(p);
+        continue;
+      }
+      for (const piece of [
+        clipToBox(plan, -big, a0, -big, big),
+        clipToBox(plan, a1, big, -big, big),
+        clipToBox(plan, a0, a1, -big, r0),
+        clipToBox(plan, a0, a1, r1, big),
+      ]) {
+        if (piece.length < 3 || Math.abs(signedArea(piece)) < 1e-6) continue;
+        next.push(standing(piece, y0, y0 + p.depth));
+      }
+    }
+    out = next;
+  }
+  return out;
+}
+
+/** Twice the signed area of a plan polygon (x, z): positive clockwise seen from above. */
+function signedArea(pts: readonly (readonly [number, number])[]): number {
+  let area = 0;
+  for (let k = 0; k < pts.length; k++) {
+    const [x0, z0] = pts[k] as readonly [number, number];
+    const [x1, z1] = pts[(k + 1) % pts.length] as readonly [number, number];
+    area += x0 * z1 - x1 * z0;
+  }
+  return area;
+}
+
+/**
+ * A convex plan outline (a, r) of the face frame — or (x, z) of the plan,
+ * the same thing on face 0 — as a prism from y0 up to y1.
+ */
+function standing(plan: readonly (readonly [number, number])[], y0: number, y1: number): Prism {
+  const pts = plan.map(([a, r]): [number, number] => [a, r]);
+  // Counter-clockwise seen from above, so it extrudes up.
+  if (signedArea(pts) > 0) pts.reverse();
+  return { outline: pts.map(([a, r]): Vec3 => [a, y0, r]), depth: y1 - y0 };
+}
+
+/**
+ * The entrance flights on the +z face's frame (see `ENTRANCE`): the
+ * treads as prisms, the landing, its girder and the balustrades as blocks.
+ */
+function entranceFace(): Record<"tread" | "post" | "rail" | "landing", Piece> {
+  const E = ENTRANCE;
+  const R = TERRACE_RAIL.spec;
+  const g = GALLERY.floor;
+  const rise = (FLOORS.first - g) / E.risers;
+  const T = TERRACE_EDGE;
+  const [nu, nv] = E.newel;
+  const top = FLOORS.first + R.height;
+  const out = parted("tread", "post", "rail", "landing");
+  // Where a ray from the newel, `deg` below the face's line, leaves the
+  // flight's square (by the outer string or the back string), as (u, v).
+  const exit = (deg: number): [number, number] => {
+    const th = (deg * Math.PI) / 180;
+    const du = Math.cos(th);
+    const dv = -Math.sin(th);
+    const toOuter = du > 1e-9 ? (E.outer - nu) / du : Number.POSITIVE_INFINITY;
+    const toBack = dv < -1e-9 ? (E.back - nv) / dv : Number.POSITIVE_INFINITY;
+    const t = Math.min(toOuter, toBack);
+    return [nu + du * t, nv + dv * t];
+  };
+  for (const side of [1, -1]) {
+    const at = (u: number, v: number): [number, number] => [side * u, T + v];
+    // The bottom steps, each reaching back to the next one's front.
+    E.bottom.forEach(([u0, u1, front], i) => {
+      const next = E.bottom[i + 1];
+      const backV = next === undefined ? nv : next[2];
+      out.tread.prisms.push(standing([at(u0, backV), at(u1, backV), at(u1, front), at(u0, front)], g, g + rise * (i + 1)));
+    });
+    // The winders, wedges about the newel between consecutive rays, each
+    // taking in the square's corner where its two rays leave by different
+    // strings.
+    for (let i = 0; i + 1 < E.rays.length; i++) {
+      const p = exit(E.rays[i] as number);
+      const q = exit(E.rays[i + 1] as number);
+      const plan: [number, number][] = [at(nu, nv), at(p[0], p[1])];
+      const pOuter = Math.abs(p[0] - E.outer) < 1e-9;
+      const qOuter = Math.abs(q[0] - E.outer) < 1e-9;
+      if (pOuter && !qOuter) plan.push(at(E.outer, E.back));
+      plan.push(at(q[0], q[1]));
+      out.tread.prisms.push(standing(plan, g, g + rise * (E.bottom.length + i + 1)));
+    }
+    // The newel, and the post at the outer string's front corner.
+    out.post.blocks.push(post(side * nu, T + nv, E.newelPost, g, top + E.newelProud));
+    const frontTop = g + rise * E.bottom.length + R.height;
+    out.post.blocks.push(post(side * E.outer, T + nv, R.post, g, frontTop));
+    // The handrail raking up the outer string from that post to the
+    // terrace balustrade's end post, the rail's height over the first
+    // winder where it meets it; a hair short of both posts, whose faces
+    // its square-cut ends would otherwise cross.
+    const endPost = T - R.rail / 2;
+    const meet = g + rise * (E.bottom.length + 1) + R.height;
+    const hair = 0.02;
+    out.rail.blocks.push(
+      member(
+        [side * E.outer, frontTop - R.cap / 2, T + nv - R.post / 2 - hair],
+        [side * E.outer, meet - R.cap / 2, T + hair],
+        R.cap,
+      ),
+    );
+    // Level on the terrace, beside the outer string and behind the back
+    // string, to the newel's line.
+    const la = side * (E.outer + R.post / 2);
+    const lr = T + E.back - R.post / 2;
+    const y0 = FLOORS.first;
+    for (const [lo, hi] of [
+      [y0, y0 + R.plinth],
+      [y0 + TERRACE_RAIL.mid, y0 + TERRACE_RAIL.mid + R.cap],
+      [top - R.cap, top],
+    ] as const) {
+      out.rail.blocks.push(span(la - R.rail / 2, la + R.rail / 2, lo, hi, lr + R.rail / 2, endPost - R.post / 2));
+      const [b0, b1] = side > 0 ? [nu, E.outer + R.post] : [-E.outer - R.post, -nu];
+      out.rail.blocks.push(span(b0, b1, lo, hi, lr - R.rail / 2, lr + R.rail / 2));
+    }
+    out.rail.blocks.push(post(la, lr, R.post, y0, top), post((side * (nu + E.outer)) / 2, lr, R.post, y0, top));
+  }
+  // The landing between the newels, its front over the gallery, on its own
+  // girder; and its balustrade.
+  const edge = T + E.landing;
+  const half = nu - E.newelPost / 2;
+  out.landing.blocks.push(
+    span(-half, half, FLOORS.first - DECK, FLOORS.first, T, edge),
+    span(-half, half, g, FLOORS.first - DECK, edge - STEP.thickness, edge),
+  );
+  const rr = edge - R.rail / 2;
+  const y0 = FLOORS.first;
+  out.rail.blocks.push(
+    onLine(-half, half, y0, y0 + R.plinth, rr, R.rail),
+    onLine(-half, half, y0 + TERRACE_RAIL.mid, y0 + TERRACE_RAIL.mid + R.cap, rr, R.rail),
+    onLine(-half, half, top - R.cap, top, rr, R.rail),
+  );
+  const n = Math.round((2 * half) / TERRACE_RAIL.pitch);
+  for (let k = 1; k < n; k++) out.rail.blocks.push(post(-half + (2 * half * k) / n, rr, R.post, y0, top));
   return out;
 }
 
@@ -2437,6 +3133,28 @@ function secondSkirtRelief(): Piece {
 }
 
 /**
+ * The fit-out that has no plate of its own to be read against — the inner
+ * arcade, the entrance flights and the 2nd platform's 1889 massing — as
+ * world solids, by piece, the same lists `buildPlatforms` cooks: every box
+ * as its prism (`blockPrism`), each an outline extruded `depth` along its
+ * own normal. For inspection: the graph never reads it.
+ */
+export function fitOutSolids(): Record<string, { outline: readonly Vec3[]; depth: number }[]> {
+  const out: Record<string, Prism[]> = {};
+  const add = (prefix: string, part: Parted, faces: readonly number[] | null) => {
+    for (const [name, piece] of Object.entries(part)) {
+      const list = faces === null ? piece.prisms : allFacesPrisms(piece.prisms, faces);
+      const boxes = faces === null ? piece.blocks : allFaces(piece.blocks, faces);
+      out[`${prefix}.${name}`] = [...list, ...boxes.map(blockPrism)];
+    }
+  };
+  add("inner", innerArcadeFace(), [0, 1, 2, 3]);
+  add("entrance", entranceFace(), TERRACE_RAIL.entrance);
+  add("second", secondFitOut(), null);
+  return out;
+}
+
+/**
  * Build the platforms, their 1889 fit-out and the pedestals. `quads` are
  * the four quadrant targets.
  */
@@ -2453,6 +3171,14 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
     terrace - STEP.thickness,
     terrace,
   );
+  // On the Français and the Russe the step is cut where the flights come
+  // up through it (see `ENTRANCE`).
+  const [newel] = ENTRANCE.newel;
+  const stepCut = [
+    span(-terrace, -ENTRANCE.outer, GALLERY.floor, FLOORS.first - DECK, terrace - STEP.thickness, terrace),
+    span(-newel, newel, GALLERY.floor, FLOORS.first - DECK, terrace - STEP.thickness, terrace),
+    span(ENTRANCE.outer, terrace - STEP.thickness, GALLERY.floor, FLOORS.first - DECK, terrace - STEP.thickness, terrace),
+  ];
 
   // The masonry class carries no normals: the page computes them.
   const pedestal = prisms(g, "pedestal", pedestalFaces(), false);
@@ -2500,7 +3226,6 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
       ...pavilion.walls,
       ...galleryRail,
       ...voidRail,
-      step,
       ...ornament.blocks,
       ...crossGirders(),
       ...balconyFace(),
@@ -2511,9 +3236,25 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
     ]).concat(
       allFaces(terraceRail(true), TERRACE_RAIL.entrance),
       allFaces(terraceRail(false), TERRACE_RAIL.closed),
+      allFaces(stepCut, TERRACE_RAIL.entrance),
+      allFaces([step], TERRACE_RAIL.closed),
       landingBlocks(),
     ),
   );
+  // The inner arcade, all round; the entrance flights, on the Français and
+  // the Russe; and the 2nd platform's 1889 massing, whole.
+  const inner = merged(innerArcadeFace());
+  const flights = merged(entranceFace());
+  const secondFit = merged(secondFitOut());
+  const fitInner = [
+    blocks(g, "innerArcade", allFaces(inner.blocks)),
+    prisms(g, "innerArcadeCurved", allFacesPrisms(inner.prisms)),
+  ];
+  const fitFlights = [
+    blocks(g, "entranceRails", allFaces(flights.blocks, TERRACE_RAIL.entrance)),
+    prisms(g, "entranceFlights", allFacesPrisms(flights.prisms, TERRACE_RAIL.entrance)),
+  ];
+  const fitSecond = [blocks(g, "secondFitOut", secondFit.blocks), prisms(g, "secondFitOutCurved", secondFit.prisms)];
   // The ground stair arrives in piles 4 and 2: quadrant targets 0 and 2.
   const arrivals = [
     ...[0, 2].map((k) => turnWell(STAIR_OPENINGS.ground, k)),
@@ -2521,7 +3262,13 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
     ...[0, 1, 2, 3].flatMap((k) => LIFT_OPENINGS.first.map((w) => turnWell(w, k))),
   ];
   const fitPrisms = prisms(g, "fitOutCurved", [
-    ...cutWells(allFacesPrisms(firstDeck()), arrivals),
+    ...cutWells(
+      [
+        ...allFacesPrisms(firstDeck(), TERRACE_RAIL.closed),
+        ...allFacesPrisms(cutNotches(firstDeck(), entranceNotches()), TERRACE_RAIL.entrance),
+      ],
+      arrivals,
+    ),
     ...secondDeck(),
     ...allFacesPrisms([
       ...pavilion.vaults,
@@ -2537,7 +3284,7 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
   ]);
 
   return {
-    platforms: [fitBlocks, fitPrisms],
+    platforms: [fitBlocks, fitPrisms, ...fitInner, ...fitFlights, ...fitSecond],
     names: [copyToQuadrants(g, "names", namesBand(g), quads)],
     masonry: [copyToQuadrants(g, "pedestals", pedestal, quads)],
   };
