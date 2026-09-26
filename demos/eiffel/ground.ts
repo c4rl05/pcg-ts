@@ -1,6 +1,7 @@
 /**
- * THE GROUND AND WHAT IS UNDER IT: the machine room in pile 3's basement,
- * its flue and chimney (SOURCES.md §31).
+ * THE GROUND AND WHAT IS UNDER IT (SOURCES.md §31): the machine room in
+ * pile 3's basement, its flue and chimney; the uprights' supports, their
+ * stones, shoes and anchors (`SUPPORT`, §31.3).
  *
  * THE DATUM. The model's ground is one flat plane at the tower centre's
  * « Sol au centre de la Tour (33.50) », y 0 [sourced PL-I]. The Champ de
@@ -29,14 +30,20 @@
  * round brick chimney « à droite de la pile 4 », 17.23 m over its footing
  * [sourced p. 202, PL-IV Fig. 15; route measured PL-III Fig. 2].
  *
+ * THE SUPPORTS stand under the model's uprights, which run down to the
+ * sommiers' centre, so they sit 1.10 down each upright's axis from their
+ * printed cotes (`SUPPORT.stack`); the machine room and the flue are at
+ * theirs.
+ *
  * Everything is built in world coordinates (pile 3 is the +x −z leg,
- * `PILES` in spec.ts), as one set of convex prisms per class.
+ * `PILES` in spec.ts), as convex prisms, one mesh per class.
  */
 import type { Graph, NodeHandle } from "pcg-ts";
 import { attribute, extrudePolygon, mergePrimitives, pointGrid, pointsToPath, setAttribute, vec } from "pcg-ts";
 import { type Vec3, indexTable } from "./lattice.js";
 import type { Parts } from "./parts.js";
-import { yOfCote } from "./spec.js";
+import { LEG_UPRIGHTS, type UprightName, segmentAxis } from "./builtup.js";
+import { NODES, PILES, yOfCote } from "./spec.js";
 
 // ---------------------------------------------------------------------------
 // Vectors and solids
@@ -408,12 +415,21 @@ export const PLANT = {
    */
   lowFloor: [
     { x: [41.7, 57.4] as const, z: [-44.8, -37.1] as const },
-    { x: [57.4, 60.2] as const, z: [-41.3, -38.1] as const },
+    { x: [57.4, 60.2] as const, z: [-40.4, -38.1] as const },
   ],
-  /** « Soute à charbon (30.00) » in the W corner [sourced p. 202; measured x 57.4-60.7, z −41.3 to −38.1, taken to the wall's 1.50 at 60.2]; the heap 1.20 high [estimated]. */
-  coal: { x: [57.4, 60.2] as const, z: [-41.3, -38.1] as const, heap: 1.2 },
-  /** Decauville track from the store to the boiler fronts along z −42.7, 0.60 gauge [sourced track p. 202; route and gauge estimated]. */
-  track: { z: -42.7, x: [46.2, 57.7] as const, gauge: 0.6 },
+  /**
+   * « Soute à charbon (30.00) » in the W corner [sourced p. 202; measured
+   * x 57.4-60.7, z −41.3 to −38.1], taken to the wall's 1.50 at 60.2 and
+   * off the corner of the massif beside it at −40.4; the heap 1.20 high
+   * [estimated].
+   */
+  coal: { x: [57.4, 60.2] as const, z: [-40.4, -38.1] as const, heap: 1.2 },
+  /**
+   * Decauville track from the store to the boiler fronts along z −42.7,
+   * 0.60 gauge [sourced track p. 202; route and gauge estimated], between
+   * the two massifs whose front faces stand either end of it.
+   */
+  track: { z: -42.7, x: [47.6, 56.0] as const, gauge: 0.6 },
   /**
    * The two Quillacq pump-engines (Wheelock engine and Girard pump in
    * tandem, p. 199-200), axes along the pile's diagonal: E1 from its pump
@@ -792,23 +808,333 @@ function chimney(): { above: Prism[]; below: Prism[] } {
 }
 
 // ---------------------------------------------------------------------------
+// The supports: the stones, the shoes, the anchors (PL-VI, PL-IV Figs 7-8)
+
+/**
+ * Each upright's support (« appui ») [sourced E1900-TXT pp. 87, 94-95,
+ * 101-102; PL-VI Figs 1, 7-19; PL-IV Figs 7-8], stacked along the
+ * upright's axis T and laid out square to it, in the lean line U (out
+ * along the tower's diagonal, the bolts' line) and across it, E:
+ *
+ * - two courses of Château-Landon stone (« pierres d'appui »), each 0.50
+ *   thick [sourced PL-IV Figs 7-8, PL-VI Fig. 1 « 0,50 » twice, and p. 87
+ *   on its image, « 0,50 m », where the OCR reads 0,30; 9.88 m³ against the
+ *   printed « 9,845 m³ »], both irregular octagons square to the axis,
+ *   not the text's « hexagonales » [sourced PL-IV Fig. 8]: the lower 4.10
+ *   along U × 4.00 across, its faces square to U 0.97 long and along it
+ *   1.63; the upper 3.00 × 3.15, 0.75 and 1.036 [sourced PL-IV Fig. 8],
+ *   the oblique faces joining them [derived]. The upper's top centre is
+ *   the « Centre des sommiers » [sourced PL-XXXI; PL-IV Fig. 7's massif
+ *   plus 1.00 of stone closes on 36.00, derived];
+ * - the cast-iron « sabot inférieur » B, 5,782 kg: 1.800 square across its
+ *   flats with its corners rounded (the diagonals « 2,150 », « 2,160 »
+ *   give r 0.47), 0.915 high, square to the axis, its sides square to the
+ *   tower's faces seen along the axis and its bolt diagonal on U [sourced
+ *   PL-VI Figs 1, 7-10, p. 102]; built as a 0.20 base flange at the full
+ *   square and a body 1.50 across [estimated, from Fig. 1's section]. Its
+ *   pocket (« vide pour le passage du vérin », 0.783) and the jack's
+ *   0.650 × 0.485 opening are inside it and not drawn;
+ * - the iron shims, 0.050 [sourced « en supposant des cales de 50 mm »],
+ *   1.10 across [estimated];
+ * - the cast-steel « contre-sabot » A, 2,551 kg: its ledge, 0.125 and a
+ *   0.010 step, a rounded rhombus 1.200 along U × 1.375 across [sourced
+ *   PL-VI Fig. 12], drawn 1.5 % larger so the built-up box's end, fins and
+ *   all, lies wholly on it (the fins' outer corners overhang the printed
+ *   rhombus by 4-5 mm) [estimated]; its spigot into B and its head inside
+ *   the upright's end are hidden and not drawn.
+ *
+ * So the upright's dressed end stands « 1,100 » up the axis from the
+ * stone's top centre [sourced PL-VI Fig. 8's chain, 200 + 715 + 50 + 125 +
+ * 10]. THE MODEL'S UPRIGHTS run down to
+ * the sommiers' centre itself — PL-XXXI's line, the supports' node at y
+ * 2.50 — where the iron really ended 1.10 higher, at about 36.90. The
+ * stack is built under the model's upright, so its end and the ledge meet
+ * exactly: everything under the upright stands 1.10 down its axis (0.90
+ * lower, 0.64 further out) from the plates' cotes [derived; SOURCES.md
+ * §31.3]. One offset, `SUPPORT.stack`, carries it.
+ *
+ * - THE ANCHORS: two bolts an upright, 32 in all [sourced p. 87, p. 97
+ *   « Pose des tirants 8 » a pile], Ø 0.10, 7.80 long, parallel to the
+ *   axis on U « 1,47 » apart [sourced PL-VI « 0,599 » in plan, PL-IV],
+ *   through holes at B's corners, anchored 6.20 down the axis at
+ *   « (30,947) » under cast-iron shoes 0.625 × 0.35 × 0.30 on a pair of
+ *   double-T bars « Longueur 3m00 » [sourced PL-VI Fig. 1, p. 97], each in
+ *   a cast-iron sleeve of bore 0.20 [sourced « Tuyau en fonte »], drawn
+ *   0.30 outside. Their tops, 1.60 up the axis from the stone (6.20 +
+ *   1.60 = 7.80), through the forged stirrup's seat, the « sabot
+ *   supérieur » 0.10 high and a nut 0.20 × 0.22 across its flats, the rod
+ *   0.16 over it and 0.46 over the stirrup, where PL-VI Figs 1 and 13 draw
+ *   0.50-0.56 [sourced Figs 13-16; the 7.80 governs]; the stirrup's V, the
+ *   « Gousset de 500 × 8 » it is riveted to on the upright and the lower
+ *   nuts are not drawn [estimated: the seat alone, 0.34 × 0.30 × 0.02].
+ * - THE JACKS: two of 800 t for sixteen supports, slid in « par une
+ *   ouverture », their pump « sur un chariot pour la rendre transportable »
+ *   [sourced p. 102], the load settled at last on the shims (« régler
+ *   définitivement les cales », p. 117): none stood in a pocket once the
+ *   tower was up [derived], and none is built.
+ */
+export const SUPPORT = {
+  /** From the upper stone's top centre to the upright's end, along its axis. */
+  stack: 1.1,
+  stones: {
+    lower: { u: 4.1, e: 4.0, uFace: 0.97, eFace: 1.63, t: 0.5 },
+    upper: { u: 3.0, e: 3.15, uFace: 0.75, eFace: 1.036, t: 0.5 },
+  },
+  sabot: { flats: 1.8, radius: 0.47, high: 0.915, flange: 0.2, body: 1.5, bodyRadius: 0.32 },
+  shims: { t: 0.05, flats: 1.1, radius: 0.15 },
+  ledge: { t: 0.135, u: 1.2 * 1.015, e: 1.375 * 1.015, round: 0.1 },
+  bolts: { apart: 1.47, d: 0.1, down: 6.2, up: 1.6, sleeve: 0.3 },
+  anchor: { shoe: { u: 0.35, e: 0.625, t: 0.3 }, bar: { length: 3.0, deep: 0.2, apart: 0.24 } },
+  seat: { u: 0.34, e: 0.3, t: 0.02 },
+  /** The « sabot supérieur » under the nut. */
+  washer: { d: 0.22, t: 0.1 },
+  nut: { flats: 0.22, t: 0.2 },
+} as const;
+
+/** A support's frame: the upright's foot (where its end meets the stack), its axis and the lean line and across. */
+export interface SupportFrame {
+  readonly pile: 1 | 2 | 3 | 4;
+  readonly upright: UprightName;
+  /** The upright's axis at the supports' node, y 2.50: its end's centre. */
+  readonly foot: Vec3;
+  readonly T: Vec3;
+  readonly U: Vec3;
+  readonly E: Vec3;
+  /** The upper stone's top centre, `SUPPORT.stack` down the axis. */
+  readonly seat: Vec3;
+}
+
+/** Turn a +x +z leg's vector onto quadrant target k (k quarter turns about +y, +z onto +x). */
+export function onQuadrant(k: number, p: Vec3): Vec3 {
+  if (k === 0) return p;
+  if (k === 1) return [p[2], p[1], -p[0]];
+  if (k === 2) return [-p[0], p[1], -p[2]];
+  return [-p[2], p[1], p[0]];
+}
+
+const squareTo3 = (v: Vec3, t: Vec3): Vec3 => sub3(v, mul3(t, dot3(v, t)));
+
+/** The sixteen supports' frames, pile by pile (PILES' order), c b a d in each. */
+export function supportFrames(): SupportFrame[] {
+  const out: SupportFrame[] = [];
+  const d = unit3([1, 0, 1]);
+  for (const pile of PILES) {
+    for (const [name, xs, zs] of LEG_UPRIGHTS) {
+      const s = NODES[0]!;
+      const T0 = segmentAxis(name, 0).T;
+      const U0 = unit3(squareTo3(d, T0));
+      const E0 = unit3(cross3(T0, U0));
+      const foot0: Vec3 = [s[xs], s.y, s[zs]];
+      const k = pile.quadrant;
+      const foot = onQuadrant(k, foot0);
+      const T = onQuadrant(k, T0);
+      out.push({
+        pile: pile.n,
+        upright: name,
+        foot,
+        T,
+        U: onQuadrant(k, U0),
+        E: onQuadrant(k, E0),
+        seat: sub3(foot, mul3(T, SUPPORT.stack)),
+      });
+    }
+  }
+  return out;
+}
+
+/** A point of a support's frame: u along the lean line, e across, t up the axis, from its seat. */
+const at = (f: SupportFrame, u: number, e: number, t: number): Vec3 =>
+  add3(f.seat, add3(mul3(f.U, u), add3(mul3(f.E, e), mul3(f.T, t))));
+
+/** An outline in a support's frame (u, e pairs) at t, extruded `depth` up the axis. */
+function slab(f: SupportFrame, ring: ReadonlyArray<readonly [number, number]>, t: number, depth: number): Prism {
+  return { outline: towards(ring.map(([u, e]) => at(f, u, e, t)), f.T), depth };
+}
+
+/** A square `flats` across with its corners rounded to r, its sides at 45 degrees to U and E, as (u, e). */
+function roundedDiamond(flats: number, r: number, per = 4): Array<readonly [number, number]> {
+  const h = flats / 2;
+  const out: Array<readonly [number, number]> = [];
+  // In the square's own axes (a, b) = ((u + e), (u − e)) / √2, then turned back.
+  for (const [ca, cb, a0] of [
+    [1, 1, 0],
+    [-1, 1, 90],
+    [-1, -1, 180],
+    [1, -1, 270],
+  ] as const) {
+    const cx = ca * (h - r);
+    const cy = cb * (h - r);
+    for (let k = 0; k <= per; k++) {
+      const ang = ((a0 + (90 * k) / per) * Math.PI) / 180;
+      const a = cx + r * Math.cos(ang);
+      const b = cy + r * Math.sin(ang);
+      out.push([(a + b) / Math.SQRT2, (a - b) / Math.SQRT2]);
+    }
+  }
+  return out;
+}
+
+/**
+ * A rhombus whose diagonals, measured over its blunted tips, are `du`
+ * along U and `de` across: each vertex cut back `c` along its edges, the
+ * vertices set out so the cuts land on the printed diagonals.
+ */
+function cutRhombus(du: number, de: number, c: number): Array<readonly [number, number]> {
+  const edge = Math.hypot(du / 2, de / 2);
+  const [pu, pe] = [du / 2 + (c * (du / 2)) / edge, de / 2 + (c * (de / 2)) / edge];
+  const v: Array<readonly [number, number]> = [
+    [pu, 0],
+    [0, pe],
+    [-pu, 0],
+    [0, -pe],
+  ];
+  const out: Array<readonly [number, number]> = [];
+  for (let i = 0; i < 4; i++) {
+    const p = v[i]!;
+    const prev = v[(i + 3) % 4]!;
+    const next = v[(i + 1) % 4]!;
+    const toward = (q: readonly [number, number]): readonly [number, number] => {
+      const l = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      return [p[0] + ((q[0] - p[0]) * c) / l, p[1] + ((q[1] - p[1]) * c) / l];
+    };
+    out.push(toward(prev), toward(next));
+  }
+  return out;
+}
+
+/** A stone course's octagon (`SUPPORT.stones`), as (u, e). */
+function stoneOctagon(s: { u: number; e: number; uFace: number; eFace: number }): Array<readonly [number, number]> {
+  const [U, E, a, b] = [s.u / 2, s.e / 2, s.uFace / 2, s.eFace / 2];
+  return [
+    [U, -a],
+    [U, a],
+    [b, E],
+    [-b, E],
+    [-U, a],
+    [-U, -a],
+    [-b, -E],
+    [b, -E],
+  ];
+}
+
+/** A regular n-gon about (u, e), as (u, e). */
+function ngon(u: number, e: number, flats: number, n: number): Array<readonly [number, number]> {
+  const r = flats / 2 / Math.cos(Math.PI / n);
+  return Array.from({ length: n }, (_, i): readonly [number, number] => {
+    const a = ((i + 0.5) * 2 * Math.PI) / n;
+    return [u + r * Math.cos(a), e + r * Math.sin(a)];
+  });
+}
+
+/** One support's pieces, by class: the iron over the stone, the stones, and what is buried. */
+export function supportPieces(f: SupportFrame): { iron: Prism[]; stone: Prism[]; buried: Prism[] } {
+  const S = SUPPORT;
+  const iron: Prism[] = [];
+  const stone: Prism[] = [];
+  const buried: Prism[] = [];
+  // The stones, upper on lower, under the seat.
+  const { lower, upper } = S.stones;
+  stone.push(slab(f, stoneOctagon(upper), -upper.t, upper.t));
+  stone.push(slab(f, stoneOctagon(lower), -upper.t - lower.t, lower.t));
+  // B: flange and body; the shims; A's ledge up to the upright's end.
+  const B = S.sabot;
+  iron.push(slab(f, roundedDiamond(B.flats, B.radius), 0, B.flange));
+  iron.push(slab(f, roundedDiamond(B.body, B.bodyRadius), B.flange, B.high - B.flange));
+  iron.push(slab(f, roundedDiamond(S.shims.flats, S.shims.radius), B.high, S.shims.t));
+  iron.push(slab(f, cutRhombus(S.ledge.u, S.ledge.e, S.ledge.round), S.stack - S.ledge.t, S.ledge.t));
+  // The bolts: buried from the anchorage to the stone, iron above it.
+  const bolt = S.bolts;
+  for (const side of [-1, 1]) {
+    const u = (side * bolt.apart) / 2;
+    const down = -bolt.down;
+    buried.push(cylinder(at(f, u, 0, down), at(f, u, 0, 0), bolt.d, 12));
+    buried.push(cylinder(at(f, u, 0, down + S.anchor.shoe.t), at(f, u, 0, -upper.t - lower.t), bolt.sleeve, 12));
+    iron.push(cylinder(at(f, u, 0, 0), at(f, u, 0, bolt.up), bolt.d, 12));
+    // The anchorage: its shoe on the bars.
+    const sh = S.anchor.shoe;
+    buried.push(
+      slab(
+        f,
+        [
+          [u - sh.u / 2, -sh.e / 2],
+          [u + sh.u / 2, -sh.e / 2],
+          [u + sh.u / 2, sh.e / 2],
+          [u - sh.u / 2, sh.e / 2],
+        ],
+        down,
+        sh.t,
+      ),
+    );
+    // The top: the stirrup's seat, the « sabot supérieur » and the nut, over the upright's end.
+    const top = S.stack + 0.02;
+    iron.push(
+      slab(
+        f,
+        [
+          [u - S.seat.u / 2, -S.seat.e / 2],
+          [u + S.seat.u / 2, -S.seat.e / 2],
+          [u + S.seat.u / 2, S.seat.e / 2],
+          [u - S.seat.u / 2, S.seat.e / 2],
+        ],
+        top,
+        S.seat.t,
+      ),
+    );
+    iron.push(slab(f, ngon(u, 0, S.washer.d, 12), top + S.seat.t, S.washer.t));
+    iron.push(slab(f, ngon(u, 0, S.nut.flats, 6), top + S.seat.t + S.washer.t, S.nut.t));
+  }
+  // The bars under both shoes, along U, side by side across.
+  const bar = S.anchor.bar;
+  for (const k of [-1, 1]) {
+    const e = (k * bar.apart) / 2;
+    const w = (bar.apart - 0.04) / 2;
+    buried.push(
+      slab(
+        f,
+        [
+          [-bar.length / 2, e - w / 2],
+          [bar.length / 2, e - w / 2],
+          [bar.length / 2, e + w / 2],
+          [-bar.length / 2, e + w / 2],
+        ],
+        -S.bolts.down - bar.deep,
+        bar.deep,
+      ),
+    );
+  }
+  return { iron, stone, buried };
+}
+
+// ---------------------------------------------------------------------------
 // The build
 
 /** Everything this module builds, as prism lists by class. */
-export function groundPrisms(): { foundations: Prism[]; machinery: Prism[] } {
-  const ch = chimney();
+export function groundPrisms(): { foundations: Prism[]; machinery: Prism[]; masonry: Prism[] } {
+  const room = machineRoomPrisms();
+  const supports = supportFrames().map(supportPieces);
   return {
-    foundations: [...roomMasonry(), ...flue()].map(blockPrism).concat(ch.below, ch.above),
-    machinery: roomPlant(),
+    foundations: [...room.foundations, ...supports.flatMap((s) => s.buried)],
+    machinery: [...room.plant, ...supports.flatMap((s) => s.iron)],
+    masonry: supports.flatMap((s) => s.stone),
   };
 }
 
-/** Build the ground's parts: the machine room, the flue and the chimney. */
+/** The machine room, its flue and its chimney: their masonry and their plant. */
+export function machineRoomPrisms(): { foundations: Prism[]; plant: Prism[] } {
+  const ch = chimney();
+  return {
+    foundations: [...roomMasonry(), ...flue()].map(blockPrism).concat(ch.below, ch.above),
+    plant: roomPlant(),
+  };
+}
+
+/** Build the ground's parts: the machine room, the flue, the chimney and the supports. */
 export function buildGround(g: Graph): Parts {
   const p = groundPrisms();
   return {
     foundations: [prisms(g, "groundFoundations", p.foundations)],
-    machinery: [prisms(g, "groundPlant", p.machinery)],
+    machinery: [prisms(g, "groundIron", p.machinery)],
+    masonry: [prisms(g, "groundStones", p.masonry)],
   };
 }
 

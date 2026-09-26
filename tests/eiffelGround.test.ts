@@ -16,13 +16,13 @@
  */
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Geometry } from "pcg-ts";
-import { CAP, CHIMNEY, FLUE, PLANT, ROOM, groundPrisms } from "../demos/eiffel/ground.js";
+import { CAP, CHIMNEY, FLUE, PLANT, ROOM, machineRoomPrisms } from "../demos/eiffel/ground.js";
 import type { PartClass } from "../demos/eiffel/parts.js";
 import { yOfCote } from "../demos/eiffel/spec.js";
 import { type Solid, type Vec3, cookWithoutGround, inside, prismSamples, solidOf, surfaceSamples } from "./support/eiffelGround.js";
 
-const P = groundPrisms();
-const plant: Solid[] = P.machinery.map(solidOf);
+const P = machineRoomPrisms();
+const plant: Solid[] = P.plant.map(solidOf);
 const masonry: Solid[] = P.foundations.map(solidOf);
 
 describe("eiffel ground: the machine room under pile 3", () => {
@@ -62,14 +62,14 @@ describe("eiffel ground: the machine room under pile 3", () => {
   it("keeps the plant out of its own walls and floors", () => {
     // A machine may stand ON a floor (its face on the slab's top) but not in
     // it: every machine's surface, sampled along all its edges.
-    const samples = P.machinery.flatMap((p) => prismSamples(p));
+    const samples = P.plant.flatMap((p) => prismSamples(p));
     const hits = inside(masonry, samples, 0.005);
     expect(hits.slice(0, 10).map((h) => `${h.at.map((v) => v.toFixed(2)).join(",")} in ${h.solid}`)).toEqual([]);
     // Control: the second engine's flywheel moved back to where the plate
     // measures it runs into the chaufferie's parting wall and floor.
     const E = PLANT.engines[1]!;
     const back: Vec3 = [40.7 - E.wheel[0], 0, -46.3 - E.wheel[1]];
-    const wheel = P.machinery.filter((p) => {
+    const wheel = P.plant.filter((p) => {
       const s = solidOf(p);
       return Math.abs((s.min[0] + s.max[0]) / 2 - E.wheel[0]) < 0.3 && Math.abs((s.min[2] + s.max[2]) / 2 - E.wheel[1]) < 0.3 && s.max[1] - s.min[1] > 3;
     });
@@ -102,7 +102,7 @@ describe("eiffel ground: the machine room under pile 3", () => {
       expect(report.slice(0, 20)).toEqual([]);
       // Control, through the same census: a Worthington pump moved onto the
       // Otis girders' feet is caught.
-      const pump = P.machinery.map(solidOf).filter((s) => Math.abs((s.min[0] + s.max[0]) / 2 - 56.8) < 0.2 && Math.abs((s.min[2] + s.max[2]) / 2 + 50.8) < 0.2);
+      const pump = P.plant.map(solidOf).filter((s) => Math.abs((s.min[0] + s.max[0]) / 2 - 56.8) < 0.2 && Math.abs((s.min[2] + s.max[2]) / 2 + 50.8) < 0.2);
       expect(pump.length).toBeGreaterThan(0);
       const shift = (s: Solid, d: Vec3): Solid => ({
         planes: s.planes.map(({ n, c }) => ({ n, c: c - (n[0] * d[0] + n[1] * d[1] + n[2] * d[2]) })),

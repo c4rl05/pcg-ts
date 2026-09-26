@@ -4728,9 +4728,11 @@ function skirtOrnament(): Piece {
  * stair's start) rise out of the skirt without passing through masonry,
  * as PL-VII draws the ties inside it; and the arch's pier stands in front
  * of the inner faces, touching them only at the ground (38.17, the pier
- * base's back face) [derived].
+ * base's back face) [derived]. The shell is 0.20: the cast facing was
+ * about 0.15 [sourced p. 95], and a thicker skirt reaches the supports'
+ * stones inside it (`SUPPORT` in ground.ts).
  */
-const PEDESTAL_SKIRT = { shell: 0.4, margin: 0.03, coping: 0.05, lean: 1.33 } as const;
+const PEDESTAL_SKIRT = { shell: 0.2, margin: 0.03, coping: 0.05, lean: 1.33 } as const;
 
 /** Wound so a planar outline's normal (Newell's) points along `into`: it then extrudes that way. */
 function towards(outline: readonly Vec3[], into: Vec3): Vec3[] {
