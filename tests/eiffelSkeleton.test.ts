@@ -2025,8 +2025,8 @@ describe("eiffel skeleton", () => {
         if (seen > CROSS.thick) seenThrough.push(p.c.label ?? "");
       }
     }
-    // WHERE IT HOLDS — every X crossing in the tower and every post landing
-    // clear of a turn, 816 of the 888 plates — the tightest clearance
+    // WHERE IT HOLDS â€” every X crossing in the tower and every post landing
+    // clear of a turn, 816 of the 888 plates â€” the tightest clearance
     // anywhere is 1.57 mm.
     expect(behind.length + through.length).toBeGreaterThan(0);
     expect(clean, "the tightest clean clearance").toBeGreaterThan(0.0015);
@@ -2050,12 +2050,12 @@ describe("eiffel skeleton", () => {
     // BUT MOST OF THAT IS INSIDE AN ANGLE ALREADY. The lacing runs from
     // chord axis to chord axis, so its ends are inside the corner angles'
     // 90 mm by construction, and so is every point the raw count blames on
-    // XXI and XX — the blow-out included: the 8 plates "through" at XXI are
+    // XXI and XX â€” the blow-out included: the 8 plates "through" at XXI are
     // lacing 2.6 mm under the post's OWN angle's outer face, which no plate
     // lets through because the angle encloses it. Discounting what an angle
     // already encloses, 20 plates remain, all at XXII, each with the
     // lacing inside the plate's own 10 mm (6.17 mm at worst, 3.8 short of
-    // its front face) — so nothing shows through any plate in the tower.
+    // its front face) â€” so nothing shows through any plate in the tower.
     // A plate PLANE cannot take these 16 out either: solved per plate
     // against the cooked steel and lacing, the best flat plane at XXII
     // still leaves the lacing within 0.57 mm of needing a proud plate, i.e.

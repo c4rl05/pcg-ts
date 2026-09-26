@@ -134,17 +134,29 @@ import {
   type Field,
   type Graph,
   type NodeHandle,
+  abs,
+  add,
   attribute,
   component,
+  div,
+  dot,
   extrudePolygon,
   ge,
+  gt,
   index,
+  lt,
+  max,
   mul,
   pointGrid,
   pointsToPath,
   position,
+  ramp,
   removeAttribute,
+  select,
   setAttribute,
+  sign,
+  sqrt,
+  sub,
   vec,
 } from "pcg-ts";
 import {
@@ -184,7 +196,7 @@ import {
   signedArea,
 } from "./ironwork.js";
 import { CROSS_PLATE, type Detail, type Parts } from "./parts.js";
-import { ARCH, FIRST_FLOOR, MEMBERS, PEDESTAL, node, profileAt, tableAt } from "./spec.js";
+import { ARCH, FIRST_FLOOR, NODES, PEDESTAL, UPRIGHT_BOX, node, profileAt, tableAt } from "./spec.js";
 import {
   UPRIGHT_SEAMS,
   faceSkin,
@@ -402,13 +414,45 @@ const N11 = normalOf(slopeOf("XVIII", "XVII"));
 /** The arch centre's height (6.87) [derived]. */
 const CENTRE_Y = ARCH.crownY - R_IN * COS;
 /**
- * b's inner face, horizontally from its axis across the face: the 0.41
- * half-width is square to the member [sourced PL-XXXI], which leans along
- * the leg's diagonal (slope SLOPE in both x and z), so its box face lies
- * 0.41 / sqrt(1 - SLOPE^2 / (1 + 2 SLOPE^2)) = 0.4495 out [derived].
+ * THE UPRIGHTS THIS FLOOR MEETS: b and d in the face plane, a in the plane
+ * 15.00 inboard. Each is a constant 0.877 square IN PLAN from the supports
+ * to XVII, its webs in the tower's face planes [sourced PL-XXXI text;
+ * spec.ts `UPRIGHT_BOX`, laid out by builtup.ts; SOURCES.md §27]. So on a
+ * face the web toward the opening is the plane x = inner(y) - 0.4385 at
+ * every height, and b's inner face lies the plan half itself out from its
+ * axis across the face [derived] — not the 0.4495 this read before, which
+ * was the old swept skin's 0.41 carried across the face.
+ *
+ * THAT WEB IS NOT SQUARE TO THE FACE PLANE. It holds z and leans in y with
+ * the leg's side face, so the two meet at the box's lozenge angle, 78.36°
+ * (PL-XI Fig. 11 prints 78°21'44") [derived], and 0.30 out of the face
+ * plane along its normal the web stands 0.068 nearer the arch across the
+ * face on the outward side and 0.068 farther on the inward one [derived:
+ * 0.30 SLOPE SIN]. A member's end cut square to its axis cannot lie on it:
+ * `landAt` runs each landing end on until all four corners reach the web,
+ * and `toTheWeb` then brings every corner past it back onto it, cut as the
+ * web cuts it.
+ *
+ * HOW THE ARCH MEETS b, as PL-XI draws it ("Attache de l'arc sur
+ * l'arbalétrier", Figs 3 and 5, sections square to the upright;
+ * "Assemblage de l'arc avec l'arbalétrier", Figs 10 and 11) [sourced
+ * drawing]: the arch is a caisson, its two face plates 0.558 apart, 0.279
+ * either side of the face plane, riveted by angles to b's WEB, 284.8 either
+ * side of the web's centre line and 118.3 in from its edges (Fig. 3). At
+ * section AB, where the intrados runs along b 1.00 from its axis, the
+ * caisson's b side is the web itself and its section is cut to it: 0.627
+ * wide on one face and 0.512 on the other (Fig. 11), the 0.115 the
+ * lozenge's slant takes over the 0.558 [derived: 2 x 0.279 x 0.206]. And
+ * Fig. 11 draws the fin, two angles back to back on the web's centre line,
+ * standing INSIDE the caisson between its plates, not cut for it. So every
+ * member here lands on the web, never on the fin's tip, and the fin runs
+ * on uninterrupted: in the model it stands into the member's solid, which
+ * is the caisson drawn closed [derived from the drawing]. At section AB the
+ * intrados' outer face lies on the web to 0.1 mm at the face plane (0.40 =
+ * 1.00 - 0.60, `D_B`), and `toTheWeb` cuts its outward side to the web
+ * there as Fig. 11 cuts it.
  */
-const UPRIGHT_FACE =
-  MEMBERS.upright[0][1] / Math.sqrt(1 - (SLOPE * SLOPE) / (1 + 2 * SLOPE * SLOPE));
+const UPRIGHT_FACE = UPRIGHT_BOX.planHalf;
 
 /** A point on the +z face at (x, y), `dz` inboard of it. */
 function onFace(x: number, y: number, dz = 0): Vec3 {
@@ -457,6 +501,200 @@ if (Math.abs(D_B - R_IN - 1) > 0.01) {
   );
 }
 
+// ------------------------------------------------------------- the webs
+
+const v3 = {
+  add: (p: Vec3, q: Vec3): Vec3 => [p[0] + q[0], p[1] + q[1], p[2] + q[2]],
+  sub: (p: Vec3, q: Vec3): Vec3 => [p[0] - q[0], p[1] - q[1], p[2] - q[2]],
+  scale: (p: Vec3, k: number): Vec3 => [p[0] * k, p[1] * k, p[2] * k],
+  dot: (p: Vec3, q: Vec3): number => p[0] * q[0] + p[1] * q[1] + p[2] * q[2],
+  cross: (p: Vec3, q: Vec3): Vec3 => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]],
+  unit: (p: Vec3): Vec3 => v3.scale(p, 1 / Math.hypot(p[0], p[1], p[2])),
+};
+
+/**
+ * The web's lean at height y: how far the uprights' inner line moves in per
+ * metre up, over the panel holding y (0.50269 in panels 1-4) [derived from
+ * the node table].
+ */
+function webLean(y: number): number {
+  let k = 0;
+  while (k < NODES.length - 2 && NODES[k + 1]!.y <= y) k++;
+  const lo = NODES[k]!;
+  const hi = NODES[k + 1]!;
+  return (lo.inner - hi.inner) / (hi.y - lo.y);
+}
+
+/**
+ * How far a point of the +z face (either plane) stands past the web of the
+ * upright it faces, across the face: positive inside the box. The web is
+ * the plane |x| = inner(y) - 0.4385 for b and d in the face plane and for a
+ * 15.00 inboard alike [derived: the box's plan square].
+ */
+function pastWeb(p: Vec3): number {
+  return Math.abs(p[0]) - (profileAt(p[1]).inner - UPRIGHT_FACE);
+}
+
+/** The gradient of `pastWeb`: across the face, and up it by the web's lean. */
+function webGradient(p: Vec3): Vec3 {
+  return [Math.sign(p[0]), webLean(p[1]), 0];
+}
+
+/**
+ * The shallowest a member may meet the web at and still be cut along its
+ * own axis: the sine of its angle to the web [estimated]. A shallower one grazes
+ * it (the intrados at section AB, the fillet, the heads beside b), and
+ * `toTheWeb` cuts it across the face instead; `landAt` leaves it alone.
+ */
+const LAND_SINE = 0.3;
+
+/**
+ * A member whose axis ENDS on the web (at the face plane, where `toB`,
+ * `PHI_E` and `bFaceAt` put it), run on along its axis until all four of
+ * its end's corners have reached the web: its skin is a square of `half`
+ * squared to its face (`faceSkin`), so at the face plane only its axis is
+ * home, and a corner off the plane stands short of the leaning web or past
+ * it. The corners past it are brought back along the axis onto the web by
+ * `toTheWeb`, so the end is cut to the web plane as a real end is cut to
+ * the plate it is riveted to. A member that meets the web at less than
+ * `LAND_SINE` is left as it is.
+ */
+function landAt(m: Member, half: number): Member {
+  let out = m;
+  for (const first of [true, false]) {
+    const end = first ? out.a : out.b;
+    const from = first ? out.b : out.a;
+    // On it to a millimetre: the panels 1-4 lean one line in the plane
+    // (SLOPE), and the node table's own panels differ from it by 1e-5, up to
+    // 0.07 mm over the arch's height.
+    if (Math.abs(pastWeb(end)) > 1e-3) continue;
+    const T = v3.unit(v3.sub(end, from));
+    const gradient = webGradient(end);
+    const into = v3.dot(gradient, T);
+    if (into < LAND_SINE * Math.hypot(...gradient)) continue;
+    const side = v3.unit(v3.cross(T, m.n));
+    const up = v3.cross(side, T);
+    const corners = [
+      [1, 1],
+      [1, -1],
+      [-1, 1],
+      [-1, -1],
+    ].map(([i, j]) => v3.add(end, v3.add(v3.scale(side, i! * half), v3.scale(up, j! * half))));
+    // Each corner reaches the web `-pastWeb / into` further along the axis.
+    const run = Math.max(...corners.map((c) => -pastWeb(c) / v3.dot(webGradient(c), T)));
+    const landed = v3.add(end, v3.scale(T, run));
+    // The deepest corner then comes back that far along the member, which
+    // must stay on it.
+    const back = Math.max(
+      ...corners.map((c) => pastWeb(v3.add(c, v3.scale(T, run))) / v3.dot(webGradient(c), T)),
+    );
+    const length = Math.hypot(...v3.sub(landed, from));
+    if (back > length - 0.05) {
+      throw new Error(
+        `firstFloor: a member landing on the upright's web at y ${end[1].toFixed(2)} is cut back ${back.toFixed(2)} along a ${length.toFixed(2)} length, past its other end — lengthen its last segment`,
+      );
+    }
+    out = first ? { ...out, a: landed } : { ...out, b: landed };
+  }
+  return out;
+}
+
+/** The lower box's stretch: the supports to XVII [sourced PL-XXXI; builtup.ts]. */
+const BOX_FROM = NODES[0]!.y;
+const BOX_TO = node("XVII").y;
+/** The uprights' inner and outer lines, and the web's lean, as tables of height. */
+const INNER_LINE = NODES.map((n) => [n.y, n.inner] as const);
+const OUTER_LINE = NODES.map((n) => [n.y, n.outer] as const);
+const LEAN_LINE = NODES.slice(0, -1).flatMap((n, k) => {
+  const s = webLean(n.y);
+  return [
+    [n.y + 1e-4, s],
+    [NODES[k + 1]!.y - 1e-4, s],
+  ] as const;
+});
+
+/**
+ * The cut, on the cooked mesh of a member set of this floor, on all four
+ * faces: every vertex standing inside an upright's box, past its web, is
+ * brought back onto the web — along its member's own axis (the skin's
+ * `tangent`) where the member meets the web at `LAND_SINE` or more, so each
+ * side of the member keeps its plane and its normal and only the end turns
+ * to lie on the web; across the face (x on the ±z faces, z on the ±x ones)
+ * where it grazes the web, or where the set carries no axis (`alongAxis`
+ * false: the arcade's plates and the ironwork, flat pieces lying in their
+ * plane, which a cut across the face keeps in it). The face a member lies
+ * in is read from the face normal every member's skin carries
+ * (`FACE_NORMAL`), not from where the vertex is: at a, where
+ * the ±x and ±z faces' inner arches meet, a vertex past the web can stand
+ * nearer the other face's plane. Only `below` a height, so a set that also
+ * runs into a box on purpose above it (the grande poutre's end diagonal, to
+ * b's axis) keeps that. Vertices move; nothing is added or removed, so
+ * every count the checks pin holds.
+ */
+function toTheWeb(g: Graph, id: string, mesh: NodeHandle, alongAxis: boolean, below = BOX_TO): NodeHandle {
+  const P = position();
+  const x = component(P, 0);
+  const y = component(P, 1);
+  const z = component(P, 2);
+  // A skin carries its member's face normal on every point (the resample
+  // under it lands the path's on its samples, and the sweep copies them
+  // round each ring).
+  const n = attribute(FACE_NORMAL, 3);
+  const zFace = alongAxis ? ge(abs(component(n, 2)), abs(component(n, 0))) : ge(abs(z), abs(x));
+  const u = select(zFace, abs(z), abs(x));
+  const v = select(zFace, abs(x), abs(z));
+  const across = select(zFace, vec(sign(x), 0, 0), vec(0, 0, sign(z)));
+  const inner = ramp(y, INNER_LINE);
+  const outer = ramp(y, OUTER_LINE);
+  const past = sub(v, sub(inner, UPRIGHT_FACE));
+  // Inside a box: past the web, short of the far one, within the box across
+  // (b and d at the face plane, a at the inner one), in the lower box's
+  // stretch and below `below`. Products of 0/1 tests.
+  const inside = mul(
+    mul(gt(past, 0), lt(v, add(inner, UPRIGHT_FACE))),
+    mul(
+      max(lt(abs(sub(u, outer)), UPRIGHT_FACE), lt(abs(sub(u, inner)), UPRIGHT_FACE)),
+      mul(gt(y, BOX_FROM), lt(y, Math.min(below, BOX_TO))),
+    ),
+  );
+  const acrossCut = sub(P, mul(across, past));
+  let cut: Field = acrossCut;
+  if (alongAxis) {
+    const T = attribute("tangent", 3);
+    const lean = ramp(y, LEAN_LINE);
+    // The web's gradient is `across` plus its lean up the face.
+    const into = add(dot(T, across), mul(lean, component(T, 1)));
+    const steep = gt(abs(into), mul(LAND_SINE, sqrt(add(1, mul(lean, lean)))));
+    cut = select(steep, sub(P, mul(T, div(past, select(steep, into, 1)))), acrossCut);
+  }
+  const moved = g.add(
+    setAttribute,
+    { name: "P", type: "f32", tupleSize: 3, value: select(inside, cut, P) },
+    `${id}OnWeb`,
+  );
+  g.connect(mesh, "out", moved, "in");
+  return moved;
+}
+
+/**
+ * 1 where a point stands outside every lower upright's box, 0 inside one:
+ * the seam rows of a member cut to a web (`landAt`) stop at it rather than
+ * run on into the box with the member's axis.
+ */
+function outsideUprights(): Field {
+  const P = position();
+  const y = component(P, 1);
+  const inner = ramp(y, INNER_LINE);
+  const outer = ramp(y, OUTER_LINE);
+  const onLine = (c: Field) =>
+    max(lt(abs(sub(c, inner)), UPRIGHT_FACE), lt(abs(sub(c, outer)), UPRIGHT_FACE));
+  const inBox = mul(
+    mul(onLine(abs(component(P, 0))), onLine(abs(component(P, 2)))),
+    mul(gt(y, BOX_FROM), lt(y, BOX_TO)),
+  );
+  return sub(1, inBox);
+}
+
 // ------------------------------------------------------------- the arch
 
 /** Angles 0, step, 2 step ... below `end`, then `end`. */
@@ -500,9 +738,19 @@ function lowerArchX(y: number): number {
   return C2[0] + Math.sqrt(r2 * r2 - dt * dt);
 }
 
-/** The extrados member's axis, crown to where it meets b. */
+/**
+ * The extrados member's axis, crown to where it meets b. It meets b's web
+ * at 22° and is cut to it along its own length (`landAt`): its far side
+ * reaches the web 1.7 m along it past its near side [derived]. A last step
+ * shorter than a whole one (0.65 of one here) could not hold that cut, so
+ * the last two steps share the stretch equally (0.83 each, 1.15 m, off the
+ * circle by 4 mm at their middles) [derived].
+ */
 function extradosAxis(): InPlane[] {
-  return angles(PHI_E, THETA / 2).map((phi) => polar(R_OUT - ARCH_CHORD, phi));
+  const phis = angles(PHI_E, THETA / 2);
+  const n = phis.length;
+  if (n >= 3 && PHI_E - phis[n - 2]! < THETA / 2 - 1e-9) phis[n - 2] = (phis[n - 3]! + PHI_E) / 2;
+  return phis.map((phi) => polar(R_OUT - ARCH_CHORD, phi));
 }
 
 /** Montant k's angle from the crown (k from 1). */
@@ -524,9 +772,11 @@ function montant(k: number): [InPlane, InPlane] {
 /**
  * Montant k as the pieces that show: in the band between the chords'
  * faces, and above the extrados up to the chord or b. Radial pieces meet
- * the concentric chords square; where one meets the straight chord or b
- * at an angle it runs on until its near corner is home, so no notch shows.
- * Split so, no seam rivet is buried in the member it runs into.
+ * the concentric chords square; where one meets the straight chord at an
+ * angle it runs on until its near corner is home, so no notch shows. One
+ * that meets b ends with its axis on b's web at the face plane, and is cut
+ * to the web by `landAt` and `toTheWeb`. Split so, no seam rivet is
+ * buried in the member it runs into.
  */
 function montantPieces(k: number): InPlane[][] {
   montant(k);
@@ -541,10 +791,10 @@ function montantPieces(k: number): InPlane[][] {
     const end =
       k <= TO_MEMBRURE
         ? (T_M - MEMBRURE) / Math.cos(phi) + MONTANT * Math.tan(phi)
-        : toB(phi) + MONTANT * Math.abs(Math.tan(phi - PHI_H));
+        : toB(phi);
     reach(R_OUT, end);
   } else {
-    reach(lo, toB(phi) + MONTANT * Math.abs(Math.tan(phi - PHI_H)));
+    reach(lo, toB(phi));
   }
   return pieces;
 }
@@ -650,13 +900,14 @@ interface Opening {
 /**
  * The opening between montants k and k + 1: its head is the circle tangent
  * to both montants' faces and to what is above (the arcade chord's
- * underside, or b's face). Each spandrel beside it is the region between a
+ * underside, or b's web where it crosses the plates' own layer, `d` from
+ * the arch centre: `webLineAt`). Each spandrel beside it is the region between a
  * montant, that line and the circle; seen from the corner where the two
  * lines meet, the circle shows exactly the arc between their tangent
  * points, so a fan of triangles from the corner over that arc fills the
  * spandrel and nothing of the opening.
  */
-function opening(k: number): Opening {
+function opening(k: number, d = D_BF): Opening {
   const p0 = phiOf(k);
   const p1 = phiOf(k + 1);
   const left: Line = { n: [Math.cos(p0), -Math.sin(p0)], d: MONTANT };
@@ -664,7 +915,7 @@ function opening(k: number): Opening {
   const top: Line =
     k < TO_MEMBRURE
       ? { n: [0, -1], d: -(T_M - MEMBRURE) }
-      : { n: [-Math.sin(PHI_H), -Math.cos(PHI_H)], d: -D_BF };
+      : { n: [-Math.sin(PHI_H), -Math.cos(PHI_H)], d: -d };
   const { c, r } = incircle([left, right, top]);
   const ang = (l: Line) => Math.atan2(-l.n[1], -l.n[0]);
   const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -696,7 +947,7 @@ function opening(k: number): Opening {
 }
 
 /** The solid plates at the crown, between montants k and k + 1 for k < OPEN_FROM. */
-function crownPlates(): InPlane[][] {
+function crownPlates(d = D_BF): InPlane[][] {
   const topAt = (phi: number) => polar((T_M - MEMBRURE) / Math.cos(phi), phi);
   const out: InPlane[][] = [];
   for (let k = 1; k < OPEN_FROM; k++) {
@@ -706,34 +957,52 @@ function crownPlates(): InPlane[][] {
   }
   // Past the last opening, the sliver between montant 11, the extrados and b.
   const last = phiOf(OPEN_TO + 1);
-  const meetsB = PHI_H - Math.acos(D_BF / R_OUT);
-  out.push([polar(R_OUT, last), polar(toB(last), last), polar(R_OUT, meetsB)]);
+  const meetsB = PHI_H - Math.acos(d / R_OUT);
+  out.push([polar(R_OUT, last), polar(toB(last, d), last), polar(R_OUT, meetsB)]);
   return out;
 }
 
-/** Every opening's head radius, for the checks. */
+/** Every opening's head radius as built on the outer arch's face 1, for the checks. */
 export function arcadeOpenings(): Array<{ k: number; radius: number }> {
   const out: Array<{ k: number; radius: number }> = [];
-  for (let k = OPEN_FROM; k <= OPEN_TO; k++) out.push({ k, radius: opening(k).radius });
+  const d = webLineAt(PLATE_OFFSET + PLATE / 2);
+  for (let k = OPEN_FROM; k <= OPEN_TO; k++) out.push({ k, radius: opening(k, d).radius });
   return out;
 }
 
-/** The arch's parts in one plane, right half and mirror, as in-plane paths. */
-function archHalves(): {
+/**
+ * b's web, from the arch centre in the plane's own terms, in the layer `o`
+ * out of the face plane along its normal: the web leans with the leg's side
+ * face, so a layer out along the normal (up the face) meets it o SLOPE SIN
+ * nearer across the face [derived]. The arcade's plates lie in such a layer,
+ * 0.205 out on the decorated side, where the web stands 0.042 nearer than
+ * at the face plane on the outer arch's face 1 and 0.042 farther on the
+ * inner arch's face 4; each plane's plates and heads are laid out to their
+ * own layer's web.
+ */
+function webLineAt(o: number): number {
+  return D_BF - (o * SLOPE * SIN) / B_NORM;
+}
+
+/**
+ * The arch's parts in one plane, right half and mirror, as in-plane paths;
+ * the arcade's plates and heads to b's web at `d` (`webLineAt`).
+ */
+function archHalves(d = D_BF): {
   chords: InPlane[][];
   montants: InPlane[][];
   heads: InPlane[][];
   plates: InPlane[][];
 } {
   const both = (paths: InPlane[][]) => [...paths, ...paths.map((p) => p.map(mirror))];
-  const opens = Array.from({ length: OPEN_TO - OPEN_FROM + 1 }, (_, i) => opening(OPEN_FROM + i));
+  const opens = Array.from({ length: OPEN_TO - OPEN_FROM + 1 }, (_, i) => opening(OPEN_FROM + i, d));
   const right = Array.from({ length: MONTANTS - 1 }, (_, i) => montantPieces(i + 2)).flat();
   return {
     chords: both([intradosAxis(), extradosAxis()]),
     // Montant 1 stands on the axis, once.
     montants: [...montantPieces(1), ...both(right)],
     heads: both(opens.map((o) => o.head)),
-    plates: both([...crownPlates(), ...opens.flatMap((o) => o.plates)]),
+    plates: both([...crownPlates(d), ...opens.flatMap((o) => o.plates)]),
   };
 }
 
@@ -866,7 +1135,6 @@ function arches(): {
   plates: Vec3[][];
   piers: Array<{ c: Vec3; size: Vec3 }>;
 } {
-  const h = archHalves();
   const work = bandIronwork();
   const out = {
     chords: [] as Member[],
@@ -880,6 +1148,7 @@ function arches(): {
     piers: [] as Array<{ c: Vec3; size: Vec3 }>,
   };
   for (const { dz, decorated } of PLANES) {
+    const h = archHalves(webLineAt(decorated * (PLATE_OFFSET + PLATE / 2)));
     const at = (p: InPlane) => fromPlane(p, dz);
     // The decorated side: plates and ironwork lie against the montants' faces.
     const lift = (base: number) => (p: InPlane): Vec3 => {
@@ -888,8 +1157,9 @@ function arches(): {
       return [q[0] + o * N4[0], q[1] + o * N4[1], q[2] + o * N4[2]];
     };
     const off = lift(PLATE_OFFSET);
-    out.chords.push(...along(h.chords.map((p) => p.map(at)), N4));
-    out.montants.push(...along(h.montants.map((p) => p.map(at)), N4));
+    // The extrados and the montants from 9 on end on b's web (`landAt`).
+    out.chords.push(...along(h.chords.map((p) => p.map(at)), N4).map((m) => landAt(m, ARCH_CHORD)));
+    out.montants.push(...along(h.montants.map((p) => p.map(at)), N4).map((m) => landAt(m, MONTANT)));
     out.heads.push(...along(h.heads.map((p) => p.map(off)), N4));
     // Wound so each plate's own normal points away from the montants: the
     // extrusion then thickens it outward from their faces, never into them.
@@ -980,12 +1250,11 @@ function girders(): {
   const dBot = FIRST_FLOOR.decorativeBottomY;
   const dTop = node("XXIV").y - DECO_TOP * COS;
   const decoPosts = Array.from({ length: 11 }, (_, i) => (i - 5) * BAY);
-  // The outer posts stop at b's face: the diagonals where their axis meets
-  // it, the post itself where its inner corner does, so no notch shows.
+  // The outer posts and the diagonals to their tops end with their axes on
+  // b's web at the face plane, and are cut to it (`landAt`, `toTheWeb`).
   const outerPost = decoPosts[10]!;
   const bFaceAt = (x: number) => node("XXIV").y - (x + UPRIGHT_FACE - node("XXIV").inner) / SLOPE;
   const yShort = bFaceAt(outerPost);
-  const yShortPost = bFaceAt(outerPost - END_POST);
   // Posts run between the chords' faces, so none of their seams is buried.
   const postBot = bot + MAIN_CHORD * cos5;
   const postTop = top - MAIN_CHORD * cos5;
@@ -1025,7 +1294,7 @@ function girders(): {
     out.decoTop.push({ ...chord(dTop), n: N4 });
     for (const x of decoPosts) {
       if (Math.abs(x) === outerPost) {
-        out.endPosts.push({ a: p(x, decoBot), b: p(x, yShortPost), n: N4 });
+        out.endPosts.push(landAt({ a: p(x, decoBot), b: p(x, yShort), n: N4 }, END_POST));
       } else {
         out.posts.push({ a: p(x, decoBot), b: p(x, decoTop), n: N4 });
       }
@@ -1035,7 +1304,10 @@ function girders(): {
       const x1 = decoPosts[i + 1]!;
       const t0 = Math.abs(x0) === outerPost ? yShort : dTop;
       const t1 = Math.abs(x1) === outerPost ? yShort : dTop;
-      out.bars.push({ a: p(x0, dBot), b: p(x1, t1), n: N4 }, { a: p(x0, t0), b: p(x1, dBot), n: N4 });
+      out.bars.push(
+        landAt({ a: p(x0, dBot), b: p(x1, t1), n: N4 }, GIRDER_WEB[0][1]),
+        landAt({ a: p(x0, t0), b: p(x1, dBot), n: N4 }, GIRDER_WEB[0][1]),
+      );
     }
     // The rounded top corner at b: tangent to the top chord and to b's face.
     const tTop = planeT(dTop);
@@ -1312,6 +1584,10 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}
   // The arch's rows stop where the member enters its pier's collar: a row
   // below this would sit inside the stone.
   const aboveCollar = ge(component(position(), 1), ARCH_END + ARCH_CHORD * SIN);
+  // Every member set that meets an upright is cut to its web (`toTheWeb`),
+  // and its rows kept out of the box.
+  const outside = outsideUprights();
+  const onWeb = (id: string, mesh: NodeHandle, below?: number) => toTheWeb(g, id, mesh, true, below);
 
   const gd = girders();
   const ar = arches();
@@ -1364,9 +1640,11 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}
     solid("ffMembrureChord", membrure, MEMBRURE, "ff.girders.membrure"),
     solid("ffDecoTopChord", decoTop, DECO_TOP, "ff.girders.decoTop"),
     solid("ffPost", posts, POST, "ff.girders.posts"),
-    solid("ffEndPost", endPosts, END_POST, "ff.girders.endPosts"),
-    solid("ffFillet", fillets, FILLET_BAR, null),
-    ...web.meshes,
+    onWeb("ffEndPost", solid("ffEndPost", endPosts, END_POST, "ff.girders.endPosts", outside)),
+    onWeb("ffFillet", solid("ffFillet", fillets, FILLET_BAR, null)),
+    // The decorative girder's diagonals to b, below the grande poutre, whose
+    // end diagonal runs to b's axis.
+    ...web.meshes.map((m, i) => onWeb(`ffWeb${i}`, m, node("XXIV").y)),
     ...cross.meshes,
     solid("ffEntretoiseBars", four("ffDiagonals", en.diagonals), ENTRETOISE_BAR, null),
     solid("ffBand10Chords", four("ffChords10", sf.chords10), BAND10_CHORD, "ff.second.band"),
@@ -1407,22 +1685,19 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}
   }
 
   const archMeshes = [
-    solid(
+    onWeb(
       "ffArchChords",
-      four("ffArchChordPaths", ar.chords),
-      ARCH_CHORD,
-      "ff.arches.chords",
-      aboveCollar,
+      solid("ffArchChords", four("ffArchChordPaths", ar.chords), ARCH_CHORD, "ff.arches.chords", mul(aboveCollar, outside)),
     ),
-    solid("ffMontants", four("ffMontantPaths", ar.montants), MONTANT, "ff.arches.montants"),
-    solid("ffHeads", four("ffHeadPaths", ar.heads), HEAD_EDGE, null),
+    onWeb("ffMontants", solid("ffMontants", four("ffMontantPaths", ar.montants), MONTANT, "ff.arches.montants", outside)),
+    onWeb("ffHeads", solid("ffHeads", four("ffHeadPaths", ar.heads), HEAD_EDGE, null)),
     // The fans' frames and bars at every depth; the volutes and their
     // macarons only with the laced web: 192k triangles, sub-pixel
     // from where the plain depth is looked at (SOURCES.md §28).
-    ironworkSolid(g, "ffFans", ar.fans, quads),
-    ...(laced ? [ironworkSolid(g, "ffScrolls", ar.scrolls, quads)] : []),
+    toTheWeb(g, "ffFans", ironworkSolid(g, "ffFans", ar.fans, quads), false),
+    ...(laced ? [toTheWeb(g, "ffScrolls", ironworkSolid(g, "ffScrolls", ar.scrolls, quads), false)] : []),
     solid("ffBracket", four("ffBracketPaths", ar.bracket), BRACKET_BAR, null),
-    plates(g, "ffArcadePlates", ar.plates, quads),
+    toTheWeb(g, "ffArcadePlates", plates(g, "ffArcadePlates", ar.plates, quads), false),
     // Last, and apart from the chords: hidden in the stone, it has no rows,
     // and the chords' member set (and so their rivets) stays as it was.
     solid("ffArchFeet", four("ffArchFeetPaths", ar.feet), ARCH_CHORD, null),

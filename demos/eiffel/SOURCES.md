@@ -1767,6 +1767,39 @@ The belts' TOP chords lie in the floor decks: panel 5's at XXIII (y 56.94-57.40)
 - **The bars' run to the angle's toe.** On all three girders the bars run on past the chord's axis to the toe and their groups with them (panel 5's 4-5 heads a line, panel 11's 5). Not built: at the toe a V's two bars close on the post's own group. The model's bars take the heads that fit before the axis, 3 a line.
 - **Panel 5's mid-bay column.** Both readers find an unclaimed column of rivets on each chord's web midway between posts, where no member lands (one reads 2 x 3, the other 2 x 4 at gauge about 94 and pitch about 102), probably a web cover or stiffener. Not built: the count is not agreed and the plate names nothing there.
 - **Rivet diameter** is printed at none of these joints; the heads stay the tower's 38 mm.
+### 24.5 Where the first floor meets the uprights as built (2026-09-26)
+
+§27 rebuilt the lower uprights as PL-XXXI's box; `firstFloor.ts` still cut its ends to the old swept skin. The joint was re-read on PL-XI f56 (Figs 3, 5, 10, 11, by their printed dimensions) and every place the floor meets an upright re-fitted. Tags as in §0.
+
+| Element | Plate reads | Was | Now | Tag |
+|---|---|---|---|---|
+| b's (and d's, a's) web across the face | the box's plan square, faces in the face planes (§27) | 0.4495 from the axis (the 0.41 skin carried across) | the plan half, 0.4385 (`UPRIGHT_BOX.planHalf`); the web leans with the leg's side face, 78.36° to the face plane, so 0.30 off the plane it stands 0.068 nearer or farther across the face | [sourced text; derived] |
+| The joint | Figs 3 and 5 ("Attache de l'arc sur l'arbalétrier", sections square to the upright): the arch's face plates are riveted by angles to b's WEB, 284.8 either side of its centre line and 118.3 in from its edges (at a joint 121.4 / 109). Fig. 11 (section AB): the arch is a caisson 0.558 deep (0.279 either side of the face plane), its b side the web itself, its section cut to the web, 0.627 and 0.512 wide on its two faces, beside the printed 78°21'44" | each end square to its axis, cut to the rolled skin: a wedge open one side, buried the other | every member lands on the web, its end cut to the web plane | [sourced drawing] |
+| The fin | Fig. 11 draws the fin's two angles on the web's centre line, between the caisson's plates, inside it | — | not cut: `builtup.ts` and `legs.ts` unchanged. It stands into each landing member, which draws the caisson closed | [sourced drawing]; the closed caisson [derived] |
+
+**What is built.** `landAt` runs each landing end (the extrados, montants 9–14, the decorative girder's short end posts and the diagonals to their tops) on along its axis until all four corners reach the web; `toTheWeb` then brings every vertex past a web back onto it along its member's axis, so each side keeps its plane and normal and only the end turns onto the web. A member meeting the web at a sine under 0.3 (the intrados at AB, the fillet, the heads) and the flat pieces (plates, ironwork) are cut across the face instead. The arcade's plates and heads are laid out per plane to the web in their own layer, 0.042 nearer on face 1 of the outer arch and 0.042 farther on face 4 of the inner. The extrados's last two steps share the stretch to b (0.83 of a step each), since its cut runs 1.73 m along it. The cut sets' seam rows are kept out of the boxes.
+
+**Measured on the cooked model** (`buildFirstFloor`, the +x+z leg, against the census's analytic box, tests/eiffelArchEnds.test.ts; plain and laced alike unless said):
+
+| | Before | After |
+|---|---|---|
+| Extrados end (4) | corners 103 mm inside to 245 mm off | all four on the web (0.0) |
+| Montants 9–14 ends (24) | one corner 56 mm off, the others 34–215 mm inside | 0.0 |
+| Decorative end posts (4), at y 48.5–49.5 | 67 mm off / 159 mm inside | 0.0 |
+| Diagonals to their tops (4) | 161 mm off / 139 mm inside | 0.0 at the plain depth; the laced struts: nothing inside, nearest 0.0 |
+| Vertices inside a box below XXIV | 1,396 at the plain depth, to 239 mm | 0 |
+| Plates and heads nearest a's web (inner arch) | 55.9 / 3.3 mm off | 0.0 |
+| Fin, laced | — | every landing end's footprint spans the fin and its flats (±0.10) |
+
+**Residuals.**
+- **The intrados at AB**: its outward side is cut onto the web; its inward side stands 67 mm off at the tangent point. Fig. 11 closes both faces on the web; the square member cannot without widening one side.
+- **The ironwork** is laid out once, to the web at the face plane: on the web at b, 45 mm short of a's web on face 4 of the inner arch.
+- **Rivets** (the riveted tower, heads more than 2 mm inside a box): `ff.arches.montants` 301 → 48, `ff.girders.endPosts` 172 → 56, `ff.arches.chords` 272 → 257, `ff.girders.web` 108 → 128. A seam row's `keep` reads the member's axis, not the head, so a head on a surface the cut took away stays inside, hidden in the closed box; the 20 new ones are the laced diagonals' lacing heads past their cut ends (strut.ts places them).
+- **Still run to b's axis** by convention, hidden in the box: the girders' chords (the decorative girder's membrure and top chord among them, up to 0.44 in), the grande poutre's end diagonal (above XXIV, where the cut stops), the bracket and the 2nd floor's bands.
+- **Grazing cuts lie in the web's plane**: where a face is cut across the face (the fillet's last segment, the heads' edges, the intrados' outward side) it is flattened onto the web's outer surface, which may z-fight at the plain depth (materials are double-sided); not yet checked in a render.
+- **The laced girder diagonal** is an open strut: the fin shows through its lacing rather than entering a solid.
+- This supersedes §27's "The first floor" residual bullet.
+
 
 ## 26. Three leftovers: Plate I's 18.65, the plan bracing's H, the arch's hidden foot (2026-09-26)
 
@@ -1819,7 +1852,7 @@ The lower arbalétriers (sixteen, supports to node XVII) were a swept square ski
 
 **Residuals, measured, left for their own items.**
 - **D3 of the study: the joint plates are today's**, beside the strut (0.400-0.408 off its face plane), not on the channel's legs where PL-IX seats the real gussets. A plate laps its upright's NEIGHBOURING faces 8 mm off their webs, so there a C.J. or a flat leg meets it 4 mm deep and an outstanding leg stands through it: in the +x+z leg, 120 plates are pierced by a channel's leg (up to 84 mm past the plate) and 120 by a fin's flat legs (8 mm), 2 by a fin (32 mm), all in panels 1-5 [measured]. Seating the joint on the channel (the gussets 385 apart) is D3b.
-- **The first floor** (`firstFloor.ts`) still reads the old skin: `UPRIGHT_FACE` = 0.41 / √(…) = 0.4495 across the face, from `MEMBERS.upright[0][1]`. Against the true box its arch ends at a's two exterior faces and at b's −x and d's −z stand 2.3-3.0 mm (a) and 9.2-11.0 mm (b, d) off the web at their nearest vertex (y ≈ 41) and 55-59 mm at their farthest (y ≈ 40 and 43): each end is cut to the rolled skin, so it opens as a wedge onto the true web. Those are fin faces, and the fin (112) stands into every arch end. Its girders reach the fins of a, b and d at y ≈ 49.7 [measured].
+- **The first floor** (`firstFloor.ts`), *as it stood when this section was written — since re-fitted to the true web, §24.5*: it read the old skin: `UPRIGHT_FACE` = 0.41 / √(…) = 0.4495 across the face, from `MEMBERS.upright[0][1]`. Against the true box its arch ends at a's two exterior faces and at b's −x and d's −z stand 2.3-3.0 mm (a) and 9.2-11.0 mm (b, d) off the web at their nearest vertex (y ≈ 41) and 55-59 mm at their farthest (y ≈ 40 and 43): each end is cut to the rolled skin, so it opens as a wedge onto the true web. Those are fin faces, and the fin (112) stands into every arch end. Its girders reach the fins of a, b and d at y ≈ 49.7 [measured].
 - **The pedestals** (`platforms.ts`): the hole round each upright is sized on the square skin's lean (0.41 × 1.33 + 0.03 = 0.575 in plan), 0.112 off the true box [measured: the nearest masonry vertex].
 - **The belts and ties** still clip at `MEMBERS.upright` (0.41 / 0.435 across the face), inside the box's 0.4385: chord ends bury in the web, a panel-5 belt gusset 8.5 mm in, its posts 21.5 mm off. The ties' edge rows' first heads (0.46 in plan) stand 2.6 mm off the web, but their rims reach 9.5 mm into the C.J. over the landing face's butt [derived]. Re-fitting them changes the chord rows' counts (tests/eiffelChordRivets.test.ts), which is rivets25's work.
 
