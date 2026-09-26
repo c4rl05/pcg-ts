@@ -139,6 +139,7 @@ import {
 } from "./rivetPack.js";
 import { BufferAttribute, DataTexture, NearestFilter, SRGBColorSpace } from "three";
 import { FLAG_BANDS, FLAG_GRID, FLAG_POINTS, flagNormals, flagPose } from "./flag.js";
+import { attachScrubber, buildDayParam, stageErection } from "./scrub.js";
 
 // ------------------------------------------------------------------ //
 // The look.
@@ -393,14 +394,6 @@ function driveHeads(list: readonly Mesh[]): void {
  */
 const CPU_RIVETS = new URLSearchParams(location.search).has("cpuRivets");
 
-/**
- * `?build` stages every instanced batch by date at load by permuting its
- * instance matrices (scrub.ts), which a packed batch does not have: under
- * it the rivets take the matrix path, and say so, until the staging reads
- * packed seats too.
- */
-const STAGED_RIVETS = new URLSearchParams(location.search).has("build");
-
 /** Whether this three's shaders take the packed edit, asked once (rivetPack.ts). */
 const SHADER_PROBLEM = packedShaderProblem();
 
@@ -428,11 +421,9 @@ function drawRivets(name: string, collection: DataCollection, problems: string[]
     for (const batch of item.batches) {
       const packed: ReturnType<typeof packRivets> = CPU_RIVETS
         ? { reason: "cpu-requested", detail: "?cpuRivets" }
-        : STAGED_RIVETS
-          ? { reason: "staged-by-date", detail: "?build permutes instance matrices (scrub.ts)" }
-          : SHADER_PROBLEM !== undefined
-            ? { reason: "shader-anchor-missing", detail: SHADER_PROBLEM }
-            : packRivets(batch as RivetBatch);
+        : SHADER_PROBLEM !== undefined
+          ? { reason: "shader-anchor-missing", detail: SHADER_PROBLEM }
+          : packRivets(batch as RivetBatch);
       try {
         if (!isFallback(packed)) {
           const mesh = packedRivetMesh(packed, ASSETS.rivet!.geometry, site ? PACKED_SITE : PACKED_SHOP);
@@ -660,6 +651,26 @@ overlay.addCheckbox("lifts", !STILL, (on) => {
   liftsRunning = on;
 });
 
+// THE ERECTION, 1887-89 (`?build`, or `?build=1887-10-10` to open on a
+// day): the tower shown as it stood on a day, with a date scrubber
+// (scrub.ts), and the temporary works it stood in (erection.ts). The
+// toggle reloads, keeping the view and the depth, because the works are
+// cooked and the staging is done once at load.
+const BUILD = new URLSearchParams(location.search).has("build");
+overlay.addCheckbox("build", BUILD, (on) => {
+  const q = new URLSearchParams(location.search);
+  if (on) q.set("build", "");
+  else q.delete("build");
+  const p = camera.position;
+  const t = controls.target;
+  q.set("cam", [p.x, p.y, p.z, t.x, t.y, t.z].map((v) => v.toFixed(2)).join(","));
+  location.search = q.toString().replace(/build=(&|$)/, "build$1");
+});
+/** Claimed here, under the toggles; filled once the cook is drawn. */
+const buildSlot = overlay.addSlot();
+/** The scrubber, once `?build` has staged the tower; the loop plays it. */
+let scrubber: ReturnType<typeof attachScrubber> | undefined;
+
 // THE DETAIL LEVELS, as links rather than a control: each is a plain URL
 // (the page reads it once, at load, and cooks at that depth), so a level
 // can be bookmarked or sent, and each link carries the current camera pose
@@ -703,7 +714,7 @@ function refreshDetailLinks(): void {
     // `still` rides along with the pose, for the same reason: a scripted
     // capture moves between depths by following these links, and a page
     // that started its lifts again at the next depth would never settle.
-    const query = [d.key, STILL ? "still" : "", `cam=${cam}`].filter(Boolean).join("&");
+    const query = [d.key, STILL ? "still" : "", BUILD ? "build" : "", `cam=${cam}`].filter(Boolean).join("&");
     a.href = `?${query}`;
     const current = d.key === here;
     a.style.fontWeight = current ? "600" : "400";
@@ -983,6 +994,9 @@ async function main(): Promise<void> {
     );
   }
   statTotal(total.toLocaleString());
+  // Staged by date here, before anything below can swap a mesh's geometry
+  // (the section's cut): scrub.ts.
+  const erection = BUILD ? stageErection(meshes) : undefined;
   if (rivets || riveted > 0) {
     overlay.addStat("rivets")(riveted > 0 ? riveted.toLocaleString() : "absent");
   }
@@ -1063,6 +1077,17 @@ async function main(): Promise<void> {
       }
       renderer.shadowMap.needsUpdate = true;
     });
+  }
+
+  if (erection !== undefined) {
+    const raw = params.get("build");
+    scrubber = attachScrubber(buildSlot, buildDayParam(raw), !STILL && (raw === null || raw === ""), (day) => {
+      erection.setDay(day);
+      renderer.shadowMap.needsUpdate = true;
+    });
+    const { ms, bytes } = erection.stats;
+    overlay.addStat("dated")(`${ms.toFixed(0)} ms, ${(bytes / 1024).toFixed(0)} KB`);
+    window.pcgEiffelBuild = { setDay: (iso) => scrubber?.set(buildDayParam(iso)) };
   }
 
   report(problems);
@@ -1419,6 +1444,7 @@ renderer.setAnimationLoop(() => {
     windClock += Math.min((now - lastFrame) / 1000, 0.1);
     waveFlags(windClock);
   }
+  scrubber?.tick(Math.min((now - lastFrame) / 1000, 0.1));
   lastFrame = now;
   // A driven camera is not an orbited one: `update()` would re-derive the
   // pose from the controls' own spherical and clamp it back inside

@@ -2440,3 +2440,93 @@ The plate overlay puts an orthographic camera on a figure's projection and lays 
 - **PL-XI Fig. 1's uprights** lean 0.512 and 0.518 px per px against the model's 0.503, so its inner axis drifts 0.13 by 28.40; its extrados crown reads 43.44 against the model's 43.32.
 
 **Not registered.** PL-VII draws the faces « en rabattement », rotated into the page with heights along the inclined face (§0), so no orthographic camera on the model reproduces it: the face's slope changes at every kinked node.
+
+## 32. The erection, 1887–89: every piece dated, and the page's scrubber (2026-09-26)
+
+Read from E1900-TXT pp. 86–123 (the foundations, § 7 « Montage des deux premiers étages », § 8–9, § 10 « Dates relatives aux diverses phases de montage », the labour accounts), p. 228 and p. 311, every date with a digit that matters re-read on the page image; Fig. 123 (p. 112), the book's own height-and-weight diagram of the erection; PL-XXIV and PL-XXV; and the thirteen photogravures (« Épreuves en taille douce », canvases 496–508, e-rara page ids 8976422–8976434). `chronology.ts` holds the timeline and the rules, `scrub.ts` the page's half, `tests/eiffelBuild.test.ts` the checks.
+
+### 32.1 The timeline
+
+Days are counted from **26 Jan 1887**, « Les travaux furent inaugurés, le 26 janvier 1887, par le commencement des fouilles de la pile 2 » [sourced p. 86].
+
+| Date | What | Source |
+|---|---|---|
+| 26 Jan – 30 Jun 1887 | The foundations: « commencé le 26 janvier 1887, a été terminé le 30 juin suivant »; pile 2 excavated from 26 Jan, its masonry « commencée le 4 mars et terminée le 10 avril »; pile 3 excavated 29 Jan – 8 Mar, its masonry 9 Mar – end April; pile 4 on compressed-air caissons from « les premiers jours de février » (photogravure 1, April 1887), « L'ensemble du travail fut terminé le 16 juin 1887 »; pile 1 on caissons too, its masonry done « dans les derniers jours de juin » | [sourced pp. 86–94] |
+| June 1887 | The cast-iron shoes set, « terminée dans le courant de juin » | [sourced p. 102] |
+| 1 Jul 1887 | « C'est le 1er juillet 1887 que commença ce montage », on all four piles « au fur et à mesure des livraisons », with 22 m shear legs | [sourced p. 102] |
+| 18 Jul 1887 | Pile 4's first three tronçons, « dont la hauteur dépassait le milieu du premier panneau » (photogravure 3) | [sourced p. 103] |
+| 2 Sep 1887 | The first creeper crane, at pile 3 | [sourced p. 103, on the image: the OCR reads « pile } »] |
+| 10 Oct 1887 | « la hauteur de 28 m correspondant à l'entretoise limitant le panneau 2 ... fut atteinte le 10 Octobre », 900 t and 98,000 rivets in place | [sourced p. 103] |
+| 4 Dec 1887 | « Fin du montage des quatre premiers panneaux » | [sourced p. 112] |
+| 18 Dec 1887 – 1 Mar 1888 | The 1st floor's girders, begun with the « Poutres de l'arc » (Fig. 123) | [sourced p. 112] |
+| 14 Jan 1888 | Photogravure 5, « prise du 1er étage »: the legs at the 1st floor | [the date sourced; the height it implies estimated] |
+| 1 Apr 1888 | « Achèvement de la première plate-forme »; « c. Commencement du montage au-dessus du premier étage. 1er avril 1888 » | [sourced p. 112] |
+| 7 May – 31 Aug 1888 | « Le montage des arcs décoratifs s'est fait du 7 mai au 31 août » | [sourced p. 112, on the image: the OCR's « 3 mai » is wrong] |
+| 14 Aug 1888 | « Fin du montage du deuxième étage » | [sourced p. 112] |
+| 23 Sep 1888 – 4 Jan 1889 | The soubassements' ironwork; their facing « terminé seulement en mai 1889 » | [sourced pp. 95–96] |
+| 30 Nov 1888 | « Fin du montage de la plate-forme intermédiaire » | [sourced p. 112] |
+| 24 Feb 1889 | « Fin du montage du troisième étage » | [sourced p. 112] |
+| 31 Mar 1889 | « Arrivée au sommet »; « Le dimanche 31 mars 1889 ... M. Eiffel hissa lui-même le drapeau national » | [sourced pp. 112, 311] |
+| 15 Apr 1889 | « Fin du montage » | [sourced p. 112] |
+| 15 May 1889 | The first visitors, « Du 15 au 31 mai 1889 » | [sourced p. 228] |
+| 1 Jun 1889 | « 15 avril au 1er juin 1889 (achèvement de la rivure) » | [sourced p. 113] |
+| 19 Jan – 19 Jun 1889 | The lifts: Otis erected « à partir du 5 janvier 1889 » to 13 June, Roux, Combaluzier et Lepape 19 January to 8 June (p. 113; p. 118 has « au 2 juin »), Édoux 20 February to 2 June, the machines and pumps « du 11 février 1889 au 10 avril »; into service, the Roux « les 26 mai et 2 juin », Otis « le 4 juin par le pilier Nord, et le 19 juin par le pilier Sud », Édoux on 13 June | [sourced pp. 113, 118] |
+
+**Fig. 123 settles the heights.** Its levels are « au-dessus des appuis », above the support stones' centres at cote 36.00, so y = h + 2.50 [derived §0], and on that datum every period of the § 10 table ends on a node of PL-XXXI or a floor to the centimetre: 47.90 → **50.40** (XXIV) on 4 Dec 1887, +7.00 → **57.40** (XXIII) on 1 Apr 1888, +58.10 → **115.50** (XVII) on 14 Aug, +80.20 → **195.70** (the landing, 195.93) on 30 Nov, +80.42 → **276.12** (the 3rd floor) on 24 Feb 1889, +24.38 → **300.50** (the top terrace) on 31 Mar [sourced Fig. 123, read on the image; derived]. They are heights of the FINISHED section; the erection ran ahead of them above the 1st floor (« le montage simultané des montants et des poutres de la première plate-forme », p. 117).
+
+### 32.2 The rule: the erection front, and what a piece is
+
+- **The front** (`FRONT`): the day the top of the placed iron reached height y, linear between stops [the stops sourced as tagged in 32.1; linear between them estimated]: (2.50, 1 Jul 1887), (11.9, 18 Jul), (28.4, 10 Oct), (50.4, 4 Dec), (57.4, 14 Jan 1888), (57.63, 1 Apr), (115.5, 14 Aug), (195.93, 30 Nov), (276.13, 24 Feb 1889), (300.515 and the rod's 312.275, 31 Mar). Linear between stops is what the book's own pace gives: « Montage d'un panneau au-dessous du premier étage .. 40 jours. — entre le premier et le deuxième étage. 30 — entre le deuxième et la plate-forme intermédiaire. 15 — au-delà, jusqu'au troisième étage. 7 » [sourced p. 113]. Nothing rises over the 1st floor between 14 Jan and 1 Apr 1888, while the girders are built and joined between the legs; the § 10 table then prints « Commencement du montage au-dessus du premier étage. 1er avril 1888 » [sourced p. 112].
+- **All four legs alike.** The book dates no pile apart: pile 4 was PHOTOGRAPHED on 18 July, not begun, and pile 3's crane of 2 September came « une fois les premiers tronçons placés » [sourced p. 103], so the four legs share one front. (A first pass started pile 4 on 18 July; the text does not support it.)
+- **A piece is dated by its TOP**: it goes up once the iron under it is up, and the front is then where its top is, so on the day the front reaches y nothing of the iron stands above y — the test holds this at every stop [derived].
+- **The 1st floor's girders**, between the legs at 43–60 m (and the belt they run through in the legs): 18 Dec 1887 to 1 Mar 1888, out from the legs, the middle of a face last, never after 1 Mar and never before the leg beside them reached their height [dates sourced; the order estimated: the girders were built on the face scaffolds from both legs, p. 108].
+- **The arches**: 7 May – 31 Aug 1888, out from the legs, the crowns last: « La partie des arcs placée entre les grands échafaudages et les pylônes, a été montée en porte à faux », the middle on the scaffold « pendant l'assemblage des poutres du deuxième étage » [sourced p. 117; the order derived from it].
+- **What a piece is.** The graph merges each class into one mesh, and a piece is a connected component of the drawn index buffer: a whole member where the module welds one (a lattice box, a gusset, a baluster), one flat face of a member where the module gives every face its own points (a prism's walls, most of the lattice's skins) [measured: about 2 triangles a component in the uprights and girders, 12–16 in the bracing, the masonry and the glass]. A member's faces share its top, so they go up together; its foot, a face of its own, may go up a few days before it. A component longer than 15 m AND of more than 16 triangles — a sweep: a rail, a helical stair — is dated triangle by triangle, so it grows with the erection; a long flat face is not, since half a face would show [derived].
+- **The uprights went up in tronçons**, « les tronçons successifs », 4.50 long below the 2nd floor and 6.00 above (spec.ts `SPLICE`). The model draws an upright a panel at a time, up to 13.5 m, so an upright's piece is dated as the tronçon at its foot: the front at its foot plus a tronçon, or its top if lower (`datedHeight`). Dated by its top, a whole panel's upright would wait for the panel's end while the struts at mid-panel hung in the air beside it [derived]. The price: on a stop's day the uprights stand up to a tronçon over the front (to 17.69 m on 18 Jul 1887, where photogravure 3 has « past mid-panel 1 »).
+- **Nothing hangs in the air.** In a leg or the shaft every other piece waits for the upright piece covering its foot (a foot within 0.3 m over a node rests on the node), so no strut or tie is ever drawn above the uprights beside it; `tests/eiffelBuild.test.ts` holds that every 5 days to 31 Mar 1889 [derived; measured].
+- **Granularity reached: per piece**, finer than per panel per pile, and per triangle on the long pieces. Days are whole: a piece dated within a day is up at that day's end.
+
+### 32.3 The rest: foundations, fit-out, lifts
+
+- **Foundations and support stones**, bottom up, per pile: pile 2 26 Jan – 10 Apr, pile 3 29 Jan – 30 Apr, pile 4 1 Feb – 16 Jun, pile 1 1 Feb – 30 Jun [sourced as in 32.1; pile 1's start estimated with pile 4's].
+- **The soubassements** (the masonry class above the support stones under the legs' own squares, and the platforms' dress in the plinths' ring: the grilles, the stairs' first steps): 23 Sep 1888 to 15 May 1889, bottom up [sourced window, the order estimated].
+- **The machine room's chimney and walls above ground, and its plant**: with the machines, « du 11 février 1889 au 10 avril » [sourced p. 113 for the machines; the chimney's date estimated with them].
+- **The 1st floor's fit-out** (the platforms over the deck, the glass, the silvered crescents, the names, the gas globes, cabochons and balusters), by face and bottom up: the gallery's arcades are not up on 21 Aug 1888 and are up, unroofed, on 26 Dec 1888 (photogravures 8, 9), so the window opens on 1 Oct 1888 [estimated]; the restaurants « montés à partir du mois de janvier 1889. On commença par ceux des faces Paris et Grenelle ; on continua par celui du Trocadéro ; puis, le 15 avril, après la démolition du monte-charges ... celui du côté de l'École Militaire » [sourced p. 118, read on the image: the OCR has « 13 avril »]. Windows by face: NE Paris and SW Grenelle 1 Oct 1888 – 15 Apr 1889, NW Trocadéro to 30 Apr, SE École Militaire 15 Apr – 15 May 1889 [the starts sourced or estimated as said; the ends estimated]. The names and the glazing are undated in the book [estimated with the rest].
+- **The 2nd floor's and the landing's fit-out**: from the platform's day to 15 Apr 1889; **the 3rd floor's**: 24 Feb to 15 May 1889 (« on se servit de la chèvre ... pour ... monter tous les matériaux destinés à l'aménagement de cette plate-forme », p. 118) [estimated].
+- **The stairs from the ground to the 1st floor**: « ne furent montés que vers le mois de novembre ; jusque-là, la circulation se faisait par un escalier en bois établi le long des poutres d'ascenseurs. A partir du premier étage, les escaliers en hélice étaient mis en place au fur et à mesure de l'avancement du montage » [sourced p. 118]; the year is not printed, and 1888 is taken [estimated: the legs reached the floor in January 1888]. Above the 1st floor the stairs follow the front.
+- **The lifts' fixed machinery**, bottom up in its line's window: Otis (piles 1 and 3) « commença le 5 janvier 1889 » to 13 June, Roux, Combaluzier et Lepape (piles 2 and 4) 19 Jan – 8 Jun [sourced p. 113; p. 118 prints 2 June], Édoux (the shaft) 20 Feb – 2 Jun [sourced p. 118], the machines and pumps under the ground 11 Feb – 10 Apr [sourced p. 113]. **The cars, chains and moving parts** appear on the day their line went into service; which Roux pile opened first, 26 May or 2 June, is not said: Ouest is taken first [estimated].
+- **The flag** on 31 Mar 1889 [sourced p. 311]. The scrubber ends on 19 Jun 1889, when the last lift ran.
+
+### 32.4 The rivets: with their iron, and the site's at the book's pace
+
+**A head comes with its iron.** A rivet's own height does not date it: the plate it sits on can be dated weeks later than the front passed the head (a piece is dated by its top), and an arch's rivets by the arches' own window. So each head is dated by the surfaces it sits on, the latest of every class triangle within 2 cm of its seat (`hostDays`) [derived]; that is a shop head's day, and a site head's earliest. At `?rivets`, 872 of 1,208,860 heads (0.07 %) find no surface that near and fall back to the front at their height [measured]. `tests/eiffelBuild.test.ts` finds the latest surface within 2 cm of a sample of heads by brute force and holds `hostDays` to it exactly.
+
+**The site heads keep the book's pace.** The book counts the rivets driven on the Champ de Mars by period (spec.ts `COUNTS.rivetsSiteByPeriod`, p. 113, re-read on the image: 189,580 / 235,809 / 283,898 / 162,184 / 100,739 / 50,868 / 27,768, summing to 1,050,846) and 98,000 at 28 m (p. 103). The model's site heads (`rivetClass` share > 0) are taken in the order their iron went up, and the k-th of N is driven on the day the book's running total reached k/N of 1,050,846, never before its iron (`siteRivetDays`). So the model's site riveting keeps the book's pace whatever its own count. Measured at `?rivets`: of 349,456 site heads, 32,590 are driven by 10 Oct 1887 (9.33 %; the book's 98,000 is 9.33 %), and 19,584 (5.6 %) wait for their iron rather than the pace [measured].
+
+### 32.5 What it costs [measured, Node, this machine]
+
+Nothing in the cook: the graph is unchanged, and the default page runs none of this. `?build` stages the drawn meshes once at load:
+
+| Depth | Triangles staged | Staging the meshes | Dating and ordering the instances | Tables kept |
+|---|---|---|---|---|
+| plain | 645,826 | 0.28 s | 1,188 fittings, 1 ms | 16 KB |
+| `?laced` | 3,891,114 | 1.1–1.4 s | 1,188 fittings, 1 ms | 25 KB |
+| `?rivets` | 3,891,114 | 1.1 s | 1,208,860 heads, 2.7 s (2.5 s of it the search for their iron) | about 45 KB |
+
+In the browser at `?rivets&build` the page reports the whole staging as 3.0 s and 46 KB (« dated »), after a 10.3 s cook [measured, this machine].
+
+The index buffers are replaced by reordered copies of the same size, and each batch's per-head arrays — the packed seats, turns and sizes (rivetPack.ts), or the matrices under `?cpuRivets` — are permuted in place before their first upload, so the lasting memory is the tables: one (day, count) pair per day on which anything of a mesh or batch went up. The search for the heads' iron holds a map of the heads by 0.6 m cell while it runs. A day's frame is then a binary search per mesh and a `drawRange` or instance `count`, and the shadow map is redrawn only when the day changes. The page prints the staging's time and tables as « dated ».
+
+### 32.6 Disagreements and open points
+
+- **Period b's height**: the § 10 table prints 14.20 m, Fig. 123 7.00; 7.00 lands on node XXIII and 14.20 lands on nothing, so the figure is taken.
+- **January–March 1888**: « monter pendant chacun des mois de janvier, février et mars, 650 t de fer » (p. 117) against the § 10 table's 1,797 t for the whole 3.5 months of period b; the dates here follow the table.
+- **The riveting peak** « en août 1889 » (p. 113, so printed on the image) is after the riveting ended; read as August 1888. Not used.
+- **The landing**: the table closes the intermediate platform on 30 Nov 1888, p. 119 has the men « arrivé à l'étage intermédiaire, le 20 décembre ». The table is taken.
+- **The rivet periods** start b on 4 Dec and e on 1 Dec where the tonnage table uses 18 Dec and 30 Nov; the rivet schedule follows the rivet table.
+- **The legs above the 1st floor**: the § 10 table begins them on 1 Apr 1888, and the front here follows it; the research's reading of photogravure 7 (15 May 1888) put the legs' tops at about node XX, 90.4, where the front gives 76 m (about node XXI). The printed date is taken over the measured print.
+- **The Roux lifts' end**: p. 113 closes their erection on 8 June, p. 118 on 2 June; 8 June is taken, and which of the two lines went into service first, 26 May or 2 June, is not said (Ouest is taken first).
+- **The arches where the inner arches meet at a** stand, in the model, where the double pylon's top stood; those pieces wait for the pylons to come down (§32.7) [derived from the geometry; the book finishes the arches on 31 Aug, after the pylons].
+- **The section view** (section.ts) swaps the foundations', the machinery's and the masonry's meshes for a cut of them; under `?build` the cut is drawn whole, whatever the day. The staged geometry is kept as it was, and shows again when the section is closed.
+- **The legs' junction with the girders** is not dated (« Quand il fut terminé, on procéda au raccord de ces poutres avec les montants », p. 108); photogravure 6 (26 Mar 1888) shows the girders continuous from leg to leg. The model has nothing to show for the junction itself.
+- **What the rule cannot tell apart.** Dating is by class and position, so a class that mixes periods is dated by where its pieces stand: a restaurant's floor structure under the 1st floor's deck goes up with the deck (1 Apr 1888), not with the restaurant (1889); a platforms piece standing in a leg below the 1st floor is taken for the ground stairs.
