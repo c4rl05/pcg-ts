@@ -1274,7 +1274,8 @@ const TERRACE_RAIL = {
  * - Balustrades [estimated: none is printed for the flights]: the terrace
  *   balustrade's section (`TERRACE_RAIL`), level at the terrace along the
  *   flights' outer and back strings, where the terrace stands above them,
- *   and across the landing's front between the newels, where PL-XIX Fig. 1
+ *   the back run ending on a post on the newel's line across the flight's
+ *   head, and across the landing's front between the newels, where PL-XIX Fig. 1
  *   draws it unbroken [sourced drawing]; a handrail raking down the outer
  *   string over the gallery, from the terrace balustrade's end post to a
  *   post at its front corner, u 3.8825, v +0.45 [measured], at the rail's
@@ -4763,6 +4764,10 @@ function entranceFace(): Record<"tread" | "post" | "rail" | "landing", Piece> {
       out.rail.blocks.push(span(b0, b1, lo, hi, lr - R.rail / 2, lr + R.rail / 2));
     }
     out.rail.blocks.push(post(la, lr, R.post, y0, top), post((side * (nu + E.outer)) / 2, lr, R.post, y0, top));
+    // The back run's inner end, on the newel's line across the flight's
+    // head: its rails stop there in the air without a post [estimated: no
+    // post is printed; every other run of this balustrade ends on one].
+    out.rail.blocks.push(post(side * nu, lr, R.post, y0, top));
   }
   // The landing between the newels, its front over the gallery, on its own
   // girder; and its balustrade.
