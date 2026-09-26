@@ -117,6 +117,7 @@ import {
 } from "./lifts.js";
 import { LOOK } from "./look.js";
 import { PART_CLASSES, type PartClass } from "./parts.js";
+import { type PlateOverlay, loadPlateTool } from "./plateTool.js";
 import { BALUSTER, CABOCHON_RISE, FITTING_ASSETS } from "./platforms.js";
 import { NEUTRAL, createRig } from "./rig.js";
 import { rivetClass } from "./spec.js";
@@ -605,6 +606,21 @@ function refreshDetailLinks(): void {
 }
 controls.addEventListener("end", refreshDetailLinks);
 refreshDetailLinks();
+
+// THE PLATE OVERLAY, an audit tool on the dev server only (`?plate=<id>`,
+// e.g. `?plate=I-1&opacity=0.5`): one of Eiffel's figures, the camera on its
+// projection and the scan over the model. The published page has none of
+// it — the build drops the whole tool (plateTool.ts).
+let plates: PlateOverlay | undefined;
+void loadPlateTool({
+  renderer,
+  scene,
+  controls,
+  slot: () => overlay.addSlot(),
+  report: (p) => report([p]),
+})?.then((p) => {
+  plates = p;
+});
 
 // Claimed here, where the panel is built, so the graph sits under the
 // readouts.
@@ -1282,7 +1298,8 @@ renderer.setAnimationLoop(() => {
   // `maxPolarAngle` and the distance limits, which is exactly what a shot
   // looking up a leg from the ground is outside of.
   if (!driven) controls.update();
-  rig.render();
+  if (plates?.active === true) plates.render();
+  else rig.render();
   tickFps();
 });
 
