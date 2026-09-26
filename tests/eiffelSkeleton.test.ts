@@ -18,6 +18,7 @@ import {
   serializeGraph,
 } from "pcg-ts";
 import { buildEiffel } from "../demos/eiffel/graph.js";
+import { lowerSeamRows } from "../demos/eiffel/builtup.js";
 import { UPRIGHT_KINK } from "../demos/eiffel/legs.js";
 import { type Detail, JITTER } from "../demos/eiffel/parts.js";
 import {
@@ -29,6 +30,7 @@ import {
   MEMBERS,
   NODES,
   PLAN_BRACING,
+  UPRIGHT_BOX,
   node,
   profileAt,
 } from "../demos/eiffel/spec.js";
@@ -972,43 +974,102 @@ describe("eiffel skeleton", () => {
     }
   });
 
-  it("steps the upright section at node XVII, in the skins and in the seam rows alike", async () => {
-    // PL-XXXI: sections XVIII-XXIII about 0.87 square, XII-XVII 500. The
-    // skins: every ring of the lower chains within a kink of XVII is 0.435
-    // half-wide, every ring of the upper chains 0.25 â€” a chain through XVII
-    // would taper across panel 12 instead.
+  it("steps the upright section at node XVII: the built-up box below, the 0.50 box above, and their seam rows", async () => {
+    // PL-XXXI: from the supports to XVII the arbalÃ©triers are the 0.877
+    // plan-square box of plates (demos/eiffel/builtup.ts, held against the
+    // plate in tests/eiffelBuiltup.test.ts), XII-XVII 500 square. This
+    // used to read a swept 0.435 skin's rims at XVII and its seam rows at
+    // hypot(0.435, 0.435 - inset) off the axis: that skin was neither the
+    // plan square (0.4385) nor square to the tower's faces (rolled 11.6 deg
+    // in panels 1-4), so the lower half now reads the plates themselves.
     const g = buildEiffel(1889, { rivets: true });
-    for (const id of ["legUprights4", "legUprightsUpper4", "legUprightSkin", "legUprightUpperSkin"]) {
+    for (const id of ["legUprightsUpper4", "legUprightPlatesLit", "legUprightUpperSkin"]) {
       g.output({ id } as NodeHandle, "out", `probe:${id}`);
     }
     const { outputs } = await cook(g);
     const geo = (id: string) => firstGeometry(outputs[`probe:${id}`]!)!;
-    const lower = polylines(geo("legUprights4"));
     const upper = polylines(geo("legUprightsUpper4"));
     const yXVII = node("XVII").y;
-    // The vertices the skin's triangles use.
-    const verts = (id: string): Vec3[] => polylines(geo(id)).flat();
+    const H = UPRIGHT_BOX.planHalf;
+    // Into the +x+z leg: the quadrants are quarter turns of it.
+    const fold = (p: Vec3): Vec3 => {
+      let q = p;
+      for (let i = 0; i < 4 && !(q[0] > 0 && q[2] > 0); i++) q = [q[2], q[1], -q[0]];
+      return q;
+    };
+    // The upright of the leg nearest a point, the panel it lies along, and
+    // its plan offsets from that panel's axis line at its own height. A
+    // point ON the box's faces is in the panel of its height (the faces
+    // fold on the nodes' horizontal lines); a plate vertex may be on a
+    // run-on past it, so `along` picks the panel by the place along each
+    // panel's axis instead.
+    const picks = [["outer", "outer"], ["inner", "outer"], ["inner", "inner"], ["outer", "inner"]] as const;
+    const nearest = (p: Vec3, along = true) => {
+      const pr = profileAt(p[1]);
+      const [xs, zs] = picks.reduce((b, m) =>
+        Math.hypot(p[0] - pr[m[0]], p[2] - pr[m[1]]) < Math.hypot(p[0] - pr[b[0]], p[2] - pr[b[1]]) ? m : b,
+      );
+      let k = 0;
+      let off = Infinity;
+      for (let j = 0; j < 12; j++) {
+        const [A, Q] = [NODES[j]!, NODES[j + 1]!];
+        const d: Vec3 = [Q[xs] - A[xs], Q.y - A.y, Q[zs] - A[zs]];
+        const t = ((p[0] - A[xs]) * d[0] + (p[1] - A.y) * d[1] + (p[2] - A[zs]) * d[2]) / (d[0] ** 2 + d[1] ** 2 + d[2] ** 2);
+        const o = along ? Math.max(0, -t, t - 1) : Math.max(0, A.y - p[1], p[1] - Q.y);
+        if (o < off) [k, off] = [j, o];
+      }
+      const A = NODES[k]!;
+      const Q = NODES[k + 1]!;
+      const T0: Vec3 = [Q[xs] - A[xs], Q.y - A.y, Q[zs] - A[zs]];
+      const l = Math.hypot(...T0);
+      const f = (p[1] - A.y) / T0[1];
+      return {
+        dx: p[0] - (A[xs] + T0[0] * f),
+        dz: p[2] - (A[zs] + T0[2] * f),
+        T: [T0[0] / l, T0[1] / l, T0[2] / l] as Vec3,
+        xs,
+        zs,
+      };
+    };
+    // The lower box ENDS at XVII: no plate vertex stands past the node's
+    // plane square to panel 11's axis, and some lie on it (to f32 on a box
+    // scaled 5 m either side of its centre: 0.5 mm).
+    const plates = polylines(geo("legUprightPlatesLit")).flat().map(fold);
+    let onTop = 0;
+    for (const v of plates.filter((v) => v[1] > node("XVIII").y + 1)) {
+      const { T, xs, zs } = nearest(v);
+      const top = node("XVII");
+      const past = (v[0] - top[xs]) * T[0] + (v[1] - yXVII) * T[1] + (v[2] - top[zs]) * T[2];
+      expect(past).toBeLessThan(5e-4);
+      if (Math.abs(past) < 5e-4) onTop++;
+    }
+    expect(onTop).toBeGreaterThan(0);
+    // The upper skin: 0.25 half-wide throughout, and at XVII.
     const corner = (r: number) => r * Math.SQRT2;
-    const lowerTop = verts("legUprightSkin").filter((v) => Math.abs(v[1] - yXVII) < 0.02);
-    expect(lowerTop.length).toBeGreaterThan(0);
-    // (A cap's centre sits on the axis; the rim is what has a size.)
     const rim = (v: Vec3, lines: Vec3[][]) => toAxis(v, lines) > 1e-3;
-    for (const v of lowerTop.filter((v) => rim(v, lower))) expect(toAxis(v, lower)).toBeCloseTo(corner(0.435), 3);
-    const upperAll = verts("legUprightUpperSkin");
+    const upperAll = polylines(geo("legUprightUpperSkin")).flat();
     for (const v of upperAll) expect(toAxis(v, upper)).toBeLessThan(corner(0.25) * 1.01);
     for (const v of upperAll.filter((v) => Math.abs(v[1] - yXVII) < 0.02 && rim(v, upper))) {
       expect(toAxis(v, upper)).toBeCloseTo(corner(0.25), 3);
     }
-    // The seam rows read the same two tables: a row is `inset` in from a
-    // corner of an r-square, so sqrt(r^2 + (r - inset)^2) off the axis.
+    // The lower seam rows lie ON the webs: 0.4385 out in plan across the
+    // face they fasten, and inset from its corner square to the axis, which
+    // in plan is inset / |h square to T| [derived: builtup.ts, faceFrame].
+    const lowerRivets = rivetBases(outputs["rivets.leg.uprights"]![0]).map(fold);
+    expect(lowerRivets.length).toBeGreaterThan(0);
+    for (const p of lowerRivets) {
+      const { dx, dz, T } = nearest(p, false);
+      const [out, along, h] = Math.abs(dx) > Math.abs(dz) ? [dx, dz, T[2]] : [dz, dx, T[0]];
+      expect(Math.abs(Math.abs(out) - H)).toBeLessThan(SETTLE);
+      expect(Math.abs(Math.abs(along) - (H - UPRIGHT_SEAMS.inset / Math.sqrt(1 - h * h)))).toBeLessThan(SETTLE);
+    }
+    // The upper rows read the 0.50 box: a row is `inset` in from a corner of
+    // an r-square, so sqrt(r^2 + (r - inset)^2) off the axis.
     const row = (r: number) => Math.hypot(r, r - UPRIGHT_SEAMS.inset);
-    const lowerRivets = rivetBases(outputs["rivets.leg.uprights"]![0]).filter((p) => p[1] > node("XVIII").y + 0.1);
     // (Up at XI, b and d close to 0.50 apart and a row between them is as
-    // near the other leg's axis as its own; the rows below say the same.)
+    // near the other leg's axis as its own.)
     const upperRivets = rivetBases(outputs["rivets.leg.uprights.upper"]![0]);
     const upperBelowXI = upperRivets.filter((p) => p[1] < node("XI").y - 0.5);
-    expect(lowerRivets.length).toBeGreaterThan(0);
-    for (const p of lowerRivets) expect(Math.abs(toAxis(p, lower) - row(0.435))).toBeLessThan(SETTLE);
     for (const p of upperBelowXI) expect(Math.abs(toAxis(p, upper) - row(0.25))).toBeLessThan(SETTLE);
     // The upper box's first row, which would sit on the lower box's top
     // face, is not laid.
@@ -1081,22 +1142,31 @@ describe("eiffel skeleton", () => {
   });
 
   it("rivets the uprights' seams at the rule's pitch: 8 rows per upright", async () => {
-    // The samples a spacing resample lays on a path of length L at pitch
-    // p: one every p from the start, plus the true end when L is not a
-    // whole number of pitches. Rows are left out where the column turns
-    // (within a kink ring of a node whose slope changes: the skin's turn),
-    // and the upper chains skip their first row, on the lower box's top.
+    // BELOW XVII, the built-up box (builtup.ts, lowerSeamRows): on each of
+    // its four faces in every panel, a row in from each corner, a head every
+    // pitch, centred on its stretch and at least half a pitch clear of each
+    // end: a straight node, or at a turn the face's fold or its plate's end
+    // (where each head sits is held in tests/eiffelBuiltup.test.ts). Each
+    // row is a line (n - 1) pitches long, less 0.1 mm, so it takes n. ABOVE, the
+    // samples a spacing resample lays on a path of length L at pitch p: one
+    // every p from the start, plus the true end when L is not a whole
+    // number of pitches. Rows are left out where the column turns (within a
+    // kink ring of a node whose slope changes: the skin's turn), and the
+    // upper chains skip their first row, on the lower box's top.
     const g = buildEiffel(1889, { rivets: true });
-    g.output({ id: "legUprights4" } as NodeHandle, "out", "probe:lower");
     g.output({ id: "legUprightsUpper4" } as NodeHandle, "out", "probe:upper");
     const { outputs } = await cook(g);
+    const p = UPRIGHT_SEAMS.pitch;
+    let lowerRows = 0;
+    for (const r of lowerSeamRows(p, UPRIGHT_SEAMS.inset)) {
+      lowerRows += Math.round(Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1], r.b[2] - r.a[2]) / p) + 1;
+    }
     // XVII turns too, but no chain turns THERE: both end on it.
     const kinks = kinkedNodes("supports", "XI").filter((y) => y !== node("XVII").y);
     // legs.ts drops rows within 3 mm of the rings either side of the node.
     const zone = UPRIGHT_KINK + 0.003;
     const samples = (line: readonly Vec3[]): number[] => {
       const ys: number[] = [];
-      const p = UPRIGHT_SEAMS.pitch;
       let L = 0;
       const cum = [0];
       for (let i = 1; i < line.length; i++) {
@@ -1115,23 +1185,20 @@ describe("eiffel skeleton", () => {
       if (L - whole * p > 1e-4) ys.push(line[line.length - 1]![1]);
       return ys;
     };
-    const expected = (probe: string, skipStart: boolean) => {
-      let n = 0;
-      for (const line of polylines(firstGeometry(outputs[probe]!)!)) {
-        const ys = samples(line).slice(skipStart ? 1 : 0);
-        n += 8 * ys.filter((y) => kinks.every((k) => Math.abs(y - k) >= zone)).length;
-      }
-      return n;
-    };
-    for (const [name, probe, skip] of [
-      ["rivets.leg.uprights", "probe:lower", false],
-      ["rivets.leg.uprights.upper", "probe:upper", true],
+    let upperRows = 0;
+    for (const line of polylines(firstGeometry(outputs["probe:upper"]!)!)) {
+      const ys = samples(line).slice(1);
+      upperRows += 8 * ys.filter((y) => kinks.every((k) => Math.abs(y - k) >= zone)).length;
+    }
+    for (const [name, expected] of [
+      ["rivets.leg.uprights", 4 * lowerRows],
+      ["rivets.leg.uprights.upper", upperRows],
     ] as const) {
       const item = outputs[name]![0]!;
       expect(item.kind).toBe("instances");
       if (item.kind !== "instances") return;
       expect(item.batches.map((b) => b.assetId)).toEqual(["rivet"]);
-      expect(item.batches.reduce((n, b) => n + b.count, 0), name).toBe(expected(probe, skip));
+      expect(item.batches.reduce((n, b) => n + b.count, 0), name).toBe(expected);
     }
   });
 
@@ -1179,7 +1246,11 @@ describe("eiffel skeleton", () => {
     for (const [a] of polylines(legMasque0x4RotDone!)) {
       const [u, w] = [Math.abs(a![0]), Math.abs(a![2])].sort((m, n) => m - n);
       expect(Math.abs(u! / 3.8825 - Math.round(u! / 3.8825))).toBeLessThan(1e-3);
-      expect(w!).toBeGreaterThan(profileAt(a![1]).outer + 0.41);
+      // In front of the uprights' exterior webs, their C.J.s (12) and the
+      // seam heads on the webs (13): the built-up box's plan half and those,
+      // along the face's normal, which in plan is F = sqrt(1 + s^2) times it.
+      // (This read 0.41 once, the old square skin's half-width.)
+      expect(w!).toBeGreaterThan(profileAt(a![1]).outer + UPRIGHT_BOX.planHalf + 0.025 * Math.hypot(1, s4));
     }
   });
 
@@ -1921,6 +1992,8 @@ describe("eiffel skeleton", () => {
 
   it("keeps every crossing plate's inner face outside the lacing it covers, and counts the ones it does not", async () => {
     const { chords, lacing, laceFaces, plates } = await crossingProbe({ lacedWeb: true });
+    // The post landings where the column turns enough to spend the depth.
+    const TURNS = ["XX", "XXI", "XXII"];
     // The bound the DEPTH is chosen against, re-measured from the cooked
     // lacing rather than from CHORD - LACE: a lacing bar's swept square is
     // mitred at the zigzag's vertices, so MID-SPAN its outer surface stands
@@ -1931,6 +2004,7 @@ describe("eiffel skeleton", () => {
     const seenBehind: string[] = [];
     const seenThrough: string[] = [];
     let clean = Infinity;
+    let cleanAtTurn = Infinity;
     let worst = -Infinity;
     let seenWorst = -Infinity;
     let seenClean = Infinity;
@@ -1950,7 +2024,8 @@ describe("eiffel skeleton", () => {
       expect(Number.isFinite(top), `no lacing under the plate at y=${p.o[1].toFixed(3)}`).toBe(true);
       worst = Math.max(worst, top);
       seenWorst = Math.max(seenWorst, seen);
-      if (top <= 0) clean = Math.min(clean, -top);
+      if (top <= 0 && TURNS.includes(p.c.label ?? "")) cleanAtTurn = Math.min(cleanAtTurn, -top);
+      else if (top <= 0) clean = Math.min(clean, -top);
       else {
         behind.push(p.c.label ?? "");
         if (top > CROSS.thick) through.push(p.c.label ?? "");
@@ -1966,15 +2041,21 @@ describe("eiffel skeleton", () => {
     // anywhere is 1.57 mm.
     expect(behind.length + through.length).toBeGreaterThan(0);
     expect(clean, "the tightest clean clearance").toBeGreaterThan(0.0015);
+    // At a turn a plate the lacing happens to clear is clean by luck, not
+    // by the depth: four at XXII by 0.11 mm. (They had lacing behind them
+    // until the joints were fitted to the built-up uprights, builtup.ts:
+    // every trimmed strut starts where its clearance says, which moved
+    // each one's lacing along it, so the peaks under these plates moved.)
+    expect(cleanAtTurn).toBeGreaterThan(0.0001);
     // WHERE IT DOES NOT, READ RAW. Only at the four kinked post landings:
     // the bisector's tilt (above) spends the clearance the depth was chosen
     // for, and a strut's lacing blows out past its mitre in the last rings
     // before a CUT end, reaching 2.6 mm inside the angles' outer face where
     // mid-span it is 17.4. Counted and bounded rather than asserted to zero.
     const tally = (v: string[]) => [...new Set(v)].sort().map((k) => `${k}=${v.filter((x) => x === k).length}`);
-    expect(tally(behind)).toEqual(["XX=8", "XXI=32", "XXII=32"]);
+    expect(tally(behind)).toEqual(["XX=8", "XXI=32", "XXII=28"]);
     expect(tally(through)).toEqual(["XXI=8"]);
-    expect(behind).toHaveLength(72);
+    expect(behind).toHaveLength(68);
     expect(through).toHaveLength(8);
     expect(1000 * worst, "the deepest the lacing reaches").toBeCloseTo(18.09, 1);
     // BUT MOST OF THAT IS INSIDE AN ANGLE ALREADY. The lacing runs from
@@ -1983,19 +2064,20 @@ describe("eiffel skeleton", () => {
     // XXI and XX — the blow-out included: the 8 plates "through" at XXI are
     // lacing 2.6 mm under the post's OWN angle's outer face, which no plate
     // lets through because the angle encloses it. Discounting what an angle
-    // already encloses, 16 plates remain, all at XXII, each with the
+    // already encloses, 20 plates remain, all at XXII, each with the
     // lacing inside the plate's own 10 mm (6.17 mm at worst, 3.8 short of
     // its front face) — so nothing shows through any plate in the tower.
     // A plate PLANE cannot take these 16 out either: solved per plate
     // against the cooked steel and lacing, the best flat plane at XXII
     // still leaves the lacing within 0.57 mm of needing a proud plate, i.e.
-    // it buys the 16 back only at 11 mm proud and 1 mm of daylight
+    // it buys them back only at 11 mm proud and 1 mm of daylight
     // (legs.ts, postCrossings).
-    expect(tally(seenBehind)).toEqual(["XXII=16"]);
+    // (16 before the joints were fitted to the built-up uprights; the four
+    // more are the lacing peaks that moved, see above.)
+    expect(tally(seenBehind)).toEqual(["XXII=20"]);
     expect(seenThrough).toHaveLength(0);
     expect(1000 * seenWorst, "the deepest the lacing reaches outside an angle").toBeCloseTo(6.17, 1);
-    // And where it is clean, at the turns too: 0.13 mm at the tightest, a
-    // XXII plate on the other side of the pair.
+    // And where it is clean, at the turns too: 0.38 mm at the tightest.
     expect(seenClean).toBeGreaterThan(0.0001);
   });
 

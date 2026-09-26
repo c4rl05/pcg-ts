@@ -114,6 +114,8 @@ const BOX_NORMALS: readonly Vec3[] = (
 /**
  * Flat bars and plates: a box per member, its length along the member,
  * `width` across it in its face and `thickness` along the face's normal.
+ * Either may be a field, read per member (a primitive attribute the
+ * members carry, as the lower uprights' plates do, each its own size).
  *
  * The unit box carries its local face normals as `normal`; `rotateAttrs`
  * turns them by each copy's `rot` (a box scaled along its own axes keeps
@@ -121,7 +123,13 @@ const BOX_NORMALS: readonly Vec3[] = (
  * same class (which do carry normals) filled these with zeros, and the
  * Masque rendered black.
  */
-export function flatBars(g: Graph, id: string, members: NodeHandle, width: number, thickness: number): NodeHandle {
+export function flatBars(
+  g: Graph,
+  id: string,
+  members: NodeHandle,
+  width: number | Field,
+  thickness: number | Field,
+): NodeHandle {
   const tips = g.add(pathResample, { mode: "count", count: 2, lengthAttr: "barLen" }, `${id}Tips`);
   const len = g.add(
     promoteAttribute,
@@ -232,6 +240,13 @@ export interface JointOpts {
    * leg boxes 0.50 apart). Read for the clearance only.
    */
   readonly uprightAt?: Field;
+  /**
+   * Where the gusset plates' near edges meet the upright, by height, when
+   * that is not `upright`: the WEB, where `upright` is the clearance a
+   * strut keeps, which also stands off what protrudes from the web (the
+   * lower uprights' channels, `builtup.ts`). Default `upright`.
+   */
+  readonly face?: ReadonlyArray<readonly [number, number]>;
   /**
    * The members carry {@link JOINT_ENDS} (primitive, f32 x 2): 1 where that
    * end lands on an upright and takes a joint, 0 where it stops free, at an
@@ -491,7 +506,11 @@ export function webMembers(
  * "Ep. 10" on the panel-5 gusset].
  */
 const PLATE = 0.008;
-/** The joint's clearance past the upright's face [estimated]. */
+/**
+ * The joint's clearance past the upright's face [estimated]: past what
+ * stands out of it too, where the upright's table says so (the lower
+ * uprights' channels, `builtup.ts`, `jointUpright`).
+ */
 const CLEAR = 0.05;
 /** A plate runs this many strut half-widths along its member [estimated]. */
 const PLATE_REACH = 3;
@@ -582,9 +601,11 @@ function trimToJoints(
  * from the upright's axis along a flat diagonal and 1.423 m along the
  * horizontal [sourced]. A rectangle cannot follow the face, so its near
  * edge is placed where its obtuse corner meets the upright's face: the
- * rest of that edge is inside the upright's box, and the plate's inner
- * face lies within the box's face (the strut is no wider than the upright)
- * or flush on it. The plates of the members meeting at a node overlap
+ * rest of that edge is inside the upright's box. The plate lies just
+ * outside the upright's faces parallel to it: 8 mm off the lower uprights'
+ * webs (an 800 strut is 16 mm deeper than their lozenge, 0.784 square to
+ * the lattice plane in panels 1-4), where it meets what stands out of them
+ * (`builtup.ts`, `jointFace`), and on or near the 0.50 boxes' faces above. The plates of the members meeting at a node overlap
  * into the irregular gusset a real joint has, without the node needing to
  * know who meets it: each member brings its own.
  *
@@ -643,7 +664,7 @@ function memberJoints(
   const faceAt = (end: 0 | 1): Field => {
     const sine = endSineAt(joints, end);
     const cosine = sqrt(sub(1, mul(sine, sine)));
-    const r = joints.uprightAt ?? ramp(y, joints.upright);
+    const r = joints.uprightAt ?? ramp(y, joints.face ?? joints.upright);
     return max(div(sub(r, mul(across, cosine)), sine), 0);
   };
   // The span (near edge, far edge, width) is fixed at the tips, before the
@@ -872,7 +893,7 @@ export const UPRIGHT_SEAMS = { pitch: 0.125, inset: 0.055 } as const;
  * leaning faces (the girder chords pass their face normal).
  *
  * `skipStart` drops each path's first row: a member that stands on a wider
- * one (the 0.50 upright on the 0.87 below node XVII) starts at the plane
+ * one (the 0.50 upright on the built-up box below node XVII) starts at the plane
  * where the wider one ends, so its first row would sit half inside it.
  */
 export function seamRivets(

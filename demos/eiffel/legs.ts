@@ -46,13 +46,16 @@
  *   B on the inner faces, 1.600; their chords are 0.22 plates, the top one
  *   just above XXVIII, where no horizontal is (PL-VII Figs 1, 5).
  *
- * The uprights change section at XVII (0.87 -> 0.50) as a STEP, so each is
- * two chains, split there, each skinned and riveted from its own table.
+ * The uprights change section at XVII as a STEP, so each is two chains,
+ * split there. Below it they are built up as PL-XXXI builds them, the
+ * 0.877 plan-square box of plates in the tower's faces (`builtup.ts`);
+ * above it, the 0.50 box, skinned and riveted from its table.
  */
 import {
   type Field,
   type Graph,
   type NodeHandle,
+  attribute,
   component,
   filterByExpression,
   ge,
@@ -82,6 +85,7 @@ import {
   stationLattice,
 } from "./lattice.js";
 import { CROSS_PLATE, type CrossPlate, type Detail, type Parts } from "./parts.js";
+import { AS_BUILT, WEBS_ONLY, jointFace, jointUpright, lowerPlates, lowerSeamRows } from "./builtup.js";
 import {
   CROSS_RIVETS,
   CROSS_THICK,
@@ -100,6 +104,7 @@ import {
   MEMBERS,
   NODES,
   type NodeLevel,
+  UPRIGHT_BOX,
   node,
   profileAt,
   tableAt,
@@ -439,7 +444,19 @@ function family(pitch: number, v0: number, d: UV): Array<{ p: UV; d: UV }> {
   return Array.from({ length: k1 - k0 + 1 }, (_, i) => ({ p: [(k0 + i) * pitch, v0] as UV, d }));
 }
 
-/** The uprights' half-width across a band [y0, y1] (its widest). */
+/**
+ * The uprights' half-width across a band [y0, y1] (its widest), as the
+ * belts' clips read it: `MEMBERS.upright`'s 0.41 / 0.435, the old square
+ * skin's. Measured horizontally in a face (`FacePlane.clip`) that is 28
+ * mm (panel 5) and 3 mm (panel 11) INSIDE the built-up box's 0.4385 plan
+ * half (`builtup.ts`), so a chord plate clipped at it ends buried in the
+ * web, a belt gusset slid GUSSET_CLEAR past it ends 8.5 mm inside the web
+ * (panel 5) or 16.5 mm off it (panel 11, 4.5 off its C.J.), and a post or
+ * bar at POST_CLEAR stands 21.5 / 46.5 mm off it, between the channel's
+ * legs in panel 5 [derived]: nothing shows a gap or a clash. Kept so, because the chords' rivet rows are counted from
+ * these clips (tests/eiffelChordRivets.test.ts); re-fitting them to the
+ * box is the chord rows' own work (rivets25).
+ */
 const uprightHalf = (y0: number, y1: number) =>
   Math.max(tableAt(MEMBERS.upright, y0 + 0.01), tableAt(MEMBERS.upright, y1 - 0.01));
 
@@ -1397,7 +1414,14 @@ function entretoiseMembers(openAt: readonly string[]): {
   };
 }
 
-/** How far the Masque stands out from the face plane: clear of the uprights' 0.41 faces and their rivet heads (0.429) [estimated]. */
+/**
+ * How far the Masque stands out from the face plane [estimated]: clear of
+ * the uprights' exterior webs, 0.392 out along the face's normal in panel
+ * 4 (the built-up box's 0.4385 plan half, `builtup.ts`), their C.J.s
+ * (0.404) and the seam heads on the webs (0.405) [derived]. It stands
+ * between the uprights, 0.45 off their axes along the face, so the fins on
+ * the face centre lines are not in front of it.
+ */
 const MASQUE_STANDOFF = 0.44;
 
 /** The width of each band that fills a Masque corner [estimated: fine against its 1.0 radius]. */
@@ -1475,7 +1499,10 @@ function masqueFillets(
  *   degrees, each spanning about 1.7 post pitches;
  * - the rounded top corners: the frame filled between the top band, the
  *   screen's side and an arc of `MASQUE.fillet`, as concentric flat bands.
- * Everything is clipped to the face, 0.45 short of the uprights' axes. Flat
+ * Everything is clipped to the face, 0.45 short of the uprights' axes
+ * (11.5 mm off the built-up box's 0.4385 plan half, in front of the
+ * channels on the faces the lattice lands on, 0.17 in front of their
+ * reach [derived]). Flat
  * bars in layers, so that no two crossing plates share a plane; returned
  * as member paths by width.
  */
@@ -1635,10 +1662,12 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     levels: levels.map(legLevel),
   });
 
-  // The uprights, on their own levels (the nodes, and a ring either side of
-  // every kink): c, b and d run the full height; a stops at XVII. Each is
-  // cut at XVII, where the section steps 0.87 -> 0.50: the lower chains run
-  // supports to XVII, the upper (c, b, d) XVII to XI.
+  // The uprights' axes, on their own levels (the nodes, and a ring either
+  // side of every kink): c, b and d run the full height; a stops at XVII.
+  // Each is cut at XVII, where the section steps: the lower chains run
+  // supports to XVII (their steel is built up from the section table,
+  // `builtup.ts`; the chains are the axes it stands on), the upper (c, b,
+  // d) XVII to XI, skinned as the 0.50 box.
   const upLevels = uprightLevels();
   const upr = stationLattice(g, {
     id: "legUpr",
@@ -1778,8 +1807,19 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
       ? [0, 1, 2, 3].flatMap((k) => turnFootprints(crossFootprints(crossList, crossPlate(detail)), k))
       : [];
   const laced = { lacingStep: LACING_STEP, covers: covered };
-  const diagonals = { upright: MEMBERS.upright, reach: JOINT_REACH.diagonal, kinks: true };
-  const across = { upright: MEMBERS.upright, reach: JOINT_REACH.horizontal, kinks: true };
+  // The lower uprights as this depth draws them: the webs alone at the
+  // plain depth; from the laced depth up, everything the section puts
+  // outside them, the C.J.s and panels 1-5's fins and channels.
+  const shown = detail.lacedWeb === true || detail.rivets === true ? AS_BUILT : WEBS_ONLY;
+  // Below XVII a strut keeps clear of the built-up box and what stands out
+  // of the face it lands on, and its plates meet the web
+  // (`jointUpright`, `jointFace`); above, of the 0.50 box.
+  const onUpright = {
+    upright: jointUpright(MEMBERS.uprightAbove),
+    face: jointFace(MEMBERS.uprightAbove),
+  };
+  const diagonals = { ...onUpright, reach: JOINT_REACH.diagonal, kinks: true };
+  const across = { ...onUpright, reach: JOINT_REACH.horizontal, kinks: true };
   const horizontalWeb = webMembers(
     g,
     "legHorizontal",
@@ -1795,8 +1835,10 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
   // The entretoises: "600" + "600" wide in plan and "715.6" deep [sourced
   // PL-VIII Figs 1, 8], a rectangular strut: N, its face's normal, is
   // horizontal (across the girder in plan), B vertical. They meet b and d
-  // along the leg's diagonal, square to neither face of the box: its corner
-  // stands r sqrt 2 out from the axis that way.
+  // along the leg's diagonal, square to neither face of the box: its plan
+  // square's corner stands 0.4385 sqrt 2 out from the axis that way, and
+  // nothing on its two faces reaches as far along it (the channels' legs,
+  // 0.52 [derived]), so the corner is the clearance.
   const entretoiseWeb = webMembers(
     g,
     "legEntretoise",
@@ -1808,7 +1850,10 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     detail,
     {
       ...across,
-      uprightAt: mul(ramp(component(position(), 1), MEMBERS.upright), Math.SQRT2),
+      uprightAt: ramp(component(position(), 1), [
+        [0, UPRIGHT_BOX.planHalf * Math.SQRT2],
+        [node("XVII").y, UPRIGHT_BOX.planHalf * Math.SQRT2],
+      ]),
       endFlags: true,
     },
     {
@@ -1867,17 +1912,26 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     laced,
   );
 
-  const lower4 = four("legUprights4", uprights);
+  // The lower chains copied: the built-up box's axes, which tests read
+  // (nothing is swept along them).
+  four("legUprights4", uprights);
   const upper4 = four("legUprightsUpper4", uprightsUpper);
   const seams =
     detail.rivets === true
       ? [
           {
+            // The corner angles' rows on the true faces (`lowerSeamRows`).
             name: "leg.uprights",
-            spawn: seamRivets(g, "legUpright", lower4, MEMBERS.uprightBelow, [1, 0, 0], {
-              ...UPRIGHT_SEAMS,
-              keep: seamKeep(),
-            }),
+            spawn: lineRivets(
+              g,
+              "legUprightSeams",
+              fourMembers(
+                "legUprightSeams4",
+                segmentMembers(g, "legUprightSeamRows", lowerSeamRows(UPRIGHT_SEAMS.pitch, UPRIGHT_SEAMS.inset)),
+              ),
+              0,
+              UPRIGHT_SEAMS.pitch,
+            ),
           },
           {
             name: "leg.uprights.upper",
@@ -1920,7 +1974,24 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
   const crossSets = crossList.length > 0 ? crossPlateSets(crossList, crossPlate(detail)) : [];
   return {
     uprights: [
-      skin(g, "legUprightSkin", lower4, MEMBERS.uprightBelow, [1, 0, 0]),
+      // Supports to XVII: the built-up box, a flat box per plate per panel,
+      // each carrying its own size.
+      (() => {
+        const list = lowerPlates(shown);
+        return flatBars(
+          g,
+          "legUprightPlates",
+          fourMembers(
+            "legUprightPlates4",
+            segmentMembers(g, "legUprightPlates", list, [
+              { name: "plateWidth", values: list.map((p) => [p.width]) },
+              { name: "plateThick", values: list.map((p) => [p.thickness]) },
+            ]),
+          ),
+          attribute("plateWidth"),
+          attribute("plateThick"),
+        );
+      })(),
       skin(g, "legUprightUpperSkin", upper4, MEMBERS.uprightAbove, [1, 0, 0]),
     ],
     horizontals: [...horizontalWeb.meshes, ...entretoiseWeb.meshes, ...gapHorizontalWeb.meshes],

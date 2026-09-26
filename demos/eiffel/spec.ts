@@ -341,8 +341,9 @@ export const ARCH = {
 
 /**
  * Member sizes, as HALF-widths of a square section (Plate XXXI's section
- * tables). Uprights are closed boxes 0.80-0.82 m square below the 1st
- * floor, about 0.87 m to the 2nd, 0.50 m above. Web bars are 0.80 m square
+ * tables). Uprights are closed boxes: below the 2nd floor the 0.877 plan
+ * square of `UPRIGHT_BOX` (0.800-0.868 square to their axes), 0.50 m
+ * above. Web bars are 0.80 m square
  * lattice struts in panels 1-9, 0.60 m in panel 10 and 0.50 m in panels
  * 12-28; horizontals 0.80 m below the 2nd floor and 0.60 m above.
  */
@@ -363,8 +364,18 @@ export const MEMBERS = {
    * taper 0.87 -> 0.50 over panel 12 while its seam rivets, sampled every
    * pitch, stepped a centimetre above the node — the two disagreeing
    * about where the steel is. The uprights are therefore split at XVII
-   * into two chains, each skinned AND riveted with its own part of this
-   * table: `uprightBelow` and `uprightAbove`.
+   * into two chains: the lower built up from `UPRIGHT_SECTIONS`, the upper
+   * skinned AND riveted with `uprightAbove`.
+   *
+   * BELOW XVII THIS IS NOT WHERE THE STEEL IS. The legs' lower uprights are
+   * built as PL-XXXI builds them (`UPRIGHT_SECTIONS`, `builtup.ts`): a
+   * 0.877 square IN PLAN, its faces in the tower's faces, which no square
+   * half-width describes (0.41 is neither its plan half, 0.4385, nor its
+   * half-side square to the axis, 0.400 in panels 1-4). The legs read the
+   * section through builtup.ts; the lower rows here are kept for the
+   * readers outside the legs that were measured against the old square
+   * skin (`firstFloor.ts`'s b face, `platforms.ts`' pedestal and cross
+   * girders), until each is re-measured.
    */
   upright: [
     [2.5, 0.41],
@@ -373,13 +384,6 @@ export const MEMBERS = {
     [115.5, 0.435],
     [115.51, 0.25],
     [276.13, 0.25],
-  ],
-  /** The upright table from the supports to XVII (the lower chains). */
-  uprightBelow: [
-    [2.5, 0.41],
-    [57.4, 0.41],
-    [68.4, 0.435],
-    [115.5, 0.435],
   ],
   /** The upright table from XVII up (the upper chains): 0.25 at XVII itself. */
   uprightAbove: [
@@ -426,6 +430,207 @@ export const MEMBERS = {
    */
   beltBar: 0.05,
 } as const;
+
+/**
+ * THE LOWER UPRIGHTS AS BUILT, supports to XVII: the arbalétriers' own
+ * sections, read off PL-XXXI's tables and drawings with PL-IX's joint
+ * details and Eiffel's text (SOURCES.md, "The built-up uprights"). What
+ * `builtup.ts` draws, and every rule that needs to know where a lower
+ * upright's steel is reads it through there.
+ *
+ * The box is a constant 0.877 m square IN PLAN, "mesurés extérieurement",
+ * its faces in the tower's face planes; "la dimension extérieure du tronçon
+ * restât constante", so a thicker plate grows INWARD [sourced text]. Square
+ * to the leaning axis that square is a lozenge (101 38' / 78 22' in panels
+ * 1-4, PL-IX fig. 28), and the web widths the plate prints are the
+ * lozenge's sides: 877 times the sine of the angle between the axis and the
+ * face's horizontal [derived, within 2 mm of every printed width from
+ * XXVIII to XIX].
+ */
+export const UPRIGHT_BOX = {
+  /** Half the plan square outside the webs [sourced text: "877 mm mesurés extérieurement"]. */
+  planHalf: 0.4385,
+  /** The angles, all 100 x 100 x 12 below XVII [sourced PL-XXXI]. */
+  angle: { leg: 0.1, t: 0.012 },
+  /**
+   * Panels 1-5: the C.J. over a montant-EXTERIOR face's butt, 205 x 12, and
+   * over an INTERIOR face's, 200 x 12 [sourced PL-XXXI, "2 C.J. 205 x 12,
+   * 2 C.J. 200 x 12"; which is which from the drawing D28, PL-IX figs 21,
+   * 23].
+   */
+  cjExterior: { width: 0.205, t: 0.012 },
+  cjInterior: { width: 0.2, t: 0.012 },
+  /** Panels 6-11: one C.J. on every face, 200 wide and as thick as the table gives [sourced PL-XXXI]. */
+  cjUpperWidth: 0.2,
+  /**
+   * Panels 1-5, an interior face: two angles on the web, flat legs turned
+   * out, their heels "385" apart, "207.5" in from each edge of the 800
+   * [sourced PL-IX fig. 21, "coupe courante AB"]: a channel, where the
+   * montant's lattice gussets seat.
+   */
+  channelHeels: 0.385,
+  /**
+   * A member's two montant-INTERIOR faces, those toward its neighbours in
+   * the leg, as plan directions in the +x+z leg: c's toward b (-x) and d
+   * (-z), and so round [sourced PL-XXXI's montant key M1/M2: interior faces
+   * 3, 4 (c); 5, 8 (d); 9, 10 (a); 14, 15 (b)]. The other two are exterior.
+   */
+  interior: {
+    a: [[1, 0], [0, 1]],
+    b: [[1, 0], [0, -1]],
+    c: [[-1, 0], [0, -1]],
+    d: [[0, 1], [-1, 0]],
+  } as Readonly<Record<"a" | "b" | "c" | "d", ReadonlyArray<readonly [number, number]>>>,
+} as const;
+
+/**
+ * One arbalétrier's makeup at a section, as PL-XXXI prints it, in its own
+ * units: plates as [count, width, thickness] mm (a web's width is the
+ * lozenge's side, NORMAL to the axis), angles by count (all 100 x 100 x
+ * 12), and the printed area in mm^2. `ext` and `int` say which thickness
+ * goes on the montant-exterior and -interior faces; they differ only at
+ * XVIII c ("2 x 854 x 15 + 2 x 854 x 8", the heavy plates on the two
+ * exterior faces, D18).
+ */
+export interface UprightMakeup {
+  readonly webs: ReadonlyArray<readonly [number, number, number]>;
+  readonly cj: ReadonlyArray<readonly [number, number, number]>;
+  readonly angles: number;
+  readonly area: number;
+  readonly ext: { readonly web: number; readonly cj: number };
+  readonly int: { readonly web: number; readonly cj: number };
+}
+
+/** A section of all three arbalétriers (b and d are alike) and the printed leg total. */
+export interface UprightSection {
+  /** The node it is printed at; it governs the panel ABOVE that node [sourced text: "[panneau 5] ... celle portant le numéro XXIV"]. */
+  readonly section: string;
+  readonly a: UprightMakeup;
+  readonly bd: UprightMakeup;
+  readonly c: UprightMakeup;
+  /** Omega, the four arbalétriers of ONE leg, mm^2 [sourced PL-XXXI's Nota]. */
+  readonly omega: number;
+}
+
+/** Panels 1-5's makeup: four webs, 12 angles, the two pairs of C.J. 12 thick. */
+const lowerMakeup = (w: number, t: number, area: number): UprightMakeup => ({
+  webs: [[4, w, t]],
+  cj: [
+    [2, 205, 12],
+    [2, 200, 12],
+  ],
+  angles: 12,
+  area,
+  ext: { web: t, cj: 12 },
+  int: { web: t, cj: 12 },
+});
+/** Panels 6-11's: webs of one or two widths, four C.J. 200 as thick as them, the four corner angles. */
+const upperMakeup = (webs: ReadonlyArray<readonly [number, number, number]>, area: number): UprightMakeup => {
+  const t = webs[0]![2];
+  return { webs, cj: [[4, 200, t]], angles: 4, area, ext: { web: t, cj: t }, int: { web: t, cj: t } };
+};
+
+/**
+ * PL-XXXI's arbalétrier sections XXVIII-XVIII [sourced; read off the
+ * e-rara scan crops U1-U4, T1-T5, D18, D28 and checked by rebuilding every
+ * area from its parts: all 33 member areas and all 11 Omegas close exactly
+ * except XX b, where the plate writes 2 x 866 x 11 = 19,054 for 19,052 and
+ * prints 55,622, carried into its Omega]. Each governs the panel above its
+ * node; the base stretch below XXVIII takes XXVIII's [derived].
+ */
+export const UPRIGHT_SECTIONS: readonly UprightSection[] = [
+  {
+    section: "XXVIII",
+    a: lowerMakeup(800, 18.5, 95_992),
+    bd: lowerMakeup(800, 17, 91_192),
+    c: lowerMakeup(800, 16, 87_992),
+    omega: 366_368,
+  },
+  {
+    section: "XXVII",
+    a: lowerMakeup(800, 16, 87_992),
+    bd: lowerMakeup(800, 17, 91_192),
+    c: lowerMakeup(800, 16, 87_992),
+    omega: 358_368,
+  },
+  {
+    section: "XXVI",
+    a: lowerMakeup(800, 15, 84_792),
+    bd: lowerMakeup(800, 16, 87_992),
+    c: lowerMakeup(800, 16, 87_992),
+    omega: 348_768,
+  },
+  {
+    section: "XXV",
+    a: lowerMakeup(800, 13.5, 79_992),
+    bd: lowerMakeup(800, 15, 84_792),
+    c: lowerMakeup(800, 15, 84_792),
+    omega: 334_368,
+  },
+  {
+    section: "XXIV",
+    a: lowerMakeup(822, 14, 82_824),
+    bd: lowerMakeup(822, 12.5, 77_892),
+    c: lowerMakeup(822, 12.5, 77_892),
+    omega: 316_500,
+  },
+  {
+    section: "XXIII",
+    a: upperMakeup([[4, 850, 10]], 51_024),
+    bd: upperMakeup([[2, 852, 14], [2, 832, 14]], 67_376),
+    c: upperMakeup([[4, 834, 14]], 66_928),
+    omega: 252_704,
+  },
+  {
+    section: "XXII",
+    a: upperMakeup([[4, 860, 10]], 51_424),
+    bd: upperMakeup([[2, 860, 14], [2, 843, 14]], 67_908),
+    c: upperMakeup([[4, 845, 14]], 67_544),
+    omega: 254_784,
+  },
+  {
+    section: "XXI",
+    a: upperMakeup([[4, 864, 10]], 51_584),
+    bd: upperMakeup([[2, 864, 12], [2, 849, 12]], 59_736),
+    c: upperMakeup([[4, 850, 12]], 59_424),
+    omega: 230_480,
+  },
+  {
+    section: "XX",
+    // a "comme a section XIX".
+    a: upperMakeup([[4, 866, 10]], 51_664),
+    bd: upperMakeup([[2, 866, 11], [2, 852, 11]], 55_622),
+    c: upperMakeup([[4, 854, 12]], 59_616),
+    omega: 222_524,
+  },
+  {
+    section: "XIX",
+    a: upperMakeup([[4, 866, 10]], 51_664),
+    bd: upperMakeup([[2, 866, 11], [2, 854, 11]], 55_664),
+    c: upperMakeup([[4, 854, 13]], 63_832),
+    omega: 226_824,
+  },
+  {
+    section: "XVIII",
+    a: upperMakeup([[4, 866, 8]], 43_136),
+    bd: upperMakeup([[2, 854, 11], [2, 866, 11]], 55_664),
+    c: {
+      webs: [
+        [2, 854, 15],
+        [2, 854, 8],
+      ],
+      cj: [
+        [2, 200, 12],
+        [2, 200, 8],
+      ],
+      angles: 4,
+      area: 56_308,
+      ext: { web: 15, cj: 12 },
+      int: { web: 8, cj: 8 },
+    },
+    omega: 210_772,
+  },
+];
 
 /**
  * The legs' lattice belts and bands (PL-VII). Depths are printed IN THE
