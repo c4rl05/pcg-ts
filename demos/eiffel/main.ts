@@ -108,6 +108,7 @@ import { attachWordmark } from "../../shared/wordmark.js";
 import { bandsFrom } from "./bands.js";
 import { type Bands, startBands } from "./bandsView.js";
 import { isoOf } from "./chronology.js";
+import { attachKeyMove } from "./keyMove.js";
 import { buildEiffel } from "./graph.js";
 import {
   CHAIN_ASSETS,
@@ -641,7 +642,7 @@ const overlay = createOverlay({
     "graph, one material per part class. The lifts are what moves: the cars " +
     "ride their runs at about a metre a second, the Edoux pair counterweighted against each " +
     "other, their chains, trucks, pistons and pulleys moving with them; and the tricolour " +
-    "flies from the rod. Orbit to judge it; the " +
+    "flies from the rod. Orbit to judge it (W A S D and Q E move, Shift faster); the " +
     "shadows are how the lattice reads.",
 });
 
@@ -923,6 +924,15 @@ const WALK_AT = new URLSearchParams(location.search).get("walkAt")?.split(",").m
 if (WALK_AT !== undefined && WALK_AT.length === 3 && WALK_AT.every(Number.isFinite)) {
   walk.goDist(WALK_AT[0]!, WALK_AT[1], WALK_AT[2]);
 } else if (WALK !== null) walk.go(Number(WALK) || 0);
+
+// W/A/S/D and Q/E move the orbit, camera and target together (keyMove.ts);
+// the walk has keys of its own, and a driven camera is not the orbit's.
+const keyMove = attachKeyMove({
+  camera,
+  controls,
+  enabled: () => !walk.active && !driven && plates?.active !== true,
+  moved: refreshDetailLinks,
+});
 
 // Claimed here, where the panel is built, so the graph sits under the
 // readouts.
@@ -1654,11 +1664,15 @@ renderer.setAnimationLoop(() => {
     waveFlags(windClock);
   }
   scrubber?.tick(Math.min((now - lastFrame) / 1000, 0.1));
+  const frameSeconds = Math.min((now - lastFrame) / 1000, 0.1);
   lastFrame = now;
   // A driven camera is not an orbited one: `update()` would re-derive the
   // pose from the controls' own spherical and clamp it back inside
   // `maxPolarAngle` and the distance limits, which is exactly what a shot
   // looking up a leg from the ground is outside of.
+  // Every frame, walking or not: it is also what drops a key held while
+  // the orbit was not the camera's.
+  keyMove.tick(frameSeconds);
   if (walk.active) walk.tick();
   else if (!driven) controls.update();
   bands?.tick(camera);
