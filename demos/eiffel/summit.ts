@@ -2842,6 +2842,39 @@ function polygon(sides: number, radius: number, y: number): Vec3[] {
   });
 }
 
+/**
+ * How far `p` lies inside the open {@link prism} of `sides` flat walls on
+ * the axis through `rings` ([y, circumradius], bottom up, each ring's
+ * vertices where {@link polygon} puts them): positive inside, negative
+ * outside. Each wall between two rings is flat (an isosceles trapezoid,
+ * its edges the rings' chords, which stand cos(pi / sides) of the
+ * circumradius out at their middles), and the prism is convex — its
+ * radius never grows going up, nor its walls' slope — so a point inside
+ * lies by the least of its distances inside the walls' planes (and the
+ * end rings' levels), which is its depth. Outside, the value is the most
+ * any one plane has it out, a lower bound on its distance off the walls.
+ */
+function facetDepth(rings: ReadonlyArray<readonly [number, number]>, sides: number, p: Vec3): number {
+  const c = Math.cos(Math.PI / sides);
+  let depth = Math.min(p[1] - rings[0]![0], rings[rings.length - 1]![0] - p[1]);
+  for (let k = 0; k < sides; k++) {
+    const t = (2 * Math.PI * (k + 0.5)) / sides;
+    const out = p[0] * Math.cos(t) + p[2] * Math.sin(t);
+    for (let j = 0; j + 1 < rings.length; j++) {
+      const [y0, r0] = rings[j]!;
+      const [y1, r1] = rings[j + 1]!;
+      // In the wall's middle plane its line runs (r0 c, y0) to (r1 c, y1);
+      // its outward normal is (dy, -dr) over the length.
+      const dy = y1 - y0;
+      const dr = (r1 - r0) * c;
+      const l = Math.hypot(dy, dr);
+      if (l === 0) continue;
+      depth = Math.min(depth, (dr * (p[1] - y0) - dy * (out - r0 * c)) / l);
+    }
+  }
+  return depth;
+}
+
 /** Circumradius of a regular polygon from its width across the flats. */
 const circum = (flats: number, sides: number) => flats / 2 / Math.cos(Math.PI / sides);
 
@@ -3118,38 +3151,59 @@ function lantern(g: Graph, crownY: number): NodeHandle[] {
   // rib and riveted there (PL-XV Fig. 1 [sourced]): that is what carries
   // it, the deck's 0.125 edge only steadying it. The foot is drawn about
   // 0.14 long [measured PL-XV Fig. 1, ~0.11 out and ~0.10 down; Detail E,
-  // Fig. 14, "10 attaches semblables", lays it along the rib]; its slope is
-  // solved so its end's centre stands 0.025 off the sphere as built here
-  // [derived: the bar's square end then sets its lower corners 0.0035
-  // into the sphere, and 0.0006 OFF the polygon, whose facets stand up to
-  // 0.013 inside it [measured]; a centre 0.015 into the sphere put the
-  // corners 0.032-0.037 through the skin, into the cupola where the
-  // ladders rise, and one 0.015 out still 0.009 [measured]]. Until
-  // 2026-09-26 the posts stopped at the 0.275 in the air, 0.10 over the
-  // cupola.
+  // Fig. 14, "10 attaches semblables", lays it along the rib]. Its slope
+  // is solved post by post so the foot BEARS on the cupola as built: the
+  // deepest point of its square end — the lower edge, across the bar —
+  // lies on the flat facets the prism above sweeps (`cupola`'s rings,
+  // `cupolaSides` round, see `facetDepth`), not on the sphere they
+  // approximate. Those facets stand up to 0.013 inside the sphere over a
+  // facet's middle and touch it on the ridges between, and the posts fall
+  // every 36 degrees against facets every 15, each at its own place on
+  // them, so no one landing on the sphere fits all ten [measured, a
+  // centre 0.025 off the sphere, until 2026-09-27: the feet over a ridge
+  // 0.9 mm into the skin, those over a facet's middle 3.2 mm off it; one
+  // 0.015 into the sphere put corners 0.032-0.037 through it, into the
+  // cupola where the ladders rise]. Until 2026-09-26 the posts stopped at
+  // the 0.275 in the air, 0.10 over the cupola.
   const footLen = 0.14;
-  const land = R + 0.025;
-  const hFoot = postFoot - lv.springing;
-  let lo = 0;
-  let hi = Math.PI / 2;
-  for (let k = 0; k < 40; k++) {
-    // Out along the deck (0) the foot stays outside the sphere; plumb
-    // (pi/2) it reaches inside: bisect the slope between the two.
-    const th = (lo + hi) / 2;
-    const r = rPost + footLen * Math.cos(th);
-    const y = hFoot - footLen * Math.sin(th);
-    if (r * r + y * y > land * land) lo = th;
-    else hi = th;
-  }
-  const footOut = rPost + footLen * Math.cos(lo);
-  const footY = postFoot - footLen * Math.sin(lo);
+  const footAt = (t: number): Vec3 => {
+    const dir: Vec3 = [Math.cos(t), 0, Math.sin(t)];
+    const across: Vec3 = [-dir[2], 0, dir[0]];
+    // How deep the end's lower edge goes into the facets at slope th. The
+    // bar runs end to head along (-cos th, sin th) in the post's radial
+    // plane; its section's radial side, squared to it as the sweep squares
+    // the face normal, is (sin th, cos th), so the lower edge is the end
+    // less a half-width along that, and runs a width across the post.
+    const deepest = (th: number): number => {
+      const r = rPost + footLen * Math.cos(th) - a * Math.sin(th);
+      const y = postFoot - footLen * Math.sin(th) - a * Math.cos(th);
+      let d = -Infinity;
+      for (let k = 0; k <= 60; k++) {
+        const v = a * (k / 30 - 1);
+        d = Math.max(d, facetDepth(cupola, L.cupolaSides, [dir[0] * r + across[0] * v, y, dir[2] * r + across[2] * v]));
+      }
+      return d;
+    };
+    // Out along the deck (0) the foot stays clear of the cupola; plumb
+    // (pi/2) it reaches into it: bisect the slope between the two, keeping
+    // the side that does not go in.
+    let lo = 0;
+    let hi = Math.PI / 2;
+    for (let k = 0; k < 50; k++) {
+      const th = (lo + hi) / 2;
+      if (deepest(th) > 0) hi = th;
+      else lo = th;
+    }
+    const out = rPost + footLen * Math.cos(lo);
+    return [dir[0] * out, postFoot - footLen * Math.sin(lo), dir[2] * out];
+  };
   const straightPosts: Array<readonly [Vec3, Vec3]> = [];
   const straightN: Vec3[] = [];
   for (let i = 0; i < 5; i++) {
     const t = ((2 * i + 1) * Math.PI) / 5;
     const dir: Vec3 = [Math.cos(t), 0, Math.sin(t)];
     straightPosts.push([[dir[0] * rPost, postFoot, dir[2] * rPost], [dir[0] * rPost, railTop, dir[2] * rPost]]);
-    straightPosts.push([[dir[0] * footOut, footY, dir[2] * footOut], [dir[0] * rPost, postFoot, dir[2] * rPost]]);
+    straightPosts.push([footAt(t), [dir[0] * rPost, postFoot, dir[2] * rPost]]);
     straightN.push(dir, dir);
   }
   out.push(faceSkin(g, "topRailPost", members(g, "topRailPostPaths", straightPosts, straightN), a));
@@ -3161,8 +3215,8 @@ function lantern(g: Graph, crownY: number): NodeHandle[] {
     g,
     "topBent",
     [
-      // The bent ones stand on the same cranked foot.
-      Array.from({ length: 5 }, (_, i) => [footOut * Math.cos((2 * i * Math.PI) / 5), footY, footOut * Math.sin((2 * i * Math.PI) / 5)] as Vec3),
+      // The bent ones stand on the same cranked foot, seated where each falls.
+      Array.from({ length: 5 }, (_, i) => footAt((2 * i * Math.PI) / 5)),
       ...[postFoot, bendFrom].map((y) => Array.from({ length: 5 }, (_, i) => [rPost * Math.cos((2 * i * Math.PI) / 5), y, rPost * Math.sin((2 * i * Math.PI) / 5)] as Vec3)),
       ...Array.from({ length: steps }, (_, k) => {
         const f = (k + 1) / steps;
