@@ -717,14 +717,22 @@ export function skin(
   return node;
 }
 
-/** An axis-aligned box from its centre and full size. */
+/**
+ * An axis-aligned box from its centre and full size, with flat per-face
+ * `normal`. A copy that turns it (copyToQuadrants, say) needs
+ * `rotateAttrs: ["normal"]` to carry that along.
+ */
 export function box(
   g: Graph,
   id: string,
   center: readonly [number, number, number],
   size: readonly [number, number, number],
 ): NodeHandle {
-  return g.add(meshPrimitive, { shape: "box", center: [...center], size: [...size] }, id);
+  return g.add(
+    meshPrimitive,
+    { shape: "box", center: [...center], size: [...size], normals: true },
+    id,
+  );
 }
 
 /** The ring of a square section subdivided into `perSide` bays per side. */

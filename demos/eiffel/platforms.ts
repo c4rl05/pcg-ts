@@ -5819,7 +5819,7 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
 
   // The pedestal keeps its normals, smoothed like the rest (`placedMesh`),
   // so its round inner corner and bench shade round; the rest of the
-  // masonry class carries none and the page gives it flat ones (normals.ts).
+  // masonry class carries flat ones from its own sources.
   const pedestalDress = pedestalDressing();
   const pedestal = prisms(g, "pedestal", [...pedestalFaces(), ...pedestalDress.masonry]);
   // The doors' grilles are iron, painted with the fit-out.

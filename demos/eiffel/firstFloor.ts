@@ -1804,7 +1804,7 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}
     below = top;
   }
   const piers = ar.piers.map((p, i) => box(g, `ffPier${i}`, p.c, p.size));
-  const pierFour = copyToQuadrants(g, "ffPiers4", merge(g, "ffPiers", piers), quads);
+  const pierFour = copyToQuadrants(g, "ffPiers4", merge(g, "ffPiers", piers), quads, ["normal"]);
 
   return {
     girders: girderMeshes,

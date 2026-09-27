@@ -108,7 +108,6 @@ import { attachWordmark } from "../../shared/wordmark.js";
 import { bandsFrom } from "./bands.js";
 import { type Bands, startBands } from "./bandsView.js";
 import { buildEiffel } from "./graph.js";
-import { repairZeroNormals } from "./normals.js";
 import {
   CHAIN_ASSETS,
   CHAIN_PIECES,
@@ -832,7 +831,6 @@ function draw(
     try {
       if (item.kind === "geometry") {
         const geometry = toBufferGeometry(item.geo);
-        repairZeroNormals(geometry);
         geometry.computeBoundingBox();
         const mesh = new Mesh(geometry, material);
         mesh.castShadow = true;

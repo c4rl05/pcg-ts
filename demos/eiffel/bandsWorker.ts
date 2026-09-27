@@ -34,7 +34,6 @@ import {
   bandsWorld,
 } from "./bands.js";
 import { HEAD_DRIVE_ATTR } from "./heads.js";
-import { repairZeroNormals } from "./normals.js";
 import type { CrossPlate, PartClass } from "./parts.js";
 import { type RivetBatch, isFallback, packRivets } from "./rivetPack.js";
 
@@ -155,7 +154,6 @@ function meshesOf(cls: PartClass, list: DataCollection, transfer: Transferable[]
   for (const item of list) {
     if (item.kind !== "geometry" || item.geo.primitiveCount === 0) continue;
     const geometry = toBufferGeometry(item.geo);
-    repairZeroNormals(geometry);
     geometry.computeBoundingSphere();
     const s = geometry.boundingSphere;
     const attrs: AttrPayload[] = [];
