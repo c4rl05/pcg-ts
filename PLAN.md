@@ -99,7 +99,7 @@ ECMAScript lets a Float32Array store of NaN pick any NaN encoding
 (NumericToRawBytes), so "one chosen NaN" should be checked across the
 tiers before anything stronger than "NaN" is promised.
 
-### The eiffel `PRISM_RUN` split is vestigial — found 2026-09-19
+### ~~The eiffel `PRISM_RUN` split is vestigial~~ — SHIPPED 2026-09-27
 
 `prisms()` in `demos/eiffel/platforms.ts` cooks each prism list in runs of
 at most `PRISM_RUN` = 1024 points and merges them, and its comment gives
@@ -123,6 +123,18 @@ except `platforms`, where `point.seed` and `point.prism` (the prism key,
 counted per run today) differ, and positions, normals and topology do
 not. The guide's node counts and cost table (`docs/guides/eiffel.html`)
 and the stale comment in `prisms()` move with it.
+
+SHIPPED by removal, not by patching the constant, when the demo's own
+pass came (found 2026-09-19, the heading's old date). 3409691 made the platforms' boxes one point per
+block copying one extruded unit box, and their faces and bays copies of
+one drawing, so the lists the runs split are gone and `PRISM_RUN` with
+them; the world prisms left (the pedestal, its grille) are one table in
+`prismMesh`, whose comment now says why it is not cut. c09eca0 did the
+same for `ground.ts`, which had copied the split: its supports and
+massifs are copies, and its own `PRISM_RUN` chunking is gone. The
+`seed` move this entry predicted happened, in both, and the golden was
+regenerated as bytes only. The guide was re-measured after both
+(f2d5bc8: 2,680 / 3,097 / 4,582 nodes at plain / laced / rivets).
 
 ### A mesh with no `normal`, merged with one that has it, renders black — found 2026-09-19
 
@@ -219,7 +231,10 @@ a box's `boxN` turned after `copyToPoints` by
 the composed `rot`). Each `copyToPoints` on the way could name `boxN` in
 `rotateAttrs` instead, and rotation-only is exact there despite the
 non-uniform scale, because a box's face normals lie along its scale axes.
-Left for the demo's own pass.
+Left for the demo's own pass. DONE in 09c2f9a (2026-09-19): the strut and
+lift boxes carry their face normals as `normal` and name it in
+`rotateAttrs`; the rotateAttrs copies 3409691 and c09eca0 added to the
+platforms, ground and lifts do the same.
 
 ### ~~Building edges from a parent-pointer column~~ — SHIPPED 2026-09-08
 

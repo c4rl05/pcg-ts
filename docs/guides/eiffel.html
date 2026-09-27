@@ -254,9 +254,9 @@
   <div class="stats">
     <div class="stat"><b>312.275</b><span>metres to the flagpole top, 1889</span></div>
     <div class="stat"><b>29</b><span>panels, from Plate XXXI</span></div>
-    <div class="stat"><b>3.28 M</b><span>triangles, laced and rivets</span></div>
-    <div class="stat"><b>859,816</b><span>rivet instances</span></div>
-    <div class="stat"><b>2.21 s</b><span>cook, full detail</span></div>
+    <div class="stat"><b>4.09 M</b><span>triangles, laced and rivets</span></div>
+    <div class="stat"><b>1,208,132</b><span>rivet instances</span></div>
+    <div class="stat"><b>5.94 s</b><span>cook, full detail</span></div>
     <div class="stat"><b>467</b><span>[sourced] tags in the spec</span></div>
   </div>
 
@@ -526,17 +526,21 @@
   <section>
     <div class="sec-head">
       <p class="eyebrow">Architecture</p>
-      <h2 id="architecture" data-toc="Architecture">TypeScript computes the tables. The graph holds only library nodes.</h2>
+      <h2 id="architecture" data-toc="Architecture">TypeScript computes the plate data. The graph does the repeating, with library nodes only.</h2>
     </div>
     <div class="sec-body">
-      <p>Six modules — legs, shaft, first floor, platforms, lifts, summit — build the tower. Each runs at
+      <p>Eight modules — legs, shaft, first floor, summit, platforms, lifts, the flag and the ground — build the tower (under <code>?build</code>, the erection's works and cranes join them). Each runs at
       graph-build time: it reads <code>spec.ts</code>, computes what its parts need in TypeScript — station
-      positions, masks, face normals, end angles, outlines — and embeds the results in standard pcg-ts nodes as field parameters. The
-      graph they produce uses 15 node types at the skeleton depth and 17 with rivets, none of them custom, so it serializes to JSON, and a test
+      positions, masks, face normals, end angles, outlines — and embeds the results in standard pcg-ts nodes as field parameters.
+      The TypeScript also draws the pieces that occur once, or differ each time they occur. What repeats, it draws once:
+      a platform's fit-out in the frame of one face, copied onto its faces; a bay, copied onto the bay stations;
+      the boxes, one extruded unit box copied onto a point per block; the ground's supports and massifs and the lifts'
+      machinery and wheels, one template each, copied onto their seats. The copies are graph nodes, not vertex tables. The
+      graph uses 19 node types at the skeleton depth and 23 with rivets, none of them custom, so it serializes to JSON, and a test
       asserts that the skeleton graph's round trip cooks to the same positions.</p>
 
       <figure>
-        <div class="plate"><svg viewBox="0 0 1000 584" role="img" aria-label="Pipeline of the eiffel demo: spec.ts tables feed six TypeScript rule modules, which build a graph of standard library nodes; one CPU cook yields one output per part class plus rivet batches; the three.js page turns them into meshes and instanced rivet heads. A table shows the three depths.">
+        <div class="plate"><svg viewBox="0 0 1000 584" role="img" aria-label="Pipeline of the eiffel demo: spec.ts tables feed eight TypeScript rule modules, which build a graph of standard library nodes; one CPU cook yields one output per part class plus rivet batches; the three.js page turns them into meshes and instanced rivet heads. A table shows the three depths.">
 <defs>
 <marker id="pipeline-ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L8,5 L0,9 z" fill="var(--muted)"/></marker>
 <marker id="pipeline-arg" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 8,5 0,9" fill="var(--g)"/></marker>
@@ -566,7 +570,7 @@
 <text class="s-lbl-s" x="26" y="296">numbers, no nodes</text>
 <path d="M156,175 H180" fill="none" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#pipeline-ar)"/>
 <rect x="184" y="44" width="190" height="262" fill="none" stroke="var(--rule)" stroke-width="1.1"/>
-<text class="s-name" x="194" y="62">six rule modules</text>
+<text class="s-name" x="194" y="62">eight rule modules</text>
 <text class="s-lbl-s" x="194" y="76">buildEiffel(1889, detail)</text>
 <rect x="194" y="86" width="170" height="19" fill="var(--card)" stroke="var(--rule)" stroke-width="1.25"/>
 <text class="s-lbl" x="202" y="99.5">legs.ts</text>
@@ -580,11 +584,12 @@
 <text class="s-lbl" x="202" y="195.5">lifts.ts</text>
 <rect x="194" y="206" width="170" height="19" fill="var(--card)" stroke="var(--rule)" stroke-width="1.25"/>
 <text class="s-lbl" x="202" y="219.5">summit.ts</text>
-<text class="s-lbl-s" x="194" y="244">helpers: lattice.ts, strut.ts</text>
-<text class="s-lbl-s" x="194" y="262">compute stations, masks,</text>
-<text class="s-lbl-s" x="194" y="274">faceN and endSin tables,</text>
-<text class="s-lbl-s" x="194" y="286">then embed them as field</text>
-<text class="s-lbl-s" x="194" y="298">params: ramp(index(), stops)</text>
+<text class="s-lbl" x="202" y="240">+ flag.ts, ground.ts</text>
+<text class="s-lbl-s" x="194" y="254">helpers: lattice.ts, strut.ts</text>
+<text class="s-lbl-s" x="194" y="266">compute stations, masks,</text>
+<text class="s-lbl-s" x="194" y="277">faceN and endSin tables,</text>
+<text class="s-lbl-s" x="194" y="288">then embed them as field</text>
+<text class="s-lbl-s" x="194" y="299">params: ramp(index(), stops)</text>
 <path d="M374,175 H398" fill="none" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#pipeline-ar)"/>
 <rect x="402" y="44" width="160" height="262" fill="var(--card)" stroke="var(--rule)" stroke-width="1.25"/>
 <text class="s-name" x="412" y="62">Graph</text>
@@ -603,12 +608,11 @@
 <text class="s-lbl-s" x="412" y="221.6">mergePrimitives</text>
 <text class="s-lbl-s" x="412" y="233.2">removeAttribute</text>
 <text class="s-lbl-s" x="412" y="244.79999999999998">mergePoints</text>
-<text class="s-lbl-s" x="554" y="244.79999999999998" text-anchor="end">laced +</text>
+<text class="s-lbl-s" x="554" y="244.79999999999998" text-anchor="end">laced</text>
 <text class="s-lbl-s" x="412" y="256.4">spawnInstances</text>
-<text class="s-lbl-s" x="554" y="256.4" text-anchor="end">rivets</text>
 <text class="s-lbl-s" x="412" y="268">extrudePolygon</text>
 <text class="s-lbl-s" x="412" y="279.6">connectByIndex</text>
-<text class="s-name" x="412" y="298">17 types, none custom</text>
+<text class="s-name" x="412" y="298">23 types, none custom</text>
 <rect x="402" y="328" width="160" height="62" fill="var(--plate)" stroke="var(--faint)" stroke-width="1" stroke-dasharray="3 2.5"/>
 <text class="s-lbl" x="412" y="343">JSON</text>
 <text class="s-lbl-s" x="412" y="356">serializeGraph, then</text>
@@ -617,7 +621,7 @@
 <path d="M438,306 V324" fill="none" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#pipeline-ar)"/>
 <path d="M526,328 V310" fill="none" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#pipeline-ar)"/>
 <text class="s-lbl-s" x="446" y="321">round-trips</text>
-<text class="s-lbl-s" x="562" y="402" text-anchor="end">eiffelSkeleton.test.ts:856</text>
+<text class="s-lbl-s" x="562" y="402" text-anchor="end">eiffelSkeleton.test.ts:2266</text>
 <path d="M562,64 H586" fill="none" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#pipeline-ar)"/>
 <rect x="590" y="44" width="120" height="40" fill="var(--card)" stroke="var(--rule)" stroke-width="1.25"/>
 <text class="s-name" x="600" y="60">cook(graph)</text>
@@ -645,7 +649,7 @@
 <rect x="590" y="265.5" width="120" height="14" fill="var(--plate)" stroke="var(--faint)" stroke-width="1" stroke-dasharray="3 2.5"/>
 <text class="s-lbl-s" x="598" y="276">names</text>
 <rect x="590" y="289" width="120" height="14" fill="var(--plate)" stroke="var(--faint)" stroke-width="1" stroke-dasharray="3 2.5"/>
-<text class="s-lbl-s" x="598" y="299.5">rivets.* × 41</text>
+<text class="s-lbl-s" x="598" y="299.5">rivets.* × 58</text>
 <path d="M680,84 V104" fill="none" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#pipeline-ar)"/>
 <rect x="738" y="44" width="150" height="34" fill="var(--card)" stroke="var(--rule)" stroke-width="1.25"/>
 <text class="s-name" x="746" y="58">toBufferGeometry</text>
@@ -683,7 +687,7 @@
 <path d="M208,306 V406" fill="none" stroke="var(--g)" stroke-width="1.5" marker-end="url(#pipeline-arg)"/>
 <text class="s-acc" x="216" y="336">the depth switch</text>
 <text class="s-lbl-s" x="216" y="350">webMembers(…, detail)</text>
-<text class="s-lbl-s" x="216" y="362">strut.ts:308, called for each</text>
+<text class="s-lbl-s" x="216" y="362">strut.ts:536, called for each</text>
 <text class="s-lbl-s" x="216" y="374">web set by legs, shaft,</text>
 <text class="s-lbl-s" x="216" y="386">firstFloor, summit</text>
 <line x1="16" y1="416" x2="982" y2="416" stroke="var(--g)" stroke-width="1"/>
@@ -697,70 +701,73 @@
 <text class="s-lbl-s" x="16" y="475">no query</text>
 <text class="s-lbl" x="184" y="462">faceSkin / faceBox</text>
 <text class="s-lbl-s" x="184" y="475">one solid member, squared to faceN</text>
-<text class="s-name" x="402" y="462">1,608</text>
-<text class="s-lbl-s" x="402" y="475">15 types</text>
-<text class="s-name" x="590" y="462">9</text>
-<text class="s-lbl-s" x="590" y="475">every class but gussets</text>
+<text class="s-name" x="402" y="462">2,680</text>
+<text class="s-lbl-s" x="402" y="475">19 types</text>
+<text class="s-name" x="590" y="462">60</text>
+<text class="s-lbl-s" x="590" y="475">13 classes + 47 more</text>
 <text class="s-lbl" x="738" y="462">class meshes</text>
 <line x1="16" y1="484" x2="982" y2="484" stroke="var(--rule)" stroke-width="1"/>
 <text class="s-name" x="16" y="502">laced</text>
 <text class="s-lbl-s" x="16" y="515">?laced</text>
 <text class="s-lbl" x="184" y="502">trimToJoints → latticeStruts</text>
 <text class="s-lbl-s" x="184" y="515">4 chords, 8 lacing bars, gussets</text>
-<text class="s-name" x="402" y="502">1,893</text>
-<text class="s-lbl-s" x="402" y="515">16 types</text>
-<text class="s-name" x="590" y="502">10</text>
-<text class="s-lbl-s" x="590" y="515">all ten classes</text>
+<text class="s-name" x="402" y="502">3,097</text>
+<text class="s-lbl-s" x="402" y="515">20 types</text>
+<text class="s-name" x="590" y="502">61</text>
+<text class="s-lbl-s" x="590" y="515">14 classes + 47 more</text>
 <text class="s-lbl" x="738" y="502">class meshes</text>
 <line x1="16" y1="524" x2="982" y2="524" stroke="var(--rule)" stroke-width="1"/>
 <text class="s-name" x="16" y="542">rivets</text>
 <text class="s-lbl-s" x="16" y="555">?rivets</text>
 <text class="s-lbl" x="184" y="542">the same + spawnInstances</text>
 <text class="s-lbl-s" x="184" y="555">lacing, joint and seam rivets</text>
-<text class="s-name" x="402" y="542">2,648</text>
-<text class="s-lbl-s" x="402" y="555">17 types</text>
-<text class="s-name" x="590" y="542">51</text>
-<text class="s-lbl-s" x="590" y="555">10 classes + 41 rivets.*</text>
+<text class="s-name" x="402" y="542">4,582</text>
+<text class="s-lbl-s" x="402" y="555">23 types</text>
+<text class="s-name" x="590" y="542">119</text>
+<text class="s-lbl-s" x="590" y="555">61 as laced + 58 rivets.*</text>
 <text class="s-lbl" x="738" y="542">class meshes +</text>
 <text class="s-lbl-s" x="738" y="555">instanced rivet heads</text>
 </svg></div>
-        <figcaption><b>Build time to draw.</b> <code>spec.ts</code> holds the tables read off the plates. Six rule modules and their helpers compute stations, masks, <code>faceN</code> and end sines in TypeScript and embed them as field parameters of standard library nodes. The graph serializes to JSON and cooks the skeleton depth back to byte-identical positions (<code>tests/eiffelSkeleton.test.ts</code>). The page cooks it once on the CPU and draws one mesh per class output and one instanced mesh per rivet batch. The depth reaches every module but platforms as a <code>Detail</code> flag; for web members it is applied in <code>webMembers</code>. Not to scale.</figcaption>
+        <figcaption><b>Build time to draw.</b> <code>spec.ts</code> holds the tables read off the plates. Eight rule modules and their helpers compute stations, masks, <code>faceN</code> and end sines in TypeScript and embed them as field parameters of standard library nodes; what repeats they draw once and copy in the graph. The graph serializes to JSON and cooks the skeleton depth back to byte-identical positions (<code>tests/eiffelSkeleton.test.ts</code>). The page cooks it once on the CPU and draws one mesh per class output and one instanced mesh per rivet batch. The depth reaches every module but platforms, the flag and the ground as a <code>Detail</code> flag; for web members it is applied in <code>webMembers</code>. The columns name 17 of the graph's 23 node types and 10 of its 14 part classes. Not to scale.</figcaption>
       </figure>
 
       <p>A per-point table becomes a field through one helper, <code>indexTable</code>:
       <code>ramp(index(), stops)</code>, exact at every integer because a ramp interpolates only between
-      stops and no point reads a fractional index. Runs of equal values collapse to their two ends,
-      which keeps long tables short; the largest has 5,946 stops. A ramp of more than 16 stops finds
+      stops and no point reads a fractional index. A run collapses to its two ends whenever the ramp,
+      interpolating between them, stores every entry of the run bit for bit — a run of equal values, or a
+      straight flight's treads, affine in the tread index — which keeps long tables short; the largest has
+      7,089 stops at the skeleton depth and 21,140 laced. A ramp of more than 16 stops finds
       each point's segment by bisection, so a table with a stop per point costs n log n, not n². It
-      used to scan its stops from the first, which is why the platforms module cooks its prism lists
+      used to scan its stops from the first, which is why the platforms module once cooked its prism lists
       in runs of at most 1,024 points: splitting took its cook from 0.80 s to 0.31 s then. The runs
-      are still in the graph and no longer needed: cooked as one list, with 194 fewer nodes, the
-      skeleton depth is no slower (in an interleaved A/B of 35 fresh cooks a side, pinned as in the
-      note below the table, it averaged 3% faster).</p>
+      are gone with the lists they split: the platforms' boxes are copies of one unit box, and the few
+      prism lists left are one table each.</p>
 
       <p>Each module returns meshes grouped by <strong>part class</strong>, and the graph declares one
-      output per class: uprights, bracing, horizontals, girders, arches, platforms, masonry, summit,
-      gussets (laced and rivets only) and names. At the rivets depth each rivet set is its own spawn
-      and its own output: 41 of them, 859,816 instances in all.</p>
+      output per class: uprights, bracing, horizontals, girders, arches, platforms, masonry, foundations,
+      summit, gussets (laced and rivets only), names, machinery, glass and silvered. Forty-seven more are
+      the pieces the page moves or instances at every depth: the lifts' cars, cables, pulleys and wheels (39),
+      their four chains, three batches of fittings and the flag. At the rivets depth each rivet set is its own spawn
+      and its own output: 58 of them, 1,208,132 instances in all.</p>
 
       <div class="tbl">
         <table class="data">
           <thead><tr><th>Depth</th><th class="n">Graph nodes</th><th class="n">Outputs</th><th class="n">Triangles</th><th class="n">Instances</th><th class="n">Cook</th><th class="n">Graph JSON</th></tr></thead>
           <tbody>
-            <tr><td class="k">skeleton</td><td class="n">1,608</td><td class="n">9</td><td class="n">409,196</td><td class="n">0</td><td class="n">298 ms</td><td class="n">4.1 MB</td></tr>
-            <tr><td class="k">laced</td><td class="n">1,893</td><td class="n">10</td><td class="n">3,283,836</td><td class="n">0</td><td class="n">1.38 s</td><td class="n">4.6 MB</td></tr>
-            <tr><td class="k">rivets</td><td class="n">2,648</td><td class="n">51</td><td class="n">3,283,836</td><td class="n">859,816</td><td class="n">2.21 s</td><td class="n">5.6 MB</td></tr>
+            <tr><td class="k">skeleton</td><td class="n">2,680</td><td class="n">60</td><td class="n">842,378</td><td class="n">2,648</td><td class="n">911 ms</td><td class="n">5.5 MB</td></tr>
+            <tr><td class="k">laced</td><td class="n">3,097</td><td class="n">61</td><td class="n">4,093,818</td><td class="n">2,648</td><td class="n">2.79 s</td><td class="n">9.8 MB</td></tr>
+            <tr><td class="k">rivets</td><td class="n">4,582</td><td class="n">119</td><td class="n">4,093,818</td><td class="n">1,210,780</td><td class="n">5.94 s</td><td class="n">15.0 MB</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="note">Measured 2026-09-19 on an Intel i9-13900KF under Node 22.20: a CPU cook of a freshly built graph, median of seven after a warmup, the depths interleaved, the process pinned to the performance cores (on the efficiency cores the same cooks take 1.9 to 2 times as long). Graph JSON is the compact serialized form. Four cooks per depth, in three separate processes, hashed identically.</p>
+      <p class="note">Measured 2026-09-27, at f2d5bc8, on an Intel i9-13900KF under Node 22.20: a CPU cook of a freshly built graph, median of seven after a warmup, the depths interleaved, the process pinned to the performance cores (on the efficiency cores the same cooks take 1.7 to 1.8 times as long); the Cook column is the median of three such runs. The machine was shared: about four logical CPUs were busy during the cooks, the cooking process included. Instances counts every batch: the 2,648 at every depth are the fittings and the lift chains. Graph JSON is the compact serialized form. Four cooks per depth, in three separate processes, hashed identically.</p>
 
       <figure>
         <div class="plate"><svg viewBox="0 0 1000 438" role="img" aria-label="Horizontal bar chart of triangles per part class at the skeleton and laced depths: girders and bracing grow from about 0.1 million and 16 thousand to 1.37 and 1.15 million when laced; the classes without web members do not change."><line x1="150.0" y1="48" x2="150.0" y2="392" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="150.0" y="408" text-anchor="middle">0.0M</text><line x1="227.1" y1="48" x2="227.1" y2="392" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="227.1" y="408" text-anchor="middle">0.2M</text><line x1="304.3" y1="48" x2="304.3" y2="392" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="304.3" y="408" text-anchor="middle">0.4M</text><line x1="381.4" y1="48" x2="381.4" y2="392" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="381.4" y="408" text-anchor="middle">0.6M</text><line x1="458.6" y1="48" x2="458.6" y2="392" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="458.6" y="408" text-anchor="middle">0.8M</text><line x1="535.7" y1="48" x2="535.7" y2="392" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="535.7" y="408" text-anchor="middle">1.0M</text><line x1="612.9" y1="48" x2="612.9" y2="392" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="612.9" y="408" text-anchor="middle">1.2M</text><line x1="690.0" y1="48" x2="690.0" y2="392" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="690.0" y="408" text-anchor="middle">1.4M</text><rect x="150" y="14" width="12" height="8" fill="var(--faint)"/><text class="s-lbl" x="168" y="22">skeleton</text><rect x="250" y="14" width="12" height="8" fill="var(--ink)"/><text class="s-lbl" x="268" y="22">laced and rivets</text><text class="s-lbl-s" x="980" y="22" text-anchor="end">triangles per output</text><text class="s-name" x="138" y="71" text-anchor="end">girders</text><rect x="150" y="58" width="527.6" height="9" fill="var(--ink)"/><rect x="150" y="69" width="40.3" height="6" fill="var(--faint)"/><text class="s-lbl" x="685.6" y="71">1,367,980  ·  104,492 skeleton</text><text class="s-name" x="138" y="105" text-anchor="end">bracing</text><rect x="150" y="92" width="443.6" height="9" fill="var(--ink)"/><rect x="150" y="103" width="6.1" height="6" fill="var(--faint)"/><text class="s-lbl" x="601.6" y="105">1,150,080  ·  15,712 skeleton</text><text class="s-name" x="138" y="139" text-anchor="end">horizontals</text><rect x="150" y="126" width="167.9" height="9" fill="var(--ink)"/><rect x="150" y="137" width="2.5" height="6" fill="var(--faint)"/><text class="s-lbl" x="325.9" y="139">435,296  ·  6,512 skeleton</text><text class="s-name" x="138" y="173" text-anchor="end">platforms</text><rect x="150" y="160" width="59.3" height="9" fill="var(--ink)"/><rect x="150" y="171" width="59.3" height="6" fill="var(--faint)"/><text class="s-lbl" x="217.3" y="173">153,860</text><text class="s-name" x="138" y="207" text-anchor="end">arches</text><rect x="150" y="194" width="36.9" height="9" fill="var(--ink)"/><rect x="150" y="205" width="36.9" height="6" fill="var(--faint)"/><text class="s-lbl" x="194.9" y="207">95,680</text><text class="s-name" x="138" y="241" text-anchor="end">gussets</text><rect x="150" y="228" width="18.5" height="9" fill="var(--ink)"/><rect x="150" y="239" width="0.0" height="6" fill="var(--faint)"/><text class="s-lbl" x="176.5" y="241">48,000  ·  absent at skeleton</text><text class="s-name" x="138" y="275" text-anchor="end">summit</text><rect x="150" y="262" width="8.6" height="9" fill="var(--ink)"/><rect x="150" y="273" width="8.6" height="6" fill="var(--faint)"/><text class="s-lbl" x="166.6" y="275">22,284</text><text class="s-name" x="138" y="309" text-anchor="end">uprights</text><rect x="150" y="296" width="2.1" height="9" fill="var(--ink)"/><rect x="150" y="307" width="2.1" height="6" fill="var(--faint)"/><text class="s-lbl" x="160.1" y="309">5,568</text><text class="s-name" x="138" y="343" text-anchor="end">masonry</text><rect x="150" y="330" width="1.6" height="9" fill="var(--ink)"/><rect x="150" y="341" width="1.6" height="6" fill="var(--faint)"/><text class="s-lbl" x="159.6" y="343">4,224</text><text class="s-name" x="138" y="377" text-anchor="end">names</text><rect x="150" y="364" width="0.8" height="9" fill="var(--ink)"/><rect x="150" y="375" width="0.8" height="6" fill="var(--faint)"/><text class="s-lbl" x="158.3" y="377">864</text></svg></div>
         <figcaption><b>Where the triangles are.</b> Triangles per part-class output, measured on the cooked
-        graph. Lacing multiplies the classes that hold web members — girders by 13, bracing by 73,
+        graph of 2026-09-19, before the foundations, machinery, glass and fit-out were built; the table above is current. Lacing multiplies the classes that hold web members — girders by 13, bracing by 73,
         horizontals by 67 — and adds the gusset plates; uprights, arches, platforms, masonry, summit and
-        names do not change with depth. The rivets depth adds no triangles: its 859,816 rivets are instances of one
+        names do not change with depth. The rivets depth adds no triangles: its 1,208,132 rivets are instances of one
         80-triangle head, 64 bytes each.</figcaption>
       </figure>
     </div>
@@ -2517,7 +2524,7 @@
       <p>The large structure is the plates' to the precision the plates print. Below the panel scale the
       model is a set of rules whose parameters are plate readings — often [estimated] or [measured] —
       so most members are where their rule puts them, not where the drawing shows that particular member. The
-      rivet pitch is a measurement of one detail applied everywhere, and the model carries 859,816
+      rivet pitch is a measurement of one detail applied everywhere, and the model carries 1,208,132
       rivets, not the 2.5 million the tower is recorded as having. The names are plaques without
       lettering. The 1900 album occasionally draws a post-1889 state, and where the text or an 1889
       figure does not settle it, SOURCES.md says so.</p>
