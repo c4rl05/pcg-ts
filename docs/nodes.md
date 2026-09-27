@@ -2,7 +2,7 @@
 
 Generated from the node registry metadata (`listNodeTypes()`) by `node scripts/gen-node-reference.mjs` — do not edit by hand. The same metadata, machine-readable, is in [nodes.json](./nodes.json). For the graph JSON format and field-expression grammar see [authoring.md](./authoring.md).
 
-67 node types, grouped by `category` (node sections below are alphabetical):
+68 node types, grouped by `category` (node sections below are alphabetical):
 
 **attribute**
 
@@ -81,6 +81,7 @@ Generated from the node registry metadata (`listNodeTypes()`) by `node scripts/g
 - [meshPrimitive](#meshprimitive) — Builds a parametric triangle mesh with no input: shape 'plane' is one axis-aligned rectangle, shape 'box' is six of them around a volume.
 - [pointGrid](#pointgrid) — Creates a regular grid of points: countX * countY * countZ points starting at origin, stepped by spacing per axis.
 - [pointLine](#pointline) — Creates `count` evenly spaced points on a straight line.
+- [pointList](#pointlist) — Creates one point per [x, y, z] triple in `positions`, in list order, and writes named per-point columns from literal values: a TABLE of points carried in the graph file itself.
 - [pointScatterInBounds](#pointscatterinbounds) — Scatters `count` points uniformly inside the axis-aligned box [boundsMin, boundsMax].
 - [pointScatterInWorld](#pointscatterinworld) — Scatters points over an INFINITE lattice anchored to world coordinates, then returns the ones inside the query window [boundsMin, boundsMax).
 
@@ -835,6 +836,27 @@ Creates `count` evenly spaced points on a straight line. mode 'endpoints' (the d
 | `includeEnd` | bool | `true` |  |  |  | Whether `end` is one of the emitted positions, in 'endpoints' mode. true (the default) samples the closed range [start, end]: `count` points stepping (end - start) / (count - 1), the first on start and the last exactly on end — use it for a run of points with both ends pinned, such as a fence between two posts. false samples the half-open range [start, end): `count` points stepping (end - start) / count, the last one step short of end — use it when the segment is a parameter that wraps, so a closed shape gets `count` distinct positions and no duplicate seam. count 1 emits a single point at start in both modes; count 0 emits nothing. 'spacing' mode has no authored endpoint to include or exclude — its derived far end IS the last point, and the same run is equally the half-open sampling of [start, start + count * spacing) — so the choice does not arise there and false is REFUSED rather than accepted as a setting that moves nothing. |
 | `spacing` | f32 | `1` | >= 0 |  |  | Distance between consecutive points in world units when mode is 'spacing'. The step is EXACT and independent of the count: point i sits at start + i * spacing along the direction, a function of i alone, so raising `count` leaves every point already placed byte-identical and appends the new ones. That is the whole difference from 'endpoints' mode, where the count and the step are one number seen from two sides and one more point re-spaces the entire line. Must be > 0 and finite. Ignored in 'endpoints' mode. |
 
+## pointList
+
+Creates one point per [x, y, z] triple in `positions`, in list order, and writes named per-point columns from literal values: a TABLE of points carried in the graph file itself. Use it for authored or surveyed coordinates — a measured outline, a star catalogue, the stations a drawing gives — that no rule produces. Use pointGrid, pointLine or a scatter when a rule places the points (they cost a few params, not one number per point), and dataInput when the host supplies points at runtime (its item list is injected per cook and serializes empty; this node's values ARE the graph). Columns are three parallel lists: `columnNames`, `columnTypes` (f32, i32, u32, bool, or vec2 / vec3 / vec4 for f32 vectors; empty means every column is f32) and `columnValues`, which holds the columns one after another in `columnNames` order, each as count * tupleSize numbers (a vec3 column is x0, y0, z0, x1, ...). P stores the f32 of each literal, a column stores its value in its type, and per-point seed is hashCombine(node seed, point index) — the SAME formula as pointGrid, so a pointGrid with countX = n plus one setAttribute per column reading ramp(index(), [[0, v0], [1, v1], ...]) cooks to the same data bytes as this node with the same id, every column and P included, wherever that ramp gives back each value it was handed: a stop hit exactly is answered as f32(v[i-1] + (v[i] - v[i-1])), which is f32(v[i]) for f32-representable neighbours of comparable magnitude — the usual surveyed table — but NOT beside a much larger neighbour (1e20 then -0.238 reads back 0) and never for an integer past 2^24, since a ramp computes in f32 (i32 2147483647 wraps to -2147483648 through it). This node stores the literal itself in every such case, so it is the exact one of the two. A standard attribute it overwrites also keeps its standard default (color [1, 1, 1, 1], density 1), where setAttribute resets the default to 0. Refused by name rather than stored wrong: `positions` not whole triples; a column name that is empty, repeated, "P" (write positions) or "seed" (computed, as on every source); a standard attribute (rot, scale, density, boundsMin, boundsMax, color) declared with a type other than its own; an unknown column type; a `columnValues` length that is not what the columns declare (the message lists every column's slice); and a value its column cannot hold (non-finite, past the f32 range, a fractional or out-of-range integer, a bool other than 0 or 1), naming the column and the point. Not field-capable: every param is data, so there is nothing per element to evaluate. Emits a standard point cloud with no primitives; pointsToPath turns it into a polyline.
+
+**Category:** source
+
+**Inputs:** *(none)*
+
+**Outputs:** `out` (geometry)
+
+**Examples:** [basics-a-table-of-points.json](../graphs/basics-a-table-of-points.json) — 1 total (`pcg graphs --node pointList`)
+
+**Params:**
+
+| Param | Type | Default | Range | Enum | Field | Description |
+| --- | --- | --- | --- | --- | --- | --- |
+| `positions` | numberList | `[]` |  |  |  | Point positions as a flat list [x0, y0, z0, x1, y1, z1, ...]: one point per triple, in list order, stored as f32. The length must be a multiple of 3; the point count is length / 3, and an empty list emits an empty cloud. Every value must be finite and within the f32 range. |
+| `columnNames` | stringList | `[]` |  |  |  | Names of the per-point columns to write, in the order their values appear in `columnValues`. Each name is non-empty and unique. "P" is refused (the positions are `positions`) and so is "seed" (computed per point from the node seed, as on every source — keep an authored id under another name). The standard attributes rot, scale, density, boundsMin, boundsMax and color may be named, which OVERWRITES their defaults, but only with their own type: rot and color are vec4, scale, boundsMin and boundsMax vec3, density f32. Empty (the default) writes positions only. |
+| `columnTypes` | stringList | `[]` |  |  |  | One type per entry of `columnNames`: f32, i32, u32 or bool (one number per point), or vec2, vec3, vec4 (an f32 column of that many components per point). Empty (the default) means every column is f32; otherwise the list must be exactly as long as `columnNames`. i32 and u32 values must be whole numbers in their type's range, and bool values 0 or 1, since a literal the column cannot hold is refused rather than wrapped or rounded. |
+| `columnValues` | numberList | `[]` |  |  |  | Every column's values, one column after another in `columnNames` order. A column takes count * tupleSize numbers (count = positions.length / 3; tupleSize 1 for f32, i32, u32 and bool, 2, 3 or 4 for the vectors), point-major within the column, so a vec3 column is [x0, y0, z0, x1, y1, z1, ...]. The total must be exactly the sum over the columns — a length that is not is refused with each column's expected slice, which is where to look. |
+
 ## pointNeighborhood
 
 Measures each point's neighborhood inside the same cloud and writes the result as point attributes: countAttr receives how many other points lie within radius (u32), and averageAttr/averageOutAttr average a numeric point attribute over those neighbors (f32, same tuple size — averaging "P" gives each point the centroid of its neighbors, which is one Lloyd relaxation step away from even spacing). Distances are 3D over P and boundary-inclusive. A point with no neighbors gets count 0 and keeps its OWN value as the average, so a displacement built from the average is zero for isolated points instead of undefined. Points with a non-finite coordinate are nobody's neighbor and have none themselves. Both places where this node has to pick an order — which neighbors a maxCount cap keeps, and the order their values are summed — are keyed on point IDENTITY (position bits plus the `seed` point attribute), never on the array index, so reordering the input cannot move a count, a kept set, or a single bit of an average. Uses a uniform spatial grid, so it stays fast well beyond a few thousand points. Output is the input with the new attributes added; nothing is moved or removed — countAttr and averageOutAttr are reporting slots whose shape this node picks, so pointing either at an existing attribute of a DIFFERENT shape is refused rather than silently deleting it (a same-shape column is reused and reset).
@@ -933,7 +955,7 @@ Turns a point cloud into one or more paths by building `polyline` primitives ove
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-points-to-path.json](../graphs/basics-points-to-path.json), [basics-path-resample.json](../graphs/basics-path-resample.json), [basics-paths-by-group.json](../graphs/basics-paths-by-group.json) — 26 total (`pcg graphs --node pointsToPath`)
+**Examples:** [basics-points-to-path.json](../graphs/basics-points-to-path.json), [basics-path-resample.json](../graphs/basics-path-resample.json), [basics-paths-by-group.json](../graphs/basics-paths-by-group.json) — 27 total (`pcg graphs --node pointsToPath`)
 
 **Params:**
 
@@ -1179,7 +1201,7 @@ Creates or overwrites an attribute on the chosen domain. Numeric types fill from
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-attribute-from-noise.json](../graphs/basics-attribute-from-noise.json), [basics-mask-by-species.json](../graphs/basics-mask-by-species.json), [basics-attribute-remap.json](../graphs/basics-attribute-remap.json) — 64 total (`pcg graphs --node setAttribute`)
+**Examples:** [basics-attribute-from-noise.json](../graphs/basics-attribute-from-noise.json), [basics-mask-by-species.json](../graphs/basics-mask-by-species.json), [basics-attribute-remap.json](../graphs/basics-attribute-remap.json) — 65 total (`pcg graphs --node setAttribute`)
 
 **Params:**
 
@@ -1244,7 +1266,7 @@ Spawner terminal: converts the input point cloud into render-agnostic instance b
 
 **Outputs:** `instances` (instances), `points` (geometry)
 
-**Examples:** [basics-spawn-instances.json](../graphs/basics-spawn-instances.json), [basics-props-along-a-path.json](../graphs/basics-props-along-a-path.json), [basics-radial-on-curve.json](../graphs/basics-radial-on-curve.json) — 26 total (`pcg graphs --node spawnInstances`)
+**Examples:** [basics-spawn-instances.json](../graphs/basics-spawn-instances.json), [basics-props-along-a-path.json](../graphs/basics-props-along-a-path.json), [basics-radial-on-curve.json](../graphs/basics-radial-on-curve.json) — 27 total (`pcg graphs --node spawnInstances`)
 
 **Params:**
 

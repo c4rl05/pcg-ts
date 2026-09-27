@@ -3,7 +3,9 @@
  * All emit standard point clouds (P, rot, scale, density, bounds, color,
  * seed) with per-point seeds derived from the node seed.
  */
-import { createPointCloud } from "../data/index.js";
+import { STANDARD_POINT_ATTRS, createPointCloud } from "../data/index.js";
+import { canonicalOneOf } from "../diagnostics/canonical.js";
+import { suggestNames } from "../diagnostics/didYouMean.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { hashCombine, hashFloat } from "../random/index.js";
 import { standardNode } from "./registry.js";
@@ -11,6 +13,9 @@ import type {
   PointGridInputs,
   PointGridOutputs,
   PointGridParams,
+  PointListInputs,
+  PointListOutputs,
+  PointListParams,
   PointLineInputs,
   PointLineOutputs,
   PointLineParams,
@@ -25,6 +30,7 @@ import type {
 // Generated from the param schemas below; see params.generated.ts.
 export type {
   PointGridParams,
+  PointListParams,
   PointLineParams,
   PointScatterInBoundsParams,
   PointScatterInWorldParams,
@@ -75,6 +81,228 @@ export const pointGrid = standardNode<PointGridParams, PointGridInputs, PointGri
           i++;
         }
       }
+    }
+    return { out: [makeGeometryItem(geo)] };
+  },
+});
+
+/**
+ * The column types `pointList` accepts, in the order its description lists
+ * them. The storage vocabulary of `src/data` (`f32`, `i32`, `u32`, `bool`)
+ * plus the param vocabulary's spelling of an f32 vector (`vec2`..`vec4`),
+ * which is what an author writes for a direction or a colour. `string` is
+ * absent on purpose: the values are one flat NUMBER list, and a string
+ * column is setAttribute's `values` table indexed by an i32 column.
+ */
+const POINT_LIST_COLUMN_TYPES = ["f32", "i32", "u32", "bool", "vec2", "vec3", "vec4"] as const;
+
+/** A column type, decided once where the params are read. */
+const ColumnKind = { F32: 0, I32: 1, U32: 2, Bool: 3 } as const;
+type ColumnKind = (typeof ColumnKind)[keyof typeof ColumnKind];
+
+interface ColumnPlan {
+  readonly name: string;
+  /** The type as the author spelled it, for messages only. */
+  readonly spelled: string;
+  readonly kind: ColumnKind;
+  readonly storage: "f32" | "i32" | "u32" | "bool";
+  readonly tupleSize: number;
+  /** Where the column starts in `columnValues`. */
+  readonly offset: number;
+}
+
+/** Largest finite f32; a value past it (after rounding) stores as Infinity. */
+const F32_MAX = 3.4028234663852886e38;
+
+/**
+ * Why `v` cannot be stored in a column of `kind`, or undefined. The rule
+ * per kind is the rule the typed array would otherwise break silently:
+ * an Int32Array wraps 2^31 to -2^31, a Uint32Array wraps -1 to 4294967295,
+ * a Float32Array rounds 1e39 to Infinity, and a bool column would read 2
+ * as a value its type cannot hold.
+ */
+function columnValueError(kind: ColumnKind, v: number): string | undefined {
+  if (!Number.isFinite(v)) return "is not a finite number";
+  switch (kind) {
+    case ColumnKind.F32:
+      return Math.abs(Math.fround(v)) > F32_MAX
+        ? `is outside the f32 range (±${F32_MAX}) and would store as Infinity`
+        : undefined;
+    case ColumnKind.I32:
+      return Number.isInteger(v) && v >= -2147483648 && v <= 2147483647
+        ? undefined
+        : "is not an integer in the i32 range [-2147483648, 2147483647]";
+    case ColumnKind.U32:
+      return Number.isInteger(v) && v >= 0 && v <= 4294967295
+        ? undefined
+        : "is not an integer in the u32 range [0, 4294967295]";
+    case ColumnKind.Bool:
+      return v === 0 || v === 1 ? undefined : "is not 0 or 1, the only values a bool column holds";
+  }
+}
+
+/**
+ * A literal table of points: positions and named per-point columns written
+ * into the graph itself. The serializable replacement for a `pointGrid`
+ * with one `ramp(index(), stops)` setAttribute per column.
+ */
+export const pointList = standardNode<PointListParams, PointListInputs, PointListOutputs>({
+  type: "pointList",
+  category: "source",
+  description:
+    "Creates one point per [x, y, z] triple in `positions`, in list order, and writes named per-point columns from literal values: a TABLE of points carried in the graph file itself. Use it for authored or surveyed coordinates — a measured outline, a star catalogue, the stations a drawing gives — that no rule produces. Use pointGrid, pointLine or a scatter when a rule places the points (they cost a few params, not one number per point), and dataInput when the host supplies points at runtime (its item list is injected per cook and serializes empty; this node's values ARE the graph). Columns are three parallel lists: `columnNames`, `columnTypes` (f32, i32, u32, bool, or vec2 / vec3 / vec4 for f32 vectors; empty means every column is f32) and `columnValues`, which holds the columns one after another in `columnNames` order, each as count * tupleSize numbers (a vec3 column is x0, y0, z0, x1, ...). P stores the f32 of each literal, a column stores its value in its type, and per-point seed is hashCombine(node seed, point index) — the SAME formula as pointGrid, so a pointGrid with countX = n plus one setAttribute per column reading ramp(index(), [[0, v0], [1, v1], ...]) cooks to the same data bytes as this node with the same id, every column and P included, wherever that ramp gives back each value it was handed: a stop hit exactly is answered as f32(v[i-1] + (v[i] - v[i-1])), which is f32(v[i]) for f32-representable neighbours of comparable magnitude — the usual surveyed table — but NOT beside a much larger neighbour (1e20 then -0.238 reads back 0) and never for an integer past 2^24, since a ramp computes in f32 (i32 2147483647 wraps to -2147483648 through it). This node stores the literal itself in every such case, so it is the exact one of the two. A standard attribute it overwrites also keeps its standard default (color [1, 1, 1, 1], density 1), where setAttribute resets the default to 0. Refused by name rather than stored wrong: `positions` not whole triples; a column name that is empty, repeated, \"P\" (write positions) or \"seed\" (computed, as on every source); a standard attribute (rot, scale, density, boundsMin, boundsMax, color) declared with a type other than its own; an unknown column type; a `columnValues` length that is not what the columns declare (the message lists every column's slice); and a value its column cannot hold (non-finite, past the f32 range, a fractional or out-of-range integer, a bool other than 0 or 1), naming the column and the point. Not field-capable: every param is data, so there is nothing per element to evaluate. Emits a standard point cloud with no primitives; pointsToPath turns it into a polyline.",
+  inputs: [],
+  outputs: [{ name: "out", kind: "geometry" }],
+  params: {
+    positions: {
+      type: "numberList",
+      default: [],
+      description:
+        "Point positions as a flat list [x0, y0, z0, x1, y1, z1, ...]: one point per triple, in list order, stored as f32. The length must be a multiple of 3; the point count is length / 3, and an empty list emits an empty cloud. Every value must be finite and within the f32 range.",
+    },
+    columnNames: {
+      type: "stringList",
+      default: [],
+      description:
+        'Names of the per-point columns to write, in the order their values appear in `columnValues`. Each name is non-empty and unique. "P" is refused (the positions are `positions`) and so is "seed" (computed per point from the node seed, as on every source — keep an authored id under another name). The standard attributes rot, scale, density, boundsMin, boundsMax and color may be named, which OVERWRITES their defaults, but only with their own type: rot and color are vec4, scale, boundsMin and boundsMax vec3, density f32. Empty (the default) writes positions only.',
+    },
+    columnTypes: {
+      type: "stringList",
+      default: [],
+      description:
+        "One type per entry of `columnNames`: f32, i32, u32 or bool (one number per point), or vec2, vec3, vec4 (an f32 column of that many components per point). Empty (the default) means every column is f32; otherwise the list must be exactly as long as `columnNames`. i32 and u32 values must be whole numbers in their type's range, and bool values 0 or 1, since a literal the column cannot hold is refused rather than wrapped or rounded.",
+    },
+    columnValues: {
+      type: "numberList",
+      default: [],
+      description:
+        "Every column's values, one column after another in `columnNames` order. A column takes count * tupleSize numbers (count = positions.length / 3; tupleSize 1 for f32, i32, u32 and bool, 2, 3 or 4 for the vectors), point-major within the column, so a vec3 column is [x0, y0, z0, x1, y1, z1, ...]. The total must be exactly the sum over the columns — a length that is not is refused with each column's expected slice, which is where to look.",
+    },
+  },
+  execute({ params, seed }) {
+    const who = "pointList";
+    const positions = params.positions;
+    if (positions.length % 3 !== 0) {
+      const lo = positions.length - (positions.length % 3);
+      throw new Error(
+        `${who}: param "positions" holds ${positions.length} number${positions.length === 1 ? "" : "s"}, which is not whole [x, y, z] triples — ${lo / 3} point${lo === 3 ? "" : "s"} take${lo === 3 ? "s" : ""} ${lo} and ${lo / 3 + 1} take ${lo + 3}; check for a dropped or extra coordinate`,
+      );
+    }
+    const n = positions.length / 3;
+    for (let j = 0; j < positions.length; j++) {
+      const bad = columnValueError(ColumnKind.F32, positions[j]!);
+      if (bad !== undefined) {
+        throw new Error(
+          `${who}: param "positions" entry ${j} (point ${Math.floor(j / 3)}, ${"xyz"[j % 3]}) is ${positions[j]}, which ${bad}`,
+        );
+      }
+    }
+    const names = params.columnNames;
+    const types = params.columnTypes;
+    if (types.length !== 0 && types.length !== names.length) {
+      throw new Error(
+        `${who}: param "columnTypes" lists ${types.length} type${types.length === 1 ? "" : "s"} for ${names.length} column${names.length === 1 ? "" : "s"} in "columnNames"; give one type per column, in the same order, or leave columnTypes empty to make every column f32`,
+      );
+    }
+    // Every string is decided HERE, once, into a plan of kinds and
+    // offsets; the value loops below compare no string.
+    const standard = new Map(STANDARD_POINT_ATTRS.map((s) => [s.name, s] as const));
+    const seen = new Set<string>();
+    const plans: ColumnPlan[] = [];
+    let offset = 0;
+    for (let c = 0; c < names.length; c++) {
+      const name = names[c]!;
+      if (name === "") {
+        throw new Error(`${who}: param "columnNames" entry ${c} is empty; every column needs a name`);
+      }
+      if (name === "P") {
+        throw new Error(
+          `${who}: column "P" is refused — the positions are param "positions", a flat [x, y, z, ...] list; move these values there, or name the column something else to keep them as a second position`,
+        );
+      }
+      if (name === "seed") {
+        throw new Error(
+          `${who}: column "seed" is refused — the per-point seed is computed as hashCombine(node seed, point index), exactly as pointGrid computes it, so graph reseeding reaches it; keep an authored id under another name (e.g. "id", type i32 or u32)`,
+        );
+      }
+      if (seen.has(name)) {
+        throw new Error(
+          `${who}: column "${name}" is named twice in "columnNames" (entries ${names.indexOf(name)} and ${c}); each column is written once — merge the two or rename one`,
+        );
+      }
+      seen.add(name);
+      const spelledRaw = types.length === 0 ? "f32" : types[c]!;
+      const spelled = canonicalOneOf(POINT_LIST_COLUMN_TYPES, spelledRaw);
+      if (spelled === undefined) {
+        const near = suggestNames(spelledRaw, POINT_LIST_COLUMN_TYPES);
+        throw new Error(
+          `${who}: column "${name}" has unknown type ${JSON.stringify(spelledRaw)} (param "columnTypes" entry ${c}); ${near.clause}valid types: ${POINT_LIST_COLUMN_TYPES.join(", ")}`,
+        );
+      }
+      const vec = spelled === "vec2" ? 2 : spelled === "vec3" ? 3 : spelled === "vec4" ? 4 : 1;
+      const storage = vec > 1 ? "f32" : (spelled as "f32" | "i32" | "u32" | "bool");
+      const kind =
+        storage === "f32"
+          ? ColumnKind.F32
+          : storage === "i32"
+            ? ColumnKind.I32
+            : storage === "u32"
+              ? ColumnKind.U32
+              : ColumnKind.Bool;
+      const std = standard.get(name);
+      if (std !== undefined && (std.type !== storage || std.tupleSize !== vec)) {
+        const own = std.tupleSize === 1 ? std.type : `vec${std.tupleSize}`;
+        throw new Error(
+          `${who}: column "${name}" is declared ${spelled}, but "${name}" is a standard point attribute stored as ${own}; declare it "${own}" to overwrite its default, or rename the column to keep both`,
+        );
+      }
+      plans.push({ name, spelled, kind, storage, tupleSize: vec, offset });
+      offset += n * vec;
+    }
+    const values = params.columnValues;
+    if (values.length !== offset) {
+      const slices = plans
+        .map((p) => `"${p.name}" (${p.spelled}) [${p.offset}, ${p.offset + n * p.tupleSize})`)
+        .join(", ");
+      throw new Error(
+        `${who}: param "columnValues" holds ${values.length} number${values.length === 1 ? "" : "s"}, but ${n} point${n === 1 ? "" : "s"} and ${plans.length} column${plans.length === 1 ? "" : "s"} take ${offset}` +
+          (plans.length > 0
+            ? ` — each column is ${n} * its tuple size, one after another: ${slices}; a column that is short or long shifts every column after it`
+            : ` — there are no columns in "columnNames", so columnValues must be empty`),
+      );
+    }
+    for (const p of plans) {
+      const end = p.offset + n * p.tupleSize;
+      for (let j = p.offset; j < end; j++) {
+        const bad = columnValueError(p.kind, values[j]!);
+        if (bad !== undefined) {
+          const local = j - p.offset;
+          const at =
+            p.tupleSize === 1
+              ? `point ${local}`
+              : `point ${Math.floor(local / p.tupleSize)}, component ${local % p.tupleSize}`;
+          throw new Error(
+            `${who}: column "${p.name}" (${p.spelled}) value for ${at} (columnValues entry ${j}) is ${values[j]}, which ${bad}`,
+          );
+        }
+      }
+    }
+    const geo = createPointCloud(n);
+    const points = geo.attrs.point;
+    const P = points.require("P").writable();
+    const seeds = points.require("seed").writable();
+    for (let i = 0; i < n * 3; i++) P[i] = positions[i]!;
+    for (let i = 0; i < n; i++) seeds[i] = hashCombine(seed, i);
+    for (const p of plans) {
+      // A standard attribute keeps its column (and place); anything else
+      // is appended in list order with a zero default, as setAttribute
+      // would append it.
+      const attr = standard.has(p.name)
+        ? points.require(p.name)
+        : points.add(p.name, p.storage, p.tupleSize);
+      const data = attr.writable();
+      const count = n * p.tupleSize;
+      for (let k = 0; k < count; k++) data[k] = values[p.offset + k]!;
     }
     return { out: [makeGeometryItem(geo)] };
   },

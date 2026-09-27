@@ -76,6 +76,21 @@ Two shapes, for when a device consumer carries a long ramp:
   an interior stop is the top of the segment below — or knife-edge inputs
   move by more than the published ramp tolerance allows for.
 
+### A ramp does not return its stop's value at the stop — found 2026-09-27
+
+Found by `pointList`'s byte-identity test against the pointGrid + ramp
+table it replaces. An input ON an interior stop is answered from the
+segment below at u = 1, as `v0 + (v1 - v0) * 1`, not as `v1`, so the stop's
+own value is lost whenever that sum does not round back to it: after a
+much larger neighbour (stops 1e20 then -0.238 return 0 at the second
+stop), and for integers past 2^24, where the arithmetic runs through f32
+(2147483647 comes back as -2147483648). The eiffel `indexTable` never hit
+it (its run collapse checks the value the table actually stores, and its
+data is metres), and `pointList` now carries literal tables, but any graph
+that reads a ramp at its stops can. The fix is to return `vs[j]` when the
+input equals a stop exactly — which changes the bytes of every table read
+at a stop that currently rounds, so it wants the golden run beside it.
+
 ### A one-stop ramp reads past its arrays on a NaN input — found 2026-09-19
 
 Found by the byte test 5533be3 had to fix. With one stop and a NaN

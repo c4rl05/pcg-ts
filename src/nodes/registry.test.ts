@@ -9,6 +9,7 @@ import { getNodeType, hasNodeType, listNodeTypes, standardNode } from "./index.j
 
 const STANDARD_TYPES = [
   "pointGrid",
+  "pointList",
   "pointLine",
   "pointScatterInBounds",
   "meshPrimitive",
@@ -448,6 +449,7 @@ describe("category metadata", () => {
   it("categorizes the entire standard library", () => {
     const expected: Record<string, string> = {
       pointGrid: "source",
+      pointList: "source",
       pointLine: "source",
       pointScatterInBounds: "source",
       pointScatterInWorld: "source",

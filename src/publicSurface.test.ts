@@ -147,7 +147,7 @@ const ROOT_SURFACE = [
   // rather than by projecting bounds onto the path, which cannot tell
   // "above the road here" from "near the road twice".
   "pathCoverage",
-  "pathPointAt", "pathResample", "pathRuns", "pathScan", "pathSegments", "perlinNoise", "pointGrid", "pointLine", "pointNeighborhood",
+  "pathPointAt", "pathResample", "pathRuns", "pathScan", "pathSegments", "perlinNoise", "pointGrid", "pointList", "pointLine", "pointNeighborhood",
   "pointScatterInBounds", "pointScatterInWorld", "pointScatterOnPath", "pointsToPath", "position", "pow",
   "primitiveTypeCounts", "printFieldSpec", "projectToPlane", "promote", "promoteAttribute", "ramp",
   "randomField",

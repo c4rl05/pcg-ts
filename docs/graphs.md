@@ -4,9 +4,10 @@ Generated from the graphs in [`graphs`](../graphs) by `node scripts/gen-graphs.m
 
 Each file teaches ONE thing and cooks from JSON alone — no runtime-injected data, so `pcg cook <file>` on a clean install reproduces exactly what the corpus test asserts.
 
-101 examples, alphabetical by file:
+102 examples, alphabetical by file:
 
 - [basics-a-draw-that-survives-a-move.json](#basics-a-draw-that-survives-a-movejson) — keep a random draw when the point moves
+- [basics-a-table-of-points.json](#basics-a-table-of-pointsjson) — write a table of points into the graph
 - [basics-attribute-from-noise.json](#basics-attribute-from-noisejson) — write an attribute from a noise field
 - [basics-attribute-remap.json](#basics-attribute-remapjson) — rescale an attribute to a new range
 - [basics-bridge-two-paths.json](#basics-bridge-two-pathsjson) — span the band between two paths
@@ -133,6 +134,24 @@ WHY IT EXISTS. Anything that settles by moving things needs this: a repair or re
 **Outputs:** `drawn on identity` (from `spawnIdentity`.`instances`), `drawn on station` (from `spawnStation`.`instances`)
 
 Cook it: `pcg cook graphs/basics-a-draw-that-survives-a-move.json --stats`
+
+## basics-a-table-of-points.json
+
+**write a table of points into the graph**
+
+Some coordinates come from nowhere a rule can reach: a survey, a drawing, a catalogue. Here they are the eight bright stars of Orion, right ascension and declination flattened onto the ground at two units per degree (east to the left, north up, as the sky is seen), and `pointList` carries them IN the graph file: `positions` is a flat list of [x, y, z] triples, one point per triple, and each named column is declared once in `columnNames` and `columnTypes` and filled from `columnValues`, one column after another. The stars carry two: `magnitude` (f32, smaller is brighter), which a setAttribute turns into `scale` so Rigel and Betelgeuse draw largest, and `color` declared vec4, which OVERWRITES the standard colour attribute every point cloud has and reaches the renderer through `colorAttr` — red Betelgeuse among the blue-white giants (a host multiplies it into its own material, so the editor's yellow placeholder sphere warms every one of them). A second list draws the figure: the same positions again, in stroke order, with an i32 `stroke` column that `pointsToPath` splits on, one polyline per stroke. The per-point `seed` is hashed from the node seed and the point index exactly as pointGrid hashes it, and that is the point of the node: a pointGrid with countX = n plus one `ramp(index(), [[0, v0], [1, v1], ...])` per column was the old way to fake this table, and it costs a ramp search per point and a pair per value where this costs one number. `dataInput` is the other route to arbitrary points, but its items are injected by a host and serialize empty, so a graph built on it cannot be cooked from its file.
+
+**Tags:** `basics`, `source`, `attributes`, `instancing`, `path`
+
+**Seed:** 1103
+
+**Node types:** `pointList`, `pointsToPath`, `setAttribute`, `spawnInstances`
+
+**Primitives:** *(none)*
+
+**Outputs:** `stars` (from `spawn`.`instances`), `figure` (from `lines`.`out`)
+
+Cook it: `pcg cook graphs/basics-a-table-of-points.json --stats`
 
 ## basics-attribute-from-noise.json
 

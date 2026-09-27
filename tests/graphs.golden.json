@@ -163,6 +163,127 @@
         ]
       }
     },
+    "basics-a-table-of-points.json": {
+      "outputs": {
+        "figure": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 12,
+              "vertex": 12,
+              "primitive": 3,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "rot:f32x4",
+                "scale:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "seed:u32",
+                "stroke:i32"
+              ],
+              "primitive": [
+                "primtype:string"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -9.586,
+                0,
+                -19.868
+              ],
+              "max": [
+                10.732,
+                0,
+                19.34
+              ]
+            }
+          }
+        ],
+        "stars": [
+          {
+            "kind": "instances",
+            "tags": [],
+            "residency": "cpu",
+            "instances": 8,
+            "batches": [
+              {
+                "assetId": "sphere",
+                "count": 8,
+                "channels": [
+                  {
+                    "name": "color",
+                    "type": "f32",
+                    "itemSize": 3,
+                    "values": {
+                      "min": [
+                        0.7,
+                        0.55,
+                        0.32
+                      ],
+                      "max": [
+                        1,
+                        0.84,
+                        1
+                      ],
+                      "mean": [
+                        0.7525,
+                        0.7837,
+                        0.915
+                      ]
+                    }
+                  }
+                ],
+                "translation": {
+                  "min": [
+                    -9.586,
+                    0,
+                    -19.868
+                  ],
+                  "max": [
+                    10.732,
+                    0,
+                    19.34
+                  ],
+                  "mean": [
+                    0.0805,
+                    0,
+                    -0.5938
+                  ]
+                },
+                "scale": {
+                  "min": [
+                    1.271,
+                    1.271,
+                    1.271
+                  ],
+                  "max": [
+                    4.857,
+                    4.857,
+                    4.857
+                  ],
+                  "mean": [
+                    3.1492,
+                    3.1492,
+                    3.1492
+                  ]
+                },
+                "rotation": {
+                  "min": 0,
+                  "max": 0,
+                  "mean": 0
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
     "basics-attribute-from-noise.json": {
       "outputs": {
         "points": [

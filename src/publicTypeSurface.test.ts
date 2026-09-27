@@ -100,7 +100,7 @@ const ROOT_TYPE_SURFACE = [
   "ParamValue", "ParentCellRef", "PartitionByAttributeParams", "PathClipParams",
   "PathCoverageParams", "PathPointAtParams", "PathResampleParams", "PathRunsParams", "PathScanParams",
   "PathSegmentsParams", "PathShiftParams", "Pcg32", "PinDef", "PinInfo", "PinKind",
-  "PointGridParams", "PointLineParams", "PointNeighborhoodParams", "PointScatterInBoundsParams",
+  "PointGridParams", "PointListParams", "PointLineParams", "PointNeighborhoodParams", "PointScatterInBoundsParams",
   "PointScatterInWorldParams", "PointScatterOnPathParams", "PointsToPathParams", "PolygonBooleanParams",
   "PrimType",
   "ProjectToPlaneParams", "PromoteAttributeParams", "PromoteMode", "QuotaRebalanceParams",

@@ -3311,6 +3311,63 @@ export type PointLineInputs = never;
 export type PointLineOutputs = "out";
 
 /**
+ * Params of the `pointList` node type.
+ */
+export interface PointListParams {
+  /**
+   * Point positions as a flat list [x0, y0, z0, x1, y1, z1, ...]: one point per triple, in
+   * list order, stored as f32. The length must be a multiple of 3; the point count is length
+   * / 3, and an empty list emits an empty cloud. Every value must be finite and within the
+   * f32 range.
+   *
+   * @defaultValue `[]`
+   */
+  positions: readonly number[];
+  /**
+   * Names of the per-point columns to write, in the order their values appear in
+   * `columnValues`. Each name is non-empty and unique. "P" is refused (the positions are
+   * `positions`) and so is "seed" (computed per point from the node seed, as on every source
+   * — keep an authored id under another name). The standard attributes rot, scale, density,
+   * boundsMin, boundsMax and color may be named, which OVERWRITES their defaults, but only
+   * with their own type: rot and color are vec4, scale, boundsMin and boundsMax vec3,
+   * density f32. Empty (the default) writes positions only.
+   *
+   * @defaultValue `[]`
+   */
+  columnNames: readonly string[];
+  /**
+   * One type per entry of `columnNames`: f32, i32, u32 or bool (one number per point), or
+   * vec2, vec3, vec4 (an f32 column of that many components per point). Empty (the default)
+   * means every column is f32; otherwise the list must be exactly as long as `columnNames`.
+   * i32 and u32 values must be whole numbers in their type's range, and bool values 0 or 1,
+   * since a literal the column cannot hold is refused rather than wrapped or rounded.
+   *
+   * @defaultValue `[]`
+   */
+  columnTypes: readonly string[];
+  /**
+   * Every column's values, one column after another in `columnNames` order. A column takes
+   * count * tupleSize numbers (count = positions.length / 3; tupleSize 1 for f32, i32, u32
+   * and bool, 2, 3 or 4 for the vectors), point-major within the column, so a vec3 column is
+   * [x0, y0, z0, x1, y1, z1, ...]. The total must be exactly the sum over the columns — a
+   * length that is not is refused with each column's expected slice, which is where to look.
+   *
+   * @defaultValue `[]`
+   */
+  columnValues: readonly number[];
+}
+
+/**
+ * The `pointList` node type has no input pins.
+ */
+export type PointListInputs = never;
+
+/**
+ * The output pin names of the `pointList` node type.
+ */
+export type PointListOutputs = "out";
+
+/**
  * Params of the `pointNeighborhood` node type.
  */
 export interface PointNeighborhoodParams {
