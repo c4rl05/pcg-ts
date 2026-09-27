@@ -8,8 +8,8 @@
  * of thing tower-wide, in what the graph COOKS at the plain depth, with
  * the detector in tests/support/eiffelFloating.ts:
  *
- * - FLOATING: a cluster of faces that touch each other (within 8 mm, the
- *   classes' 1 mm jitter included) but nothing that reaches the ground;
+ * - FLOATING: a cluster of faces that touch each other (within 8 mm) but
+ *   nothing that reaches the ground;
  * - LOOSE ENDS: a linear member (a closed run of one mesh's triangles, at
  *   least 0.3 m long and 4 times its section) with an end that touches no
  *   other member — both ends for a lying or raking one, the foot for a
@@ -21,11 +21,19 @@
  * else must read zero, and an allow-list entry that no longer matches its
  * count fails too, so it cannot go stale.
  *
+ * It measures the tower AS DESIGNED: the cook runs with every jitter
+ * node's amount set to zero (see `unjittered`), because the question is
+ * whether the construction connects, and the demo's 1 mm jitter is a
+ * rendering device whose draw may churn. Measured with it, a verdict near
+ * a threshold was the draw's: of ten jitter seeds, only the demo's own
+ * passed the exact counts below. So the geometry measured is also shown
+ * not to depend on the seed at all.
+ *
  * The detector is first shown to say "floating" and "loose" on a scene
  * built to have them, so a detector that cannot find anything cannot pass.
  */
 import { beforeAll, describe, expect, it } from "vitest";
-import { cook, firstGeometry } from "pcg-ts";
+import { type Graph, type NodeHandle, cook, firstGeometry } from "pcg-ts";
 import { buildEiffel } from "../demos/eiffel/graph.js";
 import { type FloatingReport, type Soup, findFloating } from "./support/eiffelFloating.js";
 
@@ -299,18 +307,18 @@ const ALLOW: readonly Allowed[] = [
     reason:
       "G45: the Masque's UpA corner stub (one 1.6 m flat at the screen's lower corner) crosses no post; it laps onto the 750 chord 12-14 mm behind it (the flats' layer offset), so floats by that; closing it would put it in the chord's plane",
   },
-  // The four Masque entries' boxes all reach down to the 630 chord's ends
-  // (y 40.27) and out to the face (39.77) since the flat bars became 'rect'
-  // sweeps (2026-09-27). The copied unit box could weld into eleven
-  // triangles and lend the twelfth to a neighbour's solid, which the
-  // detector read as a support (the chord at -x, +z did), so the same gap at
-  // the chord's ends was flagged in one quadrant and hidden in three. The
-  // counts moved with it; the geometry did not (the geomeq gate).
+  // The four Masque entries read 62 each, as a screen repeated on four
+  // faces must. They read 60, 62, 62 and 60 while the suite measured the
+  // jittered mesh with a 4 mm weld: the 630 chord is a flat 4.0 mm thick,
+  // so whether its thin side welded shut (splitting the bar into pieces
+  // that held each other up and hid its ends) was the jitter's draw, and
+  // the counts moved with every seed. Measured as designed, with a 0.5 mm
+  // weld, all sixteen of the chord's ends read loose, every quadrant alike.
   {
     kind: "loose",
     cls: "girders",
     box: [20.847, 40.268, 20.852, 39.769, 50.039, 39.768],
-    count: 60,
+    count: 62,
     reason:
       "Masque (PL-VII Fig. 6), groups G09,G20,G22,G27,G31,G32,G33,G34,G35,G36,G60,G61: the screen's flats are stacked 12 mm apart so no two crossing flats share a plane (legs.ts masque layers), so a flat one or two layers behind the chord plate it laps onto ends 1.2-2.6 cm behind it, hidden by the plate; and the flats', fillet bands' and the 630 chord's ends at the screen's sides stop 0.45 off the uprights' axes (clear of the fin on the web, and at XXV of the node's gussets), 1 cm beside the box and 5-8 cm in front of its web (the 4-8 cm gaps). The screen bears on the uprights through the 750's packing (MASQUE_BEARING), so none of these ends is unsupported; closing each would need a packing per flat end",
   },
@@ -326,11 +334,6 @@ const ALLOW: readonly Allowed[] = [
     kind: "loose",
     cls: "girders",
     box: [-39.768, 40.268, -39.768, -20.846, 50.04, -20.852],
-    // 61 until the sweep's caps became corner fans (2026-09-27): the 630
-    // chord's -x end at (-38.58, 40.30, -39.74) now reads loose, as its
-    // +x twin in the entry above always has. Its points are the same to
-    // the bit; the detector's axis weights a solid by its triangles'
-    // corners, so a cap's triangulation moves the end slab it tests.
     count: 62,
     reason:
       "Masque (PL-VII Fig. 6), groups G09,G20,G22,G27,G31,G32,G33,G34,G35,G36,G60,G61: the screen's flats are stacked 12 mm apart so no two crossing flats share a plane (legs.ts masque layers), so a flat one or two layers behind the chord plate it laps onto ends 1.2-2.6 cm behind it, hidden by the plate; and the flats', fillet bands' and the 630 chord's ends at the screen's sides stop 0.45 off the uprights' axes (clear of the fin on the web, and at XXV of the node's gussets), 1 cm beside the box and 5-8 cm in front of its web (the 4-8 cm gaps). The screen bears on the uprights through the 750's packing (MASQUE_BEARING), so none of these ends is unsupported; closing each would need a packing per flat end",
@@ -338,8 +341,8 @@ const ALLOW: readonly Allowed[] = [
   {
     kind: "loose",
     cls: "girders",
-    box: [-39.427, 40.268, 20.852, -20.847, 50.039, 39.768],
-    count: 60,
+    box: [-39.768, 40.268, 20.852, -20.847, 50.039, 39.768],
+    count: 62,
     reason:
       "Masque (PL-VII Fig. 6), groups G09,G20,G22,G27,G31,G32,G33,G34,G35,G36,G60,G61: the screen's flats are stacked 12 mm apart so no two crossing flats share a plane (legs.ts masque layers), so a flat one or two layers behind the chord plate it laps onto ends 1.2-2.6 cm behind it, hidden by the plate; and the flats', fillet bands' and the 630 chord's ends at the screen's sides stop 0.45 off the uprights' axes (clear of the fin on the web, and at XXV of the node's gussets), 1 cm beside the box and 5-8 cm in front of its web (the 4-8 cm gaps). The screen bears on the uprights through the 750's packing (MASQUE_BEARING), so none of these ends is unsupported; closing each would need a packing per flat end",
   },
@@ -351,9 +354,31 @@ const matches = (a: Allowed, cls: string, p: readonly number[]) =>
 
 const fmt = (p: readonly number[]) => p.map((x) => x.toFixed(2)).join(", ");
 
-/** The tower's meshes, one soup per output (each class, each lift car, the flag). */
-async function cookSoups(): Promise<Soup[]> {
-  const { outputs } = await cook(buildEiffel(1889));
+/**
+ * The graph with every `jitterPoints` node's amount set to zero: the tower
+ * as designed. The demo jitters each class (and each lift car) by up to
+ * parts.ts `JITTER` an axis, so two coincident points of different draws
+ * part by up to 2 * sqrt(3) mm: enough to carry a design gap across the
+ * 8 mm `tol`, or two corners of a 4 mm plate across the old 4 mm weld,
+ * one way for one seed and the other way for the next. Zeroing the amount
+ * rather than rewiring round the node leaves every output where the demo
+ * puts it.
+ */
+function unjittered(g: Graph): Graph {
+  const ids = g
+    .describe()
+    .nodes.filter((n) => n.defType === "jitterPoints")
+    .map((n) => n.id);
+  // No jitter node found means the demo jitters some other way now, and
+  // this suite would be back to measuring a draw: say so, loudly.
+  expect(ids.length, "jitterPoints nodes in the eiffel graph").toBeGreaterThan(0);
+  for (const id of ids) g.setParam({ id } as NodeHandle<Record<string, unknown>>, "amount", [0, 0, 0]);
+  return g;
+}
+
+/** The tower's meshes, un-jittered, one soup per output (each class, each lift car, the flag). */
+async function cookSoups(seed = 1889): Promise<Soup[]> {
+  const { outputs } = await cook(unjittered(buildEiffel(seed)));
   const soups: Soup[] = [];
   for (const [cls, v] of Object.entries(outputs)) {
     const g = firstGeometry(v as never);
@@ -447,13 +472,63 @@ describe("the detector can say floating and loose", () => {
     expect(rails[0]!.at[0]).toBeGreaterThan(1.8);
     expect(rails[0]!.at[2]).toBeLessThan(0.2);
   });
+
+  it("finds the free end of a 3 mm flat bar, which a weld reaching across its thickness hides", () => {
+    // The 630 chord's case in miniature: a flat bar on a post by one end.
+    // A weld that reaches across the bar's thickness closes its thin sides
+    // up, the bar falls apart into pieces that touch each other, and its
+    // free end reads as held. The 4 mm weld the jittered mesh needed did
+    // that to this bar, and to the chord whenever the draw brought its
+    // 4.0 mm under the weld.
+    const scene = soupOf("probe", [
+      [
+        [-5, 0, -5],
+        [5, 0.2, 5],
+      ],
+      [
+        [0, 0.2, 0],
+        [0.1, 1.1, 0.1],
+      ],
+      [
+        [0, 1.0, 0.05],
+        [2, 1.1, 0.053],
+      ],
+    ]);
+    const loose = findFloating([scene]).looseEnds;
+    expect(loose.map((e) => e.end)).toEqual(["end"]);
+    expect(loose[0]!.at[0]).toBeGreaterThan(1.8);
+    expect(findFloating([scene], { weld: 0.004 }).looseEnds, "the old 4 mm weld, for contrast").toEqual([]);
+  });
 });
 
 describe("the tower at the plain depth", () => {
+  let soups: Soup[];
   let report: FloatingReport;
   beforeAll(async () => {
-    report = findFloating(await cookSoups());
+    soups = await cookSoups();
+    report = findFloating(soups);
   }, 180_000);
+
+  it("measures geometry no seed moves: another graph seed cooks the same soups to the bit", async () => {
+    // What makes the verdicts below seed-independent, checked rather than
+    // argued: if anything seeded besides the zeroed jitter ever reaches a
+    // mesh, a report could flip with a seed change again, and this names
+    // the class it reached.
+    const other = await cookSoups(4242);
+    expect(other.map((s) => s.cls)).toEqual(soups.map((s) => s.cls));
+    const moved: string[] = [];
+    soups.forEach((s, k) => {
+      const o = other[k]!;
+      let same = o.P.length === s.P.length && o.vertexToPoint.length === s.vertexToPoint.length;
+      for (let i = 0; same && i < s.P.length; i++) same = Object.is(s.P[i], o.P[i]);
+      for (let i = 0; same && i < s.vertexToPoint.length; i++) same = s.vertexToPoint[i] === o.vertexToPoint[i];
+      same &&= o.primVertexStart.length === s.primVertexStart.length;
+      for (let i = 0; same && i < s.primVertexStart.length; i++)
+        same = s.primVertexStart[i] === o.primVertexStart[i] && s.primVertexCount[i] === o.primVertexCount[i];
+      if (!same) moved.push(s.cls);
+    });
+    expect(moved, "classes whose un-jittered mesh depends on the graph seed").toEqual([]);
+  }, 60_000);
 
   const check = (kind: "floating" | "loose") => {
     const items =

@@ -8,8 +8,16 @@
  * where the module welds one, one flat face of it where the module gives
  * every face its own points (most boxes and prisms). A SOLID is a run of
  * one mesh's consecutive triangles that closes on itself once its corners
- * are welded (the 1 mm `JITTER` parted them): a box, a prism, a capped
- * sweep — one member, never the member it abuts (see the SOLIDS step).
+ * are welded: a box, a prism, a capped sweep — one member, never the
+ * member it abuts (see the SOLIDS step).
+ *
+ * UN-JITTERED GEOMETRY. The soups are meant to be the tower as designed,
+ * cooked with the demo's 1 mm jitter (parts.ts `JITTER`) set to zero —
+ * see `unjittered` in the test. Every distance below is then a property of
+ * the construction. Measured on the jittered mesh, a gap or a weld near
+ * its threshold was decided by the jitter's draw instead: of ten jitter
+ * seeds tried, only the demo's own passed the suite's exact counts, and
+ * the other nine failed them (2026-09-27).
  *
  * TWO CHECKS.
  *
@@ -51,9 +59,23 @@ export interface Soup {
 }
 
 export interface FloatingOptions {
-  /** Touching distance, m: the classes' 1 mm jitter parts two coincident points by up to 3.5 mm. */
+  /**
+   * Touching distance, m, on the un-jittered geometry. The tower's design
+   * gaps leave a wide plateau round it: the widest gap still read as
+   * touching is 7.00 mm (360 platforms pieces at the 1st floor, 7 mm off
+   * the silvered class), the narrowest read as open 11.0 mm (eight of the
+   * Masque's loose ends), and the report is identical anywhere from 7.1 to
+   * 10.9 mm (measured 2026-09-27).
+   */
   readonly tol: number;
-  /** Two corners of one class this close are the same corner. */
+  /**
+   * Two corners of one class this close are the same corner. Far under
+   * a plate's thickness — the Masque's 630 chord is a flat 4.0 mm thick,
+   * and a weld that reaches across a plate collapses its thin side and
+   * splits the member into pieces that hold each other up — and far over
+   * the f32 rounding of coincident corners (~0.03 mm at 300 m). The report
+   * is identical for any weld from 0.001 to 2 mm (measured 2026-09-27).
+   */
   readonly weld: number;
   /** Grid cell, m. */
   readonly cell: number;
@@ -77,7 +99,7 @@ export interface FloatingOptions {
 
 export const FLOATING_DEFAULTS: FloatingOptions = {
   tol: 0.008,
-  weld: 0.004,
+  weld: 0.0005,
   cell: 0.5,
   groundY: 0.01,
   minLength: 0.3,
@@ -616,8 +638,8 @@ export function findFloating(soups: readonly Soup[], options: Partial<FloatingOp
   // SOLIDS: each run of one mesh's triangles that closes on itself. The
   // modules emit a member's faces one after another (a box's twelve
   // triangles, a prism's caps and walls), each face with its own points,
-  // so a member is recovered by welding the corners (the jitter parted
-  // them by up to 3.5 mm) and growing from its first triangle across
+  // so a member is recovered by welding the corners (coincident but for
+  // f32 rounding; see `weld`) and growing from its first triangle across
   // shared edges, always taking the lowest-numbered triangle that meets an
   // open edge, until no edge is open. Growing across ANY shared edge would
   // weld a rail to the post it ends flush on; the order is what keeps them
