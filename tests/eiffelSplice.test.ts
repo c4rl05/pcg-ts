@@ -493,8 +493,9 @@ describe("eiffel splices", () => {
       expect(splice.filter((h) => crowded(h, false)).length).toBe(0);
       // Save by the first floor's own rows (girders, montants, end posts),
       // which run on the uprights' webs over the bends XXIV and XXIII, under
-      // the covers there (firstFloor.ts; SOURCES.md §27.2) [measured].
-      expect(splice.filter((h) => crowded(h, true)).length).toBeLessThanOrEqual(98);
+      // the covers there (firstFloor.ts; SOURCES.md §27.2) [measured: 101;
+      // 98 while every row's last head stood 0.1 mm short of its pitch].
+      expect(splice.filter((h) => crowded(h, true)).length).toBeLessThanOrEqual(101);
     }
 
     // No seam head under a cover (the corner rows stop half a pitch short of

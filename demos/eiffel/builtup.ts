@@ -73,7 +73,8 @@
  * the box (the corner angles, the diaphragms) nothing is drawn: a closed
  * box shows none of it.
  */
-import type { Vec3 } from "./lattice.js";
+import { type Graph, type NodeHandle, attribute, mul, orientAlongVector, pathResample, transformPoints } from "pcg-ts";
+import { FACE_NORMAL, type Vec3 } from "./lattice.js";
 import {
   NODES,
   SEAMS_AS_BUILT,
@@ -87,7 +88,39 @@ import {
   type UprightMakeup,
   type UprightSection,
 } from "./spec.js";
-import { UPRIGHT_SEAMS } from "./strut.js";
+import { UPRIGHT_SEAMS, rivetSpawn } from "./strut.js";
+
+/**
+ * A rivet row CENTRED on each of `lines`: floor(L / pitch) + 1 heads
+ * exactly `pitch` apart, what is left over split equally between the two
+ * ends (`pathResample` align 'center'), each head `out` off its line along
+ * the line's `FACE_NORMAL` and pointing that way. So a row that is centred
+ * on its stretch is handed the STRETCH, and the node counts and centres
+ * it; a row whose count this module decides (a field from a joint, a
+ * staggered column, a belt's lap) is handed a line exactly (n - 1) pitches
+ * long, which is the same rule with nothing left over: the node counts a
+ * whole number of pitches through the f32 rounding of the line's stored
+ * ends, so it lands n heads end to end and never an (n + 1)-th on top of
+ * the last.
+ *
+ * This is strut.ts `lineHeads` (same node ids, same head) with the
+ * resample's placement set; that function takes no placement yet.
+ */
+export function centredHeads(g: Graph, id: string, lines: NodeHandle, out: number, pitch: number): NodeHandle {
+  const samples = g.add(pathResample, { mode: "spacing", spacing: pitch, align: "center" }, `${id}Samples`);
+  const N = attribute(FACE_NORMAL, 3);
+  const at = g.add(transformPoints, { translate: mul(N, out) }, `${id}At`);
+  const aim = g.add(orientAlongVector, { direction: N, up: attribute("tangent", 3), axis: "+y" }, `${id}Aim`);
+  g.connect(lines, "out", samples, "in");
+  g.connect(samples, "out", at, "in");
+  g.connect(at, "out", aim, "in");
+  return aim;
+}
+
+/** {@link centredHeads} spawned as one rivet set (strut.ts `lineRivets`, centred). */
+export function centredRivets(g: Graph, id: string, lines: NodeHandle, out: number, pitch: number): NodeHandle {
+  return rivetSpawn(g, id, [centredHeads(g, id, lines, out, pitch)]);
+}
 
 /** A lower upright's name: a (inner corner), b, c (outer corner), d. */
 export type UprightName = "a" | "b" | "c" | "d";
@@ -448,8 +481,10 @@ export function lowerPlates(show: Protrusions): UprightPlate[] {
  * and where it turns, whichever comes first of the row's own crossing of
  * the node's horizontal plane (the face's fold), its plate's end, and the
  * end of the next panel's plate, which runs on over it there. So two
- * panels' heads never meet at a node, and none stands under a plate. Each row carries its face's
- * outward normal, for `lineRivets` with no offset. The rows are today's
+ * panels' heads never meet at a node, and none stands under a plate. Each
+ * row is returned as the STRETCH it is centred on, carrying its face's
+ * outward normal, for `centredRivets` with no offset, which counts and
+ * centres the heads on it. The rows are today's
  * rule (`UPRIGHT_SEAMS`: the middle of a 100 angle's leg in from the
  * corner), re-seated on the true faces; the other rows as built are
  * `lowerBuiltRows`' (at the end of this file).
@@ -492,14 +527,10 @@ export function lowerSeamRows(pitch: number, inset: number): Array<{ a: Vec3; b:
             (above === undefined ? L : Math.min(L + crease, meets(own.hi, T), meets(above.lo, above.T))) - pitch / 2;
           if (hi < lo) continue;
           // Each stretch the tronçons' covers leave it (the splices, below).
+          // The stretch itself: `centredRivets` counts and centres the row on it.
           for (const [s0, s1] of subtract(lo, hi, lowerCornerCuts(name, k, d, off, pitch, inset))) {
             if (s1 < s0) continue;
-            const n = Math.floor((s1 - s0) / pitch + 1e-9) + 1;
-            const from = (s0 + s1 - (n - 1) * pitch) / 2;
-            // 0.1 mm short of (n - 1) pitches: spacing mode then lands exactly
-            // n heads (legs.ts `rowMembers`); a row of one is a point.
-            const to = from + Math.max(0, (n - 1) * pitch - 1e-4);
-            out.push({ a: add(A, off, scale(T, from)), b: add(A, off, scale(T, to)), n: f.n });
+            out.push({ a: add(A, off, scale(T, s0)), b: add(A, off, scale(T, s1)), n: f.n });
           }
         }
       }
@@ -811,7 +842,8 @@ function upperRows(name: UpperName, k: number, inset: number): Array<{ d: PlanDi
  * end and the next panel's on that face (as `lowerSeamRows`). On b's and
  * d's faces toward the next leg a row stops where the two facing faces
  * close to two `head` rises apart. A row on a plate's outer face stops
- * half a pitch short of each joint's cover (the splices).
+ * half a pitch short of each joint's cover (the splices). Each row is
+ * returned as its stretch, for `centredRivets` to count and centre.
  */
 function upperRowsOf(
   names: readonly UpperName[],
@@ -881,13 +913,10 @@ function upperRowsOf(
                   .filter((j) => j.k === k)
                   .map((j) => [j.t - SPLICE.upper.length / 2 - pitch / 2, j.t + SPLICE.upper.length / 2 + pitch / 2] as const)
               : [];
+          // The stretch itself: `centredRivets` counts and centres the row on it.
           for (const [s0, s1] of subtract(lo, hi, cuts)) {
             if (s1 < s0) continue;
-            const n = Math.floor((s1 - s0) / pitch + 1e-9) + 1;
-            const from = (s0 + s1 - (n - 1) * pitch) / 2;
-            // 0.1 mm short of (n - 1) pitches: spacing mode lands exactly n heads.
-            const to = from + Math.max(0, (n - 1) * pitch - 1e-4);
-            out.push({ a: add(A, off, scale(T, from)), b: add(A, off, scale(T, to)), n: r.across === undefined ? f.n : scale(f.e, r.across) });
+            out.push({ a: add(A, off, scale(T, s0)), b: add(A, off, scale(T, s1)), n: r.across === undefined ? f.n : scale(f.e, r.across) });
           }
         }
       }
@@ -1162,7 +1191,7 @@ function bentRun(j: number, cls: CoverClass): readonly [number, number] {
   return [panel5(j - 1) ? short : long, panel5(j) ? short : long];
 }
 
-/** A splice's heads grouped by pitch: each group's rows for `lineRivets` at that pitch. */
+/** A splice's heads grouped by pitch: each group's rows for `centredHeads` at that pitch. */
 export interface SpliceHeads {
   readonly pitch: number;
   readonly rows: Array<{ a: Vec3; b: Vec3; n: Vec3 }>;
@@ -1184,8 +1213,9 @@ class HeadSets {
 /**
  * The heads of one column on one side of its joint: from `u0` (the joint,
  * or the fold) along `dir` (+-1 along T), `end` in and every pitch to `end`
- * short of `run`, as a row of n heads (a line (n - 1) pitches less 0.1 mm,
- * for `lineRivets`' spacing mode, as the seam rows).
+ * short of `run`, as a row of n heads: a line exactly (n - 1) pitches
+ * long, for `centredHeads`. The count is this rule's (the row starts at
+ * the joint's end distance, not centred), so it is decided here.
  */
 function halfRow(
   heads: HeadSets,
@@ -1203,7 +1233,7 @@ function halfRow(
   if (last < first - 1e-9) return;
   const count = Math.floor((last - first) / c.pitch + 1e-9) + 1;
   const a = u0 + dir * first;
-  const b = a + dir * Math.max(0, (count - 1) * c.pitch - 1e-4);
+  const b = a + dir * (count - 1) * c.pitch;
   heads.add(c.pitch, add(A, off, scale(T, a)), add(A, off, scale(T, b)), n);
 }
 
@@ -1708,7 +1738,9 @@ function coverCutsAt(
  * plane twice, once facing each way, with `half` the leg's half thickness:
  * the caller asks the joint plates about both heads at one point, so a
  * rivet keeps both heads or neither, then moves each out by `half` along
- * its own facing. Every other row has `half` 0.
+ * its own facing. Every other row has `half` 0. A centred row is returned
+ * as its stretch and a staggered one as its heads' own line, both for
+ * `centredHeads`.
  */
 export function lowerBuiltRows(): Array<{ a: Vec3; b: Vec3; n: Vec3; half: number }> {
   const pitch = UPRIGHT_SEAMS.pitch;
@@ -1760,19 +1792,22 @@ export function lowerBuiltRows(): Array<{ a: Vec3; b: Vec3; n: Vec3; half: numbe
           const through = r.s2 === undefined ? undefined : { off: add(f.mid, scale(f.e, (r.s + r.s2) / 2), scale(f.n, r.o)), half: Math.abs(r.s - r.s2) / 2 };
           for (const [s0, s1] of subtract(lo, hi, cuts)) {
             if (s1 < s0) continue;
+            // A row centred on the stretch is the stretch (`centredHeads`
+            // counts and centres it). A staggered one is the centred row
+            // half a pitch on, one fewer if its last would pass the end: a
+            // count the resample cannot see, so it is laid as a line exactly
+            // (count - 1) pitches long.
+            let from = s0;
+            let to = s1;
             let count = Math.floor((s1 - s0) / pitch + 1e-9) + 1;
-            let from = (s0 + s1 - (count - 1) * pitch) / 2;
             if (r.stagger === true) {
-              // Half a pitch on, and one fewer if the last would pass the end.
-              from += pitch / 2;
+              from = (s0 + s1 - (count - 1) * pitch) / 2 + pitch / 2;
               if (from + (count - 1) * pitch > s1 + 1e-9) count--;
+              to = from + (count - 1) * pitch;
             }
-            // A resample always lands both ends of a path, so a row of one
-            // head cannot be laid as a line: the few stubs that short (between
-            // a cover and a node) are left bare.
+            // A row of one head is not a line (a resample refuses it): the
+            // few stubs that short (between a cover and a node) are left bare.
             if (count < 2) continue;
-            // 0.1 mm short of (n - 1) pitches: spacing mode lands exactly n heads.
-            const to = from + ((count - 1) * pitch - 1e-4);
             if (through === undefined) {
               out.push({ a: add(A, off, scale(T, from)), b: add(A, off, scale(T, to)), n, half: 0 });
             } else {

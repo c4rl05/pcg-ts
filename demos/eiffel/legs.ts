@@ -88,6 +88,8 @@ import { CROSS_PLATE, type CrossPlate, type Detail, type Parts } from "./parts.j
 import {
   AS_BUILT,
   WEBS_ONLY,
+  centredHeads,
+  centredRivets,
   jointFace,
   jointUpright,
   lowerPlates,
@@ -132,7 +134,6 @@ import {
   faceSkin,
   flatBars,
   gussetMeshes,
-  lineHeads,
   lineRivets,
   THROUGH_HALF,
   offJointPlates,
@@ -693,13 +694,13 @@ interface RivetRow {
   readonly off: number;
 }
 
-/** Rows as the two-point lines `lineRivets` resamples at `pitch`, each head's axis out of its own face. */
+/**
+ * Rows as two-point lines exactly (n - 1) pitches long, for `centredRivets`
+ * at `pitch` (n heads end to end), each head's axis out of its own face.
+ */
 function rowMembers(pl: FacePlane, rows: readonly RivetRow[], pitch: number): SegmentMember[] {
   return rows.map((r) => {
-    // 0.1 mm short of (n - 1) pitches, so spacing mode lands n samples and no
-    // remainder: a relative shortfall below f32's epsilon lands an n + 1-th
-    // head on top of the last one (measured: 96 of them).
-    const L = (r.n - 1) * pitch - 1e-4;
+    const L = (r.n - 1) * pitch;
     const l = Math.hypot(r.dir[0], r.dir[1]);
     const b: UV = [r.from[0] + (r.dir[0] / l) * L, r.from[1] + (r.dir[1] / l) * L];
     return { a: pl.world(r.from, r.off), b: pl.world(b, r.off), n: r.off >= 0 ? pl.n : scale3(pl.n, -1) };
@@ -2002,7 +2003,7 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
           {
             // The corner angles' rows on the true faces (`lowerSeamRows`).
             name: "leg.uprights",
-            spawn: lineRivets(
+            spawn: centredRivets(
               g,
               "legUprightSeams",
               fourMembers(
@@ -2016,7 +2017,7 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
           {
             // XVII to XI, the same rule on the 500 boxes (`upperLegSeamRows`).
             name: "leg.uprights.upper",
-            spawn: lineRivets(
+            spawn: centredRivets(
               g,
               "legUprightUpperSeams",
               fourMembers(
@@ -2039,7 +2040,7 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
             spawn: (() => {
               const rowsOf = (id: string, sets: readonly SpliceHeads[]) =>
                 sets.map(({ pitch, rows }, i) =>
-                  lineHeads(g, `${id}${i}`, fourMembers(`${id}${i}4`, segmentMembers(g, `${id}Rows${i}`, rows)), 0, pitch),
+                  centredHeads(g, `${id}${i}`, fourMembers(`${id}${i}4`, segmentMembers(g, `${id}Rows${i}`, rows)), 0, pitch),
                 );
               return rivetSpawn(g, "legUprightSplices", [
                 // Where a joint plate can lie over the cover, kept off it.
@@ -2066,7 +2067,7 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
                     const lines = segmentMembers(g, "legUprightBuiltLines", rows, [
                       { name: THROUGH_HALF, values: rows.map((r) => [r.half]) },
                     ]);
-                    const heads = lineHeads(g, "legUprightBuiltRows", fourMembers("legUprightBuiltRows4", lines), 0, UPRIGHT_SEAMS.pitch);
+                    const heads = centredHeads(g, "legUprightBuiltRows", fourMembers("legUprightBuiltRows4", lines), 0, UPRIGHT_SEAMS.pitch);
                     return rivetSpawn(g, "legUprightBuilt", [
                       throughHeads(g, "legUprightBuilt", offJointPlates(g, "legUprightBuilt", [heads])),
                     ]);
@@ -2213,21 +2214,25 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
             const b5 = beltRivets(node("XXIV").y, node("XXIII").y, P.belt1Chord, P.belt1ChordThickness, P.belt1PostPitch, P.belt1PostPitch, 2 * P.belt1PostPitch, TOP_CHORD_IN_DECK);
             const b11 = beltRivets(node("XVIII").y, node("XVII").y, P.belt2Chord, P.belt2ChordThickness, P.belt2PostPitch, P.belt2PostPitch / 2, P.belt2PostPitch, TOP_CHORD_IN_DECK);
             const tr = tieRivets();
-            const sets: Array<[string, SegmentMember[], number]> = [
-              ["legBelt5Edge", b5.edge, BELT5_JOINTS.edge.pitch],
-              ["legBelt5PostLap", b5.posts, BELT5_JOINTS.post.pitch],
-              ["legBelt5BarLap", b5.bars, BELT5_JOINTS.bar.pitch],
-              ["legBelt11Edge", b11.edge, BELT11_JOINTS.edge.pitch],
-              ["legBelt11PostLap", b11.posts, BELT11_JOINTS.post.pitch],
-              ["legBelt11BarLap", b11.bars, BELT11_JOINTS.bar.pitch],
-              ["legTieEdge", tr.edge, TIE_EDGE_ROW.pitch],
-              ["legTieLap", tr.lap, TIE_LAP_SPAWN],
+            // Rows at a pitch, n heads each (`rowMembers`), and the tie
+            // laps, which are their two heads and nothing between
+            // (`TIE_LAP_SPAWN`).
+            const row = centredRivets;
+            const sets: Array<[string, SegmentMember[], number, typeof lineRivets]> = [
+              ["legBelt5Edge", b5.edge, BELT5_JOINTS.edge.pitch, row],
+              ["legBelt5PostLap", b5.posts, BELT5_JOINTS.post.pitch, row],
+              ["legBelt5BarLap", b5.bars, BELT5_JOINTS.bar.pitch, row],
+              ["legBelt11Edge", b11.edge, BELT11_JOINTS.edge.pitch, row],
+              ["legBelt11PostLap", b11.posts, BELT11_JOINTS.post.pitch, row],
+              ["legBelt11BarLap", b11.bars, BELT11_JOINTS.bar.pitch, row],
+              ["legTieEdge", tr.edge, TIE_EDGE_ROW.pitch, row],
+              ["legTieLap", tr.lap, TIE_LAP_SPAWN, lineRivets],
             ];
             return sets
               .filter(([, list]) => list.length > 0)
-              .map(([id, list, pitch]) => ({
+              .map(([id, list, pitch, spawn]) => ({
                 name: `leg.chords.${id}`,
-                spawn: lineRivets(g, `${id}Rivets`, fourMembers(`${id}Rivets4`, segmentMembers(g, `${id}Rows`, list)), 0, pitch),
+                spawn: spawn(g, `${id}Rivets`, fourMembers(`${id}Rivets4`, segmentMembers(g, `${id}Rows`, list)), 0, pitch),
               }));
           })()
         : []),

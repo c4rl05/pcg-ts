@@ -20,9 +20,42 @@
  * reach 0.90-1.00 m along them from the upright (Fig. 3's "900" and
  * "1000").
  */
-import { type Graph, type NodeHandle, abs, add, attribute, component, le, lt, min, mul, position, ramp } from "pcg-ts";
-import { AS_BUILT, WEBS_ONLY, shaftPlates, shaftSeamRows, shaftSpliceHeads } from "./builtup.js";
 import {
+  type Graph,
+  type NodeHandle,
+  abs,
+  add,
+  attribute,
+  component,
+  connectByIndex,
+  index,
+  le,
+  lt,
+  min,
+  mod,
+  mul,
+  pathResample,
+  pathScan,
+  position,
+  promoteAttribute,
+  ramp,
+  select,
+  setAttribute,
+  sub,
+  transformPoints,
+  vec,
+} from "pcg-ts";
+import {
+  AS_BUILT,
+  WEBS_ONLY,
+  centredHeads,
+  centredRivets,
+  shaftPlates,
+  shaftSeamRows,
+  shaftSpliceHeads,
+} from "./builtup.js";
+import {
+  FACE_NORMAL,
   type SegmentMember,
   type Vec3,
   chains,
@@ -49,7 +82,6 @@ import {
   faceSkin,
   flatBars,
   gussetMeshes,
-  lineHeads,
   lineRivets,
   offJointPlates,
   rivetOutputs,
@@ -414,11 +446,23 @@ export function stemStop(name: string): number | undefined {
  * column, and ends free beside a car's run (`clearOfEdoux`). The bands of
  * Figs 13-15 lie in the planes of the 0.60 girders' chords, their angles
  * squared to the horizontal.
+ *
+ * The web's diagonals are not listed here: each girder is returned as its
+ * bottom chord's line (`warren`, or `x` for A), which {@link planWebs}
+ * divides into panels in the graph.
  */
-function planBracing(): { chords: SegmentMember[]; web: SegmentMember[]; bands: SegmentMember[] } {
+function planBracing(): {
+  chords: SegmentMember[];
+  posts: SegmentMember[];
+  warren: SegmentMember[];
+  x: SegmentMember[];
+  bands: SegmentMember[];
+} {
   const from = NODES.findIndex((n) => n.name === PLAN_BRACING.from);
   const chords: SegmentMember[] = [];
-  const web: SegmentMember[] = [];
+  const posts: SegmentMember[] = [];
+  const warren: SegmentMember[] = [];
+  const x: SegmentMember[] = [];
   const bands: SegmentMember[] = [];
   for (const n of NODES.slice(from)) {
     // XII's b and d are still 1.86 apart (Fig. 15's pattern, the Nota);
@@ -439,23 +483,16 @@ function planBracing(): { chords: SegmentMember[]; web: SegmentMember[]; bands: 
       const a0: XZ = [p[0] + u[0] * t0, p[1] + u[1] * t0];
       const nrm: Vec3 = [-u[1], 0, u[0]];
       for (const [f, g] of clearOfEdoux(a0, u, L0 - t0 - t1, n.y, d)) {
-        const a: XZ = [a0[0] + u[0] * f, a0[1] + u[1] * f];
         const L = g - f;
-        const count = Math.max(1, Math.round(L / d));
-        const at = (i: number, k: 0 | 1): Vec3 => [
-          a[0] + (u[0] * L * i) / count,
-          n.y + (k - 0.5) * d,
-          a[1] + (u[1] * L * i) / count,
-        ];
-        chords.push({ a: at(0, 0), b: at(count, 0), n: nrm });
-        chords.push({ a: at(0, 1), b: at(count, 1), n: nrm });
-        web.push({ a: at(0, 0), b: at(0, 1), n: nrm });
-        web.push({ a: at(count, 0), b: at(count, 1), n: nrm });
-        for (let i = 0; i < count; i++) {
-          const k = (i % 2) as 0 | 1;
-          web.push({ a: at(i, k), b: at(i + 1, (1 - k) as 0 | 1), n: nrm });
-          if (girder === "A") web.push({ a: at(i, (1 - k) as 0 | 1), b: at(i + 1, k), n: nrm });
+        if (L / d > PLAN_PANELS_MAX) {
+          throw new Error(`eiffel shaft: a plan girder at ${n.name} is ${L.toFixed(2)} m, over ${PLAN_PANELS_MAX} panels of ${d}; raise PLAN_PANELS_MAX`);
         }
+        const at = (t: number, k: 0 | 1): Vec3 => [a0[0] + u[0] * t, n.y + (k - 0.5) * d, a0[1] + u[1] * t];
+        chords.push({ a: at(f, 0), b: at(g, 0), n: nrm });
+        chords.push({ a: at(f, 1), b: at(g, 1), n: nrm });
+        posts.push({ a: at(f, 0), b: at(f, 1), n: nrm });
+        posts.push({ a: at(g, 0), b: at(g, 1), n: nrm });
+        (girder === "A" ? x : warren).push({ a: at(f, 0), b: at(g, 0), n: nrm });
       }
     }
     const d = PLAN_BRACING.depth;
@@ -467,11 +504,48 @@ function planBracing(): { chords: SegmentMember[]; web: SegmentMember[]; bands: 
     // A post in A's web where A cuts the bands, chord to chord, that
     // their angles end on (`planBracingBandCrossings`); squared to A's plane.
     const dA = PLAN_BRACING.depthA;
-    for (const [x, z] of planBracingBandCrossings(n.name, n.outer, w)) {
-      web.push({ a: [x, n.y - dA / 2, z], b: [x, n.y + dA / 2, z], n: [-Math.SQRT1_2, 0, Math.SQRT1_2] });
+    for (const [cx, cz] of planBracingBandCrossings(n.name, n.outer, w)) {
+      posts.push({ a: [cx, n.y - dA / 2, cz], b: [cx, n.y + dA / 2, cz], n: [-Math.SQRT1_2, 0, Math.SQRT1_2] });
     }
   }
-  return { chords, web, bands };
+  return { chords, posts, warren, x, bands };
+}
+
+/**
+ * More panels than any plan girder has (the longest, 25.7 m of a 0.60
+ * girder, has 43): {@link planWebs} finds a girder's last sample as the
+ * one past 1 - 1 / (2 x this) of its length.
+ */
+const PLAN_PANELS_MAX = 100;
+
+/**
+ * The diagonals of girders `depth` deep, given as their bottom chords'
+ * lines: each divided into round(L / depth) equal panels (`pathResample`
+ * fit 'round'), a Warren web from bottom to top in the first panel and
+ * alternating on, and with `cross` its mirror as well, an X in every
+ * panel. Each diagonal is its own two-point member carrying its line's
+ * face normal, as `faceSkin` takes them.
+ */
+function planWebs(g: Graph, id: string, lines: readonly SegmentMember[], depth: number, cross: boolean): NodeHandle[] {
+  if (lines.length === 0) return [];
+  const panels = g.add(pathResample, { mode: "spacing", spacing: depth, fit: "round" }, `${id}Panels`);
+  const one = g.add(setAttribute, { name: "panelOne", type: "f32", value: 1 }, `${id}One`);
+  // Each sample's panel number along its own girder: an exclusive running count.
+  const numbered = g.add(pathScan, { name: "panelOne", outName: "panel", mode: "exclusive" }, `${id}Index`);
+  g.connect(segmentMembers(g, `${id}Lines`, lines), "out", panels, "in");
+  g.connect(panels, "out", one, "in");
+  g.connect(one, "out", numbered, "in");
+  const odd = mod(attribute("panel"), 2);
+  const next = select(lt(attribute("curveU"), 1 - 1 / (2 * PLAN_PANELS_MAX)), add(index(), 1), -1);
+  return (cross ? [odd, sub(1, odd)] : [odd]).map((up, i) => {
+    const lifted = g.add(transformPoints, { translate: vec(0, mul(up, depth), 0) }, `${id}Zig${i}`);
+    const diagonals = g.add(connectByIndex, { index: next }, `${id}Diagonals${i}`);
+    const faced = g.add(promoteAttribute, { name: FACE_NORMAL, from: "point", to: "primitive", mode: "first" }, `${id}Faces${i}`);
+    g.connect(numbered, "out", lifted, "in");
+    g.connect(lifted, "out", diagonals, "in");
+    g.connect(diagonals, "out", faced, "in");
+    return faced;
+  });
 }
 
 /** A (y, w) table read at y, clamped (what `ramp` does, before the cook). */
@@ -487,10 +561,15 @@ function ramp0(stops: ReadonlyArray<readonly [number, number]>, y: number): numb
 
 /** The plan bracing's meshes: chords and web squared to their girders' planes, the bands to the horizontal. */
 function planBracingMeshes(g: Graph): NodeHandle[] {
-  const { chords, web, bands } = planBracing();
+  const { chords, posts, warren, x, bands } = planBracing();
+  const web = merge(g, "planBracingWebPaths", [
+    segmentMembers(g, "planBracingPostPaths", posts),
+    ...planWebs(g, "planBracingWarren", warren, PLAN_BRACING.depth, false),
+    ...planWebs(g, "planBracingX", x, PLAN_BRACING.depthA, true),
+  ]);
   return [
     faceSkin(g, "planBracingChords", segmentMembers(g, "planBracingChordPaths", chords), PLAN_BRACING.chord),
-    faceSkin(g, "planBracingWeb", segmentMembers(g, "planBracingWebPaths", web), PLAN_BRACING.web),
+    faceSkin(g, "planBracingWeb", web, PLAN_BRACING.web),
     faceSkin(g, "planBracingBands", segmentMembers(g, "planBracingBandPaths", bands), PLAN_BRACING.band),
   ];
 }
@@ -613,7 +692,7 @@ export function buildShaft(g: Graph, detail: Detail = {}): Parts {
             {
               // Today's seam rule laid on the steel as built (`shaftSeamRows`).
               name: "shaft.uprights",
-              spawn: lineRivets(
+              spawn: centredRivets(
                 g,
                 "shaftUprightSeams",
                 segmentMembers(g, "shaftUprightSeamRows", shaftSeamRows(UPRIGHT_SEAMS.pitch, UPRIGHT_SEAMS.inset, RIVET_RISE)),
@@ -631,7 +710,7 @@ export function buildShaft(g: Graph, detail: Detail = {}): Parts {
                   g,
                   "shaftUprightSplice",
                   shaftSpliceHeads().map(({ pitch, rows }, i) =>
-                    lineHeads(g, `shaftUprightSplice${i}`, segmentMembers(g, `shaftUprightSpliceRows${i}`, rows), 0, pitch),
+                    centredHeads(g, `shaftUprightSplice${i}`, segmentMembers(g, `shaftUprightSpliceRows${i}`, rows), 0, pitch),
                   ),
                 ),
               ]),

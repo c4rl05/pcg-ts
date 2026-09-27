@@ -459,7 +459,7 @@
         "vertices": 318144,
         "primitives": 106048,
         "instances": 0,
-        "hash": "84d0f285fa70f475"
+        "hash": "a2e1f53a7b6c8b98"
       },
       "glass": {
         "kind": "geometry",
@@ -1091,7 +1091,7 @@
         "vertices": 4108608,
         "primitives": 1369536,
         "instances": 0,
-        "hash": "de1d1629ce9dc8fe"
+        "hash": "107ef126fc8c0703"
       },
       "glass": {
         "kind": "geometry",
@@ -1642,7 +1642,7 @@
         "vertices": 4108608,
         "primitives": 1369536,
         "instances": 0,
-        "hash": "de1d1629ce9dc8fe"
+        "hash": "107ef126fc8c0703"
       },
       "glass": {
         "kind": "geometry",
@@ -1858,7 +1858,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 2464,
-        "hash": "8c2e8838dc9116b7"
+        "hash": "63224ada56313d0a"
       },
       "rivets.leg.chords.legBelt11Edge": {
         "kind": "instances",
@@ -1867,7 +1867,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 2336,
-        "hash": "8e96ab36f90b7831"
+        "hash": "e508a03e99384d69"
       },
       "rivets.leg.chords.legBelt11PostLap": {
         "kind": "instances",
@@ -1876,7 +1876,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 512,
-        "hash": "64a44b11e12e211e"
+        "hash": "918184409e0443b6"
       },
       "rivets.leg.chords.legBelt5BarLap": {
         "kind": "instances",
@@ -1885,7 +1885,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 1568,
-        "hash": "6cbb33470829be87"
+        "hash": "692bdd589b357fea"
       },
       "rivets.leg.chords.legBelt5Edge": {
         "kind": "instances",
@@ -1894,7 +1894,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 3456,
-        "hash": "47ad18ee042cba5d"
+        "hash": "a3b0d2fe029eec0f"
       },
       "rivets.leg.chords.legBelt5PostLap": {
         "kind": "instances",
@@ -1903,7 +1903,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 768,
-        "hash": "0532dd2b2cbab4fa"
+        "hash": "ba97b06e26af217d"
       },
       "rivets.leg.chords.legTieEdge": {
         "kind": "instances",
@@ -1912,7 +1912,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 6496,
-        "hash": "c669d6586f0ddd96"
+        "hash": "2cf2a6933a6cf3ab"
       },
       "rivets.leg.chords.legTieLap": {
         "kind": "instances",
@@ -2038,7 +2038,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 97432,
-        "hash": "19d5f4e645c8d069"
+        "hash": "992d47bff5088b91"
       },
       "rivets.leg.uprights.splices": {
         "kind": "instances",
@@ -2047,7 +2047,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 258208,
-        "hash": "6af6849bbb7d3fc4"
+        "hash": "7327f581c5496698"
       },
       "rivets.leg.uprights.upper": {
         "kind": "instances",
@@ -2056,7 +2056,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 39696,
-        "hash": "b95b18f79f86428a"
+        "hash": "a971cc2154487383"
       },
       "rivets.shaft.bracing": {
         "kind": "instances",
@@ -2110,7 +2110,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 30048,
-        "hash": "3a52f316a9a10116"
+        "hash": "c9932555a3ec4c82"
       },
       "rivets.shaft.uprights.splices": {
         "kind": "instances",
@@ -2119,7 +2119,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 12576,
-        "hash": "766dab2019ce0cc5"
+        "hash": "dca9fa7d2082d640"
       },
       "rivets.summit.crossings": {
         "kind": "instances",
@@ -2715,7 +2715,7 @@
         "vertices": 4108608,
         "primitives": 1369536,
         "instances": 0,
-        "hash": "de1d1629ce9dc8fe"
+        "hash": "107ef126fc8c0703"
       },
       "glass": {
         "kind": "geometry",
@@ -2931,7 +2931,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 2464,
-        "hash": "8c2e8838dc9116b7"
+        "hash": "63224ada56313d0a"
       },
       "rivets.leg.chords.legBelt11Edge": {
         "kind": "instances",
@@ -2940,7 +2940,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 2336,
-        "hash": "8e96ab36f90b7831"
+        "hash": "e508a03e99384d69"
       },
       "rivets.leg.chords.legBelt11PostLap": {
         "kind": "instances",
@@ -2949,7 +2949,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 512,
-        "hash": "64a44b11e12e211e"
+        "hash": "918184409e0443b6"
       },
       "rivets.leg.chords.legBelt5BarLap": {
         "kind": "instances",
@@ -2958,7 +2958,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 1568,
-        "hash": "6cbb33470829be87"
+        "hash": "692bdd589b357fea"
       },
       "rivets.leg.chords.legBelt5Edge": {
         "kind": "instances",
@@ -2967,7 +2967,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 3456,
-        "hash": "47ad18ee042cba5d"
+        "hash": "a3b0d2fe029eec0f"
       },
       "rivets.leg.chords.legBelt5PostLap": {
         "kind": "instances",
@@ -2976,7 +2976,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 768,
-        "hash": "0532dd2b2cbab4fa"
+        "hash": "ba97b06e26af217d"
       },
       "rivets.leg.chords.legTieEdge": {
         "kind": "instances",
@@ -2985,7 +2985,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 6496,
-        "hash": "c669d6586f0ddd96"
+        "hash": "2cf2a6933a6cf3ab"
       },
       "rivets.leg.chords.legTieLap": {
         "kind": "instances",
@@ -3111,7 +3111,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 97432,
-        "hash": "19d5f4e645c8d069"
+        "hash": "992d47bff5088b91"
       },
       "rivets.leg.uprights.built": {
         "kind": "instances",
@@ -3120,7 +3120,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 120368,
-        "hash": "7ad7fbee8a32473c"
+        "hash": "4033140964bf741d"
       },
       "rivets.leg.uprights.splices": {
         "kind": "instances",
@@ -3129,7 +3129,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 258208,
-        "hash": "6af6849bbb7d3fc4"
+        "hash": "7327f581c5496698"
       },
       "rivets.leg.uprights.upper": {
         "kind": "instances",
@@ -3138,7 +3138,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 39696,
-        "hash": "b95b18f79f86428a"
+        "hash": "a971cc2154487383"
       },
       "rivets.shaft.bracing": {
         "kind": "instances",
@@ -3192,7 +3192,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 30048,
-        "hash": "3a52f316a9a10116"
+        "hash": "c9932555a3ec4c82"
       },
       "rivets.shaft.uprights.splices": {
         "kind": "instances",
@@ -3201,7 +3201,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 12576,
-        "hash": "766dab2019ce0cc5"
+        "hash": "dca9fa7d2082d640"
       },
       "rivets.summit.crossings": {
         "kind": "instances",
@@ -3797,7 +3797,7 @@
         "vertices": 318144,
         "primitives": 106048,
         "instances": 0,
-        "hash": "84d0f285fa70f475"
+        "hash": "a2e1f53a7b6c8b98"
       },
       "glass": {
         "kind": "geometry",

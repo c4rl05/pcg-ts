@@ -168,24 +168,40 @@ function faceNormals(geo: Geometry): Vec3[] {
 }
 
 /**
- * A flat-bar mesh's BOXES, as each box's points and their mean. `flatBars`
- * copies a unit box that carries its six faces' own normals, so a box is 24
- * points — three at each of its eight corners — and 12 triangles; the mean
- * of all 24 weights each corner alike, so it is the box's centre.
+ * A flat-bar mesh's boxes, as each box's corner points and their mean. Two
+ * layouts reach it. `flatBars` sweeps each member's two ends with a 'rect'
+ * section: 26 points, its four faces' 16 first (two at each of its eight
+ * corners), then a cap of four corners and its centre at each end. A
+ * member's joint plates (strut.ts) copy a unit box: 24 points, three at each
+ * corner. Either way the corner points weight each corner alike, so their
+ * mean is the box's centre.
  */
 function flatBoxes(geo: Geometry): Array<{ centre: Vec3; points: Vec3[] }> {
   const P = geo.attrs.point.get("P");
   if (P === undefined) throw new Error("no P");
   const n = geo.attrs.point.count;
-  expect(n % 24, "not a whole number of flat-bar boxes").toBe(0);
+  const at = (k: number): Vec3 => [P.data[3 * k] as number, P.data[3 * k + 1] as number, P.data[3 * k + 2] as number];
+  // A sweep's point 20 is its first cap's centre, the one point of a box
+  // that is no corner: half its section's diagonal (20 mm and more) from
+  // every corner. A unit box's is a corner of its -z face, where two of its
+  // first 20 points already stand, give or take the class jitter (~1 mm a
+  // point).
+  const swept = (i: number) => {
+    if (i + 26 > n) return false;
+    const c = at(i + 20);
+    for (let k = i; k < i + 20; k++) if (len3(sub3(at(k), c)) < 0.005) return false;
+    return true;
+  };
   const out: Array<{ centre: Vec3; points: Vec3[] }> = [];
-  for (let i = 0; i < n; i += 24) {
+  let i = 0;
+  while (i < n) {
+    const sweep = swept(i);
     const pts: Vec3[] = [];
-    for (let k = i; k < i + 24; k++) {
-      pts.push([P.data[3 * k] as number, P.data[3 * k + 1] as number, P.data[3 * k + 2] as number]);
-    }
-    out.push({ centre: mul3(pts.reduce((a, p) => add3(a, p), [0, 0, 0] as Vec3), 1 / 24), points: pts });
+    for (let k = i; k < i + (sweep ? 16 : 24) && k < n; k++) pts.push(at(k));
+    out.push({ centre: mul3(pts.reduce((a, p) => add3(a, p), [0, 0, 0] as Vec3), 1 / pts.length), points: pts });
+    i += sweep ? 26 : 24;
   }
+  expect(i, "not a whole number of flat-bar boxes").toBe(n);
   return out;
 }
 
@@ -1178,7 +1194,8 @@ describe("eiffel skeleton", () => {
     // every pitch, centred on its stretch and at least half a pitch clear of
     // each end: a straight node, or at a turn the face's fold or its plate's
     // end (where each head sits is held in tests/eiffelBuiltup.test.ts).
-    // Each row is a line (n - 1) pitches long, less 0.1 mm, so it takes n.
+    // Each row is handed over as its stretch, and the resample (align
+    // 'center') lays floor(length / pitch) + 1 heads on it.
     // This used to count a spacing resample's samples along the upper
     // chains, 8 a sample, as the swept 0.25 skin took them: the L of panels
     // 19-28 has no plates on its two inner faces for 4 of those rows.
@@ -1186,7 +1203,7 @@ describe("eiffel skeleton", () => {
     const { outputs } = await cook(g);
     const p = UPRIGHT_SEAMS.pitch;
     const heads = (rows: ReadonlyArray<{ a: Vec3; b: Vec3 }>) =>
-      rows.reduce((n, r) => n + Math.round(Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1], r.b[2] - r.a[2]) / p) + 1, 0);
+      rows.reduce((n, r) => n + Math.floor(Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1], r.b[2] - r.a[2]) / p + 1e-9) + 1, 0);
     const upperLeg = upperLegSeamRows(p, UPRIGHT_SEAMS.inset, RIVET_RISE);
     const shaft = shaftSeamRows(p, UPRIGHT_SEAMS.inset, RIVET_RISE);
     // Rows: a leg's c, b and d over panels 12-17, 8 each; the shaft's four

@@ -151,7 +151,9 @@ describe("eiffel rivet count", () => {
     const built = headsOf(outputs["rivets.leg.uprights.built"], "rivets.leg.uprights.built");
     // The rows laid (one leg, copied onto four), less the heads a joint
     // plate stands over (`offJointPlates`): measured 133,000 and 120,368.
-    const laid = 4 * lowerBuiltRows().reduce((n, r) => n + Math.round(len(sub(r.b, r.a)) / UPRIGHT_SEAMS.pitch) + 1, 0);
+    // A row is its stretch (centred) or its heads' own line (staggered):
+    // floor(length / pitch) + 1 heads either way.
+    const laid = 4 * lowerBuiltRows().reduce((n, r) => n + Math.floor(len(sub(r.b, r.a)) / UPRIGHT_SEAMS.pitch + 1e-9) + 1, 0);
     expect(laid).toBe(133_000);
     expect(built.length).toBeGreaterThan(0.85 * laid);
     expect(built.length).toBeLessThanOrEqual(laid);
