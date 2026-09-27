@@ -93,7 +93,7 @@ function points(geo: Geometry): Vec3[] {
 
 /**
  * A mesh of `blocks` boxes read back as boxes: 24 points each, faces of 4
- * in the order +x, -x, +y, -y, +z, -z (lifts.ts `BOX_NORMALS`). Returns
+ * in the order +x, -x, +y, -y, +z, -z (meshPrimitive's box). Returns
  * each box's face centres.
  */
 function boxes(geo: Geometry): Vec3[][] {

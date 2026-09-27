@@ -11,10 +11,10 @@
  *   whose bounding box meets the cube (so every triangle passing through
  *   it, with or without a vertex in it: the page cuts the plain tower away
  *   there fragment by fragment) — every byte of every vertex's attributes,
- *   compared as multisets (a cell's arrays come out in another order). The
- *   cell may also carry what has a vertex within 2 m of the cube (drawn
- *   nowhere: the page cuts at the faces), and its tests run in f32 before
- *   the class jitter, so the reference brackets it (`EPS`, `OUT`);
+ *   compared as multisets (a cell's arrays come out in another order). Its
+ *   test runs before the class jitter and keeps a 1 cm halo for it, so the
+ *   reference brackets it (`EPS`, `OUT`) and the cell may carry what meets
+ *   the cube grown by OUT (drawn nowhere: the page cuts at the faces);
  * - a rivet cell's heads are the whole cook's heads SEATED in the cube
  *   (half-open), transform and per-instance channel to the bit — so the
  *   cells partition every rivet output exactly, no head twice, none lost;
@@ -48,24 +48,17 @@ import {
 } from "./support/eiffelBands.js";
 
 /**
- * How far the cell's tests may stand off the exact ones, metres: they run
- * in f32 and before the class jitter (1 mm an axis) moves what they kept,
- * so everything meeting the cube shrunk by EPS must be in the cell; and
- * they keep a 1 cm halo for that jitter (parts.ts), so the cell may carry
- * what meets the cube grown by OUT.
+ * How far the cell's test may stand off the exact one, metres: it runs
+ * before the class jitter (1 mm an axis) moves what it kept, so everything
+ * meeting the cube shrunk by EPS must be in the cell; and it keeps a 1 cm
+ * halo for that jitter (parts.ts), so the cell may carry what meets the
+ * cube grown by OUT.
  */
 const EPS = 2e-3;
 const OUT = 1e-2 + EPS;
 
-/**
- * What a laced cell MAY carry besides what meets it (region.ts
- * `gateMesh`): the primitives with a vertex within 2 m of the cube.
- */
-const mayCarry =
-  (box: Box) =>
-  (geo: Parameters<ReturnType<typeof boxMeets>>[0], p: number): boolean =>
-    boxMeets(box, OUT)(geo, p) ||
-    anyVertexIn({ min: box.min.map((v) => v - 2 - OUT) as never, max: box.max.map((v) => v + 2 + OUT) as never })(geo, p);
+/** What a laced cell MAY carry (region.ts `gateMesh`): what meets the cube grown by OUT. */
+const mayCarry = (box: Box) => boxMeets(box, OUT);
 
 /** Every cube of side `s` the envelope admits. */
 function cubes(s: number): Box[] {
@@ -111,20 +104,9 @@ describe("a regional graph", () => {
       const extra = [...rs.values()].filter((n) => !known.has(n.id));
       expect(new Set(extra.map((n) => n.id))).toEqual(regionNodes(regional));
       expect(gateCount(regional)).toBeGreaterThan(100);
-      const boxes = extra.filter((n) => n.type === "filterByBounds" || n.type === "filterPrimitivesByBounds");
-      expect(boxes.length).toBe(gateCount(regional));
-      // Besides the filters, only the mesh gates' measuring and its removal.
-      for (const n of extra) {
-        expect([
-          "filterByBounds",
-          "filterPrimitivesByBounds",
-          "filterPrimitivesByAttribute",
-          "mergePrimitives",
-          "setAttribute",
-          "promoteAttribute",
-          "removeAttribute",
-        ]).toContain(n.type);
-      }
+      // Nothing but the gates: one box filter each.
+      expect(extra.length).toBe(gateCount(regional));
+      for (const n of extra) expect(["filterByBounds", "filterPrimitivesByBounds"]).toContain(n.type);
       expect(r.outputs.map((o) => o.name)).toEqual(w.outputs.map((o) => o.name));
     }
   }, 120_000);

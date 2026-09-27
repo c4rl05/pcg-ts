@@ -125,6 +125,7 @@ import {
   ge,
   index,
   lt,
+  meshPrimitive,
   mod,
   pointGrid,
   pointsToPath,
@@ -135,7 +136,7 @@ import {
 } from "pcg-ts";
 import { SAG, circleSegments } from "./chord.js";
 import { flatsSides } from "./ground.js";
-import { type Vec3, box, copyToQuadrants, indexTable, merge, skin } from "./lattice.js";
+import { type Vec3, copyToQuadrants, indexTable, merge, skin } from "./lattice.js";
 import type { Detail, Parts } from "./parts.js";
 import { FLOORS, NODES, PILES, profileAt } from "./spec.js";
 import { stairRuns } from "./stairs.js";
@@ -656,47 +657,17 @@ function onLeg(k: number, p: Vec3): Vec3 {
 const onLegs = (k: number, axis: readonly [Vec3, Vec3]): readonly [Vec3, Vec3] => [onLeg(k, axis[0]), onLeg(k, axis[1])];
 
 /**
- * The unit box's outward face normals, point by point: meshPrimitive's box
- * lays its faces out as blocks of 4 points (one quad each at the default
- * subdivisions) in the order +x, -x, +y, -y, +z, -z (as `legs.ts` reads it).
- */
-const BOX_NORMALS: readonly Vec3[] = (
-  [
-    [1, 0, 0],
-    [-1, 0, 0],
-    [0, 1, 0],
-    [0, -1, 0],
-    [0, 0, 1],
-    [0, 0, -1],
-  ] as const
-).flatMap((n): Vec3[] => [n, n, n, n]);
-
-/**
  * Many boxes as one mesh: a unit box copied onto one target per block,
  * each carrying its size as `scale` and its turn as `rot` (copyToPoints
- * scales, then turns, then places). The unit box carries its local face
- * normals as `normal`; `rotateAttrs` turns them by that same `rot` (a box
- * scaled along its own axes keeps its face normals, so rotation alone is
- * exact). A caller that copies these boxes on again (`copyToQuadrants`)
- * names `normal` in its own `rotateAttrs` to carry the turn through.
+ * scales, then turns, then places). The unit box carries its outward face
+ * normals as `normal` (meshPrimitive's `normals`); `rotateAttrs` turns them
+ * by that same `rot` (a box scaled along its own axes keeps its face
+ * normals, so rotation alone is exact). A caller that copies these boxes on
+ * again (`copyToQuadrants`) names `normal` in its own `rotateAttrs` to carry
+ * the turn through.
  */
 function blocks(g: Graph, id: string, list: readonly Block[]): NodeHandle {
-  const bare = box(g, `${id}Bare`, [0, 0, 0], [1, 1, 1]);
-  const unit = g.add(
-    setAttribute,
-    {
-      name: "normal",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(
-        indexTable(BOX_NORMALS.map((n) => n[0])),
-        indexTable(BOX_NORMALS.map((n) => n[1])),
-        indexTable(BOX_NORMALS.map((n) => n[2])),
-      ),
-    },
-    `${id}Unit`,
-  );
-  g.connect(bare, "out", unit, "in");
+  const unit = g.add(meshPrimitive, { shape: "box", size: [1, 1, 1], normals: true }, `${id}Unit`);
   return onFrames(g, id, unit, list, list.map((b) => b.size));
 }
 
