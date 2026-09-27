@@ -62,6 +62,7 @@ import {
   select,
   sqrt,
   sub,
+  transferByIndex,
   transformPoints,
   vec,
 } from "pcg-ts";
@@ -1193,13 +1194,76 @@ const FACE_OUT = [
 ] as const;
 
 /**
+ * A crossing plate's frame, gathered onto a sample from its nearest plate
+ * (`coverFilter`): the centre, the rectangle's two axes and the plane's
+ * normal (vectors), and its two half-extents.
+ */
+const COVER_AT = "coverAt";
+const COVER_ALONG = "coverAlong";
+const COVER_ACROSS = "coverAcross";
+const COVER_N = "coverN";
+const COVER_HALF = "coverHalf";
+const COVER_HALF_ACROSS = "coverHalfAcross";
+/** The frame columns a sample gathers by index; its centre comes with the nearest-point query. */
+const COVER_FRAME = [COVER_ALONG, COVER_ACROSS, COVER_N, COVER_HALF, COVER_HALF_ACROSS];
+
+/**
+ * Each footprint list's plates as ONE point cloud per graph: a point at
+ * each plate's centre, carrying its frame as the {@link COVER_FRAME}
+ * columns. Every strut a list covers asks it three times (both B sides'
+ * chord heads and the crossings), 27 asks in the tower; each ask used to
+ * write the whole list into its own predicate as a table per column, 18%
+ * of the riveted graph's ramp stops. Keyed on the list itself: a part
+ * hands the same list to every strut it covers.
+ *
+ * The columns are the same f32 values the per-ask tables gave: a field
+ * resolves to f32 either way, and each column here is the same
+ * `indexTable` ramp read at the plate's own index.
+ */
+const COVER_CLOUDS = new WeakMap<Graph, Map<readonly PlateFootprint[], NodeHandle>>();
+
+function coverCloudOf(g: Graph, id: string, covers: readonly PlateFootprint[]): NodeHandle {
+  let byList = COVER_CLOUDS.get(g);
+  if (byList === undefined) {
+    byList = new Map();
+    COVER_CLOUDS.set(g, byList);
+  }
+  const known = byList.get(covers);
+  if (known !== undefined) return known;
+  // Named after the first strut that asks.
+  let cloud: NodeHandle = g.add(
+    pointGrid,
+    { countX: covers.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
+    `${id}Plates`,
+  );
+  const table = (f: (c: PlateFootprint) => number): Field => indexTable(covers.map(f));
+  const v3 = (f: (c: PlateFootprint) => Vec3): Field =>
+    vec(table((c) => f(c)[0]), table((c) => f(c)[1]), table((c) => f(c)[2]));
+  const columns: ReadonlyArray<readonly [string, string, 1 | 3, Field]> = [
+    ["P", "At", 3, v3((c) => c.at)],
+    [COVER_ALONG, "Along", 3, v3((c) => c.along)],
+    [COVER_ACROSS, "Across", 3, v3((c) => c.across)],
+    [COVER_N, "N", 3, v3((c) => c.n)],
+    [COVER_HALF, "Half", 1, table((c) => c.half)],
+    [COVER_HALF_ACROSS, "HalfAcross", 1, table((c) => c.halfAcross)],
+  ];
+  for (const [name, suffix, tupleSize, value] of columns) {
+    const set = g.add(setAttribute, { name, type: "f32", tupleSize, value }, `${id}Plate${suffix}`);
+    g.connect(cloud, "out", set, "in");
+    cloud = set;
+  }
+  byList.set(covers, cloud);
+  return cloud;
+}
+
+/**
  * Keep the points of `pts` whose `head` (a field of each point: where its
  * rivet would sit) lies outside every plate footprint in `covers`. The
- * footprints become a point cloud of their centres; each point finds the
- * nearest (crossing plates are metres apart, and where two families cross
- * at one point only one plate is built), reads that plate's frame back by
- * index, and is dropped when the head is within the rectangle, grown by a
- * head's radius, and near the plate's plane.
+ * footprints are a point cloud of their centres (`coverCloudOf`); each
+ * point finds the nearest (crossing plates are metres apart, and where two
+ * families cross at one point only one plate is built), gathers that
+ * plate's frame by index, and is dropped when the head is within the
+ * rectangle, grown by a head's radius, and near the plate's plane.
  */
 function coverFilter(
   g: Graph,
@@ -1208,49 +1272,43 @@ function coverFilter(
   covers: readonly PlateFootprint[],
   head: Field,
 ): NodeHandle {
-  const grid = g.add(
-    pointGrid,
-    { countX: covers.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    `${id}Plates`,
-  );
-  const col = (f: (c: PlateFootprint) => number): number[] => covers.map(f);
-  const placed = g.add(
-    setAttribute,
-    {
-      name: "P",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(indexTable(col((c) => c.at[0])), indexTable(col((c) => c.at[1])), indexTable(col((c) => c.at[2]))),
-    },
-    `${id}PlateAt`,
-  );
-  g.connect(grid, "out", placed, "in");
+  const plates = coverCloudOf(g, id, covers);
   const near = g.add(
     sampleNearestPoint,
-    { distanceAttr: "", indexAttr: COVER_INDEX, maxDistance: COVER_REACH },
+    { distanceAttr: "", indexAttr: COVER_INDEX, attribute: "P", outAttribute: COVER_AT, maxDistance: COVER_REACH },
     `${id}Near`,
   );
   g.connect(pts, "out", near, "in");
-  g.connect(placed, "out", near, "source");
+  g.connect(plates, "out", near, "source");
+  // A miss (-1) reads plate 0 and is kept below whatever that reads.
+  const frame = g.add(
+    transferByIndex,
+    { index: attribute(COVER_INDEX), attributes: COVER_FRAME },
+    `${id}Frame`,
+  );
+  g.connect(near, "out", frame, "in");
+  g.connect(plates, "out", frame, "source");
   const i = attribute(COVER_INDEX);
-  const table = (f: (c: PlateFootprint) => number): Field => ramp(i, col(f).map((v, k) => [k, v + 0] as const));
-  const v3 = (f: (c: PlateFootprint) => Vec3): Field => vec(table((c) => f(c)[0]), table((c) => f(c)[1]), table((c) => f(c)[2]));
-  const d = sub(head, v3((c) => c.at));
+  const d = sub(head, attribute(COVER_AT, 3));
   const inside = mul(
     mul(
-      lt(abs(dot(d, v3((c) => c.along))), add(table((c) => c.half), RIVET_HEAD)),
-      lt(abs(dot(d, v3((c) => c.across))), add(table((c) => c.halfAcross), RIVET_HEAD)),
+      lt(abs(dot(d, attribute(COVER_ALONG, 3))), add(attribute(COVER_HALF), RIVET_HEAD)),
+      lt(abs(dot(d, attribute(COVER_ACROSS, 3))), add(attribute(COVER_HALF_ACROSS), RIVET_HEAD)),
     ),
     // Near the plane: the struts' own half-depth is under 0.45 everywhere.
-    lt(abs(dot(d, v3((c) => c.n))), 0.5),
+    lt(abs(dot(d, attribute(COVER_N, 3))), 0.5),
   );
   const keep = g.add(
     filterByExpression,
     { predicate: max(lt(i, 0), sub(1, mul(ge(i, 0), inside))) },
     `${id}Keep`,
   );
-  const done = g.add(removeAttribute, { names: [COVER_INDEX], domain: "point" }, `${id}Done`);
-  g.connect(near, "out", keep, "in");
+  const done = g.add(
+    removeAttribute,
+    { names: [COVER_INDEX, COVER_AT, ...COVER_FRAME], domain: "point" },
+    `${id}Done`,
+  );
+  g.connect(frame, "out", keep, "in");
   g.connect(keep, "out", done, "in");
   return done;
 }
