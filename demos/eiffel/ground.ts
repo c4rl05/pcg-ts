@@ -81,7 +81,8 @@ const Z: Vec3 = [0, 0, 1];
 
 /**
  * A closed, planar, CONVEX outline extruded `depth` along its own normal
- * (right-hand rule): a cap is a fan from its first point.
+ * (right-hand rule). Convex because `clipPrism` and `overlaps` below take
+ * it so; the extrusion itself would cap a concave one too.
  */
 export interface Prism {
   readonly outline: readonly Vec3[];

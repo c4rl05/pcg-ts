@@ -31,8 +31,9 @@ import {
   PAVILION,
   ROD,
   STAIR_ENVELOPE,
+  type HoledSlab,
   type Slab,
-  balconyDeckSlabs,
+  balconyDeck,
   buildSummit,
   galleryLayout,
   lanternLevels,
@@ -131,22 +132,39 @@ function sampleNear(
 /** Whether two boxes overlap. */
 const overlaps = (lo: Vec3, hi: Vec3, blo: Vec3, bhi: Vec3) => [0, 1, 2].every((k) => hi[k]! >= blo[k]! && lo[k]! <= bhi[k]!);
 
-/** How far a point is inside a slab (negative outside): the least of its distances to the slab's faces. */
-function depthIn(p: Vec3, s: Slab): number {
-  const y0 = s.outline[0]![1];
-  let d = Math.min(p[1] - y0, y0 + s.depth - p[1]);
-  const o = s.outline;
+/**
+ * How far a point lies inside a CONVEX outline in plan (negative outside):
+ * the least of its distances inside the edges' lines, whichever way the
+ * outline winds.
+ */
+function planDepth(p: Vec3, o: readonly Vec3[]): number {
+  let area = 0;
+  for (let k = 0; k < o.length; k++) area += o[k]![0] * o[(k + 1) % o.length]![2] - o[(k + 1) % o.length]![0] * o[k]![2];
+  // Wound anticlockwise from above, which is a negative area in (x, z)'s
+  // own orientation, the inside is to each edge's right there: the cross
+  // product ex*(pz-az) - ez*(px-ax) is negative. The other way, left.
+  const side = area < 0 ? -1 : 1;
+  let d = Infinity;
   for (let k = 0; k < o.length; k++) {
     const a = o[k]!;
     const b = o[(k + 1) % o.length]!;
     const ex = b[0] - a[0];
     const ez = b[2] - a[2];
-    const L = Math.hypot(ex, ez);
-    // Wound anticlockwise from above, which is a negative area in (x, z)'s
-    // own orientation, the inside is to each edge's right there: the cross
-    // product ex*(pz-az) - ez*(px-ax) is negative.
-    d = Math.min(d, -(ex * (p[2] - a[2]) - ez * (p[0] - a[0])) / L);
+    d = Math.min(d, (side * (ex * (p[2] - a[2]) - ez * (p[0] - a[0]))) / Math.hypot(ex, ez));
   }
+  return d;
+}
+
+/**
+ * How far a point is inside a slab (negative outside): the least of its
+ * distances to the slab's faces, its outline's (convex) and its holes'
+ * (convex, each a lower bound on the distance out of it), so a point in a
+ * hole is outside.
+ */
+function depthIn(p: Vec3, s: Slab | HoledSlab): number {
+  const y0 = s.outline[0]![1];
+  let d = Math.min(p[1] - y0, y0 + s.depth - p[1], planDepth(p, s.outline));
+  for (const h of "holes" in s ? s.holes : []) d = Math.min(d, -planDepth(p, h));
   return d;
 }
 
@@ -479,7 +497,7 @@ describe("Eiffel summit, room by room", () => {
 
   it("puts no structure and no Edoux part inside any room's solid", () => {
     const s = pavilionSolids();
-    const solids: Slab[] = [...s.floor, ...s.walls, ...s.casings, ...s.partitions, ...s.roof, ...balconyDeckSlabs()];
+    const solids: Slab[] = [s.floor, ...s.walls, ...s.casings, ...s.partitions, s.roof, balconyDeck()];
     const found = a.structure
       .map((q) => ({ id: q.id, ...deepest(q.tris, solids) }))
       .filter((w) => w.depth >= 0.001)
@@ -496,7 +514,7 @@ describe("Eiffel summit, room by room", () => {
     // Control 2: the girders, lowered 0.05, would sink into the roof.
     const girders = a.structure.filter((q) => q.id.startsWith("girder")).flatMap((q) => q.tris);
     const lowered = girders.map((t) => t.map((p) => [p[0], p[1] - 0.05, p[2]] as Vec3) as [Vec3, Vec3, Vec3]);
-    expect(deepest(lowered, s.roof).depth).toBeGreaterThan(0.01);
+    expect(deepest(lowered, [s.roof]).depth).toBeGreaterThan(0.01);
     // And the scan reaches the contrefiches, which cross the deck's openings.
     const struts = triangles(a.byId("contreficheLit"));
     const closed: Slab = { outline: ([[5.2, -0.6], [6.6, -0.6], [6.6, 0.6], [5.2, 0.6]] as const).map(([s0, t0]) => [(s0 + t0) / Math.SQRT2, FLOORS.third + 2.31, (t0 - s0) / Math.SQRT2] as Vec3).reverse(), depth: 0.4 };

@@ -139,6 +139,7 @@ import {
   pathResample,
   pointGrid,
   pointsToPath,
+  polygonBoolean,
   position,
   ramp,
   setAttribute,
@@ -1266,49 +1267,21 @@ function sideNormal(poly: readonly Vec3[], i: number): Vec3 {
 }
 
 /**
- * A solid slab whose plan is an octagon — a square `2 flatHalf` wide with
- * its corners cut at 45 degrees to straight sides of `2 straightHalf`:
- * two crossed boxes, and one box on each chamfer that reaches in past the
- * cross, all carrying normals (`levelBoxes`).
- */
-function octagonSlab(
-  g: Graph,
-  id: string,
-  flatHalf: number,
-  straightHalf: number,
-  y0: number,
-  height: number,
-): NodeHandle {
-  const yc = y0 + height / 2;
-  const cut = flatHalf + straightHalf; // |x| + |z| on a chamfer
-  const depth = (2 * flatHalf - cut) / Math.SQRT2;
-  const length = Math.SQRT2 * (flatHalf - straightHalf);
-  const r = cut / Math.SQRT2 - depth / 2;
-  const s = Math.SQRT1_2;
-  return levelBoxes(g, id, [
-    { c: [0, yc, 0], along: [1, 0, 0], size: [2 * flatHalf, height, 2 * straightHalf] },
-    { c: [0, yc, 0], along: [0, 0, 1], size: [2 * flatHalf, height, 2 * straightHalf] },
-    // Each chamfer's box: `depth` out along its diagonal, `length` along it.
-    ...[
-      [s, s],
-      [-s, s],
-      [-s, -s],
-      [s, -s],
-    ].map(([dx, dz]) => ({
-      c: [dx! * r, yc, dz! * r] as Vec3,
-      along: [-dz!, 0, dx!] as Vec3,
-      size: [length, height, depth] as Vec3,
-    })),
-  ]);
-}
-
-/**
- * A convex outline on a level, wound anticlockwise seen from above, to be
- * extruded up by `depth`: a slab, a wall, a partition, a post.
+ * A planar outline on a level, to be extruded up by `depth`: a slab, a
+ * wall, a partition, a post. Either winding: extrudePolygon faces it out.
  */
 export interface Slab {
   readonly outline: readonly Vec3[];
   readonly depth: number;
+}
+
+/**
+ * A slab with holes through it, each hole an outline on the slab's level.
+ * The holes may overlap each other and cross the outline's edge: the graph
+ * cuts them (`holedSlab`).
+ */
+export interface HoledSlab extends Slab {
+  readonly holes: ReadonlyArray<readonly Vec3[]>;
 }
 
 /** An axis-aligned box as a `Slab`: x0..x1, z0..z1, y0 up to y1. */
@@ -1336,86 +1309,58 @@ export interface Well {
   readonly t: readonly [number, number];
 }
 
-/** A convex polygon (s, t) clipped to the box s0..s1, t0..t1 (Sutherland-Hodgman). */
-function clipST(poly: ReadonlyArray<readonly [number, number]>, s0: number, s1: number, t0: number, t1: number): Array<[number, number]> {
-  let out = poly.map((p): [number, number] => [p[0], p[1]]);
-  const planes: Array<[0 | 1, number, 1 | -1]> = [
-    [0, s0, 1],
-    [0, s1, -1],
-    [1, t0, 1],
-    [1, t1, -1],
-  ];
-  for (const [k, v, sign] of planes) {
-    const inside = (p: [number, number]) => sign * (p[k] - v) >= -1e-9;
-    const next: Array<[number, number]> = [];
-    for (let i = 0; i < out.length; i++) {
-      const a = out[i]!;
-      const b = out[(i + 1) % out.length]!;
-      if (inside(a)) next.push(a);
-      if (inside(a) !== inside(b)) {
-        const f = (v - a[k]) / (b[k] - a[k]);
-        next.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]);
-      }
-    }
-    out = next;
-    if (out.length === 0) break;
-  }
-  return out;
+/** A slab less rectangular wells in the diagonals' frame, cut on its level. */
+function withWells(slab: Slab, wells: readonly Well[]): HoledSlab {
+  const y = slab.outline[0]![1];
+  const at = (s: number, t: number): Vec3 => {
+    const [x, z] = fromST(s, t);
+    return [x, y, z];
+  };
+  return { ...slab, holes: wells.map((w) => [at(w.s[0], w.t[0]), at(w.s[1], w.t[0]), at(w.s[1], w.t[1]), at(w.s[0], w.t[1])]) };
+}
+
+/** An annulus between two regular polygons on the axis (`polygon`), from y0 up to y1. */
+function ringSlab(sides: number, inner: number, outer: number, y0: number, y1: number): HoledSlab {
+  return { outline: polygon(sides, outer, y0), holes: [polygon(sides, inner, y0)], depth: y1 - y0 };
 }
 
 /**
- * A slab over a convex plan (x, z points) less rectangular wells in the
- * diagonals' frame, as convex pieces (platforms.ts's `floorWithWells`,
- * which that module keeps to itself): the plan cut into bands at the
- * wells' edges across the diagonal, each band into the spans between the
- * wells it crosses. Every piece is wound anticlockwise seen from above.
+ * Closed paths through `loops`, one primitive each, in the loops' order
+ * (pointsToPath emits its groups by ascending key), every point carrying
+ * its loop's `depths` entry as `depth` when given.
  */
-function slabWithWells(
-  plan: ReadonlyArray<readonly [number, number]>,
-  wells: readonly Well[],
-  y0: number,
-  y1: number,
-): Slab[] {
-  const big = 1e3;
-  const st = plan.map(([x, z]): [number, number] => [(x - z) * Math.SQRT1_2, (x + z) * Math.SQRT1_2]);
-  const ts = [-big, big, ...wells.flatMap((w) => [w.t[0], w.t[1]])].sort((a, b) => a - b);
-  const out: Slab[] = [];
-  for (let i = 0; i + 1 < ts.length; i++) {
-    const [ta, tb] = [ts[i]!, ts[i + 1]!];
-    if (tb - ta < 1e-9) continue;
-    const mid = (ta + tb) / 2;
-    const cut = wells
-      .filter((w) => mid > w.t[0] && mid < w.t[1])
-      .map((w) => w.s)
-      .sort((a, b) => a[0] - b[0]);
-    const spans: Array<[number, number]> = [];
-    let from = -big;
-    for (const [c0, c1] of cut) {
-      if (c0 > from) spans.push([from, c0]);
-      from = Math.max(from, c1);
-    }
-    spans.push([from, big]);
-    for (const [sa, sb] of spans) {
-      const piece = clipST(st, sa, sb, ta, tb);
-      if (piece.length < 3) continue;
-      const xz = piece.map(([s, t]) => fromST(s, t));
-      let area = 0;
-      for (let k = 0; k < xz.length; k++) {
-        const [x0, z0] = xz[k]!;
-        const [x1, z1] = xz[(k + 1) % xz.length]!;
-        area += x0 * z1 - x1 * z0;
-      }
-      if (Math.abs(area) < 1e-6) continue;
-      if (area > 0) xz.reverse();
-      out.push({ outline: xz.map(([x, z]): Vec3 => [x, y0, z]), depth: y1 - y0 });
-    }
+function outlinePaths(g: Graph, id: string, loops: ReadonlyArray<readonly Vec3[]>, depths?: readonly number[]): NodeHandle {
+  const pts = loops.flat();
+  const slots = g.add(
+    pointGrid,
+    { countX: pts.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
+    `${id}Slots`,
+  );
+  const place = g.add(
+    setAttribute,
+    {
+      name: "P",
+      type: "f32",
+      tupleSize: 3,
+      value: vec(
+        indexTable(pts.map((p) => p[0])),
+        indexTable(pts.map((p) => p[1])),
+        indexTable(pts.map((p) => p[2])),
+      ),
+    },
+    `${id}Place`,
+  );
+  const key = g.add(setAttribute, { name: "slab", type: "i32", value: indexTable(loops.flatMap((o, i) => o.map(() => i))) }, `${id}Key`);
+  g.connect(slots, "out", place, "in");
+  g.connect(place, "out", key, "in");
+  let last = key;
+  if (depths !== undefined) {
+    last = g.add(setAttribute, { name: "depth", type: "f32", value: indexTable(loops.flatMap((o, i) => o.map(() => depths[i]!))) }, `${id}Depth`);
+    g.connect(key, "out", last, "in");
   }
-  return out;
-}
-
-/** An octagon's plan (x, z), a square `2 flatHalf` across with 45-degree chamfers to straight sides `2 straightHalf`. */
-function octagonPlan(flatHalf: number, straightHalf: number): Array<[number, number]> {
-  return octagon(flatHalf, straightHalf, 0).map(([x, , z]): [number, number] => [x, z]);
+  const paths = g.add(pointsToPath, { groupAttr: "slab", closed: true }, `${id}Paths`);
+  g.connect(last, "out", paths, "in");
+  return paths;
 }
 
 /**
@@ -1438,46 +1383,33 @@ function slabs(g: Graph, id: string, list: readonly Slab[]): NodeHandle {
   }
   const meshes = runs.map((run, r) => {
     const rid = runs.length === 1 ? id : `${id}Run${r}`;
-    const pts = run.flatMap((p) => p.outline);
-    const slots = g.add(
-      pointGrid,
-      { countX: pts.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-      `${rid}Slots`,
-    );
-    const place = g.add(
-      setAttribute,
-      {
-        name: "P",
-        type: "f32",
-        tupleSize: 3,
-        value: vec(
-          indexTable(pts.map((p) => p[0])),
-          indexTable(pts.map((p) => p[1])),
-          indexTable(pts.map((p) => p[2])),
-        ),
-      },
-      `${rid}Place`,
-    );
-    const key = g.add(
-      setAttribute,
-      { name: "slab", type: "i32", value: indexTable(run.flatMap((p, i) => p.outline.map(() => i))) },
-      `${rid}Key`,
-    );
-    const len = g.add(
-      setAttribute,
-      { name: "depth", type: "f32", value: indexTable(run.flatMap((p) => p.outline.map(() => p.depth))) },
-      `${rid}Depth`,
-    );
-    const paths = g.add(pointsToPath, { groupAttr: "slab", closed: true }, `${rid}Paths`);
+    const paths = outlinePaths(g, rid, run.map((p) => p.outline), run.map((p) => p.depth));
     const solid = g.add(extrudePolygon, { direction: "+y", distance: attribute("depth"), caps: "both" }, rid);
-    g.connect(slots, "out", place, "in");
-    g.connect(place, "out", key, "in");
-    g.connect(key, "out", len, "in");
-    g.connect(len, "out", paths, "in");
     g.connect(paths, "out", solid, "in");
     return solid;
   });
   return meshes.length === 1 ? meshes[0]! : merge(g, id, meshes);
+}
+
+/**
+ * A `HoledSlab` as one mesh: its outline and holes as closed paths, each
+ * hole marked `holeOf` the outline; polygonBoolean dissolves them into the
+ * region they leave, however the holes overlap or cross the edge, and
+ * extrudePolygon builds that up by the depth, a wall round every hole.
+ */
+function holedSlab(g: Graph, id: string, s: HoledSlab): NodeHandle {
+  const loops = [s.outline, ...s.holes];
+  const holes = g.add(
+    setAttribute,
+    { name: "holeOf", domain: "primitive", type: "i32", value: indexTable(loops.map((_, i) => (i === 0 ? -1 : 0))) },
+    `${id}Holes`,
+  );
+  const cut = g.add(polygonBoolean, { operation: "union" }, `${id}Cut`);
+  const solid = g.add(extrudePolygon, { direction: "+y", distance: s.depth, caps: "both" }, id);
+  g.connect(outlinePaths(g, id, loops), "out", holes, "in");
+  g.connect(holes, "out", cut, "in");
+  g.connect(cut, "out", solid, "in");
+  return solid;
 }
 
 // ---------------------------------------------------------------- the gallery
@@ -1563,11 +1495,11 @@ export function galleryLayout(y = FLOORS.third): {
 }
 
 /** Eiffel's balcony's deck: the gallery's octagon grown by the overhang, less `ROOM_WELLS`. */
-export function balconyDeckSlabs(): Slab[] {
+export function balconyDeck(): HoledSlab {
   const grow = BALCONY.overhang;
   const bFlat = GALLERY.flat + grow;
   const bStraight = GALLERY.straight + grow * Math.tan(Math.PI / 8);
-  return slabWithWells(octagonPlan(bFlat, bStraight), ROOM_WELLS, balconyUnder, balconyTop);
+  return withWells({ outline: octagon(bFlat, bStraight, balconyUnder), depth: balconyTop - balconyUnder }, ROOM_WELLS);
 }
 
 /** A point `u` along side `i` of an octagon, `off` out of its line (outward positive). */
@@ -1582,21 +1514,7 @@ function onSide(poly: readonly Vec3[], i: number, u: number, y: number, off = 0)
 /** A vertical panel along side `i` of an octagon, u0..u1, y0..y1, between `in0` and `in1` inside its line. */
 function sidePanel(poly: readonly Vec3[], i: number, u0: number, u1: number, y0: number, y1: number, in0: number, in1: number): Slab {
   const ring = [onSide(poly, i, u0, y0, -in0), onSide(poly, i, u1, y0, -in0), onSide(poly, i, u1, y0, -in1), onSide(poly, i, u0, y0, -in1)];
-  return anticlockwise({ outline: ring, depth: y1 - y0 });
-}
-
-/** A slab with its outline wound anticlockwise seen from above (+y), whichever way it was given. */
-function anticlockwise(s: Slab): Slab {
-  let area = 0;
-  const o = s.outline;
-  for (let k = 0; k < o.length; k++) {
-    const p = o[k]!;
-    const q = o[(k + 1) % o.length]!;
-    area += p[0] * q[2] - q[0] * p[2];
-  }
-  // (x, z) with y up: x cross z is -y, so an anticlockwise ring seen from
-  // above has a negative x-z area.
-  return area > 0 ? { outline: [...o].reverse(), depth: s.depth } : s;
+  return { outline: ring, depth: y1 - y0 };
 }
 
 /**
@@ -1678,7 +1596,7 @@ function gallery(g: Graph): NodeHandle[] {
   // cables, the little stair and the contrefiches pass (`ROOM_WELLS`), and
   // its railing on the window posts continued [PL-XIV Fig. 2: the rail post
   // continues the mullion; PL-VII draws the rail's ends at +-8.2-8.3].
-  const deck = slabs(g, "balconyDeck", balconyDeckSlabs());
+  const deck = holedSlab(g, "balconyDeck", balconyDeck());
   const m = BALCONY.member;
   const railPosts = faceSkin(
     g,
@@ -2015,16 +1933,15 @@ function wallSlabs(
   const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
   const d = [(b[0] - a[0]) / L, (b[1] - a[1]) / L];
   const n = [-d[1]!, d[0]!];
-  const piece = (u0: number, u1: number, ya: number, yb: number): Slab =>
-    anticlockwise({
-      outline: [
-        [a[0] + d[0]! * u0 + (n[0]! * thick) / 2, ya, a[1] + d[1]! * u0 + (n[1]! * thick) / 2],
-        [a[0] + d[0]! * u1 + (n[0]! * thick) / 2, ya, a[1] + d[1]! * u1 + (n[1]! * thick) / 2],
-        [a[0] + d[0]! * u1 - (n[0]! * thick) / 2, ya, a[1] + d[1]! * u1 - (n[1]! * thick) / 2],
-        [a[0] + d[0]! * u0 - (n[0]! * thick) / 2, ya, a[1] + d[1]! * u0 - (n[1]! * thick) / 2],
-      ],
-      depth: yb - ya,
-    });
+  const piece = (u0: number, u1: number, ya: number, yb: number): Slab => ({
+    outline: [
+      [a[0] + d[0]! * u0 + (n[0]! * thick) / 2, ya, a[1] + d[1]! * u0 + (n[1]! * thick) / 2],
+      [a[0] + d[0]! * u1 + (n[0]! * thick) / 2, ya, a[1] + d[1]! * u1 + (n[1]! * thick) / 2],
+      [a[0] + d[0]! * u1 - (n[0]! * thick) / 2, ya, a[1] + d[1]! * u1 - (n[1]! * thick) / 2],
+      [a[0] + d[0]! * u0 - (n[0]! * thick) / 2, ya, a[1] + d[1]! * u0 - (n[1]! * thick) / 2],
+    ],
+    depth: yb - ya,
+  });
   const out: Slab[] = [];
   const sorted = [...openings].sort((p, q) => p.u0 - q.u0);
   let from = 0;
@@ -2040,11 +1957,11 @@ function wallSlabs(
 
 /** The pavilion's floor, outer walls with their openings, casings, partitions and roof, as slabs; and its windows' bars. */
 export function pavilionSolids(): {
-  readonly floor: Slab[];
+  readonly floor: HoledSlab;
   readonly walls: Slab[];
   readonly casings: Slab[];
   readonly partitions: Slab[];
-  readonly roof: Slab[];
+  readonly roof: HoledSlab;
   readonly sashes: Array<readonly [Vec3, Vec3]>;
   readonly sashN: Vec3[];
   readonly windows: number;
@@ -2055,14 +1972,8 @@ export function pavilionSolids(): {
   const inner = half - P.wall;
   const floorY = apartmentFloor;
   const ceiling = roomTop - P.roofDepth;
-  const square = (h: number): Array<[number, number]> => [
-    [h, -h],
-    [h, h],
-    [-h, h],
-    [-h, -h],
-  ];
-  const floor = slabWithWells(square(half), ROOM_WELLS, balconyTop, floorY);
-  const roof = slabWithWells(square(P.roof / 2), ROOF_WELLS, ceiling, roomTop);
+  const floor = withWells(boxSlab(-half, half, -half, half, balconyTop, floorY), ROOM_WELLS);
+  const roof = withWells(boxSlab(-P.roof / 2, P.roof / 2, -P.roof / 2, P.roof / 2, ceiling, roomTop), ROOF_WELLS);
   const c = half - P.casing;
   const casings = [
     boxSlab(c, half, c, half, floorY, ceiling),
@@ -2099,7 +2010,7 @@ export function pavilionSolids(): {
   for (const part of pavilionPlan().partitions) {
     if (part.outline.length < 3) continue;
     if (part.doors.length === 0) {
-      partitions.push(anticlockwise({ outline: part.outline.map(([x, z]): Vec3 => [x, floorY, z]), depth: (part.top ?? ceiling) - floorY }));
+      partitions.push({ outline: part.outline.map(([x, z]): Vec3 => [x, floorY, z]), depth: (part.top ?? ceiling) - floorY });
       continue;
     }
     // A partition with doors is a straight wall: its line from its door's
@@ -2126,10 +2037,10 @@ export function pavilionSolids(): {
 function pavilion(g: Graph): NodeHandle[] {
   const p = pavilionSolids();
   return [
-    slabs(g, "pavilionFloor", p.floor),
+    holedSlab(g, "pavilionFloor", p.floor),
     slabs(g, "pavilionWalls", [...p.walls, ...p.casings]),
     slabs(g, "pavilionPartitions", p.partitions),
-    slabs(g, "pavilionRoof", p.roof),
+    holedSlab(g, "pavilionRoof", p.roof),
     faceSkin(g, "pavilionSash", members(g, "pavilionSashPaths", p.sashes, p.sashN), PAVILION.sash),
   ];
 }
@@ -2191,7 +2102,7 @@ export function summitGlass(): { gallery: Slab[]; pavilion: Slab[] } {
   const pavilion: Slab[] = [];
   const pane = (f: Face, u0: number, u1: number, ya: number, yb: number): Slab => {
     const ring = [onFace(f, mid, u0, ya, -t / 2), onFace(f, mid, u1, ya, -t / 2), onFace(f, mid, u1, ya, t / 2), onFace(f, mid, u0, ya, t / 2)];
-    return anticlockwise({ outline: ring, depth: yb - ya });
+    return { outline: ring, depth: yb - ya };
   };
   // The pavilion's panes stop AT its walls' reveals rather than in them:
   // the walls are the rooms' solids, which nothing may enter by a
@@ -2992,7 +2903,7 @@ function lantern(g: Graph, crownY: number): NodeHandle[] {
   const tHalf = L.terrace / 2;
   const tStraight = tHalf - L.chamfer / Math.SQRT2;
   const core = 0.385;
-  out.push(slabs(g, "lanternTerrace", slabWithWells(octagonPlan(tHalf, tStraight), [{ s: [-core, core], t: [-core, core] }], crownY, deckTop)));
+  out.push(holedSlab(g, "lanternTerrace", withWells({ outline: octagon(tHalf, tStraight, crownY), depth: deckTop - crownY }, [{ s: [-core, core], t: [-core, core] }])));
   const m = 0.025;
   const rail = octagon(tHalf - m, tStraight - m * Math.tan(Math.PI / 8), deckTop);
   const railAt = bayPoints(rail, (i) => (i % 2 === 0 ? 3 : 1));
@@ -3029,25 +2940,14 @@ function lantern(g: Graph, crownY: number): NodeHandle[] {
   const consoleY = balconyY - L.console;
   out.push(flatPrism(g, "lanternBase", 10, deckTop, baseTop, rBase));
   // The floor round the core's head, which carries it [sourced p. 80].
-  const floorPlan = polygon(10, rBase - 0.01, 0).map(([x, , z]): [number, number] => [x, z]);
-  out.push(slabs(g, "lanternFloor", slabWithWells(floorPlan, [{ s: [-0.36, 0.36], t: [-0.36, 0.36] }], lv.lanternFloor - L.floorDepth, lv.lanternFloor)));
+  const floorY = lv.lanternFloor - L.floorDepth;
+  const floor = { outline: polygon(10, rBase - 0.01, floorY), depth: lv.lanternFloor - floorY };
+  out.push(holedSlab(g, "lanternFloor", withWells(floor, [{ s: [-0.36, 0.36], t: [-0.36, 0.36] }])));
   // The balcony's deck is a ring from the soubassement's wall out: inside
   // it the lantern's room rises from its own floor, 0.775 lower, where the
   // ladders go on up (`stairs.ts`). Until 2026-09-26 a full decagon closed
   // the room at the balcony's level.
-  const ring = (r0: number, r1: number): Slab[] => {
-    const i0 = polygon(10, r0, 0);
-    const o0 = polygon(10, r1, 0);
-    return i0.map((_, k) => {
-      const k1 = (k + 1) % 10;
-      const xz: Array<[number, number]> = [i0[k]!, o0[k]!, o0[k1]!, i0[k1]!].map((p) => [p[0], p[2]]);
-      let area = 0;
-      for (let j = 0; j < 4; j++) area += xz[j]![0] * xz[(j + 1) % 4]![1] - xz[(j + 1) % 4]![0] * xz[j]![1];
-      if (area > 0) xz.reverse();
-      return { outline: xz.map(([x, z]): Vec3 => [x, balconyY - 0.1, z]), depth: 0.1 };
-    });
-  };
-  out.push(slabs(g, "balconyFloor", ring(rBase, rBalcony)));
+  out.push(holedSlab(g, "balconyFloor", ringSlab(10, rBase, rBalcony, balconyY - 0.1, balconyY)));
   out.push(flatPrism(g, "balconyParapet", 10, balconyY, balconyY + L.parapet, rBalcony));
   const arcSteps = 8;
   const consoles = placedLattice(
@@ -3124,22 +3024,7 @@ function lantern(g: Graph, crownY: number): NodeHandle[] {
   // with a central opening about 0.58 across [measured]), the tripod's
   // legs standing on its rim. The deck's inner face is the collar's.
   const rTop = L.topDiameter / 2;
-  const hatch = polygon(L.cupolaSides, rRing, 0);
-  const rim = polygon(L.cupolaSides, rTop, 0);
-  out.push(
-    slabs(
-      g,
-      "topDeckSkin",
-      hatch.map((_, k) => {
-        const k1 = (k + 1) % L.cupolaSides;
-        const xz: Array<[number, number]> = [hatch[k]!, rim[k]!, rim[k1]!, hatch[k1]!].map((p) => [p[0], p[2]]);
-        let area = 0;
-        for (let j = 0; j < 4; j++) area += xz[j]![0] * xz[(j + 1) % 4]![1] - xz[(j + 1) % 4]![0] * xz[j]![1];
-        if (area > 0) xz.reverse();
-        return { outline: xz.map(([x, z]): Vec3 => [x, top, z]), depth: topY - top };
-      }),
-    ),
-  );
+  out.push(holedSlab(g, "topDeckSkin", ringSlab(L.cupolaSides, rRing, rTop, top, topY)));
 
   // Its railing: ten posts on the rim from 0.275 under the platform, the
   // five bent ones on to the socket; the rails round the posts' line.
@@ -3371,20 +3256,13 @@ function coreWithDoor(g: Graph, y0: number, y1: number): NodeHandle[] {
   const r = circum(LADDER.diameter, n);
   const sill = y0 + STAIR_ENVELOPE.rise;
   const head = sill + CORE_DOOR.height;
-  const door = new Set(coreDoorSides());
   const sheet = 0.004;
-  const v = polygon(n, r, 0);
-  const vi = polygon(n, r - sheet / Math.cos(Math.PI / n), 0);
-  const walls: Slab[] = [];
-  for (let i = 0; i < n; i++) {
-    if (door.has(i)) continue;
-    const j = (i + 1) % n;
-    const xz: Array<[number, number]> = [v[i]!, v[j]!, vi[j]!, vi[i]!].map((p) => [p[0], p[2]]);
-    let area = 0;
-    for (let k = 0; k < 4; k++) area += xz[k]![0] * xz[(k + 1) % 4]![1] - xz[(k + 1) % 4]![0] * xz[k]![1];
-    if (area > 0) xz.reverse();
-    walls.push({ outline: xz.map(([x, z]): Vec3 => [x, sill, z]), depth: head - sill });
-  }
+  const v = polygon(n, r, sill);
+  const vi = polygon(n, r - sheet / Math.cos(Math.PI / n), sill);
+  // The sheet round the sides the door leaves as one concave outline: out
+  // round the outer face from the far jamb to the near one, back inside.
+  const arc = Array.from({ length: n - CORE_DOOR.sides + 1 }, (_, k) => (coreDoorSides()[0]! + CORE_DOOR.sides + k) % n);
+  const walls: Slab[] = [{ outline: [...arc.map((i) => v[i]!), ...arc.reverse().map((i) => vi[i]!)], depth: head - sill }];
   // One mesh, under the id the whole prism had.
   return [
     merge(g, "ladderCylinderSkin", [

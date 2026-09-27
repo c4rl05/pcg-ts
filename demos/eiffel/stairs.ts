@@ -1277,7 +1277,9 @@ export function landingToThird(): StairParts {
  *    the model's ring. The « 600 » is a sheet collar flush with the
  *    platform's deck, which PL-XIX Fig. 10 draws open over it: the manhole
  *    (`summit.ts` opens it; until 2026-09-26 the deck was whole and the
- *    last rung was the deck's). The cupola's floor, 0.792 × 2.44
+ *    last rung was the deck's). Its stiles run on up inside the collar to
+ *    0.02 under the deck's top, each bolted to the collar's face by a flat
+ *    (`collarLugs`) [estimated]. The cupola's floor, 0.792 × 2.44
  *    [SOURCES.md §29], is the two ladders' landing.
  *
  * THE COUNT. The campanile's 22 are printed. The little stair takes 15 of
@@ -1299,7 +1301,14 @@ export const SUMMIT_STAIRS = {
   campanile: { risers: 22, riser: 0.178, tread: 0.633, landingIn: 0.37, start: (3 * Math.PI) / 4, turns: 1 },
   core: { width: 0.3, off: 0.2, risers: 30, facing: -Math.PI / 2 },
   mobile: { foot: 0.9, head: 0.55, width: 0.4, risers: 16 },
-  top: { off: 0.21, width: 0.3, risers: 8 },
+  /**
+   * The last ladder; `collar` the manhole it comes up through, the crown
+   * ring's « 600 » as `summit.ts` cuts it in the deck (LANTERN.crownRing,
+   * a `cupolaSides`-gon with a corner on +x, restated); `below` how far
+   * under the deck's top its stiles stop, inside the collar; `lug` a
+   * stile's flat to the collar's face, its height and thickness.
+   */
+  top: { off: 0.21, width: 0.3, risers: 8, collar: { diameter: 0.6, sides: 24 }, below: 0.02, lug: [0.06, 0.012] as const },
   cupolaFloor: { along: 2.44, across: 0.792 },
 } as const;
 
@@ -1570,11 +1579,45 @@ export function thirdToSummit(): StairParts {
       width: tp.width,
       facing: mul3(S_HAT, 1),
       slab: true,
-      // Under the top platform's 0.125 deck [`summit.ts` LANTERN.topDeck].
-      above: -0.13,
+      // Its stiles on up inside the collar, short of the deck's top (the
+      // stiles stand 5 mm over the level they start from, `ladder`).
+      above: -tp.below - 0.005,
     }),
   );
+  parts.push({ ...empty(), frame: collarLugs(inShaft(tp.off, lv.platform), mul3(S_HAT, 1), tp.width) });
   return joinStairs(...parts);
+}
+
+/**
+ * The last ladder's hold on the manhole: each stile, where it stands inside
+ * the collar, bolted to it by a flat run square out from the stile's axis
+ * to the collar's nearest face and flush on it [estimated: the plates draw
+ * the ladder up through the « 600 » and no fixing; a ladder through a
+ * manhole is fixed at its rim]. The collar is the deck's inner face, a
+ * polygon, so the flat's end lies in one of its facets. Until 2026-09-27
+ * the stiles stopped under the deck, 8 mm inside the ring's corner at the
+ * nearest, bearing on nothing.
+ */
+function collarLugs(head: Vec3, facing: Vec3, width: number): Block[] {
+  const { collar, below, lug } = SUMMIT_STAIRS.top;
+  const across = unit3(cross3(facing, UP));
+  const half = Math.PI / collar.sides;
+  const apothem = (collar.diameter / 2) * Math.cos(half);
+  const y = head[1] - below - lug[0] / 2;
+  return [-1, 1].map((side) => {
+    // The stile's axis, on the ladder's head level.
+    const p = add3(head, mul3(across, (side * (width + 0.012)) / 2));
+    // The facet nearest it: the one whose plane it is least far inside.
+    let n: Vec3 = [1, 0, 0];
+    let d = Infinity;
+    for (let k = 0; k < collar.sides; k++) {
+      const a = (2 * k + 1) * half;
+      const nk: Vec3 = [Math.cos(a), 0, Math.sin(a)];
+      const dk = apothem - dot3(nk, p);
+      if (dk < d) [n, d] = [nk, dk];
+    }
+    return { at: add3([p[0], y, p[2]], mul3(n, d / 2)), x: n, y: UP, size: [d, lug[0], lug[1]] };
+  });
 }
 
 // ---------------------------------------------------------------------------

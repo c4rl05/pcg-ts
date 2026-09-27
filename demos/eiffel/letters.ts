@@ -22,9 +22,10 @@
  * THE PIECES. A glyph is a list of CONVEX polygons, each counter-clockwise
  * (x right, y up), which may overlap: a stem, a bar, a stroke with
  * horizontal ends, or one segment of a ring. Each extrudes to a closed
- * solid on its own; their union is the letter. That is what the demo's
- * extrusion takes (a cap is a fan, so an outline must be convex), and it
- * keeps a letter with a counter (O, B, R) free of holes to cut.
+ * solid on its own; their union is the letter, so pieces may overlap and a
+ * letter with a counter (O, B, R) has no hole to cut. One outline per
+ * letter would need that union computed first (polygonBoolean, where the
+ * frieze is built).
  *
  * Only the characters the tower's names use are needed, but the alphabet is
  * whole — A to Z, the hyphen and the space — so the module can serve any

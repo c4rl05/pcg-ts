@@ -468,7 +468,7 @@
         "vertices": 44640,
         "primitives": 14880,
         "instances": 0,
-        "hash": "da05aeeb769f035f"
+        "hash": "4c65aefadb2a17b2"
       },
       "horizontals": {
         "kind": "geometry",
@@ -509,11 +509,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 642294,
-        "vertices": 1036428,
-        "primitives": 345476,
+        "points": 642342,
+        "vertices": 1036500,
+        "primitives": 345500,
         "instances": 0,
-        "hash": "8c32650acca53097"
+        "hash": "0591e51827c2f8ce"
       },
       "silvered": {
         "kind": "geometry",
@@ -527,11 +527,11 @@
       "summit": {
         "kind": "geometry",
         "items": 1,
-        "points": 38534,
-        "vertices": 66438,
-        "primitives": 22146,
+        "points": 35582,
+        "vertices": 62910,
+        "primitives": 20970,
         "instances": 0,
-        "hash": "a0746ebf37343c2a"
+        "hash": "dd629c72bd520767"
       },
       "uprights": {
         "kind": "geometry",
@@ -1100,7 +1100,7 @@
         "vertices": 44640,
         "primitives": 14880,
         "instances": 0,
-        "hash": "da05aeeb769f035f"
+        "hash": "4c65aefadb2a17b2"
       },
       "gussets": {
         "kind": "geometry",
@@ -1150,11 +1150,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 642294,
-        "vertices": 1036428,
-        "primitives": 345476,
+        "points": 642342,
+        "vertices": 1036500,
+        "primitives": 345500,
         "instances": 0,
-        "hash": "8c32650acca53097"
+        "hash": "0591e51827c2f8ce"
       },
       "silvered": {
         "kind": "geometry",
@@ -1168,11 +1168,11 @@
       "summit": {
         "kind": "geometry",
         "items": 1,
-        "points": 38534,
-        "vertices": 66438,
-        "primitives": 22146,
+        "points": 35582,
+        "vertices": 62910,
+        "primitives": 20970,
         "instances": 0,
-        "hash": "a0746ebf37343c2a"
+        "hash": "dd629c72bd520767"
       },
       "uprights": {
         "kind": "geometry",
@@ -1651,7 +1651,7 @@
         "vertices": 44640,
         "primitives": 14880,
         "instances": 0,
-        "hash": "da05aeeb769f035f"
+        "hash": "4c65aefadb2a17b2"
       },
       "gussets": {
         "kind": "geometry",
@@ -1701,11 +1701,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 642294,
-        "vertices": 1036428,
-        "primitives": 345476,
+        "points": 642342,
+        "vertices": 1036500,
+        "primitives": 345500,
         "instances": 0,
-        "hash": "8c32650acca53097"
+        "hash": "0591e51827c2f8ce"
       },
       "rivets.ff.arches.chords": {
         "kind": "instances",
@@ -2241,11 +2241,11 @@
       "summit": {
         "kind": "geometry",
         "items": 1,
-        "points": 38534,
-        "vertices": 66438,
-        "primitives": 22146,
+        "points": 35582,
+        "vertices": 62910,
+        "primitives": 20970,
         "instances": 0,
-        "hash": "a0746ebf37343c2a"
+        "hash": "dd629c72bd520767"
       },
       "uprights": {
         "kind": "geometry",
@@ -2724,7 +2724,7 @@
         "vertices": 44640,
         "primitives": 14880,
         "instances": 0,
-        "hash": "da05aeeb769f035f"
+        "hash": "4c65aefadb2a17b2"
       },
       "gussets": {
         "kind": "geometry",
@@ -2774,11 +2774,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 642294,
-        "vertices": 1036428,
-        "primitives": 345476,
+        "points": 642342,
+        "vertices": 1036500,
+        "primitives": 345500,
         "instances": 0,
-        "hash": "8c32650acca53097"
+        "hash": "0591e51827c2f8ce"
       },
       "rivets.ff.arches.chords": {
         "kind": "instances",
@@ -3323,11 +3323,11 @@
       "summit": {
         "kind": "geometry",
         "items": 1,
-        "points": 38534,
-        "vertices": 66438,
-        "primitives": 22146,
+        "points": 35582,
+        "vertices": 62910,
+        "primitives": 20970,
         "instances": 0,
-        "hash": "a0746ebf37343c2a"
+        "hash": "dd629c72bd520767"
       },
       "uprights": {
         "kind": "geometry",
@@ -3806,7 +3806,7 @@
         "vertices": 44640,
         "primitives": 14880,
         "instances": 0,
-        "hash": "da05aeeb769f035f"
+        "hash": "4c65aefadb2a17b2"
       },
       "horizontals": {
         "kind": "geometry",
@@ -3847,11 +3847,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 642294,
-        "vertices": 1036428,
-        "primitives": 345476,
+        "points": 642342,
+        "vertices": 1036500,
+        "primitives": 345500,
         "instances": 0,
-        "hash": "8c32650acca53097"
+        "hash": "0591e51827c2f8ce"
       },
       "silvered": {
         "kind": "geometry",
@@ -3865,11 +3865,11 @@
       "summit": {
         "kind": "geometry",
         "items": 1,
-        "points": 38534,
-        "vertices": 66438,
-        "primitives": 22146,
+        "points": 35582,
+        "vertices": 62910,
+        "primitives": 20970,
         "instances": 0,
-        "hash": "a0746ebf37343c2a"
+        "hash": "dd629c72bd520767"
       },
       "uprights": {
         "kind": "geometry",
