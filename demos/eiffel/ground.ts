@@ -236,6 +236,23 @@ const PRISM_RUN = 1024;
  * by its index.
  */
 export function prisms(g: Graph, id: string, list: readonly Prism[], crease = CREASE): NodeHandle {
+  return outlines(g, id, list, crease, false);
+}
+
+/**
+ * A closed surface given as planar CONVEX faces, each wound so its normal
+ * points into the solid it bounds (the way a {@link Prism}'s outline is),
+ * as one mesh: each face its own points, facing out, smoothed by the
+ * crease angle like `prisms`. Every point gets the SAME `seed`, so points
+ * the faces share by position move as one under the class's jitter
+ * (parts.ts `JITTER`) and the surface stays closed.
+ */
+export function skin(g: Graph, id: string, faces: readonly (readonly Vec3[])[], crease = CREASE): NodeHandle {
+  // Only the outline's own cap is built, so the depth is a formality.
+  return outlines(g, id, faces.map((outline) => ({ outline, depth: 0.01 })), crease, true);
+}
+
+function outlines(g: Graph, id: string, list: readonly Prism[], crease: number, faces: boolean): NodeHandle {
   list.forEach((p, i) => {
     if (!(p.depth > 1e-6) || p.outline.length < 3) {
       throw new Error(`ground.ts prisms("${id}"): prism ${i} at [${p.outline[0]?.join(", ")}] has depth ${p.depth} and ${p.outline.length} points; it needs a positive depth and three points`);
@@ -254,15 +271,16 @@ export function prisms(g: Graph, id: string, list: readonly Prism[], crease = CR
   // Smoothed by the crease angle (`chord.ts`) after the runs are merged,
   // so a round part cut across two runs still welds.
   let out: NodeHandle;
-  if (runs.length === 1) out = prismRun(g, `${id}Flat`, list);
+  if (runs.length === 1) out = prismRun(g, `${id}Flat`, list, faces);
   else {
     out = g.add(mergePrimitives, {}, `${id}Flat`);
-    runs.forEach((run, i) => g.connect(prismRun(g, `${id}Run${i}`, run), "out", out, "in"));
+    runs.forEach((run, i) => g.connect(prismRun(g, `${id}Run${i}`, run, faces), "out", out, "in"));
   }
   return smoothed(g, id, out, crease);
 }
 
-function prismRun(g: Graph, id: string, list: readonly Prism[]): NodeHandle {
+/** One run of `outlines`: each outline extruded whole, or with `faces` only its own cap, every point on seed 0. */
+function prismRun(g: Graph, id: string, list: readonly Prism[], faces = false): NodeHandle {
   const pts = list.flatMap((p) => p.outline);
   const which = list.flatMap((p, i) => p.outline.map(() => i));
   const depth = list.flatMap((p) => p.outline.map(() => p.depth));
@@ -290,13 +308,19 @@ function prismRun(g: Graph, id: string, list: readonly Prism[]): NodeHandle {
   const paths = g.add(pointsToPath, { groupAttr: "prism", closed: true }, `${id}Paths`);
   const solid = g.add(
     extrudePolygon,
-    { direction: "polygonNormal", distance: attribute("depth"), caps: "both" },
+    faces
+      ? { direction: "polygonNormal", distance: attribute("depth"), caps: "bottom", sides: false }
+      : { direction: "polygonNormal", distance: attribute("depth"), caps: "both" },
     id,
   );
   g.connect(slots, "out", place, "in");
   g.connect(place, "out", key, "in");
   g.connect(key, "out", len, "in");
-  g.connect(len, "out", paths, "in");
+  if (faces) {
+    const seed = g.add(setAttribute, { name: "seed", type: "u32", value: 0 }, `${id}Seed`);
+    g.connect(len, "out", seed, "in");
+    g.connect(seed, "out", paths, "in");
+  } else g.connect(len, "out", paths, "in");
   g.connect(paths, "out", solid, "in");
   return solid;
 }
@@ -814,38 +838,188 @@ export const CHIMNEY_STAVES = flatsSides(
   { multiple: CHIMNEY.crown.merlons },
 );
 
-/** The chimney as prisms, above and below the model's ground. */
-function chimney(): { above: Prism[]; below: Prism[] } {
-  const [x, z] = CHIMNEY.at;
+/**
+ * One course of the chimney, bottom to top: from y0 to y1, its outer
+ * diameter across the flats d0 at the foot and d1 at the head, `wall`
+ * thick (half the diameter for the solid footing); `skip` leaves a stave
+ * out (a crenel).
+ */
+interface Course {
+  readonly y0: number;
+  readonly y1: number;
+  readonly d0: number;
+  readonly d1: number;
+  readonly wall: number;
+  readonly skip?: (i: number) => boolean;
+}
+
+/** The chimney's courses, footing first: what both its solid ({@link chimney}) and its skin ({@link chimneySkin}) are built from. */
+function chimneyCourses(): Course[] {
   const C = CHIMNEY;
-  const below: Prism[] = [];
-  const above: Prism[] = [];
-  const g = 0;
-  const n = CHIMNEY_STAVES;
   // Staves per crown slot: a merlon, then a crenel, round the parapet.
-  const per = n / C.crown.merlons;
-  const aFoot = g - C.a.high;
-  below.push(cylinder([x, aFoot - C.footing.t, z], [x, aFoot, z], C.footing.d, n));
-  below.push(...roundWall(x, z, aFoot, g, C.a.d, C.a.d, C.a.wall, n));
-  let y = g;
+  const per = CHIMNEY_STAVES / C.crown.merlons;
+  const aFoot = -C.a.high;
+  const out: Course[] = [
+    { y0: aFoot - C.footing.t, y1: aFoot, d0: C.footing.d, d1: C.footing.d, wall: C.footing.d / 2 },
+    { y0: aFoot, y1: 0, d0: C.a.d, d1: C.a.d, wall: C.a.wall },
+  ];
+  let y = 0;
   for (const b of C.b) {
     // Each lift in two, so the wall thins as it rises.
     const ym = y + b.high / 2;
     const dm = (b.d0 + b.d1) / 2;
-    above.push(...roundWall(x, z, y, ym, b.d0, dm, b.wall0, n));
-    above.push(...roundWall(x, z, ym, y + b.high, dm, b.d1, b.wall1, n));
+    out.push({ y0: y, y1: ym, d0: b.d0, d1: dm, wall: b.wall0 });
+    out.push({ y0: ym, y1: y + b.high, d0: dm, d1: b.d1, wall: b.wall1 });
     y += b.high;
   }
   // The crown: corbels flaring out, the bands, the crenellated parapet.
   const K = C.crown;
   const top = C.b[C.b.length - 1]!.d1;
-  above.push(...roundWall(x, z, y, y + K.corbel, top, K.d, 0.5, n));
+  out.push({ y0: y, y1: y + K.corbel, d0: top, d1: K.d, wall: 0.5 });
   y += K.corbel;
-  above.push(...roundWall(x, z, y, y + K.band, K.d, K.d, 0.6, n));
+  out.push({ y0: y, y1: y + K.band, d0: K.d, d1: K.d, wall: 0.6 });
   y += K.band;
-  above.push(...roundWall(x, z, y, y + K.parapet / 2, K.d, K.d, K.wall, n));
-  above.push(...roundWall(x, z, y + K.parapet / 2, y + K.parapet, K.d, K.d, K.wall, n, (i) => Math.floor(i / per) % 2 === 1));
+  out.push({ y0: y, y1: y + K.parapet / 2, d0: K.d, d1: K.d, wall: K.wall });
+  out.push({ y0: y + K.parapet / 2, y1: y + K.parapet, d0: K.d, d1: K.d, wall: K.wall, skip: (i) => Math.floor(i / per) % 2 === 1 });
+  return out;
+}
+
+/**
+ * The corners of the chimney's `CHIMNEY_STAVES`-gon with its flats on
+ * radius `r`, at height `y`: stave i runs from corner i to corner i + 1,
+ * the corners exactly where {@link roundWall} puts its staves'.
+ */
+function chimneyRing(r: number, y: number): Vec3[] {
+  const [x, z] = CHIMNEY.at;
+  const n = CHIMNEY_STAVES;
+  const k = 1 / Math.cos(Math.PI / n);
+  const out: Vec3[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i * 2 * Math.PI) / n;
+    out.push([x + r * k * Math.cos(a), y, z + r * k * Math.sin(a)]);
+  }
+  return out;
+}
+
+/**
+ * The chimney as prisms, above and below the model's ground: its SOLID,
+ * stave by stave, which is what the clash and dimension checks read. The
+ * page draws {@link chimneySkin} instead (see there for why).
+ */
+function chimney(): { above: Prism[]; below: Prism[] } {
+  const [x, z] = CHIMNEY.at;
+  const below: Prism[] = [];
+  const above: Prism[] = [];
+  const n = CHIMNEY_STAVES;
+  const [footing, ...courses] = chimneyCourses();
+  const f = footing!;
+  below.push({ outline: towards(chimneyRing(f.d0 / 2, f.y0), UP), depth: f.y1 - f.y0 });
+  for (const c of courses) (c.y1 <= 0 ? below : above).push(...roundWall(x, z, c.y0, c.y1, c.d0, c.d1, c.wall, n, c.skip));
   return { above, below };
+}
+
+/**
+ * The chimney as the page draws it: ONE closed skin over the same courses,
+ * as planar convex faces, each wound to face out of the brickwork — the
+ * staves' outer and inner faces, the ledges where a course steps in or out
+ * against the next, the footing's underside and the flue's floor on it,
+ * the crenels' floors, and the merlons' tops and ends. Every seam is a
+ * corner both faces take from the same {@link chimneyRing}, so the skin
+ * is watertight to the bit.
+ *
+ * WHY NOT THE STAVES. Drawn as prisms, each stave carried its own side
+ * walls, square to its own face, running from the seam into its neighbour
+ * (staves extruded inward overlap in a wedge), so at every seam faces met
+ * the surface edge-on and fought it in depth; and each stave's corners
+ * were its own points with their own seeds, so the class's jitter
+ * (parts.ts `JITTER`) moved the two staves' corners at a seam apart by up
+ * to 2.8 mm. Between them, bright specks up every seam and round every
+ * course. The skin has no inner walls, and its points share one
+ * seed (`skin`), so points that coincide jitter as one.
+ */
+export function chimneySkin(): Vec3[][] {
+  const n = CHIMNEY_STAVES;
+  const faces: Vec3[][] = [];
+  const face = (pts: Vec3[], into: Vec3) => faces.push(towards(pts, into));
+  const mid = (i: number): Vec3 => {
+    const a = ((i + 0.5) * 2 * Math.PI) / n;
+    return [Math.cos(a), 0, Math.sin(a)];
+  };
+  const DOWN: Vec3 = [0, -1, 0];
+  const all = () => true;
+  /** A ring of quads between two rings, stave by stave where `keep`, each facing away from `into(i)`. */
+  const band = (lo: Vec3[], hi: Vec3[], into: (i: number) => Vec3, keep: (i: number) => boolean) => {
+    for (let i = 0; i < n; i++) {
+      if (!keep(i)) continue;
+      const j = (i + 1) % n;
+      face([lo[i]!, lo[j]!, hi[j]!, hi[i]!], into(i));
+    }
+  };
+  /** A flat annulus at `y` from radius r0 out to r1, stave by stave where `keep`; `into` is UP to face down. */
+  const flat = (r0: number, r1: number, y: number, into: Vec3, keep: (i: number) => boolean) => {
+    if (r0 === r1) return;
+    const [a, b] = r0 < r1 ? [r0, r1] : [r1, r0];
+    if (a === 0) {
+      // A disc: whole or nothing (only the footing is solid, and it has no crenels).
+      const kept = Array.from({ length: n }, (_, i) => keep(i)).filter(Boolean).length;
+      if (kept === 0) return;
+      if (kept < n) throw new Error(`ground.ts chimneySkin: a disc at y ${y} with ${n - kept} of ${n} staves left out`);
+      face(chimneyRing(b, y), into);
+      return;
+    }
+    band(chimneyRing(a, y), chimneyRing(b, y), () => into, keep);
+  };
+  const courses = chimneyCourses();
+  // The footing's underside.
+  const first = courses[0]!;
+  flat(0, first.d0 / 2, first.y0, UP, all);
+  courses.forEach((c, k) => {
+    const keep = (i: number) => !(c.skip?.(i) ?? false);
+    const ro0 = c.d0 / 2;
+    const ro1 = c.d1 / 2;
+    const ri0 = ro0 - c.wall;
+    const ri1 = ro1 - c.wall;
+    band(chimneyRing(ro0, c.y0), chimneyRing(ro1, c.y1), (i) => mul3(mid(i), -1), keep);
+    if (ri0 > 0) band(chimneyRing(ri0, c.y0), chimneyRing(ri1, c.y1), mid, keep);
+    // The ends of each run of staves (a merlon's cheeks), in the radial plane of its corner.
+    if (c.skip !== undefined) {
+      const oLo = chimneyRing(ro0, c.y0);
+      const oHi = chimneyRing(ro1, c.y1);
+      const iLo = chimneyRing(ri0, c.y0);
+      const iHi = chimneyRing(ri1, c.y1);
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        if (keep(i) === keep(j)) continue;
+        const a = (j * 2 * Math.PI) / n;
+        // Into the run: back round the ring if it ends at j, on round if it starts there.
+        const on: Vec3 = [-Math.sin(a), 0, Math.cos(a)];
+        face([oLo[j]!, oHi[j]!, iHi[j]!, iLo[j]!], keep(j) ? on : mul3(on, -1));
+      }
+    }
+    // Where this course meets the next (or the sky): what the one leaves
+    // uncovered of the other's end, up-facing where the lower stands proud
+    // and down-facing where the upper overhangs it.
+    const next = courses[k + 1];
+    const y = c.y1;
+    if (next === undefined) {
+      flat(ri1, ro1, y, DOWN, keep);
+      return;
+    }
+    const keepN = (i: number) => !(next.skip?.(i) ?? false);
+    const both = (i: number) => keep(i) && keepN(i);
+    const nro = next.d0 / 2;
+    const nri = nro - next.wall;
+    // Solid below meets hollow above: the lower's inside is the flue's floor.
+    const ri = Math.max(ri1, 0);
+    if (ro1 > nro) flat(nro, ro1, y, DOWN, both);
+    else flat(ro1, nro, y, UP, both);
+    if (ri < nri) flat(ri, nri, y, DOWN, both);
+    else flat(nri, ri, y, UP, both);
+    // Staves only one side has: the lower's end up, the upper's down.
+    flat(ri, ro1, y, DOWN, (i) => keep(i) && !keepN(i));
+    flat(nri, nro, y, UP, (i) => !keep(i) && keepN(i));
+  });
+  return faces;
 }
 
 // ---------------------------------------------------------------------------
@@ -1639,14 +1813,17 @@ export function foundationsPrisms(): { foundations: Prism[]; machinery: Prism[] 
 // ---------------------------------------------------------------------------
 // The build
 
-/** Everything this module builds, as prism lists by class. */
+/**
+ * Everything this module builds, as prism lists by class — all but the
+ * chimney, which is drawn as one skin (`chimneySkin`); its prisms are in
+ * `machineRoomPrisms`, for the checks that read it as a solid.
+ */
 export function groundPrisms(): { foundations: Prism[]; machinery: Prism[]; masonry: Prism[] } {
-  const room = machineRoomPrisms();
   const supports = supportFrames().map(supportPieces);
   const found = foundationsPrisms();
   return {
-    foundations: [...room.foundations, ...supports.flatMap((s) => s.buried), ...found.foundations],
-    machinery: [...room.plant, ...supports.flatMap((s) => s.iron), ...found.machinery],
+    foundations: [...roomAndFlue(), ...supports.flatMap((s) => s.buried), ...found.foundations],
+    machinery: [...roomPlant(), ...supports.flatMap((s) => s.iron), ...found.machinery],
     masonry: supports.flatMap((s) => s.stone),
   };
 }
@@ -1655,9 +1832,14 @@ export function groundPrisms(): { foundations: Prism[]; machinery: Prism[]; maso
 export function machineRoomPrisms(): { foundations: Prism[]; plant: Prism[] } {
   const ch = chimney();
   return {
-    foundations: [...roomMasonry(), ...flue()].map(blockPrism).concat(ch.below, ch.above),
+    foundations: [...roomAndFlue(), ...ch.below, ...ch.above],
     plant: roomPlant(),
   };
+}
+
+/** The machine room's masonry and its flue, as prisms. */
+function roomAndFlue(): Prism[] {
+  return [...roomMasonry(), ...flue()].map(blockPrism);
 }
 
 /** The crease angle, degrees, for the foundations class (see `buildGround`). */
@@ -1671,7 +1853,10 @@ export function buildGround(g: Graph): Parts {
     // degrees apart) and the caissons' corners (18) shade round, and the
     // chimney's corbel (21 degrees off its shaft and its band) keeps the
     // two breaks that make it a corbel rather than a swelling.
-    foundations: [prisms(g, "groundFoundations", p.foundations, FOUNDATION_CREASE)],
+    foundations: [
+      prisms(g, "groundFoundations", p.foundations, FOUNDATION_CREASE),
+      skin(g, "groundChimney", chimneySkin(), FOUNDATION_CREASE),
+    ],
     machinery: [prisms(g, "groundIron", p.machinery)],
     masonry: [prisms(g, "groundStones", p.masonry)],
   };

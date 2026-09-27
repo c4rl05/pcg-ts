@@ -237,6 +237,14 @@ const ALLOW: readonly Allowed[] = [
   },
   {
     kind: "loose",
+    cls: "foundations",
+    box: [98.95, -4.37, 48.95, 99.05, -4.27, 49.05],
+    count: 1,
+    reason:
+      "the chimney by pile 4, drawn as one closed skin (ground.ts chimneySkin), reads as one 18 m member; its foot is its concrete footing 5.88 under the model's ground, bedded in the soil, which is not modelled (seen only in ?section)",
+  },
+  {
+    kind: "loose",
     cls: "machinery",
     box: [-3.341, 114.159, 0.407, -0.407, 114.22, 3.341],
     count: 2,
