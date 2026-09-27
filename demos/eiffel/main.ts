@@ -702,7 +702,7 @@ const DETAILS = [
   { key: "", label: "skeleton", title: "solid members: the panels and their rules" },
   { key: "laced", label: "laced", title: "every web member as four angles laced in X" },
   { key: "rivets", label: "rivets", title: "laced, and every rivet as an instance" },
-  { key: "bands", label: "by distance", title: "laced and riveted round the camera, cooked as it moves" },
+  { key: "bands", label: "streamed", title: "laced and riveted round the camera, cooked as it moves" },
 ] as const;
 
 function currentDetail(): string {
