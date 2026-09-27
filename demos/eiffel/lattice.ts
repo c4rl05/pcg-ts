@@ -100,18 +100,16 @@ export function indexTable(values: readonly number[]): Field {
   const vs = values.map((v) => v + 0);
   const n = vs.length;
   const f32 = Math.fround;
-  // What the full table (a stop per entry) stores at integer i. The ends
-  // clamp to their own values. An interior i lands ON stop i, which ramp
-  // answers from the segment BELOW it at u = 1 — so this, and not
-  // f32(vs[i]), is the byte to reproduce, though the two rarely differ.
-  const want = vs.map((v, i) => (i === 0 || i === n - 1 ? f32(v) : f32(vs[i - 1]! + (v - vs[i - 1]!))));
-  // Whether stops a and b alone store want[i] for every i in (a, b]: ramp's
-  // own arithmetic (src/fields/combinators.ts) for an i inside the segment,
-  // and for i = b, which lands on stop b and so takes this segment's top
-  // at u = 1. The last entry clamps instead and needs no check. Compared
-  // as bits: `!==` rejects NaN, and 1 / r tells 0 from -0.
+  // What the full table (a stop per entry) stores at integer i: every i
+  // lands ON stop i, and ramp answers a stop with its own value (the ends
+  // by clamping), so f32(vs[i]) is the byte to reproduce.
+  const want = vs.map(f32);
+  // Whether stops a and b alone store want[i] for every i in (a, b): ramp's
+  // own arithmetic (src/fields/combinators.ts) for an i inside the segment.
+  // i = b lands on stop b, which answers with its own value, so it needs no
+  // check. Compared as bits: `!==` rejects NaN, and 1 / r tells 0 from -0.
   const holds = (a: number, b: number): boolean => {
-    for (let i = a + 1; i <= b && i < n - 1; i++) {
+    for (let i = a + 1; i < b; i++) {
       const r = f32(vs[a]! + (vs[b]! - vs[a]!) * ((i - a) / (b - a)));
       if (r !== want[i] || 1 / r !== 1 / want[i]!) return false;
     }
@@ -148,10 +146,9 @@ export type TableColumn = readonly [TableType, ReadonlyArray<number | readonly n
  * column's values are one tuple per point). It replaces a `pointGrid` fed
  * one {@link indexTable} setAttribute per column, and takes the grid's id:
  * pointList seeds point i as pointGrid does, hashCombine(node seed, i), so
- * the same id keeps every seed. It stores each literal, where the ramp
- * stored v[i-1] + (v[i] - v[i-1]): the same f32 except beside a much larger
- * neighbour, so a trigonometric residue (1.6e-16 after 0.76) came back as
- * that sum's cancellation error (1.1e-16) instead.
+ * the same id keeps every seed. It stores each literal at the column's own
+ * type, where the ramp's column is always f32: the same bytes for an f32
+ * column, but an i32 past 2^24 survives here and would not through a ramp.
  */
 export function pointTable(
   g: Graph,

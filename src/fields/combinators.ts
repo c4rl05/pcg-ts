@@ -843,9 +843,10 @@ function positionsAreNonNaNNumbers(ts: readonly unknown[]): boolean {
 /**
  * Piecewise-linear curve through `[t, value]` stops, applied to a scalar
  * field. Stop positions must be strictly ascending; inputs outside the
- * stop range clamp to the first/last value. A long ramp finds each
- * element's segment by bisection, so a table with a stop per element
- * costs O(n log n), not O(n²).
+ * stop range clamp to the first/last value, and an input exactly on a stop
+ * yields that stop's value (stored as f32, like every value). A long
+ * ramp finds each element's segment by bisection, so a table with a stop
+ * per element costs O(n log n), not O(n²).
  */
 export function ramp(
   input: FieldLike,
@@ -870,10 +871,21 @@ export function ramp(
   // are not all numbers (a string, or a hole in a sparse array), which
   // only an untyped caller can build. Every other ramp is strictly
   // ascending, where `ts[j] < t` is true up to the answer and false from
-  // it on — which is all a lower-bound bisection needs. The exact hit is
-  // the case that shows: a `t` ON interior stop k is segment k, the TOP
-  // of the segment below (u = 1), not the bottom of the one above, and
-  // `vs[k-1] + (vs[k] - vs[k-1])` need not round to `vs[k]`.
+  // it on — which is all a lower-bound bisection needs.
+  //
+  // AN INPUT ON A STOP IS ANSWERED WITH THAT STOP'S VALUE, not with the
+  // segment below it at u = 1. Both searches land a `t` equal to interior
+  // stop k on segment k, whose top is `vs[k-1] + (vs[k] - vs[k-1]) * 1`
+  // — and that sum need not round back to `vs[k]`: beside a much larger
+  // neighbour it cancels ([[0, 1e20], [1, -0.238]] answered 0 at t = 1),
+  // and one double ulp lost on the way can move the f32 store across a
+  // rounding midpoint. A table read at its stops, `ramp(index(), ...)`,
+  // is exactly that input at every element. So the hit is checked by
+  // exact equality before interpolating, on both paths alike; everywhere
+  // else the arithmetic is untouched. The value still lands in an f32
+  // column, so the answer is f32(vs[k]) — the correctly rounded one, the
+  // same the clamps store — and an integer past 2^24 still cannot come
+  // back whole: that is the column's type, not this lookup's.
   const bisect = ts.length > RAMP_WALK_MAX && positionsAreNonNaNNumbers(ts);
   const fa = resolveField(input);
   const stopsKey = stops.map((s) => `${keyNum(s[0])}:${keyNum(s[1])}`).join(",");
@@ -909,6 +921,10 @@ export function ramp(
         }
       } else {
         while (ts[j] < t) j++;
+      }
+      if (t === ts[j]) {
+        out[i] = vs[j];
+        continue;
       }
       const u = (t - ts[j - 1]) / (ts[j] - ts[j - 1]);
       out[i] = vs[j - 1] + (vs[j] - vs[j - 1]) * u;

@@ -18,7 +18,7 @@
         "vertices": 35376,
         "primitives": 11792,
         "instances": 0,
-        "hash": "a6dd21abe4e56f6b"
+        "hash": "6138a57776339497"
       },
       "car.edoux.cable.a.nord": {
         "kind": "geometry",
@@ -531,7 +531,7 @@
         "vertices": 62910,
         "primitives": 20970,
         "instances": 0,
-        "hash": "94863c472d5a7703"
+        "hash": "4458d5cf61407219"
       },
       "uprights": {
         "kind": "geometry",
@@ -540,7 +540,7 @@
         "vertices": 50640,
         "primitives": 16880,
         "instances": 0,
-        "hash": "66597e2fe18abbaf"
+        "hash": "e7001fef74caa002"
       },
       "works.bearings": {
         "kind": "geometry",
@@ -650,7 +650,7 @@
         "vertices": 3304512,
         "primitives": 1101504,
         "instances": 0,
-        "hash": "1e4d194942d9af0a"
+        "hash": "1b8cc865e9143a82"
       },
       "car.edoux.cable.a.nord": {
         "kind": "geometry",
@@ -1172,7 +1172,7 @@
         "vertices": 62910,
         "primitives": 20970,
         "instances": 0,
-        "hash": "94863c472d5a7703"
+        "hash": "4458d5cf61407219"
       },
       "uprights": {
         "kind": "geometry",
@@ -1181,7 +1181,7 @@
         "vertices": 572208,
         "primitives": 190736,
         "instances": 0,
-        "hash": "d7ca56aa997caa06"
+        "hash": "30f20ffa4b134fbf"
       }
     },
     "riveted": {
@@ -1201,7 +1201,7 @@
         "vertices": 3304512,
         "primitives": 1101504,
         "instances": 0,
-        "hash": "1e4d194942d9af0a"
+        "hash": "1b8cc865e9143a82"
       },
       "car.edoux.cable.a.nord": {
         "kind": "geometry",
@@ -2245,7 +2245,7 @@
         "vertices": 62910,
         "primitives": 20970,
         "instances": 0,
-        "hash": "94863c472d5a7703"
+        "hash": "4458d5cf61407219"
       },
       "uprights": {
         "kind": "geometry",
@@ -2254,7 +2254,7 @@
         "vertices": 572208,
         "primitives": 190736,
         "instances": 0,
-        "hash": "d7ca56aa997caa06"
+        "hash": "30f20ffa4b134fbf"
       }
     },
     "rivetsFull": {
@@ -2274,7 +2274,7 @@
         "vertices": 3304512,
         "primitives": 1101504,
         "instances": 0,
-        "hash": "1e4d194942d9af0a"
+        "hash": "1b8cc865e9143a82"
       },
       "car.edoux.cable.a.nord": {
         "kind": "geometry",
@@ -3327,7 +3327,7 @@
         "vertices": 62910,
         "primitives": 20970,
         "instances": 0,
-        "hash": "94863c472d5a7703"
+        "hash": "4458d5cf61407219"
       },
       "uprights": {
         "kind": "geometry",
@@ -3336,7 +3336,7 @@
         "vertices": 572208,
         "primitives": 190736,
         "instances": 0,
-        "hash": "d7ca56aa997caa06"
+        "hash": "30f20ffa4b134fbf"
       }
     },
     "skeleton": {
@@ -3356,7 +3356,7 @@
         "vertices": 35376,
         "primitives": 11792,
         "instances": 0,
-        "hash": "a6dd21abe4e56f6b"
+        "hash": "6138a57776339497"
       },
       "car.edoux.cable.a.nord": {
         "kind": "geometry",
@@ -3869,7 +3869,7 @@
         "vertices": 62910,
         "primitives": 20970,
         "instances": 0,
-        "hash": "94863c472d5a7703"
+        "hash": "4458d5cf61407219"
       },
       "uprights": {
         "kind": "geometry",
@@ -3878,7 +3878,7 @@
         "vertices": 50640,
         "primitives": 16880,
         "instances": 0,
-        "hash": "66597e2fe18abbaf"
+        "hash": "e7001fef74caa002"
       }
     }
   }

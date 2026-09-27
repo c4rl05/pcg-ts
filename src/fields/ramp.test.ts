@@ -38,11 +38,15 @@ function lengthened(stops: Stops, value = 1): Stops {
 
 /**
  * The CPU evaluator as it stood before the bisection, verbatim apart from
- * taking its column as an argument: clamp at the ends, otherwise walk from
- * the first segment to the first stop whose position is not below `t`, and
- * interpolate that segment in f64 before the store rounds to f32.
+ * taking its column as an argument and from the exact-stop return added
+ * after it: clamp at the ends, otherwise walk from the first segment to
+ * the first stop whose position is not below `t`, answer that stop's own
+ * value when `t` is ON it, and otherwise interpolate that segment in f64
+ * before the store rounds to f32. `exactStops: false` is the walk as it
+ * shipped before that return, which answered a hit from the segment below
+ * at u = 1 — kept so the tests can show the return changed nothing else.
  */
-function rampByScan(data: ArrayLike<number>, stops: Stops): Float32Array {
+function rampByScan(data: ArrayLike<number>, stops: Stops, exactStops = true): Float32Array {
   const ts = stops.map((s) => s[0]);
   const vs = stops.map((s) => s[1]);
   const n = data.length;
@@ -60,6 +64,10 @@ function rampByScan(data: ArrayLike<number>, stops: Stops): Float32Array {
     }
     let j = 1;
     while (ts[j] < t) j++;
+    if (exactStops && t === ts[j]) {
+      out[i] = vs[j];
+      continue;
+    }
     const u = (t - ts[j - 1]) / (ts[j] - ts[j - 1]);
     out[i] = vs[j - 1] + (vs[j] - vs[j - 1]) * u;
   }
@@ -299,10 +307,10 @@ describe("ramp: the semantics the lookup keeps", () => {
     ]);
   });
 
-  it("exactly on an interior stop it answers the TOP of the segment below, not the stop's value", () => {
-    // The segment is the first stop at or above `t`, so a hit on stop 1 is
-    // `vs[0] + (vs[1] - vs[0]) * 1` — which cancels to 0 here, not 1. A
-    // search landing on the segment above would answer `vs[1]` exactly.
+  it("exactly on an interior stop it answers that stop's value, not the segment below at u = 1", () => {
+    // The search lands a hit on stop 1 in the segment below it, whose top
+    // is `vs[0] + (vs[1] - vs[0]) * 1` — which cancels to 0 here, and
+    // used to be the answer. The stop's own value is.
     const stops = [
       [0, 1e20],
       [1, 1],
@@ -311,8 +319,69 @@ describe("ramp: the semantics the lookup keeps", () => {
     ] as const;
     const data = new Float32Array([1, 2, 0.5, 3]);
     // Walked, and bisected: the stops past 4 change none of these inputs.
-    expect(Array.from(rampShipped(data, stops))).toEqual([0, 5, f(5e19), 1]);
-    expect(Array.from(rampShipped(data, lengthened(stops)))).toEqual([0, 5, f(5e19), 1]);
+    expect(Array.from(rampShipped(data, stops))).toEqual([1, 5, f(5e19), 1]);
+    expect(Array.from(rampShipped(data, lengthened(stops)))).toEqual([1, 5, f(5e19), 1]);
+    // The pre-fix answer, so this test is known to tell the two apart.
+    expect(Array.from(rampByScan(data, stops, false))).toEqual([0, 5, f(5e19), 1]);
+  });
+
+  it("gives back 1e20 then -0.238 at the second stop, walked and bisected", () => {
+    // The case the defect was found by: (-0.238 - 1e20) rounds -0.238 away
+    // in f64, so the segment below answered 0 at t = 1.
+    const stops = [
+      [0, 1e20],
+      [1, f(-0.238)],
+      [2, 5],
+      [3, 0],
+    ] as const;
+    const long = Array.from({ length: 40 }, (_, k) => [k, k === 0 ? 1e20 : k === 1 ? f(-0.238) : k] as const);
+    expect(long.length).toBeGreaterThan(16);
+    const data = new Float32Array([0, 1, 2, 3]);
+    expect(Array.from(rampShipped(data, stops))).toEqual([f(1e20), f(-0.238), 5, 0]);
+    expect(Array.from(rampShipped(data, long))).toEqual([f(1e20), f(-0.238), 2, 3]);
+    expect(rampByScan(data, stops, false)[1]).toBe(0);
+    expect(rampByScan(data, long, false)[1]).toBe(0);
+  });
+
+  it("answers f32 of the stop's value, which is where an integer past 2^24 is lost", () => {
+    // Integers do not cancel in f64 — `v0 + (v1 - v0)` is exact below 2^53
+    // — so for them the old answer was already f32(v1). What loses
+    // 2147483647 is the f32 COLUMN every ramp writes: it rounds to 2^31,
+    // which an i32 store then wraps to -2147483648. Returning the stop's
+    // value cannot change that, and neither path gives back an integer
+    // f32 cannot hold; a table of such integers belongs in `pointList`.
+    const values = [16777217, 2147483647, -2147483648, 1, 16777219];
+    const short = values.map((v, i) => [i, v] as const);
+    const long = Array.from({ length: 24 }, (_, k) => [k, values[k % values.length]!] as const);
+    const data = new Float32Array([0, 1, 2, 3, 4]);
+    const expected = [16777216, 2147483648, -2147483648, 1, 16777220];
+    expect(expected).toEqual(values.map(f));
+    expect(Array.from(rampShipped(data, short))).toEqual(expected);
+    expect(Array.from(rampShipped(data, long))).toEqual(expected);
+    // Every integer f32 CAN hold comes back exactly, past 2^24 included.
+    const wide = [2 ** 24, 2 ** 25 + 4, -(2 ** 30), 2 ** 31 - 128, 7];
+    const wideData = new Float32Array([0, 1, 2, 3, 4]);
+    expect(Array.from(rampShipped(wideData, wide.map((v, i) => [i, v] as const)))).toEqual(wide);
+  });
+
+  it("changes nothing off a stop: every other input is the pre-fix walk, byte for byte", () => {
+    const rng = new Pcg32(27);
+    let compared = 0;
+    for (const n of [2, 5, 16, 17, 64, 1000]) {
+      for (const style of STYLES) {
+        const stops = randomStops(rng, n, style);
+        const probed = probeColumn(stops, rng, Math.max(64, n), 256);
+        const positions = new Set(stops.map((s) => s[0]));
+        const off = probed.filter((t) => !positions.has(t));
+        expect(off.length).toBeGreaterThan(0);
+        const shipped = rampShipped(off, stops);
+        const before = rampByScan(off, stops, false);
+        const at = firstByteDifference(shipped, before);
+        expect(at, `${style}, ${n} stops: input ${off[at]}`).toBe(-1);
+        compared += off.length;
+      }
+    }
+    expect(compared).toBeGreaterThan(10000);
   });
 
   it("is a constant for one stop, except that NaN stays NaN", () => {
@@ -362,10 +431,11 @@ describe("ramp: the semantics the lookup keeps", () => {
       [Infinity, 2],
     ] as const;
     const data = new Float32Array([-Infinity, -5, 0, 5, 30, Infinity]);
-    // (-5 - -Inf) / (0 - -Inf) is Inf / Inf: NaN — and so is 0, which sits
-    // exactly on the interior stop and so takes the segment BELOW it.
-    // (30 - 0) / (Inf - 0) is 0, so everything above 0 is 1.
-    const expected = [0, Number.NaN, Number.NaN, 1, 1, 2];
+    // (-5 - -Inf) / (0 - -Inf) is Inf / Inf: NaN. 0 sits exactly on the
+    // interior stop, so it is that stop's value, 1 (from the segment below,
+    // as it used to be, it was NaN too). (30 - 0) / (Inf - 0) is 0, so
+    // everything above 0 is 1.
+    const expected = [0, Number.NaN, 1, 1, 1, 2];
     expect(Array.from(rampShipped(data, stops))).toEqual(expected);
     // Bisected: twenty more stops between 0 and +Infinity, all at 1.
     const long: Array<readonly [number, number]> = [stops[0], stops[1]];

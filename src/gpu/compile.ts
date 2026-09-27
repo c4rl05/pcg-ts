@@ -984,9 +984,17 @@ function rampHelperBody(stops: ReadonlyArray<readonly [number, number]>, context
     const vDiff = stops[j][1] - vPrev;
     return `${L(vPrev)} + ${L(vDiff)} * ((t - ${L(tPrev)}) / ${L(tSpan)})`;
   };
+  // An input ON interior stop j answers that stop's value, as the CPU
+  // does, rather than the segment below at u = 1: `vPrev + vDiff * 1`
+  // need not round back to the stop's value (after a much larger
+  // neighbour it cancels to 0), and a table read at its stops,
+  // `ramp(index(), ...)`, is that input at every element. A `select`
+  // rather than a second `if`, so the source still grows by one branch
+  // per stop. The last segment needs none: `t` equal to the last stop
+  // clamped above.
   for (let j = 1; j < last; j++) {
     lines.push(`  if (t <= ${L(stops[j][0])}) {`);
-    lines.push(`    return ${interp(j)};`);
+    lines.push(`    return select(${interp(j)}, ${L(stops[j][1])}, t == ${L(stops[j][0])});`);
     lines.push("  }");
   }
   if (last >= 1) {

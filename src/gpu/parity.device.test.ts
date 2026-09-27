@@ -1022,6 +1022,50 @@ describe.skipIf(testDevice === null)(deviceSuiteName("device parity"), () => {
     expect(strays, "every lane must hold a table entry, never NaN").toEqual([]);
   }, DEVICE_MEASUREMENT_TIMEOUT_MS);
 
+  it("ramp answers a stop's own value ON the stop, on both paths", () => {
+    // THE PROBE THE `ramp` PARITY ROW CANNOT BE: that row reads a length
+    // over a hashed cloud, which lands on a stop position on no lane. An
+    // input ON interior stop k was answered from the segment below at
+    // u = 1, `v[k-1] + (v[k] - v[k-1]) * 1`, which after a much larger
+    // neighbour cancels to 0 — on the device as on the CPU. Both now
+    // answer f32(v[k]). Expected values are the stops' own f32s, stated
+    // from the rule, not read from either path.
+    const geo = makeParityGeometry(64);
+    const P = geo.attrs.point.require("P");
+    const f = Math.fround;
+    const STOPS: ReadonlyArray<readonly [number, number]> = [
+      [0, 1e20],
+      [1, f(-0.238)],
+      [2, 5],
+      [3, 0.1],
+      [4, -1e20],
+      [5, f(0.3)],
+    ];
+    // Every stop, the clamps included, then one input past each end.
+    const ROWS: readonly number[] = [0, 1, 2, 3, 4, 5, -1, 6];
+    const EXPECTED: readonly number[] = [f(1e20), f(-0.238), 5, f(0.1), f(-1e20), f(0.3), f(1e20), f(0.3)];
+    const Pd = P.writable();
+    ROWS.forEach((x, i) => {
+      Pd[i * 3] = x;
+    });
+    const spec: FieldSpecArg = {
+      fn: "ramp",
+      args: [{ fn: "component", args: [{ fn: "position" }], index: 0 }],
+      stops: STOPS.map((s) => [s[0], s[1]]),
+    };
+    const kernel = compileFieldSpec(spec, PARITY_LAYOUT);
+    const [result] = runDeviceTasks([dispatchTask("rampStops", kernel, geo, 64, 1)]);
+    expect(result!.errors).toEqual([]);
+    const gpu = decodeRun(kernel, result!.runs![0]);
+    const cpu = cpuColumn(geo, spec, 1);
+    const wrong: string[] = [];
+    for (let i = 0; i < ROWS.length; i++) {
+      if (!Object.is(cpu.data[i], EXPECTED[i])) wrong.push(`cpu t=${ROWS[i]}: want ${EXPECTED[i]}, got ${cpu.data[i]}`);
+      if (!Object.is(gpu.data[i], EXPECTED[i])) wrong.push(`gpu t=${ROWS[i]}: want ${EXPECTED[i]}, got ${gpu.data[i]}`);
+    }
+    expect(wrong, "a ramp read ON a stop answers that stop's value").toEqual([]);
+  }, DEVICE_MEASUREMENT_TIMEOUT_MS);
+
   it("audit residual probes: NaN min/max, normalize extremes, lattice overflow, subnormals", () => {
     // Deliberately-pathological inputs from the phase-19 audit's residual
     // list. Divergence here is documented GIGO contract, not a defect:

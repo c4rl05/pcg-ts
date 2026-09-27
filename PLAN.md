@@ -72,11 +72,12 @@ Two shapes, for when a device consumer carries a long ramp:
   and the run falls back to the CPU — the runtime's existing contract for
   anything it cannot lower, so it costs nothing new to explain.
 - Stops in a storage buffer and a bisection loop in WGSL. It has to find
-  the segment the CPU finds — the first stop at or above t, so an input ON
-  an interior stop is the top of the segment below — or knife-edge inputs
-  move by more than the published ramp tolerance allows for.
+  the segment the CPU finds — the first stop at or above t — and answer an
+  input ON a stop with that stop's own value, as both paths do since
+  2026-09-27, or knife-edge inputs move by more than the published ramp
+  tolerance allows for.
 
-### A ramp does not return its stop's value at the stop — found 2026-09-27
+### ~~A ramp does not return its stop's value at the stop~~ — SHIPPED 2026-09-27
 
 Found by `pointList`'s byte-identity test against the pointGrid + ramp
 table it replaces. An input ON an interior stop is answered from the
@@ -90,6 +91,26 @@ data is metres), and `pointList` now carries literal tables, but any graph
 that reads a ramp at its stops can. The fix is to return `vs[j]` when the
 input equals a stop exactly — which changes the bytes of every table read
 at a stop that currently rounds, so it wants the golden run beside it.
+
+SHIPPED as proposed, on both paths. The CPU `ramp` (walk and bisection
+alike, one check after the search) answers `vs[j]` when `t === ts[j]`,
+and the WGSL helper mirrors it with a `select` on `t == stop` per
+interior segment, so the device answers the same f32 at a stop instead of
+its own `vPrev + vDiff * 1` (measured on the RTX 5090: 0 for -0.238 after
+1e20, 0.09999990 for 0.1 after 5). Off a stop nothing moved: the new tests
+compare every other probed input against the pre-fix walk byte for byte.
+The integer case is NOT a lookup defect and did not change: integers do
+not cancel in f64, so the old sum was already f32(v); what loses
+2147483647 is the f32 column every ramp writes (2^31, which the i32 store
+wraps). Keeping it would take an integer-typed ramp column, which the GPU
+cannot match; `pointList` is the exact form for such a table. Goldens:
+the corpus is byte-identical (two graphs read a ramp at a stop, 273 hits,
+none of which rounded), and the eiffel golden moved `bracing`, `summit`
+and `uprights` at every depth, bytes only, counts identical: its
+`indexTable` normals carry trig residues (5.6e-17 beside -0.89) that the
+old sum cancelled to 0 and the stop now returns, every move under 1e-12.
+`indexTable`'s own model of the ramp (`want`, in demos/eiffel/lattice.ts)
+still states the old answer and wants updating with the demo's next pass.
 
 ### A one-stop ramp reads past its arrays on a NaN input — found 2026-09-19
 

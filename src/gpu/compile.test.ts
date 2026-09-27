@@ -213,7 +213,7 @@ fn pcg_ramp_0(t: f32) -> f32 {
     return 0f;
   }
   if (t <= 2f) {
-    return 1f + -0.5f * ((t - 0f) / 2f);
+    return select(1f + -0.5f * ((t - 0f) / 2f), 0.5f, t == 2f);
   }
   return 0.5f + -0.5f * ((t - 2f) / 2f);
 }

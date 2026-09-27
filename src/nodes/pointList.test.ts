@@ -338,12 +338,10 @@ describe("pointList", () => {
       }
     });
 
-    it("also for arbitrary doubles, except where the ramp's own arithmetic rounds away", async () => {
-      // A stop hit exactly is answered from the segment BELOW at u = 1:
-      // f32(v[k-1] + (v[k] - v[k-1])), which is f32(v[k]) unless v[k]
-      // sits within a double rounding of an f32 midpoint. pointList stores
-      // f32(v[k]), the correctly rounded one. State both models exactly
-      // and check each form against its own.
+    it("also for arbitrary doubles: a stop hit exactly answers the stop's own f32", async () => {
+      // pointList stores f32(v[k]); a ramp read ON stop k answers f32(v[k])
+      // too (it used to answer the segment below at u = 1, which could
+      // round away — see the two cases after this one).
       const rng = new Pcg32(7);
       const n = 300;
       const xyz = Array.from({ length: n * 3 }, () => rng.range(-500, 500));
@@ -351,46 +349,48 @@ describe("pointList", () => {
       const kind = Array.from({ length: n }, () => Math.floor(rng.range(-1000, 1000)));
       const up = Array.from({ length: n * 3 }, () => rng.range(-1, 1));
       const [a, b] = await bothForms(n, xyz, h, kind, up);
-      const rampModel = (vs: readonly number[]) =>
-        vs.map((v, i) => (i === 0 || i === vs.length - 1 ? f32(v) : f32(vs[i - 1]! + (v - vs[i - 1]!))));
       expect(column(b, "h")).toEqual(h.map(f32));
-      expect(column(a, "h")).toEqual(rampModel(h));
+      expect(column(a, "h")).toEqual(h.map(f32));
       expect(column(b, "kind")).toEqual(column(a, "kind"));
-      // On this sample the two models agree everywhere, so the forms do.
-      expect(rampModel(h)).toEqual(h.map(f32));
       expect(snapshotGeometry(b)).toEqual(snapshotGeometry(a));
     });
 
-    it("diverges beside a much larger neighbour, where the ramp loses the value", async () => {
-      // (v - 1e20) rounds away v in double, so the stop reads back 0.
+    it("agrees beside a much larger neighbour, where the ramp used to lose the value", async () => {
+      // (v - 1e20) rounds v away in double, so the segment below read back
+      // 0; the stop's own value is what both forms now store.
       const h = [0, 1e20, f32(-0.238), 5];
       const pos = Array.from({ length: 12 }, (_, j) => (j % 3 === 0 ? j / 3 : 0));
       const [a, b] = await bothForms(4, pos, h, [0, 0, 0, 0], new Array(12).fill(0));
-      expect(column(a, "h")[2]).toBe(0);
+      expect(column(a, "h")[2]).toBe(f32(-0.238));
       expect(column(b, "h")[2]).toBe(f32(-0.238));
+      expect(snapshotGeometry(b)).toEqual(snapshotGeometry(a));
     });
 
-    it("stores integers past 2^24 exactly, which a ramp (computing in f32) cannot", async () => {
+    it("stores integers past 2^24 exactly, which a ramp (writing an f32 column) cannot", async () => {
+      // The one divergence left, and it is the column's, not the lookup's:
+      // every ramp writes f32, so 16777217 is 16777216 and 2147483647 is
+      // 2^31, which the i32 store wraps to -2147483648.
       const kind = [16777217, 2147483647, -2147483648, 1];
       const pos = Array.from({ length: 12 }, (_, j) => (j % 3 === 0 ? j / 3 : 0));
       const [a, b] = await bothForms(4, pos, [0, 0, 0, 0], kind, new Array(12).fill(0));
       expect(column(b, "kind")).toEqual(kind);
-      expect(column(a, "kind")).not.toEqual(kind);
+      expect(column(a, "kind")).toEqual([16777216, -2147483648, -2147483648, 1]);
       const id = await list({ positions: [0, 0, 0], columnNames: ["id"], columnTypes: ["u32"], columnValues: [4294967295] });
       expect(column(id, "id")).toEqual([4294967295]);
     });
 
-    it("the one divergence is the ramp's, and pointList is the correctly rounded side", async () => {
+    it("agrees one double ulp above an f32 midpoint, where the ramp used to round the other way", async () => {
       // v is one double ulp above the midpoint between 1 and the next f32,
-      // so f32(v) rounds UP. Reached from 3.0003, the ramp's round trip
-      // 3.0003 + (v - 3.0003) loses that ulp, lands ON the midpoint, and
-      // rounds to even: 1.
+      // so f32(v) rounds UP. Reached from 3.0003, the old answer's round
+      // trip 3.0003 + (v - 3.0003) lost that ulp, landed ON the midpoint,
+      // and rounded to even: 1. Both forms now store f32(v).
       const v = 1 + 2 ** -24 + 2 ** -52;
       const h = [3.0003, v, 0];
       const [a, b] = await bothForms(3, [0, 0, 0, 1, 0, 0, 2, 0, 0], h, [0, 0, 0], new Array(9).fill(0));
-      expect(column(b, "h")[1]).toBe(f32(v));
       expect(f32(v)).toBe(1 + 2 ** -23);
-      expect(column(a, "h")[1]).toBe(1);
+      expect(column(b, "h")[1]).toBe(f32(v));
+      expect(column(a, "h")[1]).toBe(f32(v));
+      expect(f32(3.0003 + (v - 3.0003))).toBe(1);
     });
   });
 });
