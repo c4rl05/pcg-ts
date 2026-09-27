@@ -47,7 +47,7 @@ export function buildEiffel(seed = 1889, detail: Detail = {}): Graph {
       buildPlatforms(g, quads),
       buildLifts(g, quads, detail),
       buildFlag(g),
-      buildGround(g),
+      buildGround(g, quads),
       detail.build === true ? buildErection(g, quads) : {},
       detail.build === true ? buildCranes(g) : {},
     ),
