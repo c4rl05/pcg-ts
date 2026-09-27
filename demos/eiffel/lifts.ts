@@ -160,6 +160,25 @@ interface Block {
   readonly size: Vec3;
 }
 
+/**
+ * Where a spoked wheel stands: its centre, its axle (unit), the direction
+ * its first spoke lies toward, and its make ({@link wheelBlocks}). The
+ * graph builds each make once and copies it onto every wheel of it
+ * ({@link gear}).
+ */
+interface Wheel {
+  readonly centre: Vec3;
+  readonly axis: Vec3;
+  readonly ref: Vec3;
+  readonly spec: WheelSpec;
+}
+
+/** A part as the graph takes it: its boxes, and its wheels ({@link gear}). */
+interface Gear {
+  readonly blocks: readonly Block[];
+  readonly wheels: readonly Wheel[];
+}
+
 const SQ2 = Math.SQRT2;
 const UP: Vec3 = [0, 1, 0];
 /** Out along the +x+z leg's diagonal, horizontal. */
@@ -431,6 +450,8 @@ const TROUGH = 1.1;
 interface CarBody {
   /** The boxes, about the axle midpoint on the rail. */
   readonly blocks: readonly Block[];
+  /** The running wheels (the Roux's), about the same point. */
+  readonly wheels: readonly Wheel[];
   /** The slope, in radians, on which the floors are level. */
   readonly level: number;
   /** Axle to axle along the rails: the chassis' length. */
@@ -551,6 +572,7 @@ function carBody(spec: CarSpec): CarBody {
   // the head at most, never through it. Built, a corner points straight
   // down, so on the straight every wheel stands on its head.
   let ride = 0;
+  const wheels: Wheel[] = [];
   if (spec.running !== undefined) {
     const { diameter, width } = spec.running;
     const t = inPlane(-Math.cos(level), Math.sin(level));
@@ -571,7 +593,7 @@ function carBody(spec: CarSpec): CarBody {
       const c = add3(onDiag(rOf(y), y), mul3(n, ride));
       const ends = [-1, 1].map((side) => add3(c, mul3(E, (side * spec.gauge) / 2)));
       for (const w of ends) {
-        raw.push(...wheelBlocks(w, E, ref, { diameter: drawn, rim: 0.06, width, spokes: 6, spoke: 0.05, hub: 0.16, sag }));
+        wheels.push({ centre: w, axis: E, ref, spec: { diameter: drawn, rim: 0.06, width, spokes: 6, spoke: 0.05, hub: 0.16, sag } });
       }
       raw.push(member(ends[0] as Vec3, ends[1] as Vec3, 0.12, n));
       // The chassis' top stands 0.35 over the rail line; the axle's 0.51.
@@ -587,6 +609,7 @@ function carBody(spec: CarSpec): CarBody {
   const mid = add3(onDiag(rOf(yMid), yMid), mul3(n, ride));
   return {
     blocks: raw.map((b) => ({ ...b, at: sub3(b.at, mid) })),
+    wheels: wheels.map((w) => ({ ...w, centre: sub3(w.centre, mid) })),
     level,
     wheelbase: (yHigh - yLow) / Math.sin(level),
     floor: sub3(onDiag(r1, 0), mid),
@@ -628,6 +651,9 @@ function onLeg(k: number, p: Vec3): Vec3 {
   if (k === 2) return [-p[0], p[1], -p[2]];
   return [-p[2], p[1], p[0]];
 }
+
+/** A leg-frame axis (a tube's ends) onto quadrant target k. */
+const onLegs = (k: number, axis: readonly [Vec3, Vec3]): readonly [Vec3, Vec3] => [onLeg(k, axis[0]), onLeg(k, axis[1])];
 
 /**
  * The unit box's outward face normals, point by point: meshPrimitive's box
@@ -671,12 +697,27 @@ function blocks(g: Graph, id: string, list: readonly Block[]): NodeHandle {
     `${id}Unit`,
   );
   g.connect(bare, "out", unit, "in");
+  return onFrames(g, id, unit, list, list.map((b) => b.size));
+}
+
+/**
+ * A mesh copied onto frames, one copy each: a target per frame carrying
+ * its centre as P, its turn as `rot` and (given `sizes`) its size as
+ * `scale`; the mesh's `normal` turns with it.
+ */
+function onFrames(
+  g: Graph,
+  id: string,
+  source: NodeHandle,
+  list: ReadonlyArray<Pick<Block, "at" | "x" | "y">>,
+  sizes?: readonly Vec3[],
+): NodeHandle {
   const slots = g.add(
     pointGrid,
     { countX: list.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
     `${id}Slots`,
   );
-  const col = (pick: (b: Block) => number) => indexTable(list.map(pick));
+  const col = (pick: (b: Pick<Block, "at" | "x" | "y">) => number) => indexTable(list.map(pick));
   const quats = list.map((b) => frameQuat(b.x, b.y));
   const place = g.add(
     setAttribute,
@@ -688,16 +729,13 @@ function blocks(g: Graph, id: string, list: readonly Block[]): NodeHandle {
     },
     `${id}Place`,
   );
-  const size = g.add(
-    setAttribute,
-    {
-      name: "scale",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(col((b) => b.size[0]), col((b) => b.size[1]), col((b) => b.size[2])),
-    },
-    `${id}Size`,
-  );
+  g.connect(slots, "out", place, "in");
+  let last = place;
+  if (sizes !== undefined) {
+    const size = (i: number) => indexTable(sizes.map((v) => v[i] as number));
+    last = g.add(setAttribute, { name: "scale", type: "f32", tupleSize: 3, value: vec(size(0), size(1), size(2)) }, `${id}Size`);
+    g.connect(place, "out", last, "in");
+  }
   const q = (i: number) => indexTable(quats.map((r) => r[i] as number));
   const rot = g.add(
     setAttribute,
@@ -705,12 +743,55 @@ function blocks(g: Graph, id: string, list: readonly Block[]): NodeHandle {
     `${id}Turn`,
   );
   const out = g.add(copyToPoints, { topology: "keep", rotateAttrs: ["normal"] }, id);
-  g.connect(slots, "out", place, "in");
-  g.connect(place, "out", size, "in");
-  g.connect(size, "out", rot, "in");
-  g.connect(unit, "out", out, "source");
+  g.connect(last, "out", rot, "in");
+  g.connect(source, "out", out, "source");
   g.connect(rot, "out", out, "target");
   return out;
+}
+
+/** Each graph's wheel makes, built once each ({@link wheelTemplate}). */
+const WHEEL_TEMPLATES = new WeakMap<Graph, Map<string, NodeHandle>>();
+
+/**
+ * A wheel make as one mesh about the origin, its axle +z and its first
+ * spoke +x: built the first time a graph asks for it, then shared by
+ * every wheel of that make.
+ */
+function wheelTemplate(g: Graph, spec: WheelSpec): NodeHandle {
+  let made = WHEEL_TEMPLATES.get(g);
+  if (made === undefined) WHEEL_TEMPLATES.set(g, (made = new Map()));
+  const key = JSON.stringify(spec);
+  let node = made.get(key);
+  if (node === undefined) {
+    node = blocks(g, `liftWheel${made.size}`, wheelBlocks(spec));
+    made.set(key, node);
+  }
+  return node;
+}
+
+/**
+ * A part as one mesh: its boxes, and each of its wheels its make's
+ * template turned onto the wheel's frame, the frame {@link wheelBlocks}
+ * builds about (the first spoke's direction x, then the axle × x, so
+ * the template's +z lands on the axle).
+ */
+function gear(g: Graph, id: string, part: Gear): NodeHandle {
+  const makes = new Map<string, Wheel[]>();
+  for (const w of part.wheels) {
+    const key = JSON.stringify(w.spec);
+    makes.set(key, [...(makes.get(key) ?? []), w]);
+  }
+  const build: Array<(id: string) => NodeHandle> = [];
+  if (part.blocks.length > 0) build.push((to) => blocks(g, to, part.blocks));
+  for (const list of makes.values()) {
+    const frames = list.map((w) => {
+      const x = unit3(sub3(w.ref, mul3(w.axis, dot3(w.ref, w.axis))));
+      return { at: w.centre, x, y: cross3(w.axis, x) };
+    });
+    build.push((to) => onFrames(g, to, wheelTemplate(g, (list[0] as Wheel).spec), frames));
+  }
+  if (build.length === 1) return (build[0] as (id: string) => NodeHandle)(id);
+  return merge(g, id, build.map((b, i) => b(`${id}${i}`)));
 }
 
 /**
@@ -1752,7 +1833,7 @@ function cutLine(line: RunLine, s0: number, s1: number): RunLine {
  * `RunLine.chordSpan`), so both axles are on it throughout; that both ends
  * are still on the built rail is checked here, not assumed.
  */
-function legRun(k: number): { run: CarRun; blocks: Block[]; rail: RunLine; railStart: number; body: CarBody } {
+function legRun(k: number): { run: CarRun; blocks: Block[]; wheels: Wheel[]; rail: RunLine; railStart: number; body: CarBody } {
   const system = PILES[k]?.lift === "roux" ? "roux" : "otis";
   const spec = system === "roux" ? ROUX_CAR : OTIS_CAR;
   const body = carBody(spec);
@@ -1822,7 +1903,8 @@ function legRun(k: number): { run: CarRun; blocks: Block[]; rail: RunLine; railS
   const tip = (pose[3] as number) - body.level;
   const turn = (v: Vec3): Vec3 => rotate3(onLeg(k, v), axis, tip);
   const placed = body.blocks.map((b) => ({ at: add3(mid, turn(b.at)), x: turn(b.x), y: turn(b.y), size: b.size }));
-  return { run, blocks: placed, rail, railStart: s0, body };
+  const wheels = body.wheels.map((w) => ({ ...w, centre: add3(mid, turn(w.centre)), axis: turn(w.axis), ref: turn(w.ref) }));
+  return { run, blocks: placed, wheels, rail, railStart: s0, body };
 }
 
 /** The four leg cars, per quadrant target: each run and its body where the graph builds it. */
@@ -2271,51 +2353,49 @@ export function wheelRimChords(diameter: number, sag: number): number {
   return Math.max(RIM_CHORDS_MIN, flatsSides(diameter, sag));
 }
 
+/** A spoked wheel's make, as {@link wheelBlocks} takes it. */
+interface WheelSpec {
+  readonly diameter: number;
+  readonly rim: number;
+  readonly width: number;
+  readonly spokes: number;
+  readonly spoke: number;
+  readonly hub: number;
+  readonly teeth?: Vec3;
+  readonly sag?: number;
+}
+
 /**
- * A spoked wheel as blocks, about its centre: a rim of chords, `spokes`
- * spokes, a hub, and (with `teeth`, their size along the rim, out, and
- * across) a tooth at every spoke on the rim's outer face. `axis` is the
- * axle (unit), `ref` any direction the first spoke lies toward. The rim's
- * chords are smoothness, not structure: the fewest whose outer corners
- * stand within `sag` (default `SAG.near`) of the wheel's circle
- * ({@link wheelRimChords}); the spokes are the wheel's own count.
+ * A spoked wheel's make as blocks, about the origin, its axle +z and its
+ * first spoke +x (each wheel is this turned onto its own frame, `gear`):
+ * a rim of chords, `spokes` spokes, a hub, and (with `teeth`, their size
+ * along the rim, out, and across) a tooth at every spoke on the rim's
+ * outer face. The rim's chords are smoothness, not structure: the fewest
+ * whose outer corners stand within `sag` (default `SAG.near`) of the
+ * wheel's circle ({@link wheelRimChords}); the spokes are the wheel's own
+ * count. The hub is the last block: a wheel's mesh ends in it.
  */
-function wheelBlocks(
-  centre: Vec3,
-  axis: Vec3,
-  ref: Vec3,
-  o: {
-    readonly diameter: number;
-    readonly rim: number;
-    readonly width: number;
-    readonly spokes: number;
-    readonly spoke: number;
-    readonly hub: number;
-    readonly teeth?: Vec3;
-    readonly sag?: number;
-  },
-): Block[] {
+function wheelBlocks(o: WheelSpec): Block[] {
+  const Z: Vec3 = [0, 0, 1];
   const r = o.diameter / 2 - o.rim / 2;
-  const e1 = unit3(sub3(ref, mul3(axis, dot3(ref, axis))));
-  const e2 = cross3(axis, e1);
-  const dir = (a: number): Vec3 => add3(mul3(e1, Math.cos(a)), mul3(e2, Math.sin(a)));
+  const dir = (a: number): Vec3 => [Math.cos(a), Math.sin(a), 0];
   const out: Block[] = [];
   const segments = wheelRimChords(o.diameter, o.sag ?? SAG.near);
   const chord = 2 * (r + o.rim / 2) * Math.sin(Math.PI / segments);
   for (let i = 0; i < segments; i++) {
     const d = dir(((i + 0.5) * 2 * Math.PI) / segments);
-    out.push({ at: add3(centre, mul3(d, r)), x: cross3(axis, d), y: d, size: [chord, o.rim, o.width] });
+    out.push({ at: mul3(d, r), x: cross3(Z, d), y: d, size: [chord, o.rim, o.width] });
   }
   for (let i = 0; i < o.spokes; i++) {
     const d = dir((i * 2 * Math.PI) / o.spokes);
     const len = r - o.hub / 2;
-    out.push({ at: add3(centre, mul3(d, o.hub / 2 + len / 2)), x: d, y: axis, size: [len, o.spoke, o.spoke] });
+    out.push({ at: mul3(d, o.hub / 2 + len / 2), x: d, y: Z, size: [len, o.spoke, o.spoke] });
     if (o.teeth !== undefined) {
       const [tl, th, tw] = o.teeth;
-      out.push({ at: add3(centre, mul3(d, o.diameter / 2 + th / 2)), x: cross3(axis, d), y: d, size: [tl, th, tw] });
+      out.push({ at: mul3(d, o.diameter / 2 + th / 2), x: cross3(Z, d), y: d, size: [tl, th, tw] });
     }
   }
-  out.push({ at: centre, x: e1, y: e2, size: [o.hub, o.hub, o.width * 2] });
+  out.push({ at: [0, 0, 0], x: [1, 0, 0], y: [0, 1, 0], size: [o.hub, o.hub, o.width * 2] });
   return out;
 }
 
@@ -2645,10 +2725,10 @@ const ROUX_WHEELS = ROUX_PARTS.flatMap(({ k, side, chain }) => rouxWheels(chain,
  * in the sense the chain runs round it. Also where the teeth go: between
  * the chain's axles, as the chain was built.
  */
-function rouxWheels(chain: ChainRun, k: number, side: number): Array<{ name: string; blocks: Block[]; follower: Follower }> {
+function rouxWheels(chain: ChainRun, k: number, side: number): Array<{ name: string; wheel: Wheel; follower: Follower }> {
   const C = ROUX_CIRCUIT;
   const lift = (p: P2): Vec3 => onLeg(k, onDiag(p[0], p[1], side * C.lateral));
-  const out: Array<{ name: string; blocks: Block[]; follower: Follower }> = [];
+  const out: Array<{ name: string; wheel: Wheel; follower: Follower }> = [];
   for (const [which, w, spec] of [
     ["wheel", ROUX_LOOP2.wheel, C.wheel],
     ["pulley", ROUX_LOOP2.pulley, C.pulley],
@@ -2673,7 +2753,7 @@ function rouxWheels(chain: ChainRun, k: number, side: number): Array<{ name: str
         }
       }
     }
-    const blocks = wheelBlocks(centre, axis, ref, {
+    const make: WheelSpec = {
       diameter: spec.rim,
       rim: 0.1,
       width: spec.width,
@@ -2686,10 +2766,10 @@ function rouxWheels(chain: ChainRun, k: number, side: number): Array<{ name: str
       // The teeth « 445 » long on the rim [sourced PL-XXIII bis Fig. 36],
       // up to the bars' underside midway between two axles.
       ...(which === "wheel" ? { teeth: [0.445, 0.035, 0.12] as Vec3 } : {}),
-    });
+    };
     out.push({
       name: `${chain.name}.${which}`,
-      blocks,
+      wheel: { centre, axis, ref, spec: make },
       // A pitch of chain turns it by the angle one piece subtends on it,
       // 2 asin(pitch / 2r): 30° on R, « 12m00 par tour de roue » [sourced
       // PL-XXIII Fig. 3], so the joints ride it without drifting.
@@ -2705,7 +2785,8 @@ function rouxWheels(chain: ChainRun, k: number, side: number): Array<{ name: str
 }
 
 /**
- * The still parts of one circuit: the double duct over the car's course,
+ * The still parts of one circuit, in the +x+z leg (`buildLifts` copies
+ * them onto the Roux legs): the double duct over the car's course,
  * a bracket every 2.30 [sourced p. ~118], the wheels' shafts and
  * bearings, and the pulley's frame. The duct is three U-irons: its outer
  * plates, its middle plate and its sides, the lower channel's inboard
@@ -2714,13 +2795,13 @@ function rouxWheels(chain: ChainRun, k: number, side: number): Array<{ name: str
  * them: the book's duct wraps both wheels too (« gaine circulaire »),
  * left out here so the chain can be seen.
  */
-function rouxDuct(k: number, side: number): Block[] {
+function rouxDuct(side: number): Block[] {
   const C = ROUX_CIRCUIT;
   const D = C.duct;
   const out: Block[] = [];
   const upper = ROUX_LOOP2.upper;
   // The double duct: where the upper strand runs in it, over the lower.
-  const lift = (p: P2, l: number): Vec3 => onLeg(k, onDiag(p[0], p[1], side * C.lateral + l));
+  const lift = (p: P2, l: number): Vec3 => onDiag(p[0], p[1], side * C.lateral + l);
   const half = D.across / 2;
   // Inboard is toward the track's centre line.
   const inboard = -side;
@@ -2778,14 +2859,14 @@ function rouxDuct(k: number, side: number): Block[] {
  * centre [measured PL-XXIII Fig. 4]; R''s on « deux traverses horizontales
  * » carried by the lift girders [sourced p. ~118], here a traverse under
  * the bearings on two posts down to the girders' top [the form
- * estimated]. Blocks, and the shafts as tube axes.
+ * estimated]. Blocks, and the shafts as tube axes, in the +x+z leg as
+ * `rouxDuct` is.
  */
-function rouxFrames(k: number): { blocks: Block[]; shafts: Array<{ axis: readonly [Vec3, Vec3]; diameter: number }> } {
+function rouxFrames(): { blocks: Block[]; shafts: Array<{ axis: readonly [Vec3, Vec3]; diameter: number }> } {
   const C = ROUX_CIRCUIT;
   const out: Block[] = [];
   const shafts: Array<{ axis: readonly [Vec3, Vec3]; diameter: number }> = [];
-  const across = onLeg(k, E);
-  const at = (p: P2, l: number): Vec3 => onLeg(k, onDiag(p[0], p[1], l));
+  const at = (p: P2, l: number): Vec3 => onDiag(p[0], p[1], l);
   // The bearings stand either side of each wheel's hub (0.48 wide), 0.45
   // off its plane; the shaft runs out past the outer ones [estimated].
   const reach = C.lateral + 0.65;
@@ -2987,10 +3068,12 @@ function frameBox(k: number, f: Frame2, along: number, out: number, l: number, s
 const otisRun = (k: number): CarRun => (LEG_CARS[k] as (typeof LEG_CARS)[number]).run;
 
 /**
- * The Otis motor on leg k that stands still: the girders and their ties,
- * the cylinder (as a tube axis), the six fixed pulleys.
+ * The Otis motor that stands still, in the +x+z leg (`buildLifts` copies
+ * it onto the Otis legs): the girders and their ties, the cylinder (as a
+ * tube axis), the six fixed pulleys.
  */
-function otisMotor(k: number): { blocks: Block[]; cylinder: readonly [Vec3, Vec3]; wheels: Block[] } {
+function otisMotor(): Gear & { blocks: Block[]; cylinder: readonly [Vec3, Vec3] } {
+  const k = 0;
   const M = OTIS_GEAR.motor;
   const f = OTIS_FRAMES.motor;
   const out: Block[] = [];
@@ -3018,7 +3101,7 @@ function otisMotor(k: number): { blocks: Block[]; cylinder: readonly [Vec3, Vec3
   for (const along of [cFoot + 0.5, cFoot + M.cylinder.length - 0.5]) {
     out.push(frameBox(k, f, along, (cradleTop - M.depth / 2) / 2, 0, [0.3, cradleTop + M.depth / 2, M.apart]));
   }
-  const wheels: Block[] = [];
+  const wheels: Wheel[] = [];
   // Three fixed pulleys in the lower group and two in the upper, and the
   // guide pulley « a » over them the garant leaves by: « 5 poulies fixes »
   // and the dead end [sourced p. 133; heights measured PL-XX Fig. 4].
@@ -3030,7 +3113,7 @@ function otisMotor(k: number): { blocks: Block[]; cylinder: readonly [Vec3, Vec3
   ] as const) {
     const along = OTIS_FRAMES.toY(f, y, M.pulleyOut);
     for (const l of across) {
-      wheels.push(...wheelBlocks(onLegAt(k, at2f(f, along, M.pulleyOut), l), onLeg(k, E), UP, pulley(M.pulley)));
+      wheels.push({ centre: onLegAt(k, at2f(f, along, M.pulleyOut), l), axis: E, ref: UP, spec: pulley(M.pulley) });
     }
     // The shafts [estimated: « poulies fixes » the girders carry]. The
     // upper pair's axis and the guide's are 0.51 apart, inside their rims
@@ -3074,7 +3157,7 @@ const pulley = (d: number) => ({ diameter: d, rim: 0.08, width: 0.12, spokes: 6,
  * The Otis carriage on leg k as built, the car at its `at`: frame, six
  * travelling pulleys, four rollers and the piston's rods; and how it moves.
  */
-function otisCarriage(k: number): { blocks: Block[]; follower: Follower } {
+function otisCarriage(k: number): Gear & { follower: Follower } {
   const M = OTIS_GEAR.motor;
   const C = M.carriage;
   const f = OTIS_FRAMES.motor;
@@ -3085,12 +3168,13 @@ function otisCarriage(k: number): { blocks: Block[]; follower: Follower } {
   const lowTop = OTIS_FRAMES.toY(f, C.lowerAtTop, M.pulleyOut);
   const lower = lowTop + (run.to - run.at) / 12;
   const out: Block[] = [];
+  const wheels: Wheel[] = [];
   const mid = lower + C.groups / 2;
   // The frame: two side plates the carriage's length, over the pulleys' hubs.
   for (const side of [-1, 1]) out.push(frameBox(k, f, mid, M.pulleyOut, side * (M.across + 0.2), [C.length, 0.5, 0.06]));
   for (const along of [lower, lower + C.groups]) {
     for (const l of [-M.across, 0, M.across]) {
-      out.push(...wheelBlocks(onLegAt(k, at2f(f, along, M.pulleyOut), l), onLeg(k, E), UP, pulley(M.pulley)));
+      wheels.push({ centre: onLegAt(k, at2f(f, along, M.pulleyOut), l), axis: onLeg(k, E), ref: UP, spec: pulley(M.pulley) });
     }
     // The group's shaft, across through its hubs into both side plates
     // [estimated: the frame carries its pulleys].
@@ -3112,15 +3196,16 @@ function otisCarriage(k: number): { blocks: Block[]; follower: Follower } {
   // the carriage, so they end in its frame, not beside it].
   out.push(frameBox(k, f, rodTop, (M.cylinder.out + M.pulleyOut) / 2, 0, [0.2, 0.25, 2 * (M.across + 0.23)]));
   const up = unit3(sub3(onLegAt(k, at2f(f, 1, 0)), onLegAt(k, at2f(f, 0, 0))));
-  return { blocks: out, follower: { name, lead: run.name, slide: mul3(up, -1 / 12) } };
+  return { blocks: out, wheels, follower: { name, lead: run.name, slide: mul3(up, -1 / 12) } };
 }
 
 /**
- * The counterweight track on leg k: its two girders from the foot to
- * XXIV, their rails, a tie at every tronçon's joint; and the fixed pulley
- * Pou7 and the return pulleys N°1 and N°2.
+ * The counterweight track, in the +x+z leg as `otisMotor` is: its two
+ * girders from the foot to XXIV, their rails, a tie at every tronçon's
+ * joint; and the fixed pulley Pou7 and the return pulleys N°1 and N°2.
  */
-function otisCounterTrack(k: number): { blocks: Block[]; wheels: Block[]; foot: number; head: number } {
+function otisCounterTrack(): Gear & { blocks: Block[] } {
+  const k = 0;
   const C = OTIS_GEAR.counter;
   const f = OTIS_FRAMES.counter;
   const foot = OTIS_FRAMES.toY(f, C.foot);
@@ -3144,7 +3229,7 @@ function otisCounterTrack(k: number): { blocks: Block[]; wheels: Block[]; foot: 
   for (let along = foot; along <= head + 1e-6; along += C.tronçon) {
     out.push(frameBox(k, f, along, -C.depth / 2, 0, [0.15, 0.27, C.apart]));
   }
-  const wheels: Block[] = [];
+  const wheels: Wheel[] = [];
   // Pou7 at the track's head and N°1 past it, lying flat in the reeving's
   // plane (N°1 « à peu près à plat », z 52.5 [measured PL-XX]).
   const n3 = unit3(sub3(onLegAt(k, at2f(f, 0, 1)), onLegAt(k, at2f(f, 0, 0))));
@@ -3165,7 +3250,7 @@ function otisCounterTrack(k: number): { blocks: Block[]; wheels: Block[]; foot: 
   ] as const) {
     const along = OTIS_FRAMES.toY(f, y, R.out);
     const hub = at2f(f, along, R.out);
-    wheels.push(...wheelBlocks(onLegAt(k, hub, l), n3, t3, { ...pulley(d), width: 0.08 }));
+    wheels.push({ centre: onLegAt(k, hub, l), axis: n3, ref: t3, spec: { ...pulley(d), width: 0.08 } });
     const seg = rail.findIndex((_, i) => i + 1 < rail.length && (rail[i + 1] as P2)[1] > hub[1]);
     const g = frame2(rail[seg] as P2, rail[seg + 1] as P2);
     // The beam's mid-depth, under the girders' bottom, square to g.
@@ -3181,7 +3266,7 @@ function otisCounterTrack(k: number): { blocks: Block[]; wheels: Block[]; foot: 
   // 36], turning the cables up the leg in the diagonal plane [orientation
   // estimated], at the floor, z 57.8 [measured].
   const n2: P2 = [cornerA(FLOORS.first) + C.n2.a, 57.8];
-  wheels.push(...wheelBlocks(onLegAt(k, n2), onLeg(k, E), UP, pulley(C.n2.diameter)));
+  wheels.push({ centre: onLegAt(k, n2), axis: E, ref: UP, spec: pulley(C.n2.diameter) });
   // It hangs in the floor's slot for the cables (open 0.65 either side of
   // it, its edge 0.15-0.2 in from its axis [measured on the model]): its
   // shaft across to a bracket on the floor each side, 0.3 on the deck and
@@ -3191,14 +3276,14 @@ function otisCounterTrack(k: number): { blocks: Block[]; wheels: Block[]; foot: 
   for (const side of [-1, 1]) {
     out.push({ at: onLegAt(k, [n2[0] - 0.175, FLOORS.first + high / 2], side * 0.85), x: onLeg(k, U), y: UP, size: [0.55, high, 0.2] });
   }
-  return { blocks: out, wheels, foot, head };
+  return { blocks: out, wheels };
 }
 
 /**
  * The truck on leg k as built, and its three cable strands up to the
  * track's head; how each moves.
  */
-function otisTruck(k: number): { truck: Block[]; strands: Array<{ name: string; blocks: Block[]; follower: Follower }>; follower: Follower } {
+function otisTruck(k: number): { truck: Gear; strands: Array<{ name: string; blocks: Block[]; follower: Follower }>; follower: Follower } {
   const C = OTIS_GEAR.counter;
   const T = C.truck;
   const f = OTIS_FRAMES.counter;
@@ -3241,7 +3326,7 @@ function otisTruck(k: number): { truck: Block[]; strands: Array<{ name: string; 
   const R = OTIS_REEVING;
   const gp = upper - T.poulieIn;
   const gpOut = R.out;
-  out.push(...wheelBlocks(onLegAt(k, at2f(f, gp, gpOut)), n3, t3, { ...pulley(C.poulie), width: 0.08 }));
+  const wheels: Wheel[] = [{ centre: onLegAt(k, at2f(f, gp, gpOut)), axis: n3, ref: t3, spec: { ...pulley(C.poulie), width: 0.08 } }];
   // The equalizer's rod T, out past the poulie's rim to its strand.
   const eq = gp + Math.sqrt((C.poulie / 2) ** 2 - R.strands.c ** 2) + 0.1;
   out.push(frameBox(k, f, (upper + eq) / 2, gpOut, R.strands.c, [eq - upper, 0.06, 0.06]));
@@ -3265,7 +3350,7 @@ function otisTruck(k: number): { truck: Block[]; strands: Array<{ name: string; 
       follower: { name, lead: run.name, stretch: { anchor: b, along: mul3(t3, -1), length: top - from, rate: 1 / 3 } },
     });
   }
-  return { truck: out, strands, follower };
+  return { truck: { blocks: out, wheels }, strands, follower };
 }
 
 /** The Otis legs, quadrant targets 1 (pile 3 Sud) and 3 (pile 1 Nord). */
@@ -3317,18 +3402,17 @@ function edouxParts(g: Graph): { machinery: NodeHandle[]; cars: Array<{ name: st
     },
     ...EDOUX_PULLEYS.map((p) => ({
       name: p.name,
-      mesh: blocks(
-        g,
-        carId(p.name),
-        wheelBlocks(p.centre, T_HAT, UP, {
-          diameter: p.flange,
-          rim: 0.05,
-          width: EDOUX_GEAR.pulley.width,
-          spokes: 4,
-          spoke: 0.16,
-          hub: EDOUX_GEAR.pulley.hub,
-        }),
-      ),
+      mesh: gear(g, carId(p.name), {
+        blocks: [],
+        wheels: [
+          {
+            centre: p.centre,
+            axis: T_HAT,
+            ref: UP,
+            spec: { diameter: p.flange, rim: 0.05, width: EDOUX_GEAR.pulley.width, spokes: 4, spoke: 0.16, hub: EDOUX_GEAR.pulley.hub },
+          },
+        ],
+      }),
     })),
     ...EDOUX_DROPS.map((d) => ({
       name: d.name,
@@ -3363,33 +3447,41 @@ export function buildLifts(g: Graph, quads: NodeHandle, detail: Detail = {}): Pa
   const cars = [
     ...CAR_NAME.map((name, k) => ({
       name,
-      mesh: blocks(g, carId(name), (LEG_CARS[k] as { blocks: Block[] }).blocks),
+      mesh: gear(g, carId(name), LEG_CARS[k] as Gear),
     })),
     ...edoux.cars,
-    ...ROUX_WHEELS.map((w) => ({ name: w.name, mesh: blocks(g, carId(w.name), w.blocks) })),
+    ...ROUX_WHEELS.map((w) => ({ name: w.name, mesh: gear(g, carId(w.name), { blocks: [], wheels: [w.wheel] }) })),
     ...OTIS_MOVING.flatMap(({ carriage, truck }) => [
-      { name: carriage.follower.name, mesh: blocks(g, carId(carriage.follower.name), carriage.blocks) },
-      { name: truck.follower.name, mesh: blocks(g, carId(truck.follower.name), truck.truck) },
+      { name: carriage.follower.name, mesh: gear(g, carId(carriage.follower.name), carriage) },
+      { name: truck.follower.name, mesh: gear(g, carId(truck.follower.name), truck.truck) },
       ...truck.strands.map((x) => ({ name: x.name, mesh: blocks(g, carId(x.name), x.blocks) })),
     ]),
   ];
-  const otis = OTIS_LEGS.map((k) => ({ motor: otisMotor(k), counter: otisCounterTrack(k) }));
+  // The machinery that stands still is built once, in the +x+z leg, and
+  // copied onto its legs as the tracks are. The tubes are not: a tube is
+  // swept where it stands (`tubes`), so its facets' roll is set by the
+  // world's +x, which a copy would turn with it.
+  const motor = otisMotor();
+  const counter = otisCounterTrack();
   const otisStill = [
-    blocks(g, "liftOtisGear", otis.flatMap(({ motor, counter }) => [...motor.blocks, ...motor.wheels, ...counter.blocks, ...counter.wheels])),
+    copyToQuadrants(
+      g,
+      "liftOtisGear",
+      gear(g, "liftOtisGearLeg", { blocks: [...motor.blocks, ...counter.blocks], wheels: [...motor.wheels, ...counter.wheels] }),
+      odd,
+      ["normal"],
+    ),
     // The cylinders lie in the legs' feet, at a visitor's eye.
-    tubes(g, "liftOtisCylinders", otis.map(({ motor }) => motor.cylinder), OTIS_GEAR.motor.cylinder.diameter, SAG.eye),
+    tubes(g, "liftOtisCylinders", OTIS_LEGS.map((k) => onLegs(k, motor.cylinder)), OTIS_GEAR.motor.cylinder.diameter, SAG.eye),
   ];
-  const roux = ROUX_LEGS.map((k) => rouxFrames(k));
+  const roux = rouxFrames();
   const rouxStill = [
-    blocks(g, "liftRouxGear", [
-      ...ROUX_PARTS.flatMap(({ k, side }) => rouxDuct(k, side)),
-      ...roux.flatMap((f) => f.blocks),
-    ]),
+    copyToQuadrants(g, "liftRouxGear", blocks(g, "liftRouxGearLeg", [...rouxDuct(-1), ...rouxDuct(1), ...roux.blocks]), even, ["normal"]),
     ...[ROUX_CIRCUIT.shaft.wheel, ROUX_CIRCUIT.shaft.pulley].map((d, i) =>
       tubes(
         g,
         `liftRouxShafts${i}`,
-        roux.flatMap((f) => f.shafts.filter((x) => x.diameter === d).map((x) => x.axis)),
+        ROUX_LEGS.flatMap((k) => roux.shafts.filter((x) => x.diameter === d).map((x) => onLegs(k, x.axis))),
         d,
       ),
     ),

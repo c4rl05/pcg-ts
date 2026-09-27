@@ -117,7 +117,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "862441f3eb4cee45"
+        "hash": "6934f9aa80488564"
       },
       "car.edoux.pulley.middle.upper": {
         "kind": "geometry",
@@ -126,7 +126,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "6967a9fd4547b4e9"
+        "hash": "6ccddf4cc104d860"
       },
       "car.edoux.pulley.nord.lower": {
         "kind": "geometry",
@@ -135,7 +135,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "5e16caf65d342993"
+        "hash": "ba673a4e1d95a92d"
       },
       "car.edoux.pulley.nord.upper": {
         "kind": "geometry",
@@ -144,7 +144,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "2b03ecf8c0952a3e"
+        "hash": "6653ccf43f5dd69e"
       },
       "car.edoux.pulley.sud.lower": {
         "kind": "geometry",
@@ -153,7 +153,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "7be008c0e6c2cead"
+        "hash": "dd7fbbbbea3e9b9d"
       },
       "car.edoux.pulley.sud.upper": {
         "kind": "geometry",
@@ -162,7 +162,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "b07cc7541df252d1"
+        "hash": "179e356e2461305b"
       },
       "car.edoux.sud": {
         "kind": "geometry",
@@ -216,7 +216,7 @@
         "vertices": 9756,
         "primitives": 3252,
         "instances": 0,
-        "hash": "04c091b717b6ca7f"
+        "hash": "373e7f34b639c153"
       },
       "car.otis.nord.truck": {
         "kind": "geometry",
@@ -225,7 +225,7 @@
         "vertices": 2124,
         "primitives": 708,
         "instances": 0,
-        "hash": "09974e8f67505703"
+        "hash": "48eceb4411ddaf29"
       },
       "car.otis.sud": {
         "kind": "geometry",
@@ -270,7 +270,7 @@
         "vertices": 9756,
         "primitives": 3252,
         "instances": 0,
-        "hash": "8888d2ee4c7bbe05"
+        "hash": "09b1361326d26f49"
       },
       "car.otis.sud.truck": {
         "kind": "geometry",
@@ -279,7 +279,7 @@
         "vertices": 2124,
         "primitives": 708,
         "instances": 0,
-        "hash": "6f631d59947481b0"
+        "hash": "db2fae4259e6f52e"
       },
       "car.roux.est": {
         "kind": "geometry",
@@ -288,7 +288,7 @@
         "vertices": 7128,
         "primitives": 2376,
         "instances": 0,
-        "hash": "aca3e983654fea5a"
+        "hash": "96e9b178b97b6a78"
       },
       "car.roux.est.left.pulley": {
         "kind": "geometry",
@@ -297,7 +297,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "246b136233b7e797"
+        "hash": "30d16b051acd9e69"
       },
       "car.roux.est.left.wheel": {
         "kind": "geometry",
@@ -306,7 +306,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "f3adfe3dbe3fcf1e"
+        "hash": "febb4534fa9b9c16"
       },
       "car.roux.est.right.pulley": {
         "kind": "geometry",
@@ -315,7 +315,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "d838332cda106c3f"
+        "hash": "fed94feeb3930c38"
       },
       "car.roux.est.right.wheel": {
         "kind": "geometry",
@@ -324,7 +324,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "089ba41350209f75"
+        "hash": "68de8819bd8d01e8"
       },
       "car.roux.ouest": {
         "kind": "geometry",
@@ -333,7 +333,7 @@
         "vertices": 7128,
         "primitives": 2376,
         "instances": 0,
-        "hash": "199fde3249602163"
+        "hash": "bc7729a22baa5fda"
       },
       "car.roux.ouest.left.pulley": {
         "kind": "geometry",
@@ -342,7 +342,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "0dbff646fae492d5"
+        "hash": "4d239d9c98bd2035"
       },
       "car.roux.ouest.left.wheel": {
         "kind": "geometry",
@@ -351,7 +351,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "d33a0f9bd554da34"
+        "hash": "a21cdb2fc91d3160"
       },
       "car.roux.ouest.right.pulley": {
         "kind": "geometry",
@@ -360,7 +360,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "5d3602e79699ab83"
+        "hash": "5526b1609260881a"
       },
       "car.roux.ouest.right.wheel": {
         "kind": "geometry",
@@ -369,7 +369,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "5724c1e67e804859"
+        "hash": "beb06ee9a86c18b7"
       },
       "chain.roux.est.left": {
         "kind": "instances",
@@ -450,7 +450,7 @@
         "vertices": 39768,
         "primitives": 13256,
         "instances": 0,
-        "hash": "d510d86e68556356"
+        "hash": "90977e2dabebf6d4"
       },
       "girders": {
         "kind": "geometry",
@@ -486,7 +486,7 @@
         "vertices": 96912,
         "primitives": 32304,
         "instances": 0,
-        "hash": "1f0d813924ed3ff1"
+        "hash": "8513244cb806837d"
       },
       "masonry": {
         "kind": "geometry",
@@ -495,7 +495,7 @@
         "vertices": 85056,
         "primitives": 28352,
         "instances": 0,
-        "hash": "36341ec4a7cbd770"
+        "hash": "b87db06dbfccbd35"
       },
       "names": {
         "kind": "geometry",
@@ -621,7 +621,7 @@
         "vertices": 75312,
         "primitives": 25104,
         "instances": 0,
-        "hash": "03be02cd0612c52c"
+        "hash": "260ff89d40939ff4"
       },
       "works.scaffolds": {
         "kind": "geometry",
@@ -749,7 +749,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "862441f3eb4cee45"
+        "hash": "6934f9aa80488564"
       },
       "car.edoux.pulley.middle.upper": {
         "kind": "geometry",
@@ -758,7 +758,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "6967a9fd4547b4e9"
+        "hash": "6ccddf4cc104d860"
       },
       "car.edoux.pulley.nord.lower": {
         "kind": "geometry",
@@ -767,7 +767,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "5e16caf65d342993"
+        "hash": "ba673a4e1d95a92d"
       },
       "car.edoux.pulley.nord.upper": {
         "kind": "geometry",
@@ -776,7 +776,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "2b03ecf8c0952a3e"
+        "hash": "6653ccf43f5dd69e"
       },
       "car.edoux.pulley.sud.lower": {
         "kind": "geometry",
@@ -785,7 +785,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "7be008c0e6c2cead"
+        "hash": "dd7fbbbbea3e9b9d"
       },
       "car.edoux.pulley.sud.upper": {
         "kind": "geometry",
@@ -794,7 +794,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "b07cc7541df252d1"
+        "hash": "179e356e2461305b"
       },
       "car.edoux.sud": {
         "kind": "geometry",
@@ -848,7 +848,7 @@
         "vertices": 9756,
         "primitives": 3252,
         "instances": 0,
-        "hash": "04c091b717b6ca7f"
+        "hash": "373e7f34b639c153"
       },
       "car.otis.nord.truck": {
         "kind": "geometry",
@@ -857,7 +857,7 @@
         "vertices": 2124,
         "primitives": 708,
         "instances": 0,
-        "hash": "09974e8f67505703"
+        "hash": "48eceb4411ddaf29"
       },
       "car.otis.sud": {
         "kind": "geometry",
@@ -902,7 +902,7 @@
         "vertices": 9756,
         "primitives": 3252,
         "instances": 0,
-        "hash": "8888d2ee4c7bbe05"
+        "hash": "09b1361326d26f49"
       },
       "car.otis.sud.truck": {
         "kind": "geometry",
@@ -911,7 +911,7 @@
         "vertices": 2124,
         "primitives": 708,
         "instances": 0,
-        "hash": "6f631d59947481b0"
+        "hash": "db2fae4259e6f52e"
       },
       "car.roux.est": {
         "kind": "geometry",
@@ -920,7 +920,7 @@
         "vertices": 7128,
         "primitives": 2376,
         "instances": 0,
-        "hash": "aca3e983654fea5a"
+        "hash": "96e9b178b97b6a78"
       },
       "car.roux.est.left.pulley": {
         "kind": "geometry",
@@ -929,7 +929,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "246b136233b7e797"
+        "hash": "30d16b051acd9e69"
       },
       "car.roux.est.left.wheel": {
         "kind": "geometry",
@@ -938,7 +938,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "f3adfe3dbe3fcf1e"
+        "hash": "febb4534fa9b9c16"
       },
       "car.roux.est.right.pulley": {
         "kind": "geometry",
@@ -947,7 +947,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "d838332cda106c3f"
+        "hash": "fed94feeb3930c38"
       },
       "car.roux.est.right.wheel": {
         "kind": "geometry",
@@ -956,7 +956,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "089ba41350209f75"
+        "hash": "68de8819bd8d01e8"
       },
       "car.roux.ouest": {
         "kind": "geometry",
@@ -965,7 +965,7 @@
         "vertices": 7128,
         "primitives": 2376,
         "instances": 0,
-        "hash": "199fde3249602163"
+        "hash": "bc7729a22baa5fda"
       },
       "car.roux.ouest.left.pulley": {
         "kind": "geometry",
@@ -974,7 +974,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "0dbff646fae492d5"
+        "hash": "4d239d9c98bd2035"
       },
       "car.roux.ouest.left.wheel": {
         "kind": "geometry",
@@ -983,7 +983,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "d33a0f9bd554da34"
+        "hash": "a21cdb2fc91d3160"
       },
       "car.roux.ouest.right.pulley": {
         "kind": "geometry",
@@ -992,7 +992,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "5d3602e79699ab83"
+        "hash": "5526b1609260881a"
       },
       "car.roux.ouest.right.wheel": {
         "kind": "geometry",
@@ -1001,7 +1001,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "5724c1e67e804859"
+        "hash": "beb06ee9a86c18b7"
       },
       "chain.roux.est.left": {
         "kind": "instances",
@@ -1082,7 +1082,7 @@
         "vertices": 39768,
         "primitives": 13256,
         "instances": 0,
-        "hash": "d510d86e68556356"
+        "hash": "90977e2dabebf6d4"
       },
       "girders": {
         "kind": "geometry",
@@ -1127,7 +1127,7 @@
         "vertices": 96912,
         "primitives": 32304,
         "instances": 0,
-        "hash": "1f0d813924ed3ff1"
+        "hash": "8513244cb806837d"
       },
       "masonry": {
         "kind": "geometry",
@@ -1136,7 +1136,7 @@
         "vertices": 85056,
         "primitives": 28352,
         "instances": 0,
-        "hash": "36341ec4a7cbd770"
+        "hash": "b87db06dbfccbd35"
       },
       "names": {
         "kind": "geometry",
@@ -1300,7 +1300,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "862441f3eb4cee45"
+        "hash": "6934f9aa80488564"
       },
       "car.edoux.pulley.middle.upper": {
         "kind": "geometry",
@@ -1309,7 +1309,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "6967a9fd4547b4e9"
+        "hash": "6ccddf4cc104d860"
       },
       "car.edoux.pulley.nord.lower": {
         "kind": "geometry",
@@ -1318,7 +1318,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "5e16caf65d342993"
+        "hash": "ba673a4e1d95a92d"
       },
       "car.edoux.pulley.nord.upper": {
         "kind": "geometry",
@@ -1327,7 +1327,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "2b03ecf8c0952a3e"
+        "hash": "6653ccf43f5dd69e"
       },
       "car.edoux.pulley.sud.lower": {
         "kind": "geometry",
@@ -1336,7 +1336,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "7be008c0e6c2cead"
+        "hash": "dd7fbbbbea3e9b9d"
       },
       "car.edoux.pulley.sud.upper": {
         "kind": "geometry",
@@ -1345,7 +1345,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "b07cc7541df252d1"
+        "hash": "179e356e2461305b"
       },
       "car.edoux.sud": {
         "kind": "geometry",
@@ -1399,7 +1399,7 @@
         "vertices": 9756,
         "primitives": 3252,
         "instances": 0,
-        "hash": "04c091b717b6ca7f"
+        "hash": "373e7f34b639c153"
       },
       "car.otis.nord.truck": {
         "kind": "geometry",
@@ -1408,7 +1408,7 @@
         "vertices": 2124,
         "primitives": 708,
         "instances": 0,
-        "hash": "09974e8f67505703"
+        "hash": "48eceb4411ddaf29"
       },
       "car.otis.sud": {
         "kind": "geometry",
@@ -1453,7 +1453,7 @@
         "vertices": 9756,
         "primitives": 3252,
         "instances": 0,
-        "hash": "8888d2ee4c7bbe05"
+        "hash": "09b1361326d26f49"
       },
       "car.otis.sud.truck": {
         "kind": "geometry",
@@ -1462,7 +1462,7 @@
         "vertices": 2124,
         "primitives": 708,
         "instances": 0,
-        "hash": "6f631d59947481b0"
+        "hash": "db2fae4259e6f52e"
       },
       "car.roux.est": {
         "kind": "geometry",
@@ -1471,7 +1471,7 @@
         "vertices": 7128,
         "primitives": 2376,
         "instances": 0,
-        "hash": "aca3e983654fea5a"
+        "hash": "96e9b178b97b6a78"
       },
       "car.roux.est.left.pulley": {
         "kind": "geometry",
@@ -1480,7 +1480,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "246b136233b7e797"
+        "hash": "30d16b051acd9e69"
       },
       "car.roux.est.left.wheel": {
         "kind": "geometry",
@@ -1489,7 +1489,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "f3adfe3dbe3fcf1e"
+        "hash": "febb4534fa9b9c16"
       },
       "car.roux.est.right.pulley": {
         "kind": "geometry",
@@ -1498,7 +1498,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "d838332cda106c3f"
+        "hash": "fed94feeb3930c38"
       },
       "car.roux.est.right.wheel": {
         "kind": "geometry",
@@ -1507,7 +1507,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "089ba41350209f75"
+        "hash": "68de8819bd8d01e8"
       },
       "car.roux.ouest": {
         "kind": "geometry",
@@ -1516,7 +1516,7 @@
         "vertices": 7128,
         "primitives": 2376,
         "instances": 0,
-        "hash": "199fde3249602163"
+        "hash": "bc7729a22baa5fda"
       },
       "car.roux.ouest.left.pulley": {
         "kind": "geometry",
@@ -1525,7 +1525,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "0dbff646fae492d5"
+        "hash": "4d239d9c98bd2035"
       },
       "car.roux.ouest.left.wheel": {
         "kind": "geometry",
@@ -1534,7 +1534,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "d33a0f9bd554da34"
+        "hash": "a21cdb2fc91d3160"
       },
       "car.roux.ouest.right.pulley": {
         "kind": "geometry",
@@ -1543,7 +1543,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "5d3602e79699ab83"
+        "hash": "5526b1609260881a"
       },
       "car.roux.ouest.right.wheel": {
         "kind": "geometry",
@@ -1552,7 +1552,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "5724c1e67e804859"
+        "hash": "beb06ee9a86c18b7"
       },
       "chain.roux.est.left": {
         "kind": "instances",
@@ -1633,7 +1633,7 @@
         "vertices": 39768,
         "primitives": 13256,
         "instances": 0,
-        "hash": "d510d86e68556356"
+        "hash": "90977e2dabebf6d4"
       },
       "girders": {
         "kind": "geometry",
@@ -1678,7 +1678,7 @@
         "vertices": 96912,
         "primitives": 32304,
         "instances": 0,
-        "hash": "1f0d813924ed3ff1"
+        "hash": "8513244cb806837d"
       },
       "masonry": {
         "kind": "geometry",
@@ -1687,7 +1687,7 @@
         "vertices": 85056,
         "primitives": 28352,
         "instances": 0,
-        "hash": "36341ec4a7cbd770"
+        "hash": "b87db06dbfccbd35"
       },
       "names": {
         "kind": "geometry",
@@ -2373,7 +2373,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "862441f3eb4cee45"
+        "hash": "6934f9aa80488564"
       },
       "car.edoux.pulley.middle.upper": {
         "kind": "geometry",
@@ -2382,7 +2382,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "6967a9fd4547b4e9"
+        "hash": "6ccddf4cc104d860"
       },
       "car.edoux.pulley.nord.lower": {
         "kind": "geometry",
@@ -2391,7 +2391,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "5e16caf65d342993"
+        "hash": "ba673a4e1d95a92d"
       },
       "car.edoux.pulley.nord.upper": {
         "kind": "geometry",
@@ -2400,7 +2400,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "2b03ecf8c0952a3e"
+        "hash": "6653ccf43f5dd69e"
       },
       "car.edoux.pulley.sud.lower": {
         "kind": "geometry",
@@ -2409,7 +2409,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "7be008c0e6c2cead"
+        "hash": "dd7fbbbbea3e9b9d"
       },
       "car.edoux.pulley.sud.upper": {
         "kind": "geometry",
@@ -2418,7 +2418,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "b07cc7541df252d1"
+        "hash": "179e356e2461305b"
       },
       "car.edoux.sud": {
         "kind": "geometry",
@@ -2472,7 +2472,7 @@
         "vertices": 9756,
         "primitives": 3252,
         "instances": 0,
-        "hash": "04c091b717b6ca7f"
+        "hash": "373e7f34b639c153"
       },
       "car.otis.nord.truck": {
         "kind": "geometry",
@@ -2481,7 +2481,7 @@
         "vertices": 2124,
         "primitives": 708,
         "instances": 0,
-        "hash": "09974e8f67505703"
+        "hash": "48eceb4411ddaf29"
       },
       "car.otis.sud": {
         "kind": "geometry",
@@ -2526,7 +2526,7 @@
         "vertices": 9756,
         "primitives": 3252,
         "instances": 0,
-        "hash": "8888d2ee4c7bbe05"
+        "hash": "09b1361326d26f49"
       },
       "car.otis.sud.truck": {
         "kind": "geometry",
@@ -2535,7 +2535,7 @@
         "vertices": 2124,
         "primitives": 708,
         "instances": 0,
-        "hash": "6f631d59947481b0"
+        "hash": "db2fae4259e6f52e"
       },
       "car.roux.est": {
         "kind": "geometry",
@@ -2544,7 +2544,7 @@
         "vertices": 7128,
         "primitives": 2376,
         "instances": 0,
-        "hash": "aca3e983654fea5a"
+        "hash": "96e9b178b97b6a78"
       },
       "car.roux.est.left.pulley": {
         "kind": "geometry",
@@ -2553,7 +2553,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "246b136233b7e797"
+        "hash": "30d16b051acd9e69"
       },
       "car.roux.est.left.wheel": {
         "kind": "geometry",
@@ -2562,7 +2562,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "f3adfe3dbe3fcf1e"
+        "hash": "febb4534fa9b9c16"
       },
       "car.roux.est.right.pulley": {
         "kind": "geometry",
@@ -2571,7 +2571,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "d838332cda106c3f"
+        "hash": "fed94feeb3930c38"
       },
       "car.roux.est.right.wheel": {
         "kind": "geometry",
@@ -2580,7 +2580,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "089ba41350209f75"
+        "hash": "68de8819bd8d01e8"
       },
       "car.roux.ouest": {
         "kind": "geometry",
@@ -2589,7 +2589,7 @@
         "vertices": 7128,
         "primitives": 2376,
         "instances": 0,
-        "hash": "199fde3249602163"
+        "hash": "bc7729a22baa5fda"
       },
       "car.roux.ouest.left.pulley": {
         "kind": "geometry",
@@ -2598,7 +2598,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "0dbff646fae492d5"
+        "hash": "4d239d9c98bd2035"
       },
       "car.roux.ouest.left.wheel": {
         "kind": "geometry",
@@ -2607,7 +2607,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "d33a0f9bd554da34"
+        "hash": "a21cdb2fc91d3160"
       },
       "car.roux.ouest.right.pulley": {
         "kind": "geometry",
@@ -2616,7 +2616,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "5d3602e79699ab83"
+        "hash": "5526b1609260881a"
       },
       "car.roux.ouest.right.wheel": {
         "kind": "geometry",
@@ -2625,7 +2625,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "5724c1e67e804859"
+        "hash": "beb06ee9a86c18b7"
       },
       "chain.roux.est.left": {
         "kind": "instances",
@@ -2706,7 +2706,7 @@
         "vertices": 39768,
         "primitives": 13256,
         "instances": 0,
-        "hash": "d510d86e68556356"
+        "hash": "90977e2dabebf6d4"
       },
       "girders": {
         "kind": "geometry",
@@ -2751,7 +2751,7 @@
         "vertices": 96912,
         "primitives": 32304,
         "instances": 0,
-        "hash": "1f0d813924ed3ff1"
+        "hash": "8513244cb806837d"
       },
       "masonry": {
         "kind": "geometry",
@@ -2760,7 +2760,7 @@
         "vertices": 85056,
         "primitives": 28352,
         "instances": 0,
-        "hash": "36341ec4a7cbd770"
+        "hash": "b87db06dbfccbd35"
       },
       "names": {
         "kind": "geometry",
@@ -3455,7 +3455,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "862441f3eb4cee45"
+        "hash": "6934f9aa80488564"
       },
       "car.edoux.pulley.middle.upper": {
         "kind": "geometry",
@@ -3464,7 +3464,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "6967a9fd4547b4e9"
+        "hash": "6ccddf4cc104d860"
       },
       "car.edoux.pulley.nord.lower": {
         "kind": "geometry",
@@ -3473,7 +3473,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "5e16caf65d342993"
+        "hash": "ba673a4e1d95a92d"
       },
       "car.edoux.pulley.nord.upper": {
         "kind": "geometry",
@@ -3482,7 +3482,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "2b03ecf8c0952a3e"
+        "hash": "6653ccf43f5dd69e"
       },
       "car.edoux.pulley.sud.lower": {
         "kind": "geometry",
@@ -3491,7 +3491,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "7be008c0e6c2cead"
+        "hash": "dd7fbbbbea3e9b9d"
       },
       "car.edoux.pulley.sud.upper": {
         "kind": "geometry",
@@ -3500,7 +3500,7 @@
         "vertices": 1476,
         "primitives": 492,
         "instances": 0,
-        "hash": "b07cc7541df252d1"
+        "hash": "179e356e2461305b"
       },
       "car.edoux.sud": {
         "kind": "geometry",
@@ -3554,7 +3554,7 @@
         "vertices": 9756,
         "primitives": 3252,
         "instances": 0,
-        "hash": "04c091b717b6ca7f"
+        "hash": "373e7f34b639c153"
       },
       "car.otis.nord.truck": {
         "kind": "geometry",
@@ -3563,7 +3563,7 @@
         "vertices": 2124,
         "primitives": 708,
         "instances": 0,
-        "hash": "09974e8f67505703"
+        "hash": "48eceb4411ddaf29"
       },
       "car.otis.sud": {
         "kind": "geometry",
@@ -3608,7 +3608,7 @@
         "vertices": 9756,
         "primitives": 3252,
         "instances": 0,
-        "hash": "8888d2ee4c7bbe05"
+        "hash": "09b1361326d26f49"
       },
       "car.otis.sud.truck": {
         "kind": "geometry",
@@ -3617,7 +3617,7 @@
         "vertices": 2124,
         "primitives": 708,
         "instances": 0,
-        "hash": "6f631d59947481b0"
+        "hash": "db2fae4259e6f52e"
       },
       "car.roux.est": {
         "kind": "geometry",
@@ -3626,7 +3626,7 @@
         "vertices": 7128,
         "primitives": 2376,
         "instances": 0,
-        "hash": "aca3e983654fea5a"
+        "hash": "96e9b178b97b6a78"
       },
       "car.roux.est.left.pulley": {
         "kind": "geometry",
@@ -3635,7 +3635,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "246b136233b7e797"
+        "hash": "30d16b051acd9e69"
       },
       "car.roux.est.left.wheel": {
         "kind": "geometry",
@@ -3644,7 +3644,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "f3adfe3dbe3fcf1e"
+        "hash": "febb4534fa9b9c16"
       },
       "car.roux.est.right.pulley": {
         "kind": "geometry",
@@ -3653,7 +3653,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "d838332cda106c3f"
+        "hash": "fed94feeb3930c38"
       },
       "car.roux.est.right.wheel": {
         "kind": "geometry",
@@ -3662,7 +3662,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "089ba41350209f75"
+        "hash": "68de8819bd8d01e8"
       },
       "car.roux.ouest": {
         "kind": "geometry",
@@ -3671,7 +3671,7 @@
         "vertices": 7128,
         "primitives": 2376,
         "instances": 0,
-        "hash": "199fde3249602163"
+        "hash": "bc7729a22baa5fda"
       },
       "car.roux.ouest.left.pulley": {
         "kind": "geometry",
@@ -3680,7 +3680,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "0dbff646fae492d5"
+        "hash": "4d239d9c98bd2035"
       },
       "car.roux.ouest.left.wheel": {
         "kind": "geometry",
@@ -3689,7 +3689,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "d33a0f9bd554da34"
+        "hash": "a21cdb2fc91d3160"
       },
       "car.roux.ouest.right.pulley": {
         "kind": "geometry",
@@ -3698,7 +3698,7 @@
         "vertices": 1908,
         "primitives": 636,
         "instances": 0,
-        "hash": "5d3602e79699ab83"
+        "hash": "5526b1609260881a"
       },
       "car.roux.ouest.right.wheel": {
         "kind": "geometry",
@@ -3707,7 +3707,7 @@
         "vertices": 2916,
         "primitives": 972,
         "instances": 0,
-        "hash": "5724c1e67e804859"
+        "hash": "beb06ee9a86c18b7"
       },
       "chain.roux.est.left": {
         "kind": "instances",
@@ -3788,7 +3788,7 @@
         "vertices": 39768,
         "primitives": 13256,
         "instances": 0,
-        "hash": "d510d86e68556356"
+        "hash": "90977e2dabebf6d4"
       },
       "girders": {
         "kind": "geometry",
@@ -3824,7 +3824,7 @@
         "vertices": 96912,
         "primitives": 32304,
         "instances": 0,
-        "hash": "1f0d813924ed3ff1"
+        "hash": "8513244cb806837d"
       },
       "masonry": {
         "kind": "geometry",
@@ -3833,7 +3833,7 @@
         "vertices": 85056,
         "primitives": 28352,
         "instances": 0,
-        "hash": "36341ec4a7cbd770"
+        "hash": "b87db06dbfccbd35"
       },
       "names": {
         "kind": "geometry",

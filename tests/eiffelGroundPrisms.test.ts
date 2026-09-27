@@ -6,10 +6,11 @@
  *
  * The other ground suites (eiffelGround, eiffelFoundations, eiffelPlinths,
  * eiffelSupports, eiffelChimney) audit the LISTS. Nothing checked the
- * graph's side of `prisms()`/`skin()` — the index-table ramps, the runs of
- * PRISM_RUN, pointsToPath, extrudePolygon — which is the side a refactor
- * that moves the repetition into the graph (copies onto frames) will
- * rewrite. That refactor may change point order, primitive order and
+ * graph's side of `prisms()`/`skin()` — the index-table ramps,
+ * pointsToPath, extrudePolygon, and the copies that draw the sixteen
+ * supports and the massifs from one template each (`supportTemplate`,
+ * `massifTemplate`) — which is the side that moved the repetition into
+ * the graph. Moving it could change point order, primitive order and
  * seeds; it must not change a single face.
  *
  * WHAT IS COMPARED. Faces, as multisets per class: each face's corners
@@ -32,7 +33,8 @@
  * AGAINST A SNAPSHOT, NOT THE LIVE LISTS. The expected faces are built
  * from tests/eiffelGround.snapshot.json -- every labelled prism (outline and
  * depth) and chimney skin face, one per line -- not from `supportFrames`,
- * `supportPieces`, `groundPrisms` and `chimneySkin` as they run now. A
+ * `supportPieces`, `massifPrisms`, `groundOnce` and `chimneySkin` as they
+ * run now. A
  * refactor that rewrote those would otherwise move both sides at once and
  * pass. A separate test holds the live lists to the same snapshot, so a
  * change to them is seen on its own; when one is MEANT, regenerate the
@@ -60,11 +62,13 @@ import {
   caissonPrisms,
   chimneySkin,
   earthingPipes,
-  groundPrisms,
+  groundOnce,
   machineRoomPrisms,
   massifPrisms,
+  massifTemplate,
   supportFrames,
   supportPieces,
+  supportTemplate,
   wallPiers,
 } from "../demos/eiffel/ground.js";
 import { type Face, type Vec3, cookedFaces, matchFaces, normalMisfits, prismFaces, skinFace } from "./support/eiffelGroundPrisms.js";
@@ -89,9 +93,11 @@ interface Labeled {
 }
 
 /**
- * `groundPrisms()` rebuilt from its sources with a name on every prism, so
- * a failure says which piece moved. A test below proves the concatenation
- * IS `groundPrisms()`, prism for prism, so the names cannot drift.
+ * Every prism the ground draws, by class, in world coordinates and with a
+ * name, so a failure says which piece moved: the supports and the massifs
+ * frame by frame (the graph copies them from one template each), the rest
+ * as `groundOnce()` lists it. A test below proves the names cover exactly
+ * what the build sends, so they cannot drift.
  */
 function labeledGround(): Record<GroundClass, Labeled[]> {
   const frames = supportFrames();
@@ -99,17 +105,20 @@ function labeledGround(): Record<GroundClass, Labeled[]> {
   const tag = (label: string, list: readonly Prism[]): Labeled[] => list.map((prism, i) => ({ label: `${label} #${i}`, prism }));
   const supports = frames.map((f) => ({ f, s: supportPieces(f) }));
   const caissons = frames.map((f) => ({ f, c: caissonPrisms(f) }));
-  const found = [
-    ...supports.flatMap(({ f, s }) => tag(`support ${name(f)} buried`, s.buried)),
-    ...frames.flatMap((f) => tag(`massif ${name(f)}`, massifPrisms(f))),
+  const rest = [
     ...caissons.flatMap(({ f, c }) => tag(`caisson concrete ${name(f)}`, c.concrete)),
     ...tag("wall pier", wallPiers()),
     ...tag("earthing pipe", earthingPipes()),
   ];
+  const found = [
+    ...supports.flatMap(({ f, s }) => tag(`support ${name(f)} buried`, s.buried)),
+    ...frames.flatMap((f) => tag(`massif ${name(f)}`, massifPrisms(f))),
+    ...rest,
+  ];
   // The room's masonry and flue lead both `machineRoomPrisms().foundations`
-  // and `groundPrisms().foundations`; what is left of the first is the chimney.
-  const all = groundPrisms().foundations;
-  const room = machineRoomPrisms().foundations.slice(0, all.length - found.length);
+  // and `groundOnce().foundations`; what is left of the first is the chimney.
+  const once = groundOnce().foundations;
+  const room = machineRoomPrisms().foundations.slice(0, once.length - rest.length);
   return {
     foundations: [...tag("machine room / flue masonry", room), ...found],
     machinery: [
@@ -236,11 +245,23 @@ describe("eiffel ground: the cooked prisms are the snapshot's prisms", () => {
     cooked = await cookGround();
   }, 120_000);
 
-  it("names every prism groundPrisms() lists, and nothing more", () => {
-    const lists = groundPrisms();
+  it("names every prism the build sends, and nothing more", () => {
+    // What is drawn once is `groundOnce()`, prism for prism; the rest is
+    // the supports, sixteen of one template, and the massifs, each kind's
+    // template once per pile of that kind.
+    const once = groundOnce();
+    const template = supportTemplate();
+    const copied = (l: Labeled) => l.label.startsWith("support ") || l.label.startsWith("massif ");
+    const massifs = [true, false].reduce((n, caissons) => {
+      const m = massifTemplate(caissons);
+      return n + m.prisms.length * m.turns.length;
+    }, 0);
+    const piece: Record<GroundClass, "buried" | "iron" | "stone"> = { foundations: "buried", machinery: "iron", masonry: "stone" };
     for (const cls of CLASSES) {
-      expect(labeled[cls].map((l) => l.prism), cls).toEqual(lists[cls]);
+      expect(labeled[cls].filter((l) => !copied(l)).map((l) => l.prism), cls).toEqual(cls === "masonry" ? [] : once[cls]);
+      expect(labeled[cls].filter((l) => l.label.startsWith("support ")).length, cls).toBe(16 * template[piece[cls]].length);
     }
+    expect(labeled.foundations.filter((l) => l.label.startsWith("massif ")).length).toBe(massifs);
     // Nothing empty slips through: every class has pieces.
     for (const cls of CLASSES) expect(labeled[cls].length, cls).toBeGreaterThan(0);
     expect(chimneySkin().length).toBeGreaterThan(0);

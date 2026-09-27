@@ -37,12 +37,26 @@
  * the machine room and the flue are at theirs.
  *
  * Everything is built in world coordinates (pile 3 is the +x −z leg,
- * `PILES` in spec.ts), as convex prisms, one mesh per class.
+ * `PILES` in spec.ts), as convex prisms, one mesh per class. What repeats
+ * is built once and copied by the graph: one support onto the sixteen
+ * uprights, each kind of massif onto the piles of its kind (`buildGround`).
  */
-import type { Graph, NodeHandle } from "pcg-ts";
-import { attribute, extrudePolygon, mergePrimitives, pointGrid, pointsToPath, setAttribute, vec } from "pcg-ts";
+import type { Field, Graph, NodeHandle } from "pcg-ts";
+import {
+  attribute,
+  copyToPoints,
+  eq,
+  extrudePolygon,
+  filterByExpression,
+  index,
+  max,
+  pointGrid,
+  pointsToPath,
+  setAttribute,
+  vec,
+} from "pcg-ts";
 import { CREASE, SAG, type SegmentLimits, arcSegments, circleSegments, smoothed } from "./chord.js";
-import { type Vec3, indexTable } from "./lattice.js";
+import { type Vec3, copyToQuadrants, indexTable, merge, quadrants } from "./lattice.js";
 import type { Parts } from "./parts.js";
 import { LEG_UPRIGHTS, type UprightName, segmentAxis } from "./builtup.js";
 import { NODES, PEDESTAL, PILES, yOfCote } from "./spec.js";
@@ -221,13 +235,6 @@ export function roundWall(
 }
 
 /**
- * Points per run of `prisms`: an index table is a ramp, whose lookup scans
- * its stops, so a table's cost grows with the square of its length (the
- * same trade as `platforms.ts`' PRISM_RUN).
- */
-const PRISM_RUN = 1024;
-
-/**
  * Many convex prisms as one mesh, each extruded along its own outline's
  * normal by its depth; every wall and cap gets its own points and a
  * `normal`, flat, then smoothed across any edge under `chord.ts`' crease
@@ -236,7 +243,7 @@ const PRISM_RUN = 1024;
  * by its index.
  */
 export function prisms(g: Graph, id: string, list: readonly Prism[], crease = CREASE): NodeHandle {
-  return outlines(g, id, list, crease, false);
+  return smoothed(g, id, flatPrisms(g, `${id}Flat`, list), crease);
 }
 
 /**
@@ -249,38 +256,22 @@ export function prisms(g: Graph, id: string, list: readonly Prism[], crease = CR
  */
 export function skin(g: Graph, id: string, faces: readonly (readonly Vec3[])[], crease = CREASE): NodeHandle {
   // Only the outline's own cap is built, so the depth is a formality.
-  return outlines(g, id, faces.map((outline) => ({ outline, depth: 0.01 })), crease, true);
+  const list = faces.map((outline) => ({ outline, depth: 0.01 }));
+  return smoothed(g, id, flatPrisms(g, `${id}Flat`, list, true), crease);
 }
 
-function outlines(g: Graph, id: string, list: readonly Prism[], crease: number, faces: boolean): NodeHandle {
+/**
+ * `prisms` before its smoothing: each outline extruded whole, or with
+ * `faces` only its own cap and every point on seed 0 — flat-shaded, so a
+ * copy can carry it (its `normal` turned with it) and the smoothing run
+ * once over the class it lands in.
+ */
+function flatPrisms(g: Graph, id: string, list: readonly Prism[], faces = false): NodeHandle {
   list.forEach((p, i) => {
     if (!(p.depth > 1e-6) || p.outline.length < 3) {
-      throw new Error(`ground.ts prisms("${id}"): prism ${i} at [${p.outline[0]?.join(", ")}] has depth ${p.depth} and ${p.outline.length} points; it needs a positive depth and three points`);
+      throw new Error(`ground.ts ${id}: prism ${i} at [${p.outline[0]?.join(", ")}] has depth ${p.depth} and ${p.outline.length} points; it needs a positive depth and three points`);
     }
   });
-  const runs: Prism[][] = [[]];
-  let count = 0;
-  for (const p of list) {
-    if (count + p.outline.length > PRISM_RUN && (runs[runs.length - 1] as Prism[]).length > 0) {
-      runs.push([]);
-      count = 0;
-    }
-    (runs[runs.length - 1] as Prism[]).push(p);
-    count += p.outline.length;
-  }
-  // Smoothed by the crease angle (`chord.ts`) after the runs are merged,
-  // so a round part cut across two runs still welds.
-  let out: NodeHandle;
-  if (runs.length === 1) out = prismRun(g, `${id}Flat`, list, faces);
-  else {
-    out = g.add(mergePrimitives, {}, `${id}Flat`);
-    runs.forEach((run, i) => g.connect(prismRun(g, `${id}Run${i}`, run, faces), "out", out, "in"));
-  }
-  return smoothed(g, id, out, crease);
-}
-
-/** One run of `outlines`: each outline extruded whole, or with `faces` only its own cap, every point on seed 0. */
-function prismRun(g: Graph, id: string, list: readonly Prism[], faces = false): NodeHandle {
   const pts = list.flatMap((p) => p.outline);
   const which = list.flatMap((p, i) => p.outline.map(() => i));
   const depth = list.flatMap((p) => p.outline.map(() => p.depth));
@@ -1793,38 +1784,76 @@ export function earthingPipes(): Prism[] {
   return out;
 }
 
-/** Everything of item 29 by class. */
-export function foundationsPrisms(): { foundations: Prism[]; machinery: Prism[] } {
-  const frames = supportFrames();
-  const caissons = frames.map(caissonPrisms);
-  return {
-    foundations: [
-      ...frames.flatMap(massifPrisms),
-      ...caissons.flatMap((c) => c.concrete),
-      ...wallPiers(),
-      ...earthingPipes(),
-    ],
-    machinery: caissons.flatMap((c) => c.iron),
-  };
-}
-
 // ITEM 29 END
 
 // ---------------------------------------------------------------------------
 // The build
 
 /**
- * Everything this module builds, as prism lists by class — all but the
- * chimney, which is drawn as one skin (`chimneySkin`); its prisms are in
- * `machineRoomPrisms`, for the checks that read it as a solid.
+ * What the ground draws ONCE, as prism lists by class: the machine room
+ * and its flue, its plant, the caissons (each pile's printed edges are
+ * its own), the wall piers and the earthing. The supports and the massifs
+ * repeat, and the graph draws them by copying ({@link supportTemplate},
+ * {@link massifTemplate}); the chimney is drawn as one skin
+ * (`chimneySkin`), and its prisms are in `machineRoomPrisms`, for the
+ * checks that read it as a solid.
  */
-export function groundPrisms(): { foundations: Prism[]; machinery: Prism[]; masonry: Prism[] } {
-  const supports = supportFrames().map(supportPieces);
-  const found = foundationsPrisms();
+export function groundOnce(): { foundations: Prism[]; machinery: Prism[] } {
+  const caissons = supportFrames().map(caissonPrisms);
   return {
-    foundations: [...roomAndFlue(), ...supports.flatMap((s) => s.buried), ...found.foundations],
-    machinery: [...roomPlant(), ...supports.flatMap((s) => s.iron), ...found.machinery],
-    masonry: supports.flatMap((s) => s.stone),
+    foundations: [...roomAndFlue(), ...caissons.flatMap((c) => c.concrete), ...wallPiers(), ...earthingPipes()],
+    machinery: [...roomPlant(), ...caissons.flatMap((c) => c.iron)],
+  };
+}
+
+/** The supports of the pile on quadrant 0, which the other piles' are turned from. */
+function supportBase(): SupportFrame[] {
+  const pile = PILES.find((p) => p.quadrant === 0)!.n;
+  const frames = supportFrames().filter((f) => f.pile === pile);
+  const f = frames[0]!;
+  for (const h of frames) {
+    if (h.T.some((v, i) => Math.abs(v - f.T[i]!) > 1e-12)) {
+      throw new Error(`ground.ts: pile ${pile}'s upright ${h.upright} meets the supports' node on another axis than upright ${f.upright}, so its support is not a copy of ${f.upright}'s; build the supports one by one`);
+    }
+  }
+  return frames;
+}
+
+/**
+ * THE SUPPORTS AS ONE. At the supports' node a pile's four uprights are
+ * parallel, so its four supports are one support moved to each upright's
+ * seat, and each pile's are the quadrant-0 pile's turned onto its own
+ * quadrant (`supportFrames` builds every frame that way). This is that
+ * one support, by class, as it stands under the quadrant-0 pile with its
+ * seat at the origin; {@link supportSeats} are the four seats it moves to.
+ * A turn about +y keeps its bolts' facets where `cylinder` puts them only
+ * while their axis stands off the vertical (the hint is then UP, which the
+ * turn keeps); at the supports' node it leans ~35 degrees.
+ */
+export function supportTemplate(): { iron: Prism[]; stone: Prism[]; buried: Prism[] } {
+  return supportPieces({ ...supportBase()[0]!, seat: [0, 0, 0] });
+}
+
+/** The quadrant-0 pile's four seats, in `supportFrames`' order: where {@link supportTemplate} is moved to before the turn. */
+export function supportSeats(): Vec3[] {
+  return supportBase().map((f) => f.seat);
+}
+
+/**
+ * THE MASSIFS BY KIND. A massif is drawn from its pile's kind (on
+ * caissons or open, `MASSIF.byPile`) and its upright's frame, and cut by
+ * its pile's skirt (`skirtPlanes`): one rule, turned with the pile. So the
+ * massifs of one kind are those of its first pile by quadrant, turned by
+ * `turns` quarter turns onto the others.
+ */
+export function massifTemplate(caissons: boolean): { prisms: Prism[]; turns: number[] } {
+  const piles = PILES.filter((p) => p.caissons === caissons).sort((a, b) => a.quadrant - b.quadrant);
+  const first = piles[0]!;
+  return {
+    prisms: supportFrames()
+      .filter((f) => f.pile === first.n)
+      .flatMap(massifPrisms),
+    turns: piles.map((p) => p.quadrant - first.quadrant),
   };
 }
 
@@ -1845,20 +1874,63 @@ function roomAndFlue(): Prism[] {
 /** The crease angle, degrees, for the foundations class (see `buildGround`). */
 const FOUNDATION_CREASE = 20;
 
-/** Build the ground's parts: the machine room, the flue, the chimney and the supports. */
-export function buildGround(g: Graph): Parts {
-  const p = groundPrisms();
+/**
+ * Copy a flat mesh onto targets, turning its `normal` with each copy
+ * (the class is smoothed after the merge, once over everything in it).
+ */
+function copyOnto(g: Graph, id: string, source: NodeHandle, targets: NodeHandle): NodeHandle {
+  const node = g.add(copyToPoints, { topology: "keep", rotateAttrs: ["normal"] }, id);
+  g.connect(source, "out", node, "source");
+  g.connect(targets, "out", node, "target");
+  return node;
+}
+
+/**
+ * Build the ground's parts: the machine room, the flue, the chimney, the
+ * supports and the foundations. The supports are {@link supportTemplate}
+ * copied onto {@link supportSeats}, turned onto the four quadrants; the
+ * massifs {@link massifTemplate}'s, onto the quadrants their kind's piles
+ * stand on. `quads` are the tower's quadrant targets (`quadrants` in
+ * lattice.ts), built here when not given.
+ */
+export function buildGround(g: Graph, quads: NodeHandle = quadrants(g, "groundQuads")): Parts {
+  const once = groundOnce();
+  const support = supportTemplate();
+  const seats = supportSeats();
+  const slots = g.add(
+    pointGrid,
+    { countX: seats.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
+    "groundSeatSlots",
+  );
+  const column = (a: 0 | 1 | 2) => indexTable(seats.map((p) => p[a]));
+  const place = g.add(setAttribute, { name: "P", type: "f32", tupleSize: 3, value: vec(column(0), column(1), column(2)) }, "groundSeats");
+  g.connect(slots, "out", place, "in");
+  const frames = copyToQuadrants(g, "groundSupportFrames", place, quads);
+  const supports = (id: string, list: readonly Prism[]) => copyOnto(g, id, flatPrisms(g, `${id}Flat`, list), frames);
+  const massifs = [true, false].map((caissons) => {
+    const id = caissons ? "groundMassifsCaisson" : "groundMassifsOpen";
+    const m = massifTemplate(caissons);
+    const keep = m.turns.map((t): Field => eq(index(), t)).reduce((x, y) => max(x, y));
+    const turns = g.add(filterByExpression, { predicate: keep }, `${id}Turns`);
+    g.connect(quads, "out", turns, "in");
+    return copyOnto(g, id, flatPrisms(g, `${id}Flat`, m.prisms), turns);
+  });
+  const merged = (id: string, parts: readonly NodeHandle[], crease: number) => smoothed(g, id, merge(g, `${id}Flat`, parts), crease);
   return {
     // A tighter crease for the masonry: the chimney's 64 staves (5.6
     // degrees apart) and the caissons' corners (18) shade round, and the
     // chimney's corbel (21 degrees off its shaft and its band) keeps the
     // two breaks that make it a corbel rather than a swelling.
     foundations: [
-      prisms(g, "groundFoundations", p.foundations, FOUNDATION_CREASE),
+      merged(
+        "groundFoundations",
+        [flatPrisms(g, "groundFoundationsOnce", once.foundations), supports("groundSupportsBuried", support.buried), ...massifs],
+        FOUNDATION_CREASE,
+      ),
       skin(g, "groundChimney", chimneySkin(), FOUNDATION_CREASE),
     ],
-    machinery: [prisms(g, "groundIron", p.machinery)],
-    masonry: [prisms(g, "groundStones", p.masonry)],
+    machinery: [merged("groundIron", [flatPrisms(g, "groundIronOnce", once.machinery), supports("groundSupportsIron", support.iron)], CREASE)],
+    masonry: [smoothed(g, "groundStones", supports("groundSupportsStone", support.stone))],
   };
 }
 
