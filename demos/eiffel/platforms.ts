@@ -161,32 +161,53 @@
  *   (`summit.ts`), whose 1.200 plate parapet is the railing [sourced PL-XIV].
  *
  * NORMALS. Everything in the platforms class is a closed convex outline
- * extruded along its own normal — the boxes too, each a rectangle
- * extruded by its depth (`blockPrism`) — and keeps the flat `normal` the
- * extrusion writes, wall by wall and cap by cap. It has to: the class also
+ * extruded along its own normal — the boxes too, each a copy of one unit
+ * box, the unit square extruded by 1 (`unitBox`, `blockPrism`) — and
+ * keeps the flat `normal` the extrusion writes, wall by wall and cap by
+ * cap. It has to: the class also
  * holds `lifts.ts`'s rail skin, which carries normals, and a class merge
  * fills a part that has none with zeros, which the page shades black —
  * which is what made these floors read as black masses (measured
  * 2026-09-19 on the model before this was done: 139,800 of the class's
  * 152,652 points; those left are `lifts.ts`'s cars and stairs, which write
- * none). Nothing here is copied by the quadrant targets, whose
- * copies would not turn a normal: every part is laid out on the +z face
- * and turned in TypeScript. The names keep no normals, as their class
- * carries none and the page computes them; the pedestals (masonry) keep
+ * none). A part drawn on the +z face is built once and copied onto its
+ * faces by the quadrant targets (`Lot`, `placedMesh`), and the copy turns
+ * its `normal` with its points (`rotateAttrs`); each mesh is smoothed only
+ * once its copies are merged, so what welds across two drawings still
+ * does. Three things are still turned in TypeScript: the decks, cut in
+ * the world round the wells of the legs' stairs and lifts (`cutWells`);
+ * the landing's girders, whose four sides differ at their corners
+ * (`landingBlocks`); and the names' letters, which differ face by face
+ * (`namesLettering`). The
+ * names keep no normals, as their class carries none and the page
+ * computes them; the pedestals (masonry) keep
  * theirs, smoothed, so their round corner shades round — the page gives
  * the rest of that class flat ones (normals.ts).
  */
-import type { Graph, NodeHandle } from "pcg-ts";
+import type { FieldLike, Graph, NodeHandle } from "pcg-ts";
 import {
+  abs,
   attribute,
+  component,
   copyToPoints,
+  eq,
   extrudePolygon,
+  filterByExpression,
+  gt,
+  index,
+  lt,
+  max,
   mergePrimitives,
+  mul,
+  ne,
   pointGrid,
+  pointLine,
   pointsToPath,
+  position,
   removeAttribute,
   setAttribute,
   spawnInstances,
+  transformPoints,
   vec,
 } from "pcg-ts";
 import { type Vec3, copyToQuadrants, indexTable } from "./lattice.js";
@@ -1514,69 +1535,249 @@ function blockPrism(b: Block): Prism {
   };
 }
 
+// ------------------------------------------------------------------ //
+// DRAWN ONCE, PLACED BY THE GRAPH.
+// ------------------------------------------------------------------ //
+
+/** Every face. Face f is quadrant target f, turned f quarter turns about +y: +z, +x, -z, -x. */
+const ALL: readonly number[] = [0, 1, 2, 3];
+
 /**
- * Many boxes as one mesh, each built as a rectangle extruded by its depth
- * (`blockPrism`), so that it carries its own flat normals (see the file
- * comment). A box with no volume is a slip, refused by its index.
+ * Stations along a face, each a move along +a: `count` of them from
+ * `first`, `pitch` apart, less any a `keep` drops (a field over the
+ * station, non-zero to keep: its position is (a, 0, 0) when it is read).
+ * With `skirt`, each is then set on the 1st-floor skirt's plate
+ * (`SKIRT_FRAME`), so a piece drawn flat on it (`flatOnSkirt`) lands on it. `name`
+ * names the stations' nodes: one name, one set of stations.
  */
-function blocks(g: Graph, id: string, list: readonly Block[]): NodeHandle {
-  list.forEach((b, i) => {
+export interface Along {
+  readonly name: string;
+  readonly first: number;
+  readonly pitch: number;
+  readonly count: number;
+  readonly keep?: FieldLike;
+  readonly skirt?: boolean;
+}
+
+/** Where a drawing stands: on each of `faces`, and there at every station of `along`, or once, as drawn. */
+export interface Place {
+  readonly faces: readonly number[];
+  readonly along?: Along;
+}
+
+/**
+ * A drawing in the face frame and where it stands, or, with `place` null,
+ * one drawn in the world. The graph builds each drawing once and copies it
+ * onto its place's targets (`placedMesh`), so a list of lots IS the
+ * repetition rule: which faces, which stations.
+ */
+export interface Lot<T> {
+  readonly place: Place | null;
+  readonly drawn: T;
+}
+
+/** A place's name in node ids: its faces, then its stations. */
+function placeName(place: Place | null): string {
+  return place === null ? "World" : `F${place.faces.join("")}${place.along?.name ?? ""}`;
+}
+
+/**
+ * Put a drawing in `lots`, merged into the lot that already stands where it
+ * does: one drawing, and one copy, a place.
+ */
+function put(lots: Array<Lot<Piece>>, place: Place | null, piece: Partial<Piece>): void {
+  const name = placeName(place);
+  let lot = lots.find((l) => placeName(l.place) === name);
+  if (lot === undefined) {
+    lot = { place, drawn: { prisms: [], blocks: [] } };
+    lots.push(lot);
+  }
+  lot.drawn.prisms.push(...(piece.prisms ?? []));
+  lot.drawn.blocks.push(...(piece.blocks ?? []));
+}
+
+/** Where the graph's copies land: the quadrant targets, and every node made from them, by name. */
+interface Site {
+  readonly g: Graph;
+  readonly quads: NodeHandle;
+  readonly made: Map<string, NodeHandle>;
+}
+
+/**
+ * The targets a place's copies land on, each carrying the turn and move a
+ * copy takes: the faces' quadrant targets (all four, or those `faces`
+ * keeps, by index), and on each its stations, the stations a line
+ * (`pointLine`), filtered by `keep` and set on the skirt as asked, then
+ * copied onto the face targets, which composes the two. Each is built
+ * once however many drawings stand on it.
+ */
+function targetsOf(site: Site, place: Place): NodeHandle {
+  const { g, quads, made } = site;
+  const once = (id: string, build: () => NodeHandle): NodeHandle => {
+    const had = made.get(id);
+    if (had !== undefined) return had;
+    const node = build();
+    made.set(id, node);
+    return node;
+  };
+  const faceId = `platformsF${place.faces.join("")}`;
+  const faces =
+    place.faces.length === ALL.length
+      ? quads
+      : once(faceId, () => {
+          const [first, ...rest] = place.faces.map((f) => eq(index(), f));
+          if (first === undefined) throw new Error("platforms.ts targetsOf: a place on no face");
+          const node = g.add(
+            filterByExpression,
+            { predicate: rest.reduce<FieldLike>((a, b) => max(a, b), first) },
+            faceId,
+          );
+          g.connect(quads, "out", node, "in");
+          return node;
+        });
+  const A = place.along;
+  if (A === undefined) return faces;
+  const stationsId = `platforms${A.name}`;
+  const stations = once(stationsId, () => {
+    let node: NodeHandle = g.add(
+      pointLine,
+      { mode: "spacing", count: A.count, start: [A.first, 0, 0], end: [A.first + 1, 0, 0], spacing: A.pitch },
+      `${stationsId}Line`,
+    );
+    if (A.keep !== undefined) {
+      const kept = g.add(filterByExpression, { predicate: A.keep }, `${stationsId}Kept`);
+      g.connect(node, "out", kept, "in");
+      node = kept;
+    }
+    if (A.skirt === true) {
+      const set = g.add(transformPoints, SKIRT_FRAME, `${stationsId}OnSkirt`);
+      g.connect(node, "out", set, "in");
+      node = set;
+    }
+    return node;
+  });
+  return once(`${stationsId}${placeName({ faces: place.faces })}`, () => {
+    const node = g.add(copyToPoints, {}, `${stationsId}${placeName({ faces: place.faces })}`);
+    g.connect(stations, "out", node, "source");
+    g.connect(faces, "out", node, "target");
+    return node;
+  });
+}
+
+/**
+ * A drawing as one mesh node named `id`, in the frame it is drawn in:
+ * every prism an outline extruded along its own normal by its depth
+ * (`prismMesh`), every block a point carrying its centre, turn and size,
+ * onto which the unit box (`unitBox`) is copied, its `normal` turned with
+ * it. The extrusion gives every wall and cap its own points and a flat
+ * `normal` (see the file comment), and the box's are axis-aligned in its
+ * own frame, so its size stretches them along themselves and the turn is
+ * all they need. A box with no volume is a slip, refused by its index.
+ */
+function drawn(g: Graph, id: string, piece: Piece): NodeHandle {
+  const { blocks, prisms: list } = piece;
+  blocks.forEach((b, i) => {
     if (!b.size.every((v) => v > 1e-6)) {
       throw new Error(
-        `platforms.ts blocks("${id}"): block ${i} at [${b.at.join(", ")}] has size ` +
+        `platforms.ts drawn("${id}"): block ${i} at [${b.at.join(", ")}] has size ` +
           `[${b.size.join(", ")}]; every extent must be positive`,
       );
     }
   });
-  return prisms(g, id, list.map(blockPrism));
+  const parts: NodeHandle[] = [];
+  if (list.length > 0) parts.push(prismMesh(g, blocks.length > 0 ? `${id}Prisms` : id, list));
+  if (blocks.length > 0) {
+    const name = list.length > 0 ? `${id}Boxes` : id;
+    const col = (pick: (b: Block) => number) => indexTable(blocks.map(pick));
+    const turnOf = (b: Block): Quat => b.rot ?? [0, 0, 0, 1];
+    const slots = g.add(
+      pointGrid,
+      { countX: blocks.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
+      `${name}Slots`,
+    );
+    const place = g.add(
+      setAttribute,
+      { name: "P", type: "f32", tupleSize: 3, value: vec(col((b) => b.at[0]), col((b) => b.at[1]), col((b) => b.at[2])) },
+      `${name}Place`,
+    );
+    const rot = g.add(
+      setAttribute,
+      {
+        name: "rot",
+        type: "f32",
+        tupleSize: 4,
+        value: vec(col((b) => turnOf(b)[0]), col((b) => turnOf(b)[1]), col((b) => turnOf(b)[2]), col((b) => turnOf(b)[3])),
+      },
+      `${name}Turn`,
+    );
+    const size = g.add(
+      setAttribute,
+      { name: "scale", type: "f32", tupleSize: 3, value: vec(col((b) => b.size[0]), col((b) => b.size[1]), col((b) => b.size[2])) },
+      `${name}Size`,
+    );
+    g.connect(slots, "out", place, "in");
+    g.connect(place, "out", rot, "in");
+    g.connect(rot, "out", size, "in");
+    parts.push(copiedOnto(g, name, unitBox(g), size));
+  }
+  if (parts.length === 1) return parts[0] as NodeHandle;
+  const out = g.add(mergePrimitives, {}, id);
+  for (const part of parts) g.connect(part, "out", out, "in");
+  return out;
+}
+
+/** Each graph's unit box: the unit square on z = -0.5 extruded 1 along +z, as `blockPrism` builds a block. */
+const UNIT_BOXES = new WeakMap<Graph, NodeHandle>();
+function unitBox(g: Graph): NodeHandle {
+  let box = UNIT_BOXES.get(g);
+  if (box === undefined) {
+    box = prismMesh(g, "platformsUnitBox", [blockPrism({ at: [0, 0, 0], size: [1, 1, 1] })]);
+    UNIT_BOXES.set(g, box);
+  }
+  return box;
 }
 
 /**
- * Many prisms as one mesh: every outline a closed path, extruded along its
- * own normal by its depth. The extrusion gives every wall and cap its own
- * points and a flat `normal`, which the platforms class keeps — smoothed
- * across any edge under `chord.ts`' crease angle, so a round part shades
- * round and a box keeps its edges; `normals` false removes it, for a class
- * that carries none (see the file comment). Each outline must be convex,
- * or at least all in sight of its first point (a crescent's silvered
- * plate, `crescentGlass`): a cap is a fan from its first point.
+ * One mesh of the platforms class, named `id`: every lot's drawing built
+ * once and copied onto its place's targets, its `normal` turned with it
+ * (`rotateAttrs`), then all of them merged and smoothed together across
+ * any edge under `chord.ts`' crease angle, so a round part shades round
+ * and a box keeps its edges, whichever lots its faces came from.
  */
-function prisms(g: Graph, id: string, list: readonly Prism[], normals = true): NodeHandle {
-  // An index table is a ramp, whose lookup scans its stops, so a table's
-  // cost grows with the square of its length: the list is cooked in runs
-  // of at most PRISM_RUN points and merged.
-  const runs: Prism[][] = [[]];
-  let count = 0;
-  for (const p of list) {
-    if (count + p.outline.length > PRISM_RUN && (runs[runs.length - 1] as Prism[]).length > 0) {
-      runs.push([]);
-      count = 0;
-    }
-    (runs[runs.length - 1] as Prism[]).push(p);
-    count += p.outline.length;
+function placedMesh(site: Site, id: string, lots: ReadonlyArray<Lot<Piece>>): NodeHandle {
+  const { g } = site;
+  const all = g.add(mergePrimitives, {}, `${id}Flat`);
+  for (const lot of lots) {
+    const name = `${id}${placeName(lot.place)}`;
+    const mesh = drawn(g, name, lot.drawn);
+    const out = lot.place === null ? mesh : copiedOnto(g, `${name}On`, mesh, targetsOf(site, lot.place));
+    g.connect(out, "out", all, "in");
   }
-  // With normals, the whole list is smoothed by the crease angle
-  // (`chord.ts`) after the runs are merged, so a round part cut across two
-  // runs still welds; without, the page computes them as before.
-  const tail = normals ? `${id}Flat` : id;
-  let out: NodeHandle;
-  if (runs.length === 1) out = prismRun(g, tail, list, normals);
-  else {
-    out = g.add(mergePrimitives, {}, tail);
-    runs.forEach((run, i) => g.connect(prismRun(g, `${id}Run${i}`, run, normals), "out", out, "in"));
-  }
-  return normals ? smoothed(g, id, out) : out;
+  return smoothed(g, id, all);
+}
+
+/** `source` copied onto every point of `targets`, its primitives kept and its `normal` turned with each copy. */
+function copiedOnto(g: Graph, id: string, source: NodeHandle, targets: NodeHandle): NodeHandle {
+  const node = g.add(copyToPoints, { topology: "keep", rotateAttrs: ["normal"] }, id);
+  g.connect(source, "out", node, "source");
+  g.connect(targets, "out", node, "target");
+  return node;
+}
+
+/** World prisms as one smoothed mesh (the pedestal, its grille). */
+function prisms(g: Graph, id: string, list: readonly Prism[]): NodeHandle {
+  return smoothed(g, id, drawn(g, `${id}Flat`, { prisms: [...list], blocks: [] }));
 }
 
 /**
- * Points per run of `prisms` [measured 2026-09-19, Node: this file's
- * meshes cook in 0.31 s in runs of 1024, 0.29 s in runs of 512, 0.34 s in
- * runs of 2048, and 0.80 s unsplit].
+ * Prisms as one mesh node named `id`: every outline a closed path, its
+ * points' coordinates a table over their index (`indexTable`), extruded
+ * along its normal by its depth. One table for the whole list: it was once
+ * cut into runs of 1,024 points, from when a table's lookup cost grew with
+ * the square of its length, which it no longer does (PLAN.md, "The eiffel
+ * `PRISM_RUN` split is vestigial").
  */
-const PRISM_RUN = 1024;
-
-/** One run of `prisms`, as one mesh node named `id`. */
-function prismRun(g: Graph, id: string, list: readonly Prism[], normals: boolean): NodeHandle {
+function prismMesh(g: Graph, id: string, list: readonly Prism[]): NodeHandle {
   const pts = list.flatMap((p) => p.outline);
   const which = list.flatMap((p, i) => p.outline.map(() => i));
   const depth = list.flatMap((p) => p.outline.map(() => p.depth));
@@ -1610,20 +1811,13 @@ function prismRun(g: Graph, id: string, list: readonly Prism[], normals: boolean
     `${id}Depth`,
   );
   const paths = g.add(pointsToPath, { groupAttr: "prism", closed: true }, `${id}Paths`);
-  const solid = g.add(
-    extrudePolygon,
-    { direction: "polygonNormal", distance: attribute("depth"), caps: "both" },
-    normals ? id : `${id}Solid`,
-  );
+  const solid = g.add(extrudePolygon, { direction: "polygonNormal", distance: attribute("depth"), caps: "both" }, id);
   g.connect(slots, "out", place, "in");
   g.connect(place, "out", key, "in");
   g.connect(key, "out", len, "in");
   g.connect(len, "out", paths, "in");
   g.connect(paths, "out", solid, "in");
-  if (normals) return solid;
-  const out = g.add(removeAttribute, { names: ["normal"], domain: "point" }, id);
-  g.connect(solid, "out", out, "in");
-  return out;
+  return solid;
 }
 
 /**
@@ -1691,6 +1885,17 @@ function railFace(
 /** The arcade's column axis: half the printed side. */
 const EDGE = PLATFORMS.first.side / 2;
 
+/**
+ * The 1st-floor skirt plate's own frame, as a transform onto the +z face:
+ * x along the face, y up the plate from its top edge (under the gallery
+ * slab, on the column axis), z out of it. A piece drawn flat in it
+ * (`flatOnSkirt`) is set on the plate by this one turn and move (`Along.skirt`).
+ */
+const SKIRT_FRAME = {
+  rotateEuler: vec((SKIRT_TILT * 180) / Math.PI, 0, 0),
+  translate: vec(0, GALLERY.floor - DECK, EDGE),
+} as const;
+
 /** The bays' vaults spring from the valley gutters [derived: 3.80 + 2.25]. */
 const SPRING_Y = GALLERY.floor + GALLERY.columnHeight + GALLERY.pierHeight;
 /** The vaults' crown [sourced]. */
@@ -1700,6 +1905,28 @@ const CROWN_Y = GALLERY.floor + GALLERY.crown;
 function bayCentre(k: number): number {
   return k * GALLERY.module;
 }
+
+/** The nine bays' centres on a face: a bay is drawn once, over a = 0, and copied onto these. */
+const BAYS: Along = { name: "Bays", first: bayCentre(-4), pitch: GALLERY.module, count: 9 };
+
+/**
+ * The bays whose vaults are the gallery's own: all but the three central
+ * ones, which a pavilion roofs (`pavilionFace`).
+ */
+const ROOFED_BAYS: Along = {
+  ...BAYS,
+  name: "RoofedBays",
+  keep: gt(abs(component(position(), 0)), 1.5 * GALLERY.module),
+};
+
+/** The ten piers, between the bays and at the corners, 0.40 in from each. */
+const PIERS: Along = { name: "Piers", first: -4.5 * GALLERY.module, pitch: GALLERY.module, count: 10 };
+
+/**
+ * The piers but the -a corner's: a corner pier's outer column IS the
+ * corner's, and belongs to the face it ends (the +a end), pinwheel fashion.
+ */
+const PIERS_PAST_CORNER: Along = { ...PIERS, name: "PiersPastCorner", keep: ne(index(), 0) };
 
 /**
  * A vault's outer arc over bay centre `c`, at r, left foot to right foot,
@@ -1788,12 +2015,6 @@ function parted<K extends string>(...names: K[]): Record<K, Piece> {
   const out = {} as Record<K, Piece>;
   for (const n of names) out[n] = { prisms: [], blocks: [] };
   return out;
-}
-
-/** A parted part's pieces, merged. */
-function merged(part: Parted): Piece {
-  const pieces = Object.values(part);
-  return { prisms: pieces.flatMap((p) => p.prisms), blocks: pieces.flatMap((p) => p.blocks) };
 }
 
 /**
@@ -1925,113 +2146,131 @@ function bayRoof(c: number, r: number, depth: number): Piece {
 }
 
 /**
- * Whether the pier at station `a` along the face stands in front of a leg
- * (see `INNER_ARCADE`): within the leg's width at the gallery floor, its
- * uprights' half-width and a pilaster's depth to spare either side.
+ * The inner arcade's piers: the piers between bays -4 and 4, not the
+ * corners' (see `INNER_ARCADE`), those standing in front of a leg and the
+ * rest. A pier stands in front of a leg when it is within the leg's width
+ * at the gallery floor, its uprights' half-width and a pilaster's depth to
+ * spare either side: a rule on the station's |a|, which the graph reads.
  */
-function inFrontOfLeg(a: number): boolean {
+const INNER_PIERS = ((): { beforeLeg: Along; clear: Along } => {
   const { outer, inner } = profileAt(GALLERY.floor);
   const spare = uprightAt(GALLERY.floor) + INNER_ARCADE.deep;
-  return Math.abs(a) > inner - spare && Math.abs(a) < outer + spare;
-}
+  const a = abs(component(position(), 0));
+  const beforeLeg = mul(gt(a, inner - spare), lt(a, outer + spare));
+  const piers = { first: -3.5 * GALLERY.module, pitch: GALLERY.module, count: 8 };
+  return {
+    beforeLeg: { ...piers, name: "PiersBeforeLeg", keep: beforeLeg },
+    clear: { ...piers, name: "PiersClearOfLeg", keep: eq(beforeLeg, 0) },
+  };
+})();
+
+/** The inner arcade's arches: over every bay but the corners'. */
+const INNER_BAYS: Along = { name: "InnerBays", first: bayCentre(-3), pitch: GALLERY.module, count: 7 };
 
 /**
  * The inner arcade on the +z face (see `INNER_ARCADE`): a pilaster and a
  * valley gutter at every pier, and over every bay the arch its vault ends
  * on, in the plane `INNER_ARCADE.depth` inside the column axis, extruded
- * outward from it by the plate as the face gable is inward.
+ * outward from it by the plate as the face gable is inward. A pier is
+ * drawn once each way, before a leg and clear of one, and an arch once,
+ * each over a = 0, and copied onto their stations (`INNER_PIERS`,
+ * `INNER_BAYS`).
  */
-function innerArcadeFace(): Record<"pilaster" | "head" | "gutter" | "arch", Piece> {
+function innerArcadeFace(): Record<"pilaster" | "head" | "gutter" | "arch", Array<Lot<Piece>>> {
   const I = INNER_ARCADE;
   const A = GALLERY;
   const rIn = EDGE - I.depth;
   const gutterFoot = SPRING_Y - I.gutterDepth;
-  const out = parted("pilaster", "head", "gutter", "arch");
-  // The piers between bays -4 and 4, not the corners' (see `INNER_ARCADE`).
-  for (let k = -4; k <= 3; k++) {
-    const p = (k + 0.5) * A.module;
-    const leg = inFrontOfLeg(p);
+  const out: Record<"pilaster" | "head" | "gutter" | "arch", Array<Lot<Piece>>> = {
+    pilaster: [],
+    head: [],
+    gutter: [],
+    arch: [],
+  };
+  for (const leg of [true, false]) {
+    const place: Place = { faces: ALL, along: leg ? INNER_PIERS.beforeLeg : INNER_PIERS.clear };
     // The shaft: on the platform against the vault's end, or, before a
     // leg, on the gallery floor against the step's face.
     const r0 = leg ? EDGE - I.legAxis - I.deep / 2 : rIn;
     const r1 = r0 + I.deep;
     const foot = leg ? A.floor : FLOORS.first;
     const headFoot = A.floor + I.headFoot;
-    out.pilaster.blocks.push(span(p - I.width / 2, p + I.width / 2, foot, headFoot, r0, r1));
+    put(out.pilaster, place, { blocks: [span(-I.width / 2, I.width / 2, foot, headFoot, r0, r1)] });
     // The head: its flare (a trapezoid across the face, extruded through
     // the pilaster's depth), then its block up to the gutter.
     const w = I.width / 2;
     const h = I.headWidth / 2;
-    out.head.prisms.push({
-      // Counter-clockwise seen from +r, so it extrudes toward +r.
-      outline: [
-        [p - w, headFoot, r0],
-        [p + w, headFoot, r0],
-        [p + h, headFoot + I.flare, r0],
-        [p - h, headFoot + I.flare, r0],
+    put(out.head, place, {
+      prisms: [
+        {
+          // Counter-clockwise seen from +r, so it extrudes toward +r.
+          outline: [
+            [-w, headFoot, r0],
+            [w, headFoot, r0],
+            [h, headFoot + I.flare, r0],
+            [-h, headFoot + I.flare, r0],
+          ],
+          depth: I.deep,
+        },
       ],
-      depth: I.deep,
+      blocks: [span(-h, h, headFoot + I.flare, gutterFoot, r0, r1)],
     });
-    out.head.blocks.push(span(p - h, p + h, headFoot + I.flare, gutterFoot, r0, r1));
     // The valley gutter: from the face's plate pier back to the arch's
     // plane, or on to the leg.
     const back = leg ? EDGE - I.legReach : rIn;
-    out.gutter.blocks.push(
-      span(p - I.gutter / 2, p + I.gutter / 2, gutterFoot, SPRING_Y, back, EDGE - ARCADE.plate / 2),
-    );
+    put(out.gutter, place, {
+      blocks: [span(-I.gutter / 2, I.gutter / 2, gutterFoot, SPRING_Y, back, EDGE - ARCADE.plate / 2)],
+    });
   }
   const arc = { outerRib: I.rib, innerRib: I.rib, radius: I.innerRadius, crown: I.innerCrown, under: ARCADE.shell };
-  for (let k = -3; k <= 3; k++) {
-    // gableRibs extrudes inward from its r: set it a plate outside the
-    // plane, so the arch stands from the vault's end outward.
-    const arch = gableRibs(bayCentre(k), rIn + ARCADE.plate, arc);
-    out.arch.prisms.push(...arch.prisms);
-    out.arch.blocks.push(...arch.blocks);
-  }
+  // gableRibs extrudes inward from its r: set it a plate outside the
+  // plane, so the arch stands from the vault's end outward.
+  put(out.arch, { faces: ALL, along: INNER_BAYS }, gableRibs(0, rIn + ARCADE.plate, arc));
   return out;
 }
 
-/** The arcade on the +z face: columns, piers, arches and masts (its dressing is `arcadeDressFace`). */
-function arcadeFace(): Block[] {
+/**
+ * The arcade on the +z face: columns, piers, arches and masts (its
+ * dressing is `arcadeDressFace`). A pier and a bay are each drawn once,
+ * over a = 0, and copied onto the piers and bays; a pier's inner (-a)
+ * column goes on every pier but the -a corner's (`PIERS_PAST_CORNER`).
+ */
+function arcadeFace(): Array<Lot<Piece>> {
   const A = GALLERY;
-  const out: Block[] = [];
   const top = A.floor + A.columnHeight;
   const spring = top + A.archSpring;
   const column = (a: number, height: number) => post(a, EDGE, A.column, A.floor, A.floor + height);
-  for (let k = -5; k <= 4; k++) {
-    // The pier between bays k and k + 1; the corner piers stand 0.40 in
-    // from the corner, so their outer column IS the corner's. That column
-    // belongs to the face it ends (the +a end), pinwheel fashion.
-    const p = (k + 0.5) * A.module;
-    if (k > -5) out.push(column(p - A.pair / 2, A.columnHeight));
-    out.push(column(p + A.pair / 2, A.columnHeight));
-    const plateHalf = (A.pair + A.column) / 2;
-    out.push(onLine(p - plateHalf, p + plateHalf, top, SPRING_Y, EDGE, ARCADE.plate));
-    // The mast, just proud of the plate pier.
-    const m = ARCADE.mast;
-    const foot = A.floor + m.foot;
-    out.push(post(p, EDGE + (ARCADE.plate + m.size) / 2, m.size, foot, foot + m.length));
-  }
-  for (let k = -4; k <= 4; k++) {
-    const c = bayCentre(k);
-    // The single column mid-bay, up to the arches' springing.
-    out.push(column(c, A.columnHeight + A.archSpring));
-    // Its two small arches, as facets of the rib.
-    for (const side of [-1, 1]) {
-      const ac = c + side * GALLERY_RAIL_PITCH;
-      const mid = A.archRadius + A.archRib / 2;
-      const chord = 2 * (A.archRadius + A.archRib) * Math.sin(Math.PI / (2 * ARCADE.archFacets));
-      for (let i = 0; i < ARCADE.archFacets; i++) {
-        const phi = (Math.PI * (i + 0.5)) / ARCADE.archFacets;
-        out.push({
-          at: [ac + mid * Math.cos(phi), spring + mid * Math.sin(phi), EDGE],
-          size: [chord, A.archRib, ARCADE.plate],
-          rot: turn(2, phi + Math.PI / 2),
-        });
-      }
+  // The pier: its outer column, the plate pier over its pair, and the
+  // mast, just proud of the plate pier.
+  const plateHalf = (A.pair + A.column) / 2;
+  const m = ARCADE.mast;
+  const foot = A.floor + m.foot;
+  const pier: Block[] = [
+    column(A.pair / 2, A.columnHeight),
+    onLine(-plateHalf, plateHalf, top, SPRING_Y, EDGE, ARCADE.plate),
+    post(0, EDGE + (ARCADE.plate + m.size) / 2, m.size, foot, foot + m.length),
+  ];
+  // The bay: its single column mid-bay, up to the arches' springing, and
+  // its two small arches, as facets of the rib.
+  const bay: Block[] = [column(0, A.columnHeight + A.archSpring)];
+  for (const side of [-1, 1]) {
+    const ac = side * GALLERY_RAIL_PITCH;
+    const mid = A.archRadius + A.archRib / 2;
+    const chord = 2 * (A.archRadius + A.archRib) * Math.sin(Math.PI / (2 * ARCADE.archFacets));
+    for (let i = 0; i < ARCADE.archFacets; i++) {
+      const phi = (Math.PI * (i + 0.5)) / ARCADE.archFacets;
+      bay.push({
+        at: [ac + mid * Math.cos(phi), spring + mid * Math.sin(phi), EDGE],
+        size: [chord, A.archRib, ARCADE.plate],
+        rot: turn(2, phi + Math.PI / 2),
+      });
     }
   }
-  return out;
+  return [
+    { place: { faces: ALL, along: PIERS }, drawn: { prisms: [], blocks: pier } },
+    { place: { faces: ALL, along: PIERS_PAST_CORNER }, drawn: { prisms: [], blocks: [column(-A.pair / 2, A.columnHeight)] } },
+    { place: { faces: ALL, along: BAYS }, drawn: { prisms: [], blocks: bay } },
+  ];
 }
 
 /**
@@ -2126,68 +2365,68 @@ interface Fitting {
 const OUT_OF_FACE: Quat = turn(0, Math.PI / 2);
 const UPRIGHT: Quat = [0, 0, 0, 1];
 
-/** Face-frame fittings, turned onto the faces given, as the quadrant targets turn. */
-function fittingsOnFaces(list: readonly Fitting[], faces: readonly number[] = [0, 1, 2, 3]): Fitting[] {
-  const out: Fitting[] = [];
-  for (const f of faces) {
-    const yaw = turn(1, (f * Math.PI) / 2);
-    for (const x of list) out.push({ at: onFace(f, x.at), rot: qmul(yaw, x.rot), scale: x.scale });
-  }
-  return out;
-}
-
 /**
- * Fittings as instances of `assetId`: a point per fitting carrying P,
- * `rot` and `scale`, jittered as the rivets are (they are seated on faces
- * too), then spawned.
+ * Fittings as instances of `assetId`: each lot's fittings drawn once as a
+ * point apiece carrying P, `rot` and `scale`, copied onto its place's
+ * targets (which turn `rot` and move P with the copy), jittered as the
+ * rivets are (they are seated on faces too), then spawned.
  */
-function fittingSpawn(g: Graph, id: string, list: readonly Fitting[], assetId: string): NodeHandle {
-  const slots = g.add(
-    pointGrid,
-    { countX: list.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    `${id}Slots`,
-  );
-  const col = (pick: (x: Fitting) => number) => indexTable(list.map(pick));
-  const place = g.add(
-    setAttribute,
-    {
-      name: "P",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(col((x) => x.at[0]), col((x) => x.at[1]), col((x) => x.at[2])),
-    },
-    `${id}Place`,
-  );
-  const rot = g.add(
-    setAttribute,
-    {
-      name: "rot",
-      type: "f32",
-      tupleSize: 4,
-      value: vec(col((x) => x.rot[0]), col((x) => x.rot[1]), col((x) => x.rot[2]), col((x) => x.rot[3])),
-    },
-    `${id}Turn`,
-  );
-  const size = g.add(
-    setAttribute,
-    {
-      name: "scale",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(col((x) => x.scale[0]), col((x) => x.scale[1]), col((x) => x.scale[2])),
-    },
-    `${id}Size`,
-  );
+function fittingSpawn(site: Site, id: string, lots: ReadonlyArray<Lot<readonly Fitting[]>>, assetId: string): NodeHandle {
+  const { g } = site;
+  const all = g.add(mergePrimitives, {}, `${id}Placed`);
+  for (const lot of lots) {
+    const name = `${id}${placeName(lot.place)}`;
+    const list = lot.drawn;
+    const col = (pick: (x: Fitting) => number) => indexTable(list.map(pick));
+    const slots = g.add(
+      pointGrid,
+      { countX: list.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
+      `${name}Slots`,
+    );
+    const place = g.add(
+      setAttribute,
+      { name: "P", type: "f32", tupleSize: 3, value: vec(col((x) => x.at[0]), col((x) => x.at[1]), col((x) => x.at[2])) },
+      `${name}Place`,
+    );
+    const rot = g.add(
+      setAttribute,
+      {
+        name: "rot",
+        type: "f32",
+        tupleSize: 4,
+        value: vec(col((x) => x.rot[0]), col((x) => x.rot[1]), col((x) => x.rot[2]), col((x) => x.rot[3])),
+      },
+      `${name}Turn`,
+    );
+    const size = g.add(
+      setAttribute,
+      {
+        name: "scale",
+        type: "f32",
+        tupleSize: 3,
+        value: vec(col((x) => x.scale[0]), col((x) => x.scale[1]), col((x) => x.scale[2])),
+      },
+      `${name}Size`,
+    );
+    g.connect(slots, "out", place, "in");
+    g.connect(place, "out", rot, "in");
+    g.connect(rot, "out", size, "in");
+    let out: NodeHandle = size;
+    if (lot.place !== null) {
+      out = g.add(copyToPoints, {}, `${name}On`);
+      g.connect(size, "out", out, "source");
+      g.connect(targetsOf(site, lot.place), "out", out, "target");
+    }
+    g.connect(out, "out", all, "in");
+  }
   const spawn = g.add(spawnInstances, { assetId }, `${id}Spawn`);
-  g.connect(slots, "out", place, "in");
-  g.connect(jitter(g, `${id}Jitter`, place), "out", rot, "in");
-  g.connect(rot, "out", size, "in");
-  g.connect(size, "out", spawn, "in");
+  g.connect(jitter(g, `${id}Jitter`, all), "out", spawn, "in");
   return spawn;
 }
 
 /**
- * The arcade's dressing on the +z face (see `ARCADE_DRESS`): the crest,
+ * The arcade's dressing (see `ARCADE_DRESS`), one arcade over a = 0 on
+ * the +z face, which the graph copies onto every bay (`BAYS`): the crest,
  * the cabochons' rings and the globes' rods and hoops as solids, and the
  * bosses and globes as fittings.
  */
@@ -2208,109 +2447,108 @@ function arcadeDressFace(): {
     outline: pts.map(([a, y]): Vec3 => [a, y, EDGE]),
     depth: C.depth,
   });
-  for (let k = -4; k <= 4; k++) {
-    const c = bayCentre(k);
-    const outerIn = vaultArc(c, EDGE, GABLE.outerRib);
-    const innerOut = innerArc(c, EDGE, GABLE.innerRib);
-    // The crest: legs along two rays, their heads turned in to the
-    // scrolls, cartouche, collar, palmette.
-    const plane = EDGE + C.depth / 2;
-    for (const j of C.legs.rays) {
-      const [ia, iy] = innerOut[j * CELL_STEPS] as Vec3;
-      const [oa, oy] = outerIn[j * CELL_STEPS] as Vec3;
-      const t = (floor + C.legs.top - iy) / (oy - iy);
-      const head: Vec3 = [ia + t * (oa - ia), floor + C.legs.top, plane];
-      const s = Math.sign(head[0] - c);
-      const scroll: Vec3 = [c + s * C.scroll.at, floor + C.scroll.y, plane];
-      part.crest.blocks.push(
-        bar([ia, iy, plane], head, C.legs.width, C.depth),
-        bar(head, [scroll[0] + s * C.scroll.radius * 0.6, scroll[1] - C.scroll.radius * 0.6, plane], C.legs.width, C.depth),
-      );
-      part.crest.prisms.push(disc(scroll[0], scroll[1], EDGE, C.scroll.radius, C.depth, 1));
-    }
-    const K = C.cartouche;
-    const [k0, k1, h, e] = [floor + K.foot, floor + K.top, K.half, K.chamfer];
+  // One arcade, over a = 0: the bays' are its copies (`BAYS`).
+  const c = 0;
+  const outerIn = vaultArc(c, EDGE, GABLE.outerRib);
+  const innerOut = innerArc(c, EDGE, GABLE.innerRib);
+  // The crest: legs along two rays, their heads turned in to the
+  // scrolls, cartouche, collar, palmette.
+  const plane = EDGE + C.depth / 2;
+  for (const j of C.legs.rays) {
+    const [ia, iy] = innerOut[j * CELL_STEPS] as Vec3;
+    const [oa, oy] = outerIn[j * CELL_STEPS] as Vec3;
+    const t = (floor + C.legs.top - iy) / (oy - iy);
+    const head: Vec3 = [ia + t * (oa - ia), floor + C.legs.top, plane];
+    const s = Math.sign(head[0] - c);
+    const scroll: Vec3 = [c + s * C.scroll.at, floor + C.scroll.y, plane];
+    part.crest.blocks.push(
+      bar([ia, iy, plane], head, C.legs.width, C.depth),
+      bar(head, [scroll[0] + s * C.scroll.radius * 0.6, scroll[1] - C.scroll.radius * 0.6, plane], C.legs.width, C.depth),
+    );
+    part.crest.prisms.push(disc(scroll[0], scroll[1], EDGE, C.scroll.radius, C.depth, 1));
+  }
+  const K = C.cartouche;
+  const [k0, k1, h, e] = [floor + K.foot, floor + K.top, K.half, K.chamfer];
+  part.crest.prisms.push(
+    ccw([
+      [c - h + e, k0],
+      [c + h - e, k0],
+      [c + h, k0 + e],
+      [c + h, k1 - e],
+      [c + h - e, k1],
+      [c - h + e, k1],
+      [c - h, k1 - e],
+      [c - h, k0 + e],
+    ]),
+  );
+  part.crest.blocks.push(
+    span(c - C.collar.half, c + C.collar.half, floor + C.collar.foot, floor + C.collar.top, EDGE, EDGE + C.depth),
+  );
+  const P = C.palmette;
+  const base = floor + P.base;
+  const tips = P.tips.flatMap(([a, y]): Array<readonly [number, number]> => (a === 0 ? [[0, y]] : [[-a, y], [a, y]]));
+  for (const [ta, ty] of tips) {
+    const L = Math.hypot(ta, floor + ty - base);
+    const [dx, dy] = [ta / L, (floor + ty - base) / L];
+    const [nx, ny] = [dy, -dx];
+    const w = P.width / 2;
     part.crest.prisms.push(
       ccw([
-        [c - h + e, k0],
-        [c + h - e, k0],
-        [c + h, k0 + e],
-        [c + h, k1 - e],
-        [c + h - e, k1],
-        [c - h + e, k1],
-        [c - h, k1 - e],
-        [c - h, k0 + e],
+        [c, base],
+        [c + dx * 0.55 * L + nx * w, base + dy * 0.55 * L + ny * w],
+        [c + dx * L, base + dy * L],
+        [c + dx * 0.55 * L - nx * w, base + dy * 0.55 * L - ny * w],
       ]),
     );
-    part.crest.blocks.push(
-      span(c - C.collar.half, c + C.collar.half, floor + C.collar.foot, floor + C.collar.top, EDGE, EDGE + C.depth),
-    );
-    const P = C.palmette;
-    const base = floor + P.base;
-    const tips = P.tips.flatMap(([a, y]): Array<readonly [number, number]> => (a === 0 ? [[0, y]] : [[-a, y], [a, y]]));
-    for (const [ta, ty] of tips) {
-      const L = Math.hypot(ta, floor + ty - base);
-      const [dx, dy] = [ta / L, (floor + ty - base) / L];
-      const [nx, ny] = [dy, -dx];
-      const w = P.width / 2;
-      part.crest.prisms.push(
-        ccw([
-          [c, base],
-          [c + dx * 0.55 * L + nx * w, base + dy * 0.55 * L + ny * w],
-          [c + dx * L, base + dy * L],
-          [c + dx * 0.55 * L - nx * w, base + dy * 0.55 * L - ny * w],
-        ]),
-      );
-    }
-    // The cabochons: one in each cell of the crescent, a constant distance
-    // in from the outer rib's inner edge along the cell's middle line (from
-    // the middle of the chord between its two rays' feet on the one rib to
-    // the same on the other).
-    const B = D.cabochon;
-    for (let k = 0; k < ARCADE.cells; k++) {
-      const [i, j] = [k * CELL_STEPS, (k + 1) * CELL_STEPS];
-      const midOf = (p: readonly Vec3[]): [number, number] => [
-        ((p[i] as Vec3)[0] + (p[j] as Vec3)[0]) / 2,
-        ((p[i] as Vec3)[1] + (p[j] as Vec3)[1]) / 2,
-      ];
-      const [oa, oy] = midOf(outerIn);
-      const [ia, iy] = midOf(innerOut);
-      const f = B.inFromOuter / Math.hypot(oa - ia, oy - iy);
-      const a = oa + f * (ia - oa);
-      const y = oy + f * (iy - oy);
-      part.ring.prisms.push(disc(a, y, EDGE, B.ring, B.ringDepth, 1));
-      cabochons.push({ at: [a, y, EDGE + B.ringDepth], rot: OUT_OF_FACE, scale: [B.boss, B.boss, B.boss] });
-    }
-    // The globe on its rod from the vault's crown, in its two hoops.
-    const G = D.globe;
-    const gr = EDGE - G.in;
-    const gy = floor + G.centre;
-    // The hoops' bars clear the globe at their chords' middles; as many as
-    // keep each hoop's outer edge within `SAG.near` of its circle
-    // [derived: 20 on about 0.33].
-    const sides = circleSegments(G.radius + G.hoop + 0.01, SAG.near);
-    const hoop = (G.radius + G.hoop / 2 + 0.005) / Math.cos(Math.PI / sides);
-    part.hanger.blocks.push(post(c, gr, G.rod, gy + hoop + G.hoop / 2, CROWN_Y - ARCADE.shell));
-    for (let j = 0; j < sides; j++) {
-      const t0 = (2 * Math.PI * j) / sides;
-      const t1 = (2 * Math.PI * (j + 1)) / sides;
-      // One hoop in the face's plane, one square to it.
-      part.hanger.blocks.push(
-        bar(
-          [c + hoop * Math.cos(t0), gy + hoop * Math.sin(t0), gr],
-          [c + hoop * Math.cos(t1), gy + hoop * Math.sin(t1), gr],
-          G.hoop,
-          G.hoop,
-        ),
-        member(
-          [c, gy + hoop * Math.sin(t0), gr + hoop * Math.cos(t0)],
-          [c, gy + hoop * Math.sin(t1), gr + hoop * Math.cos(t1)],
-          G.hoop,
-        ),
-      );
-    }
-    globes.push({ at: [c, gy, gr], rot: UPRIGHT, scale: [G.radius, G.radius, G.radius] });
   }
+  // The cabochons: one in each cell of the crescent, a constant distance
+  // in from the outer rib's inner edge along the cell's middle line (from
+  // the middle of the chord between its two rays' feet on the one rib to
+  // the same on the other).
+  const B = D.cabochon;
+  for (let k = 0; k < ARCADE.cells; k++) {
+    const [i, j] = [k * CELL_STEPS, (k + 1) * CELL_STEPS];
+    const midOf = (p: readonly Vec3[]): [number, number] => [
+      ((p[i] as Vec3)[0] + (p[j] as Vec3)[0]) / 2,
+      ((p[i] as Vec3)[1] + (p[j] as Vec3)[1]) / 2,
+    ];
+    const [oa, oy] = midOf(outerIn);
+    const [ia, iy] = midOf(innerOut);
+    const f = B.inFromOuter / Math.hypot(oa - ia, oy - iy);
+    const a = oa + f * (ia - oa);
+    const y = oy + f * (iy - oy);
+    part.ring.prisms.push(disc(a, y, EDGE, B.ring, B.ringDepth, 1));
+    cabochons.push({ at: [a, y, EDGE + B.ringDepth], rot: OUT_OF_FACE, scale: [B.boss, B.boss, B.boss] });
+  }
+  // The globe on its rod from the vault's crown, in its two hoops.
+  const G = D.globe;
+  const gr = EDGE - G.in;
+  const gy = floor + G.centre;
+  // The hoops' bars clear the globe at their chords' middles; as many as
+  // keep each hoop's outer edge within `SAG.near` of its circle
+  // [derived: 20 on about 0.33].
+  const sides = circleSegments(G.radius + G.hoop + 0.01, SAG.near);
+  const hoop = (G.radius + G.hoop / 2 + 0.005) / Math.cos(Math.PI / sides);
+  part.hanger.blocks.push(post(c, gr, G.rod, gy + hoop + G.hoop / 2, CROWN_Y - ARCADE.shell));
+  for (let j = 0; j < sides; j++) {
+    const t0 = (2 * Math.PI * j) / sides;
+    const t1 = (2 * Math.PI * (j + 1)) / sides;
+    // One hoop in the face's plane, one square to it.
+    part.hanger.blocks.push(
+      bar(
+        [c + hoop * Math.cos(t0), gy + hoop * Math.sin(t0), gr],
+        [c + hoop * Math.cos(t1), gy + hoop * Math.sin(t1), gr],
+        G.hoop,
+        G.hoop,
+      ),
+      member(
+        [c, gy + hoop * Math.sin(t0), gr + hoop * Math.cos(t0)],
+        [c, gy + hoop * Math.sin(t1), gr + hoop * Math.cos(t1)],
+        G.hoop,
+      ),
+    );
+  }
+  globes.push({ at: [c, gy, gr], rot: UPRIGHT, scale: [G.radius, G.radius, G.radius] });
   return { part, cabochons, globes };
 }
 
@@ -2383,8 +2621,9 @@ export const BALUSTER = {
 } as const;
 
 /**
- * Every baluster on the +z face (see `BALUSTER`): five in each of a bay's
- * four intervals, on the column axis, on the gallery rail's plinth.
+ * A bay's balusters on the +z face (see `BALUSTER`), the bay over a = 0,
+ * which the graph copies onto every bay (`BAYS`): five in each of its four
+ * intervals, on the column axis, on the gallery rail's plinth.
  */
 function balustersFace(): Fitting[] {
   const B = BALUSTER;
@@ -2392,24 +2631,21 @@ function balustersFace(): Fitting[] {
   const pitch = B.clear / B.perInterval;
   const foot = A.floor + GALLERY_RAIL.plinth;
   const out: Fitting[] = [];
-  for (let k = -4; k <= 4; k++) {
-    const c = bayCentre(k);
-    // Each interval's clear: from the column's socle to the pilaster's
-    // base, or from the pilaster's base to the middle column's socle.
-    const pier = A.module / 2 - A.pair / 2;
-    const clears: Array<readonly [number, number]> = [
-      [c - pier + B.socle / 2, c - GALLERY_RAIL_PITCH - B.base / 2],
-      [c - GALLERY_RAIL_PITCH + B.base / 2, c - B.socle / 2],
-      [c + B.socle / 2, c + GALLERY_RAIL_PITCH - B.base / 2],
-      [c + GALLERY_RAIL_PITCH + B.base / 2, c + pier - B.socle / 2],
-    ];
-    for (const [a0, a1] of clears) {
-      if (Math.abs(a1 - a0 - B.clear) > 1e-9) {
-        throw new Error(`platforms.ts balustersFace: an interval of ${a1 - a0}, not the plate's ${B.clear}`);
-      }
-      for (let j = 0; j < B.perInterval; j++) {
-        out.push({ at: [a0 + pitch * (j + 0.5), foot, EDGE], rot: UPRIGHT, scale: [1, 1, 1] });
-      }
+  // Each interval's clear: from the column's socle to the pilaster's
+  // base, or from the pilaster's base to the middle column's socle.
+  const pier = A.module / 2 - A.pair / 2;
+  const clears: Array<readonly [number, number]> = [
+    [-pier + B.socle / 2, -GALLERY_RAIL_PITCH - B.base / 2],
+    [-GALLERY_RAIL_PITCH + B.base / 2, -B.socle / 2],
+    [B.socle / 2, GALLERY_RAIL_PITCH - B.base / 2],
+    [GALLERY_RAIL_PITCH + B.base / 2, pier - B.socle / 2],
+  ];
+  for (const [a0, a1] of clears) {
+    if (Math.abs(a1 - a0 - B.clear) > 1e-9) {
+      throw new Error(`platforms.ts balustersFace: an interval of ${a1 - a0}, not the plate's ${B.clear}`);
+    }
+    for (let j = 0; j < B.perInterval; j++) {
+      out.push({ at: [a0 + pitch * (j + 0.5), foot, EDGE], rot: UPRIGHT, scale: [1, 1, 1] });
     }
   }
   return out;
@@ -3885,32 +4121,54 @@ function crescentGlass(c: number): { plates: Prism[]; ends: Prism[]; sills: Bloc
   return { plates, ends, sills };
 }
 
+/** How many copies a place makes: its faces times its stations (a place whose stations a field keeps cannot say before the cook). */
+function copiesOf(place: Place | null): number {
+  if (place === null) return 1;
+  if (place.along?.keep !== undefined) {
+    throw new Error(`platforms.ts copiesOf: stations "${place.along.name}" are kept by a field; count them in the cook`);
+  }
+  return place.faces.length * (place.along?.count ?? 1);
+}
+
 /**
- * The clear glass (`glass`) and the silvered (`silvered`), each as world
- * prisms on the faces it stands on, and a pane count by opening for the
- * record. For inspection as well as for the cook.
+ * The clear glass (`glass`) and the silvered (`silvered`), each drawn in
+ * the face frame with the place it stands on (`Lot`), the crescents' sills
+ * the same way, and a pane count by opening for the record. The graph
+ * builds these lots as they are (`buildPlatforms`), so for inspection
+ * they are the cook's own drawings, in the cook's order.
  */
-export function glazing(): { glass: Prism[]; silvered: Prism[]; sills: Block[]; count: Record<string, number> } {
+export function glazing(): {
+  glass: Array<Lot<Piece>>;
+  silvered: Array<Lot<Piece>>;
+  /** The crescents' cell plates alone, of `silvered` (the rest are the rays' end pieces). */
+  plates: Array<Lot<Piece>>;
+  sills: Array<Lot<Piece>>;
+  count: Record<string, number>;
+} {
   const P = PAVILION_FACE;
-  const all = [0, 1, 2, 3];
   const timber = DRESSING;
   const count: Record<string, number> = {};
-  const glass: Prism[] = [];
-  const put = (name: string, list: readonly Prism[], faces: readonly number[]) => {
-    const placed = allFacesPrisms(list, faces);
-    count[name] = (count[name] ?? 0) + placed.length;
-    glass.push(...placed);
+  const glass: Array<Lot<Piece>> = [];
+  const pane = (name: string, list: readonly Prism[], faces: readonly number[]) => {
+    count[name] = (count[name] ?? 0) + list.length * faces.length;
+    put(glass, { faces }, { prisms: [...list] });
   };
   const rearOf = (k: number) => (k === 0 ? PAV.back : PAV.annex) + ARCADE.plate;
-  put("francais.doors", francaisDoorsAll().panes, [P.francais]);
+  pane("francais.doors", francaisDoorsAll().panes, [P.francais]);
   for (const k of [-1, 0, 1]) {
     const c = bayCentre(k);
-    put("francais.tympana", tympanumGlass(c, PAV.front), [P.francais]);
-    put("rear.tympana", tympanumGlass(c, rearOf(k)), all);
+    pane("francais.tympana", tympanumGlass(c, PAV.front), [P.francais]);
+    pane("rear.tympana", tympanumGlass(c, rearOf(k)), ALL);
   }
-  put("flamand.screen", screenGlazing("flamand", false, timber.flamand.upper).panes, [P.flamand]);
-  put("anglo.screen", screenGlazing("anglo", false, timber.anglo.upper).panes, [P.anglo]);
-  put("russe.screen", screenGlazing("russe", true, timber.russe.upper).panes, [P.russe]);
+  pane("flamand.screen", screenGlazing("flamand", false, timber.flamand.upper).panes, [P.flamand]);
+  pane("anglo.screen", screenGlazing("anglo", false, timber.anglo.upper).panes, [P.anglo]);
+  pane("russe.screen", screenGlazing("russe", true, timber.russe.upper).panes, [P.russe]);
+  // The crescents are drawn bay by bay, not once and copied: the pieces
+  // past the rays' square ends (`endFill`) are not the same in every bay
+  // to the last vertex. At bays ±2 to ±4 one or two of the 44 lose a
+  // near-collinear corner that bays -1 to 1 keep [measured 2026-09-27:
+  // the same 12 plates and 44 ends everywhere, their corner counts
+  // differing], so one crescent copied onto every bay would re-cut those.
   const plates: Prism[] = [];
   const ends: Prism[] = [];
   const feet: Block[] = [];
@@ -3920,40 +4178,42 @@ export function glazing(): { glass: Prism[]; silvered: Prism[]; sills: Block[]; 
     ends.push(...cr.ends);
     feet.push(...cr.sills);
   }
-  const silvered = [...allFacesPrisms(plates, all), ...allFacesPrisms(ends, all)];
-  count["crescents"] = plates.length * all.length;
-  count["crescent.ends"] = ends.length * all.length;
-  return { glass, silvered, sills: allFaces(feet, all), count };
+  const all: Place = { faces: ALL };
+  const silvered: Array<Lot<Piece>> = [];
+  put(silvered, all, { prisms: [...plates, ...ends] });
+  count["crescents"] = plates.length * copiesOf(all);
+  count["crescent.ends"] = ends.length * copiesOf(all);
+  const sills: Array<Lot<Piece>> = [];
+  put(sills, all, { blocks: feet });
+  return { glass, silvered, plates: [{ place: all, drawn: { prisms: plates, blocks: [] } }], sills, count };
 }
 
-/** The 1st floor's cross girders on the +z face: parallelograms between the legs. */
-function crossGirders(): Block[] {
+/**
+ * The 1st floor's cross girders on the +z face: parallelograms between
+ * the legs, one drawn over a = 0 and copied every 3.8825 whose girder
+ * clears the side uprights (the stations returned).
+ */
+function crossGirders(): Lot<Piece> {
   const G = CROSS_GIRDER;
   const yTop = FLOORS.first - G.drop - G.chord / 2;
   const yBot = FLOORS.first - G.drop - G.depth + G.chord / 2;
-  const at = (y: number, t: number): [number, number] => {
+  const pt = (y: number, t: number): Vec3 => {
     const { outer, inner } = profileAt(y);
-    return [y, inner + (outer - inner) * t];
+    return [0, y, inner + (outer - inner) * t];
   };
-  const out: Block[] = [];
-  // Between the legs: every 3.8825 whose girder clears the side uprights.
-  const clear = profileAt(FLOORS.first).inner - uprightAt(FLOORS.first) - G.chord;
-  for (let k = -Math.floor(clear / G.pitch); k * G.pitch <= clear; k++) {
-    const a = k * G.pitch;
-    const pt = (y: number, t: number): Vec3 => {
-      const [yy, r] = at(y, t);
-      return [a, yy, r];
-    };
-    out.push(member(pt(yTop, 0), pt(yTop, 1), G.chord));
-    out.push(member(pt(yBot, 0), pt(yBot, 1), G.chord));
-    // Posts at the panel points, and one diagonal per panel.
-    for (let i = 0; i <= G.panels; i++) {
-      const t = i / G.panels;
-      out.push(member(pt(yBot, t), pt(yTop, t), G.bar));
-      if (i < G.panels) out.push(member(pt(yBot, t), pt(yTop, (i + 1) / G.panels), G.bar));
-    }
+  const out: Block[] = [member(pt(yTop, 0), pt(yTop, 1), G.chord), member(pt(yBot, 0), pt(yBot, 1), G.chord)];
+  // Posts at the panel points, and one diagonal per panel.
+  for (let i = 0; i <= G.panels; i++) {
+    const t = i / G.panels;
+    out.push(member(pt(yBot, t), pt(yTop, t), G.bar));
+    if (i < G.panels) out.push(member(pt(yBot, t), pt(yTop, (i + 1) / G.panels), G.bar));
   }
-  return out;
+  const clear = profileAt(FLOORS.first).inner - uprightAt(FLOORS.first) - G.chord;
+  const n = Math.floor(clear / G.pitch);
+  return {
+    place: { faces: ALL, along: { name: "CrossGirders", first: -n * G.pitch, pitch: G.pitch, count: 2 * n + 1 } },
+    drawn: { prisms: [], blocks: out },
+  };
 }
 
 /**
@@ -4197,7 +4457,7 @@ function landingBlocks(): Block[] {
  * across the foot, and from every other flange node a horizontal and a
  * diagonal back to the upright, make the web.
  */
-function consolesFace(): Block[] {
+function consolesFace(): Lot<Piece> {
   const C = CONSOLE;
   const yTop = FLOORS.third - THIRD.depth;
   const yFoot = yTop - C.height;
@@ -4213,24 +4473,28 @@ function consolesFace(): Block[] {
     const b = member(p, q, C.width);
     return { ...b, size: [C.width, C.flange, b.size[2]] };
   };
-  for (const a of C.at) {
-    const node = (i: number): Vec3 => {
-      const f = (sweep * i) / C.segments;
-      return [a, cy + ra * Math.sin(f), cr - ra * Math.cos(f)];
-    };
-    out.push(flange([a, yFoot, cr - ra], node(0)));
-    for (let i = 0; i < C.segments; i++) out.push(flange(node(i), node(i + 1)));
-    const strutY = yTop - C.bar / 2;
-    out.push(member([a, strutY, r0], [a, strutY, tip], C.bar));
-    out.push(member([a, yFoot + C.bar / 2, r0], [a, yFoot + C.bar / 2, cr - ra], C.bar));
-    for (let i = 2; i < C.segments; i += 2) {
-      const p = node(i);
-      const up = Math.min(node(i + 2)[1] as number, strutY);
-      out.push(member(p, [a, p[1], r0], C.bar));
-      out.push(member(p, [a, up, r0], C.bar));
-    }
+  // One console, over a = 0, copied onto both corner uprights (`CONSOLE.at`).
+  const [a0, a1] = C.at;
+  const a = 0;
+  const node = (i: number): Vec3 => {
+    const f = (sweep * i) / C.segments;
+    return [a, cy + ra * Math.sin(f), cr - ra * Math.cos(f)];
+  };
+  out.push(flange([a, yFoot, cr - ra], node(0)));
+  for (let i = 0; i < C.segments; i++) out.push(flange(node(i), node(i + 1)));
+  const strutY = yTop - C.bar / 2;
+  out.push(member([a, strutY, r0], [a, strutY, tip], C.bar));
+  out.push(member([a, yFoot + C.bar / 2, r0], [a, yFoot + C.bar / 2, cr - ra], C.bar));
+  for (let i = 2; i < C.segments; i += 2) {
+    const p = node(i);
+    const up = Math.min(node(i + 2)[1] as number, strutY);
+    out.push(member(p, [a, p[1], r0], C.bar));
+    out.push(member(p, [a, up, r0], C.bar));
   }
-  return out;
+  return {
+    place: { faces: ALL, along: { name: "ThirdConsoles", first: a0, pitch: a1 - a0, count: 2 } },
+    drawn: { prisms: [], blocks: out },
+  };
 }
 
 /**
@@ -4809,7 +5073,17 @@ function onSkirt(a: number, d: number, len: number, h: number, proud: number, sp
   };
 }
 
-/** A bar `w` wide on the skirt plate from (a0, depth d0) to (a1, depth d1). */
+/**
+ * `onSkirt`'s box drawn flat in the plate's own frame (`SKIRT_FRAME`): x
+ * along the face, y up the plate from its top edge, z out of it. Set on
+ * the plate by its stations' one turn and move (`Along.skirt`), it is
+ * `onSkirt`'s.
+ */
+function flatOnSkirt(a: number, d: number, len: number, h: number, proud: number, spin = 0): Block {
+  return { at: [a, (-(d - DECK) * SKIRT_LEN) / SKIRT_DROP, proud / 2], size: [len, h, proud], rot: turn(2, spin) };
+}
+
+/** A bar `w` wide on the skirt plate from (a0, depth d0) to (a1, depth d1), drawn flat (`flatOnSkirt`). */
 function acrossSkirt(
   a0: number,
   d0: number,
@@ -4820,7 +5094,7 @@ function acrossSkirt(
 ): Block {
   const du = a1 - a0;
   const dv = ((d0 - d1) * SKIRT_LEN) / SKIRT_DROP;
-  return onSkirt((a0 + a1) / 2, (d0 + d1) / 2, Math.hypot(du, dv), w, proud, Math.atan2(dv, du));
+  return flatOnSkirt((a0 + a1) / 2, (d0 + d1) / 2, Math.hypot(du, dv), w, proud, Math.atan2(dv, du));
 }
 
 /**
@@ -4882,8 +5156,15 @@ function bracket(
   return out;
 }
 
-/** The 1st-floor skirt's ornament on the +z face (see `SKIRT_ORNAMENT`). */
-function skirtOrnament(): Piece {
+/**
+ * The 1st-floor skirt's ornament on the +z face (see `SKIRT_ORNAMENT`):
+ * a console and a pilaster drawn once, over a = 0, and copied under every
+ * column position; a console bay's plaque and cresting drawn once, over
+ * its middle, and copied onto the 18 between them. The pilasters and the
+ * bays lie on the plate and are drawn flat (`flatOnSkirt`), their
+ * stations set on it; the console stands square to the face.
+ */
+function skirtOrnament(): Array<Lot<Piece>> {
   const O = SKIRT_ORNAMENT;
   const C = O.console;
   const K = O.cresting;
@@ -4892,34 +5173,41 @@ function skirtOrnament(): Piece {
   const n = Math.floor(EDGE / pitch);
   const up = SKIRT_LEN / SKIRT_DROP;
   const [yTop, rTop] = skirtAt(C.top);
-  const prisms: Prism[] = [];
-  const blocks: Block[] = [];
-  for (let j = -n; j <= n; j++) {
-    const a = j * pitch;
-    prisms.push(slab(a, C.width, bracket(yTop, rTop, C.reach, skirtAt(C.foot), C.segments)));
-    blocks.push(onSkirt(a, (P.top + P.bottom) / 2, P.width, (P.bottom - P.top) * up, P.proud));
-    if (j === n) continue;
-    // The name's plaque in the console bay from here to the next.
-    blocks.push(namePlaque(a + pitch / 2));
-    // The cresting in the console bay from here to the next: its rail, and
-    // under it a diamond lattice panel, a diamond over each.
-    blocks.push(onSkirt(a + pitch / 2, K.rail, pitch, K.bar, K.proud));
-    const w = pitch / K.panels;
-    for (let i = 0; i < K.panels; i++) {
-      const u = a + (i + 0.5) * w;
-      blocks.push(
-        acrossSkirt(u - w / 2, K.bottom, u + w / 2, K.rail, K.bar, K.proud),
-        acrossSkirt(u + w / 2, K.bottom, u - w / 2, K.rail, K.bar, K.proud),
-        onSkirt(u, (K.top + K.rail) / 2, K.diamond, K.diamond, K.proud, Math.PI / 4),
-      );
-    }
+  const consoles: Along = { name: "SkirtConsoles", first: -n * pitch, pitch, count: 2 * n + 1 };
+  const bays: Along = { name: "SkirtBays", first: (0.5 - n) * pitch, pitch, count: 2 * n, skirt: true };
+  // The name's plaque (`namePlaque`), the cresting's rail, and under it a
+  // diamond lattice panel, a diamond over each.
+  const bay: Block[] = [
+    flatOnSkirt(0, NAMES.top + NAMES.height / 2, NAMES.pitch - NAMES.gap, NAMES.height * up, NAMES.thickness),
+    flatOnSkirt(0, K.rail, pitch, K.bar, K.proud),
+  ];
+  const w = pitch / K.panels;
+  for (let i = 0; i < K.panels; i++) {
+    const u = (i + 0.5) * w - pitch / 2;
+    bay.push(
+      acrossSkirt(u - w / 2, K.bottom, u + w / 2, K.rail, K.bar, K.proud),
+      acrossSkirt(u + w / 2, K.bottom, u - w / 2, K.rail, K.bar, K.proud),
+      flatOnSkirt(u, (K.top + K.rail) / 2, K.diamond, K.diamond, K.proud, Math.PI / 4),
+    );
   }
+  const mouldings: Prism[] = [];
   for (const [d0, d1, proud] of O.mouldings) {
     const [y0, r0] = skirtAt(d0);
     const [y1, r1] = skirtAt(d1);
-    prisms.push(skirtBand(y0, r0, y1, r1, proud));
+    mouldings.push(skirtBand(y0, r0, y1, r1, proud));
   }
-  return { prisms, blocks };
+  return [
+    {
+      place: { faces: ALL, along: consoles },
+      drawn: { prisms: [slab(0, C.width, bracket(yTop, rTop, C.reach, skirtAt(C.foot), C.segments))], blocks: [] },
+    },
+    {
+      place: { faces: ALL, along: { ...consoles, name: "SkirtPilasters", skirt: true } },
+      drawn: { prisms: [], blocks: [flatOnSkirt(0, (P.top + P.bottom) / 2, P.width, (P.bottom - P.top) * up, P.proud)] },
+    },
+    { place: { faces: ALL, along: bays }, drawn: { prisms: [], blocks: bay } },
+    { place: { faces: ALL }, drawn: { prisms: mouldings, blocks: [] } },
+  ];
 }
 
 /**
@@ -5376,9 +5664,10 @@ function balconyFace(): Block[] {
  * The 2nd-floor skirt's panelling on the +z face (see
  * `SECOND_SKIRT_RELIEF`): the ribs follow the plate's profile strip by
  * strip, each box square to its strip; the consoles are plates in their
- * ribs' planes; the bands are mitred as the plate is.
+ * ribs' planes; the bands are mitred as the plate is. A rib and a panel's
+ * muntins are each drawn once, over a = 0, and copied along the face.
  */
-function secondSkirtRelief(): Piece {
+function secondSkirtRelief(): Array<Lot<Piece>> {
   const S = SECOND_SKIRT_RELIEF;
   const P = SECOND_SKIRT.profile;
   const floor = FLOORS.second;
@@ -5397,9 +5686,13 @@ function secondSkirtRelief(): Piece {
   };
   const rOut = PLATFORMS.second.side / 2 - SECOND_GALLERY.inset;
   const n = Math.floor((2 * rOut) / SECOND_GALLERY.pitch);
-  const ribs = Array.from({ length: n }, (_, i) => (i - (n - 1) / 2) * SECOND_GALLERY.pitch);
-  const blocks: Block[] = [];
-  const prisms: Prism[] = [];
+  // A rib under every outer post of the gallery (`secondGalleryFace`), and
+  // the muntins in every panel between two.
+  const ribs: Along = { name: "SecondRibs", first: (-(n - 1) / 2) * SECOND_GALLERY.pitch, pitch: SECOND_GALLERY.pitch, count: n };
+  const panels: Along = { ...ribs, name: "SecondPanels", count: n - 1 };
+  const rib: Piece = { prisms: [], blocks: [] };
+  const panel: Block[] = [];
+  const bands: Prism[] = [];
   // A box on the plate from depth d0 to d1 (within one strip) at a, `w` wide, `proud` off it.
   const onPlate = (a: number, d0: number, d1: number, w: number, proud: number): Block => {
     const p: Vec3 = [a, floor - d0, widthAt(d0)];
@@ -5419,58 +5712,90 @@ function secondSkirtRelief(): Piece {
   const C = S.console;
   const foot: [number, number] = [floor - C.foot, widthAt(C.foot)];
   const skirtFoot = (P[P.length - 1] as readonly [number, number])[0];
-  for (const a of ribs) {
-    for (const [d0, d1] of cuts(DECK, skirtFoot)) {
-      blocks.push(onPlate(a, d0, d1, S.rib, S.ribProud));
-    }
-    const profile = bracket(floor - DECK, widthAt(DECK), C.reach, foot, C.segments);
-    prisms.push(slab(a, C.width, profile));
-  }
-  for (let i = 0; i + 1 < ribs.length; i++) {
-    for (let m = 1; m <= S.muntins; m++) {
-      const a = (ribs[i] as number) + (SECOND_GALLERY.pitch * m) / (S.muntins + 1);
-      for (const [d0, d1] of cuts(S.panelTop, S.panelFoot)) {
-        blocks.push(onPlate(a, d0, d1, S.muntin, S.muntinProud));
-      }
-    }
+  // One rib and its console, over a = 0.
+  for (const [d0, d1] of cuts(DECK, skirtFoot)) rib.blocks.push(onPlate(0, d0, d1, S.rib, S.ribProud));
+  rib.prisms.push(slab(0, C.width, bracket(floor - DECK, widthAt(DECK), C.reach, foot, C.segments)));
+  // One panel's muntins, from its rib at a = 0.
+  for (let m = 1; m <= S.muntins; m++) {
+    const a = (SECOND_GALLERY.pitch * m) / (S.muntins + 1);
+    for (const [d0, d1] of cuts(S.panelTop, S.panelFoot)) panel.push(onPlate(a, d0, d1, S.muntin, S.muntinProud));
   }
   for (const [d0, d1, proud] of S.bands) {
-    prisms.push(skirtBand(floor - d0, widthAt(d0), floor - d1, widthAt(d1), proud));
+    bands.push(skirtBand(floor - d0, widthAt(d0), floor - d1, widthAt(d1), proud));
   }
-  return { prisms, blocks };
+  return [
+    { place: { faces: ALL, along: ribs }, drawn: rib },
+    { place: { faces: ALL, along: panels }, drawn: { prisms: [], blocks: panel } },
+    { place: { faces: ALL }, drawn: { prisms: bands, blocks: [] } },
+  ];
+}
+
+/** A parted part with all of it on `place`. */
+function placed(part: Parted, place: Place | null): Record<string, Array<Lot<Piece>>> {
+  const out: Record<string, Array<Lot<Piece>>> = {};
+  for (const [name, piece] of Object.entries(part)) out[name] = [{ place, drawn: piece }];
+  return out;
+}
+
+/** Placed parts' lots, merged by place, keeping what `take` picks of each drawing: what one mesh builds. */
+function gathered(
+  parts: ReadonlyArray<Record<string, Array<Lot<Piece>>>>,
+  take: (p: Piece) => Partial<Piece>,
+): Array<Lot<Piece>> {
+  const out: Array<Lot<Piece>> = [];
+  for (const part of parts) {
+    for (const lots of Object.values(part)) for (const lot of lots) put(out, lot.place, take(lot.drawn));
+  }
+  return out.filter((l) => l.drawn.blocks.length + l.drawn.prisms.length > 0);
+}
+const blocksOnly = (p: Piece): Partial<Piece> => ({ blocks: p.blocks });
+const prismsOnly = (p: Piece): Partial<Piece> => ({ prisms: p.prisms });
+
+/** The fit-out's parts, each named piece with where it stands (`fitOutSolids`, `buildPlatforms`). */
+function fitOutParts(): Record<string, Record<string, Array<Lot<Piece>>>> {
+  const out: Record<string, Record<string, Array<Lot<Piece>>>> = {
+    inner: innerArcadeFace(),
+    entrance: placed(entranceFace(), { faces: TERRACE_RAIL.entrance }),
+    second: placed(secondFitOut(), null),
+    arcade: placed(arcadeDressFace().part, { faces: ALL, along: BAYS }),
+  };
+  // A prefix met twice (a piece on two sets of faces) gathers both.
+  for (const { prefix, part, faces } of pavilionParts()) {
+    const into = (out[prefix] ??= {});
+    for (const [name, lots] of Object.entries(placed(part, { faces }))) into[name] = [...(into[name] ?? []), ...lots];
+  }
+  return out;
 }
 
 /**
  * The fit-out that has no plate of its own to be read against — the inner
- * arcade, the entrance flights and the 2nd platform's 1889 massing — as
- * world solids, by piece, the same lists `buildPlatforms` cooks: every box
- * as its prism (`blockPrism`), each an outline extruded `depth` along its
- * own normal. For inspection: the graph never reads it.
+ * arcade, the entrance flights, the 2nd platform's 1889 massing, the
+ * pavilions' frames and dressing and the arcade's — by piece, as the
+ * graph builds it: each piece's drawing, in the face frame (or, for the
+ * 2nd platform's, the world), every box as its prism (`blockPrism`), each
+ * an outline extruded `depth` along its own normal; and where it stands
+ * (`Lot`), which the graph's copies place. For inspection: the graph
+ * builds the same parts (`fitOutParts`).
  */
-export function fitOutSolids(): Record<string, { outline: readonly Vec3[]; depth: number }[]> {
-  const out: Record<string, Prism[]> = {};
-  // A name met twice (a piece on two sets of faces) gathers both.
-  const add = (prefix: string, part: Parted, faces: readonly number[] | null) => {
-    for (const [name, piece] of Object.entries(part)) {
-      const list = faces === null ? piece.prisms : allFacesPrisms(piece.prisms, faces);
-      const boxes = faces === null ? piece.blocks : allFaces(piece.blocks, faces);
-      const key = `${prefix}.${name}`;
-      out[key] = [...(out[key] ?? []), ...list, ...boxes.map(blockPrism)];
+export function fitOutSolids(): Record<string, Array<Lot<Prism[]>>> {
+  const out: Record<string, Array<Lot<Prism[]>>> = {};
+  for (const [prefix, part] of Object.entries(fitOutParts())) {
+    for (const [name, lots] of Object.entries(part)) {
+      out[`${prefix}.${name}`] = lots.map((l) => ({
+        place: l.place,
+        drawn: [...l.drawn.prisms, ...l.drawn.blocks.map(blockPrism)],
+      }));
     }
-  };
-  add("inner", innerArcadeFace(), [0, 1, 2, 3]);
-  add("entrance", entranceFace(), TERRACE_RAIL.entrance);
-  add("second", secondFitOut(), null);
-  for (const { prefix, part, faces } of pavilionParts()) add(prefix, part, faces);
-  add("arcade", arcadeDressFace().part, [0, 1, 2, 3]);
+  }
   return out;
 }
 
 /**
  * Build the platforms, their 1889 fit-out and the pedestals. `quads` are
- * the four quadrant targets.
+ * the four quadrant targets: every face-frame drawing is copied onto them.
  */
 export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
+  const site: Site = { g, quads, made: new Map() };
   // The 1st floor: the platform (`firstDeck`, among the prisms), and the
   // gallery ring 1.23 m lower (`ringSide`, among the blocks), closed
   // between them by the step's girder.
@@ -5492,9 +5817,9 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
     span(ENTRANCE.outer, terrace - STEP.thickness, GALLERY.floor, FLOORS.first - DECK, terrace - STEP.thickness, terrace),
   ];
 
-  // The pedestal keeps its normals, smoothed like the rest (`prisms`), so
-  // its round inner corner and bench shade round; the rest of the masonry
-  // class carries none and the page gives it flat ones (normals.ts).
+  // The pedestal keeps its normals, smoothed like the rest (`placedMesh`),
+  // so its round inner corner and bench shade round; the rest of the
+  // masonry class carries none and the page gives it flat ones (normals.ts).
   const pedestalDress = pedestalDressing();
   const pedestal = prisms(g, "pedestal", [...pedestalFaces(), ...pedestalDress.masonry]);
   // The doors' grilles are iron, painted with the fit-out.
@@ -5503,22 +5828,20 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
   // The fit-out, face by face. The pavilions' shell is one, less the
   // Français' staff front, which the other three have as a timber screen
   // (`pavilionParts`); each is found on its face by name.
-  const staffFaces = [PAVILION_FACE.francais];
-  const timberFaces = [PAVILION_FACE.flamand, PAVILION_FACE.anglo, PAVILION_FACE.russe];
+  const all: Place = { faces: ALL };
+  const bays: Place = { faces: ALL, along: BAYS };
+  const staff: Place = { faces: [PAVILION_FACE.francais] };
+  const timber: Place = { faces: [PAVILION_FACE.flamand, PAVILION_FACE.anglo, PAVILION_FACE.russe] };
+  const entrance: Place = { faces: TERRACE_RAIL.entrance };
+  const closed: Place = { faces: TERRACE_RAIL.closed };
   const staffShell = pavilionFace(true);
   const timberShell = pavilionFace(false);
   const second = secondGalleryFace();
   const ornament = skirtOrnament();
   const panelling = secondSkirtRelief();
-  const bays: Piece = { prisms: [], blocks: [] };
-  const trellis: Block[] = [];
-  for (let k = -4; k <= 4; k++) {
-    trellis.push(...lunetteTrellis(bayCentre(k)));
-    if (Math.abs(k) <= 1) continue;
-    const roof = bayRoof(bayCentre(k), EDGE, GALLERY.depth);
-    bays.prisms.push(...roof.prisms);
-    bays.blocks.push(...roof.blocks);
-  }
+  // One bay's roof over a = 0, on the bays the pavilions leave.
+  const roof = bayRoof(0, EDGE, GALLERY.depth);
+  const roofed: Place = { faces: ALL, along: ROOFED_BAYS };
   const skirt: Prism = {
     // Clockwise seen from outside, so the panel extrudes inward.
     outline: [
@@ -5532,79 +5855,66 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
   // The void's railing stands just inside the platform's edge, along it.
   const voidLine = voidOutline(GALLERY_RAIL.post / 2);
   const voidRail = railAlong(GALLERY_RAIL, voidLine, FLOORS.first, GALLERY_RAIL_PITCH);
-  const galleryPosts: number[] = [];
-  for (let k = -4; k <= 4; k++) {
-    galleryPosts.push(bayCentre(k) - GALLERY_RAIL_PITCH, bayCentre(k) + GALLERY_RAIL_PITCH);
-  }
-  const galleryRail = railFace(GALLERY_RAIL, EDGE, EDGE, GALLERY.floor, galleryPosts);
+  // The gallery's balustrade: its rails whole, and a bay's two cast-iron
+  // pilasters, mid-arch, over a = 0.
+  const galleryRail = railFace(GALLERY_RAIL, EDGE, EDGE, GALLERY.floor, []);
+  const railTop = GALLERY.floor + GALLERY_RAIL.height;
+  const galleryPosts = [-GALLERY_RAIL_PITCH, GALLERY_RAIL_PITCH].map((a) =>
+    post(a, EDGE, GALLERY_RAIL.post, GALLERY.floor, railTop),
+  );
 
   // The glass the frames leave open (`glazing`), and the crescents' sills.
   const glazed = glazing();
-  const fitBlocks = blocks(
-    g,
-    "fitOut",
-    allFaces([
-      ...arcadeFace(),
-      ...trellis,
-      ...bays.blocks,
+  const fitOut: Array<Lot<Piece>> = [];
+  put(fitOut, all, {
+    blocks: [
       ...galleryRail,
       ...voidRail,
-      ...ornament.blocks,
-      ...crossGirders(),
       ...balconyFace(),
       ...second.posts,
-      ...panelling.blocks,
-      ...consolesFace(),
       ringSide(terrace, EDGE + GALLERY.gutter, GALLERY.floor),
-    ]).concat(
-      allFaces(terraceRail(true), TERRACE_RAIL.entrance),
-      allFaces(terraceRail(false), TERRACE_RAIL.closed),
-      allFaces(stepCut, TERRACE_RAIL.entrance),
-      allFaces([step], TERRACE_RAIL.closed),
-      allFaces(staffShell.walls, staffFaces),
-      allFaces(timberShell.walls, timberFaces),
-      landingBlocks(),
-      glazed.sills,
-    ),
-  );
+    ],
+  });
+  put(fitOut, bays, { blocks: [...lunetteTrellis(0), ...galleryPosts] });
+  put(fitOut, roofed, { blocks: roof.blocks });
+  for (const lot of [...arcadeFace(), crossGirders(), consolesFace(), ...ornament, ...panelling]) {
+    put(fitOut, lot.place, { blocks: lot.drawn.blocks });
+  }
+  put(fitOut, entrance, { blocks: [...terraceRail(true), ...stepCut] });
+  put(fitOut, closed, { blocks: [...terraceRail(false), step] });
+  put(fitOut, staff, { blocks: staffShell.walls });
+  put(fitOut, timber, { blocks: timberShell.walls });
+  put(fitOut, null, { blocks: landingBlocks() });
+  for (const lot of glazed.sills) put(fitOut, lot.place, lot.drawn);
+  const fitBlocks = placedMesh(site, "fitOut", fitOut.filter((l) => l.drawn.blocks.length > 0));
+
   // The inner arcade, all round; the entrance flights, on the Français and
-  // the Russe; and the 2nd platform's 1889 massing, whole.
-  const inner = merged(innerArcadeFace());
-  const flights = merged(entranceFace());
-  const secondFit = merged(secondFitOut());
-  const fitInner = [
-    blocks(g, "innerArcade", allFaces(inner.blocks)),
-    prisms(g, "innerArcadeCurved", allFacesPrisms(inner.prisms)),
+  // the Russe; the 2nd platform's 1889 massing, whole; the pavilions' frame
+  // and dressing, each piece on its own face(s); and the arcade's dressing,
+  // one arcade on all 36 bays, its glass bosses and globes as instances.
+  const parts = fitOutParts();
+  const meshes: ReadonlyArray<readonly [string, string, readonly string[]]> = [
+    ["innerArcade", "innerArcadeCurved", ["inner"]],
+    ["entranceRails", "entranceFlights", ["entrance"]],
+    ["secondFitOut", "secondFitOutCurved", ["second"]],
+    ["pavilionDress", "pavilionDressCurved", ["pavilion", "francais", "russe", "anglo", "flamand"]],
+    ["arcadeDress", "arcadeDressCurved", ["arcade"]],
   ];
-  const fitFlights = [
-    blocks(g, "entranceRails", allFaces(flights.blocks, TERRACE_RAIL.entrance)),
-    prisms(g, "entranceFlights", allFacesPrisms(flights.prisms, TERRACE_RAIL.entrance)),
-  ];
-  const fitSecond = [blocks(g, "secondFitOut", secondFit.blocks), prisms(g, "secondFitOutCurved", secondFit.prisms)];
-  // The pavilions' frame and dressing, each piece on its own face(s).
-  const dress = pavilionParts();
-  const fitPavilions = [
-    blocks(g, "pavilionDress", dress.flatMap(({ part, faces }) => allFaces(merged(part).blocks, faces))),
-    prisms(g, "pavilionDressCurved", dress.flatMap(({ part, faces }) => allFacesPrisms(merged(part).prisms, faces))),
-  ];
-  // The arcade's dressing: one arcade, on all 36 bays; its glass bosses
-  // and globes as instances.
+  const fitParts = meshes.flatMap(([boxes, curved, prefixes]) => {
+    const of = prefixes.map((p) => parts[p] ?? {});
+    return [placedMesh(site, boxes, gathered(of, blocksOnly)), placedMesh(site, curved, gathered(of, prismsOnly))];
+  });
   const arcade = arcadeDressFace();
-  const arcadeSolid = merged(arcade.part);
-  const fitArcade = [
-    blocks(g, "arcadeDress", allFaces(arcadeSolid.blocks)),
-    prisms(g, "arcadeDressCurved", allFacesPrisms(arcadeSolid.prisms)),
-  ];
   const fittings = [
     {
       name: "cabochons",
-      spawn: fittingSpawn(g, "cabochons", fittingsOnFaces(arcade.cabochons), FITTING_ASSETS.cabochon),
+      spawn: fittingSpawn(site, "cabochons", [{ place: bays, drawn: arcade.cabochons }], FITTING_ASSETS.cabochon),
     },
-    { name: "globes", spawn: fittingSpawn(g, "globes", fittingsOnFaces(arcade.globes), FITTING_ASSETS.globe) },
+    { name: "globes", spawn: fittingSpawn(site, "globes", [{ place: bays, drawn: arcade.globes }], FITTING_ASSETS.globe) },
     // The gallery balustrade's stoneware balusters.
     {
       name: "balusters",
-      spawn: fittingSpawn(g, "balusters", fittingsOnFaces(balustersFace()), FITTING_ASSETS.baluster),
+      spawn: fittingSpawn(site, "balusters", [{ place: bays, drawn: balustersFace() }], FITTING_ASSETS.baluster),
     },
   ];
   // The ground stair arrives in piles 4 and 2: quadrant targets 0 and 2.
@@ -5613,33 +5923,34 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
     // Every leg's lift passes through it: the Roux to it, the Otis on up.
     ...[0, 1, 2, 3].flatMap((k) => LIFT_OPENINGS.first.map((w) => turnWell(w, k))),
   ];
-  const fitPrisms = prisms(g, "fitOutCurved", [
-    ...cutWells(
-      [
-        ...allFacesPrisms(firstDeck(), TERRACE_RAIL.closed),
-        ...allFacesPrisms(cutNotches(firstDeck(), entranceNotches()), TERRACE_RAIL.entrance),
-      ],
-      arrivals,
-    ),
-    ...secondDeck(),
-    ...allFacesPrisms(staffShell.vaults, staffFaces),
-    ...allFacesPrisms(timberShell.vaults, timberFaces),
-    ...allFacesPrisms([
-      ...bays.prisms,
-      skirt,
-      ...ornament.prisms,
-      ...secondSkirtFace(),
-      ...panelling.prisms,
-      ...second.roof,
-    ]),
-    ...landingFloor(),
-    ...thirdFloor(),
-  ]);
+  // The decks are cut in the world, round the wells of the stairs and
+  // lifts that pass through them, which stand by leg, not by face.
+  const curved: Array<Lot<Piece>> = [];
+  put(curved, null, {
+    prisms: [
+      ...cutWells(
+        [
+          ...allFacesPrisms(firstDeck(), TERRACE_RAIL.closed),
+          ...allFacesPrisms(cutNotches(firstDeck(), entranceNotches()), TERRACE_RAIL.entrance),
+        ],
+        arrivals,
+      ),
+      ...secondDeck(),
+      ...landingFloor(),
+      ...thirdFloor(),
+    ],
+  });
+  put(curved, staff, { prisms: staffShell.vaults });
+  put(curved, timber, { prisms: timberShell.vaults });
+  put(curved, all, { prisms: [skirt, ...secondSkirtFace(), ...second.roof] });
+  put(curved, roofed, { prisms: roof.prisms });
+  for (const lot of [...ornament, ...panelling]) put(curved, lot.place, { prisms: lot.drawn.prisms });
+  const fitPrisms = placedMesh(site, "fitOutCurved", curved.filter((l) => l.drawn.prisms.length > 0));
 
   return {
-    platforms: [grilles, fitBlocks, fitPrisms, ...fitInner, ...fitFlights, ...fitSecond, ...fitPavilions, ...fitArcade],
-    glass: [prisms(g, "restaurantGlass", glazed.glass)],
-    silvered: [prisms(g, "crescentGlass", glazed.silvered)],
+    platforms: [grilles, fitBlocks, fitPrisms, ...fitParts],
+    glass: [placedMesh(site, "restaurantGlass", glazed.glass)],
+    silvered: [placedMesh(site, "crescentGlass", glazed.silvered)],
     fittings,
     names: [namesLetters(g)],
     masonry: [copyToQuadrants(g, "pedestals", pedestal, quads)],

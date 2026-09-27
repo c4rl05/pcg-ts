@@ -423,7 +423,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 720,
-        "hash": "eeae69e44cf47fab"
+        "hash": "dac90fd6611516af"
       },
       "fittings.cabochons": {
         "kind": "instances",
@@ -432,7 +432,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 432,
-        "hash": "ce7b1345312c6bf1"
+        "hash": "d2a0a6fe0e9cdf4a"
       },
       "fittings.globes": {
         "kind": "instances",
@@ -441,7 +441,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 36,
-        "hash": "1841ec7254223ecc"
+        "hash": "28f51ddaa203b6e3"
       },
       "foundations": {
         "kind": "geometry",
@@ -468,7 +468,7 @@
         "vertices": 44640,
         "primitives": 14880,
         "instances": 0,
-        "hash": "1e2a7ef74c6f6e2f"
+        "hash": "da05aeeb769f035f"
       },
       "horizontals": {
         "kind": "geometry",
@@ -495,7 +495,7 @@
         "vertices": 85056,
         "primitives": 28352,
         "instances": 0,
-        "hash": "b87db06dbfccbd35"
+        "hash": "f8ca7da5b905f4e2"
       },
       "names": {
         "kind": "geometry",
@@ -513,7 +513,7 @@
         "vertices": 1037964,
         "primitives": 345988,
         "instances": 0,
-        "hash": "99a0c8b6d5e453d1"
+        "hash": "e6d39aaa40b5149c"
       },
       "silvered": {
         "kind": "geometry",
@@ -522,7 +522,7 @@
         "vertices": 85056,
         "primitives": 28352,
         "instances": 0,
-        "hash": "f5b177ab7b04ca77"
+        "hash": "7caee46dde240f42"
       },
       "summit": {
         "kind": "geometry",
@@ -1055,7 +1055,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 720,
-        "hash": "eeae69e44cf47fab"
+        "hash": "dac90fd6611516af"
       },
       "fittings.cabochons": {
         "kind": "instances",
@@ -1064,7 +1064,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 432,
-        "hash": "ce7b1345312c6bf1"
+        "hash": "d2a0a6fe0e9cdf4a"
       },
       "fittings.globes": {
         "kind": "instances",
@@ -1073,7 +1073,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 36,
-        "hash": "1841ec7254223ecc"
+        "hash": "28f51ddaa203b6e3"
       },
       "foundations": {
         "kind": "geometry",
@@ -1100,7 +1100,7 @@
         "vertices": 44640,
         "primitives": 14880,
         "instances": 0,
-        "hash": "1e2a7ef74c6f6e2f"
+        "hash": "da05aeeb769f035f"
       },
       "gussets": {
         "kind": "geometry",
@@ -1136,7 +1136,7 @@
         "vertices": 85056,
         "primitives": 28352,
         "instances": 0,
-        "hash": "b87db06dbfccbd35"
+        "hash": "f8ca7da5b905f4e2"
       },
       "names": {
         "kind": "geometry",
@@ -1154,7 +1154,7 @@
         "vertices": 1037964,
         "primitives": 345988,
         "instances": 0,
-        "hash": "99a0c8b6d5e453d1"
+        "hash": "e6d39aaa40b5149c"
       },
       "silvered": {
         "kind": "geometry",
@@ -1163,7 +1163,7 @@
         "vertices": 85056,
         "primitives": 28352,
         "instances": 0,
-        "hash": "f5b177ab7b04ca77"
+        "hash": "7caee46dde240f42"
       },
       "summit": {
         "kind": "geometry",
@@ -1606,7 +1606,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 720,
-        "hash": "eeae69e44cf47fab"
+        "hash": "dac90fd6611516af"
       },
       "fittings.cabochons": {
         "kind": "instances",
@@ -1615,7 +1615,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 432,
-        "hash": "ce7b1345312c6bf1"
+        "hash": "d2a0a6fe0e9cdf4a"
       },
       "fittings.globes": {
         "kind": "instances",
@@ -1624,7 +1624,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 36,
-        "hash": "1841ec7254223ecc"
+        "hash": "28f51ddaa203b6e3"
       },
       "foundations": {
         "kind": "geometry",
@@ -1651,7 +1651,7 @@
         "vertices": 44640,
         "primitives": 14880,
         "instances": 0,
-        "hash": "1e2a7ef74c6f6e2f"
+        "hash": "da05aeeb769f035f"
       },
       "gussets": {
         "kind": "geometry",
@@ -1687,7 +1687,7 @@
         "vertices": 85056,
         "primitives": 28352,
         "instances": 0,
-        "hash": "b87db06dbfccbd35"
+        "hash": "f8ca7da5b905f4e2"
       },
       "names": {
         "kind": "geometry",
@@ -1705,7 +1705,7 @@
         "vertices": 1037964,
         "primitives": 345988,
         "instances": 0,
-        "hash": "99a0c8b6d5e453d1"
+        "hash": "e6d39aaa40b5149c"
       },
       "rivets.ff.arches.chords": {
         "kind": "instances",
@@ -2236,7 +2236,7 @@
         "vertices": 85056,
         "primitives": 28352,
         "instances": 0,
-        "hash": "f5b177ab7b04ca77"
+        "hash": "7caee46dde240f42"
       },
       "summit": {
         "kind": "geometry",
@@ -2679,7 +2679,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 720,
-        "hash": "eeae69e44cf47fab"
+        "hash": "dac90fd6611516af"
       },
       "fittings.cabochons": {
         "kind": "instances",
@@ -2688,7 +2688,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 432,
-        "hash": "ce7b1345312c6bf1"
+        "hash": "d2a0a6fe0e9cdf4a"
       },
       "fittings.globes": {
         "kind": "instances",
@@ -2697,7 +2697,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 36,
-        "hash": "1841ec7254223ecc"
+        "hash": "28f51ddaa203b6e3"
       },
       "foundations": {
         "kind": "geometry",
@@ -2724,7 +2724,7 @@
         "vertices": 44640,
         "primitives": 14880,
         "instances": 0,
-        "hash": "1e2a7ef74c6f6e2f"
+        "hash": "da05aeeb769f035f"
       },
       "gussets": {
         "kind": "geometry",
@@ -2760,7 +2760,7 @@
         "vertices": 85056,
         "primitives": 28352,
         "instances": 0,
-        "hash": "b87db06dbfccbd35"
+        "hash": "f8ca7da5b905f4e2"
       },
       "names": {
         "kind": "geometry",
@@ -2778,7 +2778,7 @@
         "vertices": 1037964,
         "primitives": 345988,
         "instances": 0,
-        "hash": "99a0c8b6d5e453d1"
+        "hash": "e6d39aaa40b5149c"
       },
       "rivets.ff.arches.chords": {
         "kind": "instances",
@@ -3318,7 +3318,7 @@
         "vertices": 85056,
         "primitives": 28352,
         "instances": 0,
-        "hash": "f5b177ab7b04ca77"
+        "hash": "7caee46dde240f42"
       },
       "summit": {
         "kind": "geometry",
@@ -3761,7 +3761,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 720,
-        "hash": "eeae69e44cf47fab"
+        "hash": "dac90fd6611516af"
       },
       "fittings.cabochons": {
         "kind": "instances",
@@ -3770,7 +3770,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 432,
-        "hash": "ce7b1345312c6bf1"
+        "hash": "d2a0a6fe0e9cdf4a"
       },
       "fittings.globes": {
         "kind": "instances",
@@ -3779,7 +3779,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 36,
-        "hash": "1841ec7254223ecc"
+        "hash": "28f51ddaa203b6e3"
       },
       "foundations": {
         "kind": "geometry",
@@ -3806,7 +3806,7 @@
         "vertices": 44640,
         "primitives": 14880,
         "instances": 0,
-        "hash": "1e2a7ef74c6f6e2f"
+        "hash": "da05aeeb769f035f"
       },
       "horizontals": {
         "kind": "geometry",
@@ -3833,7 +3833,7 @@
         "vertices": 85056,
         "primitives": 28352,
         "instances": 0,
-        "hash": "b87db06dbfccbd35"
+        "hash": "f8ca7da5b905f4e2"
       },
       "names": {
         "kind": "geometry",
@@ -3851,7 +3851,7 @@
         "vertices": 1037964,
         "primitives": 345988,
         "instances": 0,
-        "hash": "99a0c8b6d5e453d1"
+        "hash": "e6d39aaa40b5149c"
       },
       "silvered": {
         "kind": "geometry",
@@ -3860,7 +3860,7 @@
         "vertices": 85056,
         "primitives": 28352,
         "instances": 0,
-        "hash": "f5b177ab7b04ca77"
+        "hash": "7caee46dde240f42"
       },
       "summit": {
         "kind": "geometry",

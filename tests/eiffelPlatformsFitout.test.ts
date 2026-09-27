@@ -16,7 +16,9 @@
  *   axis, or before a leg against the step; the arch's crowns; the flights'
  *   strings, risers and landing; the reservoirs' size, height and place on
  *   the Roux legs' diagonal; the buildings' heights;
- * - the cooked meshes are exactly the solids `fitOutSolids` lists;
+ * - the cooked meshes are exactly the solids `fitOutSolids` draws, each
+ *   drawing placed on its faces and stations by the plates' own symmetry
+ *   (tests/support/eiffelFitout.ts), not by the module's copies;
  * - no other part of the tower — deck, step, column, leg, pavilion, lift,
  *   stair — reaches inside any of them;
  * - two cooks agree to the bit.
@@ -31,6 +33,7 @@ import { SAG, circleSegments } from "../demos/eiffel/chord.js";
 import { buildEiffel } from "../demos/eiffel/graph.js";
 import { PART_CLASSES } from "../demos/eiffel/parts.js";
 import { VAULT_SEGMENTS, fitOutSolids } from "../demos/eiffel/platforms.js";
+import { worldSolids } from "./support/eiffelFitout.js";
 import { FACES, FLOORS, PILES } from "../demos/eiffel/spec.js";
 
 type V = readonly [number, number, number];
@@ -220,7 +223,7 @@ async function cookProbed(): Promise<Record<string, Geometry>> {
 beforeAll(async () => {
   geo = await cookProbed();
   solids = Object.fromEntries(
-    Object.entries(fitOutSolids()).map(([k, list]) => [k, list.map((p) => solid(p.outline, p.depth))]),
+    Object.entries(worldSolids(fitOutSolids())).map(([k, list]) => [k, list.map((p) => solid(p.outline, p.depth))]),
   );
   // Everything else the tower cooks: every class output and every car,
   // less the leftovers' own points (the classes are jittered by 1 mm).

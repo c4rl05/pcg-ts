@@ -31,6 +31,7 @@ import {
   vaultArc,
   voidOutline,
 } from "../demos/eiffel/platforms.js";
+import { worldSolids } from "./support/eiffelFitout.js";
 import { FLOORS, PEDESTAL } from "../demos/eiffel/spec.js";
 
 type V = readonly [number, number, number];
@@ -210,7 +211,7 @@ function barChains(bars: ReadonlyArray<{ outline: readonly V[] }>): V[][] {
   return out.filter((ch) => ch.length >= 4);
 }
 
-const solids = fitOutSolids();
+const solids = worldSolids(fitOutSolids());
 
 describe("eiffel roundness: the platforms' curves cut by size", () => {
   it("rounds the 2nd floor's reservoirs to 3 mm, a corner at top and bottom", () => {

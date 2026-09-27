@@ -19,6 +19,10 @@
  *   and no two panes over each other;
  * - one silvered plate to each cabochon, behind its ring, inside its
  *   crescent;
+ * - the panes where the plates put them: `glazing` draws each opening's
+ *   glass once, on the +z face, with the faces and stations it stands on,
+ *   and the cook's copies are held to those placed by the plates' own
+ *   symmetry (tests/support/eiffelFitout.ts);
  * - the croisées' ends at their posts' true reach (a chamfer's last post
  *   is turned 45 degrees) or at the mid-bay bar;
  * - two cooks agree to the bit.
@@ -33,6 +37,7 @@ import { SAG, halfEllipseSegments } from "../demos/eiffel/chord.js";
 import { buildEiffel } from "../demos/eiffel/graph.js";
 import { PART_CLASSES } from "../demos/eiffel/parts.js";
 import { VAULT_SEGMENTS, fitOutSolids, glazing } from "../demos/eiffel/platforms.js";
+import { type Solid, placedPrisms, worldSolids } from "./support/eiffelFitout.js";
 import { summitGlass } from "../demos/eiffel/summit.js";
 import { FACES, FLOORS } from "../demos/eiffel/spec.js";
 
@@ -324,7 +329,8 @@ function fansFromFirst(pts: readonly V[], n: V): boolean {
 // ------------------------------------------------------------ the cook
 
 let geo: Record<string, Geometry>;
-let listed: ReturnType<typeof glazing>;
+/** `glazing`'s drawings, placed: every pane in the world, in the cook's order. */
+let listed: { glass: Solid[]; silvered: Solid[]; plates: Solid[]; count: Record<string, number> };
 let top: ReturnType<typeof summitGlass>;
 /** The cabochons' centres, as cooked. */
 let cabochons: V[];
@@ -340,7 +346,13 @@ beforeAll(async () => {
   cabochons = cab.flatMap((it) =>
     it.batches.flatMap((b) => Array.from({ length: b.count }, (_, k): V => [b.transforms[16 * k + 12]!, b.transforms[16 * k + 13]!, b.transforms[16 * k + 14]!])),
   );
-  listed = glazing();
+  const drawn = glazing();
+  listed = {
+    glass: placedPrisms(drawn.glass),
+    silvered: placedPrisms(drawn.silvered),
+    plates: placedPrisms(drawn.plates),
+    count: drawn.count,
+  };
   top = summitGlass();
 }, 240_000);
 
@@ -443,6 +455,7 @@ describe("eiffel glass", () => {
     expect(c["flamand.screen"]! - 6 * 4 * 2 * 4).toBeLessThanOrEqual(6 * 8 * 3);
     expect(listed.glass.length).toBe(Object.entries(c).filter(([k]) => !k.startsWith("crescent")).reduce((s, [, n]) => s + n, 0));
     expect(listed.silvered.length).toBe(c.crescents! + c["crescent.ends"]!);
+    expect(listed.plates.length).toBe(c.crescents!);
     // 24 croisées, two sashes of two lights; 16 windows of two lights and 8 doors.
     expect(top.gallery.length).toBe(24 * 4);
     expect(top.pavilion.length).toBe(16 * 2 + 8);
@@ -656,7 +669,7 @@ describe("eiffel glass", () => {
     const rDoor = FRONT - WALL / 2;
     // The members the lights meet, from the fit-out's list: those standing
     // across the pane's plane, drawn onto it.
-    const solids = fitOutSolids();
+    const solids = worldSolids(fitOutSolids());
     const membersOn = (f: (typeof FACES)[number], r: number, keys: readonly string[]): Ring[] =>
       keys
         .flatMap((k) => solids[k] ?? [])
@@ -819,7 +832,7 @@ describe("eiffel glass", () => {
 
   it("sets one silvered plate behind each cabochon, in its cell", () => {
     // The cells' plates (the rays' end plates are the rest).
-    const plates = listed.silvered.slice(0, listed.count.crescents).map((p) => {
+    const plates = listed.plates.map((p) => {
       const c = sc(p.outline.reduce((s, q) => add(s, q), [0, 0, 0] as V), 1 / p.outline.length);
       const f = faceAt(c);
       const pts = p.outline.map((q) => toFace(q, f));
