@@ -156,7 +156,11 @@ is why it is here and not done:
 
 - `meshPrimitive` writing `normal` (per-face, corners split, as the square
   sweep does) is the obvious half: every mesh source would then carry one.
-  It changes `meshPrimitive`'s output, so the corpus golden moves.
+  **SHIPPED 2026-09-27** as opt-in `meshPrimitive` `normals: true` (default
+  off: a stored normal goes stale under displacement or an unturned copy,
+  where the renderer's computed one does not — ten terrain graphs, the
+  spiral stair's treads and the eiffel gussets would all shade wrong with
+  it on).
 - A merge that meets `normal` on some inputs only could refuse, or warn
   through the cook report, rather than zero-fill. Zero is never a valid
   normal, so unlike other attributes there is no default that means
@@ -164,7 +168,7 @@ is why it is here and not done:
 - `copyToPoints` turning `normal` with each copy is the other half:
   without it, a box that DOES carry normals is lit wrong on every turned
   copy. **SHIPPED 2026-09-19** as `copyToPoints`' `rotateAttrs` — see the
-  entry below. The first two bullets are still open.
+  entry below. The merge bullet is still open.
 
 ### ~~`copyToPoints` turns positions and `rot`, but no other direction~~ — SHIPPED 2026-09-19
 

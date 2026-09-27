@@ -53,10 +53,18 @@ function subdivisionCounts(subdivisions: readonly number[]): [number, number, nu
  * Append one subdivided quad to the buffers: `nu * nv` quads spanning the
  * `au`/`av` world axes at a fixed `an` coordinate. Points run u fastest.
  * The base winding gives a normal along +(au x av); `reverse` flips it.
+ *
+ * Every point of the quad gets the same `normal`, and it is DERIVED from
+ * the winding rather than passed in, so the column and the faces cannot
+ * disagree: +(au x av) is +an when (au, av, an) is a cyclic permutation of
+ * (x, y, z) and -an otherwise. A face's points are its own (a box shares
+ * none between faces), so this is the split-corner shading the 'square'
+ * sweep gets by duplicating its corners — flat faces, hard edges.
  */
 function appendQuad(
   positions: number[],
   uvs: number[],
+  normals: number[],
   triangles: number[],
   au: number,
   av: number,
@@ -76,6 +84,9 @@ function appendQuad(
   // One scratch tuple for the whole quad: the axes are chosen at runtime,
   // so the coordinate has to be addressed by index, not by name.
   const p = [0, 0, 0];
+  const n = [0, 0, 0];
+  const cyclic = av === (au + 1) % 3;
+  n[an] = cyclic !== reverse ? 1 : -1;
   for (let iv = 0; iv <= nv; iv++) {
     for (let iu = 0; iu <= nu; iu++) {
       p[au] = minU + iu * stepU;
@@ -83,6 +94,7 @@ function appendQuad(
       p[an] = planeCoord;
       positions.push(p[0], p[1], p[2]);
       uvs.push(iu / nu, iv / nv);
+      normals.push(n[0], n[1], n[2]);
     }
   }
   const rowStride = nu + 1;
@@ -110,7 +122,7 @@ export const meshPrimitive = standardNode<
   type: "meshPrimitive",
   category: "source",
   description:
-    "Builds a parametric triangle mesh with no input: shape 'plane' is one axis-aligned rectangle, shape 'box' is six of them around a volume. Output carries P (f32 tuple 3), a uv point attribute (f32 tuple 2) running 0..1 across each face, and one 3-vertex 'poly' primitive per triangle — everything surfaceSample, transferAttribute's 'uv' and 'raycast' mappings, and promoteAttribute need. This is the only mesh source that survives serialization: dataInput's items are injected at runtime and a saved graph carries none, so a graph that must cook from JSON alone gets its surface from here. Plane normals point along the positive third axis (+y for orientation 'xz', +z for 'xy', +x for 'yz'); box normals point outward. Point order is u fastest then v, one block per face in the order +x, -x, +y, -y, +z, -z; a box's faces do not share points, so uv seams are exact. A zero size component makes degenerate (zero-area) triangles, which area-weighted sampling and the raycast mapping skip.",
+    "Builds a parametric triangle mesh with no input: shape 'plane' is one axis-aligned rectangle, shape 'box' is six of them around a volume. Output carries P (f32 tuple 3), a uv point attribute (f32 tuple 2) running 0..1 across each face, one 3-vertex 'poly' primitive per triangle — everything surfaceSample, transferAttribute's 'uv' and 'raycast' mappings, and promoteAttribute need — and, with `normals` on, a flat per-face `normal` point attribute (f32 tuple 3). This is the only mesh source that survives serialization: dataInput's items are injected at runtime and a saved graph carries none, so a graph that must cook from JSON alone gets its surface from here. Plane normals point along the positive third axis (+y for orientation 'xz', +z for 'xy', +x for 'yz'); box normals point outward. Point order is u fastest then v, one block per face in the order +x, -x, +y, -y, +z, -z; a box's faces do not share points, so uv seams are exact. A zero size component makes degenerate (zero-area) triangles, which area-weighted sampling and the raycast mapping skip.",
   inputs: [],
   outputs: [{ name: "out", kind: "geometry" }],
   params: {
@@ -151,7 +163,13 @@ export const meshPrimitive = standardNode<
       type: "bool",
       default: false,
       description:
-        "Reverse every triangle's winding, which flips the surface normals — a plane becomes a ceiling, a box becomes an inward-facing room.",
+        "Reverse every triangle's winding (and the written `normal` with it, under `normals`), which flips the surface — a plane becomes a ceiling, a box becomes an inward-facing room.",
+    },
+    normals: {
+      type: "bool",
+      default: false,
+      description:
+        "Write a `normal` point attribute (f32 tuple 3): FLAT, one face's unit axis on each of that face's points, derived from the same winding the triangles use (so `flip` turns both) — the split-corner shading sweepProfile's 'square' and extrudePolygon give their hard edges, which a box's unshared face points make exact. TURN IT ON when this mesh is merged with one that carries a normal (sweepProfile, extrudePolygon, meshFromField): mergePrimitives fills a column missing on one input with its default, (0, 0, 0), and a lit material renders those points black. OFF BY DEFAULT because a stored normal is only right until something moves P, and the renderer computes one from the triangles when none is stored: the commonest use of a plane is displacement into terrain, which would then shade flat on rolling ground, and a box copied onto ROTATED targets keeps its unturned normal unless copyToPoints' `rotateAttrs` names `normal`. A graph that displaces the mesh and still wants a stored normal recomputes it afterwards with smoothNormals.",
     },
   },
   execute({ params }) {
@@ -161,6 +179,7 @@ export const meshPrimitive = standardNode<
     const size = [params.size[0], params.size[1], params.size[2]];
     const positions: number[] = [];
     const uvs: number[] = [];
+    const normals: number[] = [];
     const triangles: number[] = [];
 
     if (params.shape === "plane") {
@@ -179,6 +198,7 @@ export const meshPrimitive = standardNode<
       appendQuad(
         positions,
         uvs,
+        normals,
         triangles,
         au,
         av,
@@ -203,6 +223,7 @@ export const meshPrimitive = standardNode<
           appendQuad(
             positions,
             uvs,
+            normals,
             triangles,
             au,
             av,
@@ -227,6 +248,10 @@ export const meshPrimitive = standardNode<
     const geo = createTriangleMesh(positions, triangles);
     const uv = geo.attrs.point.add("uv", "f32", 2, 0);
     uv.writable().set(uvs);
+    if (params.normals) {
+      const normal = geo.attrs.point.add("normal", "f32", 3, 0);
+      normal.writable().set(normals);
+    }
     return { out: [makeGeometryItem(geo)] };
   },
 });

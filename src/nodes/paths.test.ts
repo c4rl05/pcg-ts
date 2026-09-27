@@ -33,7 +33,7 @@ import {
   writeTangents,
 } from "./index.js";
 import { firstGeo, positionsOf, runNode, snapshotGeometry } from "./nodes.testsupport.js";
-import { rotateVec } from "./util.js";
+import { polylineArcTables, rotateVec } from "./util.js";
 // Registers the shipped primitives, so `place/along-curve` can be reached
 // by name from a serialized graph — the way the pipeline actually wires it.
 import "../primitives/index.js";
@@ -4140,5 +4140,260 @@ describe("pathRuns", () => {
     const src = flagged([5, 2, 8, 9, 1], [1, 0, 1, 0, 0]);
     const run = async () => snapshotGeometry(await runs({ ...P, reduce: "min" }, src));
     expect(await run()).toEqual(await run());
+  });
+});
+
+describe("pathResample fit and align", () => {
+  const cookOn = async (geo: Geometry, params: Record<string, unknown>): Promise<Geometry> =>
+    firstGeo((await runNode(pathResample, params, { in: [makeGeometryItem(geo)] })).out);
+  const xs = (geo: Geometry): number[] => positionsOf(geo).map((p) => p[0]);
+  const line = (L: number): Geometry => createPolyline([0, 0, 0, L, 0, 0]);
+  const stepOf = (geo: Geometry): number[] => {
+    const a = geo.attrs.primitive.require("sampleStep");
+    return Array.from({ length: geo.primitiveCount }, (_, p) => a.get(p));
+  };
+  /** A closed square of side 10.75: 43 units around. */
+  const loop43 = (): Geometry =>
+    createPolyline([0, 0, 0, 10.75, 0, 0, 10.75, 10.75, 0, 0, 10.75, 0], { closed: true });
+
+  it("defaults to today's rule: fit 'exact', align 'start', byte-identical", async () => {
+    const src = createPolyline([0, 0, 0, 3, 1, 0, 7, -2, 0.5, 10.3, 0, 0]);
+    for (const geo of [src, loop43()]) {
+      const base = { mode: "spacing", spacing: 1.7, stepAttr: "sampleStep", sampleArcAttr: "arc" };
+      const implicit = snapshotGeometry(await cookOn(geo, base));
+      expect(snapshotGeometry(await cookOn(geo, { ...base, fit: "exact", align: "start" }))).toEqual(
+        implicit,
+      );
+    }
+    // And a field spacing, which runs through the same loop.
+    const field = fieldFromJson({ fn: "constant", value: 1.7 });
+    const withField = { mode: "spacing", spacing: field, stepAttr: "sampleStep" };
+    expect(snapshotGeometry(await cookOn(src, { ...withField, fit: "exact", align: "start" }))).toEqual(
+      snapshotGeometry(await cookOn(src, withField)),
+    );
+  });
+
+  it("fit 'ceil', 'round' and 'floor' divide the path into that many EQUAL steps", async () => {
+    // 10 / 4 = 2.5: ceil 3, round 3 (the tie rounds up), floor 2.
+    const at = async (fit: string) =>
+      cookOn(line(10), { mode: "spacing", spacing: 4, fit, stepAttr: "sampleStep" });
+    const ceil = await at("ceil");
+    expect(xs(ceil)).toEqual([0, 10 / 3, 20 / 3, 10].map(Math.fround));
+    expect(stepOf(ceil)).toEqual([Math.fround(10 / 3)]);
+    expect(xs(await at("round"))).toEqual(xs(ceil));
+    const floor = await at("floor");
+    expect(xs(floor)).toEqual([0, 5, 10]);
+    expect(stepOf(floor)).toEqual([5]);
+    expect(topologyOf(floor)).toEqual({ v: [0, 1, 2], start: [0], count: [3] });
+    // 10 / 3 = 3.33: ceil 4 steps of 2.5, round and floor 3.
+    const ceil3 = await cookOn(line(10), { mode: "spacing", spacing: 3, fit: "ceil" });
+    expect(xs(ceil3)).toEqual([0, 2.5, 5, 7.5, 10]);
+    expect(xs(await cookOn(line(10), { mode: "spacing", spacing: 3, fit: "round" }))).toHaveLength(4);
+    // A path that is a whole number of steps: all three agree with 'exact'.
+    for (const fit of ["exact", "ceil", "round", "floor"]) {
+      expect(xs(await cookOn(line(10), { mode: "spacing", spacing: 2.5, fit }))).toEqual([
+        0, 2.5, 5, 7.5, 10,
+      ]);
+    }
+  });
+
+  it("divides a closed path into k samples with no seam segment, as 'count' does", async () => {
+    // A square of side 1 is 4 around; 4 / 1.5 = 2.67.
+    const square = createPolyline([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0], { closed: true });
+    const ceil = await cookOn(square, { mode: "spacing", spacing: 1.5, fit: "ceil" });
+    expect(topologyOf(ceil)).toEqual({ v: [0, 1, 2, 0], start: [0], count: [4] });
+    expect(snapshotGeometry(ceil)).toEqual(
+      snapshotGeometry(await cookOn(square, { mode: "count", count: 3 })),
+    );
+    await expect(cookOn(square, { mode: "spacing", spacing: 1.5, fit: "floor" })).rejects.toThrow(
+      /pathResample: spacing 1\.5 is too coarse for the closed path at primitive 0 \(length 4\): fit "floor" divides it into 2 step\(s\), which is 2 sample\(s\), fewer than the 3 a path needs.*at most 1\.333/s,
+    );
+  });
+
+  it("align 'center' keeps the step exact and splits the remainder between both ends", async () => {
+    const geo = await cookOn(line(10), {
+      mode: "spacing",
+      spacing: 3,
+      align: "center",
+      stepAttr: "sampleStep",
+    });
+    expect(xs(geo)).toEqual([0.5, 3.5, 6.5, 9.5]);
+    expect(stepOf(geo)).toEqual([3]);
+    expect(Array.from({ length: 4 }, (_, i) => geo.attrs.point.require("curveU").get(i))).toEqual(
+      [0.05, 0.35, 0.65, 0.95].map(Math.fround),
+    );
+    // A whole number of steps: the ends are sampled, exactly as 'start'.
+    expect(xs(await cookOn(line(9), { mode: "spacing", spacing: 3, align: "center" }))).toEqual([
+      0, 3, 6, 9,
+    ]);
+    // A closed 43-unit loop at 5: the 9 samples 'start' places, moved 1.5
+    // in, so the 3-unit seam segment straddles the start point.
+    const centred = await cookOn(loop43(), { mode: "spacing", spacing: 5, align: "center" });
+    expect(centred.pointCount).toBe(9);
+    expect(positionsOf(centred)[0]).toEqual([1.5, 0, 0]);
+    // Arc 41.5 is 9.25 along the last side, which runs from (0, 10.75) down.
+    expect(positionsOf(centred)[8]).toEqual([0, 1.5, 0]);
+    // Under a dividing fit there is no remainder, so both aligns agree.
+    for (const fit of ["ceil", "round", "floor"]) {
+      const a = await cookOn(line(10), { mode: "spacing", spacing: 3, fit, align: "start" });
+      const b = await cookOn(line(10), { mode: "spacing", spacing: 3, fit, align: "center" });
+      expect(snapshotGeometry(b)).toEqual(snapshotGeometry(a));
+    }
+  });
+
+  /**
+   * The f32 shortfall. A row authored as (n - 1) pitches in f64 is stored in
+   * an f32 `P`, so the length measured back off it is a hair short of, or a
+   * hair over, (n - 1) pitches — by far more than the legacy 1e-6-of-a-step
+   * epsilon when the row sits a few hundred metres from the origin. Searched for
+   * deterministically rather than hard-coded, so the fixture is a short line
+   * and an over line whatever the rounding does.
+   */
+  function shortfallRows(): { short: Geometry; over: Geometry; pitch: number; steps: number } {
+    const pitch = 0.09;
+    const steps = 36;
+    const L = steps * pitch;
+    const dir = [1, 0.3, 0.2];
+    const dl = Math.hypot(dir[0], dir[1], dir[2]);
+    let short: Geometry | undefined;
+    let over: Geometry | undefined;
+    for (let i = 0; i < 400 && (short === undefined || over === undefined); i++) {
+      const a = [243.456 + i * 0.1379, 278.9 - i * 0.071, -145.6 + i * 0.013];
+      const b = a.map((c, k) => c + (dir[k] / dl) * L);
+      const geo = createPolyline([...a, ...b]);
+      const measured = polylineArcTables(geo, "test")[0].length;
+      // Ten times outside the legacy epsilon, on the side each case needs.
+      if (measured < L - 10 * pitch * 1e-6) short ??= geo;
+      if (measured > L + 10 * pitch * 1e-6) over ??= geo;
+    }
+    if (short === undefined || over === undefined) throw new Error("no shortfall fixture found");
+    return { short, over, pitch, steps };
+  }
+
+  it("counts a row authored as a whole number of pitches as exactly that, through f32", async () => {
+    const { short, over, pitch, steps } = shortfallRows();
+    const measure = (geo: Geometry) => polylineArcTables(geo, "test")[0].length;
+    // The teeth: a naive floor / ceil of the measured length gets it wrong,
+    // and the legacy 'exact' rule lands an extra sample on the over row.
+    expect(Math.floor(measure(short) / pitch)).toBe(steps - 1);
+    expect(Math.ceil(measure(over) / pitch)).toBe(steps + 1);
+    expect((await cookOn(over, { mode: "spacing", spacing: pitch })).pointCount).toBe(steps + 2);
+    for (const [name, geo] of [
+      ["short", short],
+      ["over", over],
+    ] as const) {
+      for (const fit of ["ceil", "round", "floor"]) {
+        const out = await cookOn(geo, { mode: "spacing", spacing: pitch, fit });
+        expect(out.pointCount, `${fit} on the ${name} row`).toBe(steps + 1);
+        // Both ends are sampled.
+        expect(positionsOf(out)[0]).toEqual(positionsOf(geo)[0]);
+        expect(positionsOf(out)[steps]).toEqual(positionsOf(geo)[1]);
+      }
+      const centred = await cookOn(geo, { mode: "spacing", spacing: pitch, align: "center" });
+      expect(centred.pointCount, `center on the ${name} row`).toBe(steps + 1);
+      // Within the tolerance the remainder is ~0, so the row spans the line.
+      expect(positionsOf(centred)[0][0]).toBeCloseTo(positionsOf(geo)[0][0], 4);
+      expect(positionsOf(centred)[steps][0]).toBeCloseTo(positionsOf(geo)[1][0], 4);
+    }
+    // The same row with a FIELD spacing (f32 per path) counts the same.
+    const field = fieldFromJson({ fn: "constant", value: pitch });
+    for (const fit of ["ceil", "floor"]) {
+      expect((await cookOn(over, { mode: "spacing", spacing: field, fit })).pointCount).toBe(steps + 1);
+      expect((await cookOn(short, { mode: "spacing", spacing: field, fit })).pointCount).toBe(steps + 1);
+    }
+  });
+
+  it("reads a half step within the tolerance as the tie, which rounds up", async () => {
+    // 10 - 1e-6 at spacing 4 is 2.49999975 steps: Math.round says 2, but it
+    // is within the tolerance (about 1.9e-5 here) of the 2.5 tie, so 3.
+    const nearTie = line(10 - 1e-6);
+    expect(Math.round(polylineArcTables(nearTie, "test")[0].length / 4)).toBe(2);
+    expect((await cookOn(nearTie, { mode: "spacing", spacing: 4, fit: "round" })).pointCount).toBe(4);
+    // Well clear of the tie, round is plain rounding.
+    expect((await cookOn(line(9.9), { mode: "spacing", spacing: 4, fit: "round" })).pointCount).toBe(3);
+  });
+
+  it("never duplicates the start of a closed loop that is a whole number of steps", async () => {
+    // 40 around at spacing 5: 8 samples under both aligns, no seam segment.
+    const loop40 = createPolyline([0, 0, 0, 10, 0, 0, 10, 10, 0, 0, 10, 0], { closed: true });
+    for (const align of ["start", "center"]) {
+      const out = await cookOn(loop40, { mode: "spacing", spacing: 5, align });
+      expect(out.pointCount, align).toBe(8);
+      expect(positionsOf(out)[0], align).toEqual([0, 0, 0]);
+    }
+  });
+
+  it("gives a path shorter than the tolerance its one step under 'ceil'", async () => {
+    // 1.2e-4 long at x = 1000: under the tolerance, yet not zero steps.
+    const tiny = createPolyline([1000, 0, 0, 1000.00012, 0, 0]);
+    expect((await cookOn(tiny, { mode: "spacing", spacing: 1, fit: "ceil" })).pointCount).toBe(2);
+  });
+
+  it("does not snap a length that is genuinely off a whole number of steps", async () => {
+    // 1e-4 over or under at spacing 1 — far beyond the tolerance of a line
+    // this near the origin (2^-20 × (10 + 10) ≈ 1.9e-5).
+    const over = line(10.0001);
+    expect((await cookOn(over, { mode: "spacing", spacing: 1, fit: "ceil" })).pointCount).toBe(12);
+    expect((await cookOn(over, { mode: "spacing", spacing: 1, fit: "floor" })).pointCount).toBe(11);
+    const short = line(9.9999);
+    expect((await cookOn(short, { mode: "spacing", spacing: 1, fit: "floor" })).pointCount).toBe(10);
+    expect((await cookOn(short, { mode: "spacing", spacing: 1, fit: "ceil" })).pointCount).toBe(11);
+  });
+
+  it("follows a per-path field spacing, one k per path", async () => {
+    const geo = createPointCloud(4);
+    const P = geo.attrs.point.require("P");
+    P.setTuple(0, [0, 0, 0]);
+    P.setTuple(1, [10, 0, 0]);
+    P.setTuple(2, [0, 5, 0]);
+    P.setTuple(3, [7, 5, 0]);
+    setPolylineTopology(geo, [0, 1, 2, 3], [0, 2], [2, 2]);
+    const sp = geo.attrs.primitive.add("sp", "f32", 1, 0);
+    sp.set(0, 4);
+    sp.set(1, 2);
+    const out = await cookOn(geo, {
+      mode: "spacing",
+      spacing: fieldFromJson({ fn: "attribute", name: "sp" }),
+      fit: "ceil",
+      stepAttr: "sampleStep",
+    });
+    // 10 / 4 → 3 steps; 7 / 2 → 4 steps.
+    expect(topologyOf(out).count).toEqual([4, 5]);
+    expect(stepOf(out)).toEqual([Math.fround(10 / 3), Math.fround(7 / 4)]);
+  });
+
+  it("is deterministic, and 'count' mode ignores both params", async () => {
+    const src = createPolyline([0, 0, 0, 3, 1, 0, 7, -2, 0.5, 10.3, 0, 0]);
+    for (const extra of [{ fit: "round" }, { align: "center" }, { fit: "floor", align: "center" }]) {
+      const params = { mode: "spacing", spacing: 0.7, sampleArcAttr: "arc", ...extra };
+      expect(snapshotGeometry(await cookOn(src, params))).toEqual(
+        snapshotGeometry(await cookOn(src, params)),
+      );
+    }
+    const count = { mode: "count", count: 7 };
+    expect(snapshotGeometry(await cookOn(src, { ...count, fit: "floor", align: "center" }))).toEqual(
+      snapshotGeometry(await cookOn(src, count)),
+    );
+  });
+
+  it("refuses bad values and too-coarse spacings, naming the param and the way out", async () => {
+    await expect(cookOn(line(10), { mode: "spacing", fit: "nearest" })).rejects.toThrow(
+      /pathResample: fit must be "exact", "ceil", "round" or "floor", got "nearest";.*Read only in mode "spacing"/s,
+    );
+    await expect(cookOn(line(10), { mode: "count", align: "middle" })).rejects.toThrow(
+      /pathResample: align must be "start" or "center", got "middle";/,
+    );
+    await expect(cookOn(line(10), { mode: "spacing", spacing: 11, fit: "floor" })).rejects.toThrow(
+      /spacing 11 is too coarse for the open path at primitive 0 \(length 10\): fit "floor" divides it into 0 step\(s\), which is 1 sample\(s\), fewer than the 2 a path needs.*at most 10.*fit "ceil"/s,
+    );
+    await expect(cookOn(line(10), { mode: "spacing", spacing: 11, align: "center" })).rejects.toThrow(
+      /align "center" places 1 sample\(s\) on it, fewer than the 2/,
+    );
+    // 'ceil' always gives an open path a step, so the same spacing is fine.
+    expect((await cookOn(line(10), { mode: "spacing", spacing: 11, fit: "ceil" })).pointCount).toBe(2);
+    // The budget binds a dividing fit before a single sample is placed.
+    await expect(cookOn(line(10), { mode: "spacing", spacing: 1e-9, fit: "ceil" })).rejects.toThrow(
+      /would place more than 1048576 samples/,
+    );
   });
 });

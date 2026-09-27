@@ -76,8 +76,8 @@ describe("smoothNormals", () => {
   it("keeps every edge of a box split: its normals are unchanged", async () => {
     const box = firstGeo((await runNode(meshPrimitive, { shape: "box", size: [2, 1, 3] }, {})).out);
     const out = await smooth(box, { angle: 60 });
-    // meshPrimitive writes no normal; the rewrite must give each point its
-    // own face's axis and nothing else.
+    // meshPrimitive writes no normal by default; the rewrite must give
+    // each point its own face's axis and nothing else.
     const N = out.attrs.point.require("normal");
     for (let p = 0; p < out.pointCount; p++) {
       const n = N.getTuple(p);

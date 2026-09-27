@@ -972,3 +972,236 @@ function twoPaths(swapped = false): Geometry {
   setPolylineTopology(geo, Uint32Array.of(0, 1, 2, 3), Uint32Array.of(0, 2), Uint32Array.of(2, 2));
   return geo;
 }
+
+describe("sweepProfile 'rect' and 'polygon'", () => {
+  // Frame of reference for every extent below: a straight path along +x
+  // under frame 'upHint' with the default up puts the ring's first axis
+  // (across, `width`) on -z and its second (up, `height`) on +y.
+  const L_SECTION = [0, 0, 2, 0, 2, 1, 1, 1, 1, 3, 0, 3]; // concave, counter-clockwise
+  const BENT = [0, 0, 0, 3, 0, 0, 5, 0, 2, 5, 2, 5];
+
+  it("builds a 'rect' of width across by height up, with the square's layout", async () => {
+    const geo = await sweep(straight(3), { profile: "rect", width: 3, height: 0.5, caps: false });
+    expectTriangleMesh(geo);
+    expect(geo.pointCount).toBe(3 * 8);
+    expect(geo.primitiveCount).toBe(2 * 4 * 2);
+    expect(span(geo, 0, geo.pointCount, 2)).toEqual([-1.5, 1.5]);
+    expect(span(geo, 0, geo.pointCount, 1)).toEqual([-0.25, 0.25]);
+  });
+
+  it("places the section by anchor: centred, standing on the path, or hanging below it", async () => {
+    const cases = [
+      ["center", [-1, 1]],
+      ["bottom", [0, 2]],
+      ["top", [-2, 0]],
+    ] as const;
+    for (const [anchor, ys] of cases) {
+      const geo = await sweep(straight(3), { profile: "rect", width: 1, height: 2, anchor });
+      expect(span(geo, 0, geo.pointCount, 1), anchor).toEqual(ys);
+      expect(span(geo, 0, geo.pointCount, 2), anchor).toEqual([-0.5, 0.5]);
+      expectNormalsMatchWinding(geo, `rect anchor=${anchor}`);
+    }
+  });
+
+  it("moves the cap fan's centre with the anchor, onto the section's own centre", async () => {
+    const geo = await sweep(straight(2), { profile: "rect", width: 1, height: 2, anchor: "bottom" });
+    // Ring block (2 x 8), then each cap: 4 corners and the centre.
+    const P = geo.attrs.point.require("P");
+    expect(P.getTuple(16 + 4).map((c) => c + 0)).toEqual([0, 1, 0]);
+    expect(P.getTuple(16 + 5 + 4).map((c) => c + 0)).toEqual([1, 1, 0]);
+    // Cap uv maps the section's box exactly: corners on 0/1, centre at 0.5.
+    const uv = geo.attrs.point.require("uv");
+    const corners = [0, 1, 2, 3].map((c) => uv.getTuple(16 + c).join(",")).sort();
+    expect(corners).toEqual(["0,0", "0,1", "1,0", "1,1"]);
+    expect(uv.getTuple(16 + 4)).toEqual([0.5, 0.5]);
+  });
+
+  it("matches the square it generalizes when width = height = 2 x radius", async () => {
+    const path = createPolyline(BENT);
+    const sq = await sweep(path, { profile: "square", radius: 0.25 });
+    const rc = await sweep(path, { profile: "rect", width: 0.5, height: 0.5 });
+    expect(rc.pointCount).toBe(sq.pointCount);
+    expect(Array.from(rc.vertexToPoint)).toEqual(Array.from(sq.vertexToPoint));
+    const [P, Q] = [sq, rc].map((g) => g.attrs.point.require("P"));
+    const [N, M] = [sq, rc].map((g) => g.attrs.point.require("normal"));
+    const [U, V] = [sq, rc].map((g) => g.attrs.point.require("uv"));
+    for (let i = 0; i < sq.pointCount; i++) {
+      for (let k = 0; k < 3; k++) {
+        expect(Q.get(i, k), `P ${i}.${k}`).toBeCloseTo(P.get(i, k), 6);
+        expect(M.get(i, k), `normal ${i}.${k}`).toBeCloseTo(N.get(i, k), 6);
+      }
+      expect(V.getTuple(i), `uv ${i}`).toEqual(U.getTuple(i));
+    }
+  });
+
+  it("keeps a rolled 'rect' a rectangle: a quarter turn swaps its extents", async () => {
+    const geo = await sweep(straight(3), {
+      profile: "rect",
+      width: 3,
+      height: 1,
+      roll: 0.25,
+      caps: false,
+    });
+    const [y0, y1] = span(geo, 0, geo.pointCount, 1);
+    const [z0, z1] = span(geo, 0, geo.pointCount, 2);
+    expect(y1 - y0).toBeCloseTo(3, 6);
+    expect(z1 - z0).toBeCloseTo(1, 6);
+    expectNormalsMatchWinding(geo, "rolled rect");
+  });
+
+  it("reads width and height per ring as fields", async () => {
+    const path = straight(3);
+    path.attrs.point.add("h", "f32", 1, 0).writable().set([1, 2, 4]);
+    path.attrs.point.add("w", "f32", 1, 0).writable().set([0.5, 1, 2]);
+    const geo = await sweep(path, {
+      profile: "rect",
+      width: attribute("w"),
+      height: attribute("h"),
+      anchor: "bottom",
+      caps: false,
+    });
+    for (let k = 0; k < 3; k++) {
+      expect(span(geo, k * 8, k * 8 + 8, 1), `ring ${k} height`).toEqual([0, [1, 2, 4][k]]);
+      const half = [0.5, 1, 2][k] / 2;
+      expect(span(geo, k * 8, k * 8 + 8, 2), `ring ${k} width`).toEqual([-half, half]);
+    }
+    // CONTROL: a plain height gives every ring the same extent, so the
+    // per-ring answers above are the field's, not a coincidence.
+    const plain = await sweep(straight(3), {
+      profile: "rect",
+      height: 2,
+      anchor: "bottom",
+      caps: false,
+    });
+    for (let k = 0; k < 3; k++) expect(span(plain, k * 8, k * 8 + 8, 1)).toEqual([0, 2]);
+  });
+
+  it("writes unit normals on a zero-height rect rather than zero ones", async () => {
+    const geo = await sweep(straight(3), { profile: "rect", width: 1, height: 0 });
+    const N = geo.attrs.point.require("normal");
+    for (let i = 0; i < geo.pointCount; i++) {
+      const n = N.getTuple(i);
+      expect(n.every(Number.isFinite), `point ${i}`).toBe(true);
+      expect(Math.hypot(...n), `point ${i}`).toBeCloseTo(1, 6);
+    }
+  });
+
+  it("sweeps an arbitrary 'polygon' section with flat faces and normals true to them", async () => {
+    // A right triangle scaled unevenly: its hypotenuse's normal only stays
+    // perpendicular to the face if it goes through the inverse-transpose.
+    const geo = await sweep(straight(3), {
+      profile: "polygon",
+      section: [0, 0, 1, 0, 0, 1],
+      width: 3,
+      height: 0.5,
+      caps: false,
+    });
+    expectTriangleMesh(geo);
+    expect(geo.pointCount).toBe(3 * 6);
+    expect(geo.primitiveCount).toBe(2 * 3 * 2);
+    // On a straight path every wall is planar, so the written normal must
+    // BE the face's normal, not merely lean the same way.
+    const N = geo.attrs.point.require("normal");
+    for (let t = 0; t < geo.primitiveCount; t++) {
+      const face = triangleNormal(geo, t);
+      const v = geo.primVertexStart[t];
+      for (let c = 0; c < 3; c++) {
+        const n = N.getTuple(geo.vertexToPoint[v + c]);
+        for (let k = 0; k < 3; k++) expect(n[k], `tri ${t} corner ${c}`).toBeCloseTo(face[k], 6);
+      }
+    }
+  });
+
+  it("accepts either winding: a clockwise section sweeps to the same surface", async () => {
+    const ccw = [0, 0, 1, 0, 1, 1, 0, 1];
+    const cw = [0, 0, 0, 1, 1, 1, 1, 0]; // the same corners, reversed about the first
+    const a = await sweep(straight(3), { profile: "polygon", section: ccw });
+    const b = await sweep(straight(3), { profile: "polygon", section: cw });
+    expect(snapshotGeometry(b)).toEqual(snapshotGeometry(a));
+  });
+
+  it("caps a 'polygon' from its area centroid, and faces every face outward", async () => {
+    const geo = await sweep(straight(2), { profile: "polygon", section: [0, 0, 2, 0, 2, 2, 0, 2] });
+    const P = geo.attrs.point.require("P");
+    // 2 rings of 8 entries, then the start cap's 4 corners and its centre.
+    // Section (x across, y up) = (1, 1) lands at world (x_path, 1, -1).
+    const centre = P.getTuple(16 + 4);
+    [0, 1, -1].forEach((want, k) => expect(centre[k], `centre.${k}`).toBeCloseTo(want, 9));
+    for (const caps of [true, false]) {
+      expectNormalsMatchWinding(
+        await sweep(createPolyline(BENT), {
+          profile: "polygon",
+          section: caps ? [0, 0, 2, 0, 2, 2, 0, 2] : L_SECTION,
+          caps,
+        }),
+        `polygon caps=${caps}`,
+      );
+    }
+  });
+
+  it("holds winding and normal together for every rect combination on a bent path", async () => {
+    const path = createPolyline(BENT);
+    for (const anchor of ["center", "bottom", "top"] as const) {
+      for (const caps of [true, false]) {
+        for (const joint of ["miter", "perpendicular"] as const) {
+          const geo = await sweep(path, {
+            profile: "rect",
+            anchor,
+            caps,
+            joint,
+            width: 0.6,
+            height: 0.3,
+          });
+          expectNormalsMatchWinding(geo, `rect ${anchor} caps=${caps} ${joint}`);
+        }
+      }
+    }
+    expectNormalsMatchWinding(
+      await sweep(unitSquare(), { profile: "rect", anchor: "bottom" }),
+      "closed rect",
+    );
+  });
+
+  it("refuses a bad section or anchor by name, with the shape it wants", async () => {
+    const path = straight(3);
+    await expect(sweep(path, { profile: "polygon" })).rejects.toThrow(
+      /profile "polygon" reads param "section".*at least 3 corners.*got 0 number/s,
+    );
+    await expect(sweep(path, { profile: "polygon", section: [0, 0, 1, 0, 1] })).rejects.toThrow(
+      /param "section".*got 5 number/s,
+    );
+    await expect(
+      sweep(path, { profile: "polygon", section: [0, 0, 1, 0, 1, 1, 0, 0] }),
+    ).rejects.toThrow(/repeats corner 3 as corner 0.*must not restate the first/s);
+    await expect(
+      sweep(path, { profile: "polygon", section: [0, 0, 1, 1, 2, 2] }),
+    ).rejects.toThrow(/param "section" encloses no area/);
+    // @ts-expect-error — not an anchor, on purpose
+    await expect(sweep(path, { profile: "rect", anchor: "left" })).rejects.toThrow(
+      /param "anchor" must be one of center, bottom, top; got "left"/,
+    );
+    // Only 'polygon' reads the section, so an empty one is fine everywhere else.
+    await expect(sweep(path, { profile: "rect" })).resolves.toBeDefined();
+  });
+
+  it("is deterministic, fields included", async () => {
+    const make = (): Geometry => {
+      const p = createPolyline(BENT);
+      p.attrs.point.add("h", "f32", 1, 0).writable().set([1, 2, 0.5, 3]);
+      return p;
+    };
+    const params = {
+      profile: "rect",
+      height: attribute("h"),
+      width: 0.4,
+      anchor: "bottom",
+      roll: 0.1,
+    } as const;
+    const a = await sweep(make(), params);
+    const b = await sweep(make(), params);
+    expect(snapshotGeometry(b)).toEqual(snapshotGeometry(a));
+    const c = await sweep(make(), { profile: "polygon", section: L_SECTION, caps: false });
+    const d = await sweep(make(), { profile: "polygon", section: L_SECTION, caps: false });
+    expect(snapshotGeometry(d)).toEqual(snapshotGeometry(c));
+  });
+});

@@ -5,11 +5,13 @@
  * direction they can trust, and uvs that cover the surface.
  */
 import { describe, expect, it } from "vitest";
-import { PRIMTYPE_ATTR, type Geometry } from "../data/index.js";
+import { PRIMTYPE_ATTR, createPolyline, type Geometry } from "../data/index.js";
 import { makeGeometryItem } from "../graph/index.js";
 import {
+  mergePrimitives,
   meshPrimitive,
   surfaceSample,
+  sweepProfile,
   transferAttribute,
   type MeshPrimitiveParams,
 } from "./index.js";
@@ -167,6 +169,127 @@ describe("meshPrimitive box", () => {
       maxX = Math.max(maxX, P.get(i, 0));
     }
     expect([minX, maxX]).toEqual([9, 11]);
+  });
+});
+
+/**
+ * Every triangle's three points carry exactly the normal its winding
+ * gives. Stronger than "normals agree with the winding" (a positive dot):
+ * a flat face has one right answer, so the column must be it bit for bit.
+ */
+function expectFlatNormalsMatchWinding(geo: Geometry, label: string): void {
+  const N = geo.attrs.point.require("normal");
+  expect(N.type).toBe("f32");
+  expect(N.tupleSize).toBe(3);
+  for (let t = 0; t < geo.primitiveCount; t++) {
+    const face = triangleNormal(geo, t);
+    const v = geo.primVertexStart[t];
+    for (let k = 0; k < 3; k++) {
+      expect(
+        N.getTuple(geo.vertexToPoint[v + k]).map((c) => c + 0),
+        `${label} tri ${t} corner ${k}`,
+      ).toEqual(face);
+    }
+  }
+}
+
+describe("meshPrimitive normal", () => {
+  it("writes none by default, so the renderer computes one from wherever P ends up", async () => {
+    for (const shape of ["plane", "box"] as const) {
+      const geo = await mesh({ shape });
+      expect(geo.attrs.point.get("normal"), shape).toBeUndefined();
+    }
+  });
+
+  it("writes each plane's face normal on every point, for every orientation and both windings", async () => {
+    for (const orientation of ["xz", "xy", "yz"] as const) {
+      for (const flip of [false, true]) {
+        const geo = await mesh({ orientation, flip, subdivisions: [3, 2, 4], normals: true });
+        expectFlatNormalsMatchWinding(geo, `${orientation} flip=${flip}`);
+      }
+    }
+    // The direction, not only the agreement: the default ground plane faces up.
+    const ground = await mesh({ normals: true });
+    const N = ground.attrs.point.require("normal");
+    for (let i = 0; i < ground.pointCount; i++) expect(N.getTuple(i).map((c) => c + 0)).toEqual([0, 1, 0]);
+  });
+
+  it("splits a box's corners: every point carries its own face's outward axis, in face order", async () => {
+    const geo = await mesh({ shape: "box", size: [3, 1, 2], subdivisions: [2, 3, 1], normals: true });
+    expectFlatNormalsMatchWinding(geo, "box");
+    // Face blocks run +x, -x, +y, -y, +z, -z; each block's first point
+    // carries that block's axis.
+    const N = geo.attrs.point.require("normal");
+    const blockSizes = [
+      (3 + 1) * (1 + 1), (3 + 1) * (1 + 1), // x faces span (y, z): (3+1) x (1+1)
+      (1 + 1) * (2 + 1), (1 + 1) * (2 + 1), // y faces span (z, x)
+      (2 + 1) * (3 + 1), (2 + 1) * (3 + 1), // z faces span (x, y)
+    ];
+    const axes = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+    let at = 0;
+    for (let f = 0; f < 6; f++) {
+      for (let i = 0; i < blockSizes[f]; i++) {
+        expect(N.getTuple(at + i).map((c) => c + 0), `face ${f} point ${i}`).toEqual(axes[f]);
+      }
+      at += blockSizes[f];
+    }
+    expect(at).toBe(geo.pointCount);
+  });
+
+  it("flip turns the written normal inward together with the winding", async () => {
+    const out = await mesh({ shape: "box", size: [2, 2, 2], normals: true });
+    const inward = await mesh({ shape: "box", size: [2, 2, 2], flip: true, normals: true });
+    expectFlatNormalsMatchWinding(inward, "flipped box");
+    const A = out.attrs.point.require("normal");
+    const B = inward.attrs.point.require("normal");
+    for (let i = 0; i < out.pointCount; i++) {
+      expect(B.getTuple(i).map((c) => c + 0)).toEqual(A.getTuple(i).map((c) => -c + 0));
+    }
+  });
+
+  it("keeps a unit normal on a zero-area face rather than a zero one", async () => {
+    const geo = await mesh({ shape: "box", size: [2, 0, 2], normals: true });
+    const N = geo.attrs.point.require("normal");
+    for (let i = 0; i < geo.pointCount; i++) expect(Math.hypot(...N.getTuple(i))).toBe(1);
+  });
+
+  it("adds only the column: points, uv and triangles are the bytes they are without it", async () => {
+    const params: Partial<MeshPrimitiveParams> = { shape: "box", size: [3, 1, 2], subdivisions: [2, 2, 2] };
+    const plain = await mesh(params);
+    const lit = await mesh({ ...params, normals: true });
+    expect([...lit.attrs.point.names()].sort()).toEqual(["P", "normal", "uv"].sort());
+    lit.attrs.point.remove("normal");
+    expect(snapshotGeometry(lit)).toEqual(snapshotGeometry(plain));
+  });
+
+  it("merged with a sweep, no point ends up with the zero normal a missing column fills with", async () => {
+    // The trap this closes: mergePrimitives fills an attribute one input
+    // lacks with its default, which for `normal` is (0, 0, 0) — and a lit
+    // material shades that black.
+    const tube = firstGeo(
+      (
+        await runNode(
+          sweepProfile,
+          { radius: 0.2 },
+          { in: [makeGeometryItem(createPolyline([0, 0, 0, 3, 0, 0]))] },
+        )
+      ).out,
+    );
+    const merge = async (box: Geometry): Promise<Geometry> =>
+      firstGeo(
+        (await runNode(mergePrimitives, {}, { in: [makeGeometryItem(box), makeGeometryItem(tube)] }))
+          .out,
+      );
+    const merged = await merge(await mesh({ shape: "box", size: [1, 1, 1], normals: true }));
+    const N = merged.attrs.point.require("normal");
+    for (let i = 0; i < merged.pointCount; i++) {
+      expect(Math.hypot(...N.getTuple(i)), `point ${i}`).toBeGreaterThan(0.99);
+    }
+    // CONTROL: the trap is real without the switch — the box's 24 points
+    // come out of the merge with (0, 0, 0).
+    const trapped = await merge(await mesh({ shape: "box", size: [1, 1, 1] }));
+    const Z = trapped.attrs.point.require("normal");
+    for (let i = 0; i < 24; i++) expect(Z.getTuple(i).map((c) => c + 0)).toEqual([0, 0, 0]);
   });
 });
 

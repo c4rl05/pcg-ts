@@ -92,6 +92,28 @@ interface ProfileSpec {
   readonly cap: Uint32Array;
   /** Which field param sets this profile's scale: "radius" or "width". */
   readonly scaleParam: "radius" | "width";
+  /**
+   * True when the section is scaled PER AXIS — `width` along the first
+   * ring axis, `height` along the second — rather than uniformly by
+   * `scaleParam`. A per-axis scale has to act BEFORE the roll (a rolled
+   * rectangle scaled after it would shear into a parallelogram), and it
+   * moves every non-axis-aligned face normal, so the ring loop takes a
+   * separate arm for it rather than folding it into the uniform one and
+   * perturbing the bits the shipped profiles already produce.
+   */
+  readonly axes: boolean;
+  /**
+   * Where a cap fan's centre sits, in unit section coordinates. Absent
+   * means the path point itself, which is the centre of every section
+   * that is symmetric about it.
+   */
+  readonly capCentre?: readonly [number, number];
+  /**
+   * Fixed cap uv, one pair per `cap` entry and then the centre's. Absent
+   * means the disc mapping of the rolled unit section the round and
+   * square profiles have always used.
+   */
+  readonly capUv?: Float64Array;
 }
 
 /**
@@ -128,7 +150,7 @@ function circleProfile(sides: number): ProfileSpec {
   }
   const cap = new Uint32Array(sides);
   for (let i = 0; i < sides; i++) cap[i] = i;
-  return { count, pos, nrm, v, bandA, bandB, cap, scaleParam: "radius" };
+  return { count, pos, nrm, v, bandA, bandB, cap, scaleParam: "radius", axes: false };
 }
 
 /**
@@ -166,7 +188,7 @@ function squareProfile(): ProfileSpec {
   const bandB = Uint32Array.of(1, 3, 5, 7);
   // The distinct corners, in boundary order: the first entry of each face.
   const cap = Uint32Array.of(0, 2, 4, 6);
-  return { count, pos, nrm, v, bandA, bandB, cap, scaleParam: "radius" };
+  return { count, pos, nrm, v, bandA, bandB, cap, scaleParam: "radius", axes: false };
 }
 
 /**
@@ -193,11 +215,192 @@ function ribbonProfile(): ProfileSpec {
     bandB: Uint32Array.of(0),
     cap: new Uint32Array(0),
     scaleParam: "width",
+    axes: false,
   };
 }
 
-/** The three shipped cross-sections; a fourth needs a consumer, not a guess. */
-const PROFILES = ["circle", "square", "ribbon"] as const;
+/**
+ * A closed section with FLAT faces from a list of corners `[a1, a2, ...]`
+ * in the ring's own 2D basis — the square's construction generalized, so
+ * every corner is duplicated and each face carries its own normal.
+ *
+ * Either winding is accepted: a clockwise list is reversed about its
+ * first corner (which keeps that corner at `v = 0`), because the band
+ * stitching and the cap fans assume the counter-clockwise order the
+ * circle and the square travel in. `v` runs by arc length around the
+ * corners, and the face that LEAVES corner f carries the outward normal
+ * (dy, -dx) / len of its edge.
+ *
+ * `centre` is the cap fan's centre; the area centroid when omitted. The
+ * cap uv maps the section's own bounding box onto the unit square, so it
+ * is exact at a rectangle's corners and does not turn with `roll`.
+ */
+function polygonProfile(corners: Float64Array, centre?: readonly [number, number]): ProfileSpec {
+  const n = corners.length / 2;
+  let area2 = 0;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    area2 += corners[i * 2] * corners[j * 2 + 1] - corners[j * 2] * corners[i * 2 + 1];
+  }
+  const xs = new Float64Array(n);
+  const ys = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const from = area2 < 0 ? (n - i) % n : i;
+    xs[i] = corners[from * 2];
+    ys[i] = corners[from * 2 + 1];
+  }
+  const count = 2 * n;
+  const pos = new Float64Array(count * 2);
+  const nrm = new Float64Array(count * 2);
+  const v = new Float64Array(count);
+  const len = new Float64Array(n);
+  let perimeter = 0;
+  for (let f = 0; f < n; f++) {
+    const g = (f + 1) % n;
+    len[f] = Math.hypot(xs[g] - xs[f], ys[g] - ys[f]);
+    perimeter += len[f];
+  }
+  let cum = 0;
+  for (let f = 0; f < n; f++) {
+    const g = (f + 1) % n;
+    const nx = (ys[g] - ys[f]) / len[f];
+    const ny = -(xs[g] - xs[f]) / len[f];
+    // Entry 2f starts face f at corner f; entry 2f + 1 ends it at the
+    // next corner. Both carry face f's normal.
+    pos[(2 * f) * 2] = xs[f];
+    pos[(2 * f) * 2 + 1] = ys[f];
+    pos[(2 * f + 1) * 2] = xs[g];
+    pos[(2 * f + 1) * 2 + 1] = ys[g];
+    nrm[(2 * f) * 2] = nx;
+    nrm[(2 * f) * 2 + 1] = ny;
+    nrm[(2 * f + 1) * 2] = nx;
+    nrm[(2 * f + 1) * 2 + 1] = ny;
+    v[2 * f] = cum / perimeter;
+    cum += len[f];
+    v[2 * f + 1] = cum / perimeter;
+  }
+  const bandA = new Uint32Array(n);
+  const bandB = new Uint32Array(n);
+  const cap = new Uint32Array(n);
+  for (let f = 0; f < n; f++) {
+    bandA[f] = 2 * f;
+    bandB[f] = 2 * f + 1;
+    // The distinct corners, in boundary order: the first entry of each face.
+    cap[f] = 2 * f;
+  }
+  let cx: number;
+  let cy: number;
+  if (centre !== undefined) {
+    [cx, cy] = centre;
+  } else {
+    // Shoelace centroid over the (now counter-clockwise) list, whose
+    // own doubled area is |area2|.
+    let sx = 0;
+    let sy = 0;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const cross = xs[i] * ys[j] - xs[j] * ys[i];
+      sx += (xs[i] + xs[j]) * cross;
+      sy += (ys[i] + ys[j]) * cross;
+    }
+    const a2 = Math.abs(area2);
+    cx = sx / (3 * a2);
+    cy = sy / (3 * a2);
+  }
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < n; i++) {
+    minX = Math.min(minX, xs[i]);
+    maxX = Math.max(maxX, xs[i]);
+    minY = Math.min(minY, ys[i]);
+    maxY = Math.max(maxY, ys[i]);
+  }
+  const spanX = maxX - minX;
+  const spanY = maxY - minY;
+  const capUv = new Float64Array((n + 1) * 2);
+  for (let i = 0; i <= n; i++) {
+    const x = i < n ? xs[i] : cx;
+    const y = i < n ? ys[i] : cy;
+    capUv[i * 2] = spanX > 0 ? (x - minX) / spanX : 0.5;
+    capUv[i * 2 + 1] = spanY > 0 ? (y - minY) / spanY : 0.5;
+  }
+  return {
+    count,
+    pos,
+    nrm,
+    v,
+    bandA,
+    bandB,
+    cap,
+    scaleParam: "width",
+    axes: true,
+    capCentre: [cx, cy],
+    capUv,
+  };
+}
+
+/**
+ * A rectangle one unit on each side — `width` and `height` scale it per
+ * axis — with its corners running counter-clockwise from (+a1, -a2) like
+ * the square's, so the two share their face order, `v` and facing.
+ * `shift` moves it along the second axis: 0 centres it on the path, 0.5
+ * stands it ON the path (its bottom face through the path point), -0.5
+ * hangs it below.
+ */
+function rectProfile(shift: number): ProfileSpec {
+  const lo = -0.5 + shift;
+  const hi = 0.5 + shift;
+  return polygonProfile(Float64Array.of(0.5, lo, 0.5, hi, -0.5, hi, -0.5, lo), [0, shift]);
+}
+
+/** An example section for the refusals below: a unit block standing on the path. */
+const SECTION_EXAMPLE = "[0.5, 0, 0.5, 1, -0.5, 1, -0.5, 0]";
+
+/**
+ * The corner list of a 'polygon' profile, validated. Refused rather than
+ * repaired, each naming what an author has to look at: a list that is not
+ * whole pairs, fewer than three corners, a corner repeated by its
+ * successor (including a last corner that restates the first — the
+ * section closes itself), and a section with no area.
+ */
+function sectionCorners(section: readonly number[]): Float64Array {
+  if (!Array.isArray(section) || section.length % 2 !== 0 || section.length < 6) {
+    throw new Error(
+      `sweepProfile: profile "polygon" reads param "section", which must be a flat list [x0, y0, x1, y1, ...] of at least 3 corners in the ring's (across, up) frame, e.g. ${SECTION_EXAMPLE} for a unit block standing on the path; got ${Array.isArray(section) ? `${section.length} number(s)` : JSON.stringify(section)}`,
+    );
+  }
+  for (let i = 0; i < section.length; i++) {
+    if (!Number.isFinite(section[i])) {
+      throw new Error(
+        `sweepProfile: param "section" entry ${i} is ${String(section[i])}; every coordinate must be a finite number`,
+      );
+    }
+  }
+  const n = section.length / 2;
+  let area2 = 0;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    if (section[i * 2] === section[j * 2] && section[i * 2 + 1] === section[j * 2 + 1]) {
+      throw new Error(
+        `sweepProfile: param "section" repeats corner ${i} as corner ${j} ([${section[i * 2]}, ${section[i * 2 + 1]}]), and a zero-length face has no normal; remove the duplicate${j === 0 ? " — the section closes itself, so the last corner must not restate the first" : ""}`,
+      );
+    }
+    area2 += section[i * 2] * section[j * 2 + 1] - section[j * 2] * section[i * 2 + 1];
+  }
+  if (!(Math.abs(area2) > 0)) {
+    throw new Error(
+      `sweepProfile: param "section" encloses no area (its corners are collinear); a closed section needs corners that span a region, e.g. ${SECTION_EXAMPLE}`,
+    );
+  }
+  return Float64Array.from(section);
+}
+
+/** The shipped cross-sections; a section from a geometry pin still needs a consumer. */
+const PROFILES = ["circle", "square", "ribbon", "rect", "polygon"] as const;
+/** Where a 'rect' section sits across the ring's up axis. */
+const ANCHORS = ["center", "bottom", "top"] as const;
 /** How a ring meets the next one through a bend. */
 const JOINTS = ["miter", "perpendicular"] as const;
 /** Where the roll inside the ring plane comes from. */
@@ -296,7 +499,7 @@ export const sweepProfile = standardNode<
       default: "circle",
       enum: [...PROFILES],
       description:
-        "Cross-section shape. 'circle' and 'square' are CLOSED (a tube, and a square rod whose four faces stay flat because its corners carry per-face normals) and take `radius` and `caps`; 'ribbon' is OPEN — a flat two-point strip of `width`, centred on the path, facing the frame's up axis — and takes neither, because a strip has no inside. A profile from a second geometry pin (an I-beam, a kerb) is deliberately not here yet: it forces four decisions no consumer has asked for, and these enum values stay valid when it arrives.",
+        "Cross-section shape. 'circle' and 'square' are CLOSED (a tube, and a square rod whose four faces stay flat because its corners carry per-face normals) and take `radius` and `caps`; 'ribbon' is OPEN — a flat two-point strip of `width`, centred on the path, facing the frame's up axis — and takes neither, because a strip has no inside. 'rect' is the square with its two extents set apart: `width` across the path (the ring's first axis) by `height` along the frame's up axis, both field-capable, placed by `anchor` (centred on the path, standing on it, or hanging from it) — a wall, a kerb, a beam, a plank — with the same flat faces, split corners, frames, miter and caps as 'square'. 'polygon' is any closed section with flat faces: the corners in `section`, in the ring's (across, up) frame relative to the path point, scaled per axis by `width` and `height` (both 1 by default, so the corners are world units). Every corner of a 'rect' or 'polygon' is split, so all its faces shade flat; run smoothNormals after the sweep to round the shallow ones. A profile from a second geometry pin (an I-beam as a mesh) is deliberately not here yet: it forces decisions no consumer has asked for, and these enum values stay valid when it arrives.",
     },
     sides: {
       type: "i32",
@@ -304,7 +507,7 @@ export const sweepProfile = standardNode<
       min: 3,
       max: 256,
       description:
-        "Points around a 'circle' profile; ignored by the other two. Default 8 matches the shipped tube asset (a three.js CylinderGeometry with 8 radial segments), so a swept tube reads like the instanced tube it replaces. Cost is linear: the ring emits `sides + 1` points (the extra one duplicates the seam so the uv does not run backwards across one column of quads) and `sides * 2` triangles per band.",
+        "Points around a 'circle' profile; ignored by every other profile. Default 8 matches the shipped tube asset (a three.js CylinderGeometry with 8 radial segments), so a swept tube reads like the instanced tube it replaces. Cost is linear: the ring emits `sides + 1` points (the extra one duplicates the seam so the uv does not run backwards across one column of quads) and `sides * 2` triangles per band.",
     },
     radius: {
       type: "f32",
@@ -312,7 +515,7 @@ export const sweepProfile = standardNode<
       min: 0,
       acceptsField: true,
       description:
-        "Distance from the path to the surface, in world units, for the 'circle' and 'square' profiles ('square' reads it as HALF-WIDTH, so the section fits a 2 x radius box). Same default as pathSegments' `radius`. Field-capable and resolved on the INPUT points — the path's own points, which is exactly where a ring sits — so a taper is exact rather than averaged. A per-path radius living on the primitive domain has to be promoted onto the points first (promoteAttribute, primitive to point) before a field can see it.",
+        "Distance from the path to the surface, in world units, for the 'circle' and 'square' profiles ('square' reads it as HALF-WIDTH, so the section fits a 2 x radius box); ignored by 'ribbon', 'rect' and 'polygon', which read `width` (and `height`) instead. Same default as pathSegments' `radius`. Field-capable and resolved on the INPUT points — the path's own points, which is exactly where a ring sits — so a taper is exact rather than averaged. A per-path radius living on the primitive domain has to be promoted onto the points first (promoteAttribute, primitive to point) before a field can see it.",
     },
     width: {
       type: "f32",
@@ -320,7 +523,28 @@ export const sweepProfile = standardNode<
       min: 0,
       acceptsField: true,
       description:
-        "Full width of a 'ribbon' profile in world units (the strip runs from -width/2 to +width/2 across the path); ignored by the closed profiles. Field-capable on the INPUT points, so a road that widens at a junction is one promoted attribute away.",
+        "Full width across the path in world units for a 'ribbon' (the strip runs from -width/2 to +width/2) and a 'rect' (its extent along the ring's first axis); for a 'polygon' it MULTIPLIES the `section` coordinates along that axis. Ignored by 'circle' and 'square'. Field-capable on the INPUT points, so a road that widens at a junction is one promoted attribute away.",
+    },
+    height: {
+      type: "f32",
+      default: 1,
+      min: 0,
+      acceptsField: true,
+      description:
+        "Extent of a 'rect' along the frame's up axis (the ring's second axis — the axis a 'ribbon' faces), in world units; for a 'polygon' it MULTIPLIES the `section` coordinates along that axis. Ignored by the other profiles. Field-capable on the INPUT points, resolved at the ring exactly as `width` is, so a wall that rises along its run or a kerb that dips at a crossing is one attribute away. The two are independent: a non-uniform scale is applied BEFORE `roll`, so a rolled 'rect' stays a rectangle, and each face normal is carried through the scale (inverse-transpose) so a sloped 'polygon' face keeps shading the way it faces. A zero extent makes the faces along it zero-area — drawn as nothing, skipped by area-weighted sampling — and leaves their normals unscaled rather than zero.",
+    },
+    anchor: {
+      type: "enum",
+      default: "center",
+      enum: [...ANCHORS],
+      description:
+        "Where a 'rect' sits across the frame's up axis: 'center' centres it on the path; 'bottom' STANDS it on the path — its bottom face runs through the path's points, so the section spans 0..height above them, which is a wall or a kerb built on a ground-hugging line; 'top' hangs it below, spanning -height..0, which is a beam under a deck line. Moves the cap fan's centre with it. Ignored by every other profile — a 'polygon' already says where the path is, because its corners are relative to the path point. Turned with the section by `roll`, about the path point.",
+    },
+    section: {
+      type: "numberList",
+      default: [],
+      description:
+        "Corners of a 'polygon' profile as a flat list [x0, y0, x1, y1, ...]: x across the path along the ring's first axis, y along the frame's up axis, relative to the path point, then scaled by `width` and `height`. At least three corners; either winding (a clockwise list is reversed about its first corner, which keeps `v` = 0 there); do not restate the first corner at the end — the section closes itself. With frame 'upHint' and the default up, a horizontal path's first axis points to the LEFT of the direction of travel, so (x, y, travel) is right-handed; [0.5, 0, 0.5, 1, -0.5, 1, -0.5, 0] is a unit block standing on the path. Every corner is split (flat faces, per-face normals), `v` runs 0..1 by arc length around the corners in counter-clockwise order (starting at the first corner) measured on the section as given, before `width` and `height` scale it, and caps are fans from the section's area centroid, which is exact for any section every corner of which is visible from that centroid (every convex one) and overlaps itself otherwise — set `caps` false for a deeply concave section. Refused by name when it is not whole pairs, has fewer than three corners, repeats a corner, or encloses no area. Ignored by every other profile. Not field-capable: the section is one shape for the whole sweep, and `width`, `height` and `roll` are what vary per ring.",
     },
     frame: {
       type: "enum",
@@ -362,11 +586,11 @@ export const sweepProfile = standardNode<
       type: "bool",
       default: true,
       description:
-        "Close the two ends of an OPEN path with a CLOSED profile, as a triangle fan from the path's endpoint. Ignored for a closed path (it has no ends) and for the 'ribbon' profile (it has no hole), so all four combinations are defined rather than merely unsurprising. Cap points are separate from the wall's, so the seam between a flat cap and a round wall stays a real crease instead of being smoothed away. Cap uv is a disc mapping — the unit section mapped into the 0..1 square — not a continuation of the wall's.",
+        "Close the two ends of an OPEN path with a CLOSED profile, as a triangle fan from the path's endpoint — for a 'rect' from its centre (which `anchor` moves off the path) and for a 'polygon' from its area centroid. Ignored for a closed path (it has no ends) and for the 'ribbon' profile (it has no hole), so all four combinations are defined rather than merely unsurprising. Cap points are separate from the wall's, so the seam between a flat cap and a round wall stays a real crease instead of being smoothed away. Cap uv is not a continuation of the wall's: for 'circle' and 'square' it is a disc mapping — the unit section, turned by `roll`, mapped into the 0..1 square — and for 'rect' and 'polygon' it maps the section's own bounding box onto 0..1, so a rectangle's corners land exactly on the uv square's.",
     },
   },
-  // `radius`, `width`, `up`, `roll` and `miterLimit` may resolve on the
-  // GPU. All are evaluated on the INPUT geometry, which this node never mutates
+  // `radius`, `width`, `height`, `up`, `roll` and `miterLimit` may resolve
+  // on the GPU. All are evaluated on the INPUT geometry, which this node never mutates
   // (it builds a fresh mesh), so the resolver and the CPU fallback see
   // identical bytes. Not `resident`: a resident node must be
   // element-count-preserving on a single geometry input, and a sweep
@@ -384,6 +608,12 @@ export const sweepProfile = standardNode<
     if (!(FRAMES as readonly string[]).includes(frameMode)) {
       throw new Error(
         `sweepProfile: param "frame" must be one of ${FRAMES.join(", ")}; got "${frameMode}"`,
+      );
+    }
+    const anchorMode = params.anchor;
+    if (!(ANCHORS as readonly string[]).includes(anchorMode)) {
+      throw new Error(
+        `sweepProfile: param "anchor" must be one of ${ANCHORS.join(", ")}; got "${anchorMode}"`,
       );
     }
     const jointMode = params.joint;
@@ -443,12 +673,23 @@ export const sweepProfile = standardNode<
 
     // An empty input (a partitioned cook's empty cell) sweeps to an empty mesh.
     const tables = polylineArcTables(src, "sweepProfile", "emptyInput");
+    // The profile and the anchor are decided HERE, once: every string is
+    // compared before the ring loop, which reads only the numbers and
+    // booleans the chosen ProfileSpec carries (see the note in
+    // `src/noise/worley.ts`).
     const profile =
       profileName === "circle"
         ? circleProfile(params.sides)
         : profileName === "square"
           ? squareProfile()
-          : ribbonProfile();
+          : profileName === "ribbon"
+            ? ribbonProfile()
+            : profileName === "rect"
+              ? rectProfile(anchorMode === "bottom" ? 0.5 : anchorMode === "top" ? -0.5 : 0)
+              : polygonProfile(sectionCorners(params.section));
+    const perAxis = profile.axes;
+    const capUv = profile.capUv;
+    const capCentre = profile.capCentre;
     const capable = profile.cap.length > 0 && params.caps;
     // Every field-capable param resolves BEFORE anything is written, on
     // the untouched input, so the GPU and CPU paths read the same bytes.
@@ -468,6 +709,16 @@ export const sweepProfile = standardNode<
       "sweepProfile",
       profile.scaleParam,
     );
+    // The second axis's extent, only for a section scaled per axis — left
+    // unresolved otherwise, exactly as `radius` is for a 'ribbon'.
+    const heightCol = perAxis
+      ? requireTuple(
+          await resolveOnMaybeGpu(gpu, src, "point", params.height, seed, "sweepProfile", "height"),
+          [1],
+          "sweepProfile",
+          "height",
+        )
+      : undefined;
     const rollCol = requireTuple(
       await resolveOnMaybeGpu(gpu, src, "point", params.roll, seed, "sweepProfile", "roll"),
       [1],
@@ -801,17 +1052,47 @@ export const sweepProfile = standardNode<
         }
 
         const scale = readComp(scaleCol, pi, 0);
+        // A per-axis section scales its second axis by `height`; the
+        // uniform ones never read it.
+        const scale2 = heightCol !== undefined ? readComp(heightCol, pi, 0) : scale;
         const turns = readComp(rollCol, pi, 0);
         const rc = Math.cos(2 * Math.PI * turns);
         const rsn = Math.sin(2 * Math.PI * turns);
         const u = arc > 0 ? table.cum[k] / arc : 0;
         const base = L.pointBase + k * profile.count;
         for (let i = 0; i < profile.count; i++) {
-          rollApply(rp, profile.pos[i * 2], profile.pos[i * 2 + 1], rc, rsn);
-          rollApply(rn, profile.nrm[i * 2], profile.nrm[i * 2 + 1], rc, rsn);
-          let vx = (rp[0] * e1[0] + rp[1] * e2[0]) * scale;
-          let vy = (rp[0] * e1[1] + rp[1] * e2[1]) * scale;
-          let vz = (rp[0] * e1[2] + rp[1] * e2[2]) * scale;
+          let vx: number;
+          let vy: number;
+          let vz: number;
+          if (perAxis) {
+            // Scale in the section's own axes FIRST, then roll, so the
+            // section stays the shape it was declared as. A normal goes
+            // through the inverse-transpose of that scale, (n1 * s2,
+            // n2 * s1) up to length; a face with a zero extent keeps its
+            // unscaled normal rather than a zero one.
+            rollApply(rp, profile.pos[i * 2] * scale, profile.pos[i * 2 + 1] * scale2, rc, rsn);
+            let m1 = profile.nrm[i * 2] * scale2;
+            let m2 = profile.nrm[i * 2 + 1] * scale;
+            const ml = m1 * m1 + m2 * m2;
+            if (ml > 0) {
+              const inv = 1 / Math.sqrt(ml);
+              m1 *= inv;
+              m2 *= inv;
+            } else {
+              m1 = profile.nrm[i * 2];
+              m2 = profile.nrm[i * 2 + 1];
+            }
+            rollApply(rn, m1, m2, rc, rsn);
+            vx = rp[0] * e1[0] + rp[1] * e2[0];
+            vy = rp[0] * e1[1] + rp[1] * e2[1];
+            vz = rp[0] * e1[2] + rp[1] * e2[2];
+          } else {
+            rollApply(rp, profile.pos[i * 2], profile.pos[i * 2 + 1], rc, rsn);
+            rollApply(rn, profile.nrm[i * 2], profile.nrm[i * 2 + 1], rc, rsn);
+            vx = (rp[0] * e1[0] + rp[1] * e2[0]) * scale;
+            vy = (rp[0] * e1[1] + rp[1] * e2[1]) * scale;
+            vz = (rp[0] * e1[2] + rp[1] * e2[2]) * scale;
+          }
           if (stretch !== 0) {
             const along = vx * mx + vy * my + vz * mz;
             vx += mx * along * stretch;
@@ -847,22 +1128,43 @@ export const sweepProfile = standardNode<
             normal[no] = nx * sign;
             normal[no + 1] = ny * sign;
             normal[no + 2] = nz * sign;
-            // A disc mapping over the UNIT section, so cap uv does not
-            // move when the radius does.
-            rollApply(rp, profile.pos[i * 2], profile.pos[i * 2 + 1], rc, rsn);
-            uv[(capBase + c) * 2] = 0.5 + 0.5 * rp[0];
-            uv[(capBase + c) * 2 + 1] = 0.5 + 0.5 * rp[1];
+            if (capUv !== undefined) {
+              uv[(capBase + c) * 2] = capUv[c * 2];
+              uv[(capBase + c) * 2 + 1] = capUv[c * 2 + 1];
+            } else {
+              // A disc mapping over the UNIT section, so cap uv does not
+              // move when the radius does.
+              rollApply(rp, profile.pos[i * 2], profile.pos[i * 2 + 1], rc, rsn);
+              uv[(capBase + c) * 2] = 0.5 + 0.5 * rp[0];
+              uv[(capBase + c) * 2 + 1] = 0.5 + 0.5 * rp[1];
+            }
           }
           const co = (capBase + nc) * pStride;
-          pOut[co] = pd[po];
-          pOut[co + 1] = pd[po + 1];
-          pOut[co + 2] = pd[po + 2];
+          if (capCentre !== undefined) {
+            // An off-path centre goes through the same scale, roll and
+            // basis as the ring's own points. No stretch: a cap stands on
+            // an open path's end, where both neighbouring segments are the
+            // same one and the miter never engages.
+            rollApply(rp, capCentre[0] * scale, capCentre[1] * scale2, rc, rsn);
+            pOut[co] = pd[po] + (rp[0] * e1[0] + rp[1] * e2[0]);
+            pOut[co + 1] = pd[po + 1] + (rp[0] * e1[1] + rp[1] * e2[1]);
+            pOut[co + 2] = pd[po + 2] + (rp[0] * e1[2] + rp[1] * e2[2]);
+          } else {
+            pOut[co] = pd[po];
+            pOut[co + 1] = pd[po + 1];
+            pOut[co + 2] = pd[po + 2];
+          }
           const cno = (capBase + nc) * 3;
           normal[cno] = nx * sign;
           normal[cno + 1] = ny * sign;
           normal[cno + 2] = nz * sign;
-          uv[(capBase + nc) * 2] = 0.5;
-          uv[(capBase + nc) * 2 + 1] = 0.5;
+          if (capUv !== undefined) {
+            uv[(capBase + nc) * 2] = capUv[nc * 2];
+            uv[(capBase + nc) * 2 + 1] = capUv[nc * 2 + 1];
+          } else {
+            uv[(capBase + nc) * 2] = 0.5;
+            uv[(capBase + nc) * 2 + 1] = 0.5;
+          }
         }
       }
     }

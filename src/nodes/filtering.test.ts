@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createPointCloud, setPolylineTopology, type Geometry } from "../data/index.js";
 import { pointIdentities } from "../data/identity.js";
-import { attribute, constant, position, randomField, vec } from "../fields/index.js";
+import { add, attribute, constant, position, randomField, vec } from "../fields/index.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { hashCombine, hashFloat } from "../random/index.js";
 import {
@@ -607,7 +607,7 @@ describe("filterPrimitivesByBounds", () => {
     // refusal an untyped caller (JSON, a UI) meets.
     // @ts-expect-error — not a vertex quantifier, on purpose
     await expect(run({ vertex: "middle" })).rejects.toThrow(
-      /filterPrimitivesByBounds: vertex must be "first", "last", "all" or "any", got "middle";.*neither tiles/s,
+      /filterPrimitivesByBounds: vertex must be "first", "last", "all", "any" or "boundingBox", got "middle";.*neither tiles.*"boundingBox" keeps a primitive whose bounding box overlaps/s,
     );
     // @ts-expect-error — not an unreferencedPoints value, on purpose
     await expect(run({ unreferencedPoints: "maybe" })).rejects.toThrow(
@@ -2792,5 +2792,206 @@ describe("a constant field is f32, and the plain param is not", () => {
     // the field path's, so an exactly-representable bar must agree.
     expect(await keptAt(0.5)).toEqual([0]);
     expect(await keptAt(constant(0.5))).toEqual([0]);
+  });
+});
+
+describe("filterPrimitivesByBounds vertex 'boundingBox'", () => {
+  /** The ids of the surviving primitives, by their `roadKind`. */
+  const kept = async (
+    geo: Geometry,
+    params: Partial<FilterPrimitivesByBoundsParams>,
+  ): Promise<string[]> => kindsOf(await keptPrims(geo, params));
+
+  /** Unbounded on y and z, so only the x interval decides. */
+  const slab = (lo: number, hi: number) => ({
+    boundsMin: [lo, -Infinity, -Infinity],
+    boundsMax: [hi, Infinity, Infinity],
+  });
+
+  it("keeps a long primitive that crosses the box with no vertex inside it, which 'any' drops", async () => {
+    // road0 runs x -5 → 5 through the box [0, 1.5) with both ends outside;
+    // road1 (a triangle's outline, three vertices) crosses it the same way
+    // diagonally; road2 misses it entirely.
+    const geo = networkAt(
+      [
+        [-5, 0, 0],
+        [5, 0, 0],
+        [-3, -3, 0],
+        [4, 3, 0],
+        [4, -3, 0],
+        [7, 0, 0],
+        [9, 0, 0],
+      ],
+      [
+        [0, 1],
+        [2, 3, 4],
+        [5, 6],
+      ],
+    );
+    const box = { boundsMin: [0, -1, -1], boundsMax: [1.5, 1, 1] };
+    expect(await kept(geo, { ...box, vertex: "any" })).toEqual([]);
+    expect(await kept(geo, { ...box, vertex: "boundingBox" })).toEqual(["road0", "road1"]);
+    expect(await kept(geo, { ...box, vertex: "boundingBox", mode: "outside" })).toEqual(["road2"]);
+  });
+
+  it("is a superset of 'any', and 'inside' and 'outside' partition the input", async () => {
+    const pts = [
+      [-2, 0, 0],
+      [-1, 0, 0],
+      [0, 0, 0],
+      [1, 0, 0],
+      [2, 0, 0],
+      [-4, 0, 0],
+      [4, 0, 0],
+    ];
+    const prims = [[0, 1], [1, 2], [2, 3], [3, 4], [2, 4, 0], [5, 6]];
+    const geo = networkAt(pts, prims);
+    const box = { boundsMin: [0, -10, -10], boundsMax: [1.5, 10, 10] };
+    const any = await kept(geo, { ...box, vertex: "any" });
+    const bbox = await kept(geo, { ...box, vertex: "boundingBox" });
+    expect(any).toEqual(["road1", "road2", "road3", "road4"]);
+    // road5 spans -4 → 4 with no vertex in [0, 1.5): only the box test sees it.
+    expect(bbox).toEqual(["road1", "road2", "road3", "road4", "road5"]);
+    const out = await kept(geo, { ...box, vertex: "boundingBox", mode: "outside" });
+    expect([...bbox, ...out].sort()).toEqual(kindsOf(geo).sort());
+    expect(out).toEqual(["road0"]);
+  });
+
+  it("owns an abutting primitive by the half-open side of the shared face", async () => {
+    // Two boxes sharing the face x = 0: left [-10, 0), right [0, 10).
+    const geo = networkAt(
+      [
+        [-3, 0, 0], // 0
+        [-1, 0, 0], // 1
+        [1, 0, 0], // 2
+        [-2, 0, 0], // 3
+        [0, 0, 0], // 4
+        [0, 1, 0], // 5
+        [2, 0, 0], // 6
+      ],
+      [
+        [0, 1], // road0: [-3, -1], wholly left
+        [1, 2], // road1: [-1, 1], straddles the face
+        [3, 4], // road2: [-2, 0], ends ON the face from the left
+        [4, 5], // road3: lies IN the plane x = 0 (zero x extent)
+        [4, 6], // road4: [0, 2], starts ON the face, wholly right
+      ],
+    );
+    const left = slab(-10, 0);
+    const right = slab(0, 10);
+    // halfOpen: x = 0 belongs to the right box, so a primitive whose closed
+    // box reaches it meets the right box — road2 is in both, road3 only
+    // right, and road4 (lo = 0, not < 0) never meets the left one.
+    expect(await kept(geo, { ...left, vertex: "boundingBox" })).toEqual(["road0", "road1", "road2"]);
+    expect(await kept(geo, { ...right, vertex: "boundingBox" })).toEqual([
+      "road1",
+      "road2",
+      "road3",
+      "road4",
+    ]);
+    // inclusive: the face belongs to both, so all three face-touchers are in both.
+    const inc = { vertex: "boundingBox" as const, boundary: "inclusive" as const };
+    expect(await kept(geo, { ...left, ...inc })).toEqual(["road0", "road1", "road2", "road3", "road4"]);
+    expect(await kept(geo, { ...right, ...inc })).toEqual(["road1", "road2", "road3", "road4"]);
+    // Every primitive is claimed by at least one of two abutting halfOpen
+    // boxes — nothing that passes through a cell is lost at a seam.
+    const union = new Set([
+      ...(await kept(geo, { ...left, vertex: "boundingBox" })),
+      ...(await kept(geo, { ...right, vertex: "boundingBox" })),
+    ]);
+    expect([...union].sort()).toEqual(kindsOf(geo).sort());
+  });
+
+  it("an empty box meets nothing under 'halfOpen', and its plane under 'inclusive'", async () => {
+    const geo = networkAt(
+      [
+        [-5, 0, 0],
+        [5, 0, 0],
+      ],
+      [[0, 1]],
+    );
+    // max <= min: a primitive spanning it still does not meet an empty set.
+    expect(await kept(geo, { ...slab(1, 1), vertex: "boundingBox" })).toEqual([]);
+    expect(await kept(geo, { ...slab(2, 1), vertex: "boundingBox" })).toEqual([]);
+    expect(await kept(geo, { ...slab(1, 1), vertex: "boundingBox", boundary: "inclusive" })).toEqual([
+      "road0",
+    ]);
+    expect(await kept(geo, { ...slab(2, 1), vertex: "boundingBox", boundary: "inclusive" })).toEqual([]);
+  });
+
+  it("a NaN coordinate keeps its primitive out, and an empty primitive is never inside", async () => {
+    const geo = networkAt(
+      [
+        [0.5, 0, 0],
+        [Number.NaN, 0, 0],
+        [0.25, 0, 0],
+        [0.75, 0, 0],
+      ],
+      [
+        [0, 1],
+        [2, 3],
+      ],
+    );
+    const box = slab(0, 1);
+    expect(await kept(geo, { ...box, vertex: "boundingBox" })).toEqual(["road1"]);
+    expect(await kept(geo, { ...box, vertex: "boundingBox", mode: "outside" })).toEqual(["road0"]);
+    // A zero-vertex primitive, spliced into the topology by hand.
+    // A zero-vertex primitive beside a one-vertex one; only bare setTopology
+    // builds it. The empty one is never inside, the other is.
+    const empty = cloudAt([[0.5, 0, 0]]);
+    empty.setTopology(new Uint32Array([0]), new Uint32Array([0, 0]), new Uint32Array([0, 1]));
+    const out = await keptPrims(empty, { ...box, vertex: "boundingBox" });
+    expect(Array.from(out.primVertexCount)).toEqual([1]);
+  });
+
+  it("reads a per-primitive box from a field, on the primitive domain", async () => {
+    // Both roads cross x in [0, 1) with no vertex there; road1's own box is
+    // moved to [100, 101), which it does not reach.
+    const geo = networkAt(
+      [
+        [-5, 0, 0],
+        [5, 0, 0],
+        [-6, 1, 0],
+        [6, 1, 0],
+      ],
+      [
+        [0, 1],
+        [2, 3],
+      ],
+    );
+    const lo = geo.attrs.primitive.add("lo", "f32", 1, 0);
+    lo.set(1, 100);
+    const out = await kept(geo, {
+      vertex: "boundingBox",
+      boundsMin: vec(attribute("lo"), -10, -10),
+      boundsMax: vec(add(attribute("lo"), 1), 10, 10),
+    });
+    expect(out).toEqual(["road0"]);
+  });
+
+  it("is deterministic and leaves every other rule's output as it was", async () => {
+    const geo = networkAt(
+      [
+        [-5, 0, 0],
+        [5, 0, 0],
+        [0.5, 0, 0],
+        [0.7, 0, 0],
+      ],
+      [
+        [0, 1],
+        [2, 3],
+      ],
+    );
+    const box = slab(0, 1);
+    const run = async (vertex: FilterPrimitivesByBoundsParams["vertex"]) =>
+      snapshotGeometry(await keptPrims(geo, { ...box, vertex, unreferencedPoints: "drop" }));
+    expect(await run("boundingBox")).toEqual(await run("boundingBox"));
+    // The default rule is still 'first', and still keeps by the first vertex:
+    // road0 starts at x = -5, outside, so only road1 survives it.
+    expect(snapshotGeometry(await keptPrims(geo, box))).toEqual(
+      snapshotGeometry(await keptPrims(geo, { ...box, vertex: "first" })),
+    );
+    expect(kindsOf(await keptPrims(geo, box))).toEqual(["road1"]);
+    expect(kindsOf(await keptPrims(geo, { ...box, vertex: "boundingBox" }))).toEqual(["road0", "road1"]);
   });
 });

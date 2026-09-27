@@ -598,6 +598,111 @@ function resampleBudgetError(
   );
 }
 
+/** `pathResample.fit`'s values, in menu order. */
+const RESAMPLE_FITS = ["exact", "ceil", "round", "floor"] as const;
+
+/** `pathResample.align`'s values, in menu order. */
+const RESAMPLE_ALIGNS = ["start", "center"] as const;
+
+/**
+ * `pathResample.fit` as a code, settled once per cook where the params are
+ * read and carried into the per-path loop instead of the string — see the
+ * note in `src/noise/worley.ts`. 0 is 'exact', then ceil, round, floor in
+ * {@link RESAMPLE_FITS} order.
+ */
+type ResampleFitCode = 0 | 1 | 2 | 3;
+const FIT_EXACT: ResampleFitCode = 0;
+const FIT_CEIL: ResampleFitCode = 1;
+const FIT_ROUND: ResampleFitCode = 2;
+const FIT_FLOOR: ResampleFitCode = 3;
+
+/** Refuse an unknown `fit`, naming the four and what each divides by. */
+function requireResampleFit(fit: string): ResampleFitCode {
+  const i = (RESAMPLE_FITS as readonly string[]).indexOf(fit);
+  if (i < 0) {
+    throw new Error(
+      `pathResample: fit must be "exact", "ceil", "round" or "floor", got ${JSON.stringify(fit)}; ` +
+        '"exact" (the default) keeps every step exactly `spacing` and leaves the remainder at the end (or, with align "center", split between both ends); ' +
+        '"ceil", "round" and "floor" divide each path into ceil, round or floor(length / spacing) EQUAL steps, so the step is stretched or shrunk to fit and there is no remainder. Read only in mode "spacing"',
+    );
+  }
+  return i as ResampleFitCode;
+}
+
+/** Refuse an unknown `align`; answers whether it is 'center'. */
+function requireResampleAlign(align: string): boolean {
+  if (!(RESAMPLE_ALIGNS as readonly string[]).includes(align)) {
+    throw new Error(
+      `pathResample: align must be "start" or "center", got ${JSON.stringify(align)}; ` +
+        '"start" (the default) steps from the path\'s start and leaves the remainder at its end, "center" places floor(length / spacing) + 1 samples exactly `spacing` apart and splits the remainder equally between both ends. Read only in mode "spacing" with fit "exact"',
+    );
+  }
+  return align === "center";
+}
+
+/** The whole-step tolerance's scale: 2^-20 of the path's coordinate size. */
+const WHOLE_STEP_REL = 2 ** -20;
+
+/** The whole-step tolerance's ceiling: 2^-8 of one step. */
+const WHOLE_STEP_CAP = 2 ** -8;
+
+/**
+ * How far a path's measured length may sit from a whole number of steps and
+ * still COUNT as that whole number, in world units — what makes the
+ * divisions of `fit` 'ceil' and 'floor' (and of align 'center') robust.
+ *
+ * The case it exists for: a line authored (n - 1) pitches long in f64 is
+ * STORED in f32, so the length this node measures back off `P` can come out
+ * a hair short of (n - 1) pitches — floor would then give n - 2 — or a hair
+ * over — ceil would give n. Each stored coordinate moves by at most
+ * M · 2^-24, where M is the largest absolute coordinate on the path, so each
+ * segment's length moves by at most 2·√3 · M · 2^-24 ≈ 3.5 · M · 2^-24 and
+ * S segments by S times that. The tolerance is 2^-20 · (S · M + L): 16 ·
+ * M · 2^-24 per segment, over four times that bound, plus L · 2^-20 to cover a
+ * spacing that arrived as an f32 field value (relative error 2^-24). It is
+ * capped at 2^-8 of a step, so on a path whose coordinates are far too large
+ * for f32 to resolve the spacing, ceil and floor still never collapse into
+ * round.
+ */
+function wholeStepTolerance(table: PolylineArcTable, sp: number): number {
+  const ss = table.segStart;
+  const sd = table.segDir;
+  const nSeg = table.segLen.length;
+  let m = 0;
+  for (let i = 0; i < nSeg * 3; i++) {
+    const a = Math.abs(ss[i]);
+    if (a > m) m = a;
+  }
+  // The last vertex, which no segment starts at.
+  const last = (nSeg - 1) * 3;
+  for (let c = 0; c < 3; c++) {
+    const a = Math.abs(ss[last + c] + sd[last + c]);
+    if (a > m) m = a;
+  }
+  return Math.min(WHOLE_STEP_REL * (nSeg * m + table.length), sp * WHOLE_STEP_CAP);
+}
+
+/**
+ * The number of steps `fit` divides a path of length `L` into at `sp`:
+ * ceil, round or floor of L / sp, where a length within `tol` of a whole
+ * number of steps counts as exactly that many (see
+ * {@link wholeStepTolerance}), and under 'round' a length within `tol` of a
+ * half step counts as the tie, which rounds UP. `fit` is a code, never the
+ * param string: this is called once per path.
+ */
+function resampleDivisions(L: number, sp: number, tol: number, fit: ResampleFitCode): number {
+  const q = L / sp;
+  const whole = Math.round(q);
+  if (fit === FIT_ROUND) {
+    const below = Math.floor(q);
+    return Math.abs(L - (below + 0.5) * sp) <= tol ? below + 1 : whole;
+  }
+  // `whole > 0`: a path shorter than the tolerance is not "zero steps" — it
+  // would make 'ceil' refuse a path it always gives a step.
+  if (whole > 0 && Math.abs(L - whole * sp) <= tol) return whole;
+  return fit === FIT_CEIL ? Math.ceil(q) : Math.floor(q);
+}
+
 /** Even arc-length resampling of each polyline primitive. */
 export const pathResample = standardNode<
   PathResampleParams,
@@ -607,7 +712,7 @@ export const pathResample = standardNode<
   type: "pathResample",
   category: "sampler",
   description:
-    "Resamples every polyline primitive at even arc-length steps and emits a PATH, not a cloud: the new points carry polyline topology, and a path that was closed comes back closed. Unlike splineSample, each polyline is resampled on its own arc length rather than as one concatenated curve, so a graph with several paths keeps them separate. mode 'count' places exactly `count` samples per path (endpoints included on an open path; a closed path divides its length without duplicating the start). mode 'spacing' steps every `spacing` world units, keeping that step exact rather than stretching it to fit: an open path always ends on its true endpoint, so it never comes back shorter than it went in, and a closed path closes with a REMAINDER segment at the seam that is shorter than `spacing` (use 'count' to divide a loop evenly — see the `spacing` param). Output points are new: they carry the standard point-cloud attributes plus the unit segment `tangent` (f32 tuple 3) and `curveU` (f32, normalized position within that path), and the input's point attributes are NOT carried across. Its PRIMITIVE attributes ARE, in both directions: every attribute of the polyline a sample came from lands on that sample, and each output polyline keeps the attributes of the input polyline it replaces (output primitive i resamples input polyline i and nothing else), so a road resampled here comes back still a road rather than a nameless polyline. `primtype` is the one exception, being a type tag rather than a value, and there is no opt-out: a carried name that collides with one this node writes (P, tangent, curveU, seed, ...) is refused with an error naming the attribute and the fix. FOUR OPT-IN REPORTS publish what the resampling already computed, so anything sized in units of the sampling can be stated as a multiple of it instead of retyped as a literal that the count knob then invalidates. Three are facts about a PATH and land on the PRIMITIVE domain: `lengthAttr` writes each path's TRUE ARC LENGTH — the INPUT curve's — `stepAttr` the distance between its samples, and `resampledLengthAttr` the length of the polyline this node actually EMITS. THE TWO LENGTHS ARE DIFFERENT NUMBERS and the difference is why the second exists: a resample CUTS CORNERS, so the polyline through the samples is always shorter than the curve it approximates, and it is the shorter one that anything stepping, tiling or scattering over THIS output is walking. The fourth, `sampleArcAttr`, is a fact about a SAMPLE and lands on the POINT domain: each sample's own arc position along its path, in world units on that emitted polyline, so it composes directly with pathPointAt's 'distance' mode, transferAlongPath and arcTile. All four are empty by default and the output is byte-identical to a cook without them. Downstream, any node that can REMOVE points drops topology — filterByDensity, filterByBounds, filterByAttribute, filterByExpression, selfPrune, partitionByAttribute — and so does mergePoints, so a resampled path that passes through one stops being a path. Category is not the rule: projectToPlane is categorised `filter` but preserves topology, and filterByAttribute drops it even when its predicate keeps every point.",
+    "Resamples every polyline primitive at even arc-length steps and emits a PATH, not a cloud: the new points carry polyline topology, and a path that was closed comes back closed. Unlike splineSample, each polyline is resampled on its own arc length rather than as one concatenated curve, so a graph with several paths keeps them separate. mode 'count' places exactly `count` samples per path (endpoints included on an open path; a closed path divides its length without duplicating the start). mode 'spacing' steps every `spacing` world units, keeping that step exact rather than stretching it to fit: an open path always ends on its true endpoint, so it never comes back shorter than it went in, and a closed path closes with a REMAINDER segment at the seam that is shorter than `spacing` (use 'count' to divide a loop evenly — see the `spacing` param). Two params change that rule and default to it: `align` 'center' keeps the step exact but splits the remainder between both ends, and `fit` 'ceil', 'round' or 'floor' divides each path into that rounding of length / spacing EQUAL steps, with a whole number of steps recognised through f32 rounding of the input. Output points are new: they carry the standard point-cloud attributes plus the unit segment `tangent` (f32 tuple 3) and `curveU` (f32, normalized position within that path), and the input's point attributes are NOT carried across. Its PRIMITIVE attributes ARE, in both directions: every attribute of the polyline a sample came from lands on that sample, and each output polyline keeps the attributes of the input polyline it replaces (output primitive i resamples input polyline i and nothing else), so a road resampled here comes back still a road rather than a nameless polyline. `primtype` is the one exception, being a type tag rather than a value, and there is no opt-out: a carried name that collides with one this node writes (P, tangent, curveU, seed, ...) is refused with an error naming the attribute and the fix. FOUR OPT-IN REPORTS publish what the resampling already computed, so anything sized in units of the sampling can be stated as a multiple of it instead of retyped as a literal that the count knob then invalidates. Three are facts about a PATH and land on the PRIMITIVE domain: `lengthAttr` writes each path's TRUE ARC LENGTH — the INPUT curve's — `stepAttr` the distance between its samples, and `resampledLengthAttr` the length of the polyline this node actually EMITS. THE TWO LENGTHS ARE DIFFERENT NUMBERS and the difference is why the second exists: a resample CUTS CORNERS, so the polyline through the samples is always shorter than the curve it approximates, and it is the shorter one that anything stepping, tiling or scattering over THIS output is walking. The fourth, `sampleArcAttr`, is a fact about a SAMPLE and lands on the POINT domain: each sample's own arc position along its path, in world units on that emitted polyline, so it composes directly with pathPointAt's 'distance' mode, transferAlongPath and arcTile. All four are empty by default and the output is byte-identical to a cook without them. Downstream, any node that can REMOVE points drops topology — filterByDensity, filterByBounds, filterByAttribute, filterByExpression, selfPrune, partitionByAttribute — and so does mergePoints, so a resampled path that passes through one stops being a path. Category is not the rule: projectToPlane is categorised `filter` but preserves topology, and filterByAttribute drops it even when its predicate keeps every point.",
   inputs: [{ name: "in", kind: "geometry" }],
   outputs: [{ name: "out", kind: "geometry" }],
   params: {
@@ -616,7 +721,7 @@ export const pathResample = standardNode<
       default: "count",
       enum: ["count", "spacing"],
       description:
-        "How samples are placed: 'count' puts exactly `count` samples on each path; 'spacing' steps every `spacing` units along each path.",
+        "How samples are placed: 'count' puts exactly `count` samples on each path; 'spacing' steps every `spacing` units along each path — exactly, from the start, by default, or as a centred row (`align`) or a whole number of equal steps sized from `spacing` (`fit`).",
     },
     count: {
       type: "i32",
@@ -631,7 +736,21 @@ export const pathResample = standardNode<
       min: 0,
       acceptsField: true,
       description:
-        `Distance between samples in world units when mode is 'spacing'. The step is EXACT and is never stretched to make the samples come out even, so a CLOSED path ends on a REMAINDER: the last sample sits at floor(length / spacing) * spacing and the segment from it back to the start is SHORTER than \`spacing\` — a 43-unit loop at spacing 5 gets 9 samples and closes with a 3-unit segment at the seam. That remainder is whatever the loop's length leaves over, anywhere from a hair above 0 to just under \`spacing\`. To divide a loop EVENLY, switch mode to 'count': it splits the length into \`count\` equal steps and has no seam segment. An open path is the same story at its far end — it always lands on its true endpoint, so its last segment is short in the same way. Must be > 0, small enough to leave at least 2 samples on each open path (3 on a closed one), and large enough that the whole input stays under ${MAX_RESAMPLE_POINTS} samples. Ignored in 'count' mode. AS A FIELD IT IS ONE SPACING PER PATH, resolved on the INPUT's PRIMITIVE domain: a wide road and a footpath in one geometry take different steps in ONE COOK, each path's count following its own value against its own arc length. That is why this param can be a field where splineSample's spacing cannot — this node resamples every polyline ON ITS OWN ARC LENGTH, so there is a primitive element to read one value per, while splineSample concatenates every polyline into ONE curve and reads its spacing exactly once, against no element at all. The field sees the PRIMITIVE domain, so what it can read is what a path carries: a primitive attribute (written with setAttribute domain 'primitive', or carried up from the points with promoteAttribute point → primitive), index() and fraction() over the paths, randomField(), and nodeSeed(). A POINT attribute is not in scope there, and position() is not either — a path has no one position. Both limits stay, and they are enforced differently on purpose. The MINIMUM is PER PATH: a path whose own resolved spacing is too coarse to leave 2 samples (3 when closed) is REFUSED, naming that primitive and the spacing it resolved to — never quietly dropped from the output, since a path missing from an otherwise fine-looking cook is the plausible failure this library exists to refuse. The BUDGET is on the TOTAL: samples are counted as they are placed, across every path in primitive order, and the cook is refused as soon as they add up past ${MAX_RESAMPLE_POINTS} — a per-path cap would pass ten paths of 200 000 samples each. A field is not range-checked the way a plain value is (a schema's min binds a number, not a recipe), so bound the expression itself — max(<expr>, <the smallest step you meant>) — and note that a NaN or infinite spacing is refused rather than read as a meaning.`,
+        `Distance between samples in world units when mode is 'spacing'. The step is EXACT and is never stretched to make the samples come out even, so a CLOSED path ends on a REMAINDER: the last sample sits at floor(length / spacing) * spacing and the segment from it back to the start is SHORTER than \`spacing\` — a 43-unit loop at spacing 5 gets 9 samples and closes with a 3-unit segment at the seam. That remainder is whatever the loop's length leaves over, anywhere from a hair above 0 to just under \`spacing\`. To divide a loop EVENLY, switch mode to 'count': it splits the length into \`count\` equal steps and has no seam segment — or keep this mode and set \`fit\` to 'ceil', 'round' or 'floor', which picks the number of equal steps FROM this spacing. (All of this paragraph is fit 'exact' with align 'start', the defaults; \`align\` 'center' moves the remainder.) An open path is the same story at its far end — it always lands on its true endpoint, so its last segment is short in the same way. Must be > 0, small enough to leave at least 2 samples on each open path (3 on a closed one), and large enough that the whole input stays under ${MAX_RESAMPLE_POINTS} samples. Ignored in 'count' mode. AS A FIELD IT IS ONE SPACING PER PATH, resolved on the INPUT's PRIMITIVE domain: a wide road and a footpath in one geometry take different steps in ONE COOK, each path's count following its own value against its own arc length. That is why this param can be a field where splineSample's spacing cannot — this node resamples every polyline ON ITS OWN ARC LENGTH, so there is a primitive element to read one value per, while splineSample concatenates every polyline into ONE curve and reads its spacing exactly once, against no element at all. The field sees the PRIMITIVE domain, so what it can read is what a path carries: a primitive attribute (written with setAttribute domain 'primitive', or carried up from the points with promoteAttribute point → primitive), index() and fraction() over the paths, randomField(), and nodeSeed(). A POINT attribute is not in scope there, and position() is not either — a path has no one position. Both limits stay, and they are enforced differently on purpose. The MINIMUM is PER PATH: a path whose own resolved spacing is too coarse to leave 2 samples (3 when closed) is REFUSED, naming that primitive and the spacing it resolved to — never quietly dropped from the output, since a path missing from an otherwise fine-looking cook is the plausible failure this library exists to refuse. The BUDGET is on the TOTAL: samples are counted as they are placed, across every path in primitive order, and the cook is refused as soon as they add up past ${MAX_RESAMPLE_POINTS} — a per-path cap would pass ten paths of 200 000 samples each. A field is not range-checked the way a plain value is (a schema's min binds a number, not a recipe), so bound the expression itself — max(<expr>, <the smallest step you meant>) — and note that a NaN or infinite spacing is refused rather than read as a meaning.`,
+    },
+    fit: {
+      type: "enum",
+      default: "exact",
+      enum: [...RESAMPLE_FITS],
+      description:
+        "How 'spacing' mode turns a path's length L into samples. 'exact' (the default) is the rule described under `spacing`: every step is exactly `spacing`, and what is left over is a short last segment (or, with `align` 'center', split between both ends). 'ceil', 'round' and 'floor' instead divide each path into k EQUAL steps, k = ceil, round or floor(L / spacing), so the step becomes L / k — never more than `spacing` under 'ceil' (pieces meant to abut still do, as in arcTile's rule), never less under 'floor' (nothing closer than asked) — both up to the whole-step tolerance below, which may stretch or shrink a step by that tolerance over k, nearest under 'round' (the count a truss panel or a rivet row is drawn with) — and the samples land on both ends of an open path with no remainder anywhere; a closed path gets k samples and no seam segment, exactly as 'count' mode divides a loop. An open path gets k + 1 samples; k must leave at least 2 samples (3 on a closed path) or the cook is refused naming the path, the fit and a spacing that would do. WHOLE NUMBERS ARE ROBUST TO f32: a length within a tolerance of a whole number of steps counts as exactly that many, so a line authored (n - 1) pitches long in f64 — whose f32-stored endpoints measure a hair short or over — divides into n - 1 steps under every fit, not n - 2 under 'floor' or n under 'ceil'. The tolerance is 2^-20 × (S × M + L), S the path's segment count and M its largest absolute vertex coordinate — over four times what storing the vertices in f32 can move a measured length — capped at 1/256 of a step; under 'round' a length within it of a half step is the tie, which rounds up. Read only in mode 'spacing'; 'count' ignores it. `stepAttr` reports L / k under the three dividing fits. With a field `spacing`, k follows each path's own value.",
+    },
+    align: {
+      type: "enum",
+      default: "start",
+      enum: [...RESAMPLE_ALIGNS],
+      description:
+        "Where the remainder of an 'exact' fit goes. 'start' (the default) steps from the path's start, as `spacing` describes, so the remainder is at the end. 'center' places floor(L / spacing) + 1 samples exactly `spacing` apart on an open path and splits the remainder EQUALLY between both ends, so the row is centred on the path: a 10-unit line at spacing 3 gets samples at 0.5, 3.5, 6.5 and 9.5, and its ENDPOINTS ARE NOT SAMPLED unless the length is a whole number of steps (within the same f32 tolerance `fit` describes, which makes floor(L / spacing) robust here too). On a closed path it places the same samples 'start' does — floor(L / spacing) + 1, or exactly L / spacing when that is whole — shifted forward by half the remainder, so the short seam segment is CENTRED on the path's start point instead of ending at it: a 43-unit loop at spacing 5 gets 9 samples from 1.5 to 41.5 and a 3-unit segment across the start. An open path shorter than `spacing` would get ONE sample and is refused; a closed one needs 3. Read only in mode 'spacing' with fit 'exact' — the dividing fits leave no remainder, so under them both values place the same samples.",
     },
     lengthAttr: {
       type: "string",
@@ -643,7 +762,7 @@ export const pathResample = standardNode<
       type: "string",
       default: "",
       description:
-        "Name of an f32 PRIMITIVE attribute receiving the ARC-LENGTH STEP between consecutive samples on that path. Empty (the default) writes none. Per path and so on the PRIMITIVE domain for the same reason as `lengthAttr`: in 'count' mode the step is that path's OWN length divided by its divisions (length / (count - 1) on an open path, length / count on a closed one, the divisor that leaves no duplicate at the seam), so two paths of different lengths get different steps and neither varies from sample to sample. In 'spacing' mode it reports `spacing` itself, unchanged — or, when `spacing` is a field, that path's OWN resolved value, which is the same statement once the param is read per path — not a tautology but the point of reporting it at all: a downstream size written as a multiple of this attribute follows the sampling when the mode or the knob changes under it, instead of silently meaning something else. Note that in 'spacing' mode the LAST step is the remainder described under `spacing` and is SHORTER than the value reported here; this is the step the node takes, not what the path had left over. Same reporting-slot rule as `lengthAttr`, and no two of the per-path reports may name the same attribute — the second write would overwrite the first with no complaint, since the shapes agree.",
+        "Name of an f32 PRIMITIVE attribute receiving the ARC-LENGTH STEP between consecutive samples on that path. Empty (the default) writes none. Per path and so on the PRIMITIVE domain for the same reason as `lengthAttr`: in 'count' mode the step is that path's OWN length divided by its divisions (length / (count - 1) on an open path, length / count on a closed one, the divisor that leaves no duplicate at the seam), so two paths of different lengths get different steps and neither varies from sample to sample. In 'spacing' mode with fit 'exact' it reports `spacing` itself, unchanged — or, when `spacing` is a field, that path's OWN resolved value, which is the same statement once the param is read per path — not a tautology but the point of reporting it at all: a downstream size written as a multiple of this attribute follows the sampling when the mode or the knob changes under it, instead of silently meaning something else. Note that with fit 'exact' the LAST step (or, with align 'center', the two end pieces) is the remainder described under `spacing` and is SHORTER than the value reported here; this is the step the node takes, not what the path had left over. Under fit 'ceil', 'round' or 'floor' it reports that path's own equal step, length / k, computed by the same division that placed the samples. Same reporting-slot rule as `lengthAttr`, and no two of the per-path reports may name the same attribute — the second write would overwrite the first with no complaint, since the shapes agree.",
     },
     resampledLengthAttr: {
       type: "string",
@@ -674,6 +793,16 @@ export const pathResample = standardNode<
     if (params.mode === "spacing" && scalarSpacing !== undefined && !(scalarSpacing > 0)) {
       throw new Error(`pathResample: spacing must be > 0 in 'spacing' mode, got ${scalarSpacing}`);
     }
+    // Both settled HERE, once, and carried into the per-path loop as a code
+    // and a boolean — never the strings; see the note in
+    // `src/noise/worley.ts`. Checked in every mode, since a typo is a typo
+    // even where the value would be ignored.
+    const fitCode = requireResampleFit(params.fit);
+    const alignCenter = requireResampleAlign(params.align);
+    // The rule this node has always had, and the only one that runs the
+    // original loop below — so a graph that never names `fit` or `align`
+    // cooks byte-identically to before they existed.
+    const legacySpacing = fitCode === FIT_EXACT && !alignCenter;
     requireDistinctResampleReports(params);
     // Param-only, so it lands with the other checks that need no geometry.
     requireSampleArcNotPrimtype(params);
@@ -754,6 +883,60 @@ export const pathResample = standardNode<
           throw new Error(
             `pathResample: the "spacing" field resolved to ${sp} on the ${kind} path at primitive ${table.prim}, but every path's spacing must be > 0 — a step of 0 or less places no samples, and this node refuses the cook rather than dropping that path from the output. Bound the expression with max(<the spacing field>, <the smallest step you meant>), or switch mode to 'count'.`,
           );
+        }
+        if (!legacySpacing) {
+          // A centred exact row divides by FLOOR: floor(L / sp) whole steps,
+          // which is the dividing fits' count rule with the step kept.
+          const tol = wholeStepTolerance(table, sp);
+          const k = resampleDivisions(L, sp, tol, fitCode === FIT_EXACT ? FIT_FLOOR : fitCode);
+          // A dividing fit leaves no remainder, so a closed path gets k
+          // samples and an open one k + 1. A centred exact row on a closed
+          // path is 'start''s samples shifted: floor(L / sp) + 1 of them,
+          // the last followed by the short seam segment — or exactly k when
+          // L is a whole number of steps and there is no seam segment.
+          const n = !table.closed
+            ? k + 1
+            : fitCode !== FIT_EXACT || Math.abs(L - k * sp) <= tol
+              ? k
+              : k + 1;
+          if (!(n >= least)) {
+            const rule =
+              fitCode === FIT_EXACT
+                ? `align "center" places ${n} sample(s) on it`
+                : `fit "${RESAMPLE_FITS[fitCode]}" divides it into ${k} step(s), which is ${n} sample(s)`;
+            throw new Error(
+              `pathResample: ${spacings === undefined ? `spacing ${sp}` : `the "spacing" field resolved to ${sp}, which`} is too coarse for the ${kind} path at primitive ${table.prim} (length ${L}): ${rule}, fewer than the ${least} a path needs. The minimum is PER PATH and a path that misses it is refused rather than dropped: use a spacing of at most ${L / (table.closed ? 3 : 1)} on it${fitCode === FIT_CEIL || table.closed ? "" : ', fit "ceil" (which always gives an open path at least one step)'}, or switch mode to 'count'.`,
+            );
+          }
+          // Checked before a single position is pushed: `n` is known up
+          // front here, and a spacing of 1e-12 makes it astronomically large
+          // (or Infinity) — see resampleBudgetError.
+          if (total + n > MAX_RESAMPLE_POINTS) {
+            throw resampleBudgetError(sp, table, tables, totalLength, spacings !== undefined);
+          }
+          if (fitCode === FIT_EXACT) {
+            // The remainder, halved, at each end. Negative by at most the
+            // whole-step tolerance when L counted as a whole number of steps
+            // from a hair short, so every position is clamped onto the path.
+            const off = (L - k * sp) / 2;
+            for (let i = 0; i < n; i++) {
+              if ((i & 1023) === 0) checkCancelled();
+              const s = off + i * sp;
+              positions.push(s < 0 ? 0 : s > L ? L : s);
+            }
+            steps.push(sp);
+          } else {
+            // The same division 'count' mode makes, so `stepAttr` below is
+            // positions[1] to the bit.
+            for (let i = 0; i < n; i++) {
+              if ((i & 1023) === 0) checkCancelled();
+              positions.push((i * L) / k);
+            }
+            steps.push(L / k);
+          }
+          perPath.push(positions);
+          total += positions.length;
+          continue;
         }
         // The epsilon is load-bearing on a closed path: without it a step
         // that lands a float-hair short of the total length slips in as an

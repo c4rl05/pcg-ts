@@ -1425,14 +1425,32 @@ export interface FilterPrimitivesByBoundsParams {
    * primitive only when EVERY vertex is in the box, 'any' when at least one is; both are
    * selections, and neither tiles — 'any' hands a straddling primitive to every box it
    * reaches and 'all' to none of them, so a partitioned cook using either double-counts or
-   * loses edges at the seams. A primitive with no vertices is never inside, under all four
-   * rules.
+   * loses edges at the seams. 'boundingBox' reads every vertex and tests the axis-aligned
+   * box they SPAN, [lo, hi] per axis, CLOSED: a primitive is inside when that box OVERLAPS
+   * the filter's box. It is 'any' made geometric — a long triangle or edge that crosses the
+   * box with no vertex in it is inside, which 'any' misses — and, for a primitive with no
+   * NaN coordinate, it is a superset of 'any' (a vertex in the box puts its bounding box in
+   * the box). Under 'halfOpen' the test is lo < max and hi >= min on every axis (and min <
+   * max, so an empty box meets nothing); under 'inclusive' it is lo <= max and hi >= min
+   * (and min <= max). The primitive's own box is closed on purpose: a flat primitive — zero
+   * extent on an axis, like an axis-aligned plate — must still be able to meet a box.
+   * ABUTTING BOXES: like 'any', this is a SELECTION and does not tile. A primitive
+   * straddling a shared face is in both boxes; one that merely TOUCHES the face is claimed
+   * by the box whose half-open side holds that face — under 'halfOpen' a primitive whose box
+   * ends exactly at x = c is kept by the box [c, …) as well as by the box it lies in,
+   * because the point x = c it reaches belongs to that neighbour, and a primitive lying
+   * wholly in the plane x = c is kept only by [c, …); under 'inclusive' both boxes keep
+   * both. It is the rule for a cell that must emit EVERY primitive that can be seen inside
+   * it (a renderer clipping at the cell's faces), not one owner per primitive — to catch
+   * primitives NEAR the cell too, widen the box by the halo. A NaN vertex coordinate makes
+   * the primitive's box NaN, so that primitive is never inside and lands in 'outside'. A
+   * primitive with no vertices is never inside, under all five rules.
    *
-   * - Enum: `"first"` | `"last"` | `"all"` | `"any"`
+   * - Enum: `"first"` | `"last"` | `"all"` | `"any"` | `"boundingBox"`
    *
    * @defaultValue `"first"`
    */
-  vertex: "first" | "last" | "all" | "any";
+  vertex: "first" | "last" | "all" | "any" | "boundingBox";
   /**
    * 'inside' keeps the primitives the `vertex` rule places in the box, 'outside' keeps the
    * rest. They are exact complements under whichever vertex rule and boundary are active, so
@@ -1703,12 +1721,31 @@ export interface MeshPrimitiveParams {
    */
   subdivisions: readonly number[];
   /**
-   * Reverse every triangle's winding, which flips the surface normals — a plane becomes a
-   * ceiling, a box becomes an inward-facing room.
+   * Reverse every triangle's winding (and the written `normal` with it, under `normals`),
+   * which flips the surface — a plane becomes a ceiling, a box becomes an inward-facing
+   * room.
    *
    * @defaultValue `false`
    */
   flip: boolean;
+  /**
+   * Write a `normal` point attribute (f32 tuple 3): FLAT, one face's unit axis on each of
+   * that face's points, derived from the same winding the triangles use (so `flip` turns
+   * both) — the split-corner shading sweepProfile's 'square' and extrudePolygon give their
+   * hard edges, which a box's unshared face points make exact. TURN IT ON when this mesh is
+   * merged with one that carries a normal (sweepProfile, extrudePolygon, meshFromField):
+   * mergePrimitives fills a column missing on one input with its default, (0, 0, 0), and a
+   * lit material renders those points black. OFF BY DEFAULT because a stored normal is only
+   * right until something moves P, and the renderer computes one from the triangles when
+   * none is stored: the commonest use of a plane is displacement into terrain, which would
+   * then shade flat on rolling ground, and a box copied onto ROTATED targets keeps its
+   * unturned normal unless copyToPoints' `rotateAttrs` names `normal`. A graph that
+   * displaces the mesh and still wants a stored normal recomputes it afterwards with
+   * smoothNormals.
+   *
+   * @defaultValue `false`
+   */
+  normals: boolean;
 }
 
 /**
@@ -2225,7 +2262,8 @@ export type PathPointAtOutputs = "out";
 export interface PathResampleParams {
   /**
    * How samples are placed: 'count' puts exactly `count` samples on each path; 'spacing'
-   * steps every `spacing` units along each path.
+   * steps every `spacing` units along each path — exactly, from the start, by default, or as
+   * a centred row (`align`) or a whole number of equal steps sized from `spacing` (`fit`).
    *
    * - Enum: `"count"` | `"spacing"`
    *
@@ -2249,32 +2287,34 @@ export interface PathResampleParams {
    * closes with a 3-unit segment at the seam. That remainder is whatever the loop's length
    * leaves over, anywhere from a hair above 0 to just under `spacing`. To divide a loop
    * EVENLY, switch mode to 'count': it splits the length into `count` equal steps and has no
-   * seam segment. An open path is the same story at its far end — it always lands on its
-   * true endpoint, so its last segment is short in the same way. Must be > 0, small enough
-   * to leave at least 2 samples on each open path (3 on a closed one), and large enough that
-   * the whole input stays under 1048576 samples. Ignored in 'count' mode. AS A FIELD IT IS
-   * ONE SPACING PER PATH, resolved on the INPUT's PRIMITIVE domain: a wide road and a
-   * footpath in one geometry take different steps in ONE COOK, each path's count following
-   * its own value against its own arc length. That is why this param can be a field where
-   * splineSample's spacing cannot — this node resamples every polyline ON ITS OWN ARC
-   * LENGTH, so there is a primitive element to read one value per, while splineSample
-   * concatenates every polyline into ONE curve and reads its spacing exactly once, against
-   * no element at all. The field sees the PRIMITIVE domain, so what it can read is what a
-   * path carries: a primitive attribute (written with setAttribute domain 'primitive', or
-   * carried up from the points with promoteAttribute point → primitive), index() and
-   * fraction() over the paths, randomField(), and nodeSeed(). A POINT attribute is not in
-   * scope there, and position() is not either — a path has no one position. Both limits
-   * stay, and they are enforced differently on purpose. The MINIMUM is PER PATH: a path
-   * whose own resolved spacing is too coarse to leave 2 samples (3 when closed) is REFUSED,
-   * naming that primitive and the spacing it resolved to — never quietly dropped from the
-   * output, since a path missing from an otherwise fine-looking cook is the plausible
-   * failure this library exists to refuse. The BUDGET is on the TOTAL: samples are counted
-   * as they are placed, across every path in primitive order, and the cook is refused as
-   * soon as they add up past 1048576 — a per-path cap would pass ten paths of 200 000
-   * samples each. A field is not range-checked the way a plain value is (a schema's min
-   * binds a number, not a recipe), so bound the expression itself — max(<expr>, <the
-   * smallest step you meant>) — and note that a NaN or infinite spacing is refused rather
-   * than read as a meaning.
+   * seam segment — or keep this mode and set `fit` to 'ceil', 'round' or 'floor', which
+   * picks the number of equal steps FROM this spacing. (All of this paragraph is fit 'exact'
+   * with align 'start', the defaults; `align` 'center' moves the remainder.) An open path is
+   * the same story at its far end — it always lands on its true endpoint, so its last
+   * segment is short in the same way. Must be > 0, small enough to leave at least 2 samples
+   * on each open path (3 on a closed one), and large enough that the whole input stays under
+   * 1048576 samples. Ignored in 'count' mode. AS A FIELD IT IS ONE SPACING PER PATH,
+   * resolved on the INPUT's PRIMITIVE domain: a wide road and a footpath in one geometry
+   * take different steps in ONE COOK, each path's count following its own value against its
+   * own arc length. That is why this param can be a field where splineSample's spacing
+   * cannot — this node resamples every polyline ON ITS OWN ARC LENGTH, so there is a
+   * primitive element to read one value per, while splineSample concatenates every polyline
+   * into ONE curve and reads its spacing exactly once, against no element at all. The field
+   * sees the PRIMITIVE domain, so what it can read is what a path carries: a primitive
+   * attribute (written with setAttribute domain 'primitive', or carried up from the points
+   * with promoteAttribute point → primitive), index() and fraction() over the paths,
+   * randomField(), and nodeSeed(). A POINT attribute is not in scope there, and position()
+   * is not either — a path has no one position. Both limits stay, and they are enforced
+   * differently on purpose. The MINIMUM is PER PATH: a path whose own resolved spacing is
+   * too coarse to leave 2 samples (3 when closed) is REFUSED, naming that primitive and the
+   * spacing it resolved to — never quietly dropped from the output, since a path missing
+   * from an otherwise fine-looking cook is the plausible failure this library exists to
+   * refuse. The BUDGET is on the TOTAL: samples are counted as they are placed, across every
+   * path in primitive order, and the cook is refused as soon as they add up past 1048576 — a
+   * per-path cap would pass ten paths of 200 000 samples each. A field is not range-checked
+   * the way a plain value is (a schema's min binds a number, not a recipe), so bound the
+   * expression itself — max(<expr>, <the smallest step you meant>) — and note that a NaN or
+   * infinite spacing is refused rather than read as a meaning.
    *
    * - Range: `>= 0`
    * - Accepts a field.
@@ -2282,6 +2322,56 @@ export interface PathResampleParams {
    * @defaultValue `1`
    */
   spacing: FieldParam;
+  /**
+   * How 'spacing' mode turns a path's length L into samples. 'exact' (the default) is the
+   * rule described under `spacing`: every step is exactly `spacing`, and what is left over
+   * is a short last segment (or, with `align` 'center', split between both ends). 'ceil',
+   * 'round' and 'floor' instead divide each path into k EQUAL steps, k = ceil, round or
+   * floor(L / spacing), so the step becomes L / k — never more than `spacing` under 'ceil'
+   * (pieces meant to abut still do, as in arcTile's rule), never less under 'floor' (nothing
+   * closer than asked) — both up to the whole-step tolerance below, which may stretch or
+   * shrink a step by that tolerance over k, nearest under 'round' (the count a truss panel
+   * or a rivet row is drawn with) — and the samples land on both ends of an open path with
+   * no remainder anywhere; a closed path gets k samples and no seam segment, exactly as
+   * 'count' mode divides a loop. An open path gets k + 1 samples; k must leave at least 2
+   * samples (3 on a closed path) or the cook is refused naming the path, the fit and a
+   * spacing that would do. WHOLE NUMBERS ARE ROBUST TO f32: a length within a tolerance of a
+   * whole number of steps counts as exactly that many, so a line authored (n - 1) pitches
+   * long in f64 — whose f32-stored endpoints measure a hair short or over — divides into n -
+   * 1 steps under every fit, not n - 2 under 'floor' or n under 'ceil'. The tolerance is
+   * 2^-20 × (S × M + L), S the path's segment count and M its largest absolute vertex
+   * coordinate — over four times what storing the vertices in f32 can move a measured length
+   * — capped at 1/256 of a step; under 'round' a length within it of a half step is the tie,
+   * which rounds up. Read only in mode 'spacing'; 'count' ignores it. `stepAttr` reports L /
+   * k under the three dividing fits. With a field `spacing`, k follows each path's own
+   * value.
+   *
+   * - Enum: `"exact"` | `"ceil"` | `"round"` | `"floor"`
+   *
+   * @defaultValue `"exact"`
+   */
+  fit: "exact" | "ceil" | "round" | "floor";
+  /**
+   * Where the remainder of an 'exact' fit goes. 'start' (the default) steps from the path's
+   * start, as `spacing` describes, so the remainder is at the end. 'center' places floor(L /
+   * spacing) + 1 samples exactly `spacing` apart on an open path and splits the remainder
+   * EQUALLY between both ends, so the row is centred on the path: a 10-unit line at spacing
+   * 3 gets samples at 0.5, 3.5, 6.5 and 9.5, and its ENDPOINTS ARE NOT SAMPLED unless the
+   * length is a whole number of steps (within the same f32 tolerance `fit` describes, which
+   * makes floor(L / spacing) robust here too). On a closed path it places the same samples
+   * 'start' does — floor(L / spacing) + 1, or exactly L / spacing when that is whole —
+   * shifted forward by half the remainder, so the short seam segment is CENTRED on the
+   * path's start point instead of ending at it: a 43-unit loop at spacing 5 gets 9 samples
+   * from 1.5 to 41.5 and a 3-unit segment across the start. An open path shorter than
+   * `spacing` would get ONE sample and is refused; a closed one needs 3. Read only in mode
+   * 'spacing' with fit 'exact' — the dividing fits leave no remainder, so under them both
+   * values place the same samples.
+   *
+   * - Enum: `"start"` | `"center"`
+   *
+   * @defaultValue `"start"`
+   */
+  align: "start" | "center";
   /**
    * Name of an f32 PRIMITIVE attribute receiving each path's TRUE ARC LENGTH in world units
    * — the sum of its input polyline's segment lengths. Empty (the default) writes none. This
@@ -2309,16 +2399,18 @@ export interface PathResampleParams {
    * length divided by its divisions (length / (count - 1) on an open path, length / count on
    * a closed one, the divisor that leaves no duplicate at the seam), so two paths of
    * different lengths get different steps and neither varies from sample to sample. In
-   * 'spacing' mode it reports `spacing` itself, unchanged — or, when `spacing` is a field,
-   * that path's OWN resolved value, which is the same statement once the param is read per
-   * path — not a tautology but the point of reporting it at all: a downstream size written
-   * as a multiple of this attribute follows the sampling when the mode or the knob changes
-   * under it, instead of silently meaning something else. Note that in 'spacing' mode the
-   * LAST step is the remainder described under `spacing` and is SHORTER than the value
-   * reported here; this is the step the node takes, not what the path had left over. Same
-   * reporting-slot rule as `lengthAttr`, and no two of the per-path reports may name the
-   * same attribute — the second write would overwrite the first with no complaint, since the
-   * shapes agree.
+   * 'spacing' mode with fit 'exact' it reports `spacing` itself, unchanged — or, when
+   * `spacing` is a field, that path's OWN resolved value, which is the same statement once
+   * the param is read per path — not a tautology but the point of reporting it at all: a
+   * downstream size written as a multiple of this attribute follows the sampling when the
+   * mode or the knob changes under it, instead of silently meaning something else. Note that
+   * with fit 'exact' the LAST step (or, with align 'center', the two end pieces) is the
+   * remainder described under `spacing` and is SHORTER than the value reported here; this is
+   * the step the node takes, not what the path had left over. Under fit 'ceil', 'round' or
+   * 'floor' it reports that path's own equal step, length / k, computed by the same division
+   * that placed the samples. Same reporting-slot rule as `lengthAttr`, and no two of the
+   * per-path reports may name the same attribute — the second write would overwrite the
+   * first with no complaint, since the shapes agree.
    *
    * @defaultValue `""`
    */
@@ -4751,18 +4843,26 @@ export interface SweepProfileParams {
    * Cross-section shape. 'circle' and 'square' are CLOSED (a tube, and a square rod whose
    * four faces stay flat because its corners carry per-face normals) and take `radius` and
    * `caps`; 'ribbon' is OPEN — a flat two-point strip of `width`, centred on the path,
-   * facing the frame's up axis — and takes neither, because a strip has no inside. A profile
-   * from a second geometry pin (an I-beam, a kerb) is deliberately not here yet: it forces
-   * four decisions no consumer has asked for, and these enum values stay valid when it
-   * arrives.
+   * facing the frame's up axis — and takes neither, because a strip has no inside. 'rect' is
+   * the square with its two extents set apart: `width` across the path (the ring's first
+   * axis) by `height` along the frame's up axis, both field-capable, placed by `anchor`
+   * (centred on the path, standing on it, or hanging from it) — a wall, a kerb, a beam, a
+   * plank — with the same flat faces, split corners, frames, miter and caps as 'square'.
+   * 'polygon' is any closed section with flat faces: the corners in `section`, in the ring's
+   * (across, up) frame relative to the path point, scaled per axis by `width` and `height`
+   * (both 1 by default, so the corners are world units). Every corner of a 'rect' or
+   * 'polygon' is split, so all its faces shade flat; run smoothNormals after the sweep to
+   * round the shallow ones. A profile from a second geometry pin (an I-beam as a mesh) is
+   * deliberately not here yet: it forces decisions no consumer has asked for, and these enum
+   * values stay valid when it arrives.
    *
-   * - Enum: `"circle"` | `"square"` | `"ribbon"`
+   * - Enum: `"circle"` | `"square"` | `"ribbon"` | `"rect"` | `"polygon"`
    *
    * @defaultValue `"circle"`
    */
-  profile: "circle" | "square" | "ribbon";
+  profile: "circle" | "square" | "ribbon" | "rect" | "polygon";
   /**
-   * Points around a 'circle' profile; ignored by the other two. Default 8 matches the
+   * Points around a 'circle' profile; ignored by every other profile. Default 8 matches the
    * shipped tube asset (a three.js CylinderGeometry with 8 radial segments), so a swept tube
    * reads like the instanced tube it replaces. Cost is linear: the ring emits `sides + 1`
    * points (the extra one duplicates the seam so the uv does not run backwards across one
@@ -4775,11 +4875,12 @@ export interface SweepProfileParams {
   sides: number;
   /**
    * Distance from the path to the surface, in world units, for the 'circle' and 'square'
-   * profiles ('square' reads it as HALF-WIDTH, so the section fits a 2 x radius box). Same
-   * default as pathSegments' `radius`. Field-capable and resolved on the INPUT points — the
-   * path's own points, which is exactly where a ring sits — so a taper is exact rather than
-   * averaged. A per-path radius living on the primitive domain has to be promoted onto the
-   * points first (promoteAttribute, primitive to point) before a field can see it.
+   * profiles ('square' reads it as HALF-WIDTH, so the section fits a 2 x radius box);
+   * ignored by 'ribbon', 'rect' and 'polygon', which read `width` (and `height`) instead.
+   * Same default as pathSegments' `radius`. Field-capable and resolved on the INPUT points —
+   * the path's own points, which is exactly where a ring sits — so a taper is exact rather
+   * than averaged. A per-path radius living on the primitive domain has to be promoted onto
+   * the points first (promoteAttribute, primitive to point) before a field can see it.
    *
    * - Range: `>= 0`
    * - Accepts a field.
@@ -4788,9 +4889,11 @@ export interface SweepProfileParams {
    */
   radius: FieldParam;
   /**
-   * Full width of a 'ribbon' profile in world units (the strip runs from -width/2 to
-   * +width/2 across the path); ignored by the closed profiles. Field-capable on the INPUT
-   * points, so a road that widens at a junction is one promoted attribute away.
+   * Full width across the path in world units for a 'ribbon' (the strip runs from -width/2
+   * to +width/2) and a 'rect' (its extent along the ring's first axis); for a 'polygon' it
+   * MULTIPLIES the `section` coordinates along that axis. Ignored by 'circle' and 'square'.
+   * Field-capable on the INPUT points, so a road that widens at a junction is one promoted
+   * attribute away.
    *
    * - Range: `>= 0`
    * - Accepts a field.
@@ -4798,6 +4901,59 @@ export interface SweepProfileParams {
    * @defaultValue `1`
    */
   width: FieldParam;
+  /**
+   * Extent of a 'rect' along the frame's up axis (the ring's second axis — the axis a
+   * 'ribbon' faces), in world units; for a 'polygon' it MULTIPLIES the `section` coordinates
+   * along that axis. Ignored by the other profiles. Field-capable on the INPUT points,
+   * resolved at the ring exactly as `width` is, so a wall that rises along its run or a kerb
+   * that dips at a crossing is one attribute away. The two are independent: a non-uniform
+   * scale is applied BEFORE `roll`, so a rolled 'rect' stays a rectangle, and each face
+   * normal is carried through the scale (inverse-transpose) so a sloped 'polygon' face keeps
+   * shading the way it faces. A zero extent makes the faces along it zero-area — drawn as
+   * nothing, skipped by area-weighted sampling — and leaves their normals unscaled rather
+   * than zero.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  height: FieldParam;
+  /**
+   * Where a 'rect' sits across the frame's up axis: 'center' centres it on the path;
+   * 'bottom' STANDS it on the path — its bottom face runs through the path's points, so the
+   * section spans 0..height above them, which is a wall or a kerb built on a ground-hugging
+   * line; 'top' hangs it below, spanning -height..0, which is a beam under a deck line.
+   * Moves the cap fan's centre with it. Ignored by every other profile — a 'polygon' already
+   * says where the path is, because its corners are relative to the path point. Turned with
+   * the section by `roll`, about the path point.
+   *
+   * - Enum: `"center"` | `"bottom"` | `"top"`
+   *
+   * @defaultValue `"center"`
+   */
+  anchor: "center" | "bottom" | "top";
+  /**
+   * Corners of a 'polygon' profile as a flat list [x0, y0, x1, y1, ...]: x across the path
+   * along the ring's first axis, y along the frame's up axis, relative to the path point,
+   * then scaled by `width` and `height`. At least three corners; either winding (a clockwise
+   * list is reversed about its first corner, which keeps `v` = 0 there); do not restate the
+   * first corner at the end — the section closes itself. With frame 'upHint' and the default
+   * up, a horizontal path's first axis points to the LEFT of the direction of travel, so (x,
+   * y, travel) is right-handed; [0.5, 0, 0.5, 1, -0.5, 1, -0.5, 0] is a unit block standing
+   * on the path. Every corner is split (flat faces, per-face normals), `v` runs 0..1 by arc
+   * length around the corners in counter-clockwise order (starting at the first corner)
+   * measured on the section as given, before `width` and `height` scale it, and caps are
+   * fans from the section's area centroid, which is exact for any section every corner of
+   * which is visible from that centroid (every convex one) and overlaps itself otherwise —
+   * set `caps` false for a deeply concave section. Refused by name when it is not whole
+   * pairs, has fewer than three corners, repeats a corner, or encloses no area. Ignored by
+   * every other profile. Not field-capable: the section is one shape for the whole sweep,
+   * and `width`, `height` and `roll` are what vary per ring.
+   *
+   * @defaultValue `[]`
+   */
+  section: readonly number[];
   /**
    * Where the ROLL inside the ring comes from. The ring's PLANE always comes from the path,
    * so this never changes where the surface is, only how the profile is turned within it —
@@ -4887,11 +5043,15 @@ export interface SweepProfileParams {
   miterLimit: FieldParam;
   /**
    * Close the two ends of an OPEN path with a CLOSED profile, as a triangle fan from the
-   * path's endpoint. Ignored for a closed path (it has no ends) and for the 'ribbon' profile
-   * (it has no hole), so all four combinations are defined rather than merely unsurprising.
-   * Cap points are separate from the wall's, so the seam between a flat cap and a round wall
-   * stays a real crease instead of being smoothed away. Cap uv is a disc mapping — the unit
-   * section mapped into the 0..1 square — not a continuation of the wall's.
+   * path's endpoint — for a 'rect' from its centre (which `anchor` moves off the path) and
+   * for a 'polygon' from its area centroid. Ignored for a closed path (it has no ends) and
+   * for the 'ribbon' profile (it has no hole), so all four combinations are defined rather
+   * than merely unsurprising. Cap points are separate from the wall's, so the seam between a
+   * flat cap and a round wall stays a real crease instead of being smoothed away. Cap uv is
+   * not a continuation of the wall's: for 'circle' and 'square' it is a disc mapping — the
+   * unit section, turned by `roll`, mapped into the 0..1 square — and for 'rect' and
+   * 'polygon' it maps the section's own bounding box onto 0..1, so a rectangle's corners
+   * land exactly on the uv square's.
    *
    * @defaultValue `true`
    */

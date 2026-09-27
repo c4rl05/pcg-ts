@@ -507,6 +507,51 @@ function insideBoxPredicate(
 }
 
 /**
+ * One corner of the box, per element: the plain param's raw f64 component
+ * for every element, or the resolved column's for this one. Which of the two
+ * is decided ONCE, here, for the same reason {@link insideBoxPredicate}
+ * splits its bodies — and the plain corner is never routed through a column,
+ * so a face that is not f32-exact does not move.
+ */
+function cornerReader(corner: readonly number[] | Column): (elem: number, axis: number) => number {
+  if (Array.isArray(corner)) {
+    const c = corner as readonly number[];
+    return (_elem: number, axis: number): number => c[axis];
+  }
+  const col = corner as Column;
+  return (elem: number, axis: number): number => readComp(col, elem, axis);
+}
+
+/**
+ * Whether the CLOSED interval [lo, hi] meets the box's interval on one axis:
+ * [a, b) under 'halfOpen', [a, b] under 'inclusive'. The box's own
+ * emptiness is part of the test (a < b, or a <= b), so an empty box meets
+ * nothing however wide the primitive; any NaN answers false.
+ */
+function overlapsAxis(lo: number, hi: number, a: number, b: number, inclusive: boolean): boolean {
+  return inclusive ? lo <= b && a <= b && hi >= a : lo < b && a < b && hi >= a;
+}
+
+/**
+ * The 'boundingBox' vertex rule's test, built once per cook: given a
+ * primitive's bounding box and the index of the primitive asking, does it
+ * overlap `[boundsMin, boundsMax]` under the active boundary rule? See the
+ * `vertex` param's description for the reading of each face.
+ */
+function overlapBoxPredicate(
+  boundsMin: readonly number[] | Column,
+  boundsMax: readonly number[] | Column,
+  inclusive: boolean,
+): (lo: Float64Array, hi: Float64Array, elem: number) => boolean {
+  const mn = cornerReader(boundsMin);
+  const mx = cornerReader(boundsMax);
+  return (lo: Float64Array, hi: Float64Array, elem: number): boolean =>
+    overlapsAxis(lo[0], hi[0], mn(elem, 0), mx(elem, 0), inclusive) &&
+    overlapsAxis(lo[1], hi[1], mn(elem, 1), mx(elem, 1), inclusive) &&
+    overlapsAxis(lo[2], hi[2], mn(elem, 2), mx(elem, 2), inclusive);
+}
+
+/**
  * Resolve a bounds corner to one box per element of the filter's own
  * domain.
  *
@@ -625,7 +670,7 @@ export const filterPrimitivesByBounds = standardNode<
   type: "filterPrimitivesByBounds",
   category: "filter",
   description:
-    "Keeps or drops WHOLE PRIMITIVES by testing their vertices against the axis-aligned box [boundsMin, boundsMax], and it is one of the two filters in this library that PRESERVE TOPOLOGY (filterPrimitivesByAttribute, which tests a value a primitive carries rather than where its vertices lie, is the other): the survivors keep their vertices, their vertex and primitive attributes, and the points they share, so a network that goes in comes out a network. Every point filter — filterByDensity, filterByBounds, filterByAttribute, filterByExpression, selfPrune — rebuilds the point domain from the survivors and the primitives go with it; this node filters the PRIMITIVE domain instead, which is what makes the difference. It exists to complete the partitioned network cook connectPoints prescribes, whose last step no node could perform: widen the cell's rectangle by `radius` and clip the CLOUD to it with filterByBounds ('halfOpen'), run connectPoints, then run THIS node on the UNWIDENED rectangle with vertex 'first' and the same 'halfOpen' boundary. Each cell then emits exactly the edges it owns, the cells tile the whole-region network with no duplicate and no gap, and the recipe is a serializable graph rather than a TypeScript script. `vertex` decides what 'in the box' means for a primitive: 'first' and 'last' consult ONE vertex, which is what makes them OWNERSHIP rules — every primitive has exactly one first vertex, so exactly one box of a tiling claims it — while 'all' and 'any' are SELECTIONS and do not tile ('any' claims a straddling primitive from every box it reaches, 'all' from none of them). connectPoints emits each edge's lower-keyed endpoint FIRST, so with vertex 'first' this node's owner and that node's canonical edge order are the same choice by construction. For a polyline from any other source — pointsToPath, resamplePath, createPolyline — the first vertex is simply the path's START point: still exactly one owner per path, so the tiling is still exact, but the owner is the cell holding the start rather than the cell holding most of the road, and that one cell emits the whole path however far it runs. `mode` 'outside' is the exact complement of 'inside' under whichever vertex rule and boundary are active, so running both over one input reproduces its primitives exactly once; combined with `vertex` that spans the four quantifiers — 'all'+'inside' keeps primitives lying entirely inside, 'any'+'outside' those lying entirely outside, 'any'+'inside' those touching the box, 'all'+'outside' those not entirely within it. `boundary` is filterByBounds' rule with the same meaning and the same reason to prefer 'halfOpen' wherever ownership matters. POINTS: by default (unreferencedPoints 'keep') the point domain is passed through untouched — same points, same indices, same attributes, same identities — so a partition cell keeps its halo points as isolated leftovers; 'drop' removes every point no surviving primitive references and renumbers the topology onto what is left, which is how a clean network comes out. A geometry with no primitives is not an error but an empty result: a cell too sparse to make an edge is a legitimate, silent case in a partitioned cook. Primitives of any kind are handled, polylines and polys alike — this reads vertices, never `primtype`.",
+    "Keeps or drops WHOLE PRIMITIVES by testing their vertices against the axis-aligned box [boundsMin, boundsMax], and it is one of the two filters in this library that PRESERVE TOPOLOGY (filterPrimitivesByAttribute, which tests a value a primitive carries rather than where its vertices lie, is the other): the survivors keep their vertices, their vertex and primitive attributes, and the points they share, so a network that goes in comes out a network. Every point filter — filterByDensity, filterByBounds, filterByAttribute, filterByExpression, selfPrune — rebuilds the point domain from the survivors and the primitives go with it; this node filters the PRIMITIVE domain instead, which is what makes the difference. It exists to complete the partitioned network cook connectPoints prescribes, whose last step no node could perform: widen the cell's rectangle by `radius` and clip the CLOUD to it with filterByBounds ('halfOpen'), run connectPoints, then run THIS node on the UNWIDENED rectangle with vertex 'first' and the same 'halfOpen' boundary. Each cell then emits exactly the edges it owns, the cells tile the whole-region network with no duplicate and no gap, and the recipe is a serializable graph rather than a TypeScript script. `vertex` decides what 'in the box' means for a primitive: 'first' and 'last' consult ONE vertex, which is what makes them OWNERSHIP rules — every primitive has exactly one first vertex, so exactly one box of a tiling claims it — while 'all' and 'any' are SELECTIONS and do not tile ('any' claims a straddling primitive from every box it reaches, 'all' from none of them). connectPoints emits each edge's lower-keyed endpoint FIRST, so with vertex 'first' this node's owner and that node's canonical edge order are the same choice by construction. For a polyline from any other source — pointsToPath, resamplePath, createPolyline — the first vertex is simply the path's START point: still exactly one owner per path, so the tiling is still exact, but the owner is the cell holding the start rather than the cell holding most of the road, and that one cell emits the whole path however far it runs. `mode` 'outside' is the exact complement of 'inside' under whichever vertex rule and boundary are active, so running both over one input reproduces its primitives exactly once; combined with `vertex` that spans the four quantifiers — 'all'+'inside' keeps primitives lying entirely inside, 'any'+'outside' those lying entirely outside, 'any'+'inside' those touching the box, 'all'+'outside' those not entirely within it. A fifth rule, 'boundingBox', is geometric rather than a quantifier: it keeps every primitive whose axis-aligned bounding box OVERLAPS the box, so a long triangle crossing the box with no vertex inside it is kept — the selection a cell needs when it must emit everything that passes through it. `boundary` is filterByBounds' rule with the same meaning and the same reason to prefer 'halfOpen' wherever ownership matters. POINTS: by default (unreferencedPoints 'keep') the point domain is passed through untouched — same points, same indices, same attributes, same identities — so a partition cell keeps its halo points as isolated leftovers; 'drop' removes every point no surviving primitive references and renumbers the topology onto what is left, which is how a clean network comes out. A geometry with no primitives is not an error but an empty result: a cell too sparse to make an edge is a legitimate, silent case in a partitioned cook. Primitives of any kind are handled, polylines and polys alike — this reads vertices, never `primtype`.",
   inputs: [{ name: "in", kind: "geometry" }],
   outputs: [{ name: "out", kind: "geometry" }],
   params: {
@@ -648,9 +693,9 @@ export const filterPrimitivesByBounds = standardNode<
     vertex: {
       type: "enum",
       default: "first",
-      enum: ["first", "last", "all", "any"],
+      enum: ["first", "last", "all", "any", "boundingBox"],
       description:
-        "Which of a primitive's vertices the box test reads. 'first' (the default) and 'last' read exactly ONE — the primitive's first or last vertex — which is what makes them ownership rules: every primitive has exactly one of each, so abutting boxes under the 'halfOpen' boundary claim it exactly once between them. Use 'first' with connectPoints, whose edges already lead with their lower-keyed endpoint, so the owner a cell computes matches the canonical edge order rather than merely correlating with it. 'all' keeps a primitive only when EVERY vertex is in the box, 'any' when at least one is; both are selections, and neither tiles — 'any' hands a straddling primitive to every box it reaches and 'all' to none of them, so a partitioned cook using either double-counts or loses edges at the seams. A primitive with no vertices is never inside, under all four rules.",
+        "Which of a primitive's vertices the box test reads. 'first' (the default) and 'last' read exactly ONE — the primitive's first or last vertex — which is what makes them ownership rules: every primitive has exactly one of each, so abutting boxes under the 'halfOpen' boundary claim it exactly once between them. Use 'first' with connectPoints, whose edges already lead with their lower-keyed endpoint, so the owner a cell computes matches the canonical edge order rather than merely correlating with it. 'all' keeps a primitive only when EVERY vertex is in the box, 'any' when at least one is; both are selections, and neither tiles — 'any' hands a straddling primitive to every box it reaches and 'all' to none of them, so a partitioned cook using either double-counts or loses edges at the seams. 'boundingBox' reads every vertex and tests the axis-aligned box they SPAN, [lo, hi] per axis, CLOSED: a primitive is inside when that box OVERLAPS the filter's box. It is 'any' made geometric — a long triangle or edge that crosses the box with no vertex in it is inside, which 'any' misses — and, for a primitive with no NaN coordinate, it is a superset of 'any' (a vertex in the box puts its bounding box in the box). Under 'halfOpen' the test is lo < max and hi >= min on every axis (and min < max, so an empty box meets nothing); under 'inclusive' it is lo <= max and hi >= min (and min <= max). The primitive's own box is closed on purpose: a flat primitive — zero extent on an axis, like an axis-aligned plate — must still be able to meet a box. ABUTTING BOXES: like 'any', this is a SELECTION and does not tile. A primitive straddling a shared face is in both boxes; one that merely TOUCHES the face is claimed by the box whose half-open side holds that face — under 'halfOpen' a primitive whose box ends exactly at x = c is kept by the box [c, …) as well as by the box it lies in, because the point x = c it reaches belongs to that neighbour, and a primitive lying wholly in the plane x = c is kept only by [c, …); under 'inclusive' both boxes keep both. It is the rule for a cell that must emit EVERY primitive that can be seen inside it (a renderer clipping at the cell's faces), not one owner per primitive — to catch primitives NEAR the cell too, widen the box by the halo. A NaN vertex coordinate makes the primitive's box NaN, so that primitive is never inside and lands in 'outside'. A primitive with no vertices is never inside, under all five rules.",
     },
     mode: {
       type: "enum",
@@ -685,12 +730,14 @@ export const filterPrimitivesByBounds = standardNode<
       vertexRule !== "first" &&
       vertexRule !== "last" &&
       vertexRule !== "all" &&
-      vertexRule !== "any"
+      vertexRule !== "any" &&
+      vertexRule !== "boundingBox"
     ) {
       throw new Error(
-        `${who}: vertex must be "first", "last", "all" or "any", got ${JSON.stringify(vertexRule)}; ` +
+        `${who}: vertex must be "first", "last", "all", "any" or "boundingBox", got ${JSON.stringify(vertexRule)}; ` +
           '"first" and "last" test ONE vertex and are the ownership rules a partitioned cook tiles with (use "first" after connectPoints, whose edges lead with their lower-keyed endpoint); ' +
-          '"all" and "any" test every vertex and are selections — neither tiles, since a primitive straddling a seam is claimed by every cell under "any" and by none under "all"',
+          '"all" and "any" test every vertex and are selections — neither tiles, since a primitive straddling a seam is claimed by every cell under "any" and by none under "all"; ' +
+          '"boundingBox" keeps a primitive whose bounding box overlaps the box, so a long one crossing it with no vertex inside is kept too — also a selection',
       );
     }
     const drop = requireUnreferencedPointsRule(who, params.unreferencedPoints);
@@ -737,6 +784,21 @@ export const filterPrimitivesByBounds = standardNode<
     const ruleIsFirst = vertexRule === "first";
     const ruleIsLast = vertexRule === "last";
     const wantAll = vertexRule === "all";
+    // Built only for the rule that reads it, like the box test above, and
+    // from the same corners — so the two cannot disagree about a face.
+    const overlaps =
+      vertexRule === "boundingBox"
+        ? overlapBoxPredicate(
+            minCol ?? (params.boundsMin as readonly number[]),
+            maxCol ?? (params.boundsMax as readonly number[]),
+            inclusive,
+          )
+        : undefined;
+    // Scratch for one primitive's bounding box, reused by every primitive.
+    const lo = new Float64Array(3);
+    const hi = new Float64Array(3);
+    const pd = P.data;
+    const ps = P.tupleSize;
     const nPrims = geo.primitiveCount;
     for (let p = 0; p < nPrims; p++) {
       const c = counts[p];
@@ -744,8 +806,23 @@ export const filterPrimitivesByBounds = standardNode<
       let inside: boolean;
       if (c === 0) {
         // Nothing to test: not inside under every rule, including the
-        // vacuous-truth reading of "all", so the four rules agree.
+        // vacuous-truth reading of "all", so the five rules agree.
         inside = false;
+      } else if (overlaps !== undefined) {
+        lo[0] = lo[1] = lo[2] = Infinity;
+        hi[0] = hi[1] = hi[2] = -Infinity;
+        for (let j = 0; j < c; j++) {
+          const o = v2p[s + j] * ps;
+          // Math.min/max rather than a comparison: they PROPAGATE a NaN, so
+          // a primitive with a NaN coordinate has a NaN box and is never
+          // inside — what a NaN point already is under the other rules.
+          for (let k = 0; k < 3; k++) {
+            const x = pd[o + k];
+            lo[k] = Math.min(lo[k], x);
+            hi[k] = Math.max(hi[k], x);
+          }
+        }
+        inside = overlaps(lo, hi, p);
       } else if (ruleIsFirst) {
         inside = insidePoint(v2p[s], p);
       } else if (ruleIsLast) {
