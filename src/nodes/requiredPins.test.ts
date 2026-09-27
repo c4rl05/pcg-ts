@@ -118,6 +118,7 @@ describe("PinDef.optional, measured against the cook", () => {
       "mergePoints.in",
       "mergePrimitives.in",
       "meshFromField.in",
+      "polygonBoolean.clip",
       "volumeSample.in",
     ]);
   });

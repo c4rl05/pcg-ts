@@ -567,8 +567,11 @@ describe("eiffel built-up uprights", () => {
     // (6 in a quarter; its near edge meets the flange's edge at its obtuse
     // corner, strut.ts); a gap-lattice plate's corner in b's and d's corner
     // (1 a quarter); and the 2nd floor's belt chords at XVII, which run to
-    // the axes inside the deck [measured].
-    expect(c.swallowed).toEqual({ "gussets|bd": 24, "gussets|legB": 4, "gussets|legD": 6, "girders|legB": 26, "girders|legD": 25 });
+    // the axes inside the deck [measured]. These count mesh POINTS: the
+    // girders' 26 and 25 became 24 and 24 when the sweep's caps became
+    // corner fans (2026-09-27), the three cap centres that were inside
+    // gone with every other cap centre, the rest of the points unchanged.
+    expect(c.swallowed).toEqual({ "gussets|bd": 24, "gussets|legB": 4, "gussets|legD": 6, "girders|legB": 24, "girders|legD": 24 });
     // Every web member clear of the steel it meets. Before, over panel 18,
     // 0.5 mm INSIDE the T's 1,000 flange (bracing) and 2.1 mm off it
     // (horizontals): the merge clearance stopped at XI. Now 17 mm at worst

@@ -38,6 +38,7 @@ import { quadrants } from "../demos/eiffel/lattice.js";
 import { type Detail } from "../demos/eiffel/parts.js";
 import { node } from "../demos/eiffel/spec.js";
 import { type Vec3, faceFrame, near, rivetBases } from "./support/eiffelBuiltupCensus.js";
+import { SWEPT_BOX_POINTS } from "./support/sweptBox.js";
 
 // ------------------------------------------------------------ the numbers
 
@@ -49,8 +50,8 @@ const ON = 0.001;
 const LAND_SINE = 0.3;
 /** The fin's flats, 200 wide across the face's centre line [sourced PL-XXXI, D28; the census's model]. */
 const FIN_FLAT = 0.1;
-/** Points a two-point member's skin has: four walls of four, two caps of five. */
-const MEMBER_POINTS = 26;
+/** Points a two-point member's skin has: the swept box of tests/support/sweptBox.ts. */
+const MEMBER_POINTS = SWEPT_BOX_POINTS;
 
 /** The cut sets and what they were before the cut, by probe id. */
 const CUT = {
@@ -144,8 +145,8 @@ interface End {
 /**
  * The ends of a set of two-point member skins that come within 2 mm of an
  * upright's web or past it, in the +x+z leg (every quadrant is a turned
- * copy): each end's four corners (the ring at curveU 0 or 1, less its
- * cap's hub) and the member's sine to that web.
+ * copy): each end's four corners (the ring and cap at curveU 0 or 1) and
+ * the member's sine to that web.
  */
 function endsAtWebs(geo: Geometry): End[] {
   const n = geo.pointCount;
@@ -164,10 +165,12 @@ function endsAtWebs(geo: Geometry): End[] {
         tangent = [T[3 * i]!, T[3 * i + 1]!, T[3 * i + 2]!];
         if (!pts.some((r) => Math.hypot(...sub(q, r)) < 1e-5)) pts.push(q);
       }
-      if (pts.length !== 5) throw new Error(`member ${m / MEMBER_POINTS}'s end has ${pts.length} distinct points, not 4 corners and a hub`);
-      const spread = (c: Vec3) => pts.reduce((a, q) => a + Math.hypot(...sub(q, c)), 0);
-      const hub = pts.reduce((a, q) => (spread(q) < spread(a) ? q : a));
-      const corners = pts.filter((q) => q !== hub);
+      if (pts.length !== 4) throw new Error(`member ${m / MEMBER_POINTS}'s end has ${pts.length} distinct points, not 4 corners`);
+      const corners = pts;
+      // The section's centre, where the cap's hub stood until the caps
+      // became corner fans: the path's end, for a centred section.
+      const mean = (a: number) => corners.reduce((s, q) => s + q[a]!, 0) / 4;
+      const hub: Vec3 = [mean(0), mean(1), mean(2)];
       if (corners.some((c) => c[0] <= 0 || c[2] <= 0)) continue;
       const ws = corners.map((c) => near(c, 0.3));
       if (ws.some((w) => w === undefined)) continue;

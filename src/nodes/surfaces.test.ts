@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 import {
   PRIMTYPE_ATTR,
+  createPointCloud,
   createPolyline,
   primitiveTypeCounts,
   setPolylineTopology,
@@ -17,10 +18,12 @@ import {
 import { attribute, constant } from "../fields/index.js";
 import { makeGeometryItem } from "../graph/index.js";
 import {
+  bridgePaths,
   extrudePolygon,
   surfaceSample,
   sweepProfile,
   writeCurveFrame,
+  type BridgePathsParams,
   type ExtrudePolygonParams,
   type SweepProfileParams,
 } from "./index.js";
@@ -115,9 +118,10 @@ describe("sweepProfile shape and counts", () => {
   it("puts one ring on each point and stitches the bands between them", async () => {
     const geo = await sweep(straight(4));
     // 4 rings of 9 points (8 sides + the duplicated uv seam), plus two
-    // caps of 8 + 1. 3 bands x 8 x 2 side triangles, plus 8 per cap.
-    expect(geo.pointCount).toBe(4 * 9 + 2 * 9);
-    expect(geo.primitiveCount).toBe(3 * 8 * 2 + 2 * 8);
+    // caps of 8 corners and no centre. 3 bands x 8 x 2 side triangles,
+    // plus a corner fan of 8 - 2 per cap.
+    expect(geo.pointCount).toBe(4 * 9 + 2 * 8);
+    expect(geo.primitiveCount).toBe(3 * 8 * 2 + 2 * 6);
     expectTriangleMesh(geo);
   });
 
@@ -141,7 +145,7 @@ describe("sweepProfile shape and counts", () => {
     const open = straight(3);
     const capped = await sweep(open, { caps: true });
     const bare = await sweep(open, { caps: false });
-    expect(capped.primitiveCount - bare.primitiveCount).toBe(16);
+    expect(capped.primitiveCount - bare.primitiveCount).toBe(12);
     // A ribbon has no inside, so `caps` cannot add anything to one.
     const ribbon = await sweep(open, { profile: "ribbon", caps: true });
     expect(ribbon.pointCount).toBe(3 * 2);
@@ -1003,17 +1007,51 @@ describe("sweepProfile 'rect' and 'polygon'", () => {
     }
   });
 
-  it("moves the cap fan's centre with the anchor, onto the section's own centre", async () => {
+  it("caps a rect end with 2 triangles over its 4 corners, uv on the section's box", async () => {
     const geo = await sweep(straight(2), { profile: "rect", width: 1, height: 2, anchor: "bottom" });
-    // Ring block (2 x 8), then each cap: 4 corners and the centre.
-    const P = geo.attrs.point.require("P");
-    expect(P.getTuple(16 + 4).map((c) => c + 0)).toEqual([0, 1, 0]);
-    expect(P.getTuple(16 + 5 + 4).map((c) => c + 0)).toEqual([1, 1, 0]);
-    // Cap uv maps the section's box exactly: corners on 0/1, centre at 0.5.
+    // Ring block (2 x 8), then each cap: its 4 corners and nothing else.
+    expect(geo.pointCount).toBe(16 + 4 + 4);
+    expect(geo.primitiveCount).toBe(4 * 2 + 2 + 2);
     const uv = geo.attrs.point.require("uv");
     const corners = [0, 1, 2, 3].map((c) => uv.getTuple(16 + c).join(",")).sort();
     expect(corners).toEqual(["0,0", "0,1", "1,0", "1,1"]);
-    expect(uv.getTuple(16 + 4)).toEqual([0.5, 0.5]);
+    // The two end caps cover the section exactly: area 1 x 2 each.
+    const P = geo.attrs.point.require("P");
+    for (const t of [8, 9, 10, 11]) {
+      const v = geo.primVertexStart[t];
+      const [a, b, c] = [0, 1, 2].map((k) => P.getTuple(geo.vertexToPoint[v + k]));
+      const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+      const area =
+        Math.hypot(ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]) / 2;
+      expect(area).toBeCloseTo(1, 6);
+    }
+    expectNormalsMatchWinding(geo, "rect caps");
+  });
+
+  it("ear-clips a concave section's caps, so an L end is covered exactly once", async () => {
+    // An L in (across, up): 6 corners, area 3.
+    const section = [0, 0, 2, 0, 2, 1, 1, 1, 1, 2, 0, 2];
+    for (const s of [section, [0, 0, 0, 2, 1, 2, 1, 1, 2, 1, 2, 0]]) {
+      const geo = await sweep(straight(2), { profile: "polygon", section: s });
+      const bare = await sweep(straight(2), { profile: "polygon", section: s, caps: false });
+      const capTris = geo.primitiveCount - bare.primitiveCount;
+      expect(capTris).toBe(2 * 4);
+      const P = geo.attrs.point.require("P");
+      let sum = 0;
+      for (let t = bare.primitiveCount; t < geo.primitiveCount; t++) {
+        const v = geo.primVertexStart[t];
+        const [a, b, c] = [0, 1, 2].map((k) => P.getTuple(geo.vertexToPoint[v + k]));
+        const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        const ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+        sum +=
+          Math.hypot(ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]) / 2;
+      }
+      // Two caps of area 3; a fan from a reflex corner would overlap and
+      // sum to more.
+      expect(sum).toBeCloseTo(6, 5);
+      expectNormalsMatchWinding(geo, "L caps");
+    }
   });
 
   it("matches the square it generalizes when width = height = 2 x radius", async () => {
@@ -1120,22 +1158,22 @@ describe("sweepProfile 'rect' and 'polygon'", () => {
     expect(snapshotGeometry(b)).toEqual(snapshotGeometry(a));
   });
 
-  it("caps a 'polygon' from its area centroid, and faces every face outward", async () => {
+  it("caps a 'polygon' over its own corners, and faces every face outward", async () => {
     const geo = await sweep(straight(2), { profile: "polygon", section: [0, 0, 2, 0, 2, 2, 0, 2] });
+    // 2 rings of 8 entries, then each cap's 4 corners — no centre point.
+    expect(geo.pointCount).toBe(16 + 4 + 4);
     const P = geo.attrs.point.require("P");
-    // 2 rings of 8 entries, then the start cap's 4 corners and its centre.
-    // Section (x across, y up) = (1, 1) lands at world (x_path, 1, -1).
-    const centre = P.getTuple(16 + 4);
-    [0, 1, -1].forEach((want, k) => expect(centre[k], `centre.${k}`).toBeCloseTo(want, 9));
+    // Section (x across, y up) = (2, 2) lands at world (x_path, 2, -2):
+    // the start cap's third corner.
+    const corner = P.getTuple(16 + 2);
+    [0, 2, -2].forEach((want, k) => expect(corner[k], `corner.${k}`).toBeCloseTo(want, 9));
     for (const caps of [true, false]) {
-      expectNormalsMatchWinding(
-        await sweep(createPolyline(BENT), {
-          profile: "polygon",
-          section: caps ? [0, 0, 2, 0, 2, 2, 0, 2] : L_SECTION,
-          caps,
-        }),
-        `polygon caps=${caps}`,
-      );
+      for (const section of [[0, 0, 2, 0, 2, 2, 0, 2], L_SECTION]) {
+        expectNormalsMatchWinding(
+          await sweep(createPolyline(BENT), { profile: "polygon", section, caps }),
+          `polygon caps=${caps}`,
+        );
+      }
     }
   });
 
@@ -1203,5 +1241,567 @@ describe("sweepProfile 'rect' and 'polygon'", () => {
     const c = await sweep(make(), { profile: "polygon", section: L_SECTION, caps: false });
     const d = await sweep(make(), { profile: "polygon", section: L_SECTION, caps: false });
     expect(snapshotGeometry(d)).toEqual(snapshotGeometry(c));
+  });
+});
+
+/**
+ * Closed loops in the y = 0 plane from [x, z] corner lists, one polyline
+ * each, with an optional i32 `holeOf` per loop (-1 on an outline).
+ */
+function footprints(loops: number[][][], holeOf?: number[]): Geometry {
+  const pos: number[] = [];
+  const idx: number[] = [];
+  const starts: number[] = [];
+  const counts: number[] = [];
+  for (const loop of loops) {
+    const first = pos.length / 3;
+    starts.push(idx.length);
+    for (const [x, z] of loop) pos.push(x, 0, z);
+    for (let i = 0; i < loop.length; i++) idx.push(first + i);
+    idx.push(first);
+    counts.push(loop.length + 1);
+  }
+  const geo = createPolyline(pos);
+  setPolylineTopology(geo, Uint32Array.from(idx), Uint32Array.from(starts), Uint32Array.from(counts));
+  if (holeOf !== undefined) geo.attrs.primitive.add("holeOf", "i32", 1, -1).writable().set(holeOf);
+  return geo;
+}
+
+/** Triangle `t`'s corners. */
+function corners(geo: Geometry, t: number): number[][] {
+  const P = geo.attrs.point.require("P");
+  const v = geo.primVertexStart[t];
+  return [0, 1, 2].map((k) => P.getTuple(geo.vertexToPoint[v + k]));
+}
+
+/** The triangles lying flat at height `y`, each asserted to face `+y * sign`. */
+function capTriangles(geo: Geometry, y: number, sign: number): number[] {
+  const out: number[] = [];
+  for (let t = 0; t < geo.primitiveCount; t++) {
+    const c = corners(geo, t);
+    if (!c.every((p) => Math.abs(p[1] - y) < 1e-6)) continue;
+    const n = triangleNormal(geo, t);
+    if (Math.hypot(...n) === 0) continue;
+    expect(n[1] * sign, `cap triangle ${t} faces ${sign > 0 ? "up" : "down"}`).toBeGreaterThan(0.99);
+    out.push(t);
+  }
+  return out;
+}
+
+/** Crossing-number point-in-loop over [x, z] corners, for the probes. */
+function insideXZ(loop: number[][], x: number, z: number): boolean {
+  let inside = false;
+  for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
+    const [xi, zi] = loop[i];
+    const [xj, zj] = loop[j];
+    if (zi > z !== zj > z && x < xi + ((z - zi) * (xj - xi)) / (zj - zi)) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * The caps at heights 0 and `h` each cover the outline less its holes
+ * EXACTLY once, and face away from the solid: probe a grid (offset off
+ * every lattice line the shapes use) and count the cap triangles over
+ * each probe.
+ */
+function expectCapsTile(geo: Geometry, outline: number[][], holes: number[][][], h: number): void {
+  const want = (x: number, z: number) =>
+    insideXZ(outline, x, z) && !holes.some((hole) => insideXZ(hole, x, z)) ? 1 : 0;
+  for (const [y, sign] of [
+    [0, -Math.sign(h)],
+    [h, Math.sign(h)],
+  ] as const) {
+    const tri = capTriangles(geo, y, sign).map((t) => corners(geo, t));
+    for (let i = 0; i < 37; i++) {
+      for (let j = 0; j < 37; j++) {
+        const x = -0.5 + (7 * (i + 0.37)) / 37;
+        const z = -6.5 + (7 * (j + 0.61)) / 37;
+        let covered = 0;
+        for (const [a, b, c] of tri) {
+          const s = (p: number[], q: number[]) =>
+            (q[0] - p[0]) * (z - p[2]) - (q[2] - p[2]) * (x - p[0]);
+          const d1 = s(a, b);
+          const d2 = s(b, c);
+          const d3 = s(c, a);
+          if ((d1 > 0 && d2 > 0 && d3 > 0) || (d1 < 0 && d2 < 0 && d3 < 0)) covered++;
+        }
+        expect(covered, `cap at y=${y}, probe (${x.toFixed(2)}, ${z.toFixed(2)})`).toBe(want(x, z));
+      }
+    }
+  }
+}
+
+const L_FOOT = [
+  [0, 0],
+  [4, 0],
+  [4, -1],
+  [1, -1],
+  [1, -4],
+  [0, -4],
+];
+const BIG = [
+  [0, 0],
+  [6, 0],
+  [6, -6],
+  [0, -6],
+];
+const HOLE_A = [
+  [1, -1],
+  [2, -1],
+  [2, -2],
+  [1, -2],
+];
+const HOLE_B = [
+  [3.5, -3],
+  [5, -4],
+  [4, -5],
+];
+
+function rev(loop: number[][]): number[][] {
+  return [loop[0], ...loop.slice(1).reverse()];
+}
+
+describe("extrudePolygon: concave outlines and holes", () => {
+  it("caps a concave footprint exactly, either winding, either side", async () => {
+    // The U starts on a corner that cannot see the whole outline, so a fan
+    // from its first point would spill out across the U's mouth.
+    const U = [
+      [1, 0],
+      [0, 0],
+      [0, -4],
+      [4, -4],
+      [4, 0],
+      [3, 0],
+      [3, -3],
+      [1, -3],
+    ];
+    for (const loop of [U, rev(U)]) {
+      const geo = await extrude(footprints([loop]), { distance: 1.5 });
+      expectNormalsMatchWinding(geo, "U");
+      expectCapsTile(geo, loop, [], 1.5);
+    }
+    for (const loop of [L_FOOT, rev(L_FOOT)]) {
+      for (const distance of [2, -2]) {
+        const geo = await extrude(footprints([loop]), { distance });
+        expectTriangleMesh(geo);
+        expectNormalsMatchWinding(geo, `L distance=${distance}`);
+        expectCapsTile(geo, loop, [], distance);
+        // Ear clipping adds no points: walls plus two 6-point caps.
+        expect(geo.pointCount).toBe(6 * 4 + 6 + 6);
+      }
+    }
+  });
+
+  it("keeps a convex footprint on the fan from its first point", async () => {
+    const geo = await extrude(unitSquare(), { caps: "top", sides: false });
+    expect(Array.from(geo.vertexToPoint)).toEqual([0, 1, 2, 0, 2, 3]);
+  });
+
+  it("cuts holeOf holes through both caps and faces the hole walls into the holes", async () => {
+    for (const [outer, a, b] of [
+      [BIG, HOLE_A, HOLE_B],
+      [rev(BIG), HOLE_A, rev(HOLE_B)],
+      [BIG, rev(HOLE_A), rev(HOLE_B)],
+    ]) {
+      for (const distance of [3, -3]) {
+        const input = footprints([outer, a, b], [-1, 0, 0]);
+        input.attrs.primitive.add("which", "i32", 1, 0).writable().set([0, 1, 2]);
+        const geo = await extrude(input, { distance });
+        expectTriangleMesh(geo);
+        expectNormalsMatchWinding(geo, `holes distance=${distance}`);
+        expectCapsTile(geo, outer, [a, b], distance);
+        // Holes add their walls and their cap corners, and no other point.
+        expect(geo.pointCount).toBe((4 + 4 + 3) * 4 + 2 * (4 + 4 + 3));
+        const which = geo.attrs.primitive.require("which");
+        const centres = [
+          [3, -3],
+          [1.5, -1.5],
+          [(3.5 + 5 + 4) / 3, -4],
+        ];
+        for (let t = 0; t < geo.primitiveCount; t++) {
+          const n = triangleNormal(geo, t);
+          if (Math.abs(n[1]) > 0.5) {
+            // Every cap triangle belongs to the outline's primitive.
+            expect(which.get(t, 0)).toBe(0);
+            continue;
+          }
+          const w = which.get(t, 0);
+          const c = corners(geo, t);
+          const mid = [(c[0][0] + c[1][0] + c[2][0]) / 3, (c[0][2] + c[1][2] + c[2][2]) / 3];
+          const toCentre = [centres[w][0] - mid[0], centres[w][1] - mid[1]];
+          const facing = n[0] * toCentre[0] + n[2] * toCentre[1];
+          // The outline's walls face away from its centre; a hole's walls
+          // face toward its own centre, into the hole.
+          if (w === 0) expect(facing, `outline wall ${t}`).toBeLessThan(0);
+          else expect(facing, `hole ${w} wall ${t}`).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
+  it("takes a hole listed before its outline", async () => {
+    const geo = await extrude(footprints([HOLE_A, BIG], [1, -1]), { distance: 1 });
+    expectCapsTile(geo, BIG, [HOLE_A], 1);
+    // Points still follow the input loops: the hole's walls come first.
+    expect(geo.attrs.point.require("P").getTuple(0).map((c) => c + 0)).toEqual([1, 0, -1]);
+  });
+
+  it("cuts a hole out of a concave outline", async () => {
+    const hole = [
+      [0.25, -1.5],
+      [0.75, -1.5],
+      [0.75, -3],
+      [0.25, -3],
+    ];
+    const geo = await extrude(footprints([L_FOOT, hole], [-1, 0]), { distance: 1 });
+    expectCapsTile(geo, L_FOOT, [hole], 1);
+    expectNormalsMatchWinding(geo, "L with hole");
+  });
+
+  it("keeps separate polygons apart, each with its own holes, in input order", async () => {
+    const other = [
+      [10, 0],
+      [13, 0],
+      [13, -3],
+      [10, -3],
+    ];
+    const otherHole = [
+      [11, -1],
+      [12, -1],
+      [12, -2],
+      [11, -2],
+    ];
+    const geo = await extrude(footprints([BIG, other, HOLE_A, otherHole], [-1, -1, 0, 1]), {
+      distance: 1,
+    });
+    expectCapsTile(geo, BIG, [HOLE_A], 1);
+    // The second polygon's caps, alone: shift the probes by moving it.
+    const moved = await extrude(footprints([other, otherHole], [-1, 0]), { distance: 1 });
+    const capArea = (g: Geometry) =>
+      capTriangles(g, 1, 1).reduce((sum, t) => {
+        const [a, b, c] = corners(g, t);
+        return sum + Math.abs((b[0] - a[0]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[0] - a[0])) / 2;
+      }, 0);
+    expect(capArea(moved)).toBeCloseTo(9 - 1, 9);
+    expect(capArea(geo)).toBeCloseTo(36 - 1 + 9 - 1, 9);
+    expect(geo.attrs.point.require("P").getTuple(0).map((c) => c + 0)).toEqual([0, 0, 0]);
+  });
+
+  it("builds walls for a zero-area hole and cuts nothing for it", async () => {
+    const sliver = [
+      [1, -1],
+      [2, -2],
+      [3, -3],
+    ];
+    const geo = await extrude(footprints([BIG, sliver], [-1, 0]), { distance: 1 });
+    expectCapsTile(geo, BIG, [], 1);
+    // Walls for both loops; cap points for the outline only.
+    expect(geo.pointCount).toBe((4 + 3) * 4 + 2 * 4);
+  });
+
+  it("drops collinear and repeated corners from the ear-clipped cap without a NaN", async () => {
+    const messy = [
+      [0, 0],
+      [2, 0],
+      [4, 0],
+      [4, -1],
+      [1, -1],
+      [1, -1],
+      [1, -4],
+      [0, -4],
+      [0, -2],
+    ];
+    const geo = await extrude(footprints([messy]), { distance: 1 });
+    expectCapsTile(geo, messy, [], 1);
+    const N = geo.attrs.point.require("normal");
+    for (let i = 0; i < geo.pointCount; i++) {
+      for (let k = 0; k < 3; k++) expect(Number.isFinite(N.get(i, k))).toBe(true);
+    }
+  });
+
+  it("follows a tilted outline with a hole under polygonNormal", async () => {
+    // BIG with HOLE_A, stood up in the xy plane (z -> y).
+    const pos: number[] = [];
+    for (const [x, z] of [...BIG, ...HOLE_A]) pos.push(x, -z, 0);
+    const geo0 = createPolyline(pos);
+    setPolylineTopology(
+      geo0,
+      Uint32Array.of(0, 1, 2, 3, 0, 4, 5, 6, 7, 4),
+      Uint32Array.of(0, 5),
+      Uint32Array.of(5, 5),
+    );
+    geo0.attrs.primitive.add("holeOf", "i32", 1, -1).writable().set([-1, 0]);
+    const geo = await extrude(geo0, { direction: "polygonNormal", distance: 2 });
+    expectNormalsMatchWinding(geo, "tilted with hole");
+    let capArea = 0;
+    for (let t = 0; t < geo.primitiveCount; t++) {
+      const [a, b, c] = corners(geo, t);
+      capArea += Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) / 2;
+    }
+    // Two caps of 36 - 1; the walls are edge-on to z and add nothing.
+    expect(capArea).toBeCloseTo(70, 5);
+  });
+
+  it("refuses a hole outside its outline, naming both primitives", async () => {
+    const outside = [
+      [8, -1],
+      [9, -1],
+      [9, -2],
+    ];
+    await expect(extrude(footprints([BIG, outside], [-1, 0]))).rejects.toThrow(
+      /primitive 1 is a hole of primitive 0.*OUTSIDE/s,
+    );
+  });
+
+  it("refuses a holeOf that names no loop, names a hole, or is not i32", async () => {
+    await expect(extrude(footprints([BIG, HOLE_A], [-1, 5]))).rejects.toThrow(
+      /primitive 1 has holeOf = 5, which names no closed polyline/,
+    );
+    await expect(extrude(footprints([BIG, HOLE_A, HOLE_B], [-1, 0, 1]))).rejects.toThrow(
+      /primitive 2 has holeOf = 1, which names primitive 1, itself a hole/,
+    );
+    await expect(extrude(footprints([BIG, HOLE_A], [-1, 1]))).rejects.toThrow(/itself a hole/);
+    const f = footprints([BIG]);
+    f.attrs.primitive.add("holeOf", "f32", 1, -1);
+    await expect(extrude(f)).rejects.toThrow(/"holeOf" as f32.*rewrite it as i32/s);
+  });
+
+  it("is deterministic, and all -1 (or no holeOf) extrudes every loop on its own", async () => {
+    const input = footprints([BIG, HOLE_A, L_FOOT], [-1, 0, -1]);
+    const a = await extrude(input);
+    const b = await extrude(input);
+    expect(snapshotGeometry(a)).toEqual(snapshotGeometry(b));
+    const apart = await extrude(footprints([BIG, HOLE_A, L_FOOT], [-1, -1, -1]));
+    const bare = await extrude(footprints([BIG, HOLE_A, L_FOOT]));
+    expect(Array.from(apart.vertexToPoint)).toEqual(Array.from(bare.vertexToPoint));
+    const each = await Promise.all([BIG, HOLE_A, L_FOOT].map((loop) => extrude(footprints([loop]))));
+    expect(apart.primitiveCount).toBe(each.reduce((n, g) => n + g.primitiveCount, 0));
+    expect(apart.pointCount).toBe(each.reduce((n, g) => n + g.pointCount, 0));
+  });
+});
+
+async function bridge(
+  from: Geometry,
+  to: Geometry,
+  params: Partial<BridgePathsParams> = {},
+): Promise<Geometry> {
+  return firstGeo(
+    (await runNode(bridgePaths, params, { from: [makeGeometryItem(from)], to: [makeGeometryItem(to)] }))
+      .out,
+  );
+}
+
+/** Open (or closed) polylines from [x, y, z] lists, one per path. */
+function paths(list: number[][][], closed = false): Geometry {
+  const pos: number[] = [];
+  const idx: number[] = [];
+  const starts: number[] = [];
+  const counts: number[] = [];
+  for (const path of list) {
+    const first = pos.length / 3;
+    starts.push(idx.length);
+    for (const p of path) pos.push(p[0], p[1], p[2]);
+    for (let i = 0; i < path.length; i++) idx.push(first + i);
+    if (closed) idx.push(first);
+    counts.push(path.length + (closed ? 1 : 0));
+  }
+  const geo = createPolyline(pos);
+  setPolylineTopology(geo, Uint32Array.from(idx), Uint32Array.from(starts), Uint32Array.from(counts));
+  return geo;
+}
+
+function line(n: number, z: number, y = 0): number[][] {
+  const out: number[][] = [];
+  for (let i = 0; i < n; i++) out.push([i, y, z]);
+  return out;
+}
+
+function ring(n: number, r: number): number[][] {
+  const out: number[][] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (2 * Math.PI * i) / n;
+    out.push([r * Math.cos(a), 0, -r * Math.sin(a)]);
+  }
+  return out;
+}
+
+function meshArea(geo: Geometry): number {
+  let sum = 0;
+  for (let t = 0; t < geo.primitiveCount; t++) {
+    const [a, b, c] = corners(geo, t);
+    const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    sum +=
+      Math.hypot(ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]) / 2;
+  }
+  return sum;
+}
+
+describe("bridgePaths", () => {
+  it("joins point i to point i with two triangles per segment pair, facing up", async () => {
+    // `from` along +x at z = 0, `to` on its left at z = -1.
+    const geo = await bridge(paths([line(5, 0)]), paths([line(5, -1)]));
+    expectTriangleMesh(geo);
+    expect(geo.pointCount).toBe(10);
+    expect(geo.primitiveCount).toBe(4 * 2);
+    expect(meshArea(geo)).toBeCloseTo(4, 9);
+    expectNormalsMatchWinding(geo, "flat band");
+    for (let t = 0; t < geo.primitiveCount; t++) expect(triangleNormal(geo, t)[1]).toBeCloseTo(1, 9);
+    const N = geo.attrs.point.require("normal");
+    for (let i = 0; i < geo.pointCount; i++) expect(N.getTuple(i)).toEqual([0, 1, 0]);
+    // `from` points first, then `to`; u by arc length, v 0 then 1.
+    const uv = geo.attrs.point.require("uv");
+    expect(uv.getTuple(0)).toEqual([0, 0]);
+    expect(uv.getTuple(4)).toEqual([1, 0]);
+    expect(uv.getTuple(5)).toEqual([0, 1]);
+    expect(uv.getTuple(7)[0]).toBeCloseTo(0.5, 9);
+  });
+
+  it("turns the band over with flip", async () => {
+    const geo = await bridge(paths([line(4, 0)]), paths([line(4, -1)]), { flip: true });
+    expectNormalsMatchWinding(geo, "flipped band");
+    for (let t = 0; t < geo.primitiveCount; t++) expect(triangleNormal(geo, t)[1]).toBeCloseTo(-1, 9);
+    expect(geo.attrs.point.require("normal").getTuple(0)).toEqual([0, -1, 0]);
+  });
+
+  it("wraps two closed paths into a ring: an annulus has n quads and no seam gap", async () => {
+    const n = 24;
+    // Outer ring counter-clockwise seen from above; the inner ring is on
+    // its left, so the annulus faces up.
+    const geo = await bridge(paths([ring(n, 2)], true), paths([ring(n, 1)], true));
+    expect(geo.primitiveCount).toBe(n * 2);
+    expect(geo.pointCount).toBe(2 * n);
+    const polyArea = (r: number) => (n / 2) * r * r * Math.sin((2 * Math.PI) / n);
+    expect(meshArea(geo)).toBeCloseTo(polyArea(2) - polyArea(1), 6);
+    expectNormalsMatchWinding(geo, "annulus");
+    for (let t = 0; t < geo.primitiveCount; t++) expect(triangleNormal(geo, t)[1]).toBeGreaterThan(0.99);
+  });
+
+  it("shades a bent band round: a rung between two tilted quads takes their mean", async () => {
+    // A roof ridge: `from` along the eave at y = 0, `to` along the ridge,
+    // bent at x = 1 so the two quads tilt differently.
+    const from = paths([
+      [
+        [0, 0, 0],
+        [1, 0, 0],
+        [2, 0, 0],
+      ],
+    ]);
+    const to = paths([
+      [
+        [0, 1, -1],
+        [1, 0, -1],
+        [2, 1, -1],
+      ],
+    ]);
+    const geo = await bridge(from, to);
+    expectNormalsMatchWinding(geo, "bent band");
+    const N = geo.attrs.point.require("normal");
+    const mid = N.getTuple(1);
+    // Symmetric about x = 1: the middle rung's normal has no x.
+    expect(mid[0]).toBeCloseTo(0, 6);
+    expect(N.getTuple(4)).toEqual(N.getTuple(1));
+    expect(Math.hypot(...mid)).toBeCloseTo(1, 6);
+  });
+
+  it("pairs by primitive order by default, and by key with pairAttr", async () => {
+    const from = paths([line(3, 0), line(3, 10)]);
+    const to = paths([line(3, 9), line(3, -1)]);
+    // In order, path 0 meets path 0 — across the whole gap.
+    const ordered = await bridge(from, to);
+    expect(meshArea(ordered)).toBeCloseTo(2 * 9 + 2 * 11, 6);
+    from.attrs.primitive.add("lane", "i32", 1, 0).writable().set([4, 8]);
+    to.attrs.primitive.add("lane", "i32", 1, 0).writable().set([8, 4]);
+    const keyed = await bridge(from, to, { pairAttr: "lane" });
+    expect(meshArea(keyed)).toBeCloseTo(2 + 2, 6);
+    const named = paths([line(3, 0), line(3, 10)]);
+    const s1 = named.attrs.primitive.add("side", "string", 1, "");
+    s1.setString(0, "left");
+    s1.setString(1, "right");
+    const namedTo = paths([line(3, 9), line(3, -1)]);
+    const s2 = namedTo.attrs.primitive.add("side", "string", 1, "");
+    s2.setString(0, "right");
+    s2.setString(1, "left");
+    expect(meshArea(await bridge(named, namedTo, { pairAttr: "side" }))).toBeCloseTo(4, 6);
+  });
+
+  it("refuses what cannot be paired, naming both counts or both primitives", async () => {
+    await expect(bridge(paths([line(4, 0)]), paths([line(5, -1)]))).rejects.toThrow(
+      /primitive 0 on pin "from" has 4 point\(s\) and its pair, primitive 0 on pin "to", has 5/,
+    );
+    await expect(bridge(paths([line(4, 0), line(4, 3)]), paths([line(4, -1)]))).rejects.toThrow(
+      /pin "from" carries 2 polyline\(s\) and pin "to" carries 1/,
+    );
+    await expect(bridge(paths([ring(5, 2)], true), paths([ring(5, 1)]))).rejects.toThrow(
+      /"from" is CLOSED and the one on "to" is OPEN/,
+    );
+    const from = paths([line(3, 0)]);
+    const to = paths([line(3, 1)]);
+    from.attrs.primitive.add("k", "i32", 1, 0).writable().set([1]);
+    to.attrs.primitive.add("k", "i32", 1, 0).writable().set([2]);
+    await expect(bridge(from, to, { pairAttr: "k" })).rejects.toThrow(/k = 1, and no polyline on pin "to"/);
+    await expect(bridge(from, to, { pairAttr: "kk" })).rejects.toThrow(/kk/);
+    const twice = paths([line(3, 1), line(3, 2)]);
+    twice.attrs.primitive.add("k", "i32", 1, 0).writable().set([1, 1]);
+    await expect(bridge(from, twice, { pairAttr: "k" })).rejects.toThrow(/primitives 0 and 1 on pin "to" both carry k = 1/);
+  });
+
+  it("carries each side's point attributes, unions the columns, and refuses a shape clash", async () => {
+    const from = paths([line(3, 0)]);
+    const to = paths([line(3, -1)]);
+    from.attrs.point.add("a", "f32", 1, -1).writable().set([1, 2, 3]);
+    to.attrs.point.add("b", "i32", 1, -7).writable().set([4, 5, 6]);
+    from.attrs.primitive.add("roadId", "i32", 1, 0).writable().set([42]);
+    to.attrs.primitive.add("ignored", "i32", 1, 0).writable().set([9]);
+    const geo = await bridge(from, to);
+    const a = geo.attrs.point.require("a");
+    const b = geo.attrs.point.require("b");
+    expect([0, 1, 2, 3, 4, 5].map((i) => a.get(i, 0))).toEqual([1, 2, 3, -1, -1, -1]);
+    expect([0, 1, 2, 3, 4, 5].map((i) => b.get(i, 0))).toEqual([-7, -7, -7, 4, 5, 6]);
+    for (let t = 0; t < geo.primitiveCount; t++) expect(geo.attrs.primitive.require("roadId").get(t, 0)).toBe(42);
+    expect(geo.attrs.primitive.has("ignored")).toBe(false);
+    const clash = paths([line(3, -1)]);
+    clash.attrs.point.add("a", "i32", 1, 0);
+    await expect(bridge(from, clash)).rejects.toThrow(/"a" is f32 tuple 1 on pin "from" and i32 tuple 1 on pin "to"/);
+    const badNormal = paths([line(3, -1)]);
+    badNormal.attrs.point.add("normal", "f32", 2, 0);
+    await expect(bridge(from, badNormal)).rejects.toThrow(/normal/);
+  });
+
+  it("gives a repeated point a borrowed normal and an all-degenerate band zeros, never NaN", async () => {
+    const from = paths([
+      [
+        [0, 0, 0],
+        [1, 0, 0],
+        [1, 0, 0],
+        [2, 0, 0],
+      ],
+    ]);
+    const to = paths([
+      [
+        [0, 0, -1],
+        [1, 0, -1],
+        [1, 0, -1],
+        [2, 0, -1],
+      ],
+    ]);
+    const geo = await bridge(from, to);
+    const N = geo.attrs.point.require("normal");
+    for (let i = 0; i < geo.pointCount; i++) expect(N.getTuple(i)).toEqual([0, 1, 0]);
+    const flat = await bridge(paths([line(3, 0)]), paths([line(3, 0)]));
+    const M = flat.attrs.point.require("normal");
+    for (let i = 0; i < flat.pointCount; i++) expect(M.getTuple(i).map((c) => c + 0)).toEqual([0, 0, 0]);
+  });
+
+  it("is deterministic and puts out nothing for two empty inputs", async () => {
+    const a = await bridge(paths([ring(9, 3)], true), paths([ring(9, 2)], true));
+    const b = await bridge(paths([ring(9, 3)], true), paths([ring(9, 2)], true));
+    expect(snapshotGeometry(a)).toEqual(snapshotGeometry(b));
+    for (const params of [{}, { pairAttr: "lane" }]) {
+      const empty = await bridge(createPointCloud(0), createPointCloud(0), params);
+      expect(empty.pointCount).toBe(0);
+      expect(empty.primitiveCount).toBe(0);
+    }
   });
 });

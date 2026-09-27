@@ -326,7 +326,12 @@ const ALLOW: readonly Allowed[] = [
     kind: "loose",
     cls: "girders",
     box: [-39.768, 40.268, -39.768, -20.846, 50.04, -20.852],
-    count: 61,
+    // 61 until the sweep's caps became corner fans (2026-09-27): the 630
+    // chord's -x end at (-38.58, 40.30, -39.74) now reads loose, as its
+    // +x twin in the entry above always has. Its points are the same to
+    // the bit; the detector's axis weights a solid by its triangles'
+    // corners, so a cap's triangulation moves the end slab it tests.
+    count: 62,
     reason:
       "Masque (PL-VII Fig. 6), groups G09,G20,G22,G27,G31,G32,G33,G34,G35,G36,G60,G61: the screen's flats are stacked 12 mm apart so no two crossing flats share a plane (legs.ts masque layers), so a flat one or two layers behind the chord plate it laps onto ends 1.2-2.6 cm behind it, hidden by the plate; and the flats', fillet bands' and the 630 chord's ends at the screen's sides stop 0.45 off the uprights' axes (clear of the fin on the web, and at XXV of the node's gussets), 1 cm beside the box and 5-8 cm in front of its web (the 4-8 cm gaps). The screen bears on the uprights through the 750's packing (MASQUE_BEARING), so none of these ends is unsupported; closing each would need a packing per flat end",
   },

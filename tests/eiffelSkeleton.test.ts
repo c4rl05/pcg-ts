@@ -37,6 +37,7 @@ import {
 } from "../demos/eiffel/spec.js";
 import { edouxMoves, frameInto, planBracingBandLines, planBracingLines, planPattern } from "../demos/eiffel/shaft.js";
 import { RIVET_RISE, UPRIGHT_SEAMS } from "../demos/eiffel/strut.js";
+import { SWEPT_BOX_POINTS, isSweptBox, sweptBoxCorners } from "./support/sweptBox.js";
 
 type Vec3 = readonly [number, number, number];
 
@@ -169,37 +170,26 @@ function faceNormals(geo: Geometry): Vec3[] {
 
 /**
  * A flat-bar mesh's boxes, as each box's corner points and their mean. Two
- * layouts reach it. `flatBars` sweeps each member's two ends with a 'rect'
- * section: 26 points, its four faces' 16 first (two at each of its eight
- * corners), then a cap of four corners and its centre at each end. A
- * member's joint plates (strut.ts) copy a unit box: 24 points, three at each
- * corner. Either way the corner points weight each corner alike, so their
- * mean is the box's centre.
+ * layouts reach it, both 24 points. `flatBars` sweeps each member's two
+ * ends with a 'rect' section, in the layout tests/support/sweptBox.ts
+ * states (its caps' 8 points are the corners, once each). A member's joint
+ * plates (strut.ts) copy a unit box: three points at each corner. Either
+ * way the corner points weight each corner alike, so their mean is the
+ * box's centre.
  */
 function flatBoxes(geo: Geometry): Array<{ centre: Vec3; points: Vec3[] }> {
   const P = geo.attrs.point.get("P");
   if (P === undefined) throw new Error("no P");
   const n = geo.attrs.point.count;
   const at = (k: number): Vec3 => [P.data[3 * k] as number, P.data[3 * k + 1] as number, P.data[3 * k + 2] as number];
-  // A sweep's point 20 is its first cap's centre, the one point of a box
-  // that is no corner: half its section's diagonal (20 mm and more) from
-  // every corner. A unit box's is a corner of its -z face, where two of its
-  // first 20 points already stand, give or take the class jitter (~1 mm a
-  // point).
-  const swept = (i: number) => {
-    if (i + 26 > n) return false;
-    const c = at(i + 20);
-    for (let k = i; k < i + 20; k++) if (len3(sub3(at(k), c)) < 0.005) return false;
-    return true;
-  };
   const out: Array<{ centre: Vec3; points: Vec3[] }> = [];
   let i = 0;
   while (i < n) {
-    const sweep = swept(i);
     const pts: Vec3[] = [];
-    for (let k = i; k < i + (sweep ? 16 : 24) && k < n; k++) pts.push(at(k));
+    if (isSweptBox(P.data, i, n)) pts.push(...sweptBoxCorners(P.data, i));
+    else for (let k = i; k < i + SWEPT_BOX_POINTS && k < n; k++) pts.push(at(k));
     out.push({ centre: mul3(pts.reduce((a, p) => add3(a, p), [0, 0, 0] as Vec3), 1 / pts.length), points: pts });
-    i += sweep ? 26 : 24;
+    i += SWEPT_BOX_POINTS;
   }
   expect(i, "not a whole number of flat-bar boxes").toBe(n);
   return out;

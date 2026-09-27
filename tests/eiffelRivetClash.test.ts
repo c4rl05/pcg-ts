@@ -25,6 +25,7 @@ import { describe, expect, it } from "vitest";
 import { type Geometry, type NodeHandle, cook, firstGeometry } from "pcg-ts";
 import { buildEiffel } from "../demos/eiffel/graph.js";
 import { JITTER } from "../demos/eiffel/parts.js";
+import { SWEPT_BOX_POINTS, isSweptBox, sweptBoxCorners } from "./support/sweptBox.js";
 
 type Vec3 = readonly [number, number, number];
 
@@ -103,12 +104,10 @@ interface Plate {
 /**
  * Every thin box of a box-mesh class. Two layouts reach it. A copied unit
  * box is 24 points, three per corner (each face its own normals). A flat
- * bar (strut.ts `flatBars`) is a 'rect' sweep of its member's two ends, 26
- * points: its four faces' 16 first, two per corner, then a cap of four
- * corners and its centre at each end. The sweep's point 20 is that first
- * cap's centre, half its section's diagonal (20 mm and more) from every
- * corner, where a box's point 20 is a corner two of its first 20 points
- * share. A box's corners are the distinct positions in its corner points.
+ * bar (strut.ts `flatBars`) is a 'rect' sweep of its member's two ends,
+ * also 24 points, in the layout tests/support/sweptBox.ts states, told from
+ * the copied box by `isSweptBox`; its caps' 8 points are its corners. A
+ * box's corners are the distinct positions in its corner points.
  * From one corner, the two longer of its three edges span the plate and
  * their cross product is its normal.
  */
@@ -116,20 +115,12 @@ function plates(geo: Geometry): Plate[] {
   const P = geo.attrs.point.get("P")!.data;
   const n = geo.attrs.point.count;
   const at = (k: number): Vec3 => [P[3 * k]!, P[3 * k + 1]!, P[3 * k + 2]!];
-  const swept = (i: number) => {
-    if (i + 26 > n) return false;
-    const c = at(i + 20);
-    for (let k = i; k < i + 20; k++) if (len3(sub3(at(k), c)) < 0.005) return false;
-    return true;
-  };
   const out: Plate[] = [];
-  for (let i = 0, run = 0; i < n; i += run) {
-    const sweep = swept(i);
-    run = sweep ? 26 : 24;
+  for (let i = 0, run = SWEPT_BOX_POINTS; i < n; i += run) {
     expect(i + run, "not a whole number of boxes").toBeLessThanOrEqual(n);
     const pts: Vec3[] = [];
-    for (let k = i; k < i + (sweep ? 16 : 24); k++) {
-      const p: Vec3 = [P[3 * k]!, P[3 * k + 1]!, P[3 * k + 2]!];
+    const corners = isSweptBox(P, i, n) ? sweptBoxCorners(P, i) : Array.from({ length: run }, (_, k) => at(i + k));
+    for (const p of corners) {
       if (!pts.some((q) => len3(sub3(p, q)) < 1e-5)) pts.push(p);
     }
     expect(pts.length).toBe(8);

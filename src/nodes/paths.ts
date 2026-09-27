@@ -42,16 +42,17 @@
  * these nodes uses.
  */
 import {
+  Geometry,
   PRIMTYPE_ATTR,
   createPointCloud,
   setPolylineTopology,
   type Attribute,
   type AttributeSet,
-  type Geometry,
 } from "../data/index.js";
 import { attributeNotFound } from "../data/attributeNotFound.js";
 import { deriveGeometry } from "../data/derive.js";
-import type { Column } from "../fields/index.js";
+import { isField, type Column } from "../fields/index.js";
+import { type FieldSpec, paramSpecOf, peekFieldSpec, specChildEntries } from "../fields/spec.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { hashCombine } from "../random/index.js";
 import { standardNode } from "./registry.js";
@@ -59,12 +60,16 @@ import {
   ORIENT_AXES,
   type FieldParam,
   type PolylineArcTable,
+  CANCEL_STRIDE,
   carryPrimitiveAttributes,
+  copyElements,
+  gatherPoints,
   locateOnArcLength,
   orientAxisCode,
   orientQuat,
   polylineArcTables,
   polylineWalks,
+  positionView,
   readComp,
   requireGeometry,
   requireReportSlot,
@@ -75,6 +80,9 @@ import {
   writePolylineTangents,
 } from "./util.js";
 import type {
+  PathClipInputs,
+  PathClipOutputs,
+  PathClipParams,
   PathPointAtInputs,
   PathPointAtOutputs,
   PathPointAtParams,
@@ -103,6 +111,7 @@ import type {
 
 // Generated from the param schemas below; see params.generated.ts.
 export type {
+  PathClipParams,
   PathPointAtParams,
   PathResampleParams,
   PathRunsParams,
@@ -2468,3 +2477,512 @@ export const writeCurveFrame = standardNode<
     return { out: [makeGeometryItem(geo)] };
   },
 });
+
+/**
+ * Field fns a clip PROBE cannot answer the way the input would. The root
+ * search resolves `field` on a cloud it builds — one probe per unsettled
+ * crossing — so a fn that measures the POPULATION being evaluated would
+ * read that batch rather than the path: its ordinal among however many
+ * crossings are still open this step. Everything else is well defined on
+ * a probe, including `attribute`, because a probe carries the segment's
+ * own attributes interpolated to where it stands (see pathClip's `field`),
+ * and `randomField`, which keys on position and the `seed` column rather
+ * than on an ordinal — and a probe carries the seed its cut will carry.
+ */
+const CLIP_IMPURE_FNS: Readonly<Record<string, string>> = {
+  fraction:
+    "it is index / (count - 1) over the points being evaluated, and the root search evaluates a batch of probes it builds itself",
+  index:
+    "it is an element's ordinal in the array being evaluated, and a probe's ordinal is its place among the crossings still being searched",
+};
+
+/**
+ * Refuse a clip field that reads the population, walking the spec the way
+ * meshFromField's screen does (through a bound `param` too). A field with
+ * no spec — built with the code combinators — cannot be screened, and the
+ * node's description says so rather than pretending otherwise.
+ */
+function requireClipFieldScreen(spec: unknown, path: string): void {
+  if (typeof spec !== "object" || spec === null || Array.isArray(spec)) return;
+  const node = spec as Record<string, unknown>;
+  const fn = typeof node.fn === "string" ? node.fn : undefined;
+  if (fn === "param") {
+    const bound = paramSpecOf(node as unknown as FieldSpec);
+    if (bound !== undefined) requireClipFieldScreen(bound, `${path}(param "${String(node.name)}")`);
+    return;
+  }
+  if (fn !== undefined && CLIP_IMPURE_FNS[fn] !== undefined) {
+    throw new Error(
+      `pathClip: param "field": the expression at ${path} uses "${fn}", which is not a property of a place on the path — ${CLIP_IMPURE_FNS[fn]}, so the cut point would depend on how many other crossings were being searched alongside it. Use position(), attribute(...), the noises and arithmetic over them; to clip by how far along a path a point is, write an arc coordinate first (pathScan, or pathResample's sampleArcAttr) and read it with attribute().`,
+    );
+  }
+  for (const child of specChildEntries(node)) {
+    requireClipFieldScreen(child.value, `${path}.${child.path}`);
+  }
+}
+
+/**
+ * The root search's stopping width, as a fraction of the segment. 2^-32 of
+ * a segment is below what an f32 position on it can resolve at any length
+ * a graph builds, so a bracket this narrow names one f32 point.
+ */
+const CLIP_T_TOL = 2 ** -32;
+
+/**
+ * The root search's ceiling. A step is a bisection whenever the secant
+ * step before it failed to halve the bracket, so the width halves at least
+ * every two steps and 64 reaches {@link CLIP_T_TOL} from any start; a
+ * field that is linear along the segment settles on the FIRST step.
+ */
+const CLIP_MAX_STEPS = 64;
+
+/** Cut every polyline where a field changes sign; keep where it is >= 0. */
+export const pathClip = standardNode<PathClipParams, PathClipInputs, PathClipOutputs>({
+  type: "pathClip",
+  category: "filter",
+  description:
+    "CUTS every polyline where `field` changes sign and keeps the pieces where it is >= 0, as polylines of their own — the path node that changes TOPOLOGY by value. pathRuns, pathScan and runFit write attributes over a path's runs and never cut it; a point filter drops points and the whole path's topology with them; this node cuts the path itself, at the place the value crosses zero rather than at the nearest vertex, so a road clipped by a region ends ON the region's edge. THE RULE: `field` is resolved at every vertex; a vertex whose value is >= 0 is KEPT (exactly 0 counts as kept), one whose value is < 0 is cut away. A segment whose two ends disagree is a CROSSING and gets exactly ONE cut point, found by a bracketed root search on the field along that segment — a secant step, falling back to bisection whenever the secant failed to halve the bracket — which is EXACT FOR A FIELD LINEAR ALONG THE SEGMENT (a plane, a slab face, an arc coordinate) and converges to a sign change for any other. The cut point is the last position the search found on the KEPT side, so every emitted point evaluates >= 0. A segment whose ends AGREE is never searched, so a field that dips below zero and back between two vertices is not seen: that is the vertex sampling's resolution, and pathResample first is the fix. A RUN is a maximal kept piece: [entry cut] + consecutive kept vertices + [exit cut]. A cut that lands exactly on its kept vertex is not emitted a second time, so a vertex at exactly 0 ends its run there. A run with fewer than 2 points, or whose length is < `minLength`, is DROPPED. CLOSED PATHS: a closed path with every vertex kept comes back CLOSED and whole; one with none kept disappears; otherwise every run is OPEN, and a run may CROSS THE SEAM — the closing segment is an ordinary segment of the ring, so a piece straddling the start is one run and not two. ORDER is deterministic: runs follow their source polylines in primitive order, and within one polyline they are ordered by the walk index of their first KEPT vertex (on a closed path the run that crosses the seam is therefore the one whose first kept vertex comes latest). WHAT THE POINTS CARRY: a kept vertex is copied with every point attribute it had, its seed included; a cut point takes P from the search and every f32 column LERPED between its segment's two ends at the cut, while integer, bool and string columns come from the segment's KEPT end — and its `seed` is re-drawn from this node's seed, the source primitive and the segment index, so a cut point never shares its kept neighbour's identity. (A lerped `rot` is not renormalised.) A point visited by two polylines is emitted once per run that visits it. Vertex attributes are not carried. PRIMITIVE ATTRIBUTES ARE CARRIED to every run cut from their polyline (primtype excepted, as everywhere), so a clipped road stays a road; DETAIL attributes are carried unchanged. Points on no polyline, and primitives that are not polylines, do not reach the output. OPT-IN REPORTS: `runIndexAttr` (i32 primitive: which surviving run of its source polyline this is, 0, 1, ...), `lengthAttr` (f32 primitive: the run's length) and `arcAttr` (f32 point: distance along the run from its first point). An input with points but no polyline is refused, as every path node refuses one; an input with no points cooks to an empty output. DETERMINISM is structural: nothing is random beyond the seeded cut-point identities, and each crossing's search reads only its own segment. Topology downstream is as fragile as everywhere: a node that can REMOVE points turns these runs back into a cloud.",
+  inputs: [{ name: "in", kind: "geometry" }],
+  outputs: [{ name: "out", kind: "geometry" }],
+  params: {
+    field: {
+      type: "f32",
+      default: 0,
+      acceptsField: true,
+      description:
+        "The signed value that decides what is kept: >= 0 is kept, < 0 is cut away. A plain number keeps everything (>= 0) or nothing (< 0), so this param only means something as a field — a half-space is dot(sub(position(), p0), n), a slab is sub(h, abs(sub(component(position(), 1), y0))), a ball is sub(r, length(sub(position(), c))), a window along a path is a comparison of an arc coordinate written by pathScan. RESOLVED ON POINTS, WITH POSITION FREE: at every input vertex it is resolved on the input itself; during the root search it is resolved on PROBE points the node builds, one per unsettled crossing, standing on the crossing segment — each probe carries exactly what the cut point there would carry (f32 columns lerped, the cut's own seed, the rest from the kept end), so attribute() reads the value AT the probe, randomField draws what it will draw on the emitted cut, and a position-only field sees only position. The two agree exactly at the vertices. `fraction` and `index` are REFUSED by name, because on a probe they measure the batch of crossings being searched rather than any place on the path. A field built with the code combinators carries no spec and cannot be screened; keeping it free of those two is then the author's promise. NaN or ±Infinity anywhere is refused, naming this param: a value that could not be computed says nothing about which side of a boundary it is on. The search is EXACT for a field linear along a segment and converges to a sign change for any other; for a noise, sample the path densely first (pathResample) — a sign change between two agreeing vertices is invisible to it.",
+    },
+    minLength: {
+      type: "f32",
+      default: 0,
+      min: 0,
+      description:
+        "Runs SHORTER than this, in world units along the run, are dropped — the stubs a boundary leaves where it grazes a path. 0 (the default) keeps every run of at least two points; a run of ONE point is never a polyline and is dropped whatever this says. Measured on the emitted run, cut points included, over the f32 positions it will carry, so it is the length a downstream node measures; a closed path kept whole is measured round its closing segment too. Must be finite and >= 0.",
+    },
+    runIndexAttr: {
+      type: "string",
+      default: "",
+      description:
+        "OPT-IN REPORT: name of an i32 PRIMITIVE attribute receiving each run's ordinal among the runs cut from its source polyline — 0, 1, 2 ... in emission order (walk order of each run's first kept vertex), counting only runs that survived `minLength`, so the numbers are dense. It answers 'which piece of this road am I', which the carried primitive attributes cannot, since every piece of one polyline carries the same ones. A reporting slot: an existing primitive column of the same name and shape (a carried one included) is reset; one of another shape is refused rather than deleted. May not equal `lengthAttr`. Empty (the default) writes none.",
+    },
+    lengthAttr: {
+      type: "string",
+      default: "",
+      description:
+        "OPT-IN REPORT: name of an f32 PRIMITIVE attribute receiving each run's LENGTH in world units, measured as `minLength` measures it — on the emitted f32 positions, the closing segment included for a path kept whole and closed. A reporting slot with the rules `runIndexAttr` states. Empty (the default) writes none.",
+    },
+    arcAttr: {
+      type: "string",
+      default: "",
+      description:
+        "OPT-IN REPORT: name of an f32 POINT attribute receiving each point's distance along its run from the run's FIRST point, in world units — 0 at every run's start (an entry cut, or the path's own first kept vertex), the run's length at its last point. It restarts per run, so it composes with pathPointAt's 'distance' mode, transferAlongPath and arcTile on each piece. On a closed path kept whole it reads from the path's first point and leaves out the closing segment, which ends where the coordinate is already 0. A reporting slot checked against the OUTPUT'S point columns — the input's, carried across — so a same-shape column is reset and another shape is refused. Empty (the default) writes none.",
+    },
+  },
+  execute({ inputs, params, seed, checkCancelled }) {
+    // Params first, as in the rest of this family: a bad param reported as
+    // a geometry problem sends the author after the wrong input.
+    const minLength = params.minLength;
+    if (!Number.isFinite(minLength) || minLength < 0) {
+      throw new Error(
+        `pathClip: param "minLength" is ${minLength}; it is a length in world units and must be finite and >= 0 — 0 keeps every run of at least two points.`,
+      );
+    }
+    if (params.runIndexAttr !== "" && params.runIndexAttr === params.lengthAttr) {
+      throw new Error(
+        `pathClip: runIndexAttr and lengthAttr both name "${params.runIndexAttr}"; they are two different primitive reports (an i32 ordinal and an f32 length) and one column cannot hold both. Give one of them another name, e.g. "runIndex" and "runLength".`,
+      );
+    }
+    if (isField(params.field)) requireClipFieldScreen(peekFieldSpec(params.field), "field");
+
+    const geo = requireGeometry(inputs, "in", "pathClip");
+    const walks = polylineWalks(geo, "pathClip", "emptyInput");
+    const pos = positionView(geo, "pathClip", "in");
+    const pd = pos.data;
+    const ps = pos.stride;
+    const f = requireScalarColumn(
+      resolveOn(geo, "point", params.field, seed, "pathClip", "field"),
+      "pathClip",
+      "field",
+      "point",
+      "a signed clip value",
+    ).data;
+
+    // ---- 1. The crossings: every segment whose two ends disagree. ----
+    // A closed walk is a RING of its points (the repeated closing vertex is
+    // the closure, not a place), and its closing segment ring[n-1] ->
+    // ring[0] is a segment like any other.
+    const rings: Uint32Array[] = [];
+    const segBase = new Int32Array(walks.length + 1);
+    for (let w = 0; w < walks.length; w++) {
+      const walk = walks[w];
+      const ring = walk.closed ? walk.points.subarray(0, walk.points.length - 1) : walk.points;
+      rings.push(ring);
+      const nSeg = walk.closed ? ring.length : ring.length - 1;
+      segBase[w + 1] = segBase[w] + nSeg;
+    }
+    const crossOf = new Int32Array(segBase[walks.length]).fill(-1);
+    const cA: number[] = []; // segment start point, walk order
+    const cB: number[] = []; // segment end point, walk order
+    const cKeptA: number[] = []; // 1 when the kept end is A
+    // The identity a cut on this segment will carry — decided BEFORE the
+    // search, because the probes carry it too: a field reading the point's
+    // identity (randomField keys on `seed`) must see on a probe exactly
+    // what it will see on the emitted cut, or the "every emitted point
+    // evaluates >= 0" promise breaks for it.
+    const cSeed: number[] = [];
+    for (let w = 0; w < walks.length; w++) {
+      const ring = rings[w];
+      const n = ring.length;
+      const nSeg = segBase[w + 1] - segBase[w];
+      for (let k = 0; k < nSeg; k++) {
+        const a = ring[k];
+        const b = ring[k + 1 === n ? 0 : k + 1];
+        const inA = f[a] >= 0;
+        if (inA === f[b] >= 0) continue;
+        crossOf[segBase[w] + k] = cA.length;
+        cA.push(a);
+        cB.push(b);
+        cKeptA.push(inA ? 1 : 0);
+        cSeed.push(hashCombine(seed, walks[w].prim, k));
+      }
+    }
+
+    // ---- 2. The root search, every crossing at once. ----
+    // `t` runs from A (0) to B (1) in walk order. The bracket is [tIn, tOut]
+    // by SIDE, not by order: f(tIn) >= 0 > f(tOut).
+    const C = cA.length;
+    const tIn = new Float64Array(C);
+    const tOut = new Float64Array(C);
+    const fIn = new Float64Array(C);
+    const fOut = new Float64Array(C);
+    const bisectNext = new Uint8Array(C);
+    let active: number[] = [];
+    for (let c = 0; c < C; c++) {
+      const keptA = cKeptA[c] === 1;
+      tIn[c] = keptA ? 0 : 1;
+      tOut[c] = keptA ? 1 : 0;
+      fIn[c] = keptA ? f[cA[c]] : f[cB[c]];
+      fOut[c] = keptA ? f[cB[c]] : f[cA[c]];
+      // An exact zero at the kept end IS the root: nothing to search.
+      if (fIn[c] !== 0) active.push(c);
+    }
+    const pointCols = [...geo.attrs.point];
+    for (let step = 0; step < CLIP_MAX_STEPS && active.length > 0; step++) {
+      checkCancelled();
+      const m = active.length;
+      const tryT = new Float64Array(m);
+      const near = new Uint32Array(m);
+      for (let j = 0; j < m; j++) {
+        const c = active[j];
+        const lo = tIn[c];
+        const hi = tOut[c];
+        let t =
+          bisectNext[c] === 1 ? 0.5 * (lo + hi) : lo + (hi - lo) * (fIn[c] / (fIn[c] - fOut[c]));
+        // A secant step that rounded onto an end of the bracket learns
+        // nothing; the midpoint does, until the bracket is one ulp wide.
+        if (!(t > Math.min(lo, hi) && t < Math.max(lo, hi))) t = 0.5 * (lo + hi);
+        tryT[j] = t;
+        near[j] = cKeptA[c] === 1 ? cA[c] : cB[c];
+      }
+      const probe = clipProbe(geo, pointCols, near, cA, cB, cSeed, active, tryT);
+      const vals = requireScalarColumn(
+        resolveOn(probe, "point", params.field, seed, "pathClip", "field"),
+        "pathClip",
+        "field",
+        "point",
+        "a signed clip value",
+      ).data;
+      const next: number[] = [];
+      for (let j = 0; j < m; j++) {
+        const c = active[j];
+        const t = tryT[j];
+        const v = vals[j];
+        const before = Math.abs(tOut[c] - tIn[c]);
+        if (v >= 0) {
+          tIn[c] = t;
+          fIn[c] = v;
+        } else {
+          tOut[c] = t;
+          fOut[c] = v;
+        }
+        const after = Math.abs(tOut[c] - tIn[c]);
+        bisectNext[c] = after > 0.5 * before ? 1 : 0;
+        // Settled: an exact root, a bracket no f32 position can split, or a
+        // bracket that can no longer shrink at all.
+        if (v === 0 || after <= CLIP_T_TOL || !(after < before)) continue;
+        next.push(c);
+      }
+      active = next;
+    }
+
+    // ---- 3. The runs. ----
+    // One entry per OUTPUT point: the source point it copies (for a cut,
+    // the segment's kept end) and, for a cut, the crossing it lies on.
+    const srcPt: number[] = [];
+    const cutOf: number[] = []; // -1 for a copied vertex
+    const cutSeed: number[] = [];
+    const runStart: number[] = [];
+    const runCount: number[] = [];
+    const runClosed: number[] = [];
+    const runPrim: number[] = [];
+    const runOrdinal: number[] = [];
+    const runLength: number[] = [];
+    const arc: number[] = [];
+
+    // The position an output point will HOLD, rounded to f32 exactly as the
+    // column will store it, so a length measured here is the length a
+    // downstream node measures on the output.
+    const coord = (o: number, axis: number): number => {
+      const c = cutOf[o];
+      if (c < 0) return pd[srcPt[o] * ps + axis];
+      const a = pd[cA[c] * ps + axis];
+      const b = pd[cB[c] * ps + axis];
+      return Math.fround(a + (b - a) * tIn[c]);
+    };
+
+    let ordinal = 0;
+    let begun = 0;
+    const emitVertex = (p: number): void => {
+      srcPt.push(p);
+      cutOf.push(-1);
+      cutSeed.push(0);
+    };
+    const emitCut = (w: number, k: number): void => {
+      const c = crossOf[segBase[w] + k];
+      // A cut that landed exactly on its kept end IS that vertex, which the
+      // run already holds or is about to — emitting it again would add a
+      // zero-length segment.
+      if (tIn[c] === (cKeptA[c] === 1 ? 0 : 1)) return;
+      srcPt.push(cKeptA[c] === 1 ? cA[c] : cB[c]);
+      cutOf.push(c);
+      cutSeed.push(cSeed[c]);
+    };
+    const endRun = (w: number, closed: boolean): void => {
+      const count = srcPt.length - begun;
+      let length = 0;
+      const arcAt: number[] = [];
+      if (count >= 2) {
+        arcAt.push(0);
+        for (let o = begun + 1; o < begun + count; o++) {
+          const dx = coord(o, 0) - coord(o - 1, 0);
+          const dy = coord(o, 1) - coord(o - 1, 1);
+          const dz = coord(o, 2) - coord(o - 1, 2);
+          length += Math.sqrt(dx * dx + dy * dy + dz * dz);
+          arcAt.push(length);
+        }
+        if (closed) {
+          const l = begun + count - 1;
+          const dx = coord(begun, 0) - coord(l, 0);
+          const dy = coord(begun, 1) - coord(l, 1);
+          const dz = coord(begun, 2) - coord(l, 2);
+          length += Math.sqrt(dx * dx + dy * dy + dz * dz);
+        }
+      }
+      if (count < 2 || length < minLength) {
+        srcPt.length = begun;
+        cutOf.length = begun;
+        cutSeed.length = begun;
+        return;
+      }
+      runStart.push(begun);
+      runCount.push(count);
+      runClosed.push(closed ? 1 : 0);
+      runPrim.push(walks[w].prim);
+      runOrdinal.push(ordinal++);
+      runLength.push(length);
+      for (const a of arcAt) arc.push(a);
+    };
+
+    for (let w = 0; w < walks.length; w++) {
+      if ((w & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
+      const ring = rings[w];
+      const n = ring.length;
+      ordinal = 0;
+      if (!walks[w].closed) {
+        let inRun = false;
+        for (let i = 0; i < n; i++) {
+          if (!(f[ring[i]] >= 0)) continue;
+          if (!inRun) {
+            begun = srcPt.length;
+            inRun = true;
+            if (i > 0) emitCut(w, i - 1);
+          }
+          emitVertex(ring[i]);
+          if (i < n - 1 && !(f[ring[i + 1]] >= 0)) {
+            emitCut(w, i);
+            endRun(w, false);
+            inRun = false;
+          }
+        }
+        if (inRun) endRun(w, false);
+        continue;
+      }
+      let kept = 0;
+      for (let i = 0; i < n; i++) if (f[ring[i]] >= 0) kept++;
+      if (kept === 0) continue;
+      if (kept === n) {
+        begun = srcPt.length;
+        for (let i = 0; i < n; i++) emitVertex(ring[i]);
+        endRun(w, true);
+        continue;
+      }
+      // Every run begins at an ENTRY: a kept vertex whose ring predecessor
+      // is cut away. Walking the entries in index order is what orders the
+      // runs by their first kept vertex, the seam-crossing run included.
+      for (let e = 0; e < n; e++) {
+        const prev = e === 0 ? n - 1 : e - 1;
+        if (!(f[ring[e]] >= 0) || f[ring[prev]] >= 0) continue;
+        begun = srcPt.length;
+        emitCut(w, prev);
+        let j = e;
+        for (;;) {
+          emitVertex(ring[j]);
+          const nx = j + 1 === n ? 0 : j + 1;
+          if (!(f[ring[nx]] >= 0)) {
+            emitCut(w, j);
+            break;
+          }
+          j = nx;
+        }
+        endRun(w, false);
+      }
+    }
+
+    // ---- 4. The output. ----
+    const total = srcPt.length;
+    const out = new Geometry();
+    copyElements(geo.attrs.point, out.attrs.point, srcPt, total);
+    // Cut points: every f32 column lerped along the segment — P included,
+    // which is what places the cut — the rest already copied from the kept
+    // end by the gather above, and a fresh identity.
+    for (const attr of out.attrs.point) {
+      if (attr.type !== "f32") continue;
+      const src = geo.attrs.point.require(attr.name).data;
+      const dst = attr.writable();
+      const ts = attr.tupleSize;
+      for (let o = 0; o < total; o++) {
+        const c = cutOf[o];
+        if (c < 0) continue;
+        const a = cA[c] * ts;
+        const b = cB[c] * ts;
+        const t = tIn[c];
+        for (let q = 0; q < ts; q++) dst[o * ts + q] = src[a + q] + (src[b + q] - src[a + q]) * t;
+      }
+    }
+    const seedAttr = out.attrs.point.get("seed");
+    if (seedAttr !== undefined && seedAttr.type === "u32" && seedAttr.tupleSize === 1) {
+      const sd = seedAttr.writable();
+      for (let o = 0; o < total; o++) if (cutOf[o] >= 0) sd[o] = cutSeed[o];
+    }
+    copyElements(geo.attrs.detail, out.attrs.detail, undefined, geo.attrs.detail.count);
+
+    const pointIndices: number[] = [];
+    const primVertexStart: number[] = [];
+    const primVertexCount: number[] = [];
+    for (let r = 0; r < runStart.length; r++) {
+      primVertexStart.push(pointIndices.length);
+      for (let i = 0; i < runCount[r]; i++) pointIndices.push(runStart[r] + i);
+      if (runClosed[r] === 1) pointIndices.push(runStart[r]);
+      primVertexCount.push(runCount[r] + runClosed[r]);
+    }
+    setPolylineTopology(out, pointIndices, primVertexStart, primVertexCount);
+    carryPrimitiveAttributes(
+      geo.attrs.primitive,
+      out.attrs.primitive,
+      Uint32Array.from(runPrim),
+      "pathClip",
+      "primitive",
+    );
+
+    // The reports go LAST, after both carries, so a same-shape name resets
+    // what was carried and a differently shaped one is refused against the
+    // columns this output actually has.
+    if (params.runIndexAttr !== "") {
+      requireReportSlot({
+        attrs: out.attrs.primitive,
+        nodeType: "pathClip",
+        param: "runIndexAttr",
+        name: params.runIndexAttr,
+        type: "i32",
+        tupleSize: 1,
+        domain: "primitive",
+        suggestion: "runIndex",
+        on: "output",
+      });
+      const d = out.attrs.primitive.replace(params.runIndexAttr, "i32", 1, 0).writable();
+      for (let r = 0; r < runOrdinal.length; r++) d[r] = runOrdinal[r];
+    }
+    if (params.lengthAttr !== "") {
+      requireReportSlot({
+        attrs: out.attrs.primitive,
+        nodeType: "pathClip",
+        param: "lengthAttr",
+        name: params.lengthAttr,
+        type: "f32",
+        tupleSize: 1,
+        domain: "primitive",
+        suggestion: "runLength",
+        on: "output",
+      });
+      const d = out.attrs.primitive.replace(params.lengthAttr, "f32", 1, 0).writable();
+      for (let r = 0; r < runLength.length; r++) d[r] = runLength[r];
+    }
+    if (params.arcAttr !== "") {
+      requireReportSlot({
+        attrs: out.attrs.point,
+        nodeType: "pathClip",
+        param: "arcAttr",
+        name: params.arcAttr,
+        type: "f32",
+        tupleSize: 1,
+        domain: "point",
+        suggestion: "runArc",
+        on: "output",
+      });
+      const d = out.attrs.point.replace(params.arcAttr, "f32", 1, 0).writable();
+      for (let o = 0; o < total; o++) d[o] = arc[o];
+    }
+    return { out: [makeGeometryItem(out)] };
+  },
+});
+
+/**
+ * The probe cloud one step of pathClip's root search resolves `field` on:
+ * probe j stands on crossing `active[j]`'s segment at `t[j]`, carrying
+ * every point attribute a cut point there would carry — f32 columns lerped
+ * between the segment's ends, the cut's own `seed`, everything else from
+ * its kept end `near[j]` — plus the input's detail columns, so a field
+ * reads on a probe exactly what it will read on the emitted cut.
+ */
+function clipProbe(
+  geo: Geometry,
+  cols: readonly Attribute[],
+  near: Uint32Array,
+  cA: readonly number[],
+  cB: readonly number[],
+  cSeed: readonly number[],
+  active: readonly number[],
+  t: Float64Array,
+): Geometry {
+  const probe = gatherPoints(geo, near);
+  const m = near.length;
+  const seedAttr = probe.attrs.point.get("seed");
+  if (seedAttr !== undefined && seedAttr.type === "u32" && seedAttr.tupleSize === 1) {
+    const sd = seedAttr.writable();
+    for (let j = 0; j < m; j++) sd[j] = cSeed[active[j]];
+  }
+  for (const attr of cols) {
+    if (attr.type !== "f32") continue;
+    const src = attr.data;
+    const dst = probe.attrs.point.require(attr.name).writable();
+    const ts = attr.tupleSize;
+    for (let j = 0; j < m; j++) {
+      const c = active[j];
+      const a = cA[c] * ts;
+      const b = cB[c] * ts;
+      for (let q = 0; q < ts; q++) dst[j * ts + q] = src[a + q] + (src[b + q] - src[a + q]) * t[j];
+    }
+  }
+  copyElements(geo.attrs.detail, probe.attrs.detail, undefined, geo.attrs.detail.count);
+  return probe;
+}

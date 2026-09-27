@@ -387,6 +387,45 @@ export type AttributeRemapInputs = "in";
 export type AttributeRemapOutputs = "out";
 
 /**
+ * Params of the `bridgePaths` node type.
+ */
+export interface BridgePathsParams {
+  /**
+   * Name of a scalar PRIMITIVE attribute, on BOTH inputs, that says which `to` path each
+   * `from` path is bridged to: the paths carrying the same key are a pair. A key is a whole
+   * number (setAttribute type 'i32' on the primitive domain) or a string compared by value —
+   * the rules pointsToPath's `groupAttr` sets. Every key must appear exactly once on each
+   * side; a key repeated on one side, or present on only one, is refused by name. Pairs
+   * still come out in `from` primitive order. Empty (the default) pairs the i-th polyline of
+   * `from` with the i-th of `to` — right whenever both sides came from the same paths
+   * through nodes that keep primitive order (pathShift, pathResample, transformPoints), and
+   * the reason this is optional.
+   *
+   * @defaultValue `""`
+   */
+  pairAttr: string;
+  /**
+   * Turn the band over: reverse every triangle's winding and negate the written `normal`, so
+   * the band faces the other way. The default faces (along `from`) x (from -> to): with
+   * `from` on the right of the direction of travel and `to` on its left, a flat band faces
+   * up.
+   *
+   * @defaultValue `false`
+   */
+  flip: boolean;
+}
+
+/**
+ * The input pin names of the `bridgePaths` node type.
+ */
+export type BridgePathsInputs = "from" | "to";
+
+/**
+ * The output pin names of the `bridgePaths` node type.
+ */
+export type BridgePathsOutputs = "out";
+
+/**
  * Params of the `connectByIndex` node type.
  */
 export interface ConnectByIndexParams {
@@ -652,30 +691,32 @@ export interface CopyToPointsParams {
    * target's `rot`, identity when the target has none — which is exactly the rotation P goes
    * through (P = targetP + targetRot * (targetScale * sourceP)), so the direction stays in
    * the frame the copy's positions are in. The SOURCE point's own `rot` is not applied,
-   * because source P is not turned by it either. ROTATION ONLY: the length is kept (up to
-   * f32 rounding; nothing is renormalized, a zero vector stays zero) and the target's
-   * `scale` is NOT applied. Under a uniform target scale that is exact for any direction.
-   * Under a NON-UNIFORM target scale it is not: a surface normal would need the
-   * inverse-transpose of that scale (and a tangent the scale itself), then a renormalize,
-   * and this param applies neither — scale uniformly, or recompute the directions
-   * downstream. DOMAINS: a name is looked up on the source's point, vertex and primitive
-   * domains and turned on every one of them that carries it, each copy of an element by the
-   * target its block landed on. The vertex and primitive domains reach the output only under
-   * `topology "keep"`, so under "drop" (the default) only the point domain is searched, and
-   * a name the source carries ONLY on its vertex or primitive domain is an error rather than
-   * a silent no-op — the likely intent was `topology "keep"`. The detail domain is never
-   * carried, so never searched, and neither is a `targetNames` column: that is the target's
-   * own value, already in the target's frame. Refused rather than resolved silently: "P",
-   * "rot", "scale" and "seed" (composed per copy — P and rot already carry the target's
-   * rotation, so naming one would apply it twice, and scale and seed are not directions);
-   * "boundsMin" and "boundsMax" (extents in the point's own frame, which the composed `rot`
-   * already turns); a name repeated in the list; a name no searched domain carries; and a
-   * column of that name that is not f32 with tuple size 3 — including one on a dropped
-   * domain, so the fix offered is never "keep" when "keep" would fail next. Every refusal
-   * but the repeat lists the source's f32 tuple-3 attributes per domain. Nothing is added,
-   * renamed or reordered — the named columns keep their place, type and default, and only
-   * their values turn — so an empty list, the default, leaves every output byte-identical to
-   * what this node produced before the param existed.
+   * because source P is not turned by it either. ROTATION ONLY, plus the SIGNS of the
+   * target's `scale` under `mirrorAware` (the default), which is what keeps a normal outward
+   * on a mirrored copy: the length is kept (up to f32 rounding; nothing is renormalized, a
+   * zero vector stays zero) and the MAGNITUDES of the target's `scale` are NOT applied.
+   * Under a uniform target scale that is exact for any direction. Under a NON-UNIFORM target
+   * scale it is not: a surface normal would need the inverse-transpose of that scale (and a
+   * tangent the scale itself), then a renormalize, and this param applies neither — scale
+   * uniformly, or recompute the directions downstream. DOMAINS: a name is looked up on the
+   * source's point, vertex and primitive domains and turned on every one of them that
+   * carries it, each copy of an element by the target its block landed on. The vertex and
+   * primitive domains reach the output only under `topology "keep"`, so under "drop" (the
+   * default) only the point domain is searched, and a name the source carries ONLY on its
+   * vertex or primitive domain is an error rather than a silent no-op — the likely intent
+   * was `topology "keep"`. The detail domain is never carried, so never searched, and
+   * neither is a `targetNames` column: that is the target's own value, already in the
+   * target's frame. Refused rather than resolved silently: "P", "rot", "scale" and "seed"
+   * (composed per copy — P and rot already carry the target's rotation, so naming one would
+   * apply it twice, and scale and seed are not directions); "boundsMin" and "boundsMax"
+   * (extents in the point's own frame, which the composed `rot` already turns); a name
+   * repeated in the list; a name no searched domain carries; and a column of that name that
+   * is not f32 with tuple size 3 — including one on a dropped domain, so the fix offered is
+   * never "keep" when "keep" would fail next. Every refusal but the repeat lists the
+   * source's f32 tuple-3 attributes per domain. Nothing is added, renamed or reordered — the
+   * named columns keep their place, type and default, and only their values turn — so an
+   * empty list, the default, leaves every output byte-identical to what this node produced
+   * before the param existed.
    *
    * @defaultValue `[]`
    */
@@ -729,6 +770,32 @@ export interface CopyToPointsParams {
    */
   targetGroupAttr: string;
   /**
+   * Honour a MIRRORING target transform. A target whose `scale` has an odd number of
+   * negative components (a negative determinant — `[-1, 1, 1]` is the mirror image across
+   * the target's local YZ plane) produces a mirror-image copy, and a mirror reverses
+   * handedness: kept as it was, every copied face's winding would describe the inside of the
+   * solid and a back-face-culled render shows the copy inside out. With this on (the
+   * default), under `topology "keep"` each 'poly' primitive of a mirrored target's copy has
+   * its vertex order reversed about its first vertex — (v0, v1, ..., vn-1) becomes (v0,
+   * vn-1, ..., v1), so a fan from v0 keeps its root — with its vertex attributes following
+   * their corners; polylines are NOT reversed, because a path's vertex order is its
+   * direction of travel and its `curveU`, not a winding (untagged primitives are read as
+   * polylines and left alone too). And every `rotateAttrs` direction goes through the SIGNS
+   * of its target's scale before the target's rotation — the reflection part of the
+   * transform, which is its own inverse-transpose, so a mirrored surface normal comes out a
+   * proper OUTWARD normal that agrees with the reversed winding, and a tangent comes out
+   * along the mirrored path; the MAGNITUDES of the scale are still not applied (see
+   * `rotateAttrs`). That sign flip applies to any negative component, mirror or not: `[-1,
+   * -1, 1]` is a half turn, and its directions turn with it. Off, a mirrored copy keeps the
+   * source's winding and directions — the behaviour before this param existed. A cook whose
+   * target scales have no negative component is byte-identical either way. The copied
+   * `scale` attribute carries the negative components as before, so an instance renderer
+   * composing its own matrix still mirrors the instance.
+   *
+   * @defaultValue `true`
+   */
+  mirrorAware: boolean;
+  /**
    * What happens to the SOURCE's topology — the vertices and primitives built over the
    * source's points. 'drop' (the default) copies POINTS only: an array of a path comes out a
    * bare cloud with the paths gone, which is why the copies have to be rebuilt downstream
@@ -757,7 +824,9 @@ export interface CopyToPointsParams {
    * that array verbatim, gaps and out-of-order primitive ranges included, while a selected
    * block is compacted to the surviving primitives' own vertices in primitive order — what
    * gatherPrimitives produces. Everything setTopology and setPolylineTopology build already
-   * tiles in order, so for those the two are the same array. The source's VERTEX and
+   * tiles in order, so for those the two are the same array. A MIRRORED target's block (see
+   * `mirrorAware`) is compacted the same way, with or without selection, because reversing a
+   * face's winding needs each primitive to own its vertex range. The source's VERTEX and
    * PRIMITIVE attributes come along, each copy carrying the original's values (a
    * per-primitive width, a per-vertex uv, and `primtype`, so the copies stay samplable as
    * what they are). The TARGET's own topology is never read under either setting — the
@@ -2034,6 +2103,97 @@ export type PartitionByAttributeInputs = "in";
  * The output pin names of the `partitionByAttribute` node type.
  */
 export type PartitionByAttributeOutputs = "out";
+
+/**
+ * Params of the `pathClip` node type.
+ */
+export interface PathClipParams {
+  /**
+   * The signed value that decides what is kept: >= 0 is kept, < 0 is cut away. A plain
+   * number keeps everything (>= 0) or nothing (< 0), so this param only means something as a
+   * field — a half-space is dot(sub(position(), p0), n), a slab is sub(h,
+   * abs(sub(component(position(), 1), y0))), a ball is sub(r, length(sub(position(), c))), a
+   * window along a path is a comparison of an arc coordinate written by pathScan. RESOLVED
+   * ON POINTS, WITH POSITION FREE: at every input vertex it is resolved on the input itself;
+   * during the root search it is resolved on PROBE points the node builds, one per unsettled
+   * crossing, standing on the crossing segment — each probe carries exactly what the cut
+   * point there would carry (f32 columns lerped, the cut's own seed, the rest from the kept
+   * end), so attribute() reads the value AT the probe, randomField draws what it will draw
+   * on the emitted cut, and a position-only field sees only position. The two agree exactly
+   * at the vertices. `fraction` and `index` are REFUSED by name, because on a probe they
+   * measure the batch of crossings being searched rather than any place on the path. A field
+   * built with the code combinators carries no spec and cannot be screened; keeping it free
+   * of those two is then the author's promise. NaN or ±Infinity anywhere is refused, naming
+   * this param: a value that could not be computed says nothing about which side of a
+   * boundary it is on. The search is EXACT for a field linear along a segment and converges
+   * to a sign change for any other; for a noise, sample the path densely first
+   * (pathResample) — a sign change between two agreeing vertices is invisible to it.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  field: FieldParam;
+  /**
+   * Runs SHORTER than this, in world units along the run, are dropped — the stubs a boundary
+   * leaves where it grazes a path. 0 (the default) keeps every run of at least two points; a
+   * run of ONE point is never a polyline and is dropped whatever this says. Measured on the
+   * emitted run, cut points included, over the f32 positions it will carry, so it is the
+   * length a downstream node measures; a closed path kept whole is measured round its
+   * closing segment too. Must be finite and >= 0.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `0`
+   */
+  minLength: number;
+  /**
+   * OPT-IN REPORT: name of an i32 PRIMITIVE attribute receiving each run's ordinal among the
+   * runs cut from its source polyline — 0, 1, 2 ... in emission order (walk order of each
+   * run's first kept vertex), counting only runs that survived `minLength`, so the numbers
+   * are dense. It answers 'which piece of this road am I', which the carried primitive
+   * attributes cannot, since every piece of one polyline carries the same ones. A reporting
+   * slot: an existing primitive column of the same name and shape (a carried one included)
+   * is reset; one of another shape is refused rather than deleted. May not equal
+   * `lengthAttr`. Empty (the default) writes none.
+   *
+   * @defaultValue `""`
+   */
+  runIndexAttr: string;
+  /**
+   * OPT-IN REPORT: name of an f32 PRIMITIVE attribute receiving each run's LENGTH in world
+   * units, measured as `minLength` measures it — on the emitted f32 positions, the closing
+   * segment included for a path kept whole and closed. A reporting slot with the rules
+   * `runIndexAttr` states. Empty (the default) writes none.
+   *
+   * @defaultValue `""`
+   */
+  lengthAttr: string;
+  /**
+   * OPT-IN REPORT: name of an f32 POINT attribute receiving each point's distance along its
+   * run from the run's FIRST point, in world units — 0 at every run's start (an entry cut,
+   * or the path's own first kept vertex), the run's length at its last point. It restarts
+   * per run, so it composes with pathPointAt's 'distance' mode, transferAlongPath and
+   * arcTile on each piece. On a closed path kept whole it reads from the path's first point
+   * and leaves out the closing segment, which ends where the coordinate is already 0. A
+   * reporting slot checked against the OUTPUT'S point columns — the input's, carried across
+   * — so a same-shape column is reset and another shape is refused. Empty (the default)
+   * writes none.
+   *
+   * @defaultValue `""`
+   */
+  arcAttr: string;
+}
+
+/**
+ * The input pin names of the `pathClip` node type.
+ */
+export type PathClipInputs = "in";
+
+/**
+ * The output pin names of the `pathClip` node type.
+ */
+export type PathClipOutputs = "out";
 
 /**
  * Params of the `pathCoverage` node type.
@@ -3568,6 +3728,76 @@ export type PointsToPathInputs = "in";
 export type PointsToPathOutputs = "out";
 
 /**
+ * Params of the `polygonBoolean` node type.
+ */
+export interface PolygonBooleanParams {
+  /**
+   * 'difference' (the default) keeps what is inside `in` and outside `clip` — a floor less
+   * its stair wells, a wall less its openings. 'intersection' keeps what is inside both — a
+   * footprint clipped to its lot. 'union' keeps what is inside either — overlapping
+   * footprints merged into one outline. Inside means winding number > 0 after every input
+   * outer loop is turned counter-clockwise and every `holeOf` hole clockwise, so overlapping
+   * loops within one set count once.
+   *
+   * - Enum: `"union"` | `"intersection"` | `"difference"`
+   *
+   * @defaultValue `"difference"`
+   */
+  operation: "union" | "intersection" | "difference";
+  /**
+   * The plane the polygons are read in. 'xz' (the default) is the ground plane — the plane
+   * `extrudePolygon`'s default direction '+y' builds up from; 'xy' and 'yz' are the two
+   * walls. Input points are PROJECTED onto it (the off-plane coordinate is ignored while
+   * computing), and each result loop is written back at the off-plane coordinate of the
+   * first input point that fed it — for a floor plate at y = 3, y = 3. Outer loops come out
+   * counter-clockwise seen from the plane's positive axis (+y for 'xz', +z for 'xy', +x for
+   * 'yz'), holes clockwise.
+   *
+   * - Enum: `"xz"` | `"xy"` | `"yz"`
+   *
+   * @defaultValue `"xz"`
+   */
+  plane: "xz" | "xy" | "yz";
+  /**
+   * Name of a scalar PRIMITIVE attribute on both pins that partitions the boolean: each
+   * group's subject polygons meet only that group's clip polygons — one floor's stair wells
+   * cut only that floor, one window's openings only that wall. Empty (the default) makes
+   * everything one group. A string key compares by its text; a numeric key must be a whole
+   * number (a key is an identity; write it as i32 with setAttribute). Both pins must carry
+   * it with the same kind (string or numeric); a group present on only one pin is still
+   * computed (its other set is empty). Every result loop carries the key, in a column of the
+   * `in` pin's type, and groups come out in the order their key first appears on `in`, then
+   * on `clip`.
+   *
+   * @defaultValue `""`
+   */
+  groupAttr: string;
+  /**
+   * The documented epsilon, in world units: two vertices closer than this are ONE vertex,
+   * and a vertex closer than this to an edge splits that edge — so corners that should
+   * coincide but differ by f32 rounding weld, a vertex lying on another polygon's edge is
+   * treated as ON it, and collinear or shared edges merge. Features smaller than this are
+   * not preserved: a result loop whose area is at most snapDistance squared is dropped as
+   * degenerate, and a vertex within snapDistance / 1000 of the straight line through its
+   * neighbours is removed. The default 0.0001 is a tenth of a millimetre at metre scale, a
+   * few f32 steps at a kilometre from the origin. Must be greater than 0.
+   *
+   * @defaultValue `0.0001`
+   */
+  snapDistance: number;
+}
+
+/**
+ * The input pin names of the `polygonBoolean` node type.
+ */
+export type PolygonBooleanInputs = "in" | "clip";
+
+/**
+ * The output pin names of the `polygonBoolean` node type.
+ */
+export type PolygonBooleanOutputs = "out";
+
+/**
  * Params of the `projectToPlane` node type.
  */
 export interface ProjectToPlaneParams {
@@ -4210,6 +4440,96 @@ export type SampleNearestPointInputs = "in" | "source";
 export type SampleNearestPointOutputs = "out";
 
 /**
+ * Params of the `segmentCrossings` node type.
+ */
+export interface SegmentCrossingsParams {
+  /**
+   * World units. Two segments cross when their closest approach is at most this — and a
+   * meeting counts as an ENDPOINT TOUCH (see `endpoints`) when it is within this of either
+   * segment's end. The default 0.001 absorbs the f32 rounding of coplanar geometry at the
+   * scale of a building (an f32 at 300 is good to about 3e-5); raise it to find bars that
+   * pass NEAR each other in 3D — a lattice built with its webs offset by their thickness
+   * crosses at that offset. 0 asks for exact intersections, which f32 geometry off the axis
+   * planes rarely has. Must be finite and >= 0.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `0.001`
+   */
+  tolerance: number;
+  /**
+   * What a meeting AT A SEGMENT'S END is. 'exclude' (the default) reports interior crossings
+   * only — an X, not an L or a T — which is what 'where do the bars cross' means on a
+   * lattice, where every bar also touches its neighbours at the joints. 'include' reports
+   * touches too: two segments sharing a point meet ON that point, and one whose end lies
+   * within `tolerance` of another is reported at the midpoint of the two closest points. A
+   * touch is the closest point on EITHER segment lying within `tolerance` of one of its
+   * ends, so with `tolerance` 0 only an exact end or a shared point is a touch. Parallel
+   * pairs are excluded under both settings.
+   *
+   * - Enum: `"exclude"` | `"include"`
+   *
+   * @defaultValue `"exclude"`
+   */
+  endpoints: "exclude" | "include";
+  /**
+   * Name of the i32 POINT attribute receiving the LOWER of the two crossing primitives' ids
+   * — its ordinal in the input's primitive storage. Always less than the `primBAttr` value
+   * on the same point. Required: the pair is what a crossing IS. May not equal any other
+   * name this node writes.
+   *
+   * @defaultValue `"primA"`
+   */
+  primAAttr: string;
+  /**
+   * Name of the i32 POINT attribute receiving the HIGHER of the two crossing primitives'
+   * ids. Required, and distinct from every other name this node writes.
+   *
+   * @defaultValue `"primB"`
+   */
+  primBAttr: string;
+  /**
+   * Name of the f32 x3 POINT attribute receiving the unit BISECTOR of the two segments'
+   * directions. Each direction runs from its primitive's vertex 0 to vertex 1; B's is
+   * flipped when the two make an obtuse angle, so the bisector halves the ACUTE angle
+   * between the bars and has a positive component along A. At a right angle, where either
+   * choice is acute, B keeps its own direction. It is the axis a part set into an X lies
+   * along. Empty = don't write.
+   *
+   * @defaultValue `"bisector"`
+   */
+  bisectorAttr: string;
+  /**
+   * OPT-IN: name of an f32 x3 POINT attribute receiving the unit NORMAL of the crossing —
+   * the cross product of A's direction and B's (flipped as for the bisector), so bisector,
+   * normal and their cross product make an orthonormal frame at the crossing, which is how a
+   * rivet's axis or a gusset plate is oriented. Empty (the default) = don't write.
+   *
+   * @defaultValue `""`
+   */
+  normalAttr: string;
+  /**
+   * OPT-IN: name of an f32 POINT attribute receiving the closest-approach DISTANCE between
+   * the two segments, in world units — 0 for an exact intersection, up to `tolerance`
+   * otherwise. The number to read when tuning `tolerance` against a lattice. Empty (the
+   * default) = don't write.
+   *
+   * @defaultValue `""`
+   */
+  distanceAttr: string;
+}
+
+/**
+ * The input pin names of the `segmentCrossings` node type.
+ */
+export type SegmentCrossingsInputs = "in";
+
+/**
+ * The output pin names of the `segmentCrossings` node type.
+ */
+export type SegmentCrossingsOutputs = "out";
+
+/**
  * Params of the `selfPrune` node type.
  */
 export interface SelfPruneParams {
@@ -4796,6 +5116,73 @@ export type SplineSampleInputs = "in";
 export type SplineSampleOutputs = "out";
 
 /**
+ * Params of the `splitPolygons` node type.
+ */
+export interface SplitPolygonsParams {
+  /**
+   * Width of the strip removed along each cut, in world units — a mullion bar's width, a
+   * joint's gap. 0 cuts along the line with no width. Field-capable on the CUTTERS'
+   * PRIMITIVE domain: one width per cutter polyline, so a window's heavy transom and its
+   * light glazing bars cut different gaps in one cook (an `attribute('barWidth')` written
+   * per cutter, or a byAttribute over a bar kind). Read the domain before writing the
+   * expression: the primitive domain carries no P, so `position()` is unavailable there.
+   * Must be 0 or more; a negative width is refused naming the cutter.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `0.05`
+   */
+  kerf: FieldParam;
+  /**
+   * The plane the polygons are read in. 'xz' (the default) is the ground plane — the plane
+   * `extrudePolygon`'s default direction '+y' builds up from; 'xy' and 'yz' are the two
+   * walls. Input points are PROJECTED onto it (the off-plane coordinate is ignored while
+   * computing), and each result loop is written back at the off-plane coordinate of the
+   * first input point that fed it — for a floor plate at y = 3, y = 3. Outer loops come out
+   * counter-clockwise seen from the plane's positive axis (+y for 'xz', +z for 'xy', +x for
+   * 'yz'), holes clockwise.
+   *
+   * - Enum: `"xz"` | `"xy"` | `"yz"`
+   *
+   * @defaultValue `"xz"`
+   */
+  plane: "xz" | "xy" | "yz";
+  /**
+   * Name of a scalar PRIMITIVE attribute on both pins: a polygon is cut only by the cutters
+   * whose key equals its own — one window's bars cut only that window's glass. Empty (the
+   * default) lets every cutter cut every polygon (a cutter far from a polygon costs nothing:
+   * cutters are culled by bounding box first). A string key compares by its text; a numeric
+   * key must be a whole number. Both pins must carry it with the same kind.
+   *
+   * @defaultValue `""`
+   */
+  groupAttr: string;
+  /**
+   * The documented epsilon, in world units: two vertices closer than this are ONE vertex,
+   * and a vertex closer than this to an edge splits that edge — so corners that should
+   * coincide but differ by f32 rounding weld, a vertex lying on another polygon's edge is
+   * treated as ON it, and collinear or shared edges merge. Features smaller than this are
+   * not preserved: a result loop whose area is at most snapDistance squared is dropped as
+   * degenerate, and a vertex within snapDistance / 1000 of the straight line through its
+   * neighbours is removed. The default 0.0001 is a tenth of a millimetre at metre scale, a
+   * few f32 steps at a kilometre from the origin. Must be greater than 0.
+   *
+   * @defaultValue `0.0001`
+   */
+  snapDistance: number;
+}
+
+/**
+ * The input pin names of the `splitPolygons` node type.
+ */
+export type SplitPolygonsInputs = "in" | "cutters";
+
+/**
+ * The output pin names of the `splitPolygons` node type.
+ */
+export type SplitPolygonsOutputs = "out";
+
+/**
  * Params of the `surfaceSample` node type.
  */
 export interface SurfaceSampleParams {
@@ -4924,9 +5311,9 @@ export interface SweepProfileParams {
    * 'bottom' STANDS it on the path — its bottom face runs through the path's points, so the
    * section spans 0..height above them, which is a wall or a kerb built on a ground-hugging
    * line; 'top' hangs it below, spanning -height..0, which is a beam under a deck line.
-   * Moves the cap fan's centre with it. Ignored by every other profile — a 'polygon' already
-   * says where the path is, because its corners are relative to the path point. Turned with
-   * the section by `roll`, about the path point.
+   * Ignored by every other profile — a 'polygon' already says where the path is, because its
+   * corners are relative to the path point. Turned with the section by `roll`, about the
+   * path point.
    *
    * - Enum: `"center"` | `"bottom"` | `"top"`
    *
@@ -4943,13 +5330,14 @@ export interface SweepProfileParams {
    * y, travel) is right-handed; [0.5, 0, 0.5, 1, -0.5, 1, -0.5, 0] is a unit block standing
    * on the path. Every corner is split (flat faces, per-face normals), `v` runs 0..1 by arc
    * length around the corners in counter-clockwise order (starting at the first corner)
-   * measured on the section as given, before `width` and `height` scale it, and caps are
-   * fans from the section's area centroid, which is exact for any section every corner of
-   * which is visible from that centroid (every convex one) and overlaps itself otherwise —
-   * set `caps` false for a deeply concave section. Refused by name when it is not whole
-   * pairs, has fewer than three corners, repeats a corner, or encloses no area. Ignored by
-   * every other profile. Not field-capable: the section is one shape for the whole sweep,
-   * and `width`, `height` and `roll` are what vary per ring.
+   * measured on the section as given, before `width` and `height` scale it. Caps are exact
+   * for ANY simple section: a convex one is a fan of n - 2 triangles from its first corner,
+   * a concave one (an L, a T, an I-beam) is ear-clipped, deterministically, and neither adds
+   * a point. The section must not cross itself — a self-crossing list is not refused, and
+   * its caps describe nothing. Refused by name when it is not whole pairs, has fewer than
+   * three corners, repeats a corner, or encloses no area. Ignored by every other profile.
+   * Not field-capable: the section is one shape for the whole sweep, and `width`, `height`
+   * and `roll` are what vary per ring.
    *
    * @defaultValue `[]`
    */
@@ -5042,16 +5430,18 @@ export interface SweepProfileParams {
    */
   miterLimit: FieldParam;
   /**
-   * Close the two ends of an OPEN path with a CLOSED profile, as a triangle fan from the
-   * path's endpoint — for a 'rect' from its centre (which `anchor` moves off the path) and
-   * for a 'polygon' from its area centroid. Ignored for a closed path (it has no ends) and
-   * for the 'ribbon' profile (it has no hole), so all four combinations are defined rather
-   * than merely unsurprising. Cap points are separate from the wall's, so the seam between a
-   * flat cap and a round wall stays a real crease instead of being smoothed away. Cap uv is
-   * not a continuation of the wall's: for 'circle' and 'square' it is a disc mapping — the
-   * unit section, turned by `roll`, mapped into the 0..1 square — and for 'rect' and
-   * 'polygon' it maps the section's own bounding box onto 0..1, so a rectangle's corners
-   * land exactly on the uv square's.
+   * Close the two ends of an OPEN path with a CLOSED profile, with triangles over the end
+   * ring's own corners and NO extra centre point: a convex section ('circle', 'square',
+   * 'rect', a convex 'polygon') is a fan of n - 2 triangles from its first corner, so a box
+   * end is 2 triangles and an 8-sided tube's end is 6, and a concave 'polygon' is
+   * ear-clipped. The start cap faces back along the path, the end cap forward. Ignored for a
+   * closed path (it has no ends) and for the 'ribbon' profile (it has no hole), so all four
+   * combinations are defined rather than merely unsurprising. Cap points are separate from
+   * the wall's, so the seam between a flat cap and a round wall stays a real crease instead
+   * of being smoothed away. Cap uv is not a continuation of the wall's: for 'circle' and
+   * 'square' it is a disc mapping — the unit section, turned by `roll`, mapped into the 0..1
+   * square — and for 'rect' and 'polygon' it maps the section's own bounding box onto 0..1,
+   * so a rectangle's corners land exactly on the uv square's.
    *
    * @defaultValue `true`
    */
@@ -5400,6 +5790,36 @@ export interface TransferByIndexParams {
    */
   attributes: readonly string[];
   /**
+   * Where each gathered column is written, PARALLEL to `attributes`: outNames[i] receives
+   * the source's attributes[i]. EMPTY (the default) writes every column under its own name,
+   * which is the plain gather. SET, it must be exactly as long as `attributes`, and
+   * `attributes` must then be an explicit list — the empty default picks its columns by a
+   * rule, so there is nothing for a parallel list to line up with — and each is refused
+   * naming both lengths, because a short list is either a forgotten name or a name in the
+   * wrong slot. Explicit names rather than a generated prefix, pathShift's `outNames` design
+   * and for its reason: a column no node in the graph mentions is a name nobody can grep
+   * for. THIS IS WHAT MAKES A NEIGHBOUR READ ONE NODE: wire the SAME geometry to `in` and to
+   * `source`, compute the neighbour's index in `index`, and gather into a name of its own —
+   * on a lattice numbered s*K + k, index add(attribute("i"), K) with attributes ["P"] and
+   * outNames ["aboveP"] gives every station the position of the station above it, while its
+   * own P stays where it is. Without this param that read takes a setAttribute copy of P
+   * onto the source first and then a transfer of the copy. A SELF-GATHER HAS ONE MEANING:
+   * every destination point sees the values the input was handed, never ones this node has
+   * already written, because the source columns are read from the input and the destination
+   * columns are the output's own copies — so a name here MAY also appear in `attributes`
+   * (swapping two columns, or reading `v` from another point into `v`, is well defined)
+   * where pathShift has to refuse it. EACH DESTINATION IS A COPY TARGET with the source
+   * column's shape, under the same rules as without renaming: an existing column of that
+   * shape is written in place, so a MISS keeps its prior value; one of another shape is
+   * replaced; a name the `in` input does not have is created with the source attribute's
+   * default. Writing into 'P' is the placement idiom under a new spelling and is held to the
+   * same rule: the source column must be P's own shape, or the gather is refused rather than
+   * reshaping the destination's positions. hitAttr may not name any entry here.
+   *
+   * @defaultValue `[]`
+   */
+  outNames: readonly string[];
+  /**
    * How an index outside [0, sourceCount-1] is read, applied AFTER the truncation. 'clamp'
    * (the default) pins it to the ends, so every negative index reads source point 0 and
    * everything past the end reads the last point; nothing misses, and a source of one point
@@ -5436,15 +5856,16 @@ export interface TransferByIndexParams {
    * keep only the points that landed, then removeAttribute to clean it up. A miss cannot
    * report itself through the gathered value — the prior value is a real value and looks
    * like one — so this is the only per-point way to find one. Two kinds of name are refused
-   * rather than written: any attribute this node is GATHERING (whether named in `attributes`
-   * or selected by its empty default), which the flag would otherwise overwrite with a bool,
-   * and any point attribute the input ALREADY holds under a different shape — the flag's
-   * shape is this node's to pick, so writing it there would delete that column and
-   * everything in it while the cook still looked fine (hitAttr "P" would leave a point cloud
-   * with no positions). An existing bool tuple-1 column of the same name IS reused and
-   * reset, which is what keeps the flag describing THIS gather only. On a clash, give the
-   * flag a name of its own (a "__" prefix marks it internal, e.g. "__hit") or
-   * removeAttribute the existing column first. Empty = don't record.
+   * rather than written: any column this node is WRITING a gathered value into (named in
+   * `outNames`, or — with `outNames` empty — named in `attributes` or selected by its empty
+   * default), which the flag would otherwise overwrite with a bool, and any point attribute
+   * the input ALREADY holds under a different shape — the flag's shape is this node's to
+   * pick, so writing it there would delete that column and everything in it while the cook
+   * still looked fine (hitAttr "P" would leave a point cloud with no positions). An existing
+   * bool tuple-1 column of the same name IS reused and reset, which is what keeps the flag
+   * describing THIS gather only. On a clash, give the flag a name of its own (a "__" prefix
+   * marks it internal, e.g. "__hit") or removeAttribute the existing column first. Empty =
+   * don't record.
    *
    * @defaultValue `""`
    */

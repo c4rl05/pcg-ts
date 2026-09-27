@@ -78,21 +78,52 @@ const OUT_OF_RANGE = ["clamp", "wrap", "miss"] as const;
  * `transferAlongPath`'s wording and for its reason: a name appearing twice
  * is two decisions about one column and only one of them can be right.
  */
-function requireDistinctNames(names: readonly string[]): void {
+function requireDistinctNames(names: readonly string[], param: "attributes" | "outNames"): void {
+  const what =
+    param === "attributes"
+      ? "every entry must name a point attribute of the `source` input"
+      : "every entry must name the destination column its `attributes` entry is written into";
   const seen = new Set<string>();
   for (const name of names) {
     if (name === "") {
-      throw new Error(
-        'transferByIndex: param "attributes" holds an empty name; every entry must name a point attribute of the `source` input',
-      );
+      throw new Error(`transferByIndex: param "${param}" holds an empty name; ${what}`);
     }
     if (seen.has(name)) {
       throw new Error(
-        `transferByIndex: param "attributes" names "${name}" twice; a name appearing twice is two decisions about one column and this node cannot tell which of them you meant — take one of them out`,
+        `transferByIndex: param "${param}" names "${name}" twice; a name appearing twice is two decisions about one column and this node cannot tell which of them you meant — take one of them out`,
       );
     }
     seen.add(name);
   }
+}
+
+/**
+ * Refuse an `outNames` list that cannot be read against `attributes`,
+ * with pathShift's wording, since the two params are the same design: a
+ * PARALLEL list, explicit names rather than a generated prefix.
+ *
+ * Checked before the geometry is looked at, like every param refusal in
+ * this family. Unlike pathShift, a name that `attributes` is also reading
+ * is NOT refused here, and the reason is where the reads come from: this
+ * node reads the `source` input's columns and writes the clone of `in`,
+ * which never share storage (the copy-on-write fork in `execute`), so
+ * swapping two columns or gathering `v` into `v` from another point has
+ * exactly one meaning — every destination point sees the values the
+ * source was handed.
+ */
+function requireOutNames(attributes: readonly string[], outNames: readonly string[]): void {
+  if (outNames.length === 0) return;
+  if (attributes.length === 0) {
+    throw new Error(
+      `transferByIndex: param "outNames" holds ${outNames.length} name${outNames.length === 1 ? "" : "s"} but "attributes" is empty; the two lists are PARALLEL — outNames[i] is where the gathered attributes[i] is written — and the empty "attributes" default picks its columns by a rule, so there is nothing for outNames to line up with. Name the source columns in "attributes" (e.g. attributes ["P"] with outNames ["aboveP"]), or empty "outNames" to write every gathered column under its own name.`,
+    );
+  }
+  if (outNames.length !== attributes.length) {
+    throw new Error(
+      `transferByIndex: param "outNames" has ${outNames.length} name${outNames.length === 1 ? "" : "s"} but "attributes" has ${attributes.length}; the two lists are PARALLEL — outNames[i] is where the gathered attributes[i] is written — so they must be the same length. A short list is either a forgotten name or a name in the wrong slot, and this node cannot tell which of those you meant. Leave "outNames" empty to write every column under its own name.`,
+    );
+  }
+  requireDistinctNames(outNames, "outNames");
 }
 
 /**
@@ -113,12 +144,12 @@ function requireDistinctNames(names: readonly string[]): void {
  * attribute's default, which is the same sentence `transferAttribute`'s
  * description already says out loud.
  */
-function destinationColumn(outSet: AttributeSet, src: Attribute): Attribute {
-  const existing = outSet.get(src.name);
+function destinationColumn(outSet: AttributeSet, src: Attribute, name: string): Attribute {
+  const existing = outSet.get(name);
   if (existing !== undefined && existing.type === src.type && existing.tupleSize === src.tupleSize) {
     return existing;
   }
-  return outSet.replace(src.name, src.type, src.tupleSize, src.defaultValue as AttrDefault);
+  return outSet.replace(name, src.type, src.tupleSize, src.defaultValue as AttrDefault);
 }
 
 /** One gathered column, resolved once before a single point is read. */
@@ -145,7 +176,7 @@ export const transferByIndex = standardNode<
   type: "transferByIndex",
   category: "attribute",
   description:
-    "Reads the `source` geometry's point attributes AT A PER-POINT COMPUTED INDEX and writes them onto the main input's points, creating or overwriting them on the output's point domain. For each destination point the `index` param resolves to a number, that number is truncated to an integer, and the source point with that ORDINAL — its position in the source's point storage, counting from 0 — is copied verbatim. This is the transfer that asks its question in the SOURCE'S ORDER rather than in space: transferAttribute's three mappings are all searches (nearest point, containing triangle, ray hit) whose answer the caller does not know, and transferAlongPath's is an arc coordinate; this one is handed the answer. It is a separate node rather than a fourth mapping because an index is not a spatial query — the params a search needs mean nothing to it, the param it needs means nothing to them, and a node whose param list decided which of two incompatible questions was being asked would be one node in name only. THE INDEX IS AN ORDINAL, NOT AN IDENTITY, and that is the trap: a filter, a sort, a resample or a partition upstream of `source` renumbers every point, and index 7 is then whatever is seventh afterwards. Nothing here can detect that. A gather that must survive a reorder has to gather on a VALUE (transferAttribute mapping 'nearest') rather than on a position in an array. WHAT IT IS FOR: a settled list whose ORDER is the answer — a lap's worth of placements, a table of archetypes, a palette, an asset roster. Picking from one uniformly is floor(mul(randomField(k), n)), picking in sequence is a counter, picking what a neighbour already chose is an attribute; every one of those produces a number, and this is the node that spends it. THE VALUES ARE COPIED, NEVER BLENDED: each column arrives with the source's own type and tuple size, so an i32 lane index stays an i32 lane index and a STRING asset id transfers intact — which is the case transferAlongPath cannot serve at all, since there is no value between two strings. WHICH ATTRIBUTES: name them in `attributes`, or leave it empty to take every point attribute of the source except the eight standard bookkeeping columns (P, rot, scale, density, boundsMin, boundsMax, color, seed) — see that param. Naming one LIFTS the exclusion, and naming P is the placement idiom: gather P and every destination point moves onto its chosen source point's position. AN INDEX OUTSIDE THE SOURCE is read by `outOfRange` — clamp to the ends, wrap round by Euclidean modulo, or MISS. A miss leaves the destination point's prior value (the source attribute's default where the column had to be created) and is counted by missCountAttr and flagged 0 by hitAttr, exactly as a miss on transferAttribute is. AN EMPTY SOURCE MISSES EVERY POINT under all three settings, including clamp and wrap: there is no index to clamp into and no length to wrap by, and inventing one would hand every destination point a value no source point holds. A NON-FINITE index is REFUSED, naming this node and the param, because an index that could not be computed is a broken expression rather than data — see `index` for the argument and the fix. DETERMINISM IS STRUCTURAL: this node draws no randomness at all, and each destination point is answered from its own index and the source alone, so the result does not depend on cook order, on partitioning, or on how many points are in hand. Shuffling the destination shuffles the output and changes nothing else. The output keeps the destination's count, order, identities and topology — this node removes no point and adds none.",
+    "Reads the `source` geometry's point attributes AT A PER-POINT COMPUTED INDEX and writes them onto the main input's points, creating or overwriting them on the output's point domain. For each destination point the `index` param resolves to a number, that number is truncated to an integer, and the source point with that ORDINAL — its position in the source's point storage, counting from 0 — is copied verbatim. This is the transfer that asks its question in the SOURCE'S ORDER rather than in space: transferAttribute's three mappings are all searches (nearest point, containing triangle, ray hit) whose answer the caller does not know, and transferAlongPath's is an arc coordinate; this one is handed the answer. It is a separate node rather than a fourth mapping because an index is not a spatial query — the params a search needs mean nothing to it, the param it needs means nothing to them, and a node whose param list decided which of two incompatible questions was being asked would be one node in name only. THE INDEX IS AN ORDINAL, NOT AN IDENTITY, and that is the trap: a filter, a sort, a resample or a partition upstream of `source` renumbers every point, and index 7 is then whatever is seventh afterwards. Nothing here can detect that. A gather that must survive a reorder has to gather on a VALUE (transferAttribute mapping 'nearest') rather than on a position in an array. WHAT IT IS FOR: a settled list whose ORDER is the answer — a lap's worth of placements, a table of archetypes, a palette, an asset roster. Picking from one uniformly is floor(mul(randomField(k), n)), picking in sequence is a counter, picking what a neighbour already chose is an attribute; every one of those produces a number, and this is the node that spends it. THE VALUES ARE COPIED, NEVER BLENDED: each column arrives with the source's own type and tuple size, so an i32 lane index stays an i32 lane index and a STRING asset id transfers intact — which is the case transferAlongPath cannot serve at all, since there is no value between two strings. WHICH ATTRIBUTES: name them in `attributes`, or leave it empty to take every point attribute of the source except the eight standard bookkeeping columns (P, rot, scale, density, boundsMin, boundsMax, color, seed) — see that param. Naming one LIFTS the exclusion, and naming P is the placement idiom: gather P and every destination point moves onto its chosen source point's position. WHERE THEY LAND: under their own names, or under `outNames`, a list parallel to `attributes` — which is what turns a NEIGHBOUR READ into one node: wire one geometry to both `in` and `source`, compute the neighbour's ordinal in `index` (on a lattice numbered s*K + k, 'the station above me' is index + K), and gather P into 'aboveP'. A self-gather reads the values the input was handed, never ones this node has already written. AN INDEX OUTSIDE THE SOURCE is read by `outOfRange` — clamp to the ends, wrap round by Euclidean modulo, or MISS. A miss leaves the destination point's prior value (the source attribute's default where the column had to be created) and is counted by missCountAttr and flagged 0 by hitAttr, exactly as a miss on transferAttribute is. AN EMPTY SOURCE MISSES EVERY POINT under all three settings, including clamp and wrap: there is no index to clamp into and no length to wrap by, and inventing one would hand every destination point a value no source point holds. A NON-FINITE index is REFUSED, naming this node and the param, because an index that could not be computed is a broken expression rather than data — see `index` for the argument and the fix. DETERMINISM IS STRUCTURAL: this node draws no randomness at all, and each destination point is answered from its own index and the source alone, so the result does not depend on cook order, on partitioning, or on how many points are in hand. Shuffling the destination shuffles the output and changes nothing else. The output keeps the destination's count, order, identities and topology — this node removes no point and adds none.",
   inputs: [
     { name: "in", kind: "geometry" },
     { name: "source", kind: "geometry" },
@@ -165,6 +196,12 @@ export const transferByIndex = standardNode<
       description:
         "Source POINT attributes to gather, in any order. AN EXPLICIT LIST IS WHAT TO WRITE WHEN THE ANSWER MATTERS: every name here is gathered, and naming one of the eight standard bookkeeping columns lifts the exclusion the empty list applies — they are skipped by that rule, never forbidden by it. EMPTY (the default) means every point attribute of the source EXCEPT P, rot, scale, density, boundsMin, boundsMax, color and seed. Those eight are excluded because they are the point domain's own bookkeeping — written on every cloud in the library before anyone has decided anything — and each describes the SOURCE'S POINTS rather than whatever the source is a table of: gathering seed hands two destination points the same identity and then drives randomness with it, P moves the destination cloud, rot and scale overwrite the transform it arrived with, boundsMin/boundsMax its extent. What is left is exactly what somebody wrote onto the source deliberately — an asset id, a lane, a width, a hue, a weight — which is what an index is asking for. STRING ATTRIBUTES ARE INCLUDED by the empty rule, unlike transferAlongPath's otherwise identical rule, and the difference is the operation: that node INTERPOLATES, and there is no value between two strings, while this one COPIES, and a copied string is just a string. Gathering an asset id out of a roster is the case this node was built for, so leaving it out of 'everything' would make the default useless exactly where the node is most used. NAMING P IS THE PLACEMENT IDIOM: gather P and every destination point moves to its chosen source point's position, which is how a scattered cloud becomes a set of picks from a settled list. The one reshape this node refuses is P's own: a source whose P is not the destination's shape is refused rather than replacing the position column with something every downstream node would misread. EVERY OTHER COLUMN IS A COPY TARGET and takes the source's shape outright — an existing destination column of another type or tuple size is REPLACED, not refused, because overwriting is what a copy is (this is transferAttribute's rule, not the reporting-slot rule that governs hitAttr and missCountAttr below). A same-shape column is written IN PLACE, which is what lets a miss keep its prior value. A source with no point attributes left after the exclusions is refused rather than cooking to a cloud with nothing added, which would look like success.",
     },
+    outNames: {
+      type: "stringList",
+      default: [],
+      description:
+        "Where each gathered column is written, PARALLEL to `attributes`: outNames[i] receives the source's attributes[i]. EMPTY (the default) writes every column under its own name, which is the plain gather. SET, it must be exactly as long as `attributes`, and `attributes` must then be an explicit list — the empty default picks its columns by a rule, so there is nothing for a parallel list to line up with — and each is refused naming both lengths, because a short list is either a forgotten name or a name in the wrong slot. Explicit names rather than a generated prefix, pathShift's `outNames` design and for its reason: a column no node in the graph mentions is a name nobody can grep for. THIS IS WHAT MAKES A NEIGHBOUR READ ONE NODE: wire the SAME geometry to `in` and to `source`, compute the neighbour's index in `index`, and gather into a name of its own — on a lattice numbered s*K + k, index add(attribute(\"i\"), K) with attributes [\"P\"] and outNames [\"aboveP\"] gives every station the position of the station above it, while its own P stays where it is. Without this param that read takes a setAttribute copy of P onto the source first and then a transfer of the copy. A SELF-GATHER HAS ONE MEANING: every destination point sees the values the input was handed, never ones this node has already written, because the source columns are read from the input and the destination columns are the output's own copies — so a name here MAY also appear in `attributes` (swapping two columns, or reading `v` from another point into `v`, is well defined) where pathShift has to refuse it. EACH DESTINATION IS A COPY TARGET with the source column's shape, under the same rules as without renaming: an existing column of that shape is written in place, so a MISS keeps its prior value; one of another shape is replaced; a name the `in` input does not have is created with the source attribute's default. Writing into 'P' is the placement idiom under a new spelling and is held to the same rule: the source column must be P's own shape, or the gather is refused rather than reshaping the destination's positions. hitAttr may not name any entry here.",
+    },
     outOfRange: {
       type: "enum",
       default: "clamp",
@@ -176,7 +213,7 @@ export const transferByIndex = standardNode<
       type: "string",
       default: "",
       description:
-        "When non-empty, writes a per-point flag of this name onto the OUTPUT'S POINT DOMAIN (bool, tuple 1). The polarity is the HIT, not the miss — the inverse of missCountAttr, which counts the zeros: 1 means this point read a source point and received its values, 0 means it missed and kept its prior value (the source attribute's default where the column had to be created). Every point is written, so the column never carries a stale value: with outOfRange 'clamp' or 'wrap' and a non-empty source it is all 1 by construction, since neither setting can fail to land, and an EMPTY source leaves it all 0 whatever outOfRange says. Feed it to filterByAttribute (comparison 'eq', value 1) to keep only the points that landed, then removeAttribute to clean it up. A miss cannot report itself through the gathered value — the prior value is a real value and looks like one — so this is the only per-point way to find one. Two kinds of name are refused rather than written: any attribute this node is GATHERING (whether named in `attributes` or selected by its empty default), which the flag would otherwise overwrite with a bool, and any point attribute the input ALREADY holds under a different shape — the flag's shape is this node's to pick, so writing it there would delete that column and everything in it while the cook still looked fine (hitAttr \"P\" would leave a point cloud with no positions). An existing bool tuple-1 column of the same name IS reused and reset, which is what keeps the flag describing THIS gather only. On a clash, give the flag a name of its own (a \"__\" prefix marks it internal, e.g. \"__hit\") or removeAttribute the existing column first. Empty = don't record.",
+        "When non-empty, writes a per-point flag of this name onto the OUTPUT'S POINT DOMAIN (bool, tuple 1). The polarity is the HIT, not the miss — the inverse of missCountAttr, which counts the zeros: 1 means this point read a source point and received its values, 0 means it missed and kept its prior value (the source attribute's default where the column had to be created). Every point is written, so the column never carries a stale value: with outOfRange 'clamp' or 'wrap' and a non-empty source it is all 1 by construction, since neither setting can fail to land, and an EMPTY source leaves it all 0 whatever outOfRange says. Feed it to filterByAttribute (comparison 'eq', value 1) to keep only the points that landed, then removeAttribute to clean it up. A miss cannot report itself through the gathered value — the prior value is a real value and looks like one — so this is the only per-point way to find one. Two kinds of name are refused rather than written: any column this node is WRITING a gathered value into (named in `outNames`, or — with `outNames` empty — named in `attributes` or selected by its empty default), which the flag would otherwise overwrite with a bool, and any point attribute the input ALREADY holds under a different shape — the flag's shape is this node's to pick, so writing it there would delete that column and everything in it while the cook still looked fine (hitAttr \"P\" would leave a point cloud with no positions). An existing bool tuple-1 column of the same name IS reused and reset, which is what keeps the flag describing THIS gather only. On a clash, give the flag a name of its own (a \"__\" prefix marks it internal, e.g. \"__hit\") or removeAttribute the existing column first. Empty = don't record.",
     },
     missCountAttr: {
       type: "string",
@@ -189,7 +226,8 @@ export const transferByIndex = standardNode<
     // Params before geometry, as everywhere in this family: a bad name
     // reported as a missing attribute sends the author to debug the wrong
     // input.
-    requireDistinctNames(params.attributes);
+    requireDistinctNames(params.attributes, "attributes");
+    requireOutNames(params.attributes, params.outNames);
     const mode = params.outOfRange;
     if (mode !== "clamp" && mode !== "wrap" && mode !== "miss") {
       throw new Error(
@@ -226,13 +264,22 @@ export const transferByIndex = standardNode<
       }
     }
 
+    // WHERE EACH COLUMN LANDS: its own name, or its `outNames` entry. Every
+    // check below that is about the DESTINATION reads this list, never the
+    // source names — with outNames set, gathering P into "aboveP" writes no
+    // P at all, and a hit flag named after a column that is read but not
+    // written clobbers nothing this node produced.
+    const renamed = params.outNames.length > 0;
+    const destNames = renamed ? params.outNames : sources.map((a) => a.name);
+
     // The reporting slots, checked against the INPUT's sets (shape-identical
     // to the clone's) so a refusal still costs nothing.
-    const gathering = new Set(sources.map((a) => a.name));
+    const gathering = new Set(destNames);
     if (params.hitAttr !== "") {
       if (gathering.has(params.hitAttr)) {
-        const how =
-          params.attributes.length > 0
+        const how = renamed
+          ? 'it is named in "outNames"'
+          : params.attributes.length > 0
             ? 'it is named in "attributes"'
             : 'the empty "attributes" default selects it';
         throw new Error(
@@ -271,11 +318,16 @@ export const transferByIndex = standardNode<
     // read where its points are. Gathering P at the SAME shape is the
     // placement idiom and goes through untouched.
     const dstP = dstIn.attrs.point.get("P");
-    for (const attr of sources) {
-      if (attr.name !== "P" || dstP === undefined) continue;
+    for (let k = 0; k < sources.length; k++) {
+      const attr = sources[k];
+      if (destNames[k] !== "P" || dstP === undefined) continue;
       if (attr.type !== dstP.type || attr.tupleSize !== dstP.tupleSize) {
+        const which =
+          attr.name === "P"
+            ? `param "attributes" names "P"`
+            : `param "outNames" writes the source's "${attr.name}" into "P"`;
         throw new Error(
-          `transferByIndex: param "attributes" names "P", but the \`source\` input carries it as ${attr.type}[${attr.tupleSize}] while the \`in\` input's own P is ${dstP.type}[${dstP.tupleSize}]. Gathering it would reshape the destination's position column, which every node downstream reads — that is not something this node may do. Gather it under another name (rename it on the SOURCE first with setAttribute), or fix the source's P.`,
+          `transferByIndex: ${which}, but the \`source\` input carries it as ${attr.type}[${attr.tupleSize}] while the \`in\` input's own P is ${dstP.type}[${dstP.tupleSize}]. Gathering it would reshape the destination's position column, which every node downstream reads — that is not something this node may do. Gather it under another name (an "outNames" entry such as "sourceP"), or fix the source's shape.`,
         );
       }
     }
@@ -315,8 +367,9 @@ export const transferByIndex = standardNode<
     // own before the first write; the source columns are other `Attribute`
     // objects, and a fork never touches theirs.
     const columns: Gathered[] = [];
-    for (const attr of sources) {
-      const dst = destinationColumn(outSet, attr);
+    for (let k = 0; k < sources.length; k++) {
+      const attr = sources[k];
+      const dst = destinationColumn(outSet, attr, destNames[k]);
       columns.push({
         srcData: attr.data,
         dstData: dst.writable(),

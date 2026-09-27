@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { Geometry, createPointCloud } from "../data/index.js";
-import { attribute, constant, div } from "../fields/index.js";
+import { add, attribute, constant, div } from "../fields/index.js";
 import { makeGeometryItem, type DataCollection } from "../graph/index.js";
 import { transferByIndex } from "./transferByIndex.js";
 import {
@@ -635,5 +635,129 @@ describe("transferByIndex: cancellation", () => {
     });
     // CANCEL_STRIDE is 256, so 600 points check at 0, 256 and 512.
     expect(checks).toBe(3);
+  });
+});
+
+describe("transferByIndex: outNames", () => {
+  /**
+   * A 2-column, 3-row lattice numbered s*K + k with K = 2: the point at
+   * (s, k) sits at x = k, y = s, and "the station above me" is index + K.
+   */
+  function lattice(): Geometry {
+    const K = 2;
+    const rows = 3;
+    const geo = createPointCloud(K * rows);
+    const P = geo.attrs.point.require("P").writable();
+    const id = geo.attrs.point.add("i", "f32", 1, 0);
+    for (let s = 0; s < rows; s++) {
+      for (let k = 0; k < K; k++) {
+        const i = s * K + k;
+        P.set([k, s, 0], i * 3);
+        id.set(i, i);
+      }
+    }
+    return geo;
+  }
+
+  it("reads the station above into a column of its own, leaving P where it was", async () => {
+    const geo = lattice();
+    const outputs = await runNode(
+      transferByIndex,
+      {
+        index: add(attribute("i"), constant(2)),
+        attributes: ["P"],
+        outNames: ["aboveP"],
+        outOfRange: "miss",
+        hitAttr: "__hasAbove",
+      },
+      { in: [makeGeometryItem(geo)], source: [makeGeometryItem(geo)] },
+    );
+    const out = firstGeo(outputs.out);
+    expect(positionsOf(out)).toEqual(positionsOf(geo));
+    // Rows 0 and 1 read the row above; row 2 has none, misses, and keeps
+    // the created column's default (P's own, the origin).
+    expect(col(out, "aboveP")).toEqual([0, 1, 0, 1, 1, 0, 0, 2, 0, 1, 2, 0, 0, 0, 0, 0, 0, 0]);
+    expect(col(out, "__hasAbove")).toEqual([1, 1, 1, 1, 0, 0]);
+  });
+
+  it("renames a string column and keeps its values intact", async () => {
+    const src = createPointCloud(3);
+    const name = src.attrs.point.add("asset", "string", 1, "");
+    ["a", "b", "c"].forEach((v, i) => name.setString(i, v));
+    const out = await gather(picks([2, 0]), src, { attributes: ["asset"], outNames: ["picked"] });
+    expect(strings(out, "picked")).toEqual(["c", "a"]);
+    expect(out.attrs.point.get("asset")).toBeUndefined();
+  });
+
+  it("swaps two columns in one self-gather, every point reading what the input held", async () => {
+    const both = picks([0, 1]);
+    both.attrs.point.add("a", "f32", 1, 0).writable().set([1, 2]);
+    both.attrs.point.add("b", "f32", 1, 0).writable().set([10, 20]);
+    const out = await gather(both, both, { attributes: ["a", "b"], outNames: ["b", "a"] });
+    expect(col(out, "a")).toEqual([10, 20]);
+    expect(col(out, "b")).toEqual([1, 2]);
+  });
+
+  it("writes in place into an existing same-shape column, so a miss keeps its prior value", async () => {
+    const dst = picks([1, 9]);
+    dst.attrs.point.add("w", "f32", 1, 0).writable().set([-1, -2]);
+    const out = await gather(dst, TABLE(), {
+      attributes: ["v"],
+      outNames: ["w"],
+      outOfRange: "miss",
+    });
+    expect(col(out, "w")).toEqual([10, -2]);
+  });
+
+  it("refuses a list whose length differs from attributes, naming both", async () => {
+    const msg = await rejection(
+      gathering(picks([0]), TABLE(), { attributes: ["v"], outNames: ["a", "b"] }),
+    );
+    expect(msg).toContain('param "outNames" has 2 names but "attributes" has 1');
+  });
+
+  it("refuses outNames beside the empty attributes default", async () => {
+    const msg = await rejection(gathering(picks([0]), TABLE(), { outNames: ["a"] }));
+    expect(msg).toContain('param "outNames" holds 1 name but "attributes" is empty');
+  });
+
+  it("refuses an empty and a repeated name", async () => {
+    const two = table("v", [0, 1]);
+    two.attrs.point.add("u", "f32", 1, 0);
+    expect(
+      await rejection(gathering(picks([0]), two, { attributes: ["v"], outNames: [""] })),
+    ).toContain('param "outNames" holds an empty name');
+    expect(
+      await rejection(
+        gathering(picks([0]), two, { attributes: ["v", "u"], outNames: ["x", "x"] }),
+      ),
+    ).toContain('param "outNames" names "x" twice');
+  });
+
+  it("refuses a hit flag named in outNames, and accepts one named only in attributes", async () => {
+    const msg = await rejection(
+      gathering(picks([0]), TABLE(), { attributes: ["v"], outNames: ["w"], hitAttr: "w" }),
+    );
+    expect(msg).toContain('hitAttr "w" is also being gathered (it is named in "outNames")');
+    const out = await gather(picks([0]), TABLE(), {
+      attributes: ["v"],
+      outNames: ["w"],
+      hitAttr: "v",
+    });
+    expect(col(out, "v")).toEqual([1]);
+  });
+
+  it("refuses to write a differently shaped column into P", async () => {
+    const msg = await rejection(
+      gathering(picks([0]), TABLE(), { attributes: ["v"], outNames: ["P"] }),
+    );
+    expect(msg).toContain('param "outNames" writes the source\'s "v" into "P"');
+  });
+
+  it("gathers P under another name without the P-shape check", async () => {
+    const src = createPointCloud(2);
+    src.attrs.point.replace("P", "f32", 2, [0, 0]).writable().set([5, 6, 7, 8]);
+    const out = await gather(picks([1]), src, { attributes: ["P"], outNames: ["srcP"] });
+    expect(col(out, "srcP")).toEqual([7, 8]);
   });
 });

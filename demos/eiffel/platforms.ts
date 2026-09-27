@@ -4077,22 +4077,11 @@ function crescentGlass(c: number): { plates: Prism[]; ends: Prism[]; sills: Bloc
   });
   // Cell k, over the sill: under the outer rib's edge and over the inner
   // rib's, chord by chord. The inner rib's edge bows into the cell, so a
-  // plate is not convex: it is fanned (`extrudePolygon` fans a cap from
-  // its first point) from its corner farthest from the inner arc's
-  // centre, on the outer rib, from which all of it is in sight.
+  // plate is not convex; `extrudePolygon` ear-clips a concave cap.
   const cell = (k: number): P2[] => {
     const ring: P2[] = top.slice(k * S, (k + 1) * S + 1).map(p2);
     ring.push(...bottom.slice(k * S, (k + 1) * S + 1).map(p2).reverse());
     return clipHalf(ring, [c, sill - e], [0, 1], 0);
-  };
-  const centre: P2 = [c, GALLERY.floor + GALLERY.innerCrown - GALLERY.innerRadius];
-  const fanned = (p: Prism): Prism => {
-    const far = (q: Vec3) => Math.hypot(q[0] - centre[0], q[1] - centre[1]);
-    let at = 0;
-    p.outline.forEach((q, i) => {
-      if (far(q) > far(p.outline[at] as Vec3)) at = i;
-    });
-    return { ...p, outline: [...p.outline.slice(at), ...p.outline.slice(0, at)] };
   };
   const rays: PlaneBar[] = [];
   for (let k = 1; k < n; k++) {
@@ -4103,7 +4092,7 @@ function crescentGlass(c: number): { plates: Prism[]; ends: Prism[]; sills: Bloc
   for (let i = 0; i < n; i++) {
     const light = lightBetween(cell(i), rays[i - 1], rays[i]);
     if (light === undefined) throw new Error(`platforms.ts crescentGlass: cell ${i} of the gable at ${c} is empty`);
-    plates.push(fanned(sheet(light, r)));
+    plates.push(sheet(light, r));
   }
   // Ray i + 1 runs between cells i (on its left) and i + 1 (on its right).
   const ends: Prism[] = [];

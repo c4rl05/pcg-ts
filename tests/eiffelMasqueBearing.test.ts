@@ -28,6 +28,7 @@ import { type Geometry, Graph, type NodeHandle, cook, firstGeometry } from "pcg-
 import { quadrants } from "../demos/eiffel/lattice.js";
 import { buildLegs } from "../demos/eiffel/legs.js";
 import type { Detail } from "../demos/eiffel/parts.js";
+import { SWEPT_BOX_POINTS, isSweptBox, sweptBoxCorners } from "./support/sweptBox.js";
 
 type V = [number, number, number];
 const sub = (a: V, b: V): V => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -48,16 +49,14 @@ interface Box {
 /** The packing mesh's blocks, read back as boxes from their corners. */
 function blocks(geo: Geometry): Box[] {
   const P = geo.attrs.point.get("P")!.data;
-  const pts: V[] = [];
-  for (let i = 0; i < geo.pointCount; i++) pts.push([P[3 * i]!, P[3 * i + 1]!, P[3 * i + 2]!]);
-  // Corners, deduplicated; each block is 8 of them, 26 points apart: a
-  // 'rect' sweep of the member's two ends, its four faces' 16 points (two
-  // at each corner) first, then a cap of four corners and its centre at
-  // each end.
+  // Each block is a 'rect' sweep of the member's two ends, in the layout
+  // tests/support/sweptBox.ts states: its 8 corners are its caps' points.
   const out: Box[] = [];
-  for (let b = 0; b + 26 <= pts.length; b += 26) {
+  expect(geo.pointCount % SWEPT_BOX_POINTS).toBe(0);
+  for (let b = 0; b + SWEPT_BOX_POINTS <= geo.pointCount; b += SWEPT_BOX_POINTS) {
+    expect(isSweptBox(P, b, geo.pointCount)).toBe(true);
     const cs: V[] = [];
-    for (const p of pts.slice(b, b + 16)) if (!cs.some((q) => len(sub(p, q)) < 1e-6)) cs.push(p);
+    for (const p of sweptBoxCorners(P, b)) if (!cs.some((q) => len(sub(p, q)) < 1e-6)) cs.push(p);
     expect(cs).toHaveLength(8);
     const c = mul(cs.reduce((s, p) => add(s, p), [0, 0, 0] as V), 1 / 8);
     const o = cs[0]!;

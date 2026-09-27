@@ -39,6 +39,8 @@ import { occlusionCull } from "./visibility.js";
 import { pathCoverage } from "./coverage.js";
 import { runFit } from "./runs.js";
 import { quotaRebalance } from "./quotas.js";
+import { polygonBoolean } from "./polygons.js";
+import { segmentCrossings } from "./crossings.js";
 
 /**
  * One value per standard-node module. Keep this list in sync with the
@@ -65,6 +67,8 @@ const MODULE_WITNESSES: readonly { readonly type: string }[] = [
   pathCoverage, // coverage.ts
   runFit, // runs.ts
   quotaRebalance, // quotas.ts
+  polygonBoolean, // polygons.ts
+  segmentCrossings, // crossings.ts
 ];
 
 /**

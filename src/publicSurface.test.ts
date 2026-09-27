@@ -84,6 +84,9 @@ const ROOT_SURFACE = [
   "div", "dot", "elementCount", "eq",
   "evaluateField", "exp", "exp2",
   "extrudePolygon", "fbm", "fieldFromJson", "fieldToJson", "filterByAttribute",
+  // Strips of quads between two paths, point i to point i: shoulders,
+  // ribbons, annuli, loft bands.
+  "bridgePaths",
   "filterByBounds", "filterByDensity", "filterByExpression", "filterByTag",
   "filterPrimitivesByAttribute", "filterPrimitivesByBounds", "firstGeometry", "floor", "forEachNode", "fract",
   "fraction",
@@ -121,6 +124,16 @@ const ROOT_SURFACE = [
   // one range's tiles all drawn from one upstream choice, so a tunnel is
   // the same rib repeated rather than a fresh draw per rib.
   "arcTile",
+  // Cuts every polyline where a field changes sign and keeps the pieces
+  // where it is >= 0, the cut placed by a root search on the field.
+  "pathClip",
+  // One point per interior crossing among a geometry's 2-vertex
+  // primitives, with both primitive ids and the crossing's bisector.
+  "segmentCrossings",
+  // Planar boolean (union / intersection / difference) of closed polylines,
+  // and cutting them along polylines with a kerf; both write `holeOf`.
+  "polygonBoolean",
+  "splitPolygons",
   // Groups a path's points into runs by an along-arc gap and least-squares
   // fits an attribute against arc within each, per run.
   "runFit",

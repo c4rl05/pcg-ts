@@ -1,8 +1,9 @@
 /**
- * Surface nodes: the producers that turn a curve into a skin and a
- * footprint into a solid, and `smoothNormals`, which decides how such a
- * skin SHADES — round across a faceted curve, sharp across an edge —
- * without changing what it is.
+ * Surface nodes: the producers that turn a curve into a skin, a footprint
+ * into a solid and two curves into the band between them (`bridgePaths`),
+ * and `smoothNormals`, which decides how such a skin SHADES — round across
+ * a faceted curve, sharp across an edge — without changing what it is.
+ * Caps that are not convex are ear-clipped by `./earClip.ts`.
  *
  * Before these, the library could represent, sample, transfer through,
  * filter, serialize and render a triangle mesh, and had exactly one node
@@ -10,7 +11,7 @@
  * params alone. Everything a graph drew out of curves stopped at
  * `pathSegments`, which fakes a tube as a run of instanced cylinders.
  *
- * Both nodes here emit 3-VERTEX `poly` primitives, never n-gons. That is
+ * The producers here emit 3-VERTEX `poly` primitives, never n-gons. That is
  * not a stylistic choice: `surfaceSample` skips any primitive whose
  * vertex count is not 3, and the `uv` and `raycast` transfer mappings
  * collect only 3-vertex `poly` primitives. A quad-spelled surface would
@@ -28,9 +29,11 @@
  */
 import { adoptTopology } from "../data/adoptTopology.js";
 import { deriveGeometry } from "../data/derive.js";
-import { Geometry, PRIMTYPE_ATTR, type PrimType } from "../data/index.js";
+import { type AttrDefault, Geometry, PRIMTYPE_ATTR, type PrimType } from "../data/index.js";
 import { type Column, isField } from "../fields/index.js";
 import { makeGeometryItem } from "../graph/index.js";
+import { requireAttributeOn } from "../data/attributeNotFound.js";
+import { earClip, isConvexLoop, loopArea2, pointInLoop } from "./earClip.js";
 import { standardNode } from "./registry.js";
 import {
   type PolylineArcTable,
@@ -48,6 +51,9 @@ import {
   rotateVec,
 } from "./util.js";
 import type {
+  BridgePathsInputs,
+  BridgePathsOutputs,
+  BridgePathsParams,
   ExtrudePolygonInputs,
   ExtrudePolygonOutputs,
   ExtrudePolygonParams,
@@ -61,6 +67,7 @@ import type {
 
 // Generated from the param schemas below; see params.generated.ts.
 export type {
+  BridgePathsParams,
   ExtrudePolygonParams,
   SmoothNormalsParams,
   SweepProfileParams,
@@ -79,7 +86,8 @@ const CANCEL_STRIDE = 1024;
  * whose corner points carry an averaged normal shades like a rounded rod
  * — and duplicating a corner would otherwise emit a zero-width band
  * between the two copies. `cap` names the distinct corners in boundary
- * order, so a cap fan visits each position exactly once.
+ * order, so a cap visits each position exactly once, and `capTris` is the
+ * cap's triangulation over them.
  */
 interface ProfileSpec {
   readonly count: number;
@@ -90,6 +98,14 @@ interface ProfileSpec {
   readonly bandB: Uint32Array;
   /** Empty for an open profile, which has no inside and takes no cap. */
   readonly cap: Uint32Array;
+  /**
+   * The cap as triangles over `cap` INDICES (not entries), every one
+   * counter-clockwise in the section's own (a1, a2) basis — the facing of
+   * the END cap; the start cap reverses them. A convex section is a fan
+   * from its first corner (n - 2 triangles, no centre point); a concave
+   * one is ear-clipped.
+   */
+  readonly capTris: Uint32Array;
   /** Which field param sets this profile's scale: "radius" or "width". */
   readonly scaleParam: "radius" | "width";
   /**
@@ -103,17 +119,25 @@ interface ProfileSpec {
    */
   readonly axes: boolean;
   /**
-   * Where a cap fan's centre sits, in unit section coordinates. Absent
-   * means the path point itself, which is the centre of every section
-   * that is symmetric about it.
-   */
-  readonly capCentre?: readonly [number, number];
-  /**
-   * Fixed cap uv, one pair per `cap` entry and then the centre's. Absent
-   * means the disc mapping of the rolled unit section the round and
-   * square profiles have always used.
+   * Fixed cap uv, one pair per `cap` entry. Absent means the disc mapping
+   * of the rolled unit section the round and square profiles have always
+   * used.
    */
   readonly capUv?: Float64Array;
+}
+
+/**
+ * A fan of `n - 2` triangles from corner 0 over corners `0..n-1` — the cap
+ * of a convex section. Counter-clockwise when the corners are.
+ */
+function cornerFan(n: number): Uint32Array {
+  const tris = new Uint32Array(Math.max(0, n - 2) * 3);
+  for (let j = 1; j + 1 < n; j++) {
+    tris[(j - 1) * 3] = 0;
+    tris[(j - 1) * 3 + 1] = j;
+    tris[(j - 1) * 3 + 2] = j + 1;
+  }
+  return tris;
 }
 
 /**
@@ -150,7 +174,18 @@ function circleProfile(sides: number): ProfileSpec {
   }
   const cap = new Uint32Array(sides);
   for (let i = 0; i < sides; i++) cap[i] = i;
-  return { count, pos, nrm, v, bandA, bandB, cap, scaleParam: "radius", axes: false };
+  return {
+    count,
+    pos,
+    nrm,
+    v,
+    bandA,
+    bandB,
+    cap,
+    capTris: cornerFan(sides),
+    scaleParam: "radius",
+    axes: false,
+  };
 }
 
 /**
@@ -188,7 +223,18 @@ function squareProfile(): ProfileSpec {
   const bandB = Uint32Array.of(1, 3, 5, 7);
   // The distinct corners, in boundary order: the first entry of each face.
   const cap = Uint32Array.of(0, 2, 4, 6);
-  return { count, pos, nrm, v, bandA, bandB, cap, scaleParam: "radius", axes: false };
+  return {
+    count,
+    pos,
+    nrm,
+    v,
+    bandA,
+    bandB,
+    cap,
+    capTris: cornerFan(4),
+    scaleParam: "radius",
+    axes: false,
+  };
 }
 
 /**
@@ -214,6 +260,7 @@ function ribbonProfile(): ProfileSpec {
     bandA: Uint32Array.of(1),
     bandB: Uint32Array.of(0),
     cap: new Uint32Array(0),
+    capTris: new Uint32Array(0),
     scaleParam: "width",
     axes: false,
   };
@@ -226,16 +273,18 @@ function ribbonProfile(): ProfileSpec {
  *
  * Either winding is accepted: a clockwise list is reversed about its
  * first corner (which keeps that corner at `v = 0`), because the band
- * stitching and the cap fans assume the counter-clockwise order the
+ * stitching and the cap triangles assume the counter-clockwise order the
  * circle and the square travel in. `v` runs by arc length around the
  * corners, and the face that LEAVES corner f carries the outward normal
  * (dy, -dx) / len of its edge.
  *
- * `centre` is the cap fan's centre; the area centroid when omitted. The
- * cap uv maps the section's own bounding box onto the unit square, so it
- * is exact at a rectangle's corners and does not turn with `roll`.
+ * The cap is a fan from the first corner when the section is convex and
+ * an ear-clipped triangulation otherwise (see `./earClip.ts`), so it never
+ * needs a centre point. The cap uv maps the section's own bounding box
+ * onto the unit square, so it is exact at a rectangle's corners and does
+ * not turn with `roll`.
  */
-function polygonProfile(corners: Float64Array, centre?: readonly [number, number]): ProfileSpec {
+function polygonProfile(corners: Float64Array): ProfileSpec {
   const n = corners.length / 2;
   let area2 = 0;
   for (let i = 0; i < n; i++) {
@@ -288,25 +337,14 @@ function polygonProfile(corners: Float64Array, centre?: readonly [number, number
     // The distinct corners, in boundary order: the first entry of each face.
     cap[f] = 2 * f;
   }
-  let cx: number;
-  let cy: number;
-  if (centre !== undefined) {
-    [cx, cy] = centre;
-  } else {
-    // Shoelace centroid over the (now counter-clockwise) list, whose
-    // own doubled area is |area2|.
-    let sx = 0;
-    let sy = 0;
-    for (let i = 0; i < n; i++) {
-      const j = (i + 1) % n;
-      const cross = xs[i] * ys[j] - xs[j] * ys[i];
-      sx += (xs[i] + xs[j]) * cross;
-      sy += (ys[i] + ys[j]) * cross;
-    }
-    const a2 = Math.abs(area2);
-    cx = sx / (3 * a2);
-    cy = sy / (3 * a2);
+  // The cap, over cap INDICES f (corner f), counter-clockwise because
+  // the corners now are.
+  const flat = new Float64Array(n * 2);
+  for (let f = 0; f < n; f++) {
+    flat[f * 2] = xs[f];
+    flat[f * 2 + 1] = ys[f];
   }
+  const capTris = isConvexLoop(flat, 0, n) ? cornerFan(n) : Uint32Array.from(earClip(flat, [0, n]));
   let minX = Infinity;
   let maxX = -Infinity;
   let minY = Infinity;
@@ -319,12 +357,10 @@ function polygonProfile(corners: Float64Array, centre?: readonly [number, number
   }
   const spanX = maxX - minX;
   const spanY = maxY - minY;
-  const capUv = new Float64Array((n + 1) * 2);
-  for (let i = 0; i <= n; i++) {
-    const x = i < n ? xs[i] : cx;
-    const y = i < n ? ys[i] : cy;
-    capUv[i * 2] = spanX > 0 ? (x - minX) / spanX : 0.5;
-    capUv[i * 2 + 1] = spanY > 0 ? (y - minY) / spanY : 0.5;
+  const capUv = new Float64Array(n * 2);
+  for (let i = 0; i < n; i++) {
+    capUv[i * 2] = spanX > 0 ? (xs[i] - minX) / spanX : 0.5;
+    capUv[i * 2 + 1] = spanY > 0 ? (ys[i] - minY) / spanY : 0.5;
   }
   return {
     count,
@@ -334,9 +370,9 @@ function polygonProfile(corners: Float64Array, centre?: readonly [number, number
     bandA,
     bandB,
     cap,
+    capTris,
     scaleParam: "width",
     axes: true,
-    capCentre: [cx, cy],
     capUv,
   };
 }
@@ -352,7 +388,7 @@ function polygonProfile(corners: Float64Array, centre?: readonly [number, number
 function rectProfile(shift: number): ProfileSpec {
   const lo = -0.5 + shift;
   const hi = 0.5 + shift;
-  return polygonProfile(Float64Array.of(0.5, lo, 0.5, hi, -0.5, hi, -0.5, lo), [0, shift]);
+  return polygonProfile(Float64Array.of(0.5, lo, 0.5, hi, -0.5, hi, -0.5, lo));
 }
 
 /** An example section for the refusals below: a unit block standing on the path. */
@@ -538,13 +574,13 @@ export const sweepProfile = standardNode<
       default: "center",
       enum: [...ANCHORS],
       description:
-        "Where a 'rect' sits across the frame's up axis: 'center' centres it on the path; 'bottom' STANDS it on the path — its bottom face runs through the path's points, so the section spans 0..height above them, which is a wall or a kerb built on a ground-hugging line; 'top' hangs it below, spanning -height..0, which is a beam under a deck line. Moves the cap fan's centre with it. Ignored by every other profile — a 'polygon' already says where the path is, because its corners are relative to the path point. Turned with the section by `roll`, about the path point.",
+        "Where a 'rect' sits across the frame's up axis: 'center' centres it on the path; 'bottom' STANDS it on the path — its bottom face runs through the path's points, so the section spans 0..height above them, which is a wall or a kerb built on a ground-hugging line; 'top' hangs it below, spanning -height..0, which is a beam under a deck line. Ignored by every other profile — a 'polygon' already says where the path is, because its corners are relative to the path point. Turned with the section by `roll`, about the path point.",
     },
     section: {
       type: "numberList",
       default: [],
       description:
-        "Corners of a 'polygon' profile as a flat list [x0, y0, x1, y1, ...]: x across the path along the ring's first axis, y along the frame's up axis, relative to the path point, then scaled by `width` and `height`. At least three corners; either winding (a clockwise list is reversed about its first corner, which keeps `v` = 0 there); do not restate the first corner at the end — the section closes itself. With frame 'upHint' and the default up, a horizontal path's first axis points to the LEFT of the direction of travel, so (x, y, travel) is right-handed; [0.5, 0, 0.5, 1, -0.5, 1, -0.5, 0] is a unit block standing on the path. Every corner is split (flat faces, per-face normals), `v` runs 0..1 by arc length around the corners in counter-clockwise order (starting at the first corner) measured on the section as given, before `width` and `height` scale it, and caps are fans from the section's area centroid, which is exact for any section every corner of which is visible from that centroid (every convex one) and overlaps itself otherwise — set `caps` false for a deeply concave section. Refused by name when it is not whole pairs, has fewer than three corners, repeats a corner, or encloses no area. Ignored by every other profile. Not field-capable: the section is one shape for the whole sweep, and `width`, `height` and `roll` are what vary per ring.",
+        "Corners of a 'polygon' profile as a flat list [x0, y0, x1, y1, ...]: x across the path along the ring's first axis, y along the frame's up axis, relative to the path point, then scaled by `width` and `height`. At least three corners; either winding (a clockwise list is reversed about its first corner, which keeps `v` = 0 there); do not restate the first corner at the end — the section closes itself. With frame 'upHint' and the default up, a horizontal path's first axis points to the LEFT of the direction of travel, so (x, y, travel) is right-handed; [0.5, 0, 0.5, 1, -0.5, 1, -0.5, 0] is a unit block standing on the path. Every corner is split (flat faces, per-face normals), `v` runs 0..1 by arc length around the corners in counter-clockwise order (starting at the first corner) measured on the section as given, before `width` and `height` scale it. Caps are exact for ANY simple section: a convex one is a fan of n - 2 triangles from its first corner, a concave one (an L, a T, an I-beam) is ear-clipped, deterministically, and neither adds a point. The section must not cross itself — a self-crossing list is not refused, and its caps describe nothing. Refused by name when it is not whole pairs, has fewer than three corners, repeats a corner, or encloses no area. Ignored by every other profile. Not field-capable: the section is one shape for the whole sweep, and `width`, `height` and `roll` are what vary per ring.",
     },
     frame: {
       type: "enum",
@@ -586,7 +622,7 @@ export const sweepProfile = standardNode<
       type: "bool",
       default: true,
       description:
-        "Close the two ends of an OPEN path with a CLOSED profile, as a triangle fan from the path's endpoint — for a 'rect' from its centre (which `anchor` moves off the path) and for a 'polygon' from its area centroid. Ignored for a closed path (it has no ends) and for the 'ribbon' profile (it has no hole), so all four combinations are defined rather than merely unsurprising. Cap points are separate from the wall's, so the seam between a flat cap and a round wall stays a real crease instead of being smoothed away. Cap uv is not a continuation of the wall's: for 'circle' and 'square' it is a disc mapping — the unit section, turned by `roll`, mapped into the 0..1 square — and for 'rect' and 'polygon' it maps the section's own bounding box onto 0..1, so a rectangle's corners land exactly on the uv square's.",
+        "Close the two ends of an OPEN path with a CLOSED profile, with triangles over the end ring's own corners and NO extra centre point: a convex section ('circle', 'square', 'rect', a convex 'polygon') is a fan of n - 2 triangles from its first corner, so a box end is 2 triangles and an 8-sided tube's end is 6, and a concave 'polygon' is ear-clipped. The start cap faces back along the path, the end cap forward. Ignored for a closed path (it has no ends) and for the 'ribbon' profile (it has no hole), so all four combinations are defined rather than merely unsurprising. Cap points are separate from the wall's, so the seam between a flat cap and a round wall stays a real crease instead of being smoothed away. Cap uv is not a continuation of the wall's: for 'circle' and 'square' it is a disc mapping — the unit section, turned by `roll`, mapped into the 0..1 square — and for 'rect' and 'polygon' it maps the section's own bounding box onto 0..1, so a rectangle's corners land exactly on the uv square's.",
     },
   },
   // `radius`, `width`, `height`, `up`, `roll` and `miterLimit` may resolve
@@ -689,7 +725,6 @@ export const sweepProfile = standardNode<
               : polygonProfile(sectionCorners(params.section));
     const perAxis = profile.axes;
     const capUv = profile.capUv;
-    const capCentre = profile.capCentre;
     const capable = profile.cap.length > 0 && params.caps;
     // Every field-capable param resolves BEFORE anything is written, on
     // the untouched input, so the GPU and CPU paths read the same bytes.
@@ -820,11 +855,20 @@ export const sweepProfile = standardNode<
       const pointBase = nPoints;
       nPoints += rings * profile.count;
       const capStart = caps ? nPoints : -1;
-      if (caps) nPoints += profile.cap.length + 1;
+      if (caps) nPoints += profile.cap.length;
       const capEnd = caps ? nPoints : -1;
-      if (caps) nPoints += profile.cap.length + 1;
-      nTris += bands * profile.bandA.length * 2 + (caps ? 2 * profile.cap.length : 0);
-      layouts.push({ table, dirs, rings, bands, caps, pointBase, capStart, capEnd });
+      if (caps) nPoints += profile.cap.length;
+      nTris += bands * profile.bandA.length * 2 + (caps ? (2 * profile.capTris.length) / 3 : 0);
+      layouts.push({
+        table,
+        dirs,
+        rings,
+        bands,
+        caps,
+        pointBase,
+        capStart,
+        capEnd,
+      });
     }
     if (nTris === 0 && tables.length > 0) {
       throw new Error(
@@ -870,22 +914,19 @@ export const sweepProfile = standardNode<
             srcPoint[L.capStart + c] = pts[0];
             srcPoint[L.capEnd + c] = pts[L.rings - 1];
           }
-          srcPoint[L.capStart + nc] = pts[0];
-          srcPoint[L.capEnd + nc] = pts[L.rings - 1];
           // The start cap faces backwards along the path, the end cap
-          // forwards, so their fans wind opposite ways.
-          for (let c = 0; c < nc; c++) {
-            const d = (c + 1) % nc;
-            v2p[t * 3] = L.capStart + nc;
-            v2p[t * 3 + 1] = L.capStart + d;
-            v2p[t * 3 + 2] = L.capStart + c;
+          // forwards, so the start cap takes the triangles reversed.
+          const ct = profile.capTris;
+          for (let k = 0; k < ct.length; k += 3) {
+            v2p[t * 3] = L.capStart + ct[k];
+            v2p[t * 3 + 1] = L.capStart + ct[k + 2];
+            v2p[t * 3 + 2] = L.capStart + ct[k + 1];
             primSrc[t++] = L.table.prim;
           }
-          for (let c = 0; c < nc; c++) {
-            const d = (c + 1) % nc;
-            v2p[t * 3] = L.capEnd + nc;
-            v2p[t * 3 + 1] = L.capEnd + c;
-            v2p[t * 3 + 2] = L.capEnd + d;
+          for (let k = 0; k < ct.length; k += 3) {
+            v2p[t * 3] = L.capEnd + ct[k];
+            v2p[t * 3 + 1] = L.capEnd + ct[k + 1];
+            v2p[t * 3 + 2] = L.capEnd + ct[k + 2];
             primSrc[t++] = L.table.prim;
           }
         }
@@ -1139,32 +1180,6 @@ export const sweepProfile = standardNode<
               uv[(capBase + c) * 2 + 1] = 0.5 + 0.5 * rp[1];
             }
           }
-          const co = (capBase + nc) * pStride;
-          if (capCentre !== undefined) {
-            // An off-path centre goes through the same scale, roll and
-            // basis as the ring's own points. No stretch: a cap stands on
-            // an open path's end, where both neighbouring segments are the
-            // same one and the miter never engages.
-            rollApply(rp, capCentre[0] * scale, capCentre[1] * scale2, rc, rsn);
-            pOut[co] = pd[po] + (rp[0] * e1[0] + rp[1] * e2[0]);
-            pOut[co + 1] = pd[po + 1] + (rp[0] * e1[1] + rp[1] * e2[1]);
-            pOut[co + 2] = pd[po + 2] + (rp[0] * e1[2] + rp[1] * e2[2]);
-          } else {
-            pOut[co] = pd[po];
-            pOut[co + 1] = pd[po + 1];
-            pOut[co + 2] = pd[po + 2];
-          }
-          const cno = (capBase + nc) * 3;
-          normal[cno] = nx * sign;
-          normal[cno + 1] = ny * sign;
-          normal[cno + 2] = nz * sign;
-          if (capUv !== undefined) {
-            uv[(capBase + nc) * 2] = capUv[nc * 2];
-            uv[(capBase + nc) * 2 + 1] = capUv[nc * 2 + 1];
-          } else {
-            uv[(capBase + nc) * 2] = 0.5;
-            uv[(capBase + nc) * 2 + 1] = 0.5;
-          }
         }
       }
     }
@@ -1214,9 +1229,88 @@ interface ExtrudeLayout {
    * interior whichever side the solid is on.
    */
   readonly hsign: number;
-  readonly wallBase: number;
-  readonly bottomBase: number;
-  readonly topBase: number;
+  /** First output point of this loop's walls (set in the placing pass). */
+  wallBase: number;
+  /** First output point of this loop's bottom cap points, or -1 for none. */
+  bottomBase: number;
+  /** First output point of this loop's top cap points, or -1 for none. */
+  topBase: number;
+}
+
+/**
+ * How one polygon's caps are triangulated, held on its OUTLINE's loop.
+ * `loops` are the table indices whose cap points the cap uses, outline
+ * first; `tris` indexes those points packed in that order (corner g of
+ * the outline, then the next loop's corners, ...), every triangle
+ * counter-clockwise seen from along the direction — or is undefined for
+ * the fan from the outline's first point a convex, hole-free polygon
+ * keeps.
+ */
+interface ExtrudeCapPlan {
+  readonly loops: readonly number[];
+  readonly tris: Uint32Array | undefined;
+}
+
+/** One polygon: an outline and the loops that are holes in it. */
+interface ExtrudeGroup {
+  /** Table indices: the outline, then its holes in input order. */
+  readonly loops: readonly number[];
+  /** The outline's table index. */
+  readonly outer: number;
+}
+
+/**
+ * The primitive attribute that makes a closed loop a HOLE: i32, -1 (or
+ * any negative) on an outline, and on a hole the primitive index of the
+ * outline it cuts, in the same geometry. The convention `polygonBoolean`
+ * and `splitPolygons` (./polygons.ts, `HOLE_OF_ATTR`) write and read, so
+ * their output extrudes with its holes and no param to set.
+ */
+const HOLE_OF = "holeOf";
+
+/**
+ * The input's closed loops as polygons: every loop is its own polygon,
+ * except that a loop whose {@link HOLE_OF} is 0 or more joins the polygon
+ * of the outline it names. Polygons come out in the order of their
+ * outlines, so the output keeps the input's order.
+ */
+function extrudeGroups(src: Geometry, tables: readonly PolylineArcTable[]): ExtrudeGroup[] {
+  const attr = src.attrs.primitive.get(HOLE_OF);
+  if (attr === undefined) return tables.map((_, t) => ({ loops: [t], outer: t }));
+  if (attr.type !== "i32" || attr.tupleSize !== 1) {
+    throw new Error(
+      `extrudePolygon: the input carries primitive attribute "${HOLE_OF}" as ${attr.type} with tupleSize ${attr.tupleSize}; "${HOLE_OF}" is read as the i32 link from a HOLE loop to the outline it cuts (-1 on an outline, the outline's primitive index on a hole — what polygonBoolean and splitPolygons write). Rename that attribute upstream, or rewrite it as i32.`,
+    );
+  }
+  const nPrim = src.primitiveCount;
+  const tableOf = new Int32Array(nPrim).fill(-1);
+  for (let t = 0; t < tables.length; t++) tableOf[tables[t].prim] = t;
+  const holeOf = attr.data;
+  const groupOf = new Int32Array(tables.length).fill(-1);
+  const groups: { loops: number[]; outer: number }[] = [];
+  for (let t = 0; t < tables.length; t++) {
+    if (holeOf[tables[t].prim] < 0) {
+      groupOf[t] = groups.length;
+      groups.push({ loops: [t], outer: t });
+    }
+  }
+  for (let t = 0; t < tables.length; t++) {
+    const prim = tables[t].prim;
+    const target = holeOf[prim];
+    if (target < 0) continue;
+    const ot = target < nPrim ? tableOf[target] : -1;
+    if (ot < 0 || holeOf[target] >= 0) {
+      throw new Error(
+        `extrudePolygon: primitive ${prim} has ${HOLE_OF} = ${target}, which names ${
+          ot < 0
+            ? `no closed polyline of the input's ${nPrim} primitive(s)`
+            : `primitive ${target}, itself a hole (its ${HOLE_OF} is ${holeOf[target]})`
+        }; ${HOLE_OF} is -1 on an outline and, on a hole, the primitive index of the OUTLINE it cuts. Set it to -1 to extrude this loop as a polygon of its own, or point it at the outline.`,
+      );
+    }
+    groups[groupOf[ot]].loops.push(t);
+  }
+  return groups;
 }
 
 /** A closed footprint swept along a direction into a solid. */
@@ -1228,7 +1322,7 @@ export const extrudePolygon = standardNode<
   type: "extrudePolygon",
   category: "surface",
   description:
-    "Treats every CLOSED polyline primitive as a polygon boundary and sweeps it along a direction into 3-vertex 'poly' triangles: a footprint becomes massing, a boundary loop becomes a wall. This is the node a pipeline that already computed its plots has been waiting for — a closed quad per lot renders as four hairlines until something gives it a third dimension. Output carries P, a `normal` (f32 tuple 3) and a `uv` (f32 tuple 2) the node writes itself, plus every INPUT POINT attribute copied onto the points that came from it and every input PRIMITIVE attribute gathered onto the triangles, so a per-lot `lotId` or `districtKind` survives; input VERTEX attributes are dropped. `normal` and `uv` are reporting slots — an input already carrying either at a different shape is REFUSED by name rather than silently deleted. On the walls `u` runs 0..1 around the boundary by ARC LENGTH (so a plot with one long side does not stretch its texture there) and `v` 0..1 from bottom to top; on the caps both run 0..1 across the footprint's own bounding box in the plane perpendicular to the direction. Walls, top cap and bottom cap keep SEPARATE points, so the edge where a roof meets a wall stays a crease instead of being shaded round. Caps are fan-triangulated from the boundary's first point, which is exact for a CONVEX footprint and is all the topology records — a concave footprint gets triangles outside itself, so subdivide it upstream. An OPEN polyline is refused by name: extrusion is not defined on one, and the fix is pointsToPath with `closed: true`. Winding is derived from the polygon's own Newell normal against the direction and against the sign of `distance`, so a footprint wound either way, extruded either way, comes out facing outward.",
+    "Treats every CLOSED polyline primitive as a polygon boundary and sweeps it along a direction into 3-vertex 'poly' triangles: a footprint becomes massing, a boundary loop becomes a wall. This is the node a pipeline that already computed its plots has been waiting for — a closed quad per lot renders as four hairlines until something gives it a third dimension. Output carries P, a `normal` (f32 tuple 3) and a `uv` (f32 tuple 2) the node writes itself, plus every INPUT POINT attribute copied onto the points that came from it and every input PRIMITIVE attribute gathered onto the triangles, so a per-lot `lotId` or `districtKind` survives; input VERTEX attributes are dropped. `normal` and `uv` are reporting slots — an input already carrying either at a different shape is REFUSED by name rather than silently deleted. On the walls `u` runs 0..1 around the boundary by ARC LENGTH (so a plot with one long side does not stretch its texture there) and `v` 0..1 from bottom to top; on the caps both run 0..1 across the footprint's own bounding box in the plane perpendicular to the direction. Walls, top cap and bottom cap keep SEPARATE points, so the edge where a roof meets a wall stays a crease instead of being shaded round. Caps are exact for any SIMPLE footprint, convex or not: a convex one is a fan from the boundary's first point (n - 2 triangles), a concave one (an L, a U, a courtyard block) is ear-clipped — deterministically, adding no points — as seen along the extrusion direction. HOLES: a closed loop whose i32 primitive attribute `holeOf` is 0 or more is a HOLE through the outline whose primitive index it holds (-1 marks an outline) — the convention polygonBoolean and splitPolygons write, so their output extrudes with its courtyards and stair wells as it comes; setAttribute writes it by hand. The caps are cut around each hole, and each hole gets walls of its own, facing INTO the hole. The outline decides the whole polygon: its direction (a 'vector' field is read on the OUTLINE's primitive, 'polygonNormal' is the outline's own normal), which side the solid is on (`distance` summed over every loop), and the cap normals and uv box; every cap triangle carries the outline's primitive attributes, each hole's walls the hole's. Loops may wind either way. A hole with a point outside its outline (seen along the direction), a `holeOf` naming no closed loop, and a hole of a hole are refused by primitive; crossing edges and holes overlapping each other are not searched for. A hole of zero area cuts nothing and still gets its walls. Without a `holeOf` attribute every loop is a polygon of its own. A self-crossing boundary is not refused and its caps describe nothing. An OPEN polyline is refused by name: extrusion is not defined on one, and the fix is pointsToPath with `closed: true`. Winding is derived from the polygon's own Newell normal against the direction and against the sign of `distance`, so a footprint wound either way, extruded either way, comes out facing outward.",
   inputs: [{ name: "in", kind: "geometry" }],
   outputs: [{ name: "out", kind: "geometry" }],
   params: {
@@ -1377,23 +1471,24 @@ export const extrudePolygon = standardNode<
       );
     }
 
-    const layouts: ExtrudeLayout[] = [];
     // Which direction rule, settled here rather than asked once per
     // POLYGON below — see the note in `src/noise/worley.ts`. The test is
     // POSITIVE, so a polygon under '+y' or 'vector' still skips the
     // Newell branch and keeps the direction it arrived with.
     const dirIsPolygonNormal = dirMode === "polygonNormal";
-    let nPoints = 0;
-    let nTris = 0;
-    for (const table of tables) {
+    const T = tables.length;
+    // Pass 1: every loop's corner count and Newell normal — exact for a
+    // planar loop, best-fit otherwise, and a pure function of the boundary
+    // order (no Map, no sort).
+    const newell = new Float64Array(T * 3);
+    for (let t = 0; t < T; t++) {
+      const table = tables[t];
       const m = table.points.length - 1;
       if (m < 3) {
         throw new Error(
           `extrudePolygon: primitive ${table.prim} closes over only ${m} distinct point(s); a polygon boundary needs at least 3`,
         );
       }
-      // Newell's normal: exact for a planar polygon, best-fit otherwise,
-      // and a pure function of the boundary order — no Map, no sort.
       let nx = 0;
       let ny = 0;
       let nz = 0;
@@ -1404,13 +1499,35 @@ export const extrudePolygon = standardNode<
         ny += (pd[a + 2] - pd[b + 2]) * (pd[a] + pd[b]);
         nz += (pd[a] - pd[b]) * (pd[a + 1] + pd[b + 1]);
       }
+      newell[t * 3] = nx;
+      newell[t * 3 + 1] = ny;
+      newell[t * 3 + 2] = nz;
+    }
+    const groups = extrudeGroups(src, tables);
+
+    // Pass 2, per POLYGON (an outline and its holes): the direction, the
+    // side the solid is on, each loop's facing, and the cap plan.
+    const layouts = new Array<ExtrudeLayout>(T);
+    const capPlans = new Array<ExtrudeCapPlan | undefined>(T);
+    const hasCapPoints = new Uint8Array(T);
+    const q0: number[] = [0, 0, 0, 1];
+    const b1: number[] = [0, 0, 0];
+    const b2: number[] = [0, 0, 0];
+    for (const group of groups) {
+      checkCancelled();
+      const outer = group.outer;
+      const table = tables[outer];
       let dx = gx;
       let dy = gy;
       let dz = gz;
+      const nx = newell[outer * 3];
+      const ny = newell[outer * 3 + 1];
+      const nz = newell[outer * 3 + 2];
       if (vectorCol !== undefined) {
-        // This polygon's own direction. A zero one is the same condition
-        // 'polygonNormal' refuses below — the polygon names no direction
-        // — so it gets the same answer, by primitive index.
+        // This polygon's own direction, read on its OUTLINE's primitive.
+        // A zero one is the same condition 'polygonNormal' refuses below
+        // — the polygon names no direction — so it gets the same answer,
+        // by primitive index.
         const vx = readComp(vectorCol, table.prim, 0);
         const vy = readComp(vectorCol, table.prim, 1);
         const vz = readComp(vectorCol, table.prim, 2);
@@ -1437,44 +1554,151 @@ export const extrudePolygon = standardNode<
         dy = ny * inv;
         dz = nz * inv;
       }
-      const wind = nx * dx + ny * dy + nz * dz >= 0 ? 1 : -1;
       // Which SIDE the solid ends up on. Summed rather than sampled so a
-      // per-point `distance` decides it as a whole; a footprint whose
-      // distances straddle zero is a bowtie and has no outward side, so
-      // any rule is arbitrary there and this one is at least total.
+      // per-point `distance` decides it as a whole — over every loop of
+      // the polygon, so a hole's walls cannot disagree with its outline's.
+      // A footprint whose distances straddle zero is a bowtie and has no
+      // outward side, so any rule is arbitrary there and this one is at
+      // least total.
       let hsum = 0;
-      for (let i = 0; i < m; i++) hsum += readComp(distCol, table.points[i], 0);
+      for (const t of group.loops) {
+        const pts = tables[t].points;
+        const m = pts.length - 1;
+        for (let i = 0; i < m; i++) hsum += readComp(distCol, pts[i], 0);
+      }
       const hsign = hsum >= 0 ? 1 : -1;
-      const wallBase = nPoints;
+      for (const t of group.loops) {
+        const lx = newell[t * 3];
+        const ly = newell[t * 3 + 1];
+        const lz = newell[t * 3 + 2];
+        const own = lx * dx + ly * dy + lz * dz >= 0 ? 1 : -1;
+        layouts[t] = {
+          table: tables[t],
+          corners: tables[t].points.length - 1,
+          dx,
+          dy,
+          dz,
+          nx: lx,
+          ny: ly,
+          nz: lz,
+          // A hole's walls face INTO the hole — away from the solid — so
+          // a hole takes the facing opposite its own winding.
+          wind: t === outer ? own : -own,
+          hsign,
+          wallBase: -1,
+          bottomBase: -1,
+          topBase: -1,
+        };
+      }
+      // Nothing more to decide for a lone loop that takes no cap.
+      if (!(wantBottom || wantTop) && group.loops.length === 1) continue;
+      // The cap plane's basis — the construction the write pass uses for
+      // the cap uv, so the same bits.
+      orientQuat(q0, dx, dy, dz, 0, 1, 0, ORIENT_AXIS_PZ);
+      rotateVec(b1, q0[0], q0[1], q0[2], q0[3], 1, 0, 0);
+      rotateVec(b2, q0[0], q0[1], q0[2], q0[3], 0, 1, 0);
+      // Every loop of the polygon in the cap plane, outline first.
+      const order = [outer];
+      for (const t of group.loops) if (t !== outer) order.push(t);
+      const starts: number[] = [];
+      let nv = 0;
+      for (const t of order) {
+        starts.push(nv);
+        nv += tables[t].points.length - 1;
+      }
+      starts.push(nv);
+      const xy = new Float64Array(nv * 2);
+      for (let k = 0; k < order.length; k++) {
+        const pts = tables[order[k]].points;
+        for (let j = 0; j < starts[k + 1] - starts[k]; j++) {
+          const a = pts[j] * ps;
+          xy[(starts[k] + j) * 2] = pd[a] * b1[0] + pd[a + 1] * b1[1] + pd[a + 2] * b1[2];
+          xy[(starts[k] + j) * 2 + 1] = pd[a] * b2[0] + pd[a + 1] * b2[1] + pd[a + 2] * b2[2];
+        }
+      }
+      const outerArea = loopArea2(xy, 0, starts[1]);
+      if (outerArea !== 0) {
+        // A hole has to lie inside its outline. Checked per point
+        // (touching the outline is allowed); crossing edges are not
+        // searched for.
+        for (let k = 1; k < order.length; k++) {
+          for (let j = starts[k]; j < starts[k + 1]; j++) {
+            if (pointInLoop(xy, 0, starts[1], xy[j * 2], xy[j * 2 + 1]) < 0) {
+              const hole = tables[order[k]];
+              throw new Error(
+                `extrudePolygon: primitive ${hole.prim} is a hole of primitive ${table.prim} (its ${HOLE_OF} is ${table.prim}), but the hole's point ${hole.points[j - starts[k]]} lies OUTSIDE that outline, seen along the extrusion direction. A hole must sit inside the loop it cuts: set its ${HOLE_OF} to -1 if it is a polygon of its own, or fix it upstream.`,
+              );
+            }
+          }
+        }
+      }
+      if (!(wantBottom || wantTop)) continue;
+      hasCapPoints[outer] = 1;
+      // Holes that cut nothing (zero area in the cap plane, or an outline
+      // with none) take no cap points; their walls are still built.
+      const live: number[] = [];
+      if (outerArea !== 0) {
+        for (let k = 1; k < order.length; k++) {
+          if (loopArea2(xy, starts[k], starts[k + 1] - starts[k]) !== 0) live.push(k);
+        }
+      }
+      if (live.length === 0 && isConvexLoop(xy, 0, starts[1])) {
+        // A convex outline keeps the fan from its first point it has
+        // always had — the same triangles, bit for bit.
+        capPlans[outer] = { loops: [outer], tris: undefined };
+        continue;
+      }
+      // Ear-clipped, over the outline and the live holes packed in that
+      // order: cap vertex g of the plan is corner g of the outline, then
+      // the first live hole's corners, and so on.
+      const loops = [outer];
+      const packedStarts = [0];
+      let packed = starts[1];
+      for (const k of live) {
+        loops.push(order[k]);
+        packedStarts.push(packed);
+        packed += starts[k + 1] - starts[k];
+        hasCapPoints[order[k]] = 1;
+      }
+      packedStarts.push(packed);
+      const packedXy = new Float64Array(packed * 2);
+      packedXy.set(xy.subarray(0, starts[1] * 2), 0);
+      for (let i = 0; i < live.length; i++) {
+        const k = live[i];
+        packedXy.set(xy.subarray(starts[k] * 2, starts[k + 1] * 2), packedStarts[i + 1] * 2);
+      }
+      capPlans[outer] = {
+        loops,
+        tris: Uint32Array.from(earClip(packedXy, packedStarts)),
+      };
+    }
+
+    // Pass 3: where every loop's points land, in input order — its walls,
+    // then its bottom and top cap points when it carries any.
+    let nPoints = 0;
+    let nTris = 0;
+    for (let t = 0; t < T; t++) {
+      const L = layouts[t];
+      const m = L.corners;
+      L.wallBase = nPoints;
       if (wantSides) {
         nPoints += m * 4;
         nTris += m * 2;
       }
-      const bottomBase = wantBottom ? nPoints : -1;
-      if (wantBottom) {
+      if (hasCapPoints[t] === 1 && wantBottom) {
+        L.bottomBase = nPoints;
         nPoints += m;
-        nTris += m - 2;
       }
-      const topBase = wantTop ? nPoints : -1;
-      if (wantTop) {
+      if (hasCapPoints[t] === 1 && wantTop) {
+        L.topBase = nPoints;
         nPoints += m;
-        nTris += m - 2;
       }
-      layouts.push({
-        table,
-        corners: m,
-        dx,
-        dy,
-        dz,
-        nx,
-        ny,
-        nz,
-        wind,
-        hsign,
-        wallBase,
-        bottomBase,
-        topBase,
-      });
+      const plan = capPlans[t];
+      if (plan !== undefined) {
+        const per = plan.tris === undefined ? m - 2 : plan.tris.length / 3;
+        if (wantBottom) nTris += per;
+        if (wantTop) nTris += per;
+      }
     }
 
     const srcPoint = new Uint32Array(nPoints);
@@ -1484,7 +1708,8 @@ export const extrudePolygon = standardNode<
     const primSrc = new Uint32Array(nTris);
     {
       let t = 0;
-      for (const L of layouts) {
+      for (let li = 0; li < T; li++) {
+        const L = layouts[li];
         const m = L.corners;
         const pts = L.table.points;
         // Every winding decision runs off wind * hsign: the geometry
@@ -1522,24 +1747,63 @@ export const extrudePolygon = standardNode<
             }
           }
         }
-        if (wantBottom) {
-          for (let j = 0; j < m; j++) srcPoint[L.bottomBase + j] = pts[j];
-          // The bottom faces AGAINST the direction, so its fan winds
-          // opposite the top's.
-          for (let j = 1; j + 1 < m; j++) {
-            v2p[t * 3] = L.bottomBase;
-            v2p[t * 3 + 1] = L.bottomBase + (emit > 0 ? j + 1 : j);
-            v2p[t * 3 + 2] = L.bottomBase + (emit > 0 ? j : j + 1);
-            primSrc[t++] = L.table.prim;
+        if (L.bottomBase >= 0) for (let j = 0; j < m; j++) srcPoint[L.bottomBase + j] = pts[j];
+        if (L.topBase >= 0) for (let j = 0; j < m; j++) srcPoint[L.topBase + j] = pts[j];
+        const plan = capPlans[li];
+        if (plan !== undefined && plan.tris === undefined) {
+          if (wantBottom) {
+            // The bottom faces AGAINST the direction, so its fan winds
+            // opposite the top's.
+            for (let j = 1; j + 1 < m; j++) {
+              v2p[t * 3] = L.bottomBase;
+              v2p[t * 3 + 1] = L.bottomBase + (emit > 0 ? j + 1 : j);
+              v2p[t * 3 + 2] = L.bottomBase + (emit > 0 ? j : j + 1);
+              primSrc[t++] = L.table.prim;
+            }
           }
-        }
-        if (wantTop) {
-          for (let j = 0; j < m; j++) srcPoint[L.topBase + j] = pts[j];
-          for (let j = 1; j + 1 < m; j++) {
-            v2p[t * 3] = L.topBase;
-            v2p[t * 3 + 1] = L.topBase + (emit > 0 ? j : j + 1);
-            v2p[t * 3 + 2] = L.topBase + (emit > 0 ? j + 1 : j);
-            primSrc[t++] = L.table.prim;
+          if (wantTop) {
+            for (let j = 1; j + 1 < m; j++) {
+              v2p[t * 3] = L.topBase;
+              v2p[t * 3 + 1] = L.topBase + (emit > 0 ? j : j + 1);
+              v2p[t * 3 + 2] = L.topBase + (emit > 0 ? j + 1 : j);
+              primSrc[t++] = L.table.prim;
+            }
+          }
+        } else if (plan !== undefined && plan.tris !== undefined) {
+          // Ear-clipped: every triangle counter-clockwise in the cap
+          // plane, which faces along the direction. The top faces along
+          // it when the solid is built along it (hsign > 0), the bottom
+          // against — winding here needs only hsign, because the clipper
+          // already settled the loops' own winding.
+          let nc = 0;
+          for (const k of plan.loops) nc += layouts[k].corners;
+          const bottomAt = new Uint32Array(nc);
+          const topAt = new Uint32Array(nc);
+          let g = 0;
+          for (const k of plan.loops) {
+            const K = layouts[k];
+            for (let j = 0; j < K.corners; j++, g++) {
+              bottomAt[g] = K.bottomBase + j;
+              topAt[g] = K.topBase + j;
+            }
+          }
+          const tris = plan.tris;
+          const up = L.hsign > 0;
+          if (wantBottom) {
+            for (let k = 0; k < tris.length; k += 3) {
+              v2p[t * 3] = bottomAt[tris[k]];
+              v2p[t * 3 + 1] = bottomAt[tris[k + (up ? 2 : 1)]];
+              v2p[t * 3 + 2] = bottomAt[tris[k + (up ? 1 : 2)]];
+              primSrc[t++] = L.table.prim;
+            }
+          }
+          if (wantTop) {
+            for (let k = 0; k < tris.length; k += 3) {
+              v2p[t * 3] = topAt[tris[k]];
+              v2p[t * 3 + 1] = topAt[tris[k + (up ? 1 : 2)]];
+              v2p[t * 3 + 2] = topAt[tris[k + (up ? 2 : 1)]];
+              primSrc[t++] = L.table.prim;
+            }
           }
         }
       }
@@ -1564,7 +1828,8 @@ export const extrudePolygon = standardNode<
     // degenerate edge can borrow from a real one.
     let wallN = new Float64Array(0);
     let done = 0;
-    for (const L of layouts) {
+    for (let li = 0; li < T; li++) {
+      const L = layouts[li];
       if ((done & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
       const m = L.corners;
       const pts = L.table.points;
@@ -1665,7 +1930,8 @@ export const extrudePolygon = standardNode<
           }
         }
       }
-      if (wantBottom || wantTop) {
+      const plan = capPlans[li];
+      if (plan !== undefined) {
         // Cap normals come from the caps' OWN Newell normals, not from
         // the direction. Two things need that: a footprint lying in a
         // tilted plane extruded straight up has caps facing the tilt,
@@ -1735,35 +2001,41 @@ export const extrudePolygon = standardNode<
         }
         const inv1 = max1 > min1 ? 1 / (max1 - min1) : 0;
         const inv2 = max2 > min2 ? 1 / (max2 - min2) : 0;
-        for (let j = 0; j < m; j++) {
-          const i0 = pts[j];
-          const a = i0 * ps;
-          const s1 = (pd[a] * c1[0] + pd[a + 1] * c1[1] + pd[a + 2] * c1[2] - min1) * inv1;
-          const s2 = (pd[a] * c2[0] + pd[a + 1] * c2[1] + pd[a + 2] * c2[2] - min2) * inv2;
-          if (wantBottom) {
-            const o = (L.bottomBase + j) * pStride;
-            pOut[o] = pd[a];
-            pOut[o + 1] = pd[a + 1];
-            pOut[o + 2] = pd[a + 2];
-            const no = (L.bottomBase + j) * 3;
-            normal[no] = bx;
-            normal[no + 1] = by;
-            normal[no + 2] = bz;
-            uv[(L.bottomBase + j) * 2] = s1;
-            uv[(L.bottomBase + j) * 2 + 1] = s2;
-          }
-          if (wantTop) {
-            const h = readComp(distCol, i0, 0);
-            const o = (L.topBase + j) * pStride;
-            pOut[o] = pd[a] + dx * h;
-            pOut[o + 1] = pd[a + 1] + dy * h;
-            pOut[o + 2] = pd[a + 2] + dz * h;
-            const no = (L.topBase + j) * 3;
-            normal[no] = tx;
-            normal[no + 1] = ty;
-            normal[no + 2] = tz;
-            uv[(L.topBase + j) * 2] = s1;
-            uv[(L.topBase + j) * 2 + 1] = s2;
+        // Every loop of the polygon takes the OUTLINE's cap normals and uv
+        // box: a hole is a gap in one flat cap, not a cap of its own.
+        for (const k of plan.loops) {
+          const K = layouts[k];
+          const kPts = K.table.points;
+          for (let j = 0; j < K.corners; j++) {
+            const i0 = kPts[j];
+            const a = i0 * ps;
+            const s1 = (pd[a] * c1[0] + pd[a + 1] * c1[1] + pd[a + 2] * c1[2] - min1) * inv1;
+            const s2 = (pd[a] * c2[0] + pd[a + 1] * c2[1] + pd[a + 2] * c2[2] - min2) * inv2;
+            if (wantBottom) {
+              const o = (K.bottomBase + j) * pStride;
+              pOut[o] = pd[a];
+              pOut[o + 1] = pd[a + 1];
+              pOut[o + 2] = pd[a + 2];
+              const no = (K.bottomBase + j) * 3;
+              normal[no] = bx;
+              normal[no + 1] = by;
+              normal[no + 2] = bz;
+              uv[(K.bottomBase + j) * 2] = s1;
+              uv[(K.bottomBase + j) * 2 + 1] = s2;
+            }
+            if (wantTop) {
+              const h = readComp(distCol, i0, 0);
+              const o = (K.topBase + j) * pStride;
+              pOut[o] = pd[a] + dx * h;
+              pOut[o + 1] = pd[a + 1] + dy * h;
+              pOut[o + 2] = pd[a + 2] + dz * h;
+              const no = (K.topBase + j) * 3;
+              normal[no] = tx;
+              normal[no + 1] = ty;
+              normal[no + 2] = tz;
+              uv[(K.topBase + j) * 2] = s1;
+              uv[(K.topBase + j) * 2 + 1] = s2;
+            }
           }
         }
       }
@@ -2132,6 +2404,403 @@ export const smoothNormals = standardNode<
       normal[p * 3 + 1] = len > 0 ? y * inv : oy;
       normal[p * 3 + 2] = len > 0 ? z * inv : oz;
     }
+    return { out: [makeGeometryItem(out)] };
+  },
+});
+
+/** One `from` path and the `to` path it is bridged to. */
+interface BridgePair {
+  readonly a: PolylineArcTable;
+  readonly b: PolylineArcTable;
+  /** Distinct points per side: a closed path's closing repeat is not one. */
+  readonly n: number;
+  /** Quads: `n` when closed (the last wraps to the first), `n - 1` when open. */
+  readonly quads: number;
+  /** First output point of this pair's `from` side; its `to` side is `toBase`. */
+  readonly fromBase: number;
+  readonly toBase: number;
+}
+
+/** A pair key, read by value: a whole number or a string. */
+function bridgeKeys(
+  geo: Geometry,
+  pin: "from" | "to",
+  name: string,
+  tables: readonly PolylineArcTable[],
+): (number | string)[] {
+  const attr = requireAttributeOn(geo, "primitive", name, {
+    prefix: "bridgePaths: ",
+    param: "pairAttr",
+    pin,
+    on: `the geometry on pin "${pin}"`,
+    reader: 'param "pairAttr"',
+    otherDomain: "promote",
+    suffix: ' Both inputs must carry it; leave "pairAttr" empty to pair the paths in primitive order.',
+  });
+  if (attr.tupleSize !== 1) {
+    throw new Error(
+      `bridgePaths: param "pairAttr" names primitive attribute "${name}" on pin "${pin}" with tuple size ${attr.tupleSize}; a pair key must be scalar — a whole-number id (setAttribute type 'i32', domain 'primitive') or a string name`,
+    );
+  }
+  const isString = attr.type === "string";
+  return tables.map((table) => {
+    if (isString) return attr.getString(table.prim);
+    const value = attr.data[table.prim];
+    if (!Number.isInteger(value)) {
+      throw new Error(
+        `bridgePaths: primitive ${table.prim} on pin "${pin}" has ${name} = ${value}, which is not a whole number; a pair key is an IDENTITY — it says which "to" path a "from" path is bridged to — and a fractional value cannot be trusted to equal itself. Write a whole-number id with setAttribute (type 'i32', domain 'primitive'), or name the pairs with a string attribute`,
+      );
+    }
+    return value;
+  });
+}
+
+/** Strips of quads between two paths, point i to point i. */
+export const bridgePaths = standardNode<BridgePathsParams, BridgePathsInputs, BridgePathsOutputs>({
+  type: "bridgePaths",
+  category: "surface",
+  description:
+    "Joins each polyline on `from` to one polyline on `to` with a strip of quads, point i to point i: segment i of the one path, segment i of the other and the two rungs between their ends make one quad, emitted as two 3-vertex 'poly' triangles (the mesh convention every consumer here reads — surfaceSample, the uv and raycast transfers). This is the band between two lines: a road shoulder between a kerb line and its pathShift offset, a ribbon between two rails, an annulus between two concentric rings, one band of a loft between two sections. PAIRING: with `pairAttr` empty the i-th polyline of `from` pairs with the i-th of `to`, in primitive order, and different path COUNTS are refused naming both; with `pairAttr` set, the path on each side carrying the same key is the pair. A pair's two paths must have the SAME number of points (refused naming both counts and both primitives — resample both with pathResample mode 'count' to one count) and must both be open or both closed: two closed paths wrap, so the last quad joins the last points back to the first and the band is a ring with no seam in its geometry. THE PATHS ARE NOT RESAMPLED OR MATCHED: point i meets point i whatever their spacing, so two paths sampled by the same count along similar lengths give an even band, and an offset path that folded back on itself gives a folded band. OUTPUT: every `from` point of every pair, then every `to` point, each carrying its own input's point attributes (a name both sides carry must agree on type and tuple size, and fills with its default where one side lacks it); a `normal` (f32 tuple 3) the node writes — shared by the two points of a rung, the normalized sum of the unit normals of the (at most two) quads meeting at that rung, so a band that bends shades round; a rung whose quads have no area or cancel borrows the nearest earlier rung that has one, or the first — and a `uv` (f32 tuple 2): `u` is each side's own normalized arc length, `v` is 0 on `from` and 1 on `to`. On a closed pair `u` returns to 0 across the closing quad, as it does on sweepProfile's closed tubes. Every triangle carries the primitive attributes of its `from` path; `to`'s primitive attributes and detail are dropped. FACING: with `from` on the right of the direction of travel and `to` on its left (seen from above), the band faces UP — the triangles wind so that (along `from`) x (from -> to) is the face normal — and `flip` turns it over. Single-sided like any mesh: flip it, or bridge the pair twice, for a band seen from both sides. `normal` and `uv` are reporting slots — an input already carrying either at a different shape is refused by name. Deterministic: pairs come out in `from` primitive order, quads in path order.",
+  inputs: [
+    { name: "from", kind: "geometry" },
+    { name: "to", kind: "geometry" },
+  ],
+  outputs: [{ name: "out", kind: "geometry" }],
+  params: {
+    pairAttr: {
+      type: "string",
+      default: "",
+      description:
+        "Name of a scalar PRIMITIVE attribute, on BOTH inputs, that says which `to` path each `from` path is bridged to: the paths carrying the same key are a pair. A key is a whole number (setAttribute type 'i32' on the primitive domain) or a string compared by value — the rules pointsToPath's `groupAttr` sets. Every key must appear exactly once on each side; a key repeated on one side, or present on only one, is refused by name. Pairs still come out in `from` primitive order. Empty (the default) pairs the i-th polyline of `from` with the i-th of `to` — right whenever both sides came from the same paths through nodes that keep primitive order (pathShift, pathResample, transformPoints), and the reason this is optional.",
+    },
+    flip: {
+      type: "bool",
+      default: false,
+      description:
+        "Turn the band over: reverse every triangle's winding and negate the written `normal`, so the band faces the other way. The default faces (along `from`) x (from -> to): with `from` on the right of the direction of travel and `to` on its left, a flat band faces up.",
+    },
+  },
+  execute({ inputs, params, checkCancelled }) {
+    const flip = params.flip;
+    const fromGeo = requireGeometry(inputs, "from", "bridgePaths");
+    const toGeo = requireGeometry(inputs, "to", "bridgePaths");
+    for (const [geo, pin] of [
+      [fromGeo, "from"],
+      [toGeo, "to"],
+    ] as const) {
+      requireReportSlot({
+        attrs: geo.attrs.point,
+        nodeType: "bridgePaths",
+        param: "normal",
+        name: "normal",
+        type: "f32",
+        tupleSize: 3,
+        domain: "point",
+        suggestion: `${pin}Normal`,
+      });
+      requireReportSlot({
+        attrs: geo.attrs.point,
+        nodeType: "bridgePaths",
+        param: "uv",
+        name: "uv",
+        type: "f32",
+        tupleSize: 2,
+        domain: "point",
+        suggestion: `${pin}Uv`,
+      });
+    }
+    // An empty geometry on both pins (a partitioned cook's empty cell)
+    // bridges to an empty mesh; one with points and no path is refused.
+    const fromTables = polylineArcTables(fromGeo, "bridgePaths", "emptyInput");
+    const toTables = polylineArcTables(toGeo, "bridgePaths", "emptyInput");
+
+    // The pairs, in `from` primitive order.
+    const matched: [PolylineArcTable, PolylineArcTable][] = [];
+    const pairAttr = params.pairAttr;
+    if (pairAttr === "") {
+      if (fromTables.length !== toTables.length) {
+        throw new Error(
+          `bridgePaths: pin "from" carries ${fromTables.length} polyline(s) and pin "to" carries ${toTables.length}; paired in primitive order, every "from" path needs one "to" path. Feed both pins paths made from the same source (pathShift and pathResample keep primitive order), or set "pairAttr" to a primitive attribute both sides carry to pair them by key.`,
+        );
+      }
+      for (let i = 0; i < fromTables.length; i++) matched.push([fromTables[i], toTables[i]]);
+    } else {
+      // A side with no path has no key to read (an empty cell carries no
+      // attributes at all); its partner's keys then go unmatched below.
+      const fromKeys = fromTables.length > 0 ? bridgeKeys(fromGeo, "from", pairAttr, fromTables) : [];
+      const toKeys = toTables.length > 0 ? bridgeKeys(toGeo, "to", pairAttr, toTables) : [];
+      const toByKey = new Map<number | string, number>();
+      for (let j = 0; j < toTables.length; j++) {
+        const seen = toByKey.get(toKeys[j]);
+        if (seen !== undefined) {
+          throw new Error(
+            `bridgePaths: primitives ${toTables[seen].prim} and ${toTables[j].prim} on pin "to" both carry ${pairAttr} = ${JSON.stringify(toKeys[j])}; a key names ONE path on each side, so each "from" path has exactly one partner`,
+          );
+        }
+        toByKey.set(toKeys[j], j);
+      }
+      const fromSeen = new Map<number | string, number>();
+      for (let i = 0; i < fromTables.length; i++) {
+        const key = fromKeys[i];
+        const twin = fromSeen.get(key);
+        if (twin !== undefined) {
+          throw new Error(
+            `bridgePaths: primitives ${fromTables[twin].prim} and ${fromTables[i].prim} on pin "from" both carry ${pairAttr} = ${JSON.stringify(key)}; a key names ONE path on each side, so each "from" path has exactly one partner`,
+          );
+        }
+        fromSeen.set(key, i);
+        const j = toByKey.get(key);
+        if (j === undefined) {
+          throw new Error(
+            `bridgePaths: primitive ${fromTables[i].prim} on pin "from" carries ${pairAttr} = ${JSON.stringify(key)}, and no polyline on pin "to" does; every key needs a path on both sides`,
+          );
+        }
+        matched.push([fromTables[i], toTables[j]]);
+      }
+      for (let j = 0; j < toTables.length; j++) {
+        if (!fromSeen.has(toKeys[j])) {
+          throw new Error(
+            `bridgePaths: primitive ${toTables[j].prim} on pin "to" carries ${pairAttr} = ${JSON.stringify(toKeys[j])}, and no polyline on pin "from" does; every key needs a path on both sides`,
+          );
+        }
+      }
+    }
+
+    // Layout: every pair's `from` points first, then every pair's `to`
+    // points, so each side's attributes arrive as one contiguous block.
+    let totalFrom = 0;
+    let nTris = 0;
+    const shapes: { n: number; quads: number; fromBase: number }[] = [];
+    for (const [a, b] of matched) {
+      if (a.closed !== b.closed) {
+        const [c, o] = a.closed ? ["from", "to"] : ["to", "from"];
+        throw new Error(
+          `bridgePaths: primitive ${a.prim} on pin "from" and primitive ${b.prim} on pin "to" are a pair, but the one on "${c}" is CLOSED and the one on "${o}" is OPEN; a band between them has no consistent end. Close both (pointsToPath \`closed: true\`) for a ring, or open both.`,
+        );
+      }
+      const na = a.points.length - (a.closed ? 1 : 0);
+      const nb = b.points.length - (b.closed ? 1 : 0);
+      if (na !== nb) {
+        throw new Error(
+          `bridgePaths: primitive ${a.prim} on pin "from" has ${na} point(s) and its pair, primitive ${b.prim} on pin "to", has ${nb}; a bridge joins point i to point i, so both sides need the same count. Resample both to one count first (pathResample mode "count" with the same "count" on each side).`,
+        );
+      }
+      if (a.closed && na < 3) {
+        throw new Error(
+          `bridgePaths: primitives ${a.prim} ("from") and ${b.prim} ("to") are closed over only ${na} distinct point(s); a closed band needs at least 3`,
+        );
+      }
+      const quads = a.closed ? na : na - 1;
+      shapes.push({ n: na, quads, fromBase: totalFrom });
+      totalFrom += na;
+      nTris += quads * 2;
+    }
+    const pairs: BridgePair[] = matched.map(([a, b], k) => ({
+      a,
+      b,
+      n: shapes[k].n,
+      quads: shapes[k].quads,
+      fromBase: shapes[k].fromBase,
+      toBase: totalFrom + shapes[k].fromBase,
+    }));
+    const nPoints = totalFrom * 2;
+
+    const srcFrom = new Uint32Array(totalFrom);
+    const srcTo = new Uint32Array(totalFrom);
+    const v2p = new Uint32Array(nTris * 3);
+    const primStart = new Uint32Array(nTris);
+    const primCount = new Uint32Array(nTris);
+    const primSrc = new Uint32Array(nTris);
+    {
+      let t = 0;
+      for (const pr of pairs) {
+        for (let i = 0; i < pr.n; i++) {
+          srcFrom[pr.fromBase + i] = pr.a.points[i];
+          srcTo[pr.fromBase + i] = pr.b.points[i];
+        }
+        for (let i = 0; i < pr.quads; i++) {
+          const j = (i + 1) % pr.n;
+          const a0 = pr.fromBase + i;
+          const a1 = pr.fromBase + j;
+          const b0 = pr.toBase + i;
+          const b1 = pr.toBase + j;
+          if (!flip) {
+            v2p[t * 3] = a0;
+            v2p[t * 3 + 1] = a1;
+            v2p[t * 3 + 2] = b0;
+            primSrc[t++] = pr.a.prim;
+            v2p[t * 3] = a1;
+            v2p[t * 3 + 1] = b1;
+            v2p[t * 3 + 2] = b0;
+            primSrc[t++] = pr.a.prim;
+          } else {
+            v2p[t * 3] = a0;
+            v2p[t * 3 + 1] = b0;
+            v2p[t * 3 + 2] = a1;
+            primSrc[t++] = pr.a.prim;
+            v2p[t * 3] = a1;
+            v2p[t * 3 + 1] = b0;
+            v2p[t * 3 + 2] = b1;
+            primSrc[t++] = pr.a.prim;
+          }
+        }
+      }
+      for (let i = 0; i < nTris; i++) {
+        primStart[i] = i * 3;
+        primCount[i] = 3;
+      }
+    }
+
+    // Point attributes: each side gathered on its own, then laid into one
+    // set as two blocks — the union of both sides' columns, a column one
+    // side lacks filled with its default over that side's block.
+    const sideA = new Geometry();
+    copyElements(fromGeo.attrs.point, sideA.attrs.point, srcFrom, totalFrom);
+    const sideB = new Geometry();
+    copyElements(toGeo.attrs.point, sideB.attrs.point, srcTo, totalFrom);
+    const out = new Geometry();
+    const set = out.attrs.point;
+    set.resize(nPoints);
+    for (const attr of sideA.attrs.point) {
+      set.add(attr.name, attr.type, attr.tupleSize, attr.defaultValue as AttrDefault);
+    }
+    for (const attr of sideB.attrs.point) {
+      const have = set.get(attr.name);
+      if (have === undefined) {
+        set.add(attr.name, attr.type, attr.tupleSize, attr.defaultValue as AttrDefault);
+      } else if (have.type !== attr.type || have.tupleSize !== attr.tupleSize) {
+        throw new Error(
+          `bridgePaths: point attribute "${attr.name}" is ${have.type} tuple ${have.tupleSize} on pin "from" and ${attr.type} tuple ${attr.tupleSize} on pin "to"; the output carries both sides' points in one column, so a name both carry must agree on type and tuple size. Rename one side with setAttribute, or drop it upstream with removeAttribute (domain "point", names ["${attr.name}"]).`,
+        );
+      }
+    }
+    for (const dst of set) {
+      const a = sideA.attrs.point.get(dst.name);
+      if (a === undefined) dst.fillDefault(0, totalFrom);
+      else dst.copyFrom(a, 0, 0, totalFrom);
+      const b = sideB.attrs.point.get(dst.name);
+      if (b === undefined) dst.fillDefault(totalFrom, nPoints);
+      else dst.copyFrom(b, 0, totalFrom, totalFrom);
+    }
+    const P = set.require("P");
+    const pd = P.data;
+    const ps = P.tupleSize;
+    const normal = set.replace("normal", "f32", 3, [0, 0, 0]).writable();
+    const uv = set.replace("uv", "f32", 2, [0, 0]).writable();
+
+    // Per pair: every quad's unit normal from its two diagonals (so the
+    // diagonal the triangles happen to split on does not bias it), then
+    // each rung's normal as the normalized sum of the quads either side.
+    let qn = new Float64Array(0);
+    let good = new Uint8Array(0);
+    const fs = flip ? -1 : 1;
+    for (const pr of pairs) {
+      checkCancelled();
+      const { n, quads } = pr;
+      if (qn.length < quads * 3) qn = new Float64Array(quads * 3);
+      for (let i = 0; i < quads; i++) {
+        const j = (i + 1) % n;
+        const a0 = (pr.fromBase + i) * ps;
+        const a1 = (pr.fromBase + j) * ps;
+        const b0 = (pr.toBase + i) * ps;
+        const b1 = (pr.toBase + j) * ps;
+        const ux = pd[b1] - pd[a0];
+        const uy = pd[b1 + 1] - pd[a0 + 1];
+        const uz = pd[b1 + 2] - pd[a0 + 2];
+        const vx = pd[b0] - pd[a1];
+        const vy = pd[b0 + 1] - pd[a1 + 1];
+        const vz = pd[b0 + 2] - pd[a1 + 2];
+        let cx = (uy * vz - uz * vy) * fs;
+        let cy = (uz * vx - ux * vz) * fs;
+        let cz = (ux * vy - uy * vx) * fs;
+        const cl = cx * cx + cy * cy + cz * cz;
+        if (cl > 0) {
+          const inv = 1 / Math.sqrt(cl);
+          cx *= inv;
+          cy *= inv;
+          cz *= inv;
+        }
+        qn[i * 3] = cx;
+        qn[i * 3 + 1] = cy;
+        qn[i * 3 + 2] = cz;
+      }
+      if (good.length < n) good = new Uint8Array(n);
+      let firstGood = -1;
+      for (let i = 0; i < n; i++) {
+        // The quads meeting at rung i: the one before it (wrapping on a
+        // closed band) and the one after it.
+        const before = i > 0 ? i - 1 : pr.a.closed ? quads - 1 : -1;
+        const after = i < quads ? i : -1;
+        let x = 0;
+        let y = 0;
+        let z = 0;
+        if (before >= 0) {
+          x += qn[before * 3];
+          y += qn[before * 3 + 1];
+          z += qn[before * 3 + 2];
+        }
+        if (after >= 0) {
+          x += qn[after * 3];
+          y += qn[after * 3 + 1];
+          z += qn[after * 3 + 2];
+        }
+        const l = x * x + y * y + z * z;
+        const o = (pr.fromBase + i) * 3;
+        if (l > 1e-24) {
+          const inv = 1 / Math.sqrt(l);
+          normal[o] = x * inv;
+          normal[o + 1] = y * inv;
+          normal[o + 2] = z * inv;
+          good[i] = 1;
+          if (firstGood < 0) firstGood = i;
+        } else {
+          good[i] = 0;
+        }
+      }
+      // A rung with no normal of its own borrows the nearest earlier rung
+      // that has one, or — before the first — the first. A band with no
+      // area anywhere keeps [0, 0, 0]: it draws nothing to shade.
+      if (firstGood >= 0) {
+        let last = firstGood;
+        for (let i = 0; i < n; i++) {
+          const o = (pr.fromBase + i) * 3;
+          if (good[i] === 1) {
+            last = i;
+            continue;
+          }
+          const s = (pr.fromBase + last) * 3;
+          normal[o] = normal[s];
+          normal[o + 1] = normal[s + 1];
+          normal[o + 2] = normal[s + 2];
+        }
+      }
+      const invA = pr.a.length > 0 ? 1 / pr.a.length : 0;
+      const invB = pr.b.length > 0 ? 1 / pr.b.length : 0;
+      for (let i = 0; i < n; i++) {
+        const o = (pr.fromBase + i) * 3;
+        const q = (pr.toBase + i) * 3;
+        normal[q] = normal[o];
+        normal[q + 1] = normal[o + 1];
+        normal[q + 2] = normal[o + 2];
+        uv[(pr.fromBase + i) * 2] = pr.a.cum[i] * invA;
+        uv[(pr.fromBase + i) * 2 + 1] = 0;
+        uv[(pr.toBase + i) * 2] = pr.b.cum[i] * invB;
+        uv[(pr.toBase + i) * 2 + 1] = 1;
+      }
+    }
+
+    // Allocated for this output above and written only there; nothing
+    // keeps them, so the output adopts them, not a copy.
+    adoptTopology(out, v2p, primStart, primCount);
+    out.attrs.primitive.add(PRIMTYPE_ATTR, "string", 1, "poly" satisfies PrimType);
+    carryPrimitiveAttributes(
+      fromGeo.attrs.primitive,
+      out.attrs.primitive,
+      primSrc,
+      "bridgePaths",
+      "primitive",
+    );
+    copyElements(fromGeo.attrs.detail, out.attrs.detail, undefined, fromGeo.attrs.detail.count);
     return { out: [makeGeometryItem(out)] };
   },
 });

@@ -27,6 +27,7 @@
  */
 import { type Geometry, firstGeometry } from "pcg-ts";
 import { NODES, profileAt } from "../../demos/eiffel/spec.js";
+import { SWEPT_BOX_POINTS, isSweptBox, sweptBoxCorners } from "./sweptBox.js";
 
 export type Vec3 = readonly [number, number, number];
 
@@ -206,11 +207,10 @@ export interface Slab {
  * Every box of a box-mesh geometry; a run that is not a box is skipped.
  * Three layouts reach it, and one geometry can mix them: a copied unit box
  * of 24 points (three a corner) or 8, and a flat bar (strut.ts
- * `flatBars`), a 'rect' sweep of its member's two ends, 26 points — its four faces' 16 first (two a corner),
- * then a cap of four corners and its centre at each end. The sweep's point
- * 20 is that cap's centre, half the section's diagonal (20 mm and more)
- * from every corner, where a 24-point box's is a corner two of its first
- * 20 points share (the class jitter parts them by ~1 mm at most).
+ * `flatBars`), a 'rect' sweep of its member's two ends in the layout
+ * tests/support/sweptBox.ts states — also 24 points, told from the copied
+ * box by `isSweptBox` (its rings double each corner, where a copied box's
+ * first 8 points are its 8 corners).
  */
 export function slabs(geo: Geometry): Slab[] {
   const P = geo.attrs.point.get("P")!.data;
@@ -224,20 +224,13 @@ export function slabs(geo: Geometry): Slab[] {
     for (let k = i; k < i + 8; k++) if (len(sub(at(k), q)) < 1e-5) return 24;
     return 8;
   };
-  const swept = (i: number) => {
-    if (i + 26 > count) return false;
-    const c = at(i + 20);
-    for (let k = i; k < i + 20; k++) if (len(sub(at(k), c)) < 0.005) return false;
-    return true;
-  };
   const out: Slab[] = [];
   for (let i = 0, run = 0; i < count; i += run) {
-    const sweep = swept(i);
-    run = sweep ? 26 : boxRun(i);
+    const sweep = isSweptBox(P, i, count);
+    run = sweep ? SWEPT_BOX_POINTS : boxRun(i);
     if (i + run > count) break;
     const pts: Vec3[] = [];
-    for (let k = i; k < i + (sweep ? 16 : run); k++) {
-      const q = at(k);
+    for (const q of sweep ? sweptBoxCorners(P, i) : Array.from({ length: run }, (_, k) => at(i + k))) {
       if (!pts.some((r) => len(sub(q, r)) < 1e-5)) pts.push(q);
     }
     if (pts.length !== 8) continue;

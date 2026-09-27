@@ -4,16 +4,19 @@ Generated from the graphs in [`graphs`](../graphs) by `node scripts/gen-graphs.m
 
 Each file teaches ONE thing and cooks from JSON alone — no runtime-injected data, so `pcg cook <file>` on a clean install reproduces exactly what the corpus test asserts.
 
-96 examples, alphabetical by file:
+101 examples, alphabetical by file:
 
 - [basics-a-draw-that-survives-a-move.json](#basics-a-draw-that-survives-a-movejson) — keep a random draw when the point moves
 - [basics-attribute-from-noise.json](#basics-attribute-from-noisejson) — write an attribute from a noise field
 - [basics-attribute-remap.json](#basics-attribute-remapjson) — rescale an attribute to a new range
+- [basics-bridge-two-paths.json](#basics-bridge-two-pathsjson) — span the band between two paths
+- [basics-clip-a-path.json](#basics-clip-a-pathjson) — cut a path where a field goes negative
 - [basics-colonnade.json](#basics-colonnadejson) — a colonnade spaced along the arc, not along the parameter
 - [basics-compose-primitives.json](#basics-compose-primitivesjson) — compose several primitives into a scatter
 - [basics-connect-by-reach.json](#basics-connect-by-reachjson) — connect a cloud by each point's own reach
 - [basics-copy-to-points.json](#basics-copy-to-pointsjson) — give every copy the attributes of the point it landed on
 - [basics-curve-shaping.json](#basics-curve-shapingjson) — a mask, a decay and a compression
+- [basics-cut-a-courtyard.json](#basics-cut-a-courtyardjson) — cut a courtyard out of a block
 - [basics-density-along-a-path.json](#basics-density-along-a-pathjson) — place an exact number of points along a path, bunched where a density says
 - [basics-even-spacing.json](#basics-even-spacingjson) — enforce a minimum distance between points
 - [basics-extrude-polygon.json](#basics-extrude-polygonjson) — turn a footprint into massing
@@ -69,6 +72,7 @@ Each file teaches ONE thing and cooks from JSON alone — no runtime-injected da
 - [basics-spawn-by-species.json](#basics-spawn-by-speciesjson) — spawn a different asset per point
 - [basics-spawn-instances.json](#basics-spawn-instancesjson) — turn points into instance batches
 - [basics-spiral-stair.json](#basics-spiral-stairjson) — treads winding up a helix
+- [basics-split-a-window.json](#basics-split-a-windowjson) — split a window into lights
 - [basics-stations-on-a-path.json](#basics-stations-on-a-pathjson) — read a lap's own frame and width at thirty arbitrary stations, and place markers there
 - [basics-subgraph-exposed-params.json](#basics-subgraph-exposed-paramsjson) — wrap a graph as one node with its own knobs
 - [basics-surface-sample.json](#basics-surface-samplejson) — scatter points over a mesh surface
@@ -82,6 +86,7 @@ Each file teaches ONE thing and cooks from JSON alone — no runtime-injected da
 - [basics-under-cover.json](#basics-under-coverjson) — measure what runs under cover, where the route passes close to itself
 - [basics-volume-scatter.json](#basics-volume-scatterjson) — fill a box with points, then carve it
 - [basics-voronoi-plots.json](#basics-voronoi-plotsjson) — a scatter becomes plots, and the plots become massing
+- [basics-where-bars-cross.json](#basics-where-bars-crossjson) — put a part where two bars cross
 - [basics-worley-cells.json](#basics-worley-cellsjson) — colour and lift a Voronoi cell
 - [basics-worley-feature.json](#basics-worley-featurejson) — draw the answer: every point reaches for its own cell
 - [examples-coral.json](#examples-coraljson) — a dendrite grown by aggregation
@@ -164,6 +169,42 @@ Cook it: `pcg cook graphs/basics-attribute-from-noise.json --stats`
 **Outputs:** `points` (from `fit`.`out`)
 
 Cook it: `pcg cook graphs/basics-attribute-remap.json --stats`
+
+## basics-bridge-two-paths.json
+
+**span the band between two paths**
+
+`bridgePaths` joins a polyline on `from` to one on `to` with a strip of quads, point i to point i, emitted as three-vertex 'poly' triangles — the same mesh topology `sweepProfile` and `meshPrimitive` emit. Here the two paths are the two edges of a road, made from one centreline: `writeTangents` gives each point its direction of travel, the cross product with up is the sideways unit, and each edge is the centreline moved half a width to one side. Because both edges come from the same points, they have the SAME point count, which is the one thing a pair must share — the node does not resample or match, point i simply meets point i, so two paths from different sources want `pathResample` mode 'count' first. The half-width widens along `curveU`, so the road flares from 1.5 to 7 units across, and the band follows whatever its edges do. FACING: with `from` on the right of the direction of travel and `to` on its left, the band faces UP; swap the pins or set `flip` to turn it over. The node writes a `normal` shared across each rung, so a bending band shades round, and a `uv` whose `u` is each edge's own normalized arc length and whose `v` runs 0 on `from` to 1 on `to`.
+
+**Tags:** `basics`, `path`, `curve`, `surface`, `mesh`, `fields`
+
+**Seed:** 1103
+
+**Node types:** `bridgePaths`, `pathResample`, `setAttribute`, `subgraph`, `writeTangents`
+
+**Primitives:** `shape/path-meander`
+
+**Outputs:** `road` (from `road`.`out`), `centreline` (from `even`.`out`)
+
+Cook it: `pcg cook graphs/basics-bridge-two-paths.json --stats`
+
+## basics-clip-a-path.json
+
+**cut a path where a field goes negative**
+
+`pathClip` changes a path's TOPOLOGY by value: it resolves `field` at every vertex, keeps the stretches where it is >= 0, and cuts the polyline at the place the value crosses zero rather than at the nearest vertex, so each kept piece comes out as a polyline of its own that ends ON the boundary. Here the field is a noise less a threshold, so the ring is kept only where the noise runs high. The ring is CLOSED, and a closed path cut anywhere comes back as OPEN runs — a piece that straddles the ring's first point is one run, not two, because the closing segment is an ordinary segment of the ring. A segment whose two ends agree is never searched, so a sign change that dips between two vertices is invisible: that is why `pathResample` samples the curve densely first — the resolution of the cut is the resolution of the sampling. `minLength` drops the stubs a boundary leaves where it only grazes the path. The cut points are new points: they carry P from the root search, f32 columns lerped across their segment, and a seed of their own. `arcAttr` writes each point's distance from the start of ITS OWN piece — it restarts at 0 at every cut — and the tubes read it, so every piece starts thin where it was cut and swells to its full radius a few units in. `runIndexAttr` and `lengthAttr` report which piece of its source path a run is and how long it came out.
+
+**Tags:** `basics`, `path`, `curve`, `topology`, `fields`
+
+**Seed:** 1101
+
+**Node types:** `pathClip`, `pathResample`, `subgraph`, `sweepProfile`
+
+**Primitives:** `shape/path-loop`
+
+**Outputs:** `kept` (from `tube`.`out`), `path` (from `dense`.`out`)
+
+Cook it: `pcg cook graphs/basics-clip-a-path.json --stats`
 
 ## basics-colonnade.json
 
@@ -265,6 +306,24 @@ THREE CURVES, THREE DIFFERENT JOBS — not three ways of doing one, which is wha
 
 Cook it: `pcg cook graphs/basics-curve-shaping.json --stats`
 
+## basics-cut-a-courtyard.json
+
+**cut a courtyard out of a block**
+
+`polygonBoolean` computes the union, intersection or difference of two sets of closed polylines in a plane — the ground plane 'xz' by default. The subject here is TWO overlapping squares on the `in` pin: loops of one set simply union, so they read as one L-shaped block. The `clip` pin carries a round courtyard, and 'difference' keeps what is inside the block and outside the courtyard. The result is closed polylines: the outer loop counter-clockwise, then its hole clockwise, with an i32 primitive attribute `holeOf` — -1 on an outline, and on a hole the primitive index of the outline it pierces. That is the convention `extrudePolygon` reads, so the plan extrudes AS IT COMES: a concave outline with a hole, the caps ear-clipped around the courtyard and the courtyard given walls of its own facing into it. Switch `operation` to 'union' and the courtyard fills the block's corner instead; 'intersection' keeps only the part of the courtyard inside the block. `snapDistance` is the documented epsilon: corners closer than it weld, so geometry that should meet but differs by f32 rounding still does.
+
+**Tags:** `basics`, `surface`, `mesh`, `extrude`, `topology`
+
+**Seed:** 1104
+
+**Node types:** `extrudePolygon`, `mergePrimitives`, `polygonBoolean`, `subgraph`
+
+**Primitives:** `shape/path-loop`
+
+**Outputs:** `massing` (from `massing`.`out`), `plan` (from `plan`.`out`)
+
+Cook it: `pcg cook graphs/basics-cut-a-courtyard.json --stats`
+
 ## basics-density-along-a-path.json
 
 **place an exact number of points along a path, bunched where a density says**
@@ -309,7 +368,7 @@ Cook it: `pcg cook graphs/basics-even-spacing.json --stats`
 
 **turn a footprint into massing**
 
-A closed polyline is already a plan; `extrudePolygon` gives it a third dimension. The boundary is swept along a direction into three-vertex 'poly' triangles — walls, a floor and a roof — and until this node existed a graph that had computed its plots could only draw them as hairlines, which is why a settlement pipeline puts a pre-made house on a lot CENTRE while the lot's own shape goes unshown. `distance` is field-capable and resolves on the INPUT points, so a per-point value gives a SLOPED top rather than a flat one: the noise here lifts each corner of the plan by a different amount. Walls, roof and floor keep SEPARATE points, so the eaves stay a crease instead of being shaded round, and the winding is derived from the polygon's own Newell normal against the direction — a footprint wound either way comes out facing outward. Caps are fan-triangulated from the boundary's first point, which is exact for a CONVEX plan and is all the topology records. An OPEN polyline is refused by name: extrusion is not defined on one, and the fix is `pointsToPath` with `closed: true`.
+A closed polyline is already a plan; `extrudePolygon` gives it a third dimension. The boundary is swept along a direction into three-vertex 'poly' triangles — walls, a floor and a roof — and until this node existed a graph that had computed its plots could only draw them as hairlines, which is why a settlement pipeline puts a pre-made house on a lot CENTRE while the lot's own shape goes unshown. `distance` is field-capable and resolves on the INPUT points, so a per-point value gives a SLOPED top rather than a flat one: the noise here lifts each corner of the plan by a different amount. Walls, roof and floor keep SEPARATE points, so the eaves stay a crease instead of being shaded round, and the winding is derived from the polygon's own Newell normal against the direction — a footprint wound either way comes out facing outward. Caps are exact for any SIMPLE plan: a convex one is a fan from the boundary's first point, a concave one (an L, a U) is ear-clipped, and a loop whose `holeOf` primitive attribute names an outline is a HOLE through it — `basics-cut-a-courtyard` extrudes one. An OPEN polyline is refused by name: extrusion is not defined on one, and the fix is `pointsToPath` with `closed: true`.
 
 **Tags:** `basics`, `surface`, `mesh`, `extrude`, `fields`
 
@@ -1357,6 +1416,24 @@ THE NEWEL IS MERGED, NOT COPIED: one thing spanning the whole rise, so it is a s
 
 Cook it: `pcg cook graphs/basics-spiral-stair.json --stats`
 
+## basics-split-a-window.json
+
+**split a window into lights**
+
+`splitPolygons` cuts every polygon on `in` along the polylines on `cutters`, removes a strip `kerf` wide around each cut, and puts out the PIECES. The polygon here is an upright window opening in the 'xy' plane; the cutters are two mullions and a transom, drawn longer than the opening so they cut clean through it. Each cutter segment is buffered into a rectangle `kerf` wide with square ends, so where the transom meets a mullion the two gaps join squarely. `kerf` is field-capable on the CUTTERS' PRIMITIVE domain — one width per cutter polyline — so the transom, which carries a `barWidth` of 0.4, cuts a heavier gap than the mullions' 0.15 in the same cook. The primitive domain carries no P: a per-cutter value is a primitive attribute, written here by `setAttribute` with `domain: "primitive"`. Every piece carries its polygon's primitive attributes and comes out as a closed polyline, so six lights extrude straight into panes of glass. The opening's four corners come from a grid whose point order is not a walk round the edge, so `pointsToPath` sorts them by their angle about the centre (`atan2`) before closing the loop.
+
+**Tags:** `basics`, `surface`, `mesh`, `extrude`, `fields`
+
+**Seed:** 1105
+
+**Node types:** `extrudePolygon`, `mergePrimitives`, `pointGrid`, `pointLine`, `pointsToPath`, `setAttribute`, `splitPolygons`
+
+**Primitives:** *(none)*
+
+**Outputs:** `glass` (from `glass`.`out`), `opening` (from `opening`.`out`), `bars` (from `bars`.`out`)
+
+Cook it: `pcg cook graphs/basics-split-a-window.json --stats`
+
 ## basics-stations-on-a-path.json
 
 **read a lap's own frame and width at thirty arbitrary stations, and place markers there**
@@ -1638,6 +1715,24 @@ Cook it: `pcg cook graphs/basics-volume-scatter.json --stats`
 **Outputs:** `massing` (from `massing`.`out`), `plots` (from `plots`.`out`)
 
 Cook it: `pcg cook graphs/basics-voronoi-plots.json --stats`
+
+## basics-where-bars-cross.json
+
+**put a part where two bars cross**
+
+A braced panel: `connectPoints` joins every grid point to its neighbours along the rows, the columns and both diagonals, so each cell carries an X. `segmentCrossings` asks where those bars cross and emits ONE POINT PER CROSSING — here one at the middle of each cell's X, twenty-four in all. The row and column bars meet their neighbours only at the joints, and a meeting at a segment's END is a touch, not a crossing: the default `endpoints: "exclude"` leaves the joints out, which is what 'where do the bars cross' means on a lattice. Two segments cross when their closest approach is within `tolerance`, so the same rule finds coplanar bars (distance 0, give or take f32 rounding) and bars built a hair apart in 3D. Each point carries the two primitive ids (`primA` < `primB`) and the unit `bisector` of the two bars — the axis that halves their ACUTE angle — and a part set into the X lies along it: the cells are wider than they are tall, so the bosses here lie flat, along the shallow angle between the diagonals. Make the cells taller than they are wide and they stand up. The output is a plain point cloud, so it feeds `spawnInstances` directly.
+
+**Tags:** `basics`, `topology`, `sampler`, `instancing`
+
+**Seed:** 1102
+
+**Node types:** `connectPoints`, `orientAlongVector`, `pointGrid`, `segmentCrossings`, `setAttribute`, `spawnInstances`
+
+**Primitives:** *(none)*
+
+**Outputs:** `lattice` (from `bars`.`out`), `crossings` (from `spawn`.`instances`)
+
+Cook it: `pcg cook graphs/basics-where-bars-cross.json --stats`
 
 ## basics-worley-cells.json
 

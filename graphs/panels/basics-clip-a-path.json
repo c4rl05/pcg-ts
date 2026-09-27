@@ -1,0 +1,16 @@
+{
+  "_comment": "Panel spec — presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
+  "sections": [
+    {
+      "title": "path",
+      "controls": [
+        { "param": "curve.size", "label": "size" },
+        { "param": "dense.count", "label": "samples", "min": 12, "max": 1200, "step": 1 }
+      ]
+    },
+    {
+      "title": "clip",
+      "controls": [{ "param": "clip.minLength", "label": "min length", "min": 0, "max": 12, "step": 0.1 }]
+    }
+  ]
+}

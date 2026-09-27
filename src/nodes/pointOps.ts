@@ -744,6 +744,47 @@ function buildKeepPlan(src: Geometry, indices: Uint32Array, nS: number): KeepPla
 }
 
 /**
+ * The plan a MIRRORED target re-emits: `plan` with every 'poly' face's
+ * vertex order reversed about its first vertex — (v0, v1, ..., vn-1)
+ * becomes (v0, vn-1, ..., v1) — so the fan every renderer triangulates
+ * from v0 keeps its root and only the winding turns. A mirror reverses
+ * handedness, so without this a mirrored face's winding normal points
+ * INTO the solid and a back-face-culled renderer shows the copy inside
+ * out. `vertexSrc` is permuted with `vertexToPoint`, so a vertex
+ * attribute (a uv, a vertex normal) stays with the corner it described.
+ *
+ * Only primitives TAGGED 'poly' turn. A polyline's vertex order is its
+ * parameterization (arc length, `curveU`, a direction of travel), not a
+ * winding, and a mirror does not reverse a road; an untagged primitive is
+ * left alone because the library reads untagged topology as polylines
+ * (`polylineWalks`). `plan` must be COMPACTED — each primitive owning its
+ * own vertex range — which {@link buildKeepPlan} guarantees and the
+ * verbatim {@link wholeSourceKeepPlan} does not (two primitives sharing a
+ * vertex slot would be reversed twice).
+ */
+function reverseKeepPlan(src: Geometry, plan: KeepPlan): KeepPlan {
+  const primType = src.attrs.primitive.get(PRIMTYPE_ATTR);
+  if (primType === undefined || primType.type !== "string") return plan;
+  // The tag's index in this column's own string table, looked up once:
+  // a face is recognised by an integer compare, not a string per element.
+  const polyCode = primType.lookupString("poly");
+  if (polyCode === undefined) return plan;
+  const tags = primType.data;
+  const vertexToPoint = Uint32Array.from(plan.vertexToPoint);
+  const vertexSrc = plan.vertexSrc.slice();
+  for (let k = 0; k < plan.primSrc.length; k++) {
+    if (tags[plan.primSrc[k]] !== polyCode) continue;
+    const s = plan.primVertexStart[k];
+    const n = plan.primVertexCount[k];
+    for (let i = 1; i < n; i++) {
+      vertexToPoint[s + i] = plan.vertexToPoint[s + n - i];
+      vertexSrc[s + i] = plan.vertexSrc[s + n - i];
+    }
+  }
+  return { ...plan, vertexToPoint, vertexSrc };
+}
+
+/**
  * The source domains `rotateAttrs` can reach, in the order a name is looked
  * up and an error lists them. The DETAIL domain is not here because this
  * node never carries it (see `topology`), so a detail direction has no
@@ -885,28 +926,39 @@ function planRotateAttrs(src: Geometry, names: readonly string[], keepTopology: 
  * block by block: elements `[starts[t], starts[t + 1])` are target t's
  * copies, on whichever domain `starts` indexes. The same `rotateVec` the
  * transform loop turns P with, so a direction and the positions it
- * describes go through one rotation. A target whose `rot` is exactly the
- * identity is skipped rather than multiplied through, which keeps its
- * copies byte-for-byte what the source held (`-0 + 0` is `+0`, so even an
+ * describes go through one rotation. Under `mirrorAware`, `reflect` holds
+ * each target's scale SIGNS (three per target, +1 or -1), applied before
+ * the turn; it is `undefined` when no target scale has a negative
+ * component, so an unmirrored cook takes exactly the path it always did.
+ * A target whose `rot` is exactly the identity and whose signs are all +1
+ * is skipped rather than multiplied through, which keeps its copies
+ * byte-for-byte what the source held (`-0 + 0` is `+0`, so even an
  * identity product is not a no-op on the bits).
  */
 function rotateBlocks(
   data: Float32Array,
   starts: Uint32Array,
   tRot: ReadonlyAttrData<Float32Array> | undefined,
+  reflect: Float64Array | undefined,
   v: number[],
 ): void {
-  if (!tRot) return;
+  if (!tRot && !reflect) return;
   const nT = starts.length - 1;
   for (let t = 0; t < nT; t++) {
-    const qx = tRot[t * 4];
-    const qy = tRot[t * 4 + 1];
-    const qz = tRot[t * 4 + 2];
-    const qw = tRot[t * 4 + 3];
-    if (qx === 0 && qy === 0 && qz === 0 && qw === 1) continue;
+    const qx = tRot ? tRot[t * 4] : 0;
+    const qy = tRot ? tRot[t * 4 + 1] : 0;
+    const qz = tRot ? tRot[t * 4 + 2] : 0;
+    const qw = tRot ? tRot[t * 4 + 3] : 1;
+    // The target scale's SIGNS, applied before the turn: the reflection
+    // part of the target transform, which is its own inverse-transpose,
+    // so a normal and a tangent both come out right.
+    const fx = reflect ? reflect[t * 3] : 1;
+    const fy = reflect ? reflect[t * 3 + 1] : 1;
+    const fz = reflect ? reflect[t * 3 + 2] : 1;
+    if (qx === 0 && qy === 0 && qz === 0 && qw === 1 && fx === 1 && fy === 1 && fz === 1) continue;
     for (let i = starts[t], end = starts[t + 1]; i < end; i++) {
       const o = i * 3;
-      rotateVec(v, qx, qy, qz, qw, data[o], data[o + 1], data[o + 2]);
+      rotateVec(v, qx, qy, qz, qw, data[o] * fx, data[o + 1] * fy, data[o + 2] * fz);
       data[o] = v[0];
       data[o + 1] = v[1];
       data[o + 2] = v[2];
@@ -923,7 +975,7 @@ export const copyToPoints = standardNode<
   type: "copyToPoints",
   category: "point op",
   description:
-    "Copies the source point cloud onto every target point (output count = source points * target points, grouped by target). Set `sourceGroupAttr` and `targetGroupAttr` and each target instead takes only the source points whose group key it asks for, which is the same node stamping a DIFFERENT subset per target rather than the whole cloud. Transforms compose per copy: P = targetP + targetRot * (targetScale * sourceP), rot = targetRot * sourceRot (quaternion product), scale = targetScale * sourceScale (componentwise), and each copied seed is hashCombine(sourceSeed, targetSeed). All other source point attributes are carried through unchanged — including a DIRECTION such as a mesh's `normal` or a path's `tangent`, which therefore keeps pointing the source's way on every copy unless `rotateAttrs` names it, and then it turns by the copy's target rotation on the point, vertex or primitive domain; missing transform attributes are treated as identity. `targetNames` additionally carries named TARGET point attributes onto the copies: every copy in a target's block receives that target's value, in a column keeping the target's type, tuple size and default. That is what lets copies vary by what the author computed on the target cloud — a species tag, an age, a noise sampled per target — since the copies are otherwise identical in everything but placement. The composed transform attributes cannot be carried, a name the source already carries is refused rather than silently overwritten, a name repeated in the list is refused, and a name absent from the target is an error. `targetIndexAttr` writes the target's INDEX rather than one of its attributes, which is what makes \"one thing per target\" — one path per anchor, one group per instance — expressible without an upstream setAttribute whose only job was to give this node something to carry. `sourceGroupAttr` and `targetGroupAttr` are PER-TARGET SOURCE SELECTION, the pair that turns \"every target takes every source point\" into \"every target takes the source points it names\": without them a vocabulary in which each target wants a different subset has to stamp the whole cloud and filter the wrong copies away, which is quadratic in a library nobody uses all of. The source's TOPOLOGY is dropped by default — an array of a path comes out a bare cloud — and `topology \"keep\"` re-emits every source primitive once per target instead, which is what makes the array of paths a set of paths without rebuilding them downstream.",
+    "Copies the source point cloud onto every target point (output count = source points * target points, grouped by target). Set `sourceGroupAttr` and `targetGroupAttr` and each target instead takes only the source points whose group key it asks for, which is the same node stamping a DIFFERENT subset per target rather than the whole cloud. Transforms compose per copy: P = targetP + targetRot * (targetScale * sourceP), rot = targetRot * sourceRot (quaternion product), scale = targetScale * sourceScale (componentwise), and each copied seed is hashCombine(sourceSeed, targetSeed). All other source point attributes are carried through unchanged — including a DIRECTION such as a mesh's `normal` or a path's `tangent`, which therefore keeps pointing the source's way on every copy unless `rotateAttrs` names it, and then it turns by the copy's target rotation on the point, vertex or primitive domain; missing transform attributes are treated as identity. `targetNames` additionally carries named TARGET point attributes onto the copies: every copy in a target's block receives that target's value, in a column keeping the target's type, tuple size and default. That is what lets copies vary by what the author computed on the target cloud — a species tag, an age, a noise sampled per target — since the copies are otherwise identical in everything but placement. The composed transform attributes cannot be carried, a name the source already carries is refused rather than silently overwritten, a name repeated in the list is refused, and a name absent from the target is an error. `targetIndexAttr` writes the target's INDEX rather than one of its attributes, which is what makes \"one thing per target\" — one path per anchor, one group per instance — expressible without an upstream setAttribute whose only job was to give this node something to carry. `sourceGroupAttr` and `targetGroupAttr` are PER-TARGET SOURCE SELECTION, the pair that turns \"every target takes every source point\" into \"every target takes the source points it names\": without them a vocabulary in which each target wants a different subset has to stamp the whole cloud and filter the wrong copies away, which is quadratic in a library nobody uses all of. A target whose scale MIRRORS (an odd number of negative components) reverses the winding of every copied face under topology \"keep\" and reflects the `rotateAttrs` directions, so a mirrored copy of a solid still faces outward (`mirrorAware`, on by default). The source's TOPOLOGY is dropped by default — an array of a path comes out a bare cloud — and `topology \"keep\"` re-emits every source primitive once per target instead, which is what makes the array of paths a set of paths without rebuilding them downstream.",
   inputs: [
     { name: "source", kind: "geometry" },
     { name: "target", kind: "geometry" },
@@ -946,7 +998,7 @@ export const copyToPoints = standardNode<
       type: "stringList",
       default: [],
       description:
-        'SOURCE direction attributes (f32, tuple size 3) to turn with each copy — a mesh\'s `normal`, a path\'s `tangent` or `curveNormal`, any axis the graph wrote. Without this every attribute but the composed transform rides onto the copies unchanged, so a direction comes out pointing the SOURCE\'s way on every copy even though the copy\'s positions and `rot` turned: a box copied onto a target turned 90 degrees is lit as if it had not turned. Each named column is rotated by its copy\'s TARGET rotation — the target\'s `rot`, identity when the target has none — which is exactly the rotation P goes through (P = targetP + targetRot * (targetScale * sourceP)), so the direction stays in the frame the copy\'s positions are in. The SOURCE point\'s own `rot` is not applied, because source P is not turned by it either. ROTATION ONLY: the length is kept (up to f32 rounding; nothing is renormalized, a zero vector stays zero) and the target\'s `scale` is NOT applied. Under a uniform target scale that is exact for any direction. Under a NON-UNIFORM target scale it is not: a surface normal would need the inverse-transpose of that scale (and a tangent the scale itself), then a renormalize, and this param applies neither — scale uniformly, or recompute the directions downstream. DOMAINS: a name is looked up on the source\'s point, vertex and primitive domains and turned on every one of them that carries it, each copy of an element by the target its block landed on. The vertex and primitive domains reach the output only under `topology "keep"`, so under "drop" (the default) only the point domain is searched, and a name the source carries ONLY on its vertex or primitive domain is an error rather than a silent no-op — the likely intent was `topology "keep"`. The detail domain is never carried, so never searched, and neither is a `targetNames` column: that is the target\'s own value, already in the target\'s frame. Refused rather than resolved silently: "P", "rot", "scale" and "seed" (composed per copy — P and rot already carry the target\'s rotation, so naming one would apply it twice, and scale and seed are not directions); "boundsMin" and "boundsMax" (extents in the point\'s own frame, which the composed `rot` already turns); a name repeated in the list; a name no searched domain carries; and a column of that name that is not f32 with tuple size 3 — including one on a dropped domain, so the fix offered is never "keep" when "keep" would fail next. Every refusal but the repeat lists the source\'s f32 tuple-3 attributes per domain. Nothing is added, renamed or reordered — the named columns keep their place, type and default, and only their values turn — so an empty list, the default, leaves every output byte-identical to what this node produced before the param existed.',
+        'SOURCE direction attributes (f32, tuple size 3) to turn with each copy — a mesh\'s `normal`, a path\'s `tangent` or `curveNormal`, any axis the graph wrote. Without this every attribute but the composed transform rides onto the copies unchanged, so a direction comes out pointing the SOURCE\'s way on every copy even though the copy\'s positions and `rot` turned: a box copied onto a target turned 90 degrees is lit as if it had not turned. Each named column is rotated by its copy\'s TARGET rotation — the target\'s `rot`, identity when the target has none — which is exactly the rotation P goes through (P = targetP + targetRot * (targetScale * sourceP)), so the direction stays in the frame the copy\'s positions are in. The SOURCE point\'s own `rot` is not applied, because source P is not turned by it either. ROTATION ONLY, plus the SIGNS of the target\'s `scale` under `mirrorAware` (the default), which is what keeps a normal outward on a mirrored copy: the length is kept (up to f32 rounding; nothing is renormalized, a zero vector stays zero) and the MAGNITUDES of the target\'s `scale` are NOT applied. Under a uniform target scale that is exact for any direction. Under a NON-UNIFORM target scale it is not: a surface normal would need the inverse-transpose of that scale (and a tangent the scale itself), then a renormalize, and this param applies neither — scale uniformly, or recompute the directions downstream. DOMAINS: a name is looked up on the source\'s point, vertex and primitive domains and turned on every one of them that carries it, each copy of an element by the target its block landed on. The vertex and primitive domains reach the output only under `topology "keep"`, so under "drop" (the default) only the point domain is searched, and a name the source carries ONLY on its vertex or primitive domain is an error rather than a silent no-op — the likely intent was `topology "keep"`. The detail domain is never carried, so never searched, and neither is a `targetNames` column: that is the target\'s own value, already in the target\'s frame. Refused rather than resolved silently: "P", "rot", "scale" and "seed" (composed per copy — P and rot already carry the target\'s rotation, so naming one would apply it twice, and scale and seed are not directions); "boundsMin" and "boundsMax" (extents in the point\'s own frame, which the composed `rot` already turns); a name repeated in the list; a name no searched domain carries; and a column of that name that is not f32 with tuple size 3 — including one on a dropped domain, so the fix offered is never "keep" when "keep" would fail next. Every refusal but the repeat lists the source\'s f32 tuple-3 attributes per domain. Nothing is added, renamed or reordered — the named columns keep their place, type and default, and only their values turn — so an empty list, the default, leaves every output byte-identical to what this node produced before the param existed.',
     },
     sourceGroupAttr: {
       type: "string",
@@ -960,12 +1012,18 @@ export const copyToPoints = standardNode<
       description:
         'Name of a scalar TARGET point attribute naming which source group that target takes — the half of per-target source selection that does the asking. Used only together with `sourceGroupAttr`, under the key rules stated there. What it buys is the case this node could not express: when each target wants a DIFFERENT subset of the source, the alternative is to stamp the whole source on every target and filter the wrong copies away, which costs sourcePoints * targetPoints intermediate points to keep a few thousand — the measured racetrack case stamped 776,000 copies to keep 1,900. With this set the node emits only the copies that survive, so the stage becomes linear in the answer. Everything else is unchanged: the copies still come out in contiguous per-target blocks, in ascending SOURCE INDEX within a block, and `targetNames`, `targetIndexAttr` and the composed transforms all behave as they do without selection — selection REMOVES copies from that layout, it never reorders what is left, and it never perturbs the seed of a copy that would have existed anyway (a copy\'s seed is hashCombine(sourceSeed, targetSeed), which names the pair and not the slot). A target whose key matches NO source group takes zero copies and that is legal, not an error, for the reason `pointsToPath`\'s `shortGroups "skip"` gives: a selection key is normally DATA — resolved from a catalogue, drawn from a noise, chosen per placement — so which keys a cell\'s targets ask for is unknowable at graph-build time, and a cell asking for a pose this source does not carry must not fail the whole cook. If a missing key IS an authoring error in your graph, catch it upstream where the population is known rather than here where it is data.',
     },
+    mirrorAware: {
+      type: "bool",
+      default: true,
+      description:
+        "Honour a MIRRORING target transform. A target whose `scale` has an odd number of negative components (a negative determinant — `[-1, 1, 1]` is the mirror image across the target's local YZ plane) produces a mirror-image copy, and a mirror reverses handedness: kept as it was, every copied face's winding would describe the inside of the solid and a back-face-culled render shows the copy inside out. With this on (the default), under `topology \"keep\"` each 'poly' primitive of a mirrored target's copy has its vertex order reversed about its first vertex — (v0, v1, ..., vn-1) becomes (v0, vn-1, ..., v1), so a fan from v0 keeps its root — with its vertex attributes following their corners; polylines are NOT reversed, because a path's vertex order is its direction of travel and its `curveU`, not a winding (untagged primitives are read as polylines and left alone too). And every `rotateAttrs` direction goes through the SIGNS of its target's scale before the target's rotation — the reflection part of the transform, which is its own inverse-transpose, so a mirrored surface normal comes out a proper OUTWARD normal that agrees with the reversed winding, and a tangent comes out along the mirrored path; the MAGNITUDES of the scale are still not applied (see `rotateAttrs`). That sign flip applies to any negative component, mirror or not: `[-1, -1, 1]` is a half turn, and its directions turn with it. Off, a mirrored copy keeps the source's winding and directions — the behaviour before this param existed. A cook whose target scales have no negative component is byte-identical either way. The copied `scale` attribute carries the negative components as before, so an instance renderer composing its own matrix still mirrors the instance.",
+    },
     topology: {
       type: "enum",
       default: "drop",
       enum: ["drop", "keep"],
       description:
-        "What happens to the SOURCE's topology — the vertices and primitives built over the source's points. 'drop' (the default) copies POINTS only: an array of a path comes out a bare cloud with the paths gone, which is why the copies have to be rebuilt downstream (targetIndexAttr, then a pointsToPath grouping on it). 'keep' re-emits source primitives onto the target blocks instead, which is the whole difference between an array of points and an array of paths. WITHOUT SELECTION (`sourceGroupAttr` and `targetGroupAttr` both empty) that is every source primitive once per TARGET, and the arithmetic is closed: the copies are laid out in contiguous blocks of nSource (copy s of target t is point t * nSource + s), so primitive p of block t walks exactly the points its original walked, t * nSource further on, and a source with N primitives always yields nTarget * N, in target-block order, nothing filtered and no primitive reshaped. That is what mergePrimitives produces from nTarget copies of the source. WITH SELECTION both of those identities are gone, and they have to be: a target holds only the source points its key asked for, so there is no fixed block stride, and a vertex referencing a point the block did not take has no point to renumber onto — it cannot be carried, and carrying it anyway would produce an index setTopology's bounds check accepts as some OTHER target's point. What replaces them is the POINT FILTERS' survival rule, quoted rather than invented: a primitive is re-emitted for a target only when ALL of its points are in that target's block. So a source primitive whose points carry two different keys belongs to no block and is re-emitted for none of them (put the key on whole primitives, not across them), and the primitive count is the sum over targets of what each target's key kept — not a product of anything. What does NOT change is the order: within a block the surviving primitives keep ascending source order and each keeps its own vertices in their own order, and the blocks still follow target order. One further difference is visible only on a source whose vertex array does not tile: an unselected block copies that array verbatim, gaps and out-of-order primitive ranges included, while a selected block is compacted to the surviving primitives' own vertices in primitive order — what gatherPrimitives produces. Everything setTopology and setPolylineTopology build already tiles in order, so for those the two are the same array. The source's VERTEX and PRIMITIVE attributes come along, each copy carrying the original's values (a per-primitive width, a per-vertex uv, and `primtype`, so the copies stay samplable as what they are). The TARGET's own topology is never read under either setting — the target contributes point transforms and, through targetNames/targetIndexAttr, point attributes, while its primitives describe points that are not in this output at all. The POINT domain is IDENTICAL under both settings — same points, same order, same attributes, same identities — so this param only ever ADDS information, and neither targetNames nor targetIndexAttr (which write point columns) can be disturbed by it, with or without selection. The DETAIL domain is carried under NEITHER setting, for the reason mergePrimitives gives for dropping it: there are two inputs, each has a detail domain, and choosing between them would be a guess. On IDENTITY, because it decides what per-copy randomness does: a primitive is named by the fold of its own points' identities, and a point's identity is its position bits plus its `seed` — both of which this node composes per copy (P from the target's transform, seed from hashCombine(sourceSeed, targetSeed)). So the copies of one source primitive are DISTINCT primitives, one per target that re-emitted it, and a randomField on the primitive domain draws a different value for each, which is what 'one variation per copy' needs. The exception is the one mergePrimitives documents: two targets sharing a position AND a seed produce copies that are the same points, hence ONE primitive to every identity-keyed decision — give coincident targets distinct seeds.",
+        "What happens to the SOURCE's topology — the vertices and primitives built over the source's points. 'drop' (the default) copies POINTS only: an array of a path comes out a bare cloud with the paths gone, which is why the copies have to be rebuilt downstream (targetIndexAttr, then a pointsToPath grouping on it). 'keep' re-emits source primitives onto the target blocks instead, which is the whole difference between an array of points and an array of paths. WITHOUT SELECTION (`sourceGroupAttr` and `targetGroupAttr` both empty) that is every source primitive once per TARGET, and the arithmetic is closed: the copies are laid out in contiguous blocks of nSource (copy s of target t is point t * nSource + s), so primitive p of block t walks exactly the points its original walked, t * nSource further on, and a source with N primitives always yields nTarget * N, in target-block order, nothing filtered and no primitive reshaped. That is what mergePrimitives produces from nTarget copies of the source. WITH SELECTION both of those identities are gone, and they have to be: a target holds only the source points its key asked for, so there is no fixed block stride, and a vertex referencing a point the block did not take has no point to renumber onto — it cannot be carried, and carrying it anyway would produce an index setTopology's bounds check accepts as some OTHER target's point. What replaces them is the POINT FILTERS' survival rule, quoted rather than invented: a primitive is re-emitted for a target only when ALL of its points are in that target's block. So a source primitive whose points carry two different keys belongs to no block and is re-emitted for none of them (put the key on whole primitives, not across them), and the primitive count is the sum over targets of what each target's key kept — not a product of anything. What does NOT change is the order: within a block the surviving primitives keep ascending source order and each keeps its own vertices in their own order, and the blocks still follow target order. One further difference is visible only on a source whose vertex array does not tile: an unselected block copies that array verbatim, gaps and out-of-order primitive ranges included, while a selected block is compacted to the surviving primitives' own vertices in primitive order — what gatherPrimitives produces. Everything setTopology and setPolylineTopology build already tiles in order, so for those the two are the same array. A MIRRORED target's block (see `mirrorAware`) is compacted the same way, with or without selection, because reversing a face's winding needs each primitive to own its vertex range. The source's VERTEX and PRIMITIVE attributes come along, each copy carrying the original's values (a per-primitive width, a per-vertex uv, and `primtype`, so the copies stay samplable as what they are). The TARGET's own topology is never read under either setting — the target contributes point transforms and, through targetNames/targetIndexAttr, point attributes, while its primitives describe points that are not in this output at all. The POINT domain is IDENTICAL under both settings — same points, same order, same attributes, same identities — so this param only ever ADDS information, and neither targetNames nor targetIndexAttr (which write point columns) can be disturbed by it, with or without selection. The DETAIL domain is carried under NEITHER setting, for the reason mergePrimitives gives for dropping it: there are two inputs, each has a detail domain, and choosing between them would be a guess. On IDENTITY, because it decides what per-copy randomness does: a primitive is named by the fold of its own points' identities, and a point's identity is its position bits plus its `seed` — both of which this node composes per copy (P from the target's transform, seed from hashCombine(sourceSeed, targetSeed)). So the copies of one source primitive are DISTINCT primitives, one per target that re-emitted it, and a randomField on the primitive domain draws a different value for each, which is what 'one variation per copy' needs. The exception is the one mergePrimitives documents: two targets sharing a position AND a seed produce copies that are the same points, hence ONE primitive to every identity-keyed decision — give coincident targets distinct seeds.",
     },
   },
   execute({ inputs, params }) {
@@ -1199,6 +1257,30 @@ export const copyToPoints = standardNode<
     const tSeedAttr = tgtSet.get("seed");
     const tSeed = tSeedAttr && tSeedAttr.type === "u32" && tSeedAttr.tupleSize === 1 ? tSeedAttr.data : undefined;
 
+    // MIRRORS, decided per target before anything is written. A target
+    // scale with an odd number of negative components has a negative
+    // determinant: the copy is a mirror image, and its faces' winding has
+    // to turn (below, under topology "keep") for it to face outward. The
+    // SIGNS of every target scale also reach the `rotateAttrs` directions,
+    // since P went through them. `reflect` stays undefined when no target
+    // scale has a negative component (or `mirrorAware` is off), so such a
+    // cook runs exactly the arithmetic it always did.
+    let reflect: Float64Array | undefined;
+    const mirrored = new Uint8Array(nT);
+    if (params.mirrorAware && tScale) {
+      for (let t = 0; t < nT; t++) {
+        const fx = tScale[t * 3] < 0 ? -1 : 1;
+        const fy = tScale[t * 3 + 1] < 0 ? -1 : 1;
+        const fz = tScale[t * 3 + 2] < 0 ? -1 : 1;
+        if (fx === 1 && fy === 1 && fz === 1) continue;
+        if (!reflect) reflect = new Float64Array(nT * 3).fill(1);
+        reflect[t * 3] = fx;
+        reflect[t * 3 + 1] = fy;
+        reflect[t * 3 + 2] = fz;
+        if (fx * fy * fz < 0) mirrored[t] = 1;
+      }
+    }
+
     const oP = outSet.require("P").writable();
     const oRot = outSet.require("rot").writable();
     const oScale = outSet.require("scale").writable();
@@ -1252,7 +1334,7 @@ export const copyToPoints = standardNode<
     // through. The columns were gathered verbatim above, so this rotates
     // them in place, one target block at a time.
     for (const name of rotate.point) {
-      rotateBlocks(outSet.require(name).writable() as Float32Array, starts, tRot, v);
+      rotateBlocks(outSet.require(name).writable() as Float32Array, starts, tRot, reflect, v);
     }
 
     // TOPOLOGY, opt-in and strictly additive. It runs LAST because the
@@ -1274,12 +1356,27 @@ export const copyToPoints = standardNode<
       // With no selection there is one group, its plan is the source's
       // topology verbatim, and this is the loop that shipped.
       const plans: (KeepPlan | undefined)[] = new Array(selection.groups.length).fill(undefined);
+      // The reversed-winding twin of each group's plan, built only when a
+      // MIRRORED target asks for it — once per group, like `plans`. It
+      // starts from the COMPACTED plan (`buildKeepPlan`, which with no
+      // selection keeps every primitive), because reversing needs each
+      // primitive to own its vertex range; for anything setTopology or
+      // setPolylineTopology built that is the verbatim layout anyway.
+      const mirroredPlans: (KeepPlan | undefined)[] = new Array(selection.groups.length).fill(undefined);
       const planAt = (t: number): KeepPlan | undefined => {
         const g = selection.groupOf[t];
         if (g < 0) return undefined;
+        const indices = selection.groups[g].indices;
+        if (mirrored[t] !== 0) {
+          let mplan = mirroredPlans[g];
+          if (!mplan) {
+            mplan = reverseKeepPlan(src, buildKeepPlan(src, indices, nS));
+            mirroredPlans[g] = mplan;
+          }
+          return mplan;
+        }
         let plan = plans[g];
         if (!plan) {
-          const indices = selection.groups[g].indices;
           plan = selection.selecting
             ? buildKeepPlan(src, indices, nS)
             : wholeSourceKeepPlan(src);
@@ -1370,7 +1467,7 @@ export const copyToPoints = standardNode<
         // domain's per-target blocks.
         const blockStarts = domain === "vertex" ? vertexStarts : primStarts;
         for (const name of rotate[domain]) {
-          rotateBlocks(to.require(name).writable() as Float32Array, blockStarts, tRot, v);
+          rotateBlocks(to.require(name).writable() as Float32Array, blockStarts, tRot, reflect, v);
         }
       }
     }

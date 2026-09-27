@@ -87,6 +87,80 @@
     ]
   },
   {
+    "file": "basics-bridge-two-paths.json",
+    "path": "graphs/basics-bridge-two-paths.json",
+    "title": "span the band between two paths",
+    "description": "`bridgePaths` joins a polyline on `from` to one on `to` with a strip of quads, point i to point i, emitted as three-vertex 'poly' triangles — the same mesh topology `sweepProfile` and `meshPrimitive` emit. Here the two paths are the two edges of a road, made from one centreline: `writeTangents` gives each point its direction of travel, the cross product with up is the sideways unit, and each edge is the centreline moved half a width to one side. Because both edges come from the same points, they have the SAME point count, which is the one thing a pair must share — the node does not resample or match, point i simply meets point i, so two paths from different sources want `pathResample` mode 'count' first. The half-width widens along `curveU`, so the road flares from 1.5 to 7 units across, and the band follows whatever its edges do. FACING: with `from` on the right of the direction of travel and `to` on its left, the band faces UP; swap the pins or set `flip` to turn it over. The node writes a `normal` shared across each rung, so a bending band shades round, and a `uv` whose `u` is each edge's own normalized arc length and whose `v` runs 0 on `from` to 1 on `to`.",
+    "tags": [
+      "basics",
+      "path",
+      "curve",
+      "surface",
+      "mesh",
+      "fields"
+    ],
+    "seed": 1103,
+    "nodeCount": 7,
+    "nodeTypes": [
+      "bridgePaths",
+      "pathResample",
+      "setAttribute",
+      "subgraph",
+      "writeTangents"
+    ],
+    "primitives": [
+      "shape/path-meander"
+    ],
+    "outputs": [
+      {
+        "name": "road",
+        "node": "road",
+        "pin": "out"
+      },
+      {
+        "name": "centreline",
+        "node": "even",
+        "pin": "out"
+      }
+    ]
+  },
+  {
+    "file": "basics-clip-a-path.json",
+    "path": "graphs/basics-clip-a-path.json",
+    "title": "cut a path where a field goes negative",
+    "description": "`pathClip` changes a path's TOPOLOGY by value: it resolves `field` at every vertex, keeps the stretches where it is >= 0, and cuts the polyline at the place the value crosses zero rather than at the nearest vertex, so each kept piece comes out as a polyline of its own that ends ON the boundary. Here the field is a noise less a threshold, so the ring is kept only where the noise runs high. The ring is CLOSED, and a closed path cut anywhere comes back as OPEN runs — a piece that straddles the ring's first point is one run, not two, because the closing segment is an ordinary segment of the ring. A segment whose two ends agree is never searched, so a sign change that dips between two vertices is invisible: that is why `pathResample` samples the curve densely first — the resolution of the cut is the resolution of the sampling. `minLength` drops the stubs a boundary leaves where it only grazes the path. The cut points are new points: they carry P from the root search, f32 columns lerped across their segment, and a seed of their own. `arcAttr` writes each point's distance from the start of ITS OWN piece — it restarts at 0 at every cut — and the tubes read it, so every piece starts thin where it was cut and swells to its full radius a few units in. `runIndexAttr` and `lengthAttr` report which piece of its source path a run is and how long it came out.",
+    "tags": [
+      "basics",
+      "path",
+      "curve",
+      "topology",
+      "fields"
+    ],
+    "seed": 1101,
+    "nodeCount": 4,
+    "nodeTypes": [
+      "pathClip",
+      "pathResample",
+      "subgraph",
+      "sweepProfile"
+    ],
+    "primitives": [
+      "shape/path-loop"
+    ],
+    "outputs": [
+      {
+        "name": "kept",
+        "node": "tube",
+        "pin": "out"
+      },
+      {
+        "name": "path",
+        "node": "dense",
+        "pin": "out"
+      }
+    ]
+  },
+  {
     "file": "basics-colonnade.json",
     "path": "graphs/basics-colonnade.json",
     "title": "a colonnade spaced along the arc, not along the parameter",
@@ -242,6 +316,42 @@
     ]
   },
   {
+    "file": "basics-cut-a-courtyard.json",
+    "path": "graphs/basics-cut-a-courtyard.json",
+    "title": "cut a courtyard out of a block",
+    "description": "`polygonBoolean` computes the union, intersection or difference of two sets of closed polylines in a plane — the ground plane 'xz' by default. The subject here is TWO overlapping squares on the `in` pin: loops of one set simply union, so they read as one L-shaped block. The `clip` pin carries a round courtyard, and 'difference' keeps what is inside the block and outside the courtyard. The result is closed polylines: the outer loop counter-clockwise, then its hole clockwise, with an i32 primitive attribute `holeOf` — -1 on an outline, and on a hole the primitive index of the outline it pierces. That is the convention `extrudePolygon` reads, so the plan extrudes AS IT COMES: a concave outline with a hole, the caps ear-clipped around the courtyard and the courtyard given walls of its own facing into it. Switch `operation` to 'union' and the courtyard fills the block's corner instead; 'intersection' keeps only the part of the courtyard inside the block. `snapDistance` is the documented epsilon: corners closer than it weld, so geometry that should meet but differs by f32 rounding still does.",
+    "tags": [
+      "basics",
+      "surface",
+      "mesh",
+      "extrude",
+      "topology"
+    ],
+    "seed": 1104,
+    "nodeCount": 6,
+    "nodeTypes": [
+      "extrudePolygon",
+      "mergePrimitives",
+      "polygonBoolean",
+      "subgraph"
+    ],
+    "primitives": [
+      "shape/path-loop"
+    ],
+    "outputs": [
+      {
+        "name": "massing",
+        "node": "massing",
+        "pin": "out"
+      },
+      {
+        "name": "plan",
+        "node": "plan",
+        "pin": "out"
+      }
+    ]
+  },
+  {
     "file": "basics-density-along-a-path.json",
     "path": "graphs/basics-density-along-a-path.json",
     "title": "place an exact number of points along a path, bunched where a density says",
@@ -310,7 +420,7 @@
     "file": "basics-extrude-polygon.json",
     "path": "graphs/basics-extrude-polygon.json",
     "title": "turn a footprint into massing",
-    "description": "A closed polyline is already a plan; `extrudePolygon` gives it a third dimension. The boundary is swept along a direction into three-vertex 'poly' triangles — walls, a floor and a roof — and until this node existed a graph that had computed its plots could only draw them as hairlines, which is why a settlement pipeline puts a pre-made house on a lot CENTRE while the lot's own shape goes unshown. `distance` is field-capable and resolves on the INPUT points, so a per-point value gives a SLOPED top rather than a flat one: the noise here lifts each corner of the plan by a different amount. Walls, roof and floor keep SEPARATE points, so the eaves stay a crease instead of being shaded round, and the winding is derived from the polygon's own Newell normal against the direction — a footprint wound either way comes out facing outward. Caps are fan-triangulated from the boundary's first point, which is exact for a CONVEX plan and is all the topology records. An OPEN polyline is refused by name: extrusion is not defined on one, and the fix is `pointsToPath` with `closed: true`.",
+    "description": "A closed polyline is already a plan; `extrudePolygon` gives it a third dimension. The boundary is swept along a direction into three-vertex 'poly' triangles — walls, a floor and a roof — and until this node existed a graph that had computed its plots could only draw them as hairlines, which is why a settlement pipeline puts a pre-made house on a lot CENTRE while the lot's own shape goes unshown. `distance` is field-capable and resolves on the INPUT points, so a per-point value gives a SLOPED top rather than a flat one: the noise here lifts each corner of the plan by a different amount. Walls, roof and floor keep SEPARATE points, so the eaves stay a crease instead of being shaded round, and the winding is derived from the polygon's own Newell normal against the direction — a footprint wound either way comes out facing outward. Caps are exact for any SIMPLE plan: a convex one is a fan from the boundary's first point, a concave one (an L, a U) is ear-clipped, and a loop whose `holeOf` primitive attribute names an outline is a HOLE through it — `basics-cut-a-courtyard` extrudes one. An OPEN polyline is refused by name: extrusion is not defined on one, and the fix is `pointsToPath` with `closed: true`.",
     "tags": [
       "basics",
       "surface",
@@ -1877,6 +1987,48 @@
     ]
   },
   {
+    "file": "basics-split-a-window.json",
+    "path": "graphs/basics-split-a-window.json",
+    "title": "split a window into lights",
+    "description": "`splitPolygons` cuts every polygon on `in` along the polylines on `cutters`, removes a strip `kerf` wide around each cut, and puts out the PIECES. The polygon here is an upright window opening in the 'xy' plane; the cutters are two mullions and a transom, drawn longer than the opening so they cut clean through it. Each cutter segment is buffered into a rectangle `kerf` wide with square ends, so where the transom meets a mullion the two gaps join squarely. `kerf` is field-capable on the CUTTERS' PRIMITIVE domain — one width per cutter polyline — so the transom, which carries a `barWidth` of 0.4, cuts a heavier gap than the mullions' 0.15 in the same cook. The primitive domain carries no P: a per-cutter value is a primitive attribute, written here by `setAttribute` with `domain: \"primitive\"`. Every piece carries its polygon's primitive attributes and comes out as a closed polyline, so six lights extrude straight into panes of glass. The opening's four corners come from a grid whose point order is not a walk round the edge, so `pointsToPath` sorts them by their angle about the centre (`atan2`) before closing the loop.",
+    "tags": [
+      "basics",
+      "surface",
+      "mesh",
+      "extrude",
+      "fields"
+    ],
+    "seed": 1105,
+    "nodeCount": 13,
+    "nodeTypes": [
+      "extrudePolygon",
+      "mergePrimitives",
+      "pointGrid",
+      "pointLine",
+      "pointsToPath",
+      "setAttribute",
+      "splitPolygons"
+    ],
+    "primitives": [],
+    "outputs": [
+      {
+        "name": "glass",
+        "node": "glass",
+        "pin": "out"
+      },
+      {
+        "name": "opening",
+        "node": "opening",
+        "pin": "out"
+      },
+      {
+        "name": "bars",
+        "node": "bars",
+        "pin": "out"
+      }
+    ]
+  },
+  {
     "file": "basics-stations-on-a-path.json",
     "path": "graphs/basics-stations-on-a-path.json",
     "title": "read a lap's own frame and width at thirty arbitrary stations, and place markers there",
@@ -2286,6 +2438,41 @@
         "name": "plots",
         "node": "plots",
         "pin": "out"
+      }
+    ]
+  },
+  {
+    "file": "basics-where-bars-cross.json",
+    "path": "graphs/basics-where-bars-cross.json",
+    "title": "put a part where two bars cross",
+    "description": "A braced panel: `connectPoints` joins every grid point to its neighbours along the rows, the columns and both diagonals, so each cell carries an X. `segmentCrossings` asks where those bars cross and emits ONE POINT PER CROSSING — here one at the middle of each cell's X, twenty-four in all. The row and column bars meet their neighbours only at the joints, and a meeting at a segment's END is a touch, not a crossing: the default `endpoints: \"exclude\"` leaves the joints out, which is what 'where do the bars cross' means on a lattice. Two segments cross when their closest approach is within `tolerance`, so the same rule finds coplanar bars (distance 0, give or take f32 rounding) and bars built a hair apart in 3D. Each point carries the two primitive ids (`primA` < `primB`) and the unit `bisector` of the two bars — the axis that halves their ACUTE angle — and a part set into the X lies along it: the cells are wider than they are tall, so the bosses here lie flat, along the shallow angle between the diagonals. Make the cells taller than they are wide and they stand up. The output is a plain point cloud, so it feeds `spawnInstances` directly.",
+    "tags": [
+      "basics",
+      "topology",
+      "sampler",
+      "instancing"
+    ],
+    "seed": 1102,
+    "nodeCount": 6,
+    "nodeTypes": [
+      "connectPoints",
+      "orientAlongVector",
+      "pointGrid",
+      "segmentCrossings",
+      "setAttribute",
+      "spawnInstances"
+    ],
+    "primitives": [],
+    "outputs": [
+      {
+        "name": "lattice",
+        "node": "bars",
+        "pin": "out"
+      },
+      {
+        "name": "crossings",
+        "node": "spawn",
+        "pin": "instances"
       }
     ]
   },

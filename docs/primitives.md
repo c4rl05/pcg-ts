@@ -78,7 +78,7 @@ Wire it: `pcg run` cannot bind its geometry inputs (geometry has no JSON form), 
 
 Copies the entire `source` cloud onto every point of `target`, composing the transforms per copy, then jitters the result so the repeated copies do not read as stamped. COUNT: the output is source x target points — 20 onto 500 is 10,000, and it multiplies fast. The transforms compose rather than overwrite: each copy is placed by the target's position, turned by the target's rotation and sized by the target's scale, so a target cloud carrying `rot` and `scale` lays its copies out already varied. VARIATION: yes — the jitter is context-seeded, so two instances differ, and `seed` re-rolls one explicitly. Reads and writes `P`; carries every source attribute through.
 
-**Content hash:** `8bb511eac4be999c`
+**Content hash:** `0990e8a17cb3c8ff`
 
 **Tags:** `compose`, `copy`, `clusters`
 
@@ -136,7 +136,7 @@ Run it: `pcg run fill/scatter-by-density`
 
 Scatters a few cluster centres through a box, then copies a small local cloud onto each one, so points arrive in groups — villages, groves, boulder fields. COUNT: the output is clusters x perCluster exactly, which multiplies fast. SHAPE: a group is a BOX running -spread to +spread around its centre and all three components of `spread` are live. It ships flat — the default is [4, 0, 4], a ground-plane patch, because that is what a village or a grove is — so raise `spread.y` to make the group volumetric (a swarm, an asteroid field, a cave's boulders) rather than reaching for a box scatter. The groups OVERHANG the bounds by up to `spread`, deliberately and unclamped: `boundsMin`/`boundsMax` place the CENTRES, and a group straddling the edge is a whole group rather than a clipped one — inset the bounds by `spread` if the points themselves have to stay inside a region. VARIATION: yes — both scatters are context-seeded, so two instances differ, and `seed` re-rolls both explicitly. The local cloud's own `scale` is reset before copying, so `spread` sizes the cluster and not the assets in it.
 
-**Content hash:** `7f300749743140f0`
+**Content hash:** `1167f7eec91c0e7c`
 
 **Tags:** `fill`, `scatter`, `clusters`
 
@@ -623,7 +623,7 @@ Builds a CLOSED PATH — polyline topology, not a loose point cloud — around a
 | `rotate` | vec3 | `[0,0,0]` |  |  | yes | ring.rotate | Rotation in degrees per world axis, applied about the origin before the loop is moved into place. |
 | `size` | vec3 | `[8,8,8]` |  |  | yes | ring.size | Radius of the loop in world units. A bare number is not accepted here: pass three numbers [8,8,8], or {"fn":"constant","value":8} for a uniform one. Unequal components give an ellipse. |
 
-**Examples:** [basics-extrude-polygon.json](../graphs/basics-extrude-polygon.json), [basics-merge-primitives.json](../graphs/basics-merge-primitives.json), [basics-smooth-normals.json](../graphs/basics-smooth-normals.json) — 10 total (`pcg graphs --primitive shape/path-loop`)
+**Examples:** [basics-extrude-polygon.json](../graphs/basics-extrude-polygon.json), [basics-clip-a-path.json](../graphs/basics-clip-a-path.json), [basics-merge-primitives.json](../graphs/basics-merge-primitives.json) — 12 total (`pcg graphs --primitive shape/path-loop`)
 
 Run it: `pcg run shape/path-loop`
 
@@ -653,7 +653,7 @@ Builds an open PATH — polyline topology — that runs along X and wanders off 
 | `variant` | f32 | `0` |  |  | yes | *(nothing — the body's field expressions read it by name)* | Offset added to the noise sample position — the per-instance re-roll, and the ONLY one this primitive has: its noise sets no seed in its field spec, so it runs at the fixed seed 0 and neither the graph seed nor a node seed moves it. |
 | `wander` | f32 | `0.15` |  |  | yes | *(nothing — the body's field expressions read it by name)* | How far the path strays from the straight line between its ends. 0 is a straight line; above that the peak deviation is about 0.22 * wander * `size.z`, exactly linear in both — so at the default `size` [40,1,40], 0.15 strays about 1.3 units to each side and 0.5 about 4.4. Inverted, for a peak of a fraction f of `size.z`, ask for wander around 4.6 * f. This is a FRACTION OF A NOMINAL RANGE, not of the deviation you get: the value scales a noise term whose range is +/-1 in principle, but four octaves of normalized fBm sampled along one line only cover part of it, and `frequency` and `variant` move that coverage (measured 0.13 to 0.31 of wander * `size.z` across the usable range). The wander is sideways only — the path is a height field along X, so it NEVER doubles back on itself at any wander; for a curve that turns back, build the corners yourself and run `pointsToPath` over them. |
 
-**Examples:** [basics-gather-on-path.json](../graphs/basics-gather-on-path.json), [basics-sweep-profile.json](../graphs/basics-sweep-profile.json), [basics-props-along-a-path.json](../graphs/basics-props-along-a-path.json) — 5 total (`pcg graphs --primitive shape/path-meander`)
+**Examples:** [basics-gather-on-path.json](../graphs/basics-gather-on-path.json), [basics-sweep-profile.json](../graphs/basics-sweep-profile.json), [basics-props-along-a-path.json](../graphs/basics-props-along-a-path.json) — 6 total (`pcg graphs --primitive shape/path-meander`)
 
 Run it: `pcg run shape/path-meander`
 
