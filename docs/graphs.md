@@ -4,7 +4,7 @@ Generated from the graphs in [`graphs`](../graphs) by `node scripts/gen-graphs.m
 
 Each file teaches ONE thing and cooks from JSON alone — no runtime-injected data, so `pcg cook <file>` on a clean install reproduces exactly what the corpus test asserts.
 
-95 examples, alphabetical by file:
+96 examples, alphabetical by file:
 
 - [basics-a-draw-that-survives-a-move.json](#basics-a-draw-that-survives-a-movejson) — keep a random draw when the point moves
 - [basics-attribute-from-noise.json](#basics-attribute-from-noisejson) — write an attribute from a noise field
@@ -65,6 +65,7 @@ Each file teaches ONE thing and cooks from JSON alone — no runtime-injected da
 - [basics-sightline-cull.json](#basics-sightline-culljson) — clear a line of sight by moving the props, not by deleting them
 - [basics-signed-distance.json](#basics-signed-distancejson) — a signed distance field, and which side of it
 - [basics-six-fold.json](#basics-six-foldjson) — one arm, six times over
+- [basics-smooth-normals.json](#basics-smooth-normalsjson) — shade a faceted curve round, keep an edge sharp
 - [basics-spawn-by-species.json](#basics-spawn-by-speciesjson) — spawn a different asset per point
 - [basics-spawn-instances.json](#basics-spawn-instancesjson) — turn points into instance batches
 - [basics-spiral-stair.json](#basics-spiral-stairjson) — treads winding up a helix
@@ -1271,6 +1272,24 @@ The arm here is authored, not grown. A real flake's arms match because they rode
 **Outputs:** `flake` (from `flake`.`out`)
 
 Cook it: `pcg cook graphs/basics-six-fold.json --stats`
+
+## basics-smooth-normals.json
+
+**shade a faceted curve round, keep an edge sharp**
+
+`extrudePolygon` gives every wall band its own four points and one flat normal, so its creases are exact — and a twenty-sided tank shades as twenty planks. `smoothNormals` decides which creases were meant by ANGLE: each point's normal becomes the angle-weighted average of the faces around its position whose normals lie within `angle` degrees of its own, so the tank's walls (18 degrees apart) shade round while its lid and floor (90 degrees) stay sharp, and the square block merged beside it keeps every edge. Nothing else changes: no point is merged, split or moved, so the output has exactly the input's points, triangles and attributes, and only `normal` differs. Points are matched by POSITION within `weldDistance`, not by index, which is what lets bands that share no point shade as one surface. The faceted copy behind is the same tank without the node, for comparison. Run it on the rounded part before merging it with neighbours whose shallow corners it should not smooth into.
+
+**Tags:** `basics`, `surface`, `mesh`, `normals`, `shading`
+
+**Seed:** 1047
+
+**Node types:** `extrudePolygon`, `mergePrimitives`, `smoothNormals`, `subgraph`
+
+**Primitives:** `shape/path-loop`
+
+**Outputs:** `smooth` (from `smooth`.`out`), `faceted` (from `faceted`.`out`)
+
+Cook it: `pcg cook graphs/basics-smooth-normals.json --stats`
 
 ## basics-spawn-by-species.json
 

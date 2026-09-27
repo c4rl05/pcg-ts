@@ -6772,6 +6772,47 @@
           "if": {
             "properties": {
               "type": {
+                "const": "smoothNormals"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "description": "Rewrites the point `normal` (f32 tuple 3) of a triangle mesh so a faceted curve shades as the surface it approximates while a real edge stays sharp. Each point's normal becomes the angle-weighted average of the faces around its POSITION whose normals lie within `angle` degrees of the point's own faces: a cylinder of 16 flat walls (22.5 degrees apart) shades round, a box (90 degrees) keeps every edge, a cap meeting its wall stays a crease. This is what extrudePolygon's output needs to read as a round tank rather than a barrel of planks — extrudePolygon gives every wall band its own four points and one flat normal, on purpose, so its creases are exact, and it cannot know which of them were meant. TOPOLOGY IS UNTOUCHED: no point is merged, split, moved or reordered, and every attribute but `normal` passes through as it came, so connected components, counts, uv seams and anything keyed by point index are exactly the input's. Points are matched by POSITION, not by index — points within `weldDistance` of each other (closing transitively) are one position — which is what lets separately-pointed bands, and separate pieces that meet edge to edge (the staves of a round wall), shade as one surface. The faces around a position are read from the whole input, so two pieces that merely touch at a shared corner at a shallow angle shade together too: run the node on the rounded part alone, before it is merged with its neighbours, when that is not wanted. A point's own faces are the reference, so a point whose faces already disagree (a shared-point mesh folded across a crease) gets the one normal that reference gives rather than being split. A point whose own faces cancel or have no area (a double-sided sheet sharing its points, a sliver) keeps the normal it came with, or [0, 0, 0] when the input had none. Reads the 'poly' primitives of 3 or more vertices, fanned from their first vertex exactly as toBufferGeometry draws them, and ignores every other primitive; an input with none is refused by name. Deterministic: positions are grouped by a union-find rooted at the smallest point index, and every sum runs in point and corner order.",
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "angle": {
+                    "default": 35,
+                    "description": "The crease angle, in DEGREES: faces whose normals differ by this much or less shade as one smooth surface, faces that differ by more keep the edge between them. 30-40 is the usual range — the default 35 smooths any circle of 11 or more segments (under 33 degrees apart) while a decagon's 36-degree edges, an octagon's 45 and every right angle stay sharp. 0 reproduces flat shading (a point takes only faces parallel to its own); 180 smooths everything that meets at a position.",
+                    "maximum": 180,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "weldDistance": {
+                    "default": 0.0001,
+                    "description": "How close two points must be, in world units, to count as one position when faces are gathered around it. Points are NOT merged: this only decides whose faces a point may average with. Keep it well under the mesh's point spacing: the pairs inside one neighbourhood are compared each against each, so a distance that gathers thousands of points into one position is slow as well as wrong. The default (a tenth of a millimetre, in metres) absorbs the float rounding between separately computed copies of one corner while staying far below any real feature. 0 matches a point to itself alone, so only faces that already SHARE a point smooth together.",
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "ref": false,
+              "subgraph": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "spawnInstances"
               }
             },
@@ -11027,6 +11068,7 @@
             "selfPrune",
             "setAttribute",
             "setBounds",
+            "smoothNormals",
             "spawnInstances",
             "splineSample",
             "subgraph",

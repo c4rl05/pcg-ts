@@ -1758,6 +1758,42 @@
     ]
   },
   {
+    "file": "basics-smooth-normals.json",
+    "path": "graphs/basics-smooth-normals.json",
+    "title": "shade a faceted curve round, keep an edge sharp",
+    "description": "`extrudePolygon` gives every wall band its own four points and one flat normal, so its creases are exact — and a twenty-sided tank shades as twenty planks. `smoothNormals` decides which creases were meant by ANGLE: each point's normal becomes the angle-weighted average of the faces around its position whose normals lie within `angle` degrees of its own, so the tank's walls (18 degrees apart) shade round while its lid and floor (90 degrees) stay sharp, and the square block merged beside it keeps every edge. Nothing else changes: no point is merged, split or moved, so the output has exactly the input's points, triangles and attributes, and only `normal` differs. Points are matched by POSITION within `weldDistance`, not by index, which is what lets bands that share no point shade as one surface. The faceted copy behind is the same tank without the node, for comparison. Run it on the rounded part before merging it with neighbours whose shallow corners it should not smooth into.",
+    "tags": [
+      "basics",
+      "surface",
+      "mesh",
+      "normals",
+      "shading"
+    ],
+    "seed": 1047,
+    "nodeCount": 8,
+    "nodeTypes": [
+      "extrudePolygon",
+      "mergePrimitives",
+      "smoothNormals",
+      "subgraph"
+    ],
+    "primitives": [
+      "shape/path-loop"
+    ],
+    "outputs": [
+      {
+        "name": "smooth",
+        "node": "smooth",
+        "pin": "out"
+      },
+      {
+        "name": "faceted",
+        "node": "faceted",
+        "pin": "out"
+      }
+    ]
+  },
+  {
     "file": "basics-spawn-by-species.json",
     "path": "graphs/basics-spawn-by-species.json",
     "title": "spawn a different asset per point",

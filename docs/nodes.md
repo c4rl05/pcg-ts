@@ -2,7 +2,7 @@
 
 Generated from the node registry metadata (`listNodeTypes()`) by `node scripts/gen-node-reference.mjs` — do not edit by hand. The same metadata, machine-readable, is in [nodes.json](./nodes.json). For the graph JSON format and field-expression grammar see [authoring.md](./authoring.md).
 
-61 node types, grouped by `category` (node sections below are alphabetical):
+62 node types, grouped by `category` (node sections below are alphabetical):
 
 **attribute**
 
@@ -89,6 +89,7 @@ Generated from the node registry metadata (`listNodeTypes()`) by `node scripts/g
 **surface**
 
 - [extrudePolygon](#extrudepolygon) — Treats every CLOSED polyline primitive as a polygon boundary and sweeps it along a direction into 3-vertex 'poly' triangles: a footprint becomes massing, a boundary loop becomes a wall.
+- [smoothNormals](#smoothnormals) — Rewrites the point `normal` (f32 tuple 3) of a triangle mesh so a faceted curve shades as the surface it approximates while a real edge stays sharp.
 - [sweepProfile](#sweepprofile) — Places a cross-section on EVERY POINT of every polyline primitive and stitches consecutive placements into 3-vertex 'poly' triangles: a curve becomes a surface.
 
 **value**
@@ -265,7 +266,7 @@ Treats every CLOSED polyline primitive as a polygon boundary and sweeps it along
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-extrude-polygon.json](../graphs/basics-extrude-polygon.json), [basics-voronoi-plots.json](../graphs/basics-voronoi-plots.json) — 2 total (`pcg graphs --node extrudePolygon`)
+**Examples:** [basics-extrude-polygon.json](../graphs/basics-extrude-polygon.json), [basics-voronoi-plots.json](../graphs/basics-voronoi-plots.json), [basics-smooth-normals.json](../graphs/basics-smooth-normals.json) — 3 total (`pcg graphs --node extrudePolygon`)
 
 **Params:**
 
@@ -466,7 +467,7 @@ Concatenates every connected geometry, in connection order, KEEPING TOPOLOGY: po
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-merge-primitives.json](../graphs/basics-merge-primitives.json), [basics-gabriel-cells.json](../graphs/basics-gabriel-cells.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json) — 10 total (`pcg graphs --node mergePrimitives`)
+**Examples:** [basics-merge-primitives.json](../graphs/basics-merge-primitives.json), [basics-gabriel-cells.json](../graphs/basics-gabriel-cells.json), [basics-smooth-normals.json](../graphs/basics-smooth-normals.json) — 11 total (`pcg graphs --node mergePrimitives`)
 
 **Params:** *(none)*
 
@@ -1119,6 +1120,25 @@ Sets the standard per-point bounds attributes: writes boundsMin and boundsMax (f
 | `boundsMin` | vec3 | `[0,0,0]` |  |  | yes | Minimum corner written to every point's boundsMin, in world units. As a FIELD it is PER POINT, which is the reading that makes this node worth more than a constant: an extent derived from the point's own `scale`, or from a species attribute, gives every instance the box it actually occupies rather than one box the whole cloud shares. Must evaluate to THREE numbers per point — a scalar is REFUSED rather than broadcast, because broadcasting would quietly hand every point a cube when a box was asked for. Both corners are resolved against the INPUT geometry before either is written, so a field here reading `boundsMax` sees the corner this cook was HANDED, never one this node produced. |
 | `boundsMax` | vec3 | `[1,1,1]` |  |  | yes | Maximum corner written to every point's boundsMax, in world units. As a FIELD it is PER POINT, on the same terms as boundsMin, and refuses a scalar for the same reason. Nothing here checks that max exceeds min: the two are written independently, and a point whose corners cross is a point with an inside-out box, which is what the author asked for and what a downstream reader will see. Independently RESOLVED, too: a field here reading `boundsMin` sees the input's corner rather than the one this cook just wrote, so the two params cannot observe each other in either order. Both corners are standard point attributes, so a field naming one always finds it; a geometry with the column deliberately removed refuses here rather than resolving to a silent zero. |
 
+## smoothNormals
+
+Rewrites the point `normal` (f32 tuple 3) of a triangle mesh so a faceted curve shades as the surface it approximates while a real edge stays sharp. Each point's normal becomes the angle-weighted average of the faces around its POSITION whose normals lie within `angle` degrees of the point's own faces: a cylinder of 16 flat walls (22.5 degrees apart) shades round, a box (90 degrees) keeps every edge, a cap meeting its wall stays a crease. This is what extrudePolygon's output needs to read as a round tank rather than a barrel of planks — extrudePolygon gives every wall band its own four points and one flat normal, on purpose, so its creases are exact, and it cannot know which of them were meant. TOPOLOGY IS UNTOUCHED: no point is merged, split, moved or reordered, and every attribute but `normal` passes through as it came, so connected components, counts, uv seams and anything keyed by point index are exactly the input's. Points are matched by POSITION, not by index — points within `weldDistance` of each other (closing transitively) are one position — which is what lets separately-pointed bands, and separate pieces that meet edge to edge (the staves of a round wall), shade as one surface. The faces around a position are read from the whole input, so two pieces that merely touch at a shared corner at a shallow angle shade together too: run the node on the rounded part alone, before it is merged with its neighbours, when that is not wanted. A point's own faces are the reference, so a point whose faces already disagree (a shared-point mesh folded across a crease) gets the one normal that reference gives rather than being split. A point whose own faces cancel or have no area (a double-sided sheet sharing its points, a sliver) keeps the normal it came with, or [0, 0, 0] when the input had none. Reads the 'poly' primitives of 3 or more vertices, fanned from their first vertex exactly as toBufferGeometry draws them, and ignores every other primitive; an input with none is refused by name. Deterministic: positions are grouped by a union-find rooted at the smallest point index, and every sum runs in point and corner order.
+
+**Category:** surface
+
+**Inputs:** `in` (geometry)
+
+**Outputs:** `out` (geometry)
+
+**Examples:** [basics-smooth-normals.json](../graphs/basics-smooth-normals.json) — 1 total (`pcg graphs --node smoothNormals`)
+
+**Params:**
+
+| Param | Type | Default | Range | Enum | Field | Description |
+| --- | --- | --- | --- | --- | --- | --- |
+| `angle` | f32 | `35` | 0..180 |  |  | The crease angle, in DEGREES: faces whose normals differ by this much or less shade as one smooth surface, faces that differ by more keep the edge between them. 30-40 is the usual range — the default 35 smooths any circle of 11 or more segments (under 33 degrees apart) while a decagon's 36-degree edges, an octagon's 45 and every right angle stay sharp. 0 reproduces flat shading (a point takes only faces parallel to its own); 180 smooths everything that meets at a position. |
+| `weldDistance` | f32 | `0.0001` | >= 0 |  |  | How close two points must be, in world units, to count as one position when faces are gathered around it. Points are NOT merged: this only decides whose faces a point may average with. Keep it well under the mesh's point spacing: the pairs inside one neighbourhood are compared each against each, so a distance that gathers thousands of points into one position is slow as well as wrong. The default (a tenth of a millimetre, in metres) absorbs the float rounding between separately computed copies of one corner while staying far below any real feature. 0 matches a point to itself alone, so only faces that already SHARE a point smooth together. |
+
 ## spawnInstances
 
 Spawner terminal: converts the input point cloud into render-agnostic instance batches. Each point becomes one instance with world matrix T(P) * R(rot) * S(scale) (column-major 4x4, THREE.Matrix4.elements layout; missing rot/scale attributes are identity). Points are grouped into one batch per asset id, in first-occurrence order: assetAttr (when non-empty) names a string point attribute holding per-point asset ids — empty per-point values fall back to assetId. colorAttr (when non-empty) additionally carries a per-instance RGB read from that point attribute, which is how instances of ONE asset id vary in appearance — age, health, season, a hue drift — without splitting into more assets. instanceAttrs carries any other point attributes as NAMED channels on the batch, dtype and tuple size preserved, which is how graph-authored data a host must animate (a phase, an id, an RGBA) reaches it at all: the field grammar has no time input, so the graph settles the structure and the host drives it from these channels. The 'instances' pin emits one instances item (input tags carried over); 'points' passes the input geometry through unchanged for chaining or debug rendering. One cook may spawn at most 1048576 instances (one per input point); a runaway density is refused with a diagnostic rather than an allocation failure. That budget is per COOK, not per world, so a streamed world cooking one cell at a time may hold many times it across its resident cells.
@@ -1174,7 +1194,7 @@ Composite node wrapping an inner graph as a single node. Pins and params are per
 
 **Outputs:** *(none)*
 
-**Examples:** [basics-subgraph-exposed-params.json](../graphs/basics-subgraph-exposed-params.json), [basics-primitive-ref.json](../graphs/basics-primitive-ref.json), [basics-gather-on-path.json](../graphs/basics-gather-on-path.json) — 33 total (`pcg graphs --node subgraph`)
+**Examples:** [basics-subgraph-exposed-params.json](../graphs/basics-subgraph-exposed-params.json), [basics-primitive-ref.json](../graphs/basics-primitive-ref.json), [basics-gather-on-path.json](../graphs/basics-gather-on-path.json) — 34 total (`pcg graphs --node subgraph`)
 
 **Params:** *(none)*
 

@@ -44,6 +44,17 @@ waiting for anything. Its body stays because the analysis under it is
 what the outcome tested — several of these scored badly, and a survey
 that guessed wrong is worth more to the next survey than a deleted one.
 
+### `smoothNormals`' two f32 params refuse a field — found 2026-09-27
+
+The node (8103b85) shipped after the sweep that made every per-element
+numeric param field-capable, and neither `angle` nor `weldDistance`
+accepts one. By the rule in `docs/llms-full.txt` ("a param can be a
+field exactly when its value is read PER ELEMENT") both qualify:
+`angle` is read per point, and `weldDistance` is a symmetric relation
+between two points. That file now counts them as a gap, not a clause.
+Waiting for a caller: the eiffel demo is the only user and sets one
+crease per mesh.
+
 ### The GPU `ramp` lowering has no bound on its stop count — found 2026-09-19
 
 Left behind by 8030557, which made the CPU `ramp` bisect above 16 stops.
