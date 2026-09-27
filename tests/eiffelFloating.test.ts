@@ -299,11 +299,18 @@ const ALLOW: readonly Allowed[] = [
     reason:
       "G45: the Masque's UpA corner stub (one 1.6 m flat at the screen's lower corner) crosses no post; it laps onto the 750 chord 12-14 mm behind it (the flats' layer offset), so floats by that; closing it would put it in the chord's plane",
   },
+  // The four Masque entries' boxes all reach down to the 630 chord's ends
+  // (y 40.27) and out to the face (39.77) since the flat bars became 'rect'
+  // sweeps (2026-09-27). The copied unit box could weld into eleven
+  // triangles and lend the twelfth to a neighbour's solid, which the
+  // detector read as a support (the chord at -x, +z did), so the same gap at
+  // the chord's ends was flagged in one quadrant and hidden in three. The
+  // counts moved with it; the geometry did not (the geomeq gate).
   {
     kind: "loose",
     cls: "girders",
     box: [20.847, 40.268, 20.852, 39.769, 50.039, 39.768],
-    count: 62,
+    count: 60,
     reason:
       "Masque (PL-VII Fig. 6), groups G09,G20,G22,G27,G31,G32,G33,G34,G35,G36,G60,G61: the screen's flats are stacked 12 mm apart so no two crossing flats share a plane (legs.ts masque layers), so a flat one or two layers behind the chord plate it laps onto ends 1.2-2.6 cm behind it, hidden by the plate; and the flats', fillet bands' and the 630 chord's ends at the screen's sides stop 0.45 off the uprights' axes (clear of the fin on the web, and at XXV of the node's gussets), 1 cm beside the box and 5-8 cm in front of its web (the 4-8 cm gaps). The screen bears on the uprights through the 750's packing (MASQUE_BEARING), so none of these ends is unsupported; closing each would need a packing per flat end",
   },
@@ -318,16 +325,16 @@ const ALLOW: readonly Allowed[] = [
   {
     kind: "loose",
     cls: "girders",
-    box: [-39.768, 40.268, -39.43, -20.846, 50.04, -20.852],
-    count: 60,
+    box: [-39.768, 40.268, -39.768, -20.846, 50.04, -20.852],
+    count: 61,
     reason:
       "Masque (PL-VII Fig. 6), groups G09,G20,G22,G27,G31,G32,G33,G34,G35,G36,G60,G61: the screen's flats are stacked 12 mm apart so no two crossing flats share a plane (legs.ts masque layers), so a flat one or two layers behind the chord plate it laps onto ends 1.2-2.6 cm behind it, hidden by the plate; and the flats', fillet bands' and the 630 chord's ends at the screen's sides stop 0.45 off the uprights' axes (clear of the fin on the web, and at XXV of the node's gussets), 1 cm beside the box and 5-8 cm in front of its web (the 4-8 cm gaps). The screen bears on the uprights through the 750's packing (MASQUE_BEARING), so none of these ends is unsupported; closing each would need a packing per flat end",
   },
   {
     kind: "loose",
     cls: "girders",
-    box: [-39.427, 40.894, 20.852, -20.847, 50.039, 39.43],
-    count: 58,
+    box: [-39.427, 40.268, 20.852, -20.847, 50.039, 39.768],
+    count: 60,
     reason:
       "Masque (PL-VII Fig. 6), groups G09,G20,G22,G27,G31,G32,G33,G34,G35,G36,G60,G61: the screen's flats are stacked 12 mm apart so no two crossing flats share a plane (legs.ts masque layers), so a flat one or two layers behind the chord plate it laps onto ends 1.2-2.6 cm behind it, hidden by the plate; and the flats', fillet bands' and the 630 chord's ends at the screen's sides stop 0.45 off the uprights' axes (clear of the fin on the web, and at XXV of the node's gussets), 1 cm beside the box and 5-8 cm in front of its web (the 4-8 cm gaps). The screen bears on the uprights through the 750's packing (MASQUE_BEARING), so none of these ends is unsupported; closing each would need a packing per flat end",
   },

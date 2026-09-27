@@ -178,6 +178,7 @@ import {
 } from "./crossing.js";
 import {
   BAR_WIDTH,
+  type BarPiece,
   CROSS_DEPTH,
   type Edge,
   FRAME_WIDTH,
@@ -192,7 +193,6 @@ import {
   ironworkSolid,
   macaronCross,
   panelIronwork,
-  ribbon,
   signedArea,
 } from "./ironwork.js";
 import { SAG, arcSegments, smoothed } from "./chord.js";
@@ -1156,13 +1156,16 @@ const PLANES = [
   { dz: INNER_OFFSET, decorated: -1 },
 ] as const;
 
+/** A set of the arches' ironwork, as `ironworkSolid` builds it. */
+type Ironwork = { bars: BarPiece[]; solids: Piece[] };
+
 /** The arch in both planes, as member lists and plate outlines. */
 function arches(): {
   chords: Member[];
   montants: Member[];
   heads: Member[];
-  fans: Piece[];
-  scrolls: Piece[];
+  fans: Ironwork;
+  scrolls: Ironwork;
   bracket: Member[];
   feet: Member[];
   plates: Vec3[][];
@@ -1173,8 +1176,8 @@ function arches(): {
     chords: [] as Member[],
     montants: [] as Member[],
     heads: [] as Member[],
-    fans: [] as Piece[],
-    scrolls: [] as Piece[],
+    fans: { bars: [], solids: [] } as Ironwork,
+    scrolls: { bars: [], solids: [] } as Ironwork,
     bracket: [] as Member[],
     feet: [] as Member[],
     plates: [] as Vec3[][],
@@ -1235,25 +1238,21 @@ function arches(): {
       }
       return out;
     };
-    const bar = (width: number) => (line: InPlane[]): Piece => {
-      const r = ribbon(line, width);
-      return {
-        outline: wind(r.outline).map(off),
-        caps: r.quads.map((q) => wind(q).map(off)),
-        depth: IRON_DEPTH,
-      };
-    };
-    const convex = (base: number, depth: number) => (p: InPlane[]): Piece => {
-      const o = wind(p).map(lift(base));
-      return { outline: o, caps: [o], depth };
-    };
+    // A bar is its centreline on the plates' plane, standing off it along
+    // the decorated side's normal (`ironworkSolid` sweeps it).
+    const up: Vec3 = [decorated * N4[0], decorated * N4[1], decorated * N4[2]];
+    const bar = (width: number) => (line: InPlane[]): BarPiece => ({ line: line.map(off), width, up });
+    const convex = (base: number, depth: number) => (p: InPlane[]): Piece => ({
+      outline: wind(p).map(lift(base)),
+      depth,
+    });
     for (const { panel, work: w } of work) {
-      out.fans.push(
+      out.fans.bars.push(
         ...w.frame.map(reach(FRAME_WIDTH / 2)).map(bar(FRAME_WIDTH)),
         ...w.bars.map(reach(BAR_WIDTH / 2)).map(bar(BAR_WIDTH)),
       );
-      out.scrolls.push(
-        ...w.volutes.map(bar(VOLUTE_WIDTH)),
+      out.scrolls.bars.push(...w.volutes.map(bar(VOLUTE_WIDTH)));
+      out.scrolls.solids.push(
         ...w.eyes.map((c) => disc(c, MACARON_R)).map(convex(PLATE_OFFSET, MACARON_DEPTH)),
         ...w.eyes.flatMap((c) => macaronCross(c, panel.up)).map(convex(PLATE_OFFSET + MACARON_DEPTH, CROSS_DEPTH)),
       );

@@ -5,11 +5,11 @@
       "arches": {
         "kind": "geometry",
         "items": 1,
-        "points": 239488,
-        "vertices": 390144,
-        "primitives": 130048,
+        "points": 212896,
+        "vertices": 400320,
+        "primitives": 133440,
         "instances": 0,
-        "hash": "3ed089a9df960b71"
+        "hash": "4c608e22db8caf12"
       },
       "bracing": {
         "kind": "geometry",
@@ -455,11 +455,11 @@
       "girders": {
         "kind": "geometry",
         "items": 1,
-        "points": 181868,
-        "vertices": 318144,
-        "primitives": 106048,
+        "points": 185532,
+        "vertices": 340128,
+        "primitives": 113376,
         "instances": 0,
-        "hash": "a2e1f53a7b6c8b98"
+        "hash": "6908c97eda56fd31"
       },
       "glass": {
         "kind": "geometry",
@@ -473,11 +473,11 @@
       "horizontals": {
         "kind": "geometry",
         "items": 1,
-        "points": 10600,
-        "vertices": 19320,
-        "primitives": 6440,
+        "points": 10660,
+        "vertices": 19680,
+        "primitives": 6560,
         "instances": 0,
-        "hash": "ec623c19616c0a50"
+        "hash": "2f0066f884f447cb"
       },
       "machinery": {
         "kind": "geometry",
@@ -527,20 +527,20 @@
       "summit": {
         "kind": "geometry",
         "items": 1,
-        "points": 40454,
-        "vertices": 77958,
-        "primitives": 25986,
+        "points": 40656,
+        "vertices": 79170,
+        "primitives": 26390,
         "instances": 0,
-        "hash": "fd954312d320dbee"
+        "hash": "64d2d81280d72244"
       },
       "uprights": {
         "kind": "geometry",
         "items": 1,
-        "points": 33736,
-        "vertices": 50688,
-        "primitives": 16896,
+        "points": 36536,
+        "vertices": 67488,
+        "primitives": 22496,
         "instances": 0,
-        "hash": "48562e3eb73e73e7"
+        "hash": "911c60df11e2b9f8"
       },
       "works.bearings": {
         "kind": "geometry",
@@ -637,11 +637,11 @@
       "arches": {
         "kind": "geometry",
         "items": 1,
-        "points": 616832,
-        "vertices": 974208,
-        "primitives": 324736,
+        "points": 457216,
+        "vertices": 993408,
+        "primitives": 331136,
         "instances": 0,
-        "hash": "9e0dab7f7c8ee1ef"
+        "hash": "346f612701dcd2d9"
       },
       "bracing": {
         "kind": "geometry",
@@ -1087,11 +1087,11 @@
       "girders": {
         "kind": "geometry",
         "items": 1,
-        "points": 1489356,
-        "vertices": 4108608,
-        "primitives": 1369536,
+        "points": 1493020,
+        "vertices": 4130592,
+        "primitives": 1376864,
         "instances": 0,
-        "hash": "107ef126fc8c0703"
+        "hash": "16fde02294ab0a2b"
       },
       "glass": {
         "kind": "geometry",
@@ -1105,20 +1105,20 @@
       "gussets": {
         "kind": "geometry",
         "items": 1,
-        "points": 128880,
-        "vertices": 193320,
-        "primitives": 64440,
+        "points": 131620,
+        "vertices": 209760,
+        "primitives": 69920,
         "instances": 0,
-        "hash": "bdca628c56cdb3e1"
+        "hash": "b8f135e300a1de7e"
       },
       "horizontals": {
         "kind": "geometry",
         "items": 1,
-        "points": 481840,
-        "vertices": 1311072,
-        "primitives": 437024,
+        "points": 481856,
+        "vertices": 1311168,
+        "primitives": 437056,
         "instances": 0,
-        "hash": "9c76a987d416a639"
+        "hash": "02778bf4b6d88e0e"
       },
       "machinery": {
         "kind": "geometry",
@@ -1168,31 +1168,31 @@
       "summit": {
         "kind": "geometry",
         "items": 1,
-        "points": 40454,
-        "vertices": 77958,
-        "primitives": 25986,
+        "points": 40656,
+        "vertices": 79170,
+        "primitives": 26390,
         "instances": 0,
-        "hash": "fd954312d320dbee"
+        "hash": "64d2d81280d72244"
       },
       "uprights": {
         "kind": "geometry",
         "items": 1,
-        "points": 381448,
-        "vertices": 572256,
-        "primitives": 190752,
+        "points": 413224,
+        "vertices": 762912,
+        "primitives": 254304,
         "instances": 0,
-        "hash": "7fbceb9ba63c2a20"
+        "hash": "fc34399e677b56dc"
       }
     },
     "riveted": {
       "arches": {
         "kind": "geometry",
         "items": 1,
-        "points": 616832,
-        "vertices": 974208,
-        "primitives": 324736,
+        "points": 457216,
+        "vertices": 993408,
+        "primitives": 331136,
         "instances": 0,
-        "hash": "9e0dab7f7c8ee1ef"
+        "hash": "346f612701dcd2d9"
       },
       "bracing": {
         "kind": "geometry",
@@ -1638,11 +1638,11 @@
       "girders": {
         "kind": "geometry",
         "items": 1,
-        "points": 1489356,
-        "vertices": 4108608,
-        "primitives": 1369536,
+        "points": 1493020,
+        "vertices": 4130592,
+        "primitives": 1376864,
         "instances": 0,
-        "hash": "107ef126fc8c0703"
+        "hash": "16fde02294ab0a2b"
       },
       "glass": {
         "kind": "geometry",
@@ -1656,20 +1656,20 @@
       "gussets": {
         "kind": "geometry",
         "items": 1,
-        "points": 128880,
-        "vertices": 193320,
-        "primitives": 64440,
+        "points": 131620,
+        "vertices": 209760,
+        "primitives": 69920,
         "instances": 0,
-        "hash": "bdca628c56cdb3e1"
+        "hash": "b8f135e300a1de7e"
       },
       "horizontals": {
         "kind": "geometry",
         "items": 1,
-        "points": 481840,
-        "vertices": 1311072,
-        "primitives": 437024,
+        "points": 481856,
+        "vertices": 1311168,
+        "primitives": 437056,
         "instances": 0,
-        "hash": "9c76a987d416a639"
+        "hash": "02778bf4b6d88e0e"
       },
       "machinery": {
         "kind": "geometry",
@@ -2241,31 +2241,31 @@
       "summit": {
         "kind": "geometry",
         "items": 1,
-        "points": 40454,
-        "vertices": 77958,
-        "primitives": 25986,
+        "points": 40656,
+        "vertices": 79170,
+        "primitives": 26390,
         "instances": 0,
-        "hash": "fd954312d320dbee"
+        "hash": "64d2d81280d72244"
       },
       "uprights": {
         "kind": "geometry",
         "items": 1,
-        "points": 381448,
-        "vertices": 572256,
-        "primitives": 190752,
+        "points": 413224,
+        "vertices": 762912,
+        "primitives": 254304,
         "instances": 0,
-        "hash": "7fbceb9ba63c2a20"
+        "hash": "fc34399e677b56dc"
       }
     },
     "rivetsFull": {
       "arches": {
         "kind": "geometry",
         "items": 1,
-        "points": 616832,
-        "vertices": 974208,
-        "primitives": 324736,
+        "points": 457216,
+        "vertices": 993408,
+        "primitives": 331136,
         "instances": 0,
-        "hash": "9e0dab7f7c8ee1ef"
+        "hash": "346f612701dcd2d9"
       },
       "bracing": {
         "kind": "geometry",
@@ -2711,11 +2711,11 @@
       "girders": {
         "kind": "geometry",
         "items": 1,
-        "points": 1489356,
-        "vertices": 4108608,
-        "primitives": 1369536,
+        "points": 1493020,
+        "vertices": 4130592,
+        "primitives": 1376864,
         "instances": 0,
-        "hash": "107ef126fc8c0703"
+        "hash": "16fde02294ab0a2b"
       },
       "glass": {
         "kind": "geometry",
@@ -2729,20 +2729,20 @@
       "gussets": {
         "kind": "geometry",
         "items": 1,
-        "points": 128880,
-        "vertices": 193320,
-        "primitives": 64440,
+        "points": 131620,
+        "vertices": 209760,
+        "primitives": 69920,
         "instances": 0,
-        "hash": "bdca628c56cdb3e1"
+        "hash": "b8f135e300a1de7e"
       },
       "horizontals": {
         "kind": "geometry",
         "items": 1,
-        "points": 481840,
-        "vertices": 1311072,
-        "primitives": 437024,
+        "points": 481856,
+        "vertices": 1311168,
+        "primitives": 437056,
         "instances": 0,
-        "hash": "9c76a987d416a639"
+        "hash": "02778bf4b6d88e0e"
       },
       "machinery": {
         "kind": "geometry",
@@ -3323,31 +3323,31 @@
       "summit": {
         "kind": "geometry",
         "items": 1,
-        "points": 40454,
-        "vertices": 77958,
-        "primitives": 25986,
+        "points": 40656,
+        "vertices": 79170,
+        "primitives": 26390,
         "instances": 0,
-        "hash": "fd954312d320dbee"
+        "hash": "64d2d81280d72244"
       },
       "uprights": {
         "kind": "geometry",
         "items": 1,
-        "points": 381448,
-        "vertices": 572256,
-        "primitives": 190752,
+        "points": 413224,
+        "vertices": 762912,
+        "primitives": 254304,
         "instances": 0,
-        "hash": "7fbceb9ba63c2a20"
+        "hash": "fc34399e677b56dc"
       }
     },
     "skeleton": {
       "arches": {
         "kind": "geometry",
         "items": 1,
-        "points": 239488,
-        "vertices": 390144,
-        "primitives": 130048,
+        "points": 212896,
+        "vertices": 400320,
+        "primitives": 133440,
         "instances": 0,
-        "hash": "3ed089a9df960b71"
+        "hash": "4c608e22db8caf12"
       },
       "bracing": {
         "kind": "geometry",
@@ -3793,11 +3793,11 @@
       "girders": {
         "kind": "geometry",
         "items": 1,
-        "points": 181868,
-        "vertices": 318144,
-        "primitives": 106048,
+        "points": 185532,
+        "vertices": 340128,
+        "primitives": 113376,
         "instances": 0,
-        "hash": "a2e1f53a7b6c8b98"
+        "hash": "6908c97eda56fd31"
       },
       "glass": {
         "kind": "geometry",
@@ -3811,11 +3811,11 @@
       "horizontals": {
         "kind": "geometry",
         "items": 1,
-        "points": 10600,
-        "vertices": 19320,
-        "primitives": 6440,
+        "points": 10660,
+        "vertices": 19680,
+        "primitives": 6560,
         "instances": 0,
-        "hash": "ec623c19616c0a50"
+        "hash": "2f0066f884f447cb"
       },
       "machinery": {
         "kind": "geometry",
@@ -3865,20 +3865,20 @@
       "summit": {
         "kind": "geometry",
         "items": 1,
-        "points": 40454,
-        "vertices": 77958,
-        "primitives": 25986,
+        "points": 40656,
+        "vertices": 79170,
+        "primitives": 26390,
         "instances": 0,
-        "hash": "fd954312d320dbee"
+        "hash": "64d2d81280d72244"
       },
       "uprights": {
         "kind": "geometry",
         "items": 1,
-        "points": 33736,
-        "vertices": 50688,
-        "primitives": 16896,
+        "points": 36536,
+        "vertices": 67488,
+        "primitives": 22496,
         "instances": 0,
-        "hash": "48562e3eb73e73e7"
+        "hash": "911c60df11e2b9f8"
       }
     }
   }

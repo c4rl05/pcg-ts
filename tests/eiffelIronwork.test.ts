@@ -264,11 +264,12 @@ describe("the arches' ironwork (PL-XI Fig. 14)", () => {
       expect(plainFans).toBeDefined();
       expect(plainScrolls).toBeUndefined();
       expect(plainFans!.primitiveCount).toBe(fans.primitiveCount);
-      // Triangles as the pieces make them: a bar's boundary walled (two a
-      // boundary edge) and its quads capped (two each), a macaron's disc and
-      // cross closed prisms; four faces, two planes.
+      // Triangles as the pieces make them: a bar a 'rect' sweep of its
+      // centreline (four faces of two triangles a segment, and each end a
+      // fan of four from its centre), a macaron's disc and cross closed
+      // prisms; four faces, two planes.
       const segs = (ls: readonly Pt[][]) => ls.reduce((s, l) => s + l.length - 1, 0);
-      const barTris = (ls: readonly Pt[][]) => ls.reduce((s, l) => s + 2 * (2 * l.length) + 4 * (l.length - 1), 0);
+      const barTris = (ls: readonly Pt[][]) => ls.reduce((s, l) => s + 8 * (l.length - 1) + 2 * 4, 0);
       const fanTris = panels.reduce((s, { work }) => s + barTris(work.frame) + barTris(work.bars), 0);
       const eyes = panels.reduce((s, { work }) => s + work.eyes.length, 0);
       const prism = (n: number) => 2 * n + 2 * (n - 2);
@@ -279,9 +280,12 @@ describe("the arches' ironwork (PL-XI Fig. 14)", () => {
       // The numbers SOURCES.md §28 quotes. Until 2026-09-26 the curves were
       // cut at a fixed 18 degrees (27,456 and 191,872); now every chord's
       // outer edge stands within CURVE_SAG of its curve, the frame's arch
-      // taking the most of it (tests/eiffelRoundnessLower.test.ts).
-      expect(FACES * PLANES * fanTris).toBe(38_464);
-      expect(FACES * PLANES * scrollTris).toBe(194_688);
+      // taking the most of it (tests/eiffelRoundnessLower.test.ts). Until
+      // the bars were swept (2026-09-27) each end was a quad of the walled
+      // boundary, two triangles where the sweep's cap fan is four (38,464
+      // and 194,688).
+      expect(FACES * PLANES * fanTris).toBe(41_856);
+      expect(FACES * PLANES * scrollTris).toBe(197_696);
       expect(FACES * PLANES * eyes).toBe(752);
       expect(segs(panels.flatMap((p) => p.work.volutes))).toBeGreaterThan(0);
     });
@@ -406,14 +410,22 @@ describe("the arches' ironwork (PL-XI Fig. 14)", () => {
     });
 
     it("the sections: 45 deep off the montants' faces, the macarons standing proud", () => {
+      // Half a millimetre bins: a bar's cap fans from its section's centre,
+      // half its depth off the face, a point no face but the cap's reaches.
       const offs = new Set<number>();
       for (const p of pointsOf(scrolls)) {
         const { plane, off } = onRib(toFace0(p).q);
-        offs.add(Math.round((plane === 0 ? off : -off) * 1000));
+        offs.add(Math.round((plane === 0 ? off : -off) * 2000));
       }
-      const mm = (m: number) => Math.round(m * 1000);
+      const bin = (m: number) => Math.round(m * 2000);
       expect([...offs].sort((x, y) => x - y)).toEqual(
-        [FACE_OFF, FACE_OFF + IRON_DEPTH, FACE_OFF + MACARON_DEPTH, FACE_OFF + MACARON_DEPTH + CROSS_DEPTH].map(mm),
+        [
+          FACE_OFF,
+          FACE_OFF + IRON_DEPTH / 2,
+          FACE_OFF + IRON_DEPTH,
+          FACE_OFF + MACARON_DEPTH,
+          FACE_OFF + MACARON_DEPTH + CROSS_DEPTH,
+        ].map(bin),
       );
     });
   });

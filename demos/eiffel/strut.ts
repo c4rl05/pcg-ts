@@ -62,6 +62,7 @@ import {
   select,
   sqrt,
   sub,
+  sweepProfile,
   transferByIndex,
   transformPoints,
   vec,
@@ -114,32 +115,18 @@ export function faceSkin(
 }
 
 /**
- * The unit box's outward face normals, point by point: meshPrimitive's box
- * lays its faces out as blocks of 4 points (one quad each at the default
- * subdivisions) in the order +x, -x, +y, -y, +z, -z.
- */
-const BOX_NORMALS: readonly Vec3[] = (
-  [
-    [1, 0, 0],
-    [-1, 0, 0],
-    [0, 1, 0],
-    [0, -1, 0],
-    [0, 0, 1],
-    [0, 0, -1],
-  ] as const
-).flatMap((n): Vec3[] => [n, n, n, n]);
-
-/**
  * Flat bars and plates: a box per member, its length along the member,
  * `width` across it in its face and `thickness` along the face's normal.
  * Either may be a field, read per member (a primitive attribute the
  * members carry, as the lower uprights' plates do, each its own size).
  *
- * The unit box carries its local face normals as `normal`; `rotateAttrs`
- * turns them by each copy's `rot` (a box scaled along its own axes keeps
- * its face normals). Without one, a merge with the swept members of the
- * same class (which do carry normals) filled these with zeros, and the
- * Masque rendered black.
+ * A 'rect' sweep of the member's two ends: the resample gives each member
+ * points of its own and carries its primitive attributes (the face normal,
+ * a per-member size) down to them, and the sweep squares the section to
+ * the face normal as its up hint, `thickness` along it and `width` across,
+ * capped at both ends. The sweep writes flat per-face normals itself, so a
+ * merge with the swept members of the same class keeps them (a missing
+ * `normal` was filled with zeros, and the Masque rendered black).
  */
 export function flatBars(
   g: Graph,
@@ -148,52 +135,14 @@ export function flatBars(
   width: number | Field,
   thickness: number | Field,
 ): NodeHandle {
-  const tips = g.add(pathResample, { mode: "count", count: 2, lengthAttr: "barLen" }, `${id}Tips`);
-  const len = g.add(
-    promoteAttribute,
-    { name: "barLen", from: "primitive", to: "point", mode: "first" },
-    `${id}Len`,
+  const tips = g.add(pathResample, { mode: "count", count: 2 }, `${id}Tips`);
+  const boxes = g.add(
+    sweepProfile,
+    { profile: "rect", width, height: thickness, anchor: "center", up: attribute(FACE_NORMAL, 3) },
+    `${id}Lit`,
   );
-  const first = g.add(filterByExpression, { predicate: lt(attribute("curveU"), 0.5) }, `${id}First`);
-  const T = attribute("tangent", 3);
-  const Fn = attribute(FACE_NORMAL, 3);
-  const N = normalize(sub(Fn, mul(T, dot(Fn, T))));
-  const mid = g.add(
-    transformPoints,
-    { translate: mul(T, mul(attribute("barLen"), 0.5)) },
-    `${id}Mid`,
-  );
-  const aim = g.add(orientAlongVector, { direction: T, up: N, axis: "+x" }, `${id}Aim`);
-  const sized = g.add(
-    setAttribute,
-    { name: "scale", type: "f32", tupleSize: 3, value: vec(attribute("barLen"), thickness, width) },
-    `${id}Size`,
-  );
-  const unit = g.add(meshPrimitive, { shape: "box", size: [1, 1, 1] }, `${id}Unit`);
-  const unitN = g.add(
-    setAttribute,
-    {
-      name: "normal",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(
-        indexTable(BOX_NORMALS.map((n) => n[0])),
-        indexTable(BOX_NORMALS.map((n) => n[1])),
-        indexTable(BOX_NORMALS.map((n) => n[2])),
-      ),
-    },
-    `${id}UnitN`,
-  );
-  const boxes = g.add(copyToPoints, { topology: "keep", rotateAttrs: ["normal"] }, `${id}Lit`);
   g.connect(members, "out", tips, "in");
-  g.connect(tips, "out", len, "in");
-  g.connect(len, "out", first, "in");
-  g.connect(first, "out", mid, "in");
-  g.connect(mid, "out", aim, "in");
-  g.connect(aim, "out", sized, "in");
-  g.connect(unit, "out", unitN, "in");
-  g.connect(unitN, "out", boxes, "source");
-  g.connect(sized, "out", boxes, "target");
+  g.connect(tips, "out", boxes, "in");
   return boxes;
 }
 
@@ -797,8 +746,12 @@ function memberJoints(
     },
     `${id}PlateSize`,
   );
-  const unit = g.add(meshPrimitive, { shape: "box", size: [1, 1, 1] }, `${id}PlateUnit`);
-  const plates = g.add(copyToPoints, { topology: "keep" }, `${id}Gussets`);
+  // The unit box writes its faces' own normals, and the copy turns them by
+  // each plate's `rot` (a box scaled along its own axes keeps its face
+  // normals): without them the class merge filled zeros, which the page
+  // had to repair.
+  const unit = g.add(meshPrimitive, { shape: "box", size: [1, 1, 1], normals: true }, `${id}PlateUnit`);
+  const plates = g.add(copyToPoints, { topology: "keep", rotateAttrs: ["normal"] }, `${id}Gussets`);
   g.connect(targets, "out", sized, "in");
   g.connect(unit, "out", plates, "source");
   g.connect(sized, "out", plates, "target");

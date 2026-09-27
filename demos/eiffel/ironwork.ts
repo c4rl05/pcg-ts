@@ -50,14 +50,15 @@
  * randomness: the same panel gives the same ironwork, bit for bit.
  *
  * THE SECTIONS. Every piece is a flat bar lying on the rib's face: its
- * width in the face, `IRON_DEPTH` out of it. A curve's bar is a chain of
- * convex quads sharing their mitred ends, so a scroll has no notch at a
- * bend; the caller extrudes them (`ironworkSolid`).
+ * width in the face, `IRON_DEPTH` out of it. This file draws only the
+ * centrelines; `ironworkSolid` sweeps each with a rectangular section,
+ * mitred at every bend, so a scroll has no notch at one.
  *
  * Pure geometry apart from `ironworkSolid`; no pcg-ts node knows about
  * panels.
  */
 import {
+  type Field,
   type Graph,
   type NodeHandle,
   attribute,
@@ -66,6 +67,7 @@ import {
   pointsToPath,
   removeAttribute,
   setAttribute,
+  sweepProfile,
   vec,
 } from "pcg-ts";
 import { SAG, smoothed } from "./chord.js";
@@ -541,36 +543,6 @@ function isClear(p: Pt, others: ReadonlyArray<{ line: readonly Pt[]; width: numb
 
 // ------------------------------------------------------------ the sections
 
-/** A flat bar in the face: its closed boundary, and the convex quads that tile it. */
-export interface Bar {
-  /** The boundary, anticlockwise: one edge out, the other back. */
-  readonly outline: Pt[];
-  /** One quad a segment, anticlockwise, each end mitred so neighbours share it. */
-  readonly quads: Pt[][];
-}
-
-/** A centreline as a flat bar `width` wide. */
-export function ribbon(line: readonly Pt[], width: number): Bar {
-  const n = line.length;
-  const normal = (i: number): Pt => {
-    const d = unit(sub(line[i + 1]!, line[i]!));
-    return [-d[1], d[0]];
-  };
-  const offsets = line.map((_, i): Pt => {
-    if (i === 0) return scale(normal(0), width / 2);
-    if (i === n - 1) return scale(normal(n - 2), width / 2);
-    const a = normal(i - 1);
-    const b = normal(i);
-    const m = unit(add(a, b));
-    return scale(m, width / 2 / dot(m, a));
-  });
-  const right = line.map((p, i) => sub(p, offsets[i]!));
-  const left = line.map((p, i) => add(p, offsets[i]!));
-  const quads: Pt[][] = [];
-  for (let i = 0; i + 1 < n; i++) quads.push([right[i]!, right[i + 1]!, left[i + 1]!, left[i]!]);
-  return { outline: [...right, ...left.slice().reverse()], quads };
-}
-
 /** A disc as a regular polygon, anticlockwise. */
 export function disc(c: Pt, r: number, sides = MACARON_SIDES): Pt[] {
   return Array.from({ length: sides }, (_, i) => add(c, scale(dir((2 * Math.PI * i) / sides), r)));
@@ -596,92 +568,123 @@ export function signedArea(p: readonly Pt[]): number {
 // ------------------------------------------------------------ the graph
 
 /**
- * A solid on the +z face: its boundary, the convex pieces that tile it (the
- * boundary itself when it is convex), and how far it stands along its own
- * normal. Wind both the same way, so that normal points off the rib's
- * decorated face.
+ * A flat bar on the face: its centreline, lifted to where the bar's back
+ * lies, its width in the face, and the face's normal pointing off the
+ * rib's decorated face, which it stands {@link IRON_DEPTH} along.
  */
-export interface Piece {
-  readonly outline: readonly Vec3[];
-  readonly caps: ReadonlyArray<readonly Vec3[]>;
-  readonly depth: number;
+export interface BarPiece {
+  readonly line: readonly Vec3[];
+  readonly width: number;
+  readonly up: Vec3;
 }
 
 /**
- * Closed outlines as points on the +z face, one polyline each, carrying
- * each one's depth, copied onto the four faces.
+ * A convex solid on the face: its boundary, and how far it stands along
+ * its own normal. Wind it so that normal points off the rib's decorated
+ * face.
  */
-function outlines(
+export interface Piece {
+  readonly outline: readonly Vec3[];
+  readonly depth: number;
+}
+
+/** The pieces a set's points belong to: the key pointsToPath groups by. */
+const PIECE = "piece";
+const WIDTH = "ironWidth";
+const UP = "ironUp";
+const DEPTH = "ironDepth";
+
+/**
+ * Point lists as points, one path each, carrying each piece's `attrs` (f32
+ * tuples; a table over the point index collapses a run of one value),
+ * copied onto the four faces with `turn` turned by each face's rotation.
+ */
+function paths(
   g: Graph,
   id: string,
-  list: ReadonlyArray<{ outline: readonly Vec3[]; depth: number }>,
+  lines: ReadonlyArray<readonly Vec3[]>,
+  closed: boolean,
+  attrs: Readonly<Record<string, ReadonlyArray<readonly number[]>>>,
   quads: NodeHandle,
+  turn?: readonly string[],
 ): NodeHandle {
-  const pts = list.flatMap((p) => p.outline);
-  const which = list.flatMap((p, i) => p.outline.map(() => i));
-  const depth = list.flatMap((p) => p.outline.map(() => p.depth));
-  const slots = g.add(
+  const pts = lines.flat();
+  const each = (f: (i: number) => number) => indexTable(lines.flatMap((l, i) => l.map(() => f(i))));
+  let last: NodeHandle = g.add(
     pointGrid,
     { countX: pts.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
     `${id}Slots`,
   );
-  const place = g.add(
-    setAttribute,
-    {
-      name: "P",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(
-        indexTable(pts.map((p) => p[0])),
-        indexTable(pts.map((p) => p[1])),
-        indexTable(pts.map((p) => p[2])),
-      ),
-    },
-    `${id}Place`,
-  );
-  const key = g.add(setAttribute, { name: "piece", type: "i32", value: indexTable(which) }, `${id}Key`);
-  const deep = g.add(setAttribute, { name: "ironDepth", type: "f32", value: indexTable(depth) }, `${id}Depth`);
-  const paths = g.add(pointsToPath, { groupAttr: "piece", closed: true }, `${id}Paths`);
-  const bare = g.add(removeAttribute, { names: ["piece"], domain: "point" }, `${id}Bare`);
-  g.connect(slots, "out", place, "in");
-  g.connect(place, "out", key, "in");
-  g.connect(key, "out", deep, "in");
-  g.connect(deep, "out", paths, "in");
-  g.connect(paths, "out", bare, "in");
-  return copyToQuadrants(g, `${id}4`, bare, quads);
+  const set = (suffix: string, name: string, type: "i32" | "f32", parts: Field[]) => {
+    const value = parts.length === 1 ? parts[0]! : vec(...parts);
+    const node = g.add(setAttribute, { name, type, tupleSize: parts.length, value }, `${id}${suffix}`);
+    g.connect(last, "out", node, "in");
+    last = node;
+  };
+  set("Place", "P", "f32", [0, 1, 2].map((c) => indexTable(pts.map((p) => p[c]!))));
+  set("Key", PIECE, "i32", [each((i) => i)]);
+  for (const [name, per] of Object.entries(attrs)) {
+    set(name, name, "f32", per[0]!.map((_, c) => each((i) => per[i]![c]!)));
+  }
+  const path = g.add(pointsToPath, { groupAttr: PIECE, closed }, `${id}Paths`);
+  const bare = g.add(removeAttribute, { names: [PIECE], domain: "point" }, `${id}Bare`);
+  g.connect(last, "out", path, "in");
+  g.connect(path, "out", bare, "in");
+  return copyToQuadrants(g, `${id}4`, bare, quads, turn);
 }
 
 /**
- * Solids, copied onto the four faces and extruded each by its own depth
- * along its own normal: the boundaries as walls alone, and their convex
- * pieces as the two faces alone (a cap is a fan from its first point, so a
- * scroll's concave boundary cannot be its own face; walled whole, a curved
- * bar costs 8 triangles a segment where a closed box a segment costs 12,
- * 4 of them hidden between neighbours). The extrusion's `normal` is kept,
+ * Solids, copied onto the four faces. A bar is its centreline swept with a
+ * 'rect' section, `width` across and IRON_DEPTH up its face's normal,
+ * standing on the line and capped, mitred where the line bends, so a
+ * scroll has no notch at a bend; the bars are sorted by width and face, so
+ * the tables their sizes ride on collapse to a few runs. A convex piece is
+ * its boundary extruded by its own depth along its own normal. Both are
+ * smoothed by the crease angle (`chord.ts`): a scroll's edges and a
+ * macaron's rim shade as the bent bar and the disc they are, their tips and
+ * faces (90 degrees off every wall) keep their edges. The `normal` is kept,
  * as the arcade's plates keep theirs (a class merge fills a missing one
- * with zeros, which the page shades black); the depth attribute is dropped.
+ * with zeros, which the page shades black); the size attributes are
+ * dropped.
  */
-export function ironworkSolid(g: Graph, id: string, pieces: readonly Piece[], quads: NodeHandle): NodeHandle {
-  if (pieces.length === 0) throw new Error(`ironwork: piece set "${id}" is empty`);
-  const walls = g.add(
-    extrudePolygon,
-    { direction: "polygonNormal", distance: attribute("ironDepth"), caps: "none", sides: true },
-    `${id}Walls`,
-  );
-  g.connect(outlines(g, `${id}Rim`, pieces, quads), "out", walls, "in");
-  // The walls alone are smoothed by the crease angle (`chord.ts`): a
-  // scroll's rim shades as the bent bar it is, its tips and the faces (90
-  // degrees off every wall) keep their edges.
-  const rim = smoothed(g, `${id}WallsSmooth`, walls);
-  const faces = g.add(
-    extrudePolygon,
-    { direction: "polygonNormal", distance: attribute("ironDepth"), caps: "both", sides: false },
-    `${id}Faces`,
-  );
-  const caps = pieces.flatMap((p) => p.caps.map((outline) => ({ outline, depth: p.depth })));
-  g.connect(outlines(g, `${id}Cap`, caps, quads), "out", faces, "in");
-  const both = merge(g, `${id}Solid`, [rim, faces]);
-  const done = g.add(removeAttribute, { names: ["ironDepth"], domain: "point" }, id);
+export function ironworkSolid(
+  g: Graph,
+  id: string,
+  pieces: { readonly bars: readonly BarPiece[]; readonly solids: readonly Piece[] },
+  quads: NodeHandle,
+): NodeHandle {
+  const out: NodeHandle[] = [];
+  const drop: string[] = [];
+  if (pieces.bars.length > 0) {
+    const bars = [...pieces.bars].sort(
+      (a, b) => a.width - b.width || a.up[0] - b.up[0] || a.up[1] - b.up[1] || a.up[2] - b.up[2],
+    );
+    const attrs = { [WIDTH]: bars.map((b) => [b.width]), [UP]: bars.map((b) => b.up) };
+    const lines = paths(g, `${id}Line`, bars.map((b) => b.line), false, attrs, quads, [UP]);
+    const swept = g.add(
+      sweepProfile,
+      { profile: "rect", width: attribute(WIDTH), height: IRON_DEPTH, anchor: "bottom", up: attribute(UP, 3) },
+      `${id}Bars`,
+    );
+    g.connect(lines, "out", swept, "in");
+    out.push(swept);
+    drop.push(WIDTH, UP);
+  }
+  if (pieces.solids.length > 0) {
+    const attrs = { [DEPTH]: pieces.solids.map((p) => [p.depth]) };
+    const rims = paths(g, `${id}Rim`, pieces.solids.map((p) => p.outline), true, attrs, quads);
+    const solids = g.add(
+      extrudePolygon,
+      { direction: "polygonNormal", distance: attribute(DEPTH), caps: "both", sides: true },
+      `${id}Solids`,
+    );
+    g.connect(rims, "out", solids, "in");
+    out.push(solids);
+    drop.push(DEPTH);
+  }
+  if (out.length === 0) throw new Error(`ironwork: piece set "${id}" is empty`);
+  const both = smoothed(g, `${id}Smooth`, out.length === 1 ? out[0]! : merge(g, `${id}Solid`, out));
+  const done = g.add(removeAttribute, { names: drop, domain: "point" }, id);
   g.connect(both, "out", done, "in");
   return done;
 }

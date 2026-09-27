@@ -202,16 +202,42 @@ export interface Slab {
   readonly half: readonly [number, number, number];
 }
 
-/** Every box of a box-mesh geometry (24- or 8-point runs); a run that is not a box is skipped. */
+/**
+ * Every box of a box-mesh geometry; a run that is not a box is skipped.
+ * Three layouts reach it, and one geometry can mix them: a copied unit box
+ * of 24 points (three a corner) or 8, and a flat bar (strut.ts
+ * `flatBars`), a 'rect' sweep of its member's two ends, 26 points — its four faces' 16 first (two a corner),
+ * then a cap of four corners and its centre at each end. The sweep's point
+ * 20 is that cap's centre, half the section's diagonal (20 mm and more)
+ * from every corner, where a 24-point box's is a corner two of its first
+ * 20 points share (the class jitter parts them by ~1 mm at most).
+ */
 export function slabs(geo: Geometry): Slab[] {
   const P = geo.attrs.point.get("P")!.data;
-  const n = geo.attrs.point.count;
-  const run = n % 24 === 0 ? 24 : 8;
+  const count = geo.attrs.point.count;
+  const at = (k: number): Vec3 => [P[3 * k]!, P[3 * k + 1]!, P[3 * k + 2]!];
+  // A 24-point box's point 8 (its +y face's first) is one of the corners
+  // its first 8 already hold; an 8-point box's is the next box's.
+  const boxRun = (i: number) => {
+    if (i + 24 > count) return 8;
+    const q = at(i + 8);
+    for (let k = i; k < i + 8; k++) if (len(sub(at(k), q)) < 1e-5) return 24;
+    return 8;
+  };
+  const swept = (i: number) => {
+    if (i + 26 > count) return false;
+    const c = at(i + 20);
+    for (let k = i; k < i + 20; k++) if (len(sub(at(k), c)) < 0.005) return false;
+    return true;
+  };
   const out: Slab[] = [];
-  for (let i = 0; i + run <= n; i += run) {
+  for (let i = 0, run = 0; i < count; i += run) {
+    const sweep = swept(i);
+    run = sweep ? 26 : boxRun(i);
+    if (i + run > count) break;
     const pts: Vec3[] = [];
-    for (let k = i; k < i + run; k++) {
-      const q: Vec3 = [P[3 * k]!, P[3 * k + 1]!, P[3 * k + 2]!];
+    for (let k = i; k < i + (sweep ? 16 : run); k++) {
+      const q = at(k);
       if (!pts.some((r) => len(sub(q, r)) < 1e-5)) pts.push(q);
     }
     if (pts.length !== 8) continue;

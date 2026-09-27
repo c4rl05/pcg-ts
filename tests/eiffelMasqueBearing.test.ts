@@ -50,11 +50,14 @@ function blocks(geo: Geometry): Box[] {
   const P = geo.attrs.point.get("P")!.data;
   const pts: V[] = [];
   for (let i = 0; i < geo.pointCount; i++) pts.push([P[3 * i]!, P[3 * i + 1]!, P[3 * i + 2]!]);
-  // Corners, deduplicated; each block is 8 of them, 24 points apart.
+  // Corners, deduplicated; each block is 8 of them, 26 points apart: a
+  // 'rect' sweep of the member's two ends, its four faces' 16 points (two
+  // at each corner) first, then a cap of four corners and its centre at
+  // each end.
   const out: Box[] = [];
-  for (let b = 0; b + 24 <= pts.length; b += 24) {
+  for (let b = 0; b + 26 <= pts.length; b += 26) {
     const cs: V[] = [];
-    for (const p of pts.slice(b, b + 24)) if (!cs.some((q) => len(sub(p, q)) < 1e-6)) cs.push(p);
+    for (const p of pts.slice(b, b + 16)) if (!cs.some((q) => len(sub(p, q)) < 1e-6)) cs.push(p);
     expect(cs).toHaveLength(8);
     const c = mul(cs.reduce((s, p) => add(s, p), [0, 0, 0] as V), 1 / 8);
     const o = cs[0]!;

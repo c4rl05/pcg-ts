@@ -33,13 +33,17 @@ interface Box {
   hu: number;
   hv: number;
 }
-/** flatBars' boxes: 24 points each (meshPrimitive box), 8 distinct corners; n the thinnest axis. */
+/**
+ * flatBars' boxes: a 'rect' sweep of a member's two ends, 26 points each —
+ * its four faces' 16 first (two at each corner), then a cap of four corners
+ * and its centre at each end; 8 distinct corners; n the thinnest axis.
+ */
 function boxes(geo: Geometry): Box[] {
   const P = geo.attrs.point.get("P")!.data;
   const out: Box[] = [];
-  for (let i = 0; i < geo.attrs.point.count; i += 24) {
+  for (let i = 0; i < geo.attrs.point.count; i += 26) {
     const pts: V[] = [];
-    for (let k = i; k < i + 24; k++) {
+    for (let k = i; k < i + 16; k++) {
       const p: V = [P[3 * k]!, P[3 * k + 1]!, P[3 * k + 2]!];
       if (!pts.some((q) => len(sub(p, q)) < 1e-5)) pts.push(p);
     }
