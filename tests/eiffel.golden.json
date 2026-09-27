@@ -1,0 +1,3885 @@
+{
+  "regenerate": "EIFFEL_GOLDEN=update env -u NODE_ENV npx vitest run tests/eiffelGolden.test.ts",
+  "depths": {
+    "build": {
+      "arches": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 239488,
+        "vertices": 390144,
+        "primitives": 130048,
+        "instances": 0,
+        "hash": "3ed089a9df960b71"
+      },
+      "bracing": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 25512,
+        "vertices": 47136,
+        "primitives": 15712,
+        "instances": 0,
+        "hash": "66001c88fb76028b"
+      },
+      "car.edoux.cable.a.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "4e1d7649bf83cbd2"
+      },
+      "car.edoux.cable.a.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "200df997180bdaab"
+      },
+      "car.edoux.cable.b.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "3ccc7501fa46ebeb"
+      },
+      "car.edoux.cable.b.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "30e0d8106ce99b6c"
+      },
+      "car.edoux.cable.c.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "9cc31d7c7c7df03e"
+      },
+      "car.edoux.cable.c.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "8eddfb972fe139f5"
+      },
+      "car.edoux.cable.d.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "1d49eb70a80b13ce"
+      },
+      "car.edoux.cable.d.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "2a84e9cd46e08f55"
+      },
+      "car.edoux.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1152,
+        "vertices": 1728,
+        "primitives": 576,
+        "instances": 0,
+        "hash": "5c0c1d48b762d360"
+      },
+      "car.edoux.pistons": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 184,
+        "vertices": 456,
+        "primitives": 152,
+        "instances": 0,
+        "hash": "035598402294a2f0"
+      },
+      "car.edoux.pulley.middle.lower": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "862441f3eb4cee45"
+      },
+      "car.edoux.pulley.middle.upper": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "6967a9fd4547b4e9"
+      },
+      "car.edoux.pulley.nord.lower": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "5e16caf65d342993"
+      },
+      "car.edoux.pulley.nord.upper": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "2b03ecf8c0952a3e"
+      },
+      "car.edoux.pulley.sud.lower": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "7be008c0e6c2cead"
+      },
+      "car.edoux.pulley.sud.upper": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "b07cc7541df252d1"
+      },
+      "car.edoux.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1824,
+        "vertices": 2736,
+        "primitives": 912,
+        "instances": 0,
+        "hash": "fc3ba4f9b84c24b0"
+      },
+      "car.otis.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 144,
+        "vertices": 216,
+        "primitives": 72,
+        "instances": 0,
+        "hash": "e1a95a7c7825053b"
+      },
+      "car.otis.nord.cable.a": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "cc98f494719f0eb7"
+      },
+      "car.otis.nord.cable.b": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "0e5f2bcb03377fd1"
+      },
+      "car.otis.nord.cable.c": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "6c9e784f6572552b"
+      },
+      "car.otis.nord.carriage": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 6504,
+        "vertices": 9756,
+        "primitives": 3252,
+        "instances": 0,
+        "hash": "04c091b717b6ca7f"
+      },
+      "car.otis.nord.truck": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1416,
+        "vertices": 2124,
+        "primitives": 708,
+        "instances": 0,
+        "hash": "09974e8f67505703"
+      },
+      "car.otis.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 144,
+        "vertices": 216,
+        "primitives": 72,
+        "instances": 0,
+        "hash": "a6c481fce71b7d61"
+      },
+      "car.otis.sud.cable.a": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "ce2ec2a891c14d49"
+      },
+      "car.otis.sud.cable.b": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "b9adb1ab52058a68"
+      },
+      "car.otis.sud.cable.c": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "6fa949a1278df9e1"
+      },
+      "car.otis.sud.carriage": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 6504,
+        "vertices": 9756,
+        "primitives": 3252,
+        "instances": 0,
+        "hash": "8888d2ee4c7bbe05"
+      },
+      "car.otis.sud.truck": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1416,
+        "vertices": 2124,
+        "primitives": 708,
+        "instances": 0,
+        "hash": "6f631d59947481b0"
+      },
+      "car.roux.est": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 4752,
+        "vertices": 7128,
+        "primitives": 2376,
+        "instances": 0,
+        "hash": "aca3e983654fea5a"
+      },
+      "car.roux.est.left.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "246b136233b7e797"
+      },
+      "car.roux.est.left.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "f3adfe3dbe3fcf1e"
+      },
+      "car.roux.est.right.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "d838332cda106c3f"
+      },
+      "car.roux.est.right.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "089ba41350209f75"
+      },
+      "car.roux.ouest": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 4752,
+        "vertices": 7128,
+        "primitives": 2376,
+        "instances": 0,
+        "hash": "199fde3249602163"
+      },
+      "car.roux.ouest.left.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "0dbff646fae492d5"
+      },
+      "car.roux.ouest.left.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "d33a0f9bd554da34"
+      },
+      "car.roux.ouest.right.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "5d3602e79699ab83"
+      },
+      "car.roux.ouest.right.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "5724c1e67e804859"
+      },
+      "chain.roux.est.left": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "a19683f74e5da5df"
+      },
+      "chain.roux.est.right": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "a67496a72ff00c9c"
+      },
+      "chain.roux.ouest.left": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "d73258555c46b822"
+      },
+      "chain.roux.ouest.right": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "6f0320d11bbacd05"
+      },
+      "cloth.flag": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 325,
+        "vertices": 1728,
+        "primitives": 576,
+        "instances": 0,
+        "hash": "ef5cb388885a76a3"
+      },
+      "fittings.balusters": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 720,
+        "hash": "eeae69e44cf47fab"
+      },
+      "fittings.cabochons": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 432,
+        "hash": "ce7b1345312c6bf1"
+      },
+      "fittings.globes": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 36,
+        "hash": "1841ec7254223ecc"
+      },
+      "foundations": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24696,
+        "vertices": 39768,
+        "primitives": 13256,
+        "instances": 0,
+        "hash": "d510d86e68556356"
+      },
+      "girders": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 181868,
+        "vertices": 318144,
+        "primitives": 106048,
+        "instances": 0,
+        "hash": "84d0f285fa70f475"
+      },
+      "glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 28458,
+        "vertices": 44640,
+        "primitives": 14880,
+        "instances": 0,
+        "hash": "1e2a7ef74c6f6e2f"
+      },
+      "horizontals": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 10600,
+        "vertices": 19320,
+        "primitives": 6440,
+        "instances": 0,
+        "hash": "ec623c19616c0a50"
+      },
+      "machinery": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 58552,
+        "vertices": 96912,
+        "primitives": 32304,
+        "instances": 0,
+        "hash": "1f0d813924ed3ff1"
+      },
+      "masonry": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 56616,
+        "vertices": 85056,
+        "primitives": 28352,
+        "instances": 0,
+        "hash": "36341ec4a7cbd770"
+      },
+      "names": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 107064,
+        "vertices": 160596,
+        "primitives": 53532,
+        "instances": 0,
+        "hash": "4afea661674fde80"
+      },
+      "platforms": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 642550,
+        "vertices": 1037964,
+        "primitives": 345988,
+        "instances": 0,
+        "hash": "99a0c8b6d5e453d1"
+      },
+      "silvered": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 54624,
+        "vertices": 85056,
+        "primitives": 28352,
+        "instances": 0,
+        "hash": "f5b177ab7b04ca77"
+      },
+      "summit": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 40454,
+        "vertices": 77958,
+        "primitives": 25986,
+        "instances": 0,
+        "hash": "fd954312d320dbee"
+      },
+      "uprights": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 33736,
+        "vertices": 50688,
+        "primitives": 16896,
+        "instances": 0,
+        "hash": "48562e3eb73e73e7"
+      },
+      "works.bearings": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 12576,
+        "vertices": 19440,
+        "primitives": 6480,
+        "instances": 0,
+        "hash": "44c1e2fad06c557c"
+      },
+      "works.crane.pile1": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1008,
+        "vertices": 1572,
+        "primitives": 524,
+        "instances": 0,
+        "hash": "598d3714e2c4b6aa"
+      },
+      "works.crane.pile2": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1008,
+        "vertices": 1572,
+        "primitives": 524,
+        "instances": 0,
+        "hash": "ab515e98bce6f12a"
+      },
+      "works.crane.pile3": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1008,
+        "vertices": 1572,
+        "primitives": 524,
+        "instances": 0,
+        "hash": "69a2ad8aaccae9f6"
+      },
+      "works.crane.pile4": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1008,
+        "vertices": 1572,
+        "primitives": 524,
+        "instances": 0,
+        "hash": "fbdd93306ff9555c"
+      },
+      "works.crane.upper1": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1008,
+        "vertices": 1572,
+        "primitives": 524,
+        "instances": 0,
+        "hash": "2e528479ff6062cf"
+      },
+      "works.crane.upper3": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1008,
+        "vertices": 1572,
+        "primitives": 524,
+        "instances": 0,
+        "hash": "acd668a11b9394b0"
+      },
+      "works.decks": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1248,
+        "vertices": 1872,
+        "primitives": 624,
+        "instances": 0,
+        "hash": "6db789ea2ae9dafa"
+      },
+      "works.pylons": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 50208,
+        "vertices": 75312,
+        "primitives": 25104,
+        "instances": 0,
+        "hash": "03be02cd0612c52c"
+      },
+      "works.scaffolds": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 23808,
+        "vertices": 35712,
+        "primitives": 11904,
+        "instances": 0,
+        "hash": "72706a73b292a2f8"
+      }
+    },
+    "laced": {
+      "arches": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 616832,
+        "vertices": 974208,
+        "primitives": 324736,
+        "instances": 0,
+        "hash": "9e0dab7f7c8ee1ef"
+      },
+      "bracing": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1236576,
+        "vertices": 3420288,
+        "primitives": 1140096,
+        "instances": 0,
+        "hash": "62e1dcd108fe49fb"
+      },
+      "car.edoux.cable.a.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "4e1d7649bf83cbd2"
+      },
+      "car.edoux.cable.a.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "200df997180bdaab"
+      },
+      "car.edoux.cable.b.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "3ccc7501fa46ebeb"
+      },
+      "car.edoux.cable.b.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "30e0d8106ce99b6c"
+      },
+      "car.edoux.cable.c.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "9cc31d7c7c7df03e"
+      },
+      "car.edoux.cable.c.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "8eddfb972fe139f5"
+      },
+      "car.edoux.cable.d.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "1d49eb70a80b13ce"
+      },
+      "car.edoux.cable.d.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "2a84e9cd46e08f55"
+      },
+      "car.edoux.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1152,
+        "vertices": 1728,
+        "primitives": 576,
+        "instances": 0,
+        "hash": "5c0c1d48b762d360"
+      },
+      "car.edoux.pistons": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 184,
+        "vertices": 456,
+        "primitives": 152,
+        "instances": 0,
+        "hash": "035598402294a2f0"
+      },
+      "car.edoux.pulley.middle.lower": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "862441f3eb4cee45"
+      },
+      "car.edoux.pulley.middle.upper": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "6967a9fd4547b4e9"
+      },
+      "car.edoux.pulley.nord.lower": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "5e16caf65d342993"
+      },
+      "car.edoux.pulley.nord.upper": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "2b03ecf8c0952a3e"
+      },
+      "car.edoux.pulley.sud.lower": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "7be008c0e6c2cead"
+      },
+      "car.edoux.pulley.sud.upper": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "b07cc7541df252d1"
+      },
+      "car.edoux.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1824,
+        "vertices": 2736,
+        "primitives": 912,
+        "instances": 0,
+        "hash": "fc3ba4f9b84c24b0"
+      },
+      "car.otis.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 144,
+        "vertices": 216,
+        "primitives": 72,
+        "instances": 0,
+        "hash": "e1a95a7c7825053b"
+      },
+      "car.otis.nord.cable.a": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "cc98f494719f0eb7"
+      },
+      "car.otis.nord.cable.b": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "0e5f2bcb03377fd1"
+      },
+      "car.otis.nord.cable.c": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "6c9e784f6572552b"
+      },
+      "car.otis.nord.carriage": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 6504,
+        "vertices": 9756,
+        "primitives": 3252,
+        "instances": 0,
+        "hash": "04c091b717b6ca7f"
+      },
+      "car.otis.nord.truck": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1416,
+        "vertices": 2124,
+        "primitives": 708,
+        "instances": 0,
+        "hash": "09974e8f67505703"
+      },
+      "car.otis.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 144,
+        "vertices": 216,
+        "primitives": 72,
+        "instances": 0,
+        "hash": "a6c481fce71b7d61"
+      },
+      "car.otis.sud.cable.a": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "ce2ec2a891c14d49"
+      },
+      "car.otis.sud.cable.b": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "b9adb1ab52058a68"
+      },
+      "car.otis.sud.cable.c": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "6fa949a1278df9e1"
+      },
+      "car.otis.sud.carriage": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 6504,
+        "vertices": 9756,
+        "primitives": 3252,
+        "instances": 0,
+        "hash": "8888d2ee4c7bbe05"
+      },
+      "car.otis.sud.truck": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1416,
+        "vertices": 2124,
+        "primitives": 708,
+        "instances": 0,
+        "hash": "6f631d59947481b0"
+      },
+      "car.roux.est": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 4752,
+        "vertices": 7128,
+        "primitives": 2376,
+        "instances": 0,
+        "hash": "aca3e983654fea5a"
+      },
+      "car.roux.est.left.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "246b136233b7e797"
+      },
+      "car.roux.est.left.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "f3adfe3dbe3fcf1e"
+      },
+      "car.roux.est.right.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "d838332cda106c3f"
+      },
+      "car.roux.est.right.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "089ba41350209f75"
+      },
+      "car.roux.ouest": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 4752,
+        "vertices": 7128,
+        "primitives": 2376,
+        "instances": 0,
+        "hash": "199fde3249602163"
+      },
+      "car.roux.ouest.left.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "0dbff646fae492d5"
+      },
+      "car.roux.ouest.left.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "d33a0f9bd554da34"
+      },
+      "car.roux.ouest.right.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "5d3602e79699ab83"
+      },
+      "car.roux.ouest.right.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "5724c1e67e804859"
+      },
+      "chain.roux.est.left": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "a19683f74e5da5df"
+      },
+      "chain.roux.est.right": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "a67496a72ff00c9c"
+      },
+      "chain.roux.ouest.left": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "d73258555c46b822"
+      },
+      "chain.roux.ouest.right": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "6f0320d11bbacd05"
+      },
+      "cloth.flag": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 325,
+        "vertices": 1728,
+        "primitives": 576,
+        "instances": 0,
+        "hash": "ef5cb388885a76a3"
+      },
+      "fittings.balusters": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 720,
+        "hash": "eeae69e44cf47fab"
+      },
+      "fittings.cabochons": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 432,
+        "hash": "ce7b1345312c6bf1"
+      },
+      "fittings.globes": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 36,
+        "hash": "1841ec7254223ecc"
+      },
+      "foundations": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24696,
+        "vertices": 39768,
+        "primitives": 13256,
+        "instances": 0,
+        "hash": "d510d86e68556356"
+      },
+      "girders": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1489356,
+        "vertices": 4108608,
+        "primitives": 1369536,
+        "instances": 0,
+        "hash": "de1d1629ce9dc8fe"
+      },
+      "glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 28458,
+        "vertices": 44640,
+        "primitives": 14880,
+        "instances": 0,
+        "hash": "1e2a7ef74c6f6e2f"
+      },
+      "gussets": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 128880,
+        "vertices": 193320,
+        "primitives": 64440,
+        "instances": 0,
+        "hash": "bdca628c56cdb3e1"
+      },
+      "horizontals": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 481840,
+        "vertices": 1311072,
+        "primitives": 437024,
+        "instances": 0,
+        "hash": "9c76a987d416a639"
+      },
+      "machinery": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 58552,
+        "vertices": 96912,
+        "primitives": 32304,
+        "instances": 0,
+        "hash": "1f0d813924ed3ff1"
+      },
+      "masonry": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 56616,
+        "vertices": 85056,
+        "primitives": 28352,
+        "instances": 0,
+        "hash": "36341ec4a7cbd770"
+      },
+      "names": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 107064,
+        "vertices": 160596,
+        "primitives": 53532,
+        "instances": 0,
+        "hash": "4afea661674fde80"
+      },
+      "platforms": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 642550,
+        "vertices": 1037964,
+        "primitives": 345988,
+        "instances": 0,
+        "hash": "99a0c8b6d5e453d1"
+      },
+      "silvered": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 54624,
+        "vertices": 85056,
+        "primitives": 28352,
+        "instances": 0,
+        "hash": "f5b177ab7b04ca77"
+      },
+      "summit": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 40454,
+        "vertices": 77958,
+        "primitives": 25986,
+        "instances": 0,
+        "hash": "fd954312d320dbee"
+      },
+      "uprights": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 381448,
+        "vertices": 572256,
+        "primitives": 190752,
+        "instances": 0,
+        "hash": "7fbceb9ba63c2a20"
+      }
+    },
+    "riveted": {
+      "arches": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 616832,
+        "vertices": 974208,
+        "primitives": 324736,
+        "instances": 0,
+        "hash": "9e0dab7f7c8ee1ef"
+      },
+      "bracing": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1236576,
+        "vertices": 3420288,
+        "primitives": 1140096,
+        "instances": 0,
+        "hash": "62e1dcd108fe49fb"
+      },
+      "car.edoux.cable.a.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "4e1d7649bf83cbd2"
+      },
+      "car.edoux.cable.a.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "200df997180bdaab"
+      },
+      "car.edoux.cable.b.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "3ccc7501fa46ebeb"
+      },
+      "car.edoux.cable.b.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "30e0d8106ce99b6c"
+      },
+      "car.edoux.cable.c.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "9cc31d7c7c7df03e"
+      },
+      "car.edoux.cable.c.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "8eddfb972fe139f5"
+      },
+      "car.edoux.cable.d.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "1d49eb70a80b13ce"
+      },
+      "car.edoux.cable.d.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "2a84e9cd46e08f55"
+      },
+      "car.edoux.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1152,
+        "vertices": 1728,
+        "primitives": 576,
+        "instances": 0,
+        "hash": "5c0c1d48b762d360"
+      },
+      "car.edoux.pistons": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 184,
+        "vertices": 456,
+        "primitives": 152,
+        "instances": 0,
+        "hash": "035598402294a2f0"
+      },
+      "car.edoux.pulley.middle.lower": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "862441f3eb4cee45"
+      },
+      "car.edoux.pulley.middle.upper": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "6967a9fd4547b4e9"
+      },
+      "car.edoux.pulley.nord.lower": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "5e16caf65d342993"
+      },
+      "car.edoux.pulley.nord.upper": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "2b03ecf8c0952a3e"
+      },
+      "car.edoux.pulley.sud.lower": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "7be008c0e6c2cead"
+      },
+      "car.edoux.pulley.sud.upper": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "b07cc7541df252d1"
+      },
+      "car.edoux.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1824,
+        "vertices": 2736,
+        "primitives": 912,
+        "instances": 0,
+        "hash": "fc3ba4f9b84c24b0"
+      },
+      "car.otis.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 144,
+        "vertices": 216,
+        "primitives": 72,
+        "instances": 0,
+        "hash": "e1a95a7c7825053b"
+      },
+      "car.otis.nord.cable.a": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "cc98f494719f0eb7"
+      },
+      "car.otis.nord.cable.b": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "0e5f2bcb03377fd1"
+      },
+      "car.otis.nord.cable.c": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "6c9e784f6572552b"
+      },
+      "car.otis.nord.carriage": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 6504,
+        "vertices": 9756,
+        "primitives": 3252,
+        "instances": 0,
+        "hash": "04c091b717b6ca7f"
+      },
+      "car.otis.nord.truck": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1416,
+        "vertices": 2124,
+        "primitives": 708,
+        "instances": 0,
+        "hash": "09974e8f67505703"
+      },
+      "car.otis.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 144,
+        "vertices": 216,
+        "primitives": 72,
+        "instances": 0,
+        "hash": "a6c481fce71b7d61"
+      },
+      "car.otis.sud.cable.a": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "ce2ec2a891c14d49"
+      },
+      "car.otis.sud.cable.b": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "b9adb1ab52058a68"
+      },
+      "car.otis.sud.cable.c": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "6fa949a1278df9e1"
+      },
+      "car.otis.sud.carriage": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 6504,
+        "vertices": 9756,
+        "primitives": 3252,
+        "instances": 0,
+        "hash": "8888d2ee4c7bbe05"
+      },
+      "car.otis.sud.truck": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1416,
+        "vertices": 2124,
+        "primitives": 708,
+        "instances": 0,
+        "hash": "6f631d59947481b0"
+      },
+      "car.roux.est": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 4752,
+        "vertices": 7128,
+        "primitives": 2376,
+        "instances": 0,
+        "hash": "aca3e983654fea5a"
+      },
+      "car.roux.est.left.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "246b136233b7e797"
+      },
+      "car.roux.est.left.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "f3adfe3dbe3fcf1e"
+      },
+      "car.roux.est.right.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "d838332cda106c3f"
+      },
+      "car.roux.est.right.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "089ba41350209f75"
+      },
+      "car.roux.ouest": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 4752,
+        "vertices": 7128,
+        "primitives": 2376,
+        "instances": 0,
+        "hash": "199fde3249602163"
+      },
+      "car.roux.ouest.left.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "0dbff646fae492d5"
+      },
+      "car.roux.ouest.left.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "d33a0f9bd554da34"
+      },
+      "car.roux.ouest.right.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "5d3602e79699ab83"
+      },
+      "car.roux.ouest.right.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "5724c1e67e804859"
+      },
+      "chain.roux.est.left": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "a19683f74e5da5df"
+      },
+      "chain.roux.est.right": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "a67496a72ff00c9c"
+      },
+      "chain.roux.ouest.left": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "d73258555c46b822"
+      },
+      "chain.roux.ouest.right": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "6f0320d11bbacd05"
+      },
+      "cloth.flag": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 325,
+        "vertices": 1728,
+        "primitives": 576,
+        "instances": 0,
+        "hash": "ef5cb388885a76a3"
+      },
+      "fittings.balusters": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 720,
+        "hash": "eeae69e44cf47fab"
+      },
+      "fittings.cabochons": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 432,
+        "hash": "ce7b1345312c6bf1"
+      },
+      "fittings.globes": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 36,
+        "hash": "1841ec7254223ecc"
+      },
+      "foundations": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24696,
+        "vertices": 39768,
+        "primitives": 13256,
+        "instances": 0,
+        "hash": "d510d86e68556356"
+      },
+      "girders": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1489356,
+        "vertices": 4108608,
+        "primitives": 1369536,
+        "instances": 0,
+        "hash": "de1d1629ce9dc8fe"
+      },
+      "glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 28458,
+        "vertices": 44640,
+        "primitives": 14880,
+        "instances": 0,
+        "hash": "1e2a7ef74c6f6e2f"
+      },
+      "gussets": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 128880,
+        "vertices": 193320,
+        "primitives": 64440,
+        "instances": 0,
+        "hash": "bdca628c56cdb3e1"
+      },
+      "horizontals": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 481840,
+        "vertices": 1311072,
+        "primitives": 437024,
+        "instances": 0,
+        "hash": "9c76a987d416a639"
+      },
+      "machinery": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 58552,
+        "vertices": 96912,
+        "primitives": 32304,
+        "instances": 0,
+        "hash": "1f0d813924ed3ff1"
+      },
+      "masonry": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 56616,
+        "vertices": 85056,
+        "primitives": 28352,
+        "instances": 0,
+        "hash": "36341ec4a7cbd770"
+      },
+      "names": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 107064,
+        "vertices": 160596,
+        "primitives": 53532,
+        "instances": 0,
+        "hash": "4afea661674fde80"
+      },
+      "platforms": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 642550,
+        "vertices": 1037964,
+        "primitives": 345988,
+        "instances": 0,
+        "hash": "99a0c8b6d5e453d1"
+      },
+      "rivets.ff.arches.chords": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 108032,
+        "hash": "aeae35d092a7bae5"
+      },
+      "rivets.ff.arches.montants": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 63104,
+        "hash": "01890cd14a58a9a4"
+      },
+      "rivets.ff.crossings.360": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 5568,
+        "hash": "b9c07587e9d927d7"
+      },
+      "rivets.ff.crossings.600": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 384,
+        "hash": "993a9f4750aac553"
+      },
+      "rivets.ff.entretoises": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 35760,
+        "hash": "1d7d6d997e3c6f66"
+      },
+      "rivets.ff.girders.decoTop": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 19776,
+        "hash": "92617b61ab0c975e"
+      },
+      "rivets.ff.girders.endPosts": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 12288,
+        "hash": "452c20b2a0c2f294"
+      },
+      "rivets.ff.girders.main": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 36480,
+        "hash": "5afe574a738ecbc6"
+      },
+      "rivets.ff.girders.membrure": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 23296,
+        "hash": "62a4280b1f22a716"
+      },
+      "rivets.ff.girders.posts": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 55936,
+        "hash": "92547e519d79d038"
+      },
+      "rivets.ff.girders.web": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 112392,
+        "hash": "3c0e96e54f7371bd"
+      },
+      "rivets.ff.second.band": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 7872,
+        "hash": "fd320211034809de"
+      },
+      "rivets.ff.second.chords": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 6144,
+        "hash": "d63464c85369669a"
+      },
+      "rivets.ff.second.web": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 4432,
+        "hash": "3b9e41c87a57a086"
+      },
+      "rivets.leg.bracing": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 70232,
+        "hash": "1e63e59902dd2201"
+      },
+      "rivets.leg.bracing.joints": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 14944,
+        "hash": "fb086f305ba3ab22"
+      },
+      "rivets.leg.chords.legBelt11BarLap": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 2464,
+        "hash": "8c2e8838dc9116b7"
+      },
+      "rivets.leg.chords.legBelt11Edge": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 2336,
+        "hash": "8e96ab36f90b7831"
+      },
+      "rivets.leg.chords.legBelt11PostLap": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 512,
+        "hash": "64a44b11e12e211e"
+      },
+      "rivets.leg.chords.legBelt5BarLap": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 1568,
+        "hash": "6cbb33470829be87"
+      },
+      "rivets.leg.chords.legBelt5Edge": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 3456,
+        "hash": "47ad18ee042cba5d"
+      },
+      "rivets.leg.chords.legBelt5PostLap": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 768,
+        "hash": "0532dd2b2cbab4fa"
+      },
+      "rivets.leg.chords.legTieEdge": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 6496,
+        "hash": "c669d6586f0ddd96"
+      },
+      "rivets.leg.chords.legTieLap": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 1408,
+        "hash": "5d5bd6b55ab1f682"
+      },
+      "rivets.leg.crossings.500": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 2720,
+        "hash": "61ddbaff2390c732"
+      },
+      "rivets.leg.crossings.600": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 2368,
+        "hash": "ab7c74365ff5999f"
+      },
+      "rivets.leg.crossings.800": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 16512,
+        "hash": "ec6efccc60cf05ac"
+      },
+      "rivets.leg.entretoises": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 5488,
+        "hash": "9416457e6fe420ac"
+      },
+      "rivets.leg.entretoises.joints": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 1960,
+        "hash": "e9557883734ec2b0"
+      },
+      "rivets.leg.gap.bracing": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 5152,
+        "hash": "940b640587f649af"
+      },
+      "rivets.leg.gap.bracing.joints": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 960,
+        "hash": "6f94d93fbdeef6f0"
+      },
+      "rivets.leg.gap.horizontals": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 1152,
+        "hash": "d4cfa889faf8ee2c"
+      },
+      "rivets.leg.gap.horizontals.joints": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 848,
+        "hash": "686acd2a50bf076c"
+      },
+      "rivets.leg.horizontals": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 31988,
+        "hash": "7f4d443940cb6073"
+      },
+      "rivets.leg.horizontals.joints": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 13584,
+        "hash": "9dddfc057860cb87"
+      },
+      "rivets.leg.posts": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 19936,
+        "hash": "aef9ebd70e764d33"
+      },
+      "rivets.leg.uprights": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 97432,
+        "hash": "19d5f4e645c8d069"
+      },
+      "rivets.leg.uprights.splices": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 258208,
+        "hash": "6af6849bbb7d3fc4"
+      },
+      "rivets.leg.uprights.upper": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 39696,
+        "hash": "b95b18f79f86428a"
+      },
+      "rivets.shaft.bracing": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 26688,
+        "hash": "d1a1a3523871b117"
+      },
+      "rivets.shaft.bracing.joints": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 4288,
+        "hash": "5dc26cddf8ec3650"
+      },
+      "rivets.shaft.crossings.500": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 3520,
+        "hash": "4fe6ae015e5a350b"
+      },
+      "rivets.shaft.horizontals": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 7504,
+        "hash": "5e078af21c5adfc6"
+      },
+      "rivets.shaft.horizontals.joints": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 4208,
+        "hash": "203eacb1beec9180"
+      },
+      "rivets.shaft.uprights": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 30048,
+        "hash": "3a52f316a9a10116"
+      },
+      "rivets.shaft.uprights.splices": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 12576,
+        "hash": "766dab2019ce0cc5"
+      },
+      "rivets.summit.crossings": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 88,
+        "hash": "d12013473b034fd7"
+      },
+      "rivets.summit.diagonals.bars": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 1320,
+        "hash": "b4f458c631abe979"
+      },
+      "rivets.summit.diagonals.chords": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 3416,
+        "hash": "58c5eda9dc5efa1d"
+      },
+      "rivets.summit.diagonals.lacing": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 48,
+        "hash": "6c781e7178514574"
+      },
+      "rivets.summit.diagonals.uprights": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 928,
+        "hash": "c68a0126f7be835f"
+      },
+      "rivets.summit.dome.chords": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 9216,
+        "hash": "30f57b321be884e7"
+      },
+      "rivets.summit.dome.lacing": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 256,
+        "hash": "dd109a8ccfbdf49f"
+      },
+      "rivets.summit.p29.bracing": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 1536,
+        "hash": "a4846a3f426021c6"
+      },
+      "rivets.summit.p29.girders": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 896,
+        "hash": "cf35ccd512c9e59d"
+      },
+      "rivets.summit.p29.horizontals": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 256,
+        "hash": "193c38f58c24d6b0"
+      },
+      "rivets.summit.p29.posts": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 4392,
+        "hash": "831fd01f203e61eb"
+      },
+      "rivets.summit.p29.uprights": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 3296,
+        "hash": "c988c4a6f0f70038"
+      },
+      "silvered": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 54624,
+        "vertices": 85056,
+        "primitives": 28352,
+        "instances": 0,
+        "hash": "f5b177ab7b04ca77"
+      },
+      "summit": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 40454,
+        "vertices": 77958,
+        "primitives": 25986,
+        "instances": 0,
+        "hash": "fd954312d320dbee"
+      },
+      "uprights": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 381448,
+        "vertices": 572256,
+        "primitives": 190752,
+        "instances": 0,
+        "hash": "7fbceb9ba63c2a20"
+      }
+    },
+    "rivetsFull": {
+      "arches": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 616832,
+        "vertices": 974208,
+        "primitives": 324736,
+        "instances": 0,
+        "hash": "9e0dab7f7c8ee1ef"
+      },
+      "bracing": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1236576,
+        "vertices": 3420288,
+        "primitives": 1140096,
+        "instances": 0,
+        "hash": "62e1dcd108fe49fb"
+      },
+      "car.edoux.cable.a.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "4e1d7649bf83cbd2"
+      },
+      "car.edoux.cable.a.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "200df997180bdaab"
+      },
+      "car.edoux.cable.b.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "3ccc7501fa46ebeb"
+      },
+      "car.edoux.cable.b.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "30e0d8106ce99b6c"
+      },
+      "car.edoux.cable.c.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "9cc31d7c7c7df03e"
+      },
+      "car.edoux.cable.c.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "8eddfb972fe139f5"
+      },
+      "car.edoux.cable.d.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "1d49eb70a80b13ce"
+      },
+      "car.edoux.cable.d.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "2a84e9cd46e08f55"
+      },
+      "car.edoux.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1152,
+        "vertices": 1728,
+        "primitives": 576,
+        "instances": 0,
+        "hash": "5c0c1d48b762d360"
+      },
+      "car.edoux.pistons": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 184,
+        "vertices": 456,
+        "primitives": 152,
+        "instances": 0,
+        "hash": "035598402294a2f0"
+      },
+      "car.edoux.pulley.middle.lower": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "862441f3eb4cee45"
+      },
+      "car.edoux.pulley.middle.upper": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "6967a9fd4547b4e9"
+      },
+      "car.edoux.pulley.nord.lower": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "5e16caf65d342993"
+      },
+      "car.edoux.pulley.nord.upper": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "2b03ecf8c0952a3e"
+      },
+      "car.edoux.pulley.sud.lower": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "7be008c0e6c2cead"
+      },
+      "car.edoux.pulley.sud.upper": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "b07cc7541df252d1"
+      },
+      "car.edoux.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1824,
+        "vertices": 2736,
+        "primitives": 912,
+        "instances": 0,
+        "hash": "fc3ba4f9b84c24b0"
+      },
+      "car.otis.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 144,
+        "vertices": 216,
+        "primitives": 72,
+        "instances": 0,
+        "hash": "e1a95a7c7825053b"
+      },
+      "car.otis.nord.cable.a": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "cc98f494719f0eb7"
+      },
+      "car.otis.nord.cable.b": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "0e5f2bcb03377fd1"
+      },
+      "car.otis.nord.cable.c": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "6c9e784f6572552b"
+      },
+      "car.otis.nord.carriage": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 6504,
+        "vertices": 9756,
+        "primitives": 3252,
+        "instances": 0,
+        "hash": "04c091b717b6ca7f"
+      },
+      "car.otis.nord.truck": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1416,
+        "vertices": 2124,
+        "primitives": 708,
+        "instances": 0,
+        "hash": "09974e8f67505703"
+      },
+      "car.otis.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 144,
+        "vertices": 216,
+        "primitives": 72,
+        "instances": 0,
+        "hash": "a6c481fce71b7d61"
+      },
+      "car.otis.sud.cable.a": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "ce2ec2a891c14d49"
+      },
+      "car.otis.sud.cable.b": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "b9adb1ab52058a68"
+      },
+      "car.otis.sud.cable.c": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "6fa949a1278df9e1"
+      },
+      "car.otis.sud.carriage": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 6504,
+        "vertices": 9756,
+        "primitives": 3252,
+        "instances": 0,
+        "hash": "8888d2ee4c7bbe05"
+      },
+      "car.otis.sud.truck": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1416,
+        "vertices": 2124,
+        "primitives": 708,
+        "instances": 0,
+        "hash": "6f631d59947481b0"
+      },
+      "car.roux.est": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 4752,
+        "vertices": 7128,
+        "primitives": 2376,
+        "instances": 0,
+        "hash": "aca3e983654fea5a"
+      },
+      "car.roux.est.left.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "246b136233b7e797"
+      },
+      "car.roux.est.left.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "f3adfe3dbe3fcf1e"
+      },
+      "car.roux.est.right.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "d838332cda106c3f"
+      },
+      "car.roux.est.right.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "089ba41350209f75"
+      },
+      "car.roux.ouest": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 4752,
+        "vertices": 7128,
+        "primitives": 2376,
+        "instances": 0,
+        "hash": "199fde3249602163"
+      },
+      "car.roux.ouest.left.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "0dbff646fae492d5"
+      },
+      "car.roux.ouest.left.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "d33a0f9bd554da34"
+      },
+      "car.roux.ouest.right.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "5d3602e79699ab83"
+      },
+      "car.roux.ouest.right.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "5724c1e67e804859"
+      },
+      "chain.roux.est.left": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "a19683f74e5da5df"
+      },
+      "chain.roux.est.right": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "a67496a72ff00c9c"
+      },
+      "chain.roux.ouest.left": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "d73258555c46b822"
+      },
+      "chain.roux.ouest.right": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "6f0320d11bbacd05"
+      },
+      "cloth.flag": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 325,
+        "vertices": 1728,
+        "primitives": 576,
+        "instances": 0,
+        "hash": "ef5cb388885a76a3"
+      },
+      "fittings.balusters": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 720,
+        "hash": "eeae69e44cf47fab"
+      },
+      "fittings.cabochons": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 432,
+        "hash": "ce7b1345312c6bf1"
+      },
+      "fittings.globes": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 36,
+        "hash": "1841ec7254223ecc"
+      },
+      "foundations": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24696,
+        "vertices": 39768,
+        "primitives": 13256,
+        "instances": 0,
+        "hash": "d510d86e68556356"
+      },
+      "girders": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1489356,
+        "vertices": 4108608,
+        "primitives": 1369536,
+        "instances": 0,
+        "hash": "de1d1629ce9dc8fe"
+      },
+      "glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 28458,
+        "vertices": 44640,
+        "primitives": 14880,
+        "instances": 0,
+        "hash": "1e2a7ef74c6f6e2f"
+      },
+      "gussets": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 128880,
+        "vertices": 193320,
+        "primitives": 64440,
+        "instances": 0,
+        "hash": "bdca628c56cdb3e1"
+      },
+      "horizontals": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 481840,
+        "vertices": 1311072,
+        "primitives": 437024,
+        "instances": 0,
+        "hash": "9c76a987d416a639"
+      },
+      "machinery": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 58552,
+        "vertices": 96912,
+        "primitives": 32304,
+        "instances": 0,
+        "hash": "1f0d813924ed3ff1"
+      },
+      "masonry": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 56616,
+        "vertices": 85056,
+        "primitives": 28352,
+        "instances": 0,
+        "hash": "36341ec4a7cbd770"
+      },
+      "names": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 107064,
+        "vertices": 160596,
+        "primitives": 53532,
+        "instances": 0,
+        "hash": "4afea661674fde80"
+      },
+      "platforms": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 642550,
+        "vertices": 1037964,
+        "primitives": 345988,
+        "instances": 0,
+        "hash": "99a0c8b6d5e453d1"
+      },
+      "rivets.ff.arches.chords": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 108032,
+        "hash": "aeae35d092a7bae5"
+      },
+      "rivets.ff.arches.montants": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 63104,
+        "hash": "01890cd14a58a9a4"
+      },
+      "rivets.ff.crossings.360": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 5568,
+        "hash": "b9c07587e9d927d7"
+      },
+      "rivets.ff.crossings.600": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 384,
+        "hash": "993a9f4750aac553"
+      },
+      "rivets.ff.entretoises": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 35760,
+        "hash": "1d7d6d997e3c6f66"
+      },
+      "rivets.ff.girders.decoTop": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 19776,
+        "hash": "92617b61ab0c975e"
+      },
+      "rivets.ff.girders.endPosts": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 12288,
+        "hash": "452c20b2a0c2f294"
+      },
+      "rivets.ff.girders.main": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 36480,
+        "hash": "5afe574a738ecbc6"
+      },
+      "rivets.ff.girders.membrure": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 23296,
+        "hash": "62a4280b1f22a716"
+      },
+      "rivets.ff.girders.posts": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 55936,
+        "hash": "92547e519d79d038"
+      },
+      "rivets.ff.girders.web": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 112392,
+        "hash": "3c0e96e54f7371bd"
+      },
+      "rivets.ff.second.band": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 7872,
+        "hash": "fd320211034809de"
+      },
+      "rivets.ff.second.chords": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 6144,
+        "hash": "d63464c85369669a"
+      },
+      "rivets.ff.second.web": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 4432,
+        "hash": "3b9e41c87a57a086"
+      },
+      "rivets.leg.bracing": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 70232,
+        "hash": "1e63e59902dd2201"
+      },
+      "rivets.leg.bracing.joints": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 14944,
+        "hash": "fb086f305ba3ab22"
+      },
+      "rivets.leg.chords.legBelt11BarLap": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 2464,
+        "hash": "8c2e8838dc9116b7"
+      },
+      "rivets.leg.chords.legBelt11Edge": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 2336,
+        "hash": "8e96ab36f90b7831"
+      },
+      "rivets.leg.chords.legBelt11PostLap": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 512,
+        "hash": "64a44b11e12e211e"
+      },
+      "rivets.leg.chords.legBelt5BarLap": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 1568,
+        "hash": "6cbb33470829be87"
+      },
+      "rivets.leg.chords.legBelt5Edge": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 3456,
+        "hash": "47ad18ee042cba5d"
+      },
+      "rivets.leg.chords.legBelt5PostLap": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 768,
+        "hash": "0532dd2b2cbab4fa"
+      },
+      "rivets.leg.chords.legTieEdge": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 6496,
+        "hash": "c669d6586f0ddd96"
+      },
+      "rivets.leg.chords.legTieLap": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 1408,
+        "hash": "5d5bd6b55ab1f682"
+      },
+      "rivets.leg.crossings.500": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 2720,
+        "hash": "61ddbaff2390c732"
+      },
+      "rivets.leg.crossings.600": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 2368,
+        "hash": "ab7c74365ff5999f"
+      },
+      "rivets.leg.crossings.800": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 16512,
+        "hash": "ec6efccc60cf05ac"
+      },
+      "rivets.leg.entretoises": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 5488,
+        "hash": "9416457e6fe420ac"
+      },
+      "rivets.leg.entretoises.joints": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 1960,
+        "hash": "e9557883734ec2b0"
+      },
+      "rivets.leg.gap.bracing": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 5152,
+        "hash": "940b640587f649af"
+      },
+      "rivets.leg.gap.bracing.joints": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 960,
+        "hash": "6f94d93fbdeef6f0"
+      },
+      "rivets.leg.gap.horizontals": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 1152,
+        "hash": "d4cfa889faf8ee2c"
+      },
+      "rivets.leg.gap.horizontals.joints": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 848,
+        "hash": "686acd2a50bf076c"
+      },
+      "rivets.leg.horizontals": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 31988,
+        "hash": "7f4d443940cb6073"
+      },
+      "rivets.leg.horizontals.joints": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 13584,
+        "hash": "9dddfc057860cb87"
+      },
+      "rivets.leg.posts": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 19936,
+        "hash": "aef9ebd70e764d33"
+      },
+      "rivets.leg.uprights": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 97432,
+        "hash": "19d5f4e645c8d069"
+      },
+      "rivets.leg.uprights.built": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 120368,
+        "hash": "7ad7fbee8a32473c"
+      },
+      "rivets.leg.uprights.splices": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 258208,
+        "hash": "6af6849bbb7d3fc4"
+      },
+      "rivets.leg.uprights.upper": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 39696,
+        "hash": "b95b18f79f86428a"
+      },
+      "rivets.shaft.bracing": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 26688,
+        "hash": "d1a1a3523871b117"
+      },
+      "rivets.shaft.bracing.joints": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 4288,
+        "hash": "5dc26cddf8ec3650"
+      },
+      "rivets.shaft.crossings.500": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 3520,
+        "hash": "4fe6ae015e5a350b"
+      },
+      "rivets.shaft.horizontals": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 7504,
+        "hash": "5e078af21c5adfc6"
+      },
+      "rivets.shaft.horizontals.joints": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 4208,
+        "hash": "203eacb1beec9180"
+      },
+      "rivets.shaft.uprights": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 30048,
+        "hash": "3a52f316a9a10116"
+      },
+      "rivets.shaft.uprights.splices": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 12576,
+        "hash": "766dab2019ce0cc5"
+      },
+      "rivets.summit.crossings": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 88,
+        "hash": "d12013473b034fd7"
+      },
+      "rivets.summit.diagonals.bars": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 1320,
+        "hash": "b4f458c631abe979"
+      },
+      "rivets.summit.diagonals.chords": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 3416,
+        "hash": "58c5eda9dc5efa1d"
+      },
+      "rivets.summit.diagonals.lacing": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 48,
+        "hash": "6c781e7178514574"
+      },
+      "rivets.summit.diagonals.uprights": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 928,
+        "hash": "c68a0126f7be835f"
+      },
+      "rivets.summit.dome.chords": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 9216,
+        "hash": "30f57b321be884e7"
+      },
+      "rivets.summit.dome.lacing": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 256,
+        "hash": "dd109a8ccfbdf49f"
+      },
+      "rivets.summit.p29.bracing": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 1536,
+        "hash": "a4846a3f426021c6"
+      },
+      "rivets.summit.p29.girders": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 896,
+        "hash": "cf35ccd512c9e59d"
+      },
+      "rivets.summit.p29.horizontals": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 256,
+        "hash": "193c38f58c24d6b0"
+      },
+      "rivets.summit.p29.posts": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 4392,
+        "hash": "831fd01f203e61eb"
+      },
+      "rivets.summit.p29.uprights": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 3296,
+        "hash": "c988c4a6f0f70038"
+      },
+      "silvered": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 54624,
+        "vertices": 85056,
+        "primitives": 28352,
+        "instances": 0,
+        "hash": "f5b177ab7b04ca77"
+      },
+      "summit": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 40454,
+        "vertices": 77958,
+        "primitives": 25986,
+        "instances": 0,
+        "hash": "fd954312d320dbee"
+      },
+      "uprights": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 381448,
+        "vertices": 572256,
+        "primitives": 190752,
+        "instances": 0,
+        "hash": "7fbceb9ba63c2a20"
+      }
+    },
+    "skeleton": {
+      "arches": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 239488,
+        "vertices": 390144,
+        "primitives": 130048,
+        "instances": 0,
+        "hash": "3ed089a9df960b71"
+      },
+      "bracing": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 25512,
+        "vertices": 47136,
+        "primitives": 15712,
+        "instances": 0,
+        "hash": "66001c88fb76028b"
+      },
+      "car.edoux.cable.a.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "4e1d7649bf83cbd2"
+      },
+      "car.edoux.cable.a.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "200df997180bdaab"
+      },
+      "car.edoux.cable.b.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "3ccc7501fa46ebeb"
+      },
+      "car.edoux.cable.b.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "30e0d8106ce99b6c"
+      },
+      "car.edoux.cable.c.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "9cc31d7c7c7df03e"
+      },
+      "car.edoux.cable.c.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "8eddfb972fe139f5"
+      },
+      "car.edoux.cable.d.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "1d49eb70a80b13ce"
+      },
+      "car.edoux.cable.d.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "2a84e9cd46e08f55"
+      },
+      "car.edoux.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1152,
+        "vertices": 1728,
+        "primitives": 576,
+        "instances": 0,
+        "hash": "5c0c1d48b762d360"
+      },
+      "car.edoux.pistons": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 184,
+        "vertices": 456,
+        "primitives": 152,
+        "instances": 0,
+        "hash": "035598402294a2f0"
+      },
+      "car.edoux.pulley.middle.lower": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "862441f3eb4cee45"
+      },
+      "car.edoux.pulley.middle.upper": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "6967a9fd4547b4e9"
+      },
+      "car.edoux.pulley.nord.lower": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "5e16caf65d342993"
+      },
+      "car.edoux.pulley.nord.upper": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "2b03ecf8c0952a3e"
+      },
+      "car.edoux.pulley.sud.lower": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "7be008c0e6c2cead"
+      },
+      "car.edoux.pulley.sud.upper": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 984,
+        "vertices": 1476,
+        "primitives": 492,
+        "instances": 0,
+        "hash": "b07cc7541df252d1"
+      },
+      "car.edoux.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1824,
+        "vertices": 2736,
+        "primitives": 912,
+        "instances": 0,
+        "hash": "fc3ba4f9b84c24b0"
+      },
+      "car.otis.nord": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 144,
+        "vertices": 216,
+        "primitives": 72,
+        "instances": 0,
+        "hash": "e1a95a7c7825053b"
+      },
+      "car.otis.nord.cable.a": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "cc98f494719f0eb7"
+      },
+      "car.otis.nord.cable.b": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "0e5f2bcb03377fd1"
+      },
+      "car.otis.nord.cable.c": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "6c9e784f6572552b"
+      },
+      "car.otis.nord.carriage": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 6504,
+        "vertices": 9756,
+        "primitives": 3252,
+        "instances": 0,
+        "hash": "04c091b717b6ca7f"
+      },
+      "car.otis.nord.truck": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1416,
+        "vertices": 2124,
+        "primitives": 708,
+        "instances": 0,
+        "hash": "09974e8f67505703"
+      },
+      "car.otis.sud": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 144,
+        "vertices": 216,
+        "primitives": 72,
+        "instances": 0,
+        "hash": "a6c481fce71b7d61"
+      },
+      "car.otis.sud.cable.a": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "ce2ec2a891c14d49"
+      },
+      "car.otis.sud.cable.b": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "b9adb1ab52058a68"
+      },
+      "car.otis.sud.cable.c": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24,
+        "vertices": 36,
+        "primitives": 12,
+        "instances": 0,
+        "hash": "6fa949a1278df9e1"
+      },
+      "car.otis.sud.carriage": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 6504,
+        "vertices": 9756,
+        "primitives": 3252,
+        "instances": 0,
+        "hash": "8888d2ee4c7bbe05"
+      },
+      "car.otis.sud.truck": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1416,
+        "vertices": 2124,
+        "primitives": 708,
+        "instances": 0,
+        "hash": "6f631d59947481b0"
+      },
+      "car.roux.est": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 4752,
+        "vertices": 7128,
+        "primitives": 2376,
+        "instances": 0,
+        "hash": "aca3e983654fea5a"
+      },
+      "car.roux.est.left.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "246b136233b7e797"
+      },
+      "car.roux.est.left.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "f3adfe3dbe3fcf1e"
+      },
+      "car.roux.est.right.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "d838332cda106c3f"
+      },
+      "car.roux.est.right.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "089ba41350209f75"
+      },
+      "car.roux.ouest": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 4752,
+        "vertices": 7128,
+        "primitives": 2376,
+        "instances": 0,
+        "hash": "199fde3249602163"
+      },
+      "car.roux.ouest.left.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "0dbff646fae492d5"
+      },
+      "car.roux.ouest.left.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "d33a0f9bd554da34"
+      },
+      "car.roux.ouest.right.pulley": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1272,
+        "vertices": 1908,
+        "primitives": 636,
+        "instances": 0,
+        "hash": "5d3602e79699ab83"
+      },
+      "car.roux.ouest.right.wheel": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 1944,
+        "vertices": 2916,
+        "primitives": 972,
+        "instances": 0,
+        "hash": "5724c1e67e804859"
+      },
+      "chain.roux.est.left": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "a19683f74e5da5df"
+      },
+      "chain.roux.est.right": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "a67496a72ff00c9c"
+      },
+      "chain.roux.ouest.left": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "d73258555c46b822"
+      },
+      "chain.roux.ouest.right": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 365,
+        "hash": "6f0320d11bbacd05"
+      },
+      "cloth.flag": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 325,
+        "vertices": 1728,
+        "primitives": 576,
+        "instances": 0,
+        "hash": "ef5cb388885a76a3"
+      },
+      "fittings.balusters": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 720,
+        "hash": "eeae69e44cf47fab"
+      },
+      "fittings.cabochons": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 432,
+        "hash": "ce7b1345312c6bf1"
+      },
+      "fittings.globes": {
+        "kind": "instances",
+        "items": 1,
+        "points": 0,
+        "vertices": 0,
+        "primitives": 0,
+        "instances": 36,
+        "hash": "1841ec7254223ecc"
+      },
+      "foundations": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 24696,
+        "vertices": 39768,
+        "primitives": 13256,
+        "instances": 0,
+        "hash": "d510d86e68556356"
+      },
+      "girders": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 181868,
+        "vertices": 318144,
+        "primitives": 106048,
+        "instances": 0,
+        "hash": "84d0f285fa70f475"
+      },
+      "glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 28458,
+        "vertices": 44640,
+        "primitives": 14880,
+        "instances": 0,
+        "hash": "1e2a7ef74c6f6e2f"
+      },
+      "horizontals": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 10600,
+        "vertices": 19320,
+        "primitives": 6440,
+        "instances": 0,
+        "hash": "ec623c19616c0a50"
+      },
+      "machinery": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 58552,
+        "vertices": 96912,
+        "primitives": 32304,
+        "instances": 0,
+        "hash": "1f0d813924ed3ff1"
+      },
+      "masonry": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 56616,
+        "vertices": 85056,
+        "primitives": 28352,
+        "instances": 0,
+        "hash": "36341ec4a7cbd770"
+      },
+      "names": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 107064,
+        "vertices": 160596,
+        "primitives": 53532,
+        "instances": 0,
+        "hash": "4afea661674fde80"
+      },
+      "platforms": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 642550,
+        "vertices": 1037964,
+        "primitives": 345988,
+        "instances": 0,
+        "hash": "99a0c8b6d5e453d1"
+      },
+      "silvered": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 54624,
+        "vertices": 85056,
+        "primitives": 28352,
+        "instances": 0,
+        "hash": "f5b177ab7b04ca77"
+      },
+      "summit": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 40454,
+        "vertices": 77958,
+        "primitives": 25986,
+        "instances": 0,
+        "hash": "fd954312d320dbee"
+      },
+      "uprights": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 33736,
+        "vertices": 50688,
+        "primitives": 16896,
+        "instances": 0,
+        "hash": "48562e3eb73e73e7"
+      }
+    }
+  }
+}
