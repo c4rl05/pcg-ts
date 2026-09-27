@@ -565,9 +565,15 @@ describe("eiffel 1st-floor fit-out, 1889", () => {
   it("sets the Russe's clock and finial and the Français' crest at the plates' heights", () => {
     const clock = solids["russe.clock"]!;
     // The dial: the disc, the clock's one outline of more than four points
-    // (the carved arch round it is quads).
-    const dial = clock.find((s) => s.pts.length > 4)!;
-    expect(clock.filter((s) => s.pts.length > 4).length).toBe(1);
+    // all one radius from its centre (the carved arch round it is a band
+    // between two arcs).
+    const round = (s: (typeof clock)[number]) => {
+      const r = s.pts.map((p) => len(sub(p, centre(s))));
+      return s.pts.length > 4 && Math.max(...r) - Math.min(...r) < 1e-6;
+    };
+    const dial = clock.find(round)!;
+    expect(clock.filter(round).length).toBe(1);
+    expect(clock.filter((s) => s.pts.length > 4).length).toBe(2);
     const c = centre(dial);
     expect(c[1]).toBeCloseTo(CLOCK_Y, 6);
     expect(dial.hi[1] - dial.lo[1]).toBeCloseTo(CLOCK_D, 6);

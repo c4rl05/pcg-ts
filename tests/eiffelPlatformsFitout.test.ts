@@ -319,13 +319,14 @@ describe("eiffel platforms fit-out", () => {
     const pilasters = solids["inner.pilaster"]!;
     expect(pilasters.length).toBe(32);
     expect(solids["inner.gutter"]!.length).toBe(32);
-    // Each arch is its bay's two ribs as quads between arcs, as many as
-    // the vault's arc has chords (VAULT_SEGMENTS, cut by size: a whole
-    // number to each of the crescent's 12 cells), and its 11 rays, all a
-    // plate (0.15) thick.
+    // Each arch is its bay's two ribs, each one band between two arcs of
+    // as many chords as the vault's arc has (VAULT_SEGMENTS, cut by size:
+    // a whole number to each of the crescent's 12 cells), and its 11 rays,
+    // all a plate (0.15) thick.
     const arch = solids["inner.arch"]!;
     expect(VAULT_SEGMENTS % 12).toBe(0);
-    expect(arch.length).toBe(28 * (2 * VAULT_SEGMENTS + 11));
+    expect(arch.length).toBe(28 * (2 + 11));
+    expect(arch.filter((s) => s.pts.length === 2 * (VAULT_SEGMENTS + 1)).length).toBe(28 * 2);
     // On the +z face: every 7.765 from ±3.8825 to ±27.18, in front of a
     // leg (19.41, 27.18) against the step, else 4.1875 inside the column axis.
     const zFace = pilasters.filter((s) => centre(s)[2] > EDGE - 5 && centre(s)[2] < EDGE);

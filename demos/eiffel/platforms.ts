@@ -12,11 +12,9 @@
  *   ring spans the legs. The void is not a square: a 29.00 square with
  *   its corners cut at 45 degrees and a bowed balcony on every face
  *   [sourced PL-XVIII, PL-XVI, Eiffel's text; see `VOID`], which leaves
- *   4,250 m² against the printed 4,200. The slab is cut into convex quads
- *   between the void's edge and the step to the gallery, laid out on the
- *   +z face between the diagonals and turned onto the other three
- *   (`firstDeck`), less the ground stair's arrivals in piles 4 and 2
- *   (`STAIR_OPENINGS`). The ring's outer 2.60 m is the promenade gallery,
+ *   4,250 m² against the printed 4,200. The slab runs from the void's edge
+ *   out to the step to the gallery (`deckPlans`), less the ground stair's
+ *   arrivals in piles 4 and 2 (`STAIR_OPENINGS`). The ring's outer 2.60 m is the promenade gallery,
  *   1.23 m LOWER than the rest (below), a second ring of four pinwheel
  *   slabs; the platform proper stops 2.60 inside the edge, where its edge
  *   girder closes the step (`STEP`).
@@ -174,9 +172,9 @@
  * faces by the quadrant targets (`Lot`, `placedMesh`), and the copy turns
  * its `normal` with its points (`rotateAttrs`); each mesh is smoothed only
  * once its copies are merged, so what welds across two drawings still
- * does. Three things are still turned in TypeScript: the decks, cut in
- * the world round the wells of the legs' stairs and lifts (`cutWells`);
- * the landing's girders, whose four sides differ at their corners
+ * does. The decks are drawn in the world, each its plan less the wells
+ * of the legs' stairs and lifts, which the graph cuts (`decks`). Two
+ * things are still turned in TypeScript: the landing's girders, whose four sides differ at their corners
  * (`landingBlocks`); and the names' letters, which differ face by face
  * (`namesLettering`). The
  * names keep no normals, as their class carries none and the page
@@ -195,6 +193,7 @@ import {
   filterByExpression,
   gt,
   index,
+  lookup,
   lt,
   max,
   mergePrimitives,
@@ -203,7 +202,9 @@ import {
   pointGrid,
   pointLine,
   pointsToPath,
+  polygonBoolean,
   position,
+  promoteAttribute,
   removeAttribute,
   setAttribute,
   spawnInstances,
@@ -1459,15 +1460,6 @@ function allFaces(list: readonly Block[], faces: readonly number[] = [0, 1, 2, 3
   return out;
 }
 
-/** Face-frame prisms, turned onto all four faces (or onto the `faces` given). */
-function allFacesPrisms(list: readonly Prism[], faces: readonly number[] = [0, 1, 2, 3]): Prism[] {
-  const out: Prism[] = [];
-  for (const f of faces) {
-    for (const p of list) out.push({ outline: p.outline.map((q) => onFace(f, q)), depth: p.depth });
-  }
-  return out;
-}
-
 /** An axis-aligned face-frame block between two corners. */
 function span(a0: number, a1: number, y0: number, y1: number, r0: number, r1: number): Block {
   return {
@@ -1742,11 +1734,13 @@ function unitBox(g: Graph): NodeHandle {
  * once and copied onto its place's targets, its `normal` turned with it
  * (`rotateAttrs`), then all of them merged and smoothed together across
  * any edge under `chord.ts`' crease angle, so a round part shades round
- * and a box keeps its edges, whichever lots its faces came from.
+ * and a box keeps its edges, whichever lots its faces came from; with
+ * any meshes `built` in the world already (the decks) among them.
  */
-function placedMesh(site: Site, id: string, lots: ReadonlyArray<Lot<Piece>>): NodeHandle {
+function placedMesh(site: Site, id: string, lots: ReadonlyArray<Lot<Piece>>, built: readonly NodeHandle[] = []): NodeHandle {
   const { g } = site;
   const all = g.add(mergePrimitives, {}, `${id}Flat`);
+  for (const mesh of built) g.connect(mesh, "out", all, "in");
   for (const lot of lots) {
     const name = `${id}${placeName(lot.place)}`;
     const mesh = drawn(g, name, lot.drawn);
@@ -1778,46 +1772,39 @@ function prisms(g: Graph, id: string, list: readonly Prism[]): NodeHandle {
  * `PRISM_RUN` split is vestigial").
  */
 function prismMesh(g: Graph, id: string, list: readonly Prism[]): NodeHandle {
-  const pts = list.flatMap((p) => p.outline);
-  const which = list.flatMap((p, i) => p.outline.map(() => i));
-  const depth = list.flatMap((p) => p.outline.map(() => p.depth));
-  const slots = g.add(
-    pointGrid,
-    { countX: pts.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    `${id}Slots`,
-  );
-  const place = g.add(
-    setAttribute,
-    {
-      name: "P",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(
-        indexTable(pts.map((p) => p[0])),
-        indexTable(pts.map((p) => p[1])),
-        indexTable(pts.map((p) => p[2])),
-      ),
-    },
-    `${id}Place`,
-  );
-  const key = g.add(
-    setAttribute,
-    { name: "prism", type: "i32", value: indexTable(which) },
-    `${id}Key`,
-  );
-  const len = g.add(
-    setAttribute,
-    { name: "depth", type: "f32", value: indexTable(depth) },
-    `${id}Depth`,
-  );
-  const paths = g.add(pointsToPath, { groupAttr: "prism", closed: true }, `${id}Paths`);
+  const paths = outlinePaths(g, id, list.map((p) => p.outline), { depth: list.map((p) => p.depth) });
   const solid = g.add(extrudePolygon, { direction: "polygonNormal", distance: attribute("depth"), caps: "both" }, id);
-  g.connect(slots, "out", place, "in");
-  g.connect(place, "out", key, "in");
-  g.connect(key, "out", len, "in");
-  g.connect(len, "out", paths, "in");
   g.connect(paths, "out", solid, "in");
   return solid;
+}
+
+/**
+ * Outlines as closed paths (`${id}Paths`), keyed `prism` by their index,
+ * each point carrying its outline's value of every column in `per`.
+ */
+function outlinePaths(
+  g: Graph,
+  id: string,
+  outlines: ReadonlyArray<readonly Vec3[]>,
+  per: Record<string, readonly number[]>,
+): NodeHandle {
+  const pts = outlines.flat();
+  const each = (values: readonly number[]) => indexTable(outlines.flatMap((o, i) => o.map(() => values[i] as number)));
+  const chain = [
+    g.add(pointGrid, { countX: pts.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] }, `${id}Slots`),
+    g.add(
+      setAttribute,
+      { name: "P", type: "f32", tupleSize: 3, value: vec(...[0, 1, 2].map((k) => indexTable(pts.map((p) => p[k] as number)))) },
+      `${id}Place`,
+    ),
+    g.add(setAttribute, { name: "prism", type: "i32", value: each(outlines.map((_, i) => i)) }, `${id}Key`),
+    ...Object.entries(per).map(([name, values]) =>
+      g.add(setAttribute, { name, type: "f32", value: each(values) }, `${id}${name[0]?.toUpperCase()}${name.slice(1)}`),
+    ),
+    g.add(pointsToPath, { groupAttr: "prism", closed: true }, `${id}Paths`),
+  ];
+  chain.forEach((node, i) => i > 0 && g.connect(chain[i - 1] as NodeHandle, "out", node, "in"));
+  return chain[chain.length - 1] as NodeHandle;
 }
 
 /**
@@ -1945,28 +1932,22 @@ export function vaultArc(c: number, r: number, inset = 0): Vec3[] {
 }
 
 /**
- * A vault: a half-ellipse over bay centre `c`, its face at r, wound to
- * extrude inward. Left foot, over the crown, to the right foot: clockwise
- * seen from +r, so the outline's normal points in, toward the tower's axis.
+ * A vault's end: the half-ellipse over bay centre `c`, its face at r,
+ * shrunk by `inset`, wound to extrude inward. Left foot, over the crown,
+ * to the right foot: clockwise seen from +r, so the outline's normal
+ * points in, toward the tower's axis.
  */
-function vault(c: number, r: number, depth: number): Prism {
-  return { outline: vaultArc(c, r), depth };
+function vault(c: number, r: number, depth: number, inset = 0): Prism {
+  return { outline: vaultArc(c, r, inset), depth };
 }
 
 /**
- * The quads between two arcs of equal count, each wound as the arcs are
- * (the first over the second), extruded `depth` inward: a crescent or a
- * shell cut into convex pieces, since a cap is a fan.
+ * The band between two arcs, wound as they are (the first over the
+ * second), extruded `depth` inward: a crescent or a shell, one concave
+ * outline (`extrudePolygon` ear-clips its caps).
  */
-function between(upper: readonly Vec3[], lower: readonly Vec3[], depth: number): Prism[] {
-  const out: Prism[] = [];
-  for (let i = 0; i + 1 < upper.length; i++) {
-    out.push({
-      outline: [upper[i] as Vec3, upper[i + 1] as Vec3, lower[i + 1] as Vec3, lower[i] as Vec3],
-      depth,
-    });
-  }
-  return out;
+function between(upper: readonly Vec3[], lower: readonly Vec3[], depth: number): Prism {
+  return { outline: [...upper, ...[...lower].reverse()], depth };
 }
 
 /**
@@ -2044,8 +2025,8 @@ function gableRibs(
   const inner = innerArc(c, r, 0, arc.radius, arc.crown);
   const innerOut = innerArc(c, r, arc.innerRib, arc.radius, arc.crown);
   const prisms = [
-    ...between(outer, outerIn, ARCADE.plate),
-    ...between(innerOut, inner, ARCADE.plate),
+    between(outer, outerIn, ARCADE.plate),
+    between(innerOut, inner, ARCADE.plate),
   ];
   const mid = r - ARCADE.plate / 2;
   const blocks: Block[] = [];
@@ -2140,7 +2121,7 @@ function lunetteTrellis(c: number): Block[] {
 function bayRoof(c: number, r: number, depth: number): Piece {
   const front = gableRibs(c, r);
   return {
-    prisms: [...front.prisms, ...between(vaultArc(c, r), vaultArc(c, r, ARCADE.shell), depth)],
+    prisms: [...front.prisms, between(vaultArc(c, r), vaultArc(c, r, ARCADE.shell), depth)],
     blocks: front.blocks,
   };
 }
@@ -2691,7 +2672,7 @@ function tympanum(c: number, r: number): Piece {
     const [x, y] = rib[i * CELL_STEPS] as Vec3;
     blocks.push(bar(hub, [x, y, mid], i === n / 2 ? GABLE.outerRib : GABLE.ray, ARCADE.plate));
   }
-  return { prisms: between(arc, rib, ARCADE.plate), blocks };
+  return { prisms: [between(arc, rib, ARCADE.plate)], blocks };
 }
 
 /**
@@ -2749,7 +2730,7 @@ function pavilionFace(staff: boolean): { walls: Block[]; vaults: Prism[] } {
       for (const s of [-1, 1]) {
         const head = doorHead(c + s * (F.mid + F.door) / 2, front);
         const line = head.map(([x, , z]): Vec3 => [x, SPRING_Y, z]);
-        vaults.push(...between(line, head, W));
+        vaults.push(between(line, head, W));
       }
       const glazed = tympanum(c, front);
       vaults.push(...glazed.prisms);
@@ -2761,7 +2742,7 @@ function pavilionFace(staff: boolean): { walls: Block[]; vaults: Prism[] } {
     const rear = tympanum(c, end + ARCADE.plate);
     vaults.push(
       ...gable.prisms,
-      ...between(vaultArc(c, EDGE), vaultArc(c, EDGE, ARCADE.shell), EDGE - end),
+      between(vaultArc(c, EDGE), vaultArc(c, EDGE, ARCADE.shell), EDGE - end),
       ...rear.prisms,
     );
     walls.push(...gable.blocks, ...rear.blocks);
@@ -3006,27 +2987,6 @@ function curveBars(pts: readonly (readonly [number, number])[], r: number, w: nu
   return out;
 }
 
-/**
- * The boarded end of the vault over bay centre `c`, its face at r,
- * extruded `t` inward: the arc under the shell over the springing line,
- * cut into convex pieces (a quad per facet, a triangle at each foot).
- */
-function boardedEnd(c: number, r: number, t: number): Prism[] {
-  const arc = vaultArc(c, r, ARCADE.shell);
-  const out: Prism[] = [];
-  for (let i = 0; i + 1 < arc.length; i++) {
-    const p = arc[i] as Vec3;
-    const q = arc[i + 1] as Vec3;
-    // Clockwise seen from +r (over the top, then back along the line), so
-    // it extrudes inward.
-    const ring: Vec3[] = [p, q];
-    if (q[1] - SPRING_Y > 1e-9) ring.push([q[0], SPRING_Y, r]);
-    if (p[1] - SPRING_Y > 1e-9) ring.push([p[0], SPRING_Y, r]);
-    out.push({ outline: ring, depth: t });
-  }
-  return out;
-}
-
 /** The rule every pavilion carries, on the +z face (see `PAVILION_FRAME`). */
 function pavilionRule(): Record<"cornice" | "sidePost" | "terrace" | "pinnacle", Piece> {
   const F = PAVILION_FRAME;
@@ -3130,7 +3090,8 @@ function screenFront(open: boolean, upper: readonly number[]): Record<"post" | "
       out.sash.blocks.push(post(a0 + (a1 - a0) * u, rMid, F.mullion, transom + F.beam, SPRING_Y - F.beam));
     }
   }
-  for (const k of [-1, 0, 1]) out.board.prisms.push(...boardedEnd(bayCentre(k), front, F.board));
+  // The vault's end boarded, under the shell over the springing line.
+  for (const k of [-1, 0, 1]) out.board.prisms.push(vault(bayCentre(k), front, F.board, ARCADE.shell));
   return out;
 }
 
@@ -3189,7 +3150,7 @@ function francaisDressing(): Record<"trellis" | "archivolt" | "crest", Piece> {
         outer.push([a + (F.door / 2 + A.width) * Math.cos(phi), y + (F.rise + A.width) * Math.sin(phi), front + A.proud]);
         inner.push([a + (F.door / 2) * Math.cos(phi), y + F.rise * Math.sin(phi), front + A.proud]);
       }
-      out.archivolt.prisms.push(...between(outer, inner, A.proud));
+      out.archivolt.prisms.push(between(outer, inner, A.proud));
     }
   }
   // The 1889 crest on the back of the centre bay, standing out from the
@@ -3266,7 +3227,7 @@ function russeDressing(): Record<"gable" | "valance" | "clock" | "finial", Piece
   out.clock.prisms.push(disc(0, floor + K.centre, back, K.radius, K.depth, -1));
   // Wound as a gable's ribs, so it extrudes -r: out of the back.
   out.clock.prisms.push(
-    ...between(vaultArc(0, back, ARCADE.shell), vaultArc(0, back, ARCADE.shell + K.band), K.bandProud),
+    between(vaultArc(0, back, ARCADE.shell), vaultArc(0, back, ARCADE.shell + K.band), K.bandProud),
   );
   // The finial on the centre lantern's back end.
   const Fi = D.finial;
@@ -4224,91 +4185,6 @@ function fromDiagonals([s, t]: readonly [number, number]): [number, number] {
   return [(s + t) * Math.SQRT1_2, (t - s) * Math.SQRT1_2];
 }
 
-/** A convex polygon (s, t) clipped to the box s0..s1, t0..t1 (Sutherland-Hodgman). */
-function clipToBox(
-  poly: readonly (readonly [number, number])[],
-  s0: number,
-  s1: number,
-  t0: number,
-  t1: number,
-): [number, number][] {
-  let out = poly.map((p): [number, number] => [p[0], p[1]]);
-  const planes: [0 | 1, number, 1 | -1][] = [
-    [0, s0, 1],
-    [0, s1, -1],
-    [1, t0, 1],
-    [1, t1, -1],
-  ];
-  for (const [k, v, sign] of planes) {
-    const inside = (p: [number, number]) => sign * (p[k] - v) >= -1e-9;
-    const next: [number, number][] = [];
-    for (let i = 0; i < out.length; i++) {
-      const a = out[i] as [number, number];
-      const b = out[(i + 1) % out.length] as [number, number];
-      if (inside(a)) next.push(a);
-      if (inside(a) !== inside(b)) {
-        const f = (v - a[k]) / (b[k] - a[k]);
-        next.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]);
-      }
-    }
-    out = next;
-    if (out.length === 0) break;
-  }
-  return out;
-}
-
-/**
- * A floor slab from y0 up to y1 over a convex plan (in the diagonals'
- * frame) less rectangular wells, as convex prisms: the plan cut into bands
- * at the wells' edges across the N-S diagonal (t), each band into pieces
- * between the wells it crosses. Every piece is wound counter-clockwise
- * seen from above, so it extrudes up.
- */
-function floorWithWells(
-  plan: readonly (readonly [number, number])[],
-  wells: readonly Well[],
-  y0: number,
-  y1: number,
-): Prism[] {
-  const big = 1e3;
-  const edges = wells.flatMap((w) => [(w.t ?? 0) - w.across / 2, (w.t ?? 0) + w.across / 2]);
-  const ts = [-big, big, ...edges].sort((a, b) => a - b);
-  const out: Prism[] = [];
-  for (let i = 0; i + 1 < ts.length; i++) {
-    const [ta, tb] = [ts[i] as number, ts[i + 1] as number];
-    if (tb - ta < 1e-9) continue;
-    const mid = (ta + tb) / 2;
-    // The wells this band crosses, as intervals along the diagonal, merged
-    // where they overlap.
-    const cut = wells
-      .filter((w) => Math.abs(mid - (w.t ?? 0)) < w.across / 2)
-      .map((w) => [w.s - w.along / 2, w.s + w.along / 2] as const)
-      .sort((a, b) => a[0] - b[0]);
-    const spans: [number, number][] = [];
-    let from = -big;
-    for (const [c0, c1] of cut) {
-      if (c0 > from) spans.push([from, c0]);
-      from = Math.max(from, c1);
-    }
-    spans.push([from, big]);
-    for (const [sa, sb] of spans) {
-      const piece = clipToBox(plan, sa, sb, ta, tb);
-      if (piece.length < 3) continue;
-      const xz = piece.map(fromDiagonals);
-      let area = 0;
-      for (let k = 0; k < xz.length; k++) {
-        const [x0, z0] = xz[k] as [number, number];
-        const [x1, z1] = xz[(k + 1) % xz.length] as [number, number];
-        area += x0 * z1 - x1 * z0;
-      }
-      if (Math.abs(area) < 1e-6) continue;
-      if (area > 0) xz.reverse();
-      out.push({ outline: xz.map(([x, z]): Vec3 => [x, y0, z]), depth: y1 - y0 });
-    }
-  }
-  return out;
-}
-
 /** A well turned `k` quarter turns about +y, as the quadrant targets turn: (s, t) to (t, -s). */
 function turnWell(w: Well, k: number): Well {
   let [s, t, along, across] = [w.s, w.t ?? 0, w.along, w.across];
@@ -4316,72 +4192,106 @@ function turnWell(w: Well, k: number): Well {
   return { s, t, along, across };
 }
 
+/** A well's rectangle on the plan (x, z). */
+function wellPlan(w: Well): [number, number][] {
+  const t = w.t ?? 0;
+  return diagonalRect([w.s - w.along / 2, w.s + w.along / 2, t - w.across / 2, t + w.across / 2]);
+}
+
+/** A deck: its plan (x, z), from y0 up `depth`, less the plans of its wells. */
+interface Deck {
+  readonly plan: ReadonlyArray<readonly [number, number]>;
+  readonly y0: number;
+  readonly depth: number;
+  readonly wells: ReadonlyArray<ReadonlyArray<readonly [number, number]>>;
+}
+
 /**
- * Deck prisms (convex outlines extruded up) less the wells that fall on
- * them: a prism a well overlaps is cut up by `floorWithWells`, the rest
- * are kept whole.
+ * The decks in the world, round the wells of the stairs and lifts that
+ * pass through them, which stand by leg, not by face:
+ * - the 1st floor's platform, from the void's edge (`voidOutline`, on
+ *   the four faces) out to the step down to the gallery, less the flights'
+ *   notches on the Français and the Russe (`entranceNotches`), the ground
+ *   stair's arrival in piles 4 and 2 (quadrant targets 0 and 2) and every
+ *   leg's lift, the Roux's to it and the Otis's on up;
+ * - the 2nd floor's square, less e1's four openings and the Otis lifts'
+ *   in piles 3 and 1;
+ * - the landing's turned square, less its wells;
+ * - the 3rd floor's octagon, less its wells, drawn 0.01 deeper than the
+ *   edge beams, so its underside does not lie in the plane of panel 29's
+ *   plate girders, which `summit.ts` hangs to the same 0.85.
  */
-function cutWells(list: readonly Prism[], wells: readonly Well[]): Prism[] {
-  return list.flatMap((p) => {
-    const plan = p.outline.map(([x, , z]): [number, number] => [
-      (x - z) * Math.SQRT1_2,
-      (x + z) * Math.SQRT1_2,
-    ]);
-    const lo = [0, 1].map((k) => Math.min(...plan.map((q) => q[k] as number)));
-    const hi = [0, 1].map((k) => Math.max(...plan.map((q) => q[k] as number)));
-    const hit = wells.filter((w) => {
-      const t = w.t ?? 0;
-      return (
-        w.s + w.along / 2 > (lo[0] as number) &&
-        w.s - w.along / 2 < (hi[0] as number) &&
-        t + w.across / 2 > (lo[1] as number) &&
-        t - w.across / 2 < (hi[1] as number)
-      );
-    });
-    if (hit.length === 0) return [p];
-    const y0 = (p.outline[0] as Vec3)[1];
-    return floorWithWells(plan, hit, y0, y0 + p.depth);
-  });
-}
-
-/** The 2nd floor's deck, less e1's four openings (plan: the square in the diagonals' frame). */
-function secondDeck(): Prism[] {
-  const d = (PLATFORMS.second.side / 2) * Math.SQRT2;
-  const plan: [number, number][] = [
-    [d, 0],
-    [0, d],
-    [-d, 0],
-    [0, -d],
-  ];
-  const wells = [
-    ...[0, 1, 2, 3].map((k) => turnWell(STAIR_OPENINGS.e1, k)),
-    // The Otis lifts come up through it in piles 3 and 1.
-    ...[1, 3].flatMap((k) => LIFT_OPENINGS.second.map((w) => turnWell(w, k))),
-  ];
-  return floorWithWells(plan, wells, FLOORS.second - DECK, FLOORS.second);
-}
-
-/** The landing's floor, less its wells (plan: the square in the diagonals' frame). */
-function landingFloor(): Prism[] {
-  const h = LANDING.side / 2;
-  const plan: [number, number][] = [
+function deckPlans(): Deck[] {
+  const onPlan = (f: number, a: number, r: number): [number, number] => {
+    const [x, , z] = onFace(f, [a, 0, r]);
+    return [x, z];
+  };
+  const square = (h: number): Array<[number, number]> => [
     [-h, -h],
     [h, -h],
     [h, h],
     [-h, h],
   ];
-  return floorWithWells(plan, LANDING.wells, FLOORS.landing - LANDING.floor, FLOORS.landing);
+  const h = LANDING.side / 2;
+  return [
+    {
+      plan: square(TERRACE_EDGE),
+      y0: FLOORS.first - DECK,
+      depth: DECK,
+      wells: [
+        ALL.flatMap((f) => voidOutline(0).slice(1).map(([a, r]) => onPlan(f, a, r))),
+        ...TERRACE_RAIL.entrance.flatMap((f) =>
+          entranceNotches().map(([a0, a1, r0, r1]) => [onPlan(f, a0, r0), onPlan(f, a1, r0), onPlan(f, a1, r1), onPlan(f, a0, r1)]),
+        ),
+        ...[0, 2].map((k) => wellPlan(turnWell(STAIR_OPENINGS.ground, k))),
+        ...ALL.flatMap((k) => LIFT_OPENINGS.first.map((w) => wellPlan(turnWell(w, k)))),
+      ],
+    },
+    {
+      plan: square(PLATFORMS.second.side / 2),
+      y0: FLOORS.second - DECK,
+      depth: DECK,
+      wells: [
+        ...ALL.map((k) => wellPlan(turnWell(STAIR_OPENINGS.e1, k))),
+        ...[1, 3].flatMap((k) => LIFT_OPENINGS.second.map((w) => wellPlan(turnWell(w, k)))),
+      ],
+    },
+    {
+      plan: diagonalRect([-h, h, -h, h]),
+      y0: FLOORS.landing - LANDING.floor,
+      depth: LANDING.floor,
+      wells: LANDING.wells.map(wellPlan),
+    },
+    {
+      plan: octagon(THIRD.across, THIRD.straight, 0, 0).outline.map(([x, , z]): [number, number] => [x, z]),
+      y0: FLOORS.third - THIRD.depth - 0.01,
+      depth: THIRD.depth + 0.01,
+      wells: THIRD.wells.map(wellPlan),
+    },
+  ];
 }
 
-/** The 3rd floor, less its wells: the octagon, in the diagonals' frame. */
-function thirdFloor(): Prism[] {
-  const plan = octagon(THIRD.across, THIRD.straight, 0, 1).outline.map(
-    ([x, , z]): [number, number] => [(x - z) * Math.SQRT1_2, (x + z) * Math.SQRT1_2],
-  );
-  // Drawn 0.01 deeper than the edge beams, so its underside does not lie in
-  // the plane of panel 29's plate girders, which `summit.ts` hangs to the
-  // same 0.85.
-  return floorWithWells(plan, THIRD.wells, FLOORS.third - THIRD.depth - 0.01, FLOORS.third);
+/**
+ * The decks as one mesh named `id`: each deck's plan at its underside,
+ * less its wells (`polygonBoolean`, one group a deck, so a deck's wells
+ * cut only that deck), extruded up by its depth, its holes walled.
+ */
+function decks(g: Graph, id: string, list: readonly Deck[]): NodeHandle {
+  const at = (plan: Deck["plan"], y: number) => plan.map(([x, z]): Vec3 => [x, y, z]);
+  const promoted = (node: NodeHandle, name: string, from: "point" | "primitive", to: "point" | "primitive") => {
+    const out = g.add(promoteAttribute, { name: "deck", from, to, mode: "first" }, `${id}${name}`);
+    g.connect(node, "out", out, "in");
+    return out;
+  };
+  const holes = list.flatMap((d, i) => d.wells.map((w) => ({ outline: at(w, d.y0), deck: i })));
+  const plans = outlinePaths(g, `${id}Plans`, list.map((d) => at(d.plan, d.y0)), { deck: list.map((_, i) => i) });
+  const wells = outlinePaths(g, `${id}Wells`, holes.map((w) => w.outline), { deck: holes.map((w) => w.deck) });
+  const cut = g.add(polygonBoolean, { operation: "difference", groupAttr: "deck" }, `${id}Cut`);
+  g.connect(promoted(plans, "PlanKeys", "point", "primitive"), "out", cut, "in");
+  g.connect(promoted(wells, "WellKeys", "point", "primitive"), "out", cut, "clip");
+  const solid = g.add(extrudePolygon, { distance: lookup(attribute("deck"), list.map((d) => d.depth)) }, id);
+  g.connect(promoted(cut, "Keys", "primitive", "point"), "out", solid, "in");
+  return solid;
 }
 
 /**
@@ -4732,39 +4642,6 @@ function voidEdgeAt(a: number): number {
 }
 
 /**
- * The platform's slab on the +z face, from the void's edge out to the step
- * down to the gallery: a convex quad for each segment of the edge,
- * reaching out along the rays from the axis through its two ends, so the
- * four faces tile the ring and meet on the diagonals.
- */
-function firstDeck(): Prism[] {
-  const T = EDGE - GALLERY.width;
-  const y0 = FLOORS.first - DECK;
-  const edge = voidOutline(0);
-  const out: Prism[] = [];
-  for (let i = 0; i + 1 < edge.length; i++) {
-    const [a0, r0] = edge[i] as [number, number];
-    const [a1, r1] = edge[i + 1] as [number, number];
-    const quad: [number, number][] = [
-      [a0, r0],
-      [a1, r1],
-      [(a1 * T) / r1, T],
-      [(a0 * T) / r0, T],
-    ];
-    let area = 0;
-    for (let k = 0; k < quad.length; k++) {
-      const [x0, z0] = quad[k] as [number, number];
-      const [x1, z1] = quad[(k + 1) % quad.length] as [number, number];
-      area += x0 * z1 - x1 * z0;
-    }
-    // Counter-clockwise seen from above, so it extrudes up.
-    if (area > 0) quad.reverse();
-    out.push({ outline: quad.map(([x, z]): Vec3 => [x, y0, z]), depth: DECK });
-  }
-  return out;
-}
-
-/**
  * A balustrade along a plan polyline (a, r) of the face frame, standing on
  * y0: its plinth and top rail along every segment, lapped half a rail at
  * the joints, and posts about `pitch` apart along each leg, at its end
@@ -4880,41 +4757,6 @@ function entranceNotches(): Array<readonly [number, number, number, number]> {
     const [a0, a1] = side > 0 ? [u0, E.outer] : [-E.outer, -u0];
     return [a0, a1, TERRACE_EDGE + E.back, TERRACE_EDGE] as const;
   });
-}
-
-/**
- * Face-frame deck prisms (outlines at one y, extruded up) less rectangles
- * (a0, a1, r0, r1): each prism a rectangle overlaps is cut into the convex
- * pieces either side of it, and behind and before it.
- */
-function cutNotches(
-  list: readonly Prism[],
-  notches: ReadonlyArray<readonly [number, number, number, number]>,
-): Prism[] {
-  const big = 1e3;
-  let out = [...list];
-  for (const [a0, a1, r0, r1] of notches) {
-    const next: Prism[] = [];
-    for (const p of out) {
-      const y0 = (p.outline[0] as Vec3)[1];
-      const plan = p.outline.map(([a, , r]): [number, number] => [a, r]);
-      if (clipToBox(plan, a0 + 1e-9, a1 - 1e-9, r0 + 1e-9, r1 - 1e-9).length < 3) {
-        next.push(p);
-        continue;
-      }
-      for (const piece of [
-        clipToBox(plan, -big, a0, -big, big),
-        clipToBox(plan, a1, big, -big, big),
-        clipToBox(plan, a0, a1, -big, r0),
-        clipToBox(plan, a0, a1, r1, big),
-      ]) {
-        if (piece.length < 3 || Math.abs(signedArea(piece)) < 1e-6) continue;
-        next.push(standing(piece, y0, y0 + p.depth));
-      }
-    }
-    out = next;
-  }
-  return out;
 }
 
 /** Twice the signed area of a plan polygon (x, z): positive clockwise seen from above. */
@@ -5785,7 +5627,7 @@ export function fitOutSolids(): Record<string, Array<Lot<Prism[]>>> {
  */
 export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
   const site: Site = { g, quads, made: new Map() };
-  // The 1st floor: the platform (`firstDeck`, among the prisms), and the
+  // The 1st floor: the platform (`deckPlans`, among the decks), and the
   // gallery ring 1.23 m lower (`ringSide`, among the blocks), closed
   // between them by the step's girder.
   const terrace = EDGE - GALLERY.width;
@@ -5906,35 +5748,15 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
       spawn: fittingSpawn(site, "balusters", [{ place: bays, drawn: balustersFace() }], FITTING_ASSETS.baluster),
     },
   ];
-  // The ground stair arrives in piles 4 and 2: quadrant targets 0 and 2.
-  const arrivals = [
-    ...[0, 2].map((k) => turnWell(STAIR_OPENINGS.ground, k)),
-    // Every leg's lift passes through it: the Roux to it, the Otis on up.
-    ...[0, 1, 2, 3].flatMap((k) => LIFT_OPENINGS.first.map((w) => turnWell(w, k))),
-  ];
-  // The decks are cut in the world, round the wells of the stairs and
-  // lifts that pass through them, which stand by leg, not by face.
   const curved: Array<Lot<Piece>> = [];
-  put(curved, null, {
-    prisms: [
-      ...cutWells(
-        [
-          ...allFacesPrisms(firstDeck(), TERRACE_RAIL.closed),
-          ...allFacesPrisms(cutNotches(firstDeck(), entranceNotches()), TERRACE_RAIL.entrance),
-        ],
-        arrivals,
-      ),
-      ...secondDeck(),
-      ...landingFloor(),
-      ...thirdFloor(),
-    ],
-  });
   put(curved, staff, { prisms: staffShell.vaults });
   put(curved, timber, { prisms: timberShell.vaults });
   put(curved, all, { prisms: [skirt, ...secondSkirtFace(), ...second.roof] });
   put(curved, roofed, { prisms: roof.prisms });
   for (const lot of [...ornament, ...panelling]) put(curved, lot.place, { prisms: lot.drawn.prisms });
-  const fitPrisms = placedMesh(site, "fitOutCurved", curved.filter((l) => l.drawn.prisms.length > 0));
+  const fitPrisms = placedMesh(site, "fitOutCurved", curved.filter((l) => l.drawn.prisms.length > 0), [
+    decks(g, "decks", deckPlans()),
+  ]);
 
   return {
     platforms: [grilles, fitBlocks, fitPrisms, ...fitParts],

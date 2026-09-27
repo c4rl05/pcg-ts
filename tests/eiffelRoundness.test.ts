@@ -176,22 +176,11 @@ function arcSag(pts: readonly P[]): number {
   return worst;
 }
 
-/** Chains of `between` quads [u_i, u_i+1, l_i+1, l_i], in list order: each chain's two edges as polylines. */
-function quadChains(quads: ReadonlyArray<{ outline: readonly V[] }>): Array<{ upper: V[]; lower: V[] }> {
-  const out: Array<{ upper: V[]; lower: V[] }> = [];
-  let cur: { upper: V[]; lower: V[] } | undefined;
-  for (const { outline: o } of quads) {
-    if (o.length !== 4) continue;
-    const [u0, u1, l1, l0] = o as [V, V, V, V];
-    if (cur !== undefined && len(sub(cur.upper[cur.upper.length - 1]!, u0)) < 1e-9) {
-      cur.upper.push(u1);
-      cur.lower.push(l1);
-    } else {
-      cur = { upper: [u0, u1], lower: [l0, l1] };
-      out.push(cur);
-    }
-  }
-  return out.filter((ch) => ch.upper.length >= 4);
+/** `between` bands, one outline each (the upper arc, then the lower one back): each band's two edges as polylines. */
+function bands(solids: ReadonlyArray<{ outline: readonly V[] }>): Array<{ upper: V[]; lower: V[] }> {
+  return solids
+    .filter(({ outline: o }) => o.length >= 8 && o.length % 2 === 0)
+    .map(({ outline: o }) => ({ upper: o.slice(0, o.length / 2), lower: o.slice(o.length / 2).reverse() }));
 }
 
 /** Chains of bars (`bar`: a rectangle along its centre line, whose ends are its short sides' middles), end to start. */
@@ -317,9 +306,9 @@ describe("eiffel roundness: the platforms' curves cut by size", () => {
   });
 
   it("rounds the inner arcade's arches as built, rib by rib, to 5 mm", () => {
-    // Each arch's two ribs are `between` quads along its arcs, in turn: the
+    // Each arch's two ribs are `between` bands along its arcs, in turn: the
     // outer rib between two half-ellipses, the inner between two circles.
-    const chains = quadChains(solids["inner.arch"]!);
+    const chains = bands(solids["inner.arch"]!);
     expect(chains.length).toBe(28 * 2);
     chains.forEach((ch, i) => {
       for (const edge of [ch.upper, ch.lower]) {
@@ -375,7 +364,7 @@ describe("eiffel roundness: the platforms' curves cut by size", () => {
   });
 
   it("rounds the Français' archivolts (so the door heads they ring) and its crest to 5 mm", () => {
-    const chains = quadChains(solids["francais.archivolt"]!);
+    const chains = bands(solids["francais.archivolt"]!);
     // Two doors to a bay, three bays; the archivolt's outer edge and the
     // head's own, half-ellipses 1.55 by 1.37 and 1.30 by 1.12.
     expect(chains.length).toBe(6);

@@ -509,11 +509,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 642342,
-        "vertices": 1036500,
-        "primitives": 345500,
+        "points": 554520,
+        "vertices": 944970,
+        "primitives": 314990,
         "instances": 0,
-        "hash": "0591e51827c2f8ce"
+        "hash": "3b81a047737196a9"
       },
       "silvered": {
         "kind": "geometry",
@@ -1150,11 +1150,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 642342,
-        "vertices": 1036500,
-        "primitives": 345500,
+        "points": 554520,
+        "vertices": 944970,
+        "primitives": 314990,
         "instances": 0,
-        "hash": "0591e51827c2f8ce"
+        "hash": "3b81a047737196a9"
       },
       "silvered": {
         "kind": "geometry",
@@ -1701,11 +1701,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 642342,
-        "vertices": 1036500,
-        "primitives": 345500,
+        "points": 554520,
+        "vertices": 944970,
+        "primitives": 314990,
         "instances": 0,
-        "hash": "0591e51827c2f8ce"
+        "hash": "3b81a047737196a9"
       },
       "rivets.ff.arches.chords": {
         "kind": "instances",
@@ -2774,11 +2774,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 642342,
-        "vertices": 1036500,
-        "primitives": 345500,
+        "points": 554520,
+        "vertices": 944970,
+        "primitives": 314990,
         "instances": 0,
-        "hash": "0591e51827c2f8ce"
+        "hash": "3b81a047737196a9"
       },
       "rivets.ff.arches.chords": {
         "kind": "instances",
@@ -3847,11 +3847,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 642342,
-        "vertices": 1036500,
-        "primitives": 345500,
+        "points": 554520,
+        "vertices": 944970,
+        "primitives": 314990,
         "instances": 0,
-        "hash": "0591e51827c2f8ce"
+        "hash": "3b81a047737196a9"
       },
       "silvered": {
         "kind": "geometry",
