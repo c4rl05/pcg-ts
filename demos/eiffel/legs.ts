@@ -269,50 +269,68 @@ function faceRing(faces: readonly number[], ts: readonly number[]): Array<readon
 }
 
 /**
- * A base tie under panel 1 on the given faces (PL-VII Figs 1, 5): X-braced
- * bays between its bottom chord, `depth` below node XXVIII, and its top
- * chord, whose axis stands `LEG_BELTS.tieTopChordAxis` above XXVIII in the
- * plane (both chords are plates: `tieChords`). Joints on both chords every
- * `pitch` from the face's centre line, or, with a `phase`, `phase` either
- * side of it and every `pitch` beyond (tie A's flank the central post, and
- * the bay across the post carries no X); an X in every other bay and in
- * the two short end bays against the uprights. The stations are fractions
- * of the face, so the bays lean with the leg and the X's read skewed, as
- * drawn. No bar up a joint: PL-VII draws none.
+ * The two base ties under panel 1 (PL-VII Figs 1, 5), each on its own two
+ * faces: A on the outer faces, its bottom chord 2.987 below XXVIII in the
+ * plane, its joints `phase` either side of the face's centre line and
+ * every `pitch` beyond; B on the inner faces, 1.600, its joints every
+ * `pitch` from the centre line. `depth` is the bottom chord's below XXVIII,
+ * vertically.
  */
-function tie(
-  g: Graph,
-  id: string,
-  faces: readonly number[],
-  pitch: number,
-  depth: number,
-  phase = 0,
-): NodeHandle {
+const TIES = (() => {
+  const s = faceSlopes(node("XXVIII").y - 1);
+  const B = LEG_BELTS;
+  return [
+    { id: "tieA", faces: [3, 0], pitch: B.tieOuterPitch, depth: vertical(B.tieOuterDepth, s.outer), phase: B.tieOuterPhase },
+    { id: "tieB", faces: [1, 2], pitch: B.tieInnerPitch, depth: vertical(B.tieInnerDepth, s.inner), phase: 0 },
+  ];
+})();
+type Tie = (typeof TIES)[number];
+
+/**
+ * A tie's joints on each face as fractions of it, the upright (0) first:
+ * every `pitch` from the face's centre line, or, with a `phase`, `phase`
+ * either side of it and every `pitch` beyond, all at least 0.3 m clear of
+ * the uprights' axes. With a phase the bay across the centre line carries
+ * no X; `left` is its left joint (-2 without one).
+ */
+function tieBays(t: Tie): { ts: number[]; left: number } {
   const top = node("XXVIII");
   const width = top.outer - top.inner;
   const offsets: number[] = [];
   for (let k = -20; k <= 20; k++) {
-    if (phase <= 0) offsets.push(k * pitch);
-    else if (k >= 0) offsets.push(phase + k * pitch, -(phase + k * pitch));
+    if (t.phase <= 0) offsets.push(k * t.pitch);
+    else if (k >= 0) offsets.push(t.phase + k * t.pitch, -(t.phase + k * t.pitch));
   }
-  // Joints at least 0.3 m clear of the uprights' axes.
   const ts = [0];
   for (const o of offsets) {
-    const t = 0.5 + o / width;
-    if (t > 0.3 / width && t < 1 - 0.3 / width) ts.push(t);
+    const f = 0.5 + o / width;
+    if (f > 0.3 / width && f < 1 - 0.3 / width) ts.push(f);
   }
   ts.sort((a, b) => a - b);
+  const left = t.phase > 0 ? ts.findIndex((f) => Math.abs(f - (0.5 - t.phase / width)) < 1e-9) : -2;
+  return { ts, left };
+}
+
+/**
+ * A base tie's bars (PL-VII Figs 1, 5): X-braced bays between its bottom
+ * chord and its top chord, whose axis stands `LEG_BELTS.tieTopChordAxis`
+ * above XXVIII in the plane (both chords are plates: `tieChords`), on the
+ * joints of {@link tieBays}: an X in every other bay and in the two short
+ * end bays against the uprights. The stations are fractions of the face,
+ * so the bays lean with the leg and the X's read skewed, as drawn. No bar
+ * up a joint: PL-VII draws none.
+ */
+function tie(g: Graph, t: Tie): NodeHandle {
+  const { ts, left } = tieBays(t);
   const lat = stationLattice(g, {
-    id,
-    ring: faceRing(faces, ts),
+    id: t.id,
+    ring: faceRing(t.faces, ts),
     closed: false,
-    levels: [legLevel(levelAt(top.y - depth)), legLevel(levelAt(tieTop()))],
+    levels: [legLevel(levelAt(node("XXVIII").y - t.depth)), legLevel(levelAt(tieTop()))],
   });
-  // The bay across the face's centre line, when the joints flank it: rule
-  // A's bar leaves its left joint, rule B's its right one.
+  // Rule A's bar leaves the centre bay's left joint, rule B's its right one.
   const perFace = ts.length;
-  const left = phase > 0 ? ts.findIndex((t) => Math.abs(t - (0.5 - phase / width)) < 1e-9) : -2;
-  return merge(g, `${id}All`, [
+  return merge(g, `${t.id}All`, [
     edges(lat, "BarsA", 1, 1, (s) => s % perFace !== left),
     edges(lat, "BarsB", -1, 1, (s) => s % perFace !== left + 1),
   ]);
@@ -328,25 +346,18 @@ function tieTop(): number {
  * The ties' chords, as plates in the face planes butting against the
  * uprights' faces (PL-VII Figs 1, 5): the top chord on all four faces (A's
  * and B's are the same plate, "200 x 8" / "200 x 9" with an angle), and
- * each tie's bottom chord on its own two faces, A's 2.987 and B's 1.600
- * below XXVIII in the plane.
+ * each tie's bottom chord on its own two faces.
  */
 function tieChords(): { top: SegmentMember[]; a: SegmentMember[]; b: SegmentMember[] } {
   const xxviii = node("XXVIII").y;
-  const s1 = faceSlopes(xxviii - 1);
-  const yA = xxviii - vertical(LEG_BELTS.tieOuterDepth, s1.outer);
-  const yB = xxviii - vertical(LEG_BELTS.tieInnerDepth, s1.inner);
+  const [yA, yB] = TIES.map((t) => xxviii - t.depth) as [number, number];
   const yT = tieTop();
-  const at = (faces: readonly number[], y0: number, bottom: boolean): SegmentMember[] => {
-    const out: SegmentMember[] = [];
-    for (const f of faces) {
+  const at = (faces: readonly number[], y0: number, bottom: boolean): SegmentMember[] =>
+    faces.flatMap((f) => {
       const pl = facePlane(f, y0, yT);
       const v = bottom ? 0 : pl.H;
-      const seg = pl.clip([0, v], [1, 0], v - 1e-6, v + 1e-6, tableAt(MEMBERS.upright, xxviii));
-      if (seg !== undefined) out.push({ a: pl.world(seg[0]), b: pl.world(seg[1]), n: pl.n });
-    }
-    return out;
-  };
+      return pl.members([pl.clip([0, v], [1, 0], v - 1e-6, v + 1e-6, tableAt(MEMBERS.upright, xxviii))]);
+    });
   return { top: at([0, 1, 2, 3], yA, false), a: at([3, 0], yA, true), b: at([1, 2], yB, true) };
 }
 
@@ -368,6 +379,8 @@ interface FacePlane {
   readonly n: Vec3;
   /** A face point, `off` out along the normal. */
   world(p: UV, off?: number): Vec3;
+  /** Segments of the face as members, `off` out along the normal; undefined ones are skipped. */
+  members(segs: ReadonlyArray<readonly [UV, UV] | undefined>, off?: number): SegmentMember[];
   /**
    * The line p + t d clipped to vlo <= v <= vhi and to `margin` inside both
    * uprights' axes; undefined when less than `min` of it is left.
@@ -386,15 +399,17 @@ function facePlane(f: number, y0: number, y1: number): FacePlane {
   // The uprights' axes as u = u0 + k v.
   const ki = (p1.inner - p0.inner) / H;
   const ko = (p1.outer - p0.outer) / H;
+  const world = ([u, v]: UV, off = 0): Vec3 => {
+    const y = y0 + v / F;
+    const w = profileAt(y)[key];
+    const p: Vec3 = f === 0 || f === 2 ? [u, y, w] : [w, y, u];
+    return add3(p, scale3(n, off));
+  };
   return {
     H,
     n,
-    world: ([u, v], off = 0) => {
-      const y = y0 + v / F;
-      const w = profileAt(y)[key];
-      const p: Vec3 = f === 0 || f === 2 ? [u, y, w] : [w, y, u];
-      return add3(p, scale3(n, off));
-    },
+    world,
+    members: (segs, off = 0) => segs.flatMap((s) => (s === undefined ? [] : [{ a: world(s[0], off), b: world(s[1], off), n }])),
     clip: (p, d, vlo, vhi, margin, min = 0.3) => {
       let t0 = -Infinity;
       let t1 = Infinity;
@@ -419,20 +434,11 @@ function facePlane(f: number, y0: number, y1: number): FacePlane {
 }
 
 /** Members on all four faces of the leg, each face's segments from `build`, `off` out of the plane. */
-function onFaces(
-  y0: number,
-  y1: number,
-  build: (pl: FacePlane) => ReadonlyArray<[UV, UV] | undefined>,
-  off = 0,
-): SegmentMember[] {
-  const out: SegmentMember[] = [];
-  for (let f = 0; f < 4; f++) {
+function onFaces(y0: number, y1: number, build: (pl: FacePlane) => ReadonlyArray<[UV, UV] | undefined>, off = 0): SegmentMember[] {
+  return [0, 1, 2, 3].flatMap((f) => {
     const pl = facePlane(f, y0, y1);
-    for (const seg of build(pl)) {
-      if (seg !== undefined) out.push({ a: pl.world(seg[0], off), b: pl.world(seg[1], off), n: pl.n });
-    }
-  }
-  return out;
+    return pl.members(build(pl), off);
+  });
 }
 
 /** Lines through (k * pitch, v0) along d, for every k whose line can reach a leg face. */
@@ -467,13 +473,18 @@ const BAR_LAYER = 0.005;
 /** A belt gusset's clearance past an upright's face, where it is slid clear [estimated]. */
 const GUSSET_CLEAR = 0.02;
 
-/** A girder belt's members: posts, the two bar families, chords, gussets (both sides). */
+/**
+ * A girder belt's members: posts, the two bar families, chords, gussets
+ * (both sides), and the chords' rivet rows ({@link BeltJoints}), read off
+ * the same clipped members rather than rebuilt.
+ */
 interface GirderBelt {
   readonly posts: SegmentMember[];
   readonly up: SegmentMember[];
   readonly down: SegmentMember[];
   readonly chords: SegmentMember[];
   readonly gussets: SegmentMember[];
+  readonly rivets: { readonly edge: SegmentMember[]; readonly posts: SegmentMember[]; readonly bars: SegmentMember[] };
 }
 
 /**
@@ -490,66 +501,124 @@ interface GirderBelt {
  * reach. Everything is clipped short of the uprights; a post shorter than
  * half the depth is dropped, and a post that does not reach mid-height
  * takes no gusset. The two bar families stand `BAR_LAYER` off the plane,
- * one each way; the posts in it.
+ * one each way; the posts in it. Each member's landing on a riveted chord
+ * is read in the chord's own face frame, from the member as clipped here.
  */
 function girderBelt(
   y0: number,
   y1: number,
   chord: number,
+  chordThick: number,
   pitch: number,
   barPitch: number,
   span: number,
   gusset: readonly [number, number],
 ): GirderBelt {
+  const J = beltJoints(chord);
   const r = uprightHalf(y0, y1);
   const margin = r + POST_CLEAR;
-  const postsOf = (pl: FacePlane) => beltPostsOf(pl, chord, pitch, margin);
-  const posts = onFaces(y0, y1, postsOf);
-  const bars = (dir: 1 | -1) =>
-    onFaces(
-      y0,
-      y1,
-      (pl) =>
-        family(barPitch, dir > 0 ? 0 : pl.H, [span, dir * pl.H]).map((l) =>
-          pl.clip(l.p, l.d, chord / 2, pl.H - chord / 2, margin),
-        ),
-      dir * BAR_LAYER,
-    );
-  // The chords butt against the uprights' faces.
-  const chords = onFaces(y0, y1, (pl) =>
-    [chord / 2, pl.H - chord / 2].map((v) => pl.clip([0, v], [1, 0], v - 1e-6, v + 1e-6, r)),
-  );
+  const T = LEG_BELTS.beltFlatThickness;
   const [gw, gh] = gusset;
-  const gussetOff = LEG_BELTS.beltFlatThickness / 2 + BAR_LAYER + LEG_BELTS.beltGussetThickness / 2 + 0.001;
-  const gussets = (side: 1 | -1) =>
-    onFaces(
-      y0,
-      y1,
-      (pl) => {
-        const mid = pl.H / 2;
-        return postsOf(pl).map((post) => {
-          if (post === undefined || post[0][1] > mid || post[1][1] < mid) return undefined;
-          const u = post[0][0];
-          // How far the plate must slide off each upright: its edge
-          // GUSSET_CLEAR past the upright's face at both its ends.
-          let away = 0;
-          let back = 0;
-          for (const v of [mid - gh / 2, mid + gh / 2]) {
-            const across = pl.clip([0, v], [1, 0], v - 1e-6, v + 1e-6, 0);
-            if (across === undefined) continue;
-            away = Math.max(away, gw / 2 + r + GUSSET_CLEAR - (u - across[0][0]));
-            back = Math.max(back, gw / 2 + r + GUSSET_CLEAR - (across[1][0] - u));
-          }
-          const c = u + away - back;
-          return [
-            [c, mid - gh / 2],
-            [c, mid + gh / 2],
-          ] as [UV, UV];
-        });
-      },
-      side * gussetOff,
+  const gussetOff = T / 2 + BAR_LAYER + LEG_BELTS.beltGussetThickness / 2 + 0.001;
+  const [posts, up, down, chords, gFront, gBack, edge, postLaps, barLaps] = Array.from({ length: 9 }, (): SegmentMember[] => []);
+  for (let f = 0; f < 4; f++) {
+    const pl = facePlane(f, y0, y1);
+    const put = (list: SegmentMember[], segs: ReadonlyArray<[UV, UV] | undefined>, off = 0) => list.push(...pl.members(segs, off));
+    const postSegs = beltPostsOf(pl, chord, pitch, margin);
+    const bars = ([1, -1] as const).map((dir) =>
+      family(barPitch, dir > 0 ? 0 : pl.H, [span, dir * pl.H]).map((l) =>
+        pl.clip(l.p, l.d, chord / 2, pl.H - chord / 2, margin),
+      ),
     );
-  return { posts, up: bars(1), down: bars(-1), chords, gussets: [...gussets(1), ...gussets(-1)] };
+    put(posts, postSegs);
+    put(up, bars[0]!, BAR_LAYER);
+    put(down, bars[1]!, -BAR_LAYER);
+    // The chords butt against the uprights' faces.
+    put(chords, [chord / 2, pl.H - chord / 2].map((v) => pl.clip([0, v], [1, 0], v - 1e-6, v + 1e-6, r)));
+    const mid = pl.H / 2;
+    const gussets = postSegs.map((post) => {
+      if (post === undefined || post[0][1] > mid || post[1][1] < mid) return undefined;
+      const u = post[0][0];
+      // How far the plate must slide off each upright: its edge
+      // GUSSET_CLEAR past the upright's face at both its ends.
+      let away = 0;
+      let back = 0;
+      for (const v of [mid - gh / 2, mid + gh / 2]) {
+        const across = pl.clip([0, v], [1, 0], v - 1e-6, v + 1e-6, 0);
+        if (across === undefined) continue;
+        away = Math.max(away, gw / 2 + r + GUSSET_CLEAR - (u - across[0][0]));
+        back = Math.max(back, gw / 2 + r + GUSSET_CLEAR - (across[1][0] - u));
+      }
+      const c = u + away - back;
+      return [
+        [c, mid - gh / 2],
+        [c, mid + gh / 2],
+      ] as [UV, UV];
+    });
+    put(gFront, gussets, gussetOff);
+    put(gBack, gussets, -gussetOff);
+    // The chords riveted: (axis v, outer-edge v, the sign pointing into the belt).
+    const riveted: Array<{ axis: number; outer: number; s: 1 | -1 }> = [{ axis: chord / 2, outer: 0, s: 1 }];
+    if (!TOP_CHORD_IN_DECK) riveted.push({ axis: pl.H - chord / 2, outer: pl.H, s: -1 });
+    const eRows: RivetRow[] = [];
+    const pRows: RivetRow[] = [];
+    const bRows: RivetRow[] = [];
+    for (const c of riveted) {
+      const v = c.outer + c.s * J.edge.inset;
+      // Inside both the chord (clipped at its axis) and the uprights' faces at the row's own height.
+      const seg = pl.clip([0, v], [1, 0], v - 1e-6, v + 1e-6, r);
+      const own = pl.clip([0, c.axis], [1, 0], c.axis - 1e-6, c.axis + 1e-6, r);
+      if (seg !== undefined && own !== undefined) {
+        // endClear, not inset, off the uprights: the ADJACENT face's joint
+        // gusset at the corner reaches 0.45 along this face (measured: 16
+        // heads through it at 0.06).
+        const u0 = Math.max(seg[0][0], own[0][0]) + J.edge.endClear;
+        const u1 = Math.min(seg[1][0], own[1][0]) - J.edge.endClear;
+        const n = Math.floor((u1 - u0) / J.edge.pitch) + 1;
+        for (const off of faces2(0, chordThick)) eRows.push({ from: [u0, v], dir: [1, 0], n, off });
+      }
+      // A landing: a member's end on this chord, the member running into
+      // the belt along D, riveted with `k`'s lines into `rows`.
+      const land = (end: UV, D: UV, layer: number, k: BeltJoints["post"], rows: RivetRow[]) => {
+        const P: UV = [-D[1], D[0]];
+        for (const g of [-k.gauge, k.gauge]) {
+          // Along the member from its end: the first head `endClear` short
+          // of the web's inner edge, then back toward the end.
+          const inner = c.axis + (c.s * chord) / 2 - c.s * LAP_ROWS.endClear;
+          const base: UV = [end[0] + g * P[0], end[1] + g * P[1]];
+          const tTop = (inner - base[1]) / D[1];
+          const n = Math.min(k.count, Math.floor((tTop - LAP_ROWS.onMember) / k.pitch + 1e-9) + 1);
+          if (n < 2) continue;
+          const from: UV = [base[0] + tTop * D[0], base[1] + tTop * D[1]];
+          for (const off of faces2(layer, T)) rows.push({ from, dir: [-D[0], -D[1]], n, off });
+        }
+      };
+      // Each end of a member that lands at `at`, the member running away from it.
+      const landings = (segs: ReadonlyArray<[UV, UV] | undefined>, at: number, layer: number, k: BeltJoints["post"], rows: RivetRow[]) => {
+        for (const seg of segs) {
+          if (seg === undefined) continue;
+          for (const [end, other] of [[seg[0], seg[1]], [seg[1], seg[0]]] as const) {
+            if (Math.abs(end[1] - at) < 1e-6) land(end, unitUV([other[0] - end[0], other[1] - end[1]]), layer, k, rows);
+          }
+        }
+      };
+      // A post ends at the bottom chord's toe (beltPostsOf).
+      landings(postSegs, c.s > 0 ? J.toe : pl.H - chord, 0, J.post, pRows);
+      landings(bars[0]!, c.axis, BAR_LAYER, J.bar, bRows);
+      landings(bars[1]!, c.axis, -BAR_LAYER, J.bar, bRows);
+    }
+    edge.push(...rowMembers(pl, eRows, J.edge.pitch));
+    postLaps.push(...rowMembers(pl, pRows, J.post.pitch));
+    barLaps.push(...rowMembers(pl, bRows, J.bar.pitch));
+  }
+  return {
+    posts,
+    up,
+    down,
+    chords,
+    gussets: [...gFront, ...gBack],
+    rivets: { edge, posts: postLaps, bars: barLaps },
+  };
 }
 
 /**
@@ -561,8 +630,8 @@ function girderBelt(
  * horizontals at XXIV and XXIII.
  */
 function belt1(): GirderBelt {
-  const P = LEG_BELTS.belt1PostPitch;
-  return girderBelt(node("XXIV").y, node("XXIII").y, LEG_BELTS.belt1Chord, P, P, 2 * P, LEG_BELTS.belt1Gusset);
+  const { belt1PostPitch: P, belt1Chord: c, belt1ChordThickness: ct, belt1Gusset: gu } = LEG_BELTS;
+  return girderBelt(node("XXIV").y, node("XXIII").y, c, ct, P, P, 2 * P, gu);
 }
 
 /**
@@ -574,8 +643,8 @@ function belt1(): GirderBelt {
  * horizontals at XVIII and XVII.
  */
 function belt2(): GirderBelt {
-  const P = LEG_BELTS.belt2PostPitch;
-  return girderBelt(node("XVIII").y, node("XVII").y, LEG_BELTS.belt2Chord, P, P / 2, P, LEG_BELTS.belt2Gusset);
+  const { belt2PostPitch: P, belt2Chord: c, belt2ChordThickness: ct, belt2Gusset: gu } = LEG_BELTS;
+  return girderBelt(node("XVIII").y, node("XVII").y, c, ct, P, P / 2, P, gu);
 }
 
 /**
@@ -711,92 +780,6 @@ function rowMembers(pl: FacePlane, rows: readonly RivetRow[], pitch: number): Se
 const faces2 = (layer: number, thick: number): [number, number] => [layer + thick / 2, layer - thick / 2];
 
 /**
- * A girder belt's chord rivets (see {@link BeltJoints}): its members
- * rebuilt exactly as {@link girderBelt} builds them, each landing read in
- * the chord's own face frame.
- */
-function beltRivets(
-  y0: number,
-  y1: number,
-  chord: number,
-  chordThick: number,
-  pitch: number,
-  barPitch: number,
-  span: number,
-  topInDeck: boolean,
-): { edge: SegmentMember[]; posts: SegmentMember[]; bars: SegmentMember[] } {
-  const J = beltJoints(chord);
-  const r = uprightHalf(y0, y1);
-  const margin = r + POST_CLEAR;
-  const T = LEG_BELTS.beltFlatThickness;
-  const edge: SegmentMember[] = [];
-  const posts: SegmentMember[] = [];
-  const bars: SegmentMember[] = [];
-  for (let f = 0; f < 4; f++) {
-    const pl = facePlane(f, y0, y1);
-    // The chords riveted: (axis v, outer-edge v, the sign pointing into the belt).
-    const chords: Array<{ axis: number; outer: number; s: 1 | -1 }> = [{ axis: chord / 2, outer: 0, s: 1 }];
-    if (!topInDeck) chords.push({ axis: pl.H - chord / 2, outer: pl.H, s: -1 });
-    const eRows: RivetRow[] = [];
-    const pRows: RivetRow[] = [];
-    const bRows: RivetRow[] = [];
-    for (const c of chords) {
-      const v = c.outer + c.s * J.edge.inset;
-      // Inside both the chord (clipped at its axis) and the uprights' faces at the row's own height.
-      const seg = pl.clip([0, v], [1, 0], v - 1e-6, v + 1e-6, r);
-      const own = pl.clip([0, c.axis], [1, 0], c.axis - 1e-6, c.axis + 1e-6, r);
-      if (seg !== undefined && own !== undefined) {
-        // endClear, not inset, off the uprights: the ADJACENT face's joint
-        // gusset at the corner reaches 0.45 along this face (measured: 16
-        // heads through it at 0.06).
-        const u0 = Math.max(seg[0][0], own[0][0]) + J.edge.endClear;
-        const u1 = Math.min(seg[1][0], own[1][0]) - J.edge.endClear;
-        const n = Math.floor((u1 - u0) / J.edge.pitch) + 1;
-        for (const off of faces2(0, chordThick)) eRows.push({ from: [u0, v], dir: [1, 0], n, off });
-      }
-      // A landing: a member's end on this chord, the member running into
-      // the belt along D, riveted with `k`'s lines into `rows`.
-      const land = (end: UV, D: UV, layer: number, k: BeltJoints["post"], rows: RivetRow[]) => {
-        const P: UV = [-D[1], D[0]];
-        for (const g of [-k.gauge, k.gauge]) {
-          // Along the member from its end: the first head `endClear` short
-          // of the web's inner edge, then back toward the end.
-          const inner = c.axis + (c.s * chord) / 2 - c.s * LAP_ROWS.endClear;
-          const base: UV = [end[0] + g * P[0], end[1] + g * P[1]];
-          const tTop = (inner - base[1]) / D[1];
-          const n = Math.min(k.count, Math.floor((tTop - LAP_ROWS.onMember) / k.pitch + 1e-9) + 1);
-          if (n < 2) continue;
-          const from: UV = [base[0] + tTop * D[0], base[1] + tTop * D[1]];
-          for (const off of faces2(layer, T)) rows.push({ from, dir: [-D[0], -D[1]], n, off });
-        }
-      };
-      const on = (p: UV, at: number) => Math.abs(p[1] - at) < 1e-6;
-      // A post ends at the bottom chord's toe (beltPostsOf).
-      const postEnd = c.s > 0 ? J.toe : pl.H - chord;
-      for (const post of beltPostsOf(pl, chord, pitch, margin)) {
-        if (post === undefined) continue;
-        for (const [end, other] of [[post[0], post[1]], [post[1], post[0]]] as const) {
-          if (on(end, postEnd)) land(end, unitUV([other[0] - end[0], other[1] - end[1]]), 0, J.post, pRows);
-        }
-      }
-      for (const dir of [1, -1] as const) {
-        for (const l of family(barPitch, dir > 0 ? 0 : pl.H, [span, dir * pl.H])) {
-          const bar = pl.clip(l.p, l.d, chord / 2, pl.H - chord / 2, margin);
-          if (bar === undefined) continue;
-          for (const [end, other] of [[bar[0], bar[1]], [bar[1], bar[0]]] as const) {
-            if (on(end, c.axis)) land(end, unitUV([other[0] - end[0], other[1] - end[1]]), dir * BAR_LAYER, J.bar, bRows);
-          }
-        }
-      }
-    }
-    edge.push(...rowMembers(pl, eRows, J.edge.pitch));
-    posts.push(...rowMembers(pl, pRows, J.post.pitch));
-    bars.push(...rowMembers(pl, bRows, J.bar.pitch));
-  }
-  return { edge, posts, bars };
-}
-
-/**
  * The tie laps' rows are each exactly their two heads, so they are spawned
  * at a spacing longer than any of them (at most 0.07 m): a resample in
  * spacing mode lands the start and the true endpoint and nothing between.
@@ -814,17 +797,15 @@ const unitUV = (d: UV): UV => {
  * The base ties' chord rivets: each tie bar ("70 x 70 x 8") laps onto its
  * chord's web with TWO rivets on its axis (PL-X Figs 2, 7, "Barres de
  * treillis — Attache sur âme"), and each chord carries its edge row
- * through the "Corn 80x80x10" along its outer edge. The bars are rebuilt
- * exactly as {@link tie} places them. Nothing is put where the central
+ * through the "Corn 80x80x10" along its outer edge. The bars are placed
+ * on {@link tieBays}, the stations {@link tie} builds. Nothing is put where the central
  * post stands: it crosses both chords there, and a head at the web would
  * sit inside its box.
  */
 function tieRivets(): { edge: SegmentMember[]; lap: SegmentMember[] } {
   const top = node("XXVIII");
-  const width = top.outer - top.inner;
-  const s1 = faceSlopes(top.y - 1);
   const yT = tieTop();
-  const yA = top.y - vertical(LEG_BELTS.tieOuterDepth, s1.outer);
+  const yA = top.y - TIES[0]!.depth;
   const r = tableAt(MEMBERS.upright, top.y);
   const half = LEG_BELTS.tieChord / 2;
   const thick = LEG_BELTS.tieChordThickness;
@@ -836,25 +817,10 @@ function tieRivets(): { edge: SegmentMember[]; lap: SegmentMember[] } {
     const p = profileAt(y);
     return [p.inner + (p.outer - p.inner) * uv[0], y, p.inner + (p.outer - p.inner) * uv[1]];
   };
-  const specs = [
-    { faces: [3, 0], pitch: LEG_BELTS.tieOuterPitch, depth: vertical(LEG_BELTS.tieOuterDepth, s1.outer), phase: LEG_BELTS.tieOuterPhase },
-    { faces: [1, 2], pitch: LEG_BELTS.tieInnerPitch, depth: vertical(LEG_BELTS.tieInnerDepth, s1.inner), phase: 0 },
-  ];
-  for (const sp of specs) {
-    const offsets: number[] = [];
-    for (let k = -20; k <= 20; k++) {
-      if (sp.phase <= 0) offsets.push(k * sp.pitch);
-      else if (k >= 0) offsets.push(sp.phase + k * sp.pitch, -(sp.phase + k * sp.pitch));
-    }
-    const ts = [0];
-    for (const o of offsets) {
-      const t = 0.5 + o / width;
-      if (t > 0.3 / width && t < 1 - 0.3 / width) ts.push(t);
-    }
-    ts.sort((a, b) => a - b);
+  for (const sp of TIES) {
+    const { ts, left } = tieBays(sp);
     const ring = faceRing(sp.faces, ts);
     const perFace = ts.length;
-    const left = sp.phase > 0 ? ts.findIndex((t) => Math.abs(t - (0.5 - sp.phase / width)) < 1e-9) : -2;
     const yB = top.y - sp.depth;
     // The bars, as (face, bottom end, top end).
     const bars: Array<{ f: number; lo: Vec3; hi: Vec3 }> = [];
@@ -893,18 +859,14 @@ function tieRivets(): { edge: SegmentMember[]; lap: SegmentMember[] } {
         if (row === undefined) continue;
         const u0 = row[0][0] + TIE_EDGE_ROW.inset;
         const u1 = row[1][0] - TIE_EDGE_ROW.inset;
-        const us: number[] = [];
-        for (let u = u0; u <= u1 + 1e-9; u += TIE_EDGE_ROW.pitch) if (clear(u, v)) us.push(u);
-        // Consecutive runs become rows.
+        // Each run of consecutive clear heads is a row.
         let run: number[] = [];
         const flush = () => {
-          if (run.length >= 2) for (const off of [thick / 2, -thick / 2]) eRows.push({ from: [run[0]!, v], dir: [1, 0], n: run.length, off });
+          if (run.length >= 2) for (const off of faces2(0, thick)) eRows.push({ from: [run[0]!, v], dir: [1, 0], n: run.length, off });
           run = [];
         };
-        for (const u of us) {
-          if (run.length > 0 && u - run[run.length - 1]! > TIE_EDGE_ROW.pitch * 1.5) flush();
-          run.push(u);
-        }
+        for (let u = u0; u <= u1 + 1e-9; u += TIE_EDGE_ROW.pitch) if (clear(u, v)) run.push(u);
+          else flush();
         flush();
         // The bars landing on this chord: two heads at TIE_LAP's depths past
         // the working line, which is the chord's axis, where each bar ends.
@@ -958,22 +920,14 @@ function band10Top(): number {
 function band10(): { up: SegmentMember[]; down: SegmentMember[] } {
   const y0 = node("XIX").y;
   const y1 = band10Top();
-  const lo = 0;
-  const hi = 0;
   const p = LEG_BELTS.band10Pitch;
   const margin = uprightHalf(y0, y1) + POST_CLEAR;
-  const off = LEG_BELTS.band10FlatThickness;
   const side = (dir: 1 | -1) =>
     onFaces(
       y0,
       y1,
-      (pl) => {
-        const D = pl.H - hi - lo;
-        return family(p, dir > 0 ? lo : pl.H - hi, [2 * p, dir * D]).map((l) =>
-          pl.clip(l.p, l.d, lo, pl.H - hi, margin),
-        );
-      },
-      dir * off,
+      (pl) => family(p, dir > 0 ? 0 : pl.H, [2 * p, dir * pl.H]).map((l) => pl.clip(l.p, l.d, 0, pl.H, margin)),
+      dir * LEG_BELTS.band10FlatThickness,
     );
   return { up: side(1), down: side(-1) };
 }
@@ -1000,17 +954,6 @@ function corner(i: number, y: number): Vec3 {
 /** The centre line of face f at height y. */
 const faceCentre = (f: number, y: number): Vec3 =>
   scale3(add3(corner(f, y), corner(f + 1, y)), 0.5);
-
-/**
- * How far below XXVIII the base tie's bottom chord lies on face `f`: A's
- * two faces are the outer pair and deeper than B's (PL-VII Figs 1, 5).
- */
-const tieDepth = (f: number) => {
-  const s = faceSlopes(node("XXVIII").y - 1);
-  return f === 0 || f === 3
-    ? vertical(LEG_BELTS.tieOuterDepth, s.outer)
-    : vertical(LEG_BELTS.tieInnerDepth, s.inner);
-};
 
 /** A post's clearance past the member it stands on [estimated, as the joints']. */
 const POST_CLEAR = 0.05;
@@ -1106,7 +1049,7 @@ function centralPosts(g: Graph): NodeHandle {
     // plate, no horizontal at XXVIII: PL-VII Figs 1, 5 draw the "877" post
     // continuous there) to XXVII.
     {
-      y0: (f) => node("XXVIII").y - tieDepth(f),
+      y0: (f) => node("XXVIII").y - TIES[f === 0 || f === 3 ? 0 : 1]!.depth,
       y1: node("XXVII").y,
       hw0: LEG_BELTS.tieChord / 2,
       hw1: h("XXVII"),
@@ -1539,9 +1482,12 @@ function masqueFillets(
  */
 function masque(g: Graph): Array<{ paths: NodeHandle; width: number; thickness: number }> {
   const foot = node("XXV");
+  // Face 0 of the +x+z leg over panel 4, where the leg is a prism, so both
+  // uprights drift the same q along u per unit of v.
+  const pl = facePlane(0, foot.y, node("XXIV").y);
+  const { H, n } = pl;
   const s = (foot.outer - node("XXIV").outer) / (node("XXIV").y - foot.y);
   const F = Math.hypot(1, s);
-  const H = (node("XXIV").y - foot.y) * F;
   const q = s / F; // the uprights' horizontal drift per unit of v
   const margin = 0.45;
   const M = MASQUE;
@@ -1549,27 +1495,7 @@ function masque(g: Graph): Array<{ paths: NodeHandle; width: number; thickness: 
   const midLo = lowTop + M.lowClear;
   const midHi = midLo + M.midChord;
   const topLo = H - M.topBand;
-  type UV = readonly [number, number];
-  // Clip the line p + t d to lo <= v <= hi, between the uprights.
-  const clip = (p: UV, d: UV, lo: number, hi: number): [UV, UV] | undefined => {
-    let t0 = -1e9;
-    let t1 = 1e9;
-    const keep = (a: number, b: number) => {
-      if (Math.abs(b) < 1e-12) {
-        if (a < 0) t0 = Infinity;
-      } else if (b > 0) t0 = Math.max(t0, -a / b);
-      else t1 = Math.min(t1, -a / b);
-    };
-    keep(p[1] - lo, d[1]);
-    keep(hi - p[1], -d[1]);
-    keep(p[0] + q * p[1] - foot.inner - margin, d[0] + q * d[1]);
-    keep(foot.outer - q * p[1] - p[0] - margin, -d[0] - q * d[1]);
-    if (!(t1 - t0 > 0.3 / Math.hypot(d[0], d[1]))) return undefined;
-    return [
-      [p[0] + t0 * d[0], p[1] + t0 * d[1]],
-      [p[0] + t1 * d[0], p[1] + t1 * d[1]],
-    ];
-  };
+  const clip = (p: UV, d: UV, lo: number, hi: number) => pl.clip(p, d, lo, hi, margin);
   // The chords, between the uprights (the 750 runs on over their webs: `bearing`).
   const horizontal = (v: number) => clip([0, v], [1, 0], v - 1e-6, v + 1e-6);
   const post = M.postPitch;
@@ -1588,12 +1514,8 @@ function masque(g: Graph): Array<{ paths: NodeHandle; width: number; thickness: 
     );
   const posts = ks.map((k) => clip([k * post, midHi], [0, 1], midHi, topLo));
   const fillets = masqueFillets(foot.inner + margin, foot.outer - margin, q, topLo, M.fillet, FILLET_BAND);
-  const n: Vec3 = [0, s / F, 1 / F];
-  // Face 0 of the +x+z leg: x = u, the plane z = outer(y), `off` out along n.
-  const world = ([u, v]: UV, off: number): Vec3 => {
-    const y = foot.y + v / F;
-    return add3([u, y, profileAt(y).outer], scale3(n, off));
-  };
+  // Face 0: x = u, the plane z = outer(y), `off` out along n.
+  const world = pl.world;
   const layer = (i: number, t: number) => MASQUE_STANDOFF + 0.012 * i + t / 2;
   // Where the screen bears on the uprights (`MASQUE_BEARING`). Seen along
   // the face's normal from `off` out, an upright's line lies s^2 off / F
@@ -1663,22 +1585,16 @@ function masque(g: Graph): Array<{ paths: NodeHandle; width: number; thickness: 
     { id: "MidFill", segs: bearing.blocks, off: bearing.off, width: bearing.width, thickness: bearing.thickness },
   ];
   return groups.map(({ id, segs, off, width, thickness }) => {
-    const rows: Vec3[][] = [];
+    const list: SegmentMember[] = [];
     for (const face of [0, 3]) {
       // Face 3 (d-c, the plane x = outer) is face 0 mirrored across x = z.
+      // The members carry -n on face 0 and its mirror on face 3, the signs
+      // the strips' edge rule used to give them (a flat box ignores it).
       const put = (p: Vec3): Vec3 => (face === 0 ? p : [p[2], p[1], p[0]]);
-      for (const seg of segs) {
-        if (seg === undefined) continue;
-        const a = world(seg[0], off);
-        const b = world(seg[1], off);
-        const across = unit3(cross3(n, sub3(b, a)));
-        rows.push([put(a), put(add3(a, across))], [put(b), put(add3(b, across))]);
-      }
+      const m = face === 0 ? scale3(n, -1) : put(n);
+      for (const s of segs) if (s !== undefined) list.push({ a: put(world(s[0], off)), b: put(world(s[1], off)), n: m });
     }
-    const lat = placedLattice(g, `masque${id}`, rows);
-    // One member per row pair; its face is the pair's own strip, which
-    // lies in the screen's plane.
-    return { paths: edges(lat, "Bars", 0, 1, (s0, k) => s0 === 0 && k % 2 === 0), width, thickness };
+    return { paths: segmentMembers(g, `masque${id}Bars`, list), width, thickness };
   });
 }
 
@@ -1839,22 +1755,11 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
   // The girder belts: the base ties under panel 1 (bars here, their chord
   // plates below), panels 5 and 11 (posts, bars, chords and gussets, all
   // plates below), and panel 10's base band.
-  const s1 = faceSlopes(node("XXVIII").y - 1);
   const panel5 = belt1();
   const panel11 = belt2();
   const band = band10();
   const ties = tieChords();
-  const belts = merge(g, "legBelts", [
-    tie(
-      g,
-      "tieA",
-      [3, 0],
-      LEG_BELTS.tieOuterPitch,
-      vertical(LEG_BELTS.tieOuterDepth, s1.outer),
-      LEG_BELTS.tieOuterPhase,
-    ),
-    tie(g, "tieB", [1, 2], LEG_BELTS.tieInnerPitch, vertical(LEG_BELTS.tieInnerDepth, s1.inner)),
-  ]);
+  const belts = merge(g, "legBelts", TIES.map((t) => tie(g, t)));
 
   // Above the 2nd floor, the gap between this leg and the next.
   const gap = gapLattice(g);
@@ -2210,9 +2115,8 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
       // The chords' rivets: panels 5 and 11 and the base ties ({@link BeltJoints}).
       ...(detail.rivets === true
         ? (() => {
-            const P = LEG_BELTS;
-            const b5 = beltRivets(node("XXIV").y, node("XXIII").y, P.belt1Chord, P.belt1ChordThickness, P.belt1PostPitch, P.belt1PostPitch, 2 * P.belt1PostPitch, TOP_CHORD_IN_DECK);
-            const b11 = beltRivets(node("XVIII").y, node("XVII").y, P.belt2Chord, P.belt2ChordThickness, P.belt2PostPitch, P.belt2PostPitch / 2, P.belt2PostPitch, TOP_CHORD_IN_DECK);
+            const b5 = panel5.rivets;
+            const b11 = panel11.rivets;
             const tr = tieRivets();
             // Rows at a pitch, n heads each (`rowMembers`), and the tie
             // laps, which are their two heads and nothing between

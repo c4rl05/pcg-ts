@@ -459,7 +459,7 @@
         "vertices": 257688,
         "primitives": 85896,
         "instances": 0,
-        "hash": "0f643119ec3c59b7"
+        "hash": "7417afd5a5b1cc89"
       },
       "glass": {
         "kind": "geometry",
@@ -1091,7 +1091,7 @@
         "vertices": 3995352,
         "primitives": 1331784,
         "instances": 0,
-        "hash": "4e846442e4d7e61c"
+        "hash": "000108be579b3ceb"
       },
       "glass": {
         "kind": "geometry",
@@ -1642,7 +1642,7 @@
         "vertices": 3995352,
         "primitives": 1331784,
         "instances": 0,
-        "hash": "4e846442e4d7e61c"
+        "hash": "000108be579b3ceb"
       },
       "glass": {
         "kind": "geometry",
@@ -2715,7 +2715,7 @@
         "vertices": 3995352,
         "primitives": 1331784,
         "instances": 0,
-        "hash": "4e846442e4d7e61c"
+        "hash": "000108be579b3ceb"
       },
       "glass": {
         "kind": "geometry",
@@ -3797,7 +3797,7 @@
         "vertices": 257688,
         "primitives": 85896,
         "instances": 0,
-        "hash": "0f643119ec3c59b7"
+        "hash": "7417afd5a5b1cc89"
       },
       "glass": {
         "kind": "geometry",
