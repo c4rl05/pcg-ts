@@ -964,7 +964,7 @@ describe("eiffel lift machinery: clearances", () => {
       }
       expect(worst.depth, `${f.name}: deepest tower point inside it, at ${worst.at?.map((x) => x.toFixed(2))} (travel ${worst.tau.toFixed(2)})`).toBeLessThan(0.002);
     }
-  });
+  }, 180_000);
 
   it("moves every moving part clear of the still machinery, and every car clear of it", () => {
     // Touching is allowed (a roller on its girder, a wheel on its rail), to

@@ -540,38 +540,44 @@ function carBody(spec: CarSpec): CarBody {
   // the gauge 0.45 over the rail line, its wheels on the rails' heads (0.15
   // over it, `track`) with a rim chord square under each centre, and two
   // axle boxes from the chassis' top up round it [the axle's section and
-  // the boxes estimated]. The car's pose rides the wheels' centres' line
-  // (`ride`), so where the rail bends under the wheelbase each circle stays
-  // tangent to its head; what is left is the rim's flats tipping on it,
-  // their corners proud of the circle by 0.93 mm at 40 chords: the rim is
-  // cut to that 1 mm of contact, not to a look [derived]. One more thing
-  // sinks them: the page puts the axles an arc length apart on the line
-  // (`carPose`), and across a bend the chord is shorter than the arc, so
-  // the rigid wheelbase stands each centre a centimetre or two past its
-  // point, off the line, up to 2.55 mm into the head near the top of the
-  // run. The wheels are hung 1.6 mm higher for it: parked on the straight
-  // they clear the heads by that, and nowhere on the run are they more
-  // than 1 mm in [measured on the cooked cars slid the page's way].
+  // the boxes estimated]. Two things keep every wheel ON its head, never in
+  // it, however the car tips [derived]. Its centre is on the line the pose
+  // rides (`ride`, the wheels' centres' line), the axles standing on it a
+  // chord `wheelbase` apart (`RunLine.chordSpan`): so where the rail bends
+  // under the wheelbase each wheel's circle stays tangent to its head, the
+  // mitred join included. And the rim is drawn INSIDE that circle: its
+  // chords' corners on it, their flats 0.9 mm in, so as the car tips
+  // against the rail (11.7° at the top station) a corner comes down onto
+  // the head at most, never through it. Built, a corner points straight
+  // down, so on the straight every wheel stands on its head.
   let ride = 0;
   if (spec.running !== undefined) {
     const { diameter, width } = spec.running;
     const t = inPlane(-Math.cos(level), Math.sin(level));
     ride = 0.15 + diameter / 2;
-    const up = ride + 0.0016;
     const sag = 0.001;
     const chords = wheelRimChords(diameter, sag);
-    const ref = rotate3(mul3(n, -1), E, -Math.PI / chords);
+    // `wheelBlocks` stands each chord's outer face tangent to the circle it
+    // is given, its corners out by this factor: given this diameter, the
+    // corners are on the wheel's own.
+    const drawn = diameter / Math.hypot(1, Math.sin(Math.PI / chords));
+    if (wheelRimChords(drawn, sag) !== chords) {
+      throw new Error(`lifts.ts carBody: the running wheel's rim, drawn at ${drawn} to keep its corners on its ${diameter} circle, would be cut in ${wheelRimChords(drawn, sag)} chords, not the ${chords} that diameter assumes; solve the two together.`);
+    }
+    // The first spoke toward the head: the corner between the last chord
+    // and the first points down.
+    const ref = mul3(n, -1);
     for (const y of [yLow, yHigh]) {
-      const c = add3(onDiag(rOf(y), y), mul3(n, up));
+      const c = add3(onDiag(rOf(y), y), mul3(n, ride));
       const ends = [-1, 1].map((side) => add3(c, mul3(E, (side * spec.gauge) / 2)));
       for (const w of ends) {
-        raw.push(...wheelBlocks(w, E, ref, { diameter, rim: 0.06, width, spokes: 6, spoke: 0.05, hub: 0.16, sag }));
+        raw.push(...wheelBlocks(w, E, ref, { diameter: drawn, rim: 0.06, width, spokes: 6, spoke: 0.05, hub: 0.16, sag }));
       }
       raw.push(member(ends[0] as Vec3, ends[1] as Vec3, 0.12, n));
       // The chassis' top stands 0.35 over the rail line; the axle's 0.51.
       for (const side of [-1, 1]) {
-        const at = add3(add3(onDiag(rOf(y), y), mul3(n, (0.35 + up + 0.06) / 2)), mul3(E, side * (spec.gauge / 2 - 0.185)));
-        raw.push({ at, x: t, y: n, size: [0.25, up + 0.06 - 0.35, 0.14] });
+        const at = add3(add3(onDiag(rOf(y), y), mul3(n, (0.35 + ride + 0.06) / 2)), mul3(E, side * (spec.gauge / 2 - 0.185)));
+        raw.push({ at, x: t, y: n, size: [0.25, ride + 0.06 - 0.35, 0.14] });
       }
     }
   }
@@ -1564,6 +1570,18 @@ interface RunLine {
    * (the Edoux, whose line is straight).
    */
   readonly wheelbase: number;
+  /**
+   * How the axles are spaced. Absent or false: an arc length `wheelbase`
+   * apart, `wheelbase / 2` either side of the car's arc length. True: a
+   * CHORD `wheelbase` apart, pushed out equally in arc either side of it —
+   * which is what the rigid body's axles are, so where the line bends
+   * between them both still stand ON it (across a bend the chord is
+   * shorter than the arc, and axles an arc length apart would stand the
+   * body's own a centimetre or two past their points, off the line). The
+   * Roux, whose wheels ride the line, needs it; the two agree wherever
+   * both axles are on one straight.
+   */
+  readonly chordSpan?: boolean;
 }
 
 /**
@@ -1574,7 +1592,8 @@ interface RunLine {
  * poses with {@link carPose} and turn the built mesh by the difference in
  * angle about `axis`, about the built pose's point, onto the new one. On a
  * leg the line is the rail line the tracks are built on, station for
- * station, so the car rides the rail exactly; in the shaft it is vertical.
+ * station, so the car rides the rail exactly (the Roux's is its wheels'
+ * centres' line, 0.45 over it, `chordSpan`); in the shaft it is vertical.
  */
 export interface CarRun extends RunLine {
   /** The graph declares this car as the output `car.<name>`. */
@@ -1630,15 +1649,38 @@ function pathPoint(line: RunLine, s: number, out: Float64Array, o: number): numb
 const AXLES = new Float64Array(6);
 
 /**
+ * Stands the two axles of a car at arc length `s` on `line` in `AXLES` and
+ * returns how far past `s ± wheelbase / 2` each stands, in arc: 0 unless
+ * the line spaces them by the chord (`chordSpan`), when it is found by
+ * fixed-point steps, each closing half the chord's shortfall on the
+ * wheelbase (the chord grows at nearly twice the step, the bends being a
+ * few degrees; eight steps are far more than a 1e-12 fit takes). On a
+ * straight the shortfall is rounding and the answer is 0, as it was.
+ */
+function standAxles(line: RunLine, s: number): number {
+  const h = line.wheelbase / 2;
+  let e = 0;
+  for (let i = 0; ; i++) {
+    pathPoint(line, s - h - e, AXLES, 0);
+    pathPoint(line, s + h + e, AXLES, 3);
+    if (line.chordSpan !== true || i === 8) return e;
+    const dx = (AXLES[3] as number) - (AXLES[0] as number);
+    const dy = (AXLES[4] as number) - (AXLES[1] as number);
+    const dz = (AXLES[5] as number) - (AXLES[2] as number);
+    const short = 2 * h - Math.hypot(dx, dy, dz);
+    if (short < 1e-12) return e;
+    e += short / 2;
+  }
+}
+
+/**
  * Where a car on `line` stands at arc length `s`: `out` gets the point
  * midway between its axles (x, y, z, world) and the chord's slope above
  * the horizontal, in radians. Writes into `out` and allocates nothing.
  */
 export function carPose(line: RunLine, s: number, out: Float64Array): void {
-  const h = line.wheelbase / 2;
-  if (h > 0) {
-    pathPoint(line, s - h, AXLES, 0);
-    pathPoint(line, s + h, AXLES, 3);
+  if (line.wheelbase > 0) {
+    standAxles(line, s);
     out[0] = ((AXLES[0] as number) + (AXLES[3] as number)) / 2;
     out[1] = ((AXLES[1] as number) + (AXLES[4] as number)) / 2;
     out[2] = ((AXLES[2] as number) + (AXLES[5] as number)) / 2;
@@ -1669,13 +1711,13 @@ function rotate3(p: Vec3, a: Vec3, angle: number): Vec3 {
 }
 
 /** A line through `points`, arc-length parameterised. */
-function lineThrough(points: readonly Vec3[], wheelbase: number): RunLine {
+function lineThrough(points: readonly Vec3[], wheelbase: number, chordSpan = false): RunLine {
   const arc = [0];
   for (let i = 1; i < points.length; i++) {
     const d = sub3(points[i] as Vec3, points[i - 1] as Vec3);
     arc.push((arc[i - 1] as number) + Math.hypot(d[0], d[1], d[2]));
   }
-  return { path: points, arc, wheelbase };
+  return chordSpan ? { path: points, arc, wheelbase, chordSpan } : { path: points, arc, wheelbase };
 }
 
 /**
@@ -1690,7 +1732,7 @@ function cutLine(line: RunLine, s0: number, s1: number): RunLine {
     return [o[0] as number, o[1] as number, o[2] as number];
   };
   const inner = line.path.filter((_, i) => (line.arc[i] as number) > s0 && (line.arc[i] as number) < s1);
-  return lineThrough([at(s0), ...inner, at(s1)], line.wheelbase);
+  return lineThrough([at(s0), ...inner, at(s1)], line.wheelbase, line.chordSpan === true);
 }
 
 /**
@@ -1706,8 +1748,9 @@ function cutLine(line: RunLine, s0: number, s1: number): RunLine {
  * height, found by bisection along the line (the floor rises with the arc
  * length, the tipping included, on every run here). The run begins half a
  * wheelbase below the lowest station and ends half a wheelbase above the
- * highest, so both axles are on it throughout; that both ends are still on
- * the built rail is checked here, not assumed.
+ * highest (a little more where a chord-spaced car spans a bend there, see
+ * `RunLine.chordSpan`), so both axles are on it throughout; that both ends
+ * are still on the built rail is checked here, not assumed.
  */
 function legRun(k: number): { run: CarRun; blocks: Block[]; rail: RunLine; railStart: number; body: CarBody } {
   const system = PILES[k]?.lift === "roux" ? "roux" : "otis";
@@ -1720,6 +1763,7 @@ function legRun(k: number): { run: CarRun; blocks: Block[]; rail: RunLine; railS
   const rail = lineThrough(
     rides.map(([r, y]) => onLeg(k, onDiag(r, y))),
     body.wheelbase,
+    body.ride > 0,
   );
   const floor = onLeg(k, body.floor);
   const pose = new Float64Array(4);
@@ -1748,8 +1792,18 @@ function legRun(k: number): { run: CarRun; blocks: Block[]; rail: RunLine; railS
   const stops = STOPS[system].map(solve);
   const first = stops[0] as number;
   const last = stops[stops.length - 1] as number;
-  const s0 = first - h;
-  const line = cutLine(rail, s0, last + h);
+  // Cut where the axles stand at the end stations: half a wheelbase out,
+  // and with the chord span (the wheels' line) a little further where the
+  // car spans a bend there.
+  const s0 = first - h - standAxles(rail, first);
+  const s1 = last + h + standAxles(rail, last);
+  if (s0 < 0 || s1 > (rail.arc[rail.arc.length - 1] as number)) {
+    throw new Error(
+      `lifts.ts: ${CAR_NAME[k]}'s axles leave its rail at a station (they need arc ${s0.toFixed(3)} to ` +
+        `${s1.toFixed(3)} of 0 to ${(rail.arc[rail.arc.length - 1] as number).toFixed(3)}). Lengthen the track or move the station.`,
+    );
+  }
+  const line = cutLine(rail, s0, s1);
   const run: CarRun = {
     name: CAR_NAME[k] as string,
     ...line,

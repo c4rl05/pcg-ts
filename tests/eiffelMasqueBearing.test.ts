@@ -16,8 +16,12 @@
  *
  * The blocks rake with the uprights; a block squared to the horizontal
  * instead swung into the C.J. and the corner rows over its height, which is
- * what the control reproduces: the same block moved 0.20 toward the
- * upright's axis must be reported.
+ * what the controls reproduce, on every block: moved 0.20 across (in the
+ * face, square to the upright), one way or the other, it must be reported
+ * in the C.J. or the fin where the depth draws them (laced, riveted), and
+ * moved 0.07 across, on the corner rows' heads where the depth drives them
+ * (riveted). "Across" is read per block from the 750 nearest it: the legs'
+ * four faces each have their own normal.
  */
 import { describe, expect, it } from "vitest";
 import { type Geometry, Graph, type NodeHandle, cook, firstGeometry } from "pcg-ts";
@@ -186,11 +190,13 @@ describe("eiffel Masque: the 750's packing bears on the uprights and clashes wit
           const d = sub(p, b.c);
           return b.ax.every((u, i) => Math.abs(dot(d, u)) < b.h[i]! + HEAD);
         });
+      // Bears: on an upright's steel behind, and under the 750 in front.
+      const grown = (b: Box): Box => ({ c: b.c, ax: b.ax, h: b.h.map((x) => x + 0.001) as [number, number, number] });
+      const onUpright = (b: Box) => hits(grown(b)).some((id) => id.startsWith("uprights:"));
+      const underChord = (b: Box) => mid.some((t) => triBox(t[0]!, t[1]!, t[2]!, grown(b)));
       for (const b of boxes) {
-        // Bears: on an upright's steel behind, and under the 750 in front.
-        const touch = { c: b.c, ax: b.ax, h: b.h.map((x) => x + 0.001) as [number, number, number] };
-        expect(hits(touch).some((id) => id.startsWith("uprights:")), `block at ${at(b)} on no upright`).toBe(true);
-        expect(mid.some((t) => triBox(t[0]!, t[1]!, t[2]!, touch)), `block at ${at(b)} under no chord`).toBe(true);
+        expect(onUpright(b), `block at ${at(b)} on no upright`).toBe(true);
+        expect(underChord(b), `block at ${at(b)} under no chord`).toBe(true);
         // Nothing else inside it, bar the 2 mm it is set into the web.
         expect([...new Set(hits(shrink(b, 0.0025)))], `inside the block at ${at(b)}`).toEqual([]);
         // No rivet head in it or on it.
@@ -199,9 +205,22 @@ describe("eiffel Masque: the 750's packing bears on the uprights and clashes wit
       // The 750 itself, which runs on over the uprights: nothing of them in
       // it (the fin on the web's centre line stands up past its plane).
       for (const c of chords) expect([...new Set(hits(shrink(c, 0.0005)))], `inside the 750 at ${at(c)}`).toEqual([]);
-      // Controls: a block moved 0.20 toward its upright's axis runs into
-      // the C.J. and the fin where the depth draws them, and 0.07 away from
-      // it onto the corner rows' heads where the depth drives them.
+      // Controls. The bearing checks, and role(): moved 5 mm along what role()
+      // calls its thickness, a block comes off the upright one way and out
+      // from under the 750 the other. Were the thickness read wrong (another
+      // face's normal, say), both shifts would slide it in its own plane and
+      // it would stay on both; and the across controls below would move it
+      // along its thickness, into the web and the chord, and "pass".
+      for (const b of boxes) {
+        const u = b.ax[role(b).thick]!;
+        const [p, q] = [1, -1].map((sg) => ({ c: add(b.c, mul(u, 0.005 * sg)), ax: b.ax, h: b.h }));
+        const off = (!onUpright(p!) && !underChord(q!)) || (!onUpright(q!) && !underChord(p!));
+        expect(off, `control: 5 mm along the thickness of the block at ${at(b)}`).toBe(true);
+      }
+      // A block moved 0.20 across runs into the C.J. and the fin where the
+      // depth draws them, and 0.07 across onto the corner rows' heads where
+      // the depth drives them: each tried both ways, one of which is toward
+      // the upright's axis.
       const moved = (b: Box, by: number): Box[] => {
         const u = b.ax[role(b).across]!;
         return [1, -1].map((sg) => ({ c: add(b.c, mul(u, by * sg)), ax: b.ax, h: b.h }));

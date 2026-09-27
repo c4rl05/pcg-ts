@@ -8,8 +8,9 @@
  * graph actually COOKS:
  *
  * - every leg car's line lies on the rail line of the track the graph
- *   builds for its leg, re-derived here from the cooked rail boxes rather
- *   than taken from the module's own table;
+ *   builds for its leg (the Roux's 0.45 over it, its wheels' centres,
+ *   which run ON the rail heads and never in them), re-derived here from
+ *   the cooked rail boxes rather than taken from the module's own table;
  * - moved the page's way, the cooked car's lower floor stands at each
  *   station's height at the arc length the run names for it — the
  *   rez-de-chaussée (z 1.58), the 1st floor, and for the Otis the 2nd;
@@ -417,11 +418,26 @@ describe("eiffel lift runs", () => {
     }
     expect(NODES.length).toBeGreaterThan(0);
   });
-  it("runs the Roux car's wheels on the rail heads its whole run: never more than 1 mm in, and touching where it is built", () => {
-    // A box as centre and half-axes, from its face centres.
+  it("runs the Roux car's wheels ON the rail heads its whole run: never in them, and standing on them where built", () => {
+    // A box as centre and half-axes, from its face centres. Its axes are
+    // squared up longest first: read straight off a 0.15-deep rail box 13.8
+    // long, each from f32 points 3.8 um apart at this height, the depth
+    // axis leans ~1e-5 and reads a head exactly under a corner 0.07 mm
+    // high at the box's end [measured]; squared to the length's axis, which
+    // the box's 13.8 fixes, the reading is good to a few microns.
     const frame = (f: Vec3[]) => {
       const c = mul3(add3(f[0] as Vec3, f[1] as Vec3), 0.5);
-      return { c, ax: [sub3(f[0] as Vec3, c), sub3(f[2] as Vec3, c), sub3(f[4] as Vec3, c)] };
+      const half = [0, 2, 4].map((i) => mul3(sub3(f[i] as Vec3, f[i + 1] as Vec3), 0.5));
+      const ax: Vec3[] = [...half];
+      const done: Vec3[] = [];
+      for (const i of [0, 1, 2].sort((p, q) => len3(half[q] as Vec3) - len3(half[p] as Vec3))) {
+        let v = half[i] as Vec3;
+        for (const u of done) v = sub3(v, mul3(u, dot3(v, u)));
+        const u = unit3(v);
+        done.push(u);
+        ax[i] = mul3(u, len3(half[i] as Vec3));
+      }
+      return { c, ax };
     };
     const rails = rouxRails.map(frame);
     // How far p is inside a rail box (negative: outside, by its worst axis).
@@ -439,6 +455,20 @@ describe("eiffel lift runs", () => {
       }
       return out;
     };
+    // The deepest rim corner in a head over the run, the page's way.
+    const deepest = (run: CarRun, pts: Vec3[], from = run.from): number => {
+      let worst = -Infinity;
+      for (let s = from; s <= run.to + 1e-9; s += 0.25) {
+        const m = mover(run, s);
+        for (const p of pts) worst = Math.max(worst, depth(m(p)));
+      }
+      return worst;
+    };
+    // ON, to the rounding: each wheel's centre is on the run's line and its
+    // rim's corners on its circle (lifts.ts carBody), so a corner reaches
+    // the head and no further. Read 3 um at worst [measured]; 0.02 mm is
+    // the f32 rounding of a corner and a head read as above, with room.
+    const ON = 2e-5;
     const roux = LEG.filter((c) => c.system === "roux");
     expect(roux).toHaveLength(2);
     for (const c of roux) {
@@ -447,14 +477,9 @@ describe("eiffel lift runs", () => {
       expect(rim.length % 4, c.run.name).toBe(0);
       expect(rim.length, c.run.name).toBeGreaterThanOrEqual(4 * 36);
       const pts = rim.flatMap((b) => corners(b));
-      let worst = -Infinity;
-      for (let s = c.run.from; s <= c.run.to + 1e-9; s += 0.25) {
-        const m = mover(c.run, s);
-        for (const p of pts) worst = Math.max(worst, depth(m(p)));
-      }
-      expect(worst, `${c.run.name}: deepest rim corner in a rail head over the run`).toBeLessThan(1e-3);
-      // Where it is built, every wheel touches its head: the lowest corner
-      // of each wheel within 2 mm of it.
+      expect(deepest(c.run, pts), `${c.run.name}: deepest rim corner in a rail head over the run`).toBeLessThan(ON);
+      // Where it is built, every wheel stands on its head: a corner points
+      // straight down onto it.
       const wheels: Vec3[][] = [];
       for (const b of rim) {
         const w = wheels.find((q) => len3(sub3(q[0] as Vec3, b.c)) < 0.7);
@@ -462,13 +487,18 @@ describe("eiffel lift runs", () => {
         else w.push(...corners(b));
       }
       expect(wheels).toHaveLength(4);
-      for (const w of wheels) expect(Math.max(...w.slice(1).map(depth)), c.run.name).toBeGreaterThan(-2e-3);
+      for (const w of wheels) expect(Math.max(...w.slice(1).map(depth)), c.run.name).toBeGreaterThan(-ON);
     }
-    // The comparator can say "in": the same rims 6 mm lower (3.5 mm square
-    // to the 54.6° rail), where built.
+    // The comparator can say "in", at this resolution: the same rims 0.1 mm
+    // lower (0.06 mm square to the 54.6° rail), where built.
     const c = roux[0] as (typeof LEG)[number];
-    const low = rimOf(c).flatMap((b) => corners(b, 0.006));
-    expect(Math.max(...low.map(depth))).toBeGreaterThan(1e-3);
+    const low = rimOf(c).flatMap((b) => corners(b, 1e-4));
+    expect(Math.max(...low.map(depth))).toBeGreaterThan(ON);
+    // And the axles' spacing is what holds the wheels up over the top bend:
+    // the same car with its axles an arc length apart, not a chord, stands
+    // its rigid wheelbase's ends past them, off the line, into the heads.
+    const byArc: CarRun = { ...c.run, chordSpan: false };
+    expect(deepest(byArc, rimOf(c).flatMap((b) => corners(b)), 60)).toBeGreaterThan(1e-3);
   });
 
   it("passes every car through the floors' lift wells", () => {
