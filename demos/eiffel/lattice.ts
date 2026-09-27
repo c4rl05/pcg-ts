@@ -86,18 +86,49 @@ export interface Lattice {
 export type StationMask = (s: number, k: number) => boolean;
 
 /**
- * A table field over the point index, exact at every integer: runs of one
- * value collapse to their two ends, and ramp interpolates only between
- * integers, which no point reads.
+ * A table field over the point index, exact at every integer: a run of
+ * entries collapses to its two ends whenever ramp, interpolating between
+ * those ends, stores every entry of the run bit for bit. A run of one value
+ * always does; an affine run (a stair flight's treads) does when the f64
+ * arithmetic below happens to round back to each entry, which is checked
+ * per entry and never assumed.
  */
 export function indexTable(values: readonly number[]): Field {
-  const stops: Array<readonly [number, number]> = [];
-  for (let i = 0; i < values.length; i++) {
-    // + 0 turns -0 into 0: a serialized param refuses -0.
-    const v = (values[i] as number) + 0;
-    const prev = values[i - 1];
-    const next = values[i + 1];
-    if (i === 0 || i === values.length - 1 || v !== prev || v !== next) stops.push([i, v]);
+  // + 0 turns -0 into 0: a serialized param refuses -0.
+  const vs = values.map((v) => v + 0);
+  const n = vs.length;
+  const f32 = Math.fround;
+  // What the full table (a stop per entry) stores at integer i. The ends
+  // clamp to their own values. An interior i lands ON stop i, which ramp
+  // answers from the segment BELOW it at u = 1 — so this, and not
+  // f32(vs[i]), is the byte to reproduce, though the two rarely differ.
+  const want = vs.map((v, i) => (i === 0 || i === n - 1 ? f32(v) : f32(vs[i - 1]! + (v - vs[i - 1]!))));
+  // Whether stops a and b alone store want[i] for every i in (a, b]: ramp's
+  // own arithmetic (src/fields/combinators.ts) for an i inside the segment,
+  // and for i = b, which lands on stop b and so takes this segment's top
+  // at u = 1. The last entry clamps instead and needs no check. Compared
+  // as bits: `!==` rejects NaN, and 1 / r tells 0 from -0.
+  const holds = (a: number, b: number): boolean => {
+    for (let i = a + 1; i <= b && i < n - 1; i++) {
+      const r = f32(vs[a]! + (vs[b]! - vs[a]!) * ((i - a) / (b - a)));
+      if (r !== want[i] || 1 / r !== 1 / want[i]!) return false;
+    }
+    return true;
+  };
+  // An empty table stays stopless, for ramp to refuse.
+  const stops: Array<readonly [number, number]> = n > 0 ? [[0, vs[0]!]] : [];
+  for (let a = 0; a < n - 1; ) {
+    // The longest checked run from a: gallop, then halve back. Whether a
+    // run holds need not be monotone in its length, so this may stop short
+    // of the longest, but it never keeps one it did not check — and it
+    // costs O(L log L) over a run of L, where extending one entry at a
+    // time would cost O(L²) on a long one.
+    let b = a + 1;
+    let step = 1;
+    for (; b + step < n && holds(a, b + step); step *= 2) b += step;
+    for (step >>= 1; step >= 1; step >>= 1) if (b + step < n && holds(a, b + step)) b += step;
+    stops.push([b, vs[b]!]);
+    a = b;
   }
   if (stops.length === 1) stops.push([stops[0]![0] + 1, stops[0]![1]]);
   return ramp(index(), stops);
