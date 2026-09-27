@@ -70,6 +70,8 @@ export interface WalkOptions {
   readonly shadow: { near(box: Box3 | null): number; texel(): number };
   /** Called with the walk's state when it is switched, for the page's toggle. */
   readonly toggled?: (on: boolean) => void;
+  /** Whether the walk opens with its near shadow on (the panel's checkbox). */
+  readonly nearShadow?: boolean;
 }
 
 export interface Walk {
@@ -81,8 +83,20 @@ export interface Walk {
   go(n: number, yaw?: number, pitch?: number): void;
   /** The same, at `d` metres along the path. */
   goDist(d: number, yaw?: number, pitch?: number): void;
-  /** The pose as it stands: for a capture's sidecar. */
-  state(): { step: number; dist: number; flight: string; eye: [number, number, number]; texel: number };
+  /**
+   * The pose as it stands: for a capture's sidecar. `yaw` and `pitch` are
+   * the look's turn off the path's, in degrees, as `go` and `goDist` take it.
+   */
+  state(): {
+    step: number;
+    dist: number;
+    flight: string;
+    eye: [number, number, number];
+    yaw: number;
+    pitch: number;
+    nearShadow: boolean;
+    texel: number;
+  };
 }
 
 /** What the Svelte control exposes (see `WalkPanel.svelte`). */
@@ -104,7 +118,7 @@ export function attachWalk(opts: WalkOptions): Walk {
   let yaw = Number.NaN;
   let pitch = 0;
   let last = performance.now();
-  let nearShadow = false;
+  let nearShadow = opts.nearShadow ?? false;
   let fitAt: Vector3 | undefined;
   let texel = 0;
   let saved: { pos: Vector3; target: Vector3; fov: number } | undefined;
@@ -365,7 +379,17 @@ export function attachWalk(opts: WalkOptions): Walk {
     state() {
       const r = need();
       const p = poseAt(r, dist);
-      return { step: p.step, dist, flight: p.flight, eye: [p.eye[0], p.eye[1], p.eye[2]], texel };
+      const deg = (a: number): number => (a * 180) / Math.PI;
+      return {
+        step: p.step,
+        dist,
+        flight: p.flight,
+        eye: [p.eye[0], p.eye[1], p.eye[2]],
+        yaw: deg(yawOff),
+        pitch: deg(pitchOff),
+        nearShadow,
+        texel,
+      };
     },
   };
   window.pcgEiffelWalk = { go: walk.go, goDist: walk.goDist, state: walk.state, set: walk.set };

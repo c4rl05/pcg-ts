@@ -364,7 +364,7 @@ export function attachScrubber(
   initial: number,
   playing: boolean,
   onDay: (day: number) => void,
-): { tick(seconds: number): void; set(day: number): void } {
+): { tick(seconds: number): void; set(day: number): void; readonly day: number } {
   const row = document.createElement("div");
   row.className = "pcg-row";
   const play = document.createElement("button");
@@ -432,6 +432,10 @@ export function attachScrubber(
       running = false;
       paintPlay();
       show(d);
+    },
+    /** The day shown, for the page's "copy view". */
+    get day() {
+      return day;
     },
   };
 }

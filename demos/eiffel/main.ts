@@ -107,6 +107,7 @@ import { createOverlay } from "../../shared/overlay.js";
 import { attachWordmark } from "../../shared/wordmark.js";
 import { bandsFrom } from "./bands.js";
 import { type Bands, startBands } from "./bandsView.js";
+import { isoOf } from "./chronology.js";
 import { buildEiffel } from "./graph.js";
 import {
   CHAIN_ASSETS,
@@ -586,6 +587,13 @@ if (pose !== undefined && pose.length === 6 && pose.every(Number.isFinite)) {
   camera.position.set(x, y, z);
   controls.target.set(tx, ty, tz);
 }
+// `?fov=` the lens, in degrees, beside it: what "copy view" writes when a
+// capture probe has changed the page's own 42.
+const FOV = Number(new URLSearchParams(location.search).get("fov"));
+if (FOV > 0 && FOV < 180) {
+  camera.fov = FOV;
+  camera.updateProjectionMatrix();
+}
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.minDistance = 0.2;
@@ -741,6 +749,143 @@ function refreshDetailLinks(): void {
 controls.addEventListener("end", refreshDetailLinks);
 refreshDetailLinks();
 
+// COPY VIEW: everything it takes to open this page on the frame it shows
+// now, as one line of URL and one of JSON, for pasting into an issue or a
+// session and for naming a shot. The URL is the repro — the depth and every
+// other query param as they are, plus the pose, the lens, the isolated
+// class, the section, the build's day, the walk's pose and both clocks,
+// with `still` so the frame holds (the lifts' and the flag's clocks are
+// restored by `t`, and would move on from it). The JSON restates it with
+// what a URL cannot carry: the viewport, the pixel ratio, whether the lifts
+// were running and whether a capture probe was driving the camera.
+
+/** The class the "show" select isolates; `all` is none. */
+let showing = "all";
+/** Whether the foundations are in section. */
+let sectioned = false;
+/** Whether the site rivets are lit against the shop's. */
+let siteLit = false;
+
+/** Params "copy view" writes itself; every other one is carried as it is. */
+const VIEW_PARAMS = new Set([
+  "cam",
+  "drive",
+  "fov",
+  "t",
+  "show",
+  "section",
+  "site",
+  "build",
+  "walk",
+  "walkAt",
+  "walkNear",
+  "still",
+]);
+
+function copyableView(): string {
+  const r = (v: number, digits = 3): number => Number(v.toFixed(digits));
+  const p = camera.position;
+  const t = controls.target;
+  const eye = [r(p.x), r(p.y), r(p.z)];
+  const target = [r(t.x), r(t.y), r(t.z)];
+  const params = new URLSearchParams(location.search);
+  const query: string[] = [];
+  for (const [k, v] of params) {
+    if (!VIEW_PARAMS.has(k)) query.push(v === "" ? k : `${k}=${encodeURIComponent(v).replace(/%2C/g, ",")}`);
+  }
+  const walked = walk.active ? walk.state() : null;
+  query.push("still");
+  // Walking, the camera and the lens are the walk's, which `walkAt` gives
+  // back; a `cam` beside it would become the orbit the walk returns to.
+  if (walked === null) {
+    query.push(`cam=${[...eye, ...target].join(",")}`);
+    if (camera.fov !== 42) query.push(`fov=${r(camera.fov, 2)}`);
+    // A probed pose may sit outside the orbit's limits (under the polar
+    // clamp, inside the minimum distance), which reopening it through the
+    // orbit would clamp back: `drive` reopens it the way `pose` put it.
+    if (driven) query.push("drive");
+  }
+  if (showing !== "all") query.push(`show=${encodeURIComponent(showing)}`);
+  if (sectioned) query.push("section");
+  if (siteLit) query.push("site");
+  // The day the scrubber shows; before the cook has staged it, the day asked for.
+  const day = BUILD ? isoOf(scrubber?.day ?? buildDayParam(params.get("build"))) : null;
+  if (day !== null) query.push(`build=${day}`);
+  if (walked !== null) {
+    query.push(`walk=${walked.step}`, `walkAt=${r(walked.dist)},${r(walked.yaw, 2)},${r(walked.pitch, 2)}`);
+    if (walked.nearShadow) query.push("walkNear");
+  }
+  // Six places: at a millisecond a pulley's vertices land 0.3 m apart.
+  query.push(`t=${r(clock, 6)},${r(windClock, 6)}`);
+  const url = `${location.origin}${location.pathname}?${query.join("&")}`;
+  const state = {
+    eye,
+    target,
+    fov: r(camera.fov, 2),
+    viewport: [window.innerWidth, window.innerHeight],
+    dpr: r(renderer.getPixelRatio(), 2),
+    detail: currentDetail() || "skeleton",
+    show: showing,
+    section: sectioned,
+    site: siteLit,
+    build: day,
+    walk:
+      walked === null
+        ? null
+        : {
+            step: walked.step,
+            flight: walked.flight,
+            dist: r(walked.dist),
+            yaw: r(walked.yaw, 2),
+            pitch: r(walked.pitch, 2),
+            nearShadow: walked.nearShadow,
+          },
+    lifts: { t: r(clock, 6), running: liftsRunning },
+    wind: { t: r(windClock, 6), running: windRunning },
+    driven,
+  };
+  return `eiffel view ${url}\n${JSON.stringify(state)}`;
+}
+
+/** Clipboard, or the old select-and-copy where the async API is refused. */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.style.cssText = "position:fixed;opacity:0";
+    document.body.append(area);
+    area.select();
+    const ok = document.execCommand("copy");
+    area.remove();
+    return ok;
+  }
+}
+
+const copySlot = overlay.addSlot();
+const copyButton = document.createElement("button");
+copyButton.type = "button";
+copyButton.textContent = "copy view";
+copyButton.title = "copy a URL that reopens this exact frame (parked at this moment), and its state as JSON";
+copyButton.style.cssText =
+  "cursor:pointer;background:none;border:1px solid currentColor;border-radius:4px;color:inherit;opacity:0.8;padding:0.15em 0.7em";
+let copyReset: ReturnType<typeof setTimeout> | undefined;
+copyButton.addEventListener("click", () => {
+  const text = copyableView();
+  // Logged as well, so a view can be read back where the clipboard cannot.
+  console.info(text);
+  void copyText(text).then((ok) => {
+    copyButton.textContent = ok ? "copied" : "copy failed: see console";
+    clearTimeout(copyReset);
+    copyReset = setTimeout(() => {
+      copyButton.textContent = "copy view";
+    }, 1500);
+  });
+});
+copySlot.append(copyButton);
+
 // THE PLATE OVERLAY, an audit tool on the dev server only (`?plate=<id>`,
 // e.g. `?plate=I-1&opacity=0.5`): one of Eiffel's figures, the camera on its
 // projection and the scan over the model. The published page has none of
@@ -766,10 +911,18 @@ const walk = attachWalk({
   canvas: renderer.domElement,
   slot: overlay.addSlot(),
   shadow: { near: (box) => rig.fitShadowNear(box), texel: () => rig.shadowTexel() },
+  // `?walkNear`: the walk's near shadow on, the way "copy view" writes it.
+  nearShadow: new URLSearchParams(location.search).has("walkNear"),
 });
 const WALK = new URLSearchParams(location.search).get("walk");
 overlay.addCheckbox("walk", WALK !== null, (on) => walk.set(on));
-if (WALK !== null) walk.go(Number(WALK) || 0);
+// `?walk=` is a step; `?walkAt=<m>,<yaw>,<pitch>` is the exact pose "copy
+// view" writes — metres along the path and the look's turn off it, in
+// degrees — and wins when both are given.
+const WALK_AT = new URLSearchParams(location.search).get("walkAt")?.split(",").map(Number);
+if (WALK_AT !== undefined && WALK_AT.length === 3 && WALK_AT.every(Number.isFinite)) {
+  walk.goDist(WALK_AT[0]!, WALK_AT[1], WALK_AT[2]);
+} else if (WALK !== null) walk.go(Number(WALK) || 0);
 
 // Claimed here, where the panel is built, so the graph sits under the
 // readouts.
@@ -1020,8 +1173,12 @@ async function main(): Promise<void> {
           ? `matrices, ${mb(64 * rivetPath.cpu)} MB${why === "" ? "" : ` (${why})`}`
           : `${rivetPath.fallbacks.length} batch(es) as matrices: ${why}`;
     overlay.addStat("rivet path")(`${how}, ${rivetPath.ms.toFixed(0)} ms`);
-    lightSiteRivets(params.has("site"));
-    overlay.addCheckbox("site rivets", params.has("site"), lightSiteRivets);
+    const lightSite = (on: boolean): void => {
+      siteLit = on;
+      lightSiteRivets(on);
+    };
+    lightSite(params.has("site"));
+    overlay.addCheckbox("site rivets", params.has("site"), lightSite);
   }
   // The foundations in section (`?section`, section.ts): the ground opened
   // and what is under it cut on PL-XX's plane through piles 1 and 3.
@@ -1033,8 +1190,12 @@ async function main(): Promise<void> {
       renderer.shadowMap.needsUpdate = true;
     },
   });
-  if (params.has("section")) section(true);
-  overlay.addCheckbox("section", params.has("section"), section);
+  const cut = (on: boolean): void => {
+    sectioned = on;
+    section(on);
+  };
+  if (params.has("section")) cut(true);
+  overlay.addCheckbox("section", params.has("section"), cut);
   if (fitted > 0) overlay.addStat("fittings")(fitted.toLocaleString());
   if (linked > 0) overlay.addStat("chain pieces")(linked.toLocaleString());
   // Only when something was overridden: the default page says nothing about
@@ -1063,7 +1224,8 @@ async function main(): Promise<void> {
       ...present.map((c) => ({ value: c, label: c })),
     ];
     if (hasRivets) options.push({ value: "rivets", label: "rivets" });
-    overlay.addSelect("show", options, "all", (v) => {
+    const isolate = (v: string): void => {
+      showing = v;
       for (const [name, list] of meshes) {
         const on =
           v === "all" ||
@@ -1079,7 +1241,12 @@ async function main(): Promise<void> {
         for (const m of list) m.visible = on;
       }
       renderer.shadowMap.needsUpdate = true;
-    });
+    };
+    // `?show=<class>` opens isolated, the way "copy view" writes it.
+    const asked = params.get("show");
+    const initial = options.some((o) => o.value === asked) ? (asked as string) : "all";
+    overlay.addSelect("show", options, initial, isolate);
+    if (initial !== "all") isolate(initial);
   }
 
   if (erection !== undefined) {
@@ -1399,7 +1566,12 @@ const FLAG_NORMAL = new Float32Array(3 * FLAG_POINTS);
  * so a probed frame at t shows the cars AND the flag as any run has them
  * at t: `flagPose` is pure in time.
  */
-let windClock = 0;
+// `?t=<lifts>,<wind>` opens with the two clocks at those seconds, the way
+// "copy view" writes them beside `still`: the cars and the flag as they
+// were when the view was copied.
+const CLOCKS = new URLSearchParams(location.search).get("t")?.split(",").map(Number);
+const clockAt = (i: number): number => (CLOCKS !== undefined && Number.isFinite(CLOCKS[i]) ? (CLOCKS[i] as number) : 0);
+let windClock = clockAt(1);
 let windRunning = !STILL;
 
 /**
@@ -1461,7 +1633,7 @@ function waveFlags(t: number): void {
 
 const tickFps = createFpsMeter(statFps);
 
-let clock = 0;
+let clock = clockAt(0);
 let lastFrame = performance.now();
 
 renderer.setAnimationLoop(() => {
@@ -1532,6 +1704,8 @@ declare global {
       pause(on: boolean): void;
       /** Put every car where its run has it, and the flag as the wind has it, at `t` seconds. */
       setClock(t: number): void;
+      /** What the panel's "copy view" button copies: the reopening URL, then the state as JSON. */
+      view(): string;
     };
   }
 }
@@ -1564,10 +1738,26 @@ window.pcgEiffel = {
     windClock = t;
     waveFlags(windClock);
   },
+  view: copyableView,
 };
+
+// `?drive` with `?cam`: the pose taken the way `pose` takes it, off the
+// orbit and its clamps, so a probed shot that "copy view" wrote reopens
+// where it was — under the polar limit, or nearer than the orbit allows.
+const DRIVE = new URLSearchParams(location.search).has("drive");
+if (DRIVE && pose !== undefined && pose.length === 6 && pose.every(Number.isFinite)) {
+  const [x, y, z, tx, ty, tz] = pose as [number, number, number, number, number, number];
+  window.pcgEiffel.pose([x, y, z], [tx, ty, tz]);
+}
 
 main()
   .then(() => {
+    // A parked page (`?still`) never moves a car itself, so `?t=` puts
+    // them, and the flag, where its clocks say once the cook has built them.
+    if (CLOCKS !== undefined) {
+      moveCars(clock);
+      waveFlags(windClock);
+    }
     // Two frames after the scene is complete — the first draws the shadow
     // map — `data-ready` tells a scripted capture it can shoot.
     requestAnimationFrame(() =>
