@@ -137,7 +137,6 @@ import {
   mul,
   orientAlongVector,
   pathResample,
-  pointGrid,
   pointsToPath,
   polygonBoolean,
   position,
@@ -156,6 +155,7 @@ import {
   indexTable,
   merge,
   placedLattice,
+  pointTable,
   segmentMembers,
   skin,
   squareRing,
@@ -814,28 +814,13 @@ function levelBoxes(
 
 /** Rivets at explicit points, each aimed (its +y) along its own direction. */
 function aimedPoints(g: Graph, id: string, at: readonly Vec3[], dirs: readonly Vec3[]): NodeHandle {
-  const lat = placedLattice(g, id, [at]);
-  const dir = g.add(
-    setAttribute,
-    {
-      name: "rivetDir",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(
-        indexTable(dirs.map((d) => d[0])),
-        indexTable(dirs.map((d) => d[1])),
-        indexTable(dirs.map((d) => d[2])),
-      ),
-    },
-    `${id}Dir`,
-  );
+  const lat = placedLattice(g, id, [at], false, { rivetDir: ["vec3", dirs] });
   const aim = g.add(
     orientAlongVector,
     { direction: attribute("rivetDir", 3), up: [0, 1, 0], axis: "+y" },
     `${id}Aim`,
   );
-  g.connect(lat.stations, "out", dir, "in");
-  g.connect(dir, "out", aim, "in");
+  g.connect(lat.stations, "out", aim, "in");
   return aim;
 }
 
@@ -1330,36 +1315,13 @@ function ringSlab(sides: number, inner: number, outer: number, y0: number, y1: n
  * its loop's `depths` entry as `depth` when given.
  */
 function outlinePaths(g: Graph, id: string, loops: ReadonlyArray<readonly Vec3[]>, depths?: readonly number[]): NodeHandle {
-  const pts = loops.flat();
-  const slots = g.add(
-    pointGrid,
-    { countX: pts.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    `${id}Slots`,
-  );
-  const place = g.add(
-    setAttribute,
-    {
-      name: "P",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(
-        indexTable(pts.map((p) => p[0])),
-        indexTable(pts.map((p) => p[1])),
-        indexTable(pts.map((p) => p[2])),
-      ),
-    },
-    `${id}Place`,
-  );
-  const key = g.add(setAttribute, { name: "slab", type: "i32", value: indexTable(loops.flatMap((o, i) => o.map(() => i))) }, `${id}Key`);
-  g.connect(slots, "out", place, "in");
-  g.connect(place, "out", key, "in");
-  let last = key;
-  if (depths !== undefined) {
-    last = g.add(setAttribute, { name: "depth", type: "f32", value: indexTable(loops.flatMap((o, i) => o.map(() => depths[i]!))) }, `${id}Depth`);
-    g.connect(key, "out", last, "in");
-  }
+  const each = (per: readonly number[]) => loops.flatMap((o, i) => o.map(() => per[i]!));
+  const table = pointTable(g, `${id}Slots`, loops.flat(), {
+    slab: ["i32", each(loops.map((_, i) => i))],
+    ...(depths === undefined ? {} : { depth: ["f32", each(depths)] as const }),
+  });
   const paths = g.add(pointsToPath, { groupAttr: "slab", closed: true }, `${id}Paths`);
-  g.connect(last, "out", paths, "in");
+  g.connect(table, "out", paths, "in");
   return paths;
 }
 
@@ -2640,23 +2602,11 @@ function dome(
   // arc (`at` takes a fractional level), so the skin follows the curve.
   const split = DOME_CHORD_SPLIT;
   const chordRows = stationRows(16, n * split + 1, (s, k) => at(s, k / split));
-  const chordLine = placedLattice(g, "domeChordLine", chordRows);
   // Each station carries its arch's plane normal, which squares its
   // chord's section: a normal read off the position (the old rib's) turns
   // near the crown, where the chords sit off the arch's plane.
-  const perPoint = chordRows.flatMap((row) => row.map((_, s) => normalOf(Math.floor(s / 4))));
-  const planeN = g.add(
-    setAttribute,
-    {
-      name: "archN",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(indexTable(perPoint.map((v) => v[0])), 0, indexTable(perPoint.map((v) => v[2]))),
-    },
-    "domePlaneN",
-  );
-  g.connect(chordLine.stations, "out", planeN, "in");
-  const chordLat: Lattice = { ...chordLine, stations: planeN };
+  const archN = chordRows.flatMap((row) => row.map((_, s) => normalOf(Math.floor(s / 4))));
+  const chordLat = placedLattice(g, "domeChordLine", chordRows, false, { archN: ["vec3", archN] });
   const chords = chains(chordLat, "Chords");
   const chordSkin = g.add(
     sweepProfile,

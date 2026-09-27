@@ -58,20 +58,16 @@
  * panels.
  */
 import {
-  type Field,
   type Graph,
   type NodeHandle,
   attribute,
   extrudePolygon,
-  pointGrid,
   pointsToPath,
   removeAttribute,
-  setAttribute,
   sweepProfile,
-  vec,
 } from "pcg-ts";
 import { SAG, smoothed } from "./chord.js";
-import { copyToQuadrants, indexTable, merge, type Vec3 } from "./lattice.js";
+import { type TableColumn, type TableType, type Vec3, copyToQuadrants, merge, pointTable } from "./lattice.js";
 
 /** A point in the arch's plane, or in a panel's frame. */
 export type Pt = readonly [number, number];
@@ -608,27 +604,19 @@ function paths(
   quads: NodeHandle,
   turn?: readonly string[],
 ): NodeHandle {
-  const pts = lines.flat();
-  const each = (f: (i: number) => number) => indexTable(lines.flatMap((l, i) => l.map(() => f(i))));
-  let last: NodeHandle = g.add(
-    pointGrid,
-    { countX: pts.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    `${id}Slots`,
-  );
-  const set = (suffix: string, name: string, type: "i32" | "f32", parts: Field[]) => {
-    const value = parts.length === 1 ? parts[0]! : vec(...parts);
-    const node = g.add(setAttribute, { name, type, tupleSize: parts.length, value }, `${id}${suffix}`);
-    g.connect(last, "out", node, "in");
-    last = node;
+  // Each column holds its line's value at every point of the line.
+  const each = <T>(per: readonly T[]) => lines.flatMap((l, i) => l.map(() => per[i]!));
+  const columns: Record<string, TableColumn> = {
+    [PIECE]: ["i32", each(lines.map((_, i) => i))],
   };
-  set("Place", "P", "f32", [0, 1, 2].map((c) => indexTable(pts.map((p) => p[c]!))));
-  set("Key", PIECE, "i32", [each((i) => i)]);
   for (const [name, per] of Object.entries(attrs)) {
-    set(name, name, "f32", per[0]!.map((_, c) => each((i) => per[i]![c]!)));
+    const size = per[0]!.length;
+    columns[name] = [size === 1 ? "f32" : (`vec${size}` as TableType), each(per)];
   }
+  const slots = pointTable(g, `${id}Slots`, lines.flat(), columns);
   const path = g.add(pointsToPath, { groupAttr: PIECE, closed }, `${id}Paths`);
   const bare = g.add(removeAttribute, { names: [PIECE], domain: "point" }, `${id}Bare`);
-  g.connect(last, "out", path, "in");
+  g.connect(slots, "out", path, "in");
   g.connect(path, "out", bare, "in");
   return copyToQuadrants(g, `${id}4`, bare, quads, turn);
 }

@@ -32,6 +32,7 @@ import {
   mod,
   mul,
   pointGrid,
+  pointList,
   pointsToPath,
   position,
   ramp,
@@ -91,7 +92,8 @@ export type StationMask = (s: number, k: number) => boolean;
  * those ends, stores every entry of the run bit for bit. A run of one value
  * always does; an affine run (a stair flight's treads) does when the f64
  * arithmetic below happens to round back to each entry, which is checked
- * per entry and never assumed.
+ * per entry and never assumed. A table that is itself a fresh point
+ * source is a {@link pointTable} instead.
  */
 export function indexTable(values: readonly number[]): Field {
   // + 0 turns -0 into 0: a serialized param refuses -0.
@@ -132,6 +134,44 @@ export function indexTable(values: readonly number[]): Field {
   }
   if (stops.length === 1) stops.push([stops[0]![0] + 1, stops[0]![1]]);
   return ramp(index(), stops);
+}
+
+/** A {@link pointTable} column's type: pointList's own spellings. */
+export type TableType = "f32" | "i32" | "vec2" | "vec3" | "vec4";
+
+/** A {@link pointTable} column: its type and one value (or tuple) per point. */
+export type TableColumn = readonly [TableType, ReadonlyArray<number | readonly number[]>];
+
+/**
+ * A literal table of points, one `pointList` under `id`: a point at each
+ * entry of `at`, in order, carrying every column of `columns` (a vector
+ * column's values are one tuple per point). It replaces a `pointGrid` fed
+ * one {@link indexTable} setAttribute per column, and takes the grid's id:
+ * pointList seeds point i as pointGrid does, hashCombine(node seed, i), so
+ * the same id keeps every seed. It stores each literal, where the ramp
+ * stored v[i-1] + (v[i] - v[i-1]): the same f32 except beside a much larger
+ * neighbour, so a trigonometric residue (1.6e-16 after 0.76) came back as
+ * that sum's cancellation error (1.1e-16) instead.
+ */
+export function pointTable(
+  g: Graph,
+  id: string,
+  at: readonly Vec3[],
+  columns: Readonly<Record<string, TableColumn>> = {},
+): NodeHandle {
+  // + 0 turns -0 into 0: a serialized param refuses -0.
+  const flat = (vs: ReadonlyArray<number | readonly number[]>) => vs.flat().map((v) => v + 0);
+  const list = Object.entries(columns);
+  return g.add(
+    pointList,
+    {
+      positions: flat(at),
+      columnNames: list.map(([name]) => name),
+      columnTypes: list.map(([, [type]]) => type),
+      columnValues: list.flatMap(([, [, values]]) => flat(values)),
+    },
+    id,
+  );
 }
 
 /** A table field over an integer point attribute. */
@@ -218,52 +258,27 @@ export function stationRows(
  * along a circle, a rib whose two chords cross each height at different
  * radii, posts at fixed x between uprights that lean. It carries the same
  * `s` and `k` attributes in the same point order as {@link stationLattice},
- * so {@link edges} and {@link chains} run on it unchanged.
+ * so {@link edges} and {@link chains} run on it unchanged. Its stations are
+ * one {@link pointTable}, which carries `columns` too, one entry per
+ * station in that order.
  */
 export function placedLattice(
   g: Graph,
   id: string,
   rows: ReadonlyArray<ReadonlyArray<Vec3>>,
   closed = false,
+  columns: Readonly<Record<string, TableColumn>> = {},
 ): Lattice {
   const ringSize = rows[0]?.length ?? 0;
   if (ringSize === 0 || rows.some((r) => r.length !== ringSize)) {
     throw new Error(`eiffel lattice "${id}": placedLattice needs rows of one non-zero length`);
   }
-  const grid = g.add(
-    pointGrid,
-    { countX: ringSize, countY: rows.length, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    `${id}Grid`,
-  );
-  const tagS = g.add(
-    setAttribute,
-    { name: "s", type: "i32", value: component(position(), 0) },
-    `${id}S`,
-  );
-  const tagK = g.add(
-    setAttribute,
-    { name: "k", type: "i32", value: component(position(), 1) },
-    `${id}K`,
-  );
-  const flat = rows.flat();
-  const place = g.add(
-    setAttribute,
-    {
-      name: "P",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(
-        indexTable(flat.map((p) => p[0])),
-        indexTable(flat.map((p) => p[1])),
-        indexTable(flat.map((p) => p[2])),
-      ),
-    },
-    `${id}Place`,
-  );
-  g.connect(grid, "out", tagS, "in");
-  g.connect(tagS, "out", tagK, "in");
-  g.connect(tagK, "out", place, "in");
-  return { g, id, ringSize, levelCount: rows.length, closed, stations: place, positions: rows };
+  const stations = pointTable(g, `${id}Grid`, rows.flat(), {
+    s: ["i32", rows.flatMap((r) => r.map((_, s) => s))],
+    k: ["i32", rows.flatMap((r, k) => r.map(() => k))],
+    ...columns,
+  });
+  return { g, id, ringSize, levelCount: rows.length, closed, stations, positions: rows };
 }
 
 /** Evaluate a mask over every station, in point order. */
@@ -553,25 +568,7 @@ export function segmentMembers(
 ): NodeHandle {
   if (list.length === 0) throw new Error(`eiffel lattice "${id}": segmentMembers needs at least one member`);
   const pts = list.flatMap((m) => [m.a, m.b]);
-  const slots = g.add(
-    pointGrid,
-    { countX: pts.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    `${id}Slots`,
-  );
-  const place = g.add(
-    setAttribute,
-    {
-      name: "P",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(
-        indexTable(pts.map((p) => p[0])),
-        indexTable(pts.map((p) => p[1])),
-        indexTable(pts.map((p) => p[2])),
-      ),
-    },
-    `${id}Place`,
-  );
+  const slots = pointTable(g, `${id}Slots`, pts);
   // Points 2i and 2i + 1 are member i: an i32 truncates index / 2.
   const key = g.add(setAttribute, { name: "member", type: "i32", value: mul(index(), 0.5) }, `${id}Key`);
   const paths = g.add(pointsToPath, { groupAttr: "member" }, `${id}Paths`);
@@ -591,8 +588,7 @@ export function segmentMembers(
     `${id}Faces`,
   );
   const done = g.add(removeAttribute, { names: ["member"], domain: "point" }, id);
-  g.connect(slots, "out", place, "in");
-  g.connect(place, "out", key, "in");
+  g.connect(slots, "out", key, "in");
   g.connect(key, "out", paths, "in");
   g.connect(paths, "out", faces, "in");
   let last: NodeHandle = faces;

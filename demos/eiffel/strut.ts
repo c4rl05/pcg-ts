@@ -68,7 +68,7 @@ import {
   vec,
 } from "pcg-ts";
 import type { PlateFootprint } from "./crossing.js";
-import { END_SINE, END_SINE_MIN, FACE_NORMAL, type Vec3, indexTable, merge, skin } from "./lattice.js";
+import { END_SINE, END_SINE_MIN, FACE_NORMAL, type Vec3, merge, pointTable, skin } from "./lattice.js";
 import { HEAD_DRIVE_ATTR } from "./heads.js";
 import { clipHeads, gatePaths, gatePoints } from "./region.js";
 
@@ -1169,9 +1169,8 @@ const COVER_FRAME = [COVER_ALONG, COVER_ACROSS, COVER_N, COVER_HALF, COVER_HALF_
  * of the riveted graph's ramp stops. Keyed on the list itself: a part
  * hands the same list to every strut it covers.
  *
- * The columns are the same f32 values the per-ask tables gave: a field
- * resolves to f32 either way, and each column here is the same
- * `indexTable` ramp read at the plate's own index.
+ * The columns are the footprints' values as f32 literals, one pointList
+ * ({@link pointTable}) rather than a ramp per column.
  */
 const COVER_CLOUDS = new WeakMap<Graph, Map<readonly PlateFootprint[], NodeHandle>>();
 
@@ -1184,27 +1183,13 @@ function coverCloudOf(g: Graph, id: string, covers: readonly PlateFootprint[]): 
   const known = byList.get(covers);
   if (known !== undefined) return known;
   // Named after the first strut that asks.
-  let cloud: NodeHandle = g.add(
-    pointGrid,
-    { countX: covers.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    `${id}Plates`,
-  );
-  const table = (f: (c: PlateFootprint) => number): Field => indexTable(covers.map(f));
-  const v3 = (f: (c: PlateFootprint) => Vec3): Field =>
-    vec(table((c) => f(c)[0]), table((c) => f(c)[1]), table((c) => f(c)[2]));
-  const columns: ReadonlyArray<readonly [string, string, 1 | 3, Field]> = [
-    ["P", "At", 3, v3((c) => c.at)],
-    [COVER_ALONG, "Along", 3, v3((c) => c.along)],
-    [COVER_ACROSS, "Across", 3, v3((c) => c.across)],
-    [COVER_N, "N", 3, v3((c) => c.n)],
-    [COVER_HALF, "Half", 1, table((c) => c.half)],
-    [COVER_HALF_ACROSS, "HalfAcross", 1, table((c) => c.halfAcross)],
-  ];
-  for (const [name, suffix, tupleSize, value] of columns) {
-    const set = g.add(setAttribute, { name, type: "f32", tupleSize, value }, `${id}Plate${suffix}`);
-    g.connect(cloud, "out", set, "in");
-    cloud = set;
-  }
+  const cloud = pointTable(g, `${id}Plates`, covers.map((c) => c.at), {
+    [COVER_ALONG]: ["vec3", covers.map((c) => c.along)],
+    [COVER_ACROSS]: ["vec3", covers.map((c) => c.across)],
+    [COVER_N]: ["vec3", covers.map((c) => c.n)],
+    [COVER_HALF]: ["f32", covers.map((c) => c.half)],
+    [COVER_HALF_ACROSS]: ["f32", covers.map((c) => c.halfAcross)],
+  });
   byList.set(covers, cloud);
   return cloud;
 }

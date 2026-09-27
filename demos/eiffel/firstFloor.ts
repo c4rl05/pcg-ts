@@ -147,7 +147,6 @@ import {
   lt,
   max,
   mul,
-  pointGrid,
   pointsToPath,
   position,
   ramp,
@@ -166,6 +165,7 @@ import {
   copyToQuadrants,
   indexTable,
   merge,
+  pointTable,
   type Vec3,
 } from "./lattice.js";
 import {
@@ -1052,25 +1052,7 @@ function along(paths: ReadonlyArray<ReadonlyArray<Vec3>>, n: Vec3): Member[] {
 function members(g: Graph, id: string, list: readonly Member[]): NodeHandle {
   if (list.length === 0) throw new Error(`firstFloor: member set "${id}" is empty`);
   const pts = list.flatMap((m) => [m.a, m.b]);
-  const slots = g.add(
-    pointGrid,
-    { countX: pts.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    `${id}Slots`,
-  );
-  const place = g.add(
-    setAttribute,
-    {
-      name: "P",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(
-        indexTable(pts.map((p) => p[0])),
-        indexTable(pts.map((p) => p[1])),
-        indexTable(pts.map((p) => p[2])),
-      ),
-    },
-    `${id}Place`,
-  );
+  const slots = pointTable(g, `${id}Slots`, pts);
   // Points 2i and 2i + 1 are member i: an i32 truncates index / 2.
   const key = g.add(setAttribute, { name: "member", type: "i32", value: mul(index(), 0.5) }, `${id}Key`);
   const paths = g.add(pointsToPath, { groupAttr: "member" }, `${id}Paths`);
@@ -1090,8 +1072,7 @@ function members(g: Graph, id: string, list: readonly Member[]): NodeHandle {
     `${id}Faces`,
   );
   const done = g.add(removeAttribute, { names: ["member"], domain: "point" }, id);
-  g.connect(slots, "out", place, "in");
-  g.connect(place, "out", key, "in");
+  g.connect(slots, "out", key, "in");
   g.connect(key, "out", paths, "in");
   g.connect(paths, "out", faces, "in");
   g.connect(faces, "out", done, "in");
@@ -1111,31 +1092,10 @@ function plates(g: Graph, id: string, outlines: readonly Vec3[][], quads: NodeHa
     .filter((o) => o.length >= 3);
   const pts = clean.flat();
   const which = clean.flatMap((o, i) => o.map(() => i));
-  const slots = g.add(
-    pointGrid,
-    { countX: pts.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    `${id}Slots`,
-  );
-  const place = g.add(
-    setAttribute,
-    {
-      name: "P",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(
-        indexTable(pts.map((p) => p[0])),
-        indexTable(pts.map((p) => p[1])),
-        indexTable(pts.map((p) => p[2])),
-      ),
-    },
-    `${id}Place`,
-  );
-  const key = g.add(setAttribute, { name: "plate", type: "i32", value: indexTable(which) }, `${id}Key`);
+  const slots = pointTable(g, `${id}Slots`, pts, { plate: ["i32", which] });
   const paths = g.add(pointsToPath, { groupAttr: "plate", closed: true }, `${id}Paths`);
   const bare = g.add(removeAttribute, { names: ["plate"], domain: "point" }, `${id}Bare`);
-  g.connect(slots, "out", place, "in");
-  g.connect(place, "out", key, "in");
-  g.connect(key, "out", paths, "in");
+  g.connect(slots, "out", paths, "in");
   g.connect(paths, "out", bare, "in");
   const four = copyToQuadrants(g, `${id}4`, bare, quads);
   // The extrusion writes a flat `normal` for every wall and cap, and it

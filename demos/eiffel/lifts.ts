@@ -127,16 +127,14 @@ import {
   lt,
   meshPrimitive,
   mod,
-  pointGrid,
   pointsToPath,
   setAttribute,
   spawnInstances,
   sweepProfile,
-  vec,
 } from "pcg-ts";
 import { SAG, circleSegments } from "./chord.js";
 import { flatsSides } from "./ground.js";
-import { type Vec3, copyToQuadrants, indexTable, merge, skin } from "./lattice.js";
+import { type Vec3, copyToQuadrants, indexTable, merge, pointTable, skin } from "./lattice.js";
 import type { Detail, Parts } from "./parts.js";
 import { FLOORS, NODES, PILES, profileAt } from "./spec.js";
 import { stairRuns } from "./stairs.js";
@@ -683,40 +681,13 @@ function onFrames(
   list: ReadonlyArray<Pick<Block, "at" | "x" | "y">>,
   sizes?: readonly Vec3[],
 ): NodeHandle {
-  const slots = g.add(
-    pointGrid,
-    { countX: list.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    `${id}Slots`,
-  );
-  const col = (pick: (b: Pick<Block, "at" | "x" | "y">) => number) => indexTable(list.map(pick));
-  const quats = list.map((b) => frameQuat(b.x, b.y));
-  const place = g.add(
-    setAttribute,
-    {
-      name: "P",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(col((b) => b.at[0]), col((b) => b.at[1]), col((b) => b.at[2])),
-    },
-    `${id}Place`,
-  );
-  g.connect(slots, "out", place, "in");
-  let last = place;
-  if (sizes !== undefined) {
-    const size = (i: number) => indexTable(sizes.map((v) => v[i] as number));
-    last = g.add(setAttribute, { name: "scale", type: "f32", tupleSize: 3, value: vec(size(0), size(1), size(2)) }, `${id}Size`);
-    g.connect(place, "out", last, "in");
-  }
-  const q = (i: number) => indexTable(quats.map((r) => r[i] as number));
-  const rot = g.add(
-    setAttribute,
-    { name: "rot", type: "f32", tupleSize: 4, value: vec(q(0), q(1), q(2), q(3)) },
-    `${id}Turn`,
-  );
+  const targets = pointTable(g, `${id}Slots`, list.map((b) => b.at), {
+    ...(sizes === undefined ? {} : { scale: ["vec3", sizes] }),
+    rot: ["vec4", list.map((b) => frameQuat(b.x, b.y))],
+  });
   const out = g.add(copyToPoints, { topology: "keep", rotateAttrs: ["normal"] }, id);
-  g.connect(last, "out", rot, "in");
   g.connect(source, "out", out, "source");
-  g.connect(rot, "out", out, "target");
+  g.connect(targets, "out", out, "target");
   return out;
 }
 
@@ -798,30 +769,9 @@ export function tubeSides(diameter: number, sag: number): number {
 function polylines(g: Graph, id: string, lines: ReadonlyArray<readonly Vec3[]>): NodeHandle {
   const pts = lines.flat();
   const which = lines.flatMap((l, i) => l.map(() => i));
-  const slots = g.add(
-    pointGrid,
-    { countX: pts.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    `${id}Slots`,
-  );
-  const place = g.add(
-    setAttribute,
-    {
-      name: "P",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(
-        indexTable(pts.map((p) => p[0])),
-        indexTable(pts.map((p) => p[1])),
-        indexTable(pts.map((p) => p[2])),
-      ),
-    },
-    `${id}Place`,
-  );
-  const key = g.add(setAttribute, { name: "line", type: "i32", value: indexTable(which) }, `${id}Key`);
+  const slots = pointTable(g, `${id}Slots`, pts, { line: ["i32", which] });
   const paths = g.add(pointsToPath, { groupAttr: "line" }, id);
-  g.connect(slots, "out", place, "in");
-  g.connect(place, "out", key, "in");
-  g.connect(key, "out", paths, "in");
+  g.connect(slots, "out", paths, "in");
   return paths;
 }
 
@@ -2257,42 +2207,11 @@ function chainSpawn(g: Graph, id: string, chain: ChainRun): NodeHandle {
       asset: r.asset,
     };
   });
-  const pick = (f: (r: (typeof frames)[number]) => number) => indexTable(frames.map(f));
-  const slots = g.add(
-    pointGrid,
-    { countX: frames.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    `${id}Slots`,
-  );
-  const place = g.add(
-    setAttribute,
-    {
-      name: "P",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(pick((r) => r.at[0]), pick((r) => r.at[1]), pick((r) => r.at[2])),
-    },
-    `${id}Place`,
-  );
-  const rot = g.add(
-    setAttribute,
-    {
-      name: "rot",
-      type: "f32",
-      tupleSize: 4,
-      value: vec(pick((r) => r.rot[0]), pick((r) => r.rot[1]), pick((r) => r.rot[2]), pick((r) => r.rot[3])),
-    },
-    `${id}Turn`,
-  );
-  const size = g.add(
-    setAttribute,
-    {
-      name: "scale",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(pick((r) => r.scale[0]), pick((r) => r.scale[1]), pick((r) => r.scale[2])),
-    },
-    `${id}Size`,
-  );
+  const slots = pointTable(g, `${id}Slots`, frames.map((r) => r.at), {
+    rot: ["vec4", frames.map((r) => r.rot)],
+    scale: ["vec3", frames.map((r) => r.scale)],
+  });
+  // A string column is setAttribute's table, picked by each point's index.
   const kind = g.add(
     setAttribute,
     {
@@ -2300,15 +2219,12 @@ function chainSpawn(g: Graph, id: string, chain: ChainRun): NodeHandle {
       type: "string",
       tupleSize: 1,
       values: [CHAIN_ASSETS.axle, CHAIN_ASSETS.bar, CHAIN_ASSETS.weight],
-      value: pick((r) => r.asset),
+      value: indexTable(frames.map((r) => r.asset)),
     },
     `${id}Kind`,
   );
   const spawn = g.add(spawnInstances, { assetId: CHAIN_ASSETS.bar, assetAttr: "asset" }, `${id}Spawn`);
-  g.connect(slots, "out", place, "in");
-  g.connect(place, "out", rot, "in");
-  g.connect(rot, "out", size, "in");
-  g.connect(size, "out", kind, "in");
+  g.connect(slots, "out", kind, "in");
   g.connect(kind, "out", spawn, "in");
   return spawn;
 }

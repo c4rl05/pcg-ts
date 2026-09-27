@@ -34,8 +34,9 @@
  * regional build adds, and moving onto a cell is setting each one's box.
  *
  * WHERE A GATE MAY STAND. Every source that writes a point's `seed` from
- * its ARRAY INDEX (`pathResample`, `pathSegments`, `pointGrid`, and a
- * `copyToPoints` from such targets) must run on the whole tower, and a
+ * its ARRAY INDEX (`pathResample`, `pathSegments`, `pointGrid`,
+ * `pointList`, and a `copyToPoints` from such targets) must run on the
+ * whole tower, and a
  * gate stands after it: filtering members before a resample renumbers
  * every sample after the first one dropped, which moves its jitter and
  * redraws its head. The filters themselves carry seeds unchanged. So a

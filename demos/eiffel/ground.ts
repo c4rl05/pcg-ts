@@ -50,13 +50,11 @@ import {
   filterByExpression,
   index,
   max,
-  pointGrid,
   pointsToPath,
   setAttribute,
-  vec,
 } from "pcg-ts";
 import { CREASE, SAG, type SegmentLimits, arcSegments, circleSegments, smoothed } from "./chord.js";
-import { type Vec3, copyToQuadrants, indexTable, merge, quadrants } from "./lattice.js";
+import { type Vec3, copyToQuadrants, merge, pointTable, quadrants } from "./lattice.js";
 import type { Parts } from "./parts.js";
 import { LEG_UPRIGHTS, type UprightName, segmentAxis } from "./builtup.js";
 import { NODES, PEDESTAL, PILES, yOfCote } from "./spec.js";
@@ -276,27 +274,7 @@ function flatPrisms(g: Graph, id: string, list: readonly Prism[], faces = false)
   const pts = list.flatMap((p) => p.outline);
   const which = list.flatMap((p, i) => p.outline.map(() => i));
   const depth = list.flatMap((p) => p.outline.map(() => p.depth));
-  const slots = g.add(
-    pointGrid,
-    { countX: pts.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    `${id}Slots`,
-  );
-  const place = g.add(
-    setAttribute,
-    {
-      name: "P",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(
-        indexTable(pts.map((p) => p[0])),
-        indexTable(pts.map((p) => p[1])),
-        indexTable(pts.map((p) => p[2])),
-      ),
-    },
-    `${id}Place`,
-  );
-  const key = g.add(setAttribute, { name: "prism", type: "i32", value: indexTable(which) }, `${id}Key`);
-  const len = g.add(setAttribute, { name: "depth", type: "f32", value: indexTable(depth) }, `${id}Depth`);
+  const slots = pointTable(g, `${id}Slots`, pts, { prism: ["i32", which], depth: ["f32", depth] });
   const paths = g.add(pointsToPath, { groupAttr: "prism", closed: true }, `${id}Paths`);
   const solid = g.add(
     extrudePolygon,
@@ -305,14 +283,11 @@ function flatPrisms(g: Graph, id: string, list: readonly Prism[], faces = false)
       : { direction: "polygonNormal", distance: attribute("depth"), caps: "both" },
     id,
   );
-  g.connect(slots, "out", place, "in");
-  g.connect(place, "out", key, "in");
-  g.connect(key, "out", len, "in");
   if (faces) {
     const seed = g.add(setAttribute, { name: "seed", type: "u32", value: 0 }, `${id}Seed`);
-    g.connect(len, "out", seed, "in");
+    g.connect(slots, "out", seed, "in");
     g.connect(seed, "out", paths, "in");
-  } else g.connect(len, "out", paths, "in");
+  } else g.connect(slots, "out", paths, "in");
   g.connect(paths, "out", solid, "in");
   return solid;
 }
@@ -1898,15 +1873,7 @@ export function buildGround(g: Graph, quads: NodeHandle = quadrants(g, "groundQu
   const once = groundOnce();
   const support = supportTemplate();
   const seats = supportSeats();
-  const slots = g.add(
-    pointGrid,
-    { countX: seats.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    "groundSeatSlots",
-  );
-  const column = (a: 0 | 1 | 2) => indexTable(seats.map((p) => p[a]));
-  const place = g.add(setAttribute, { name: "P", type: "f32", tupleSize: 3, value: vec(column(0), column(1), column(2)) }, "groundSeats");
-  g.connect(slots, "out", place, "in");
-  const frames = copyToQuadrants(g, "groundSupportFrames", place, quads);
+  const frames = copyToQuadrants(g, "groundSupportFrames", pointTable(g, "groundSeatSlots", seats), quads);
   const supports = (id: string, list: readonly Prism[]) => copyOnto(g, id, flatPrisms(g, `${id}Flat`, list), frames);
   const massifs = [true, false].map((caissons) => {
     const id = caissons ? "groundMassifsCaisson" : "groundMassifsOpen";

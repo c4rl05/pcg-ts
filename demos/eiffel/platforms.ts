@@ -199,19 +199,17 @@ import {
   mergePrimitives,
   mul,
   ne,
-  pointGrid,
   pointLine,
   pointsToPath,
   polygonBoolean,
   position,
   promoteAttribute,
   removeAttribute,
-  setAttribute,
   spawnInstances,
   transformPoints,
   vec,
 } from "pcg-ts";
-import { type Vec3, copyToQuadrants, indexTable } from "./lattice.js";
+import { type TableColumn, type Vec3, copyToQuadrants, pointTable } from "./lattice.js";
 import { SAG, arcSegments, circleSegments, halfEllipseSegments, smoothed } from "./chord.js";
 import { archPierBases } from "./firstFloor.js";
 import { ALPHABET, glyph, setLine } from "./letters.js";
@@ -692,88 +690,32 @@ function namesLetters(g: Graph): NodeHandle {
   [...ALPHABET].forEach((ch, k) => {
     for (const piece of glyph(ch).pieces) shapes.push({ outline: piece.map(([x, y]): Vec3 => [x, y, 0]), glyph: k });
   });
-  const pts = shapes.flatMap((s) => s.outline);
-  const slots = g.add(
-    pointGrid,
-    { countX: pts.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    "namesGlyphSlots",
-  );
-  const place = g.add(
-    setAttribute,
-    {
-      name: "P",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(indexTable(pts.map((p) => p[0])), indexTable(pts.map((p) => p[1])), indexTable(pts.map((p) => p[2]))),
-    },
-    "namesGlyphPlace",
-  );
-  const key = g.add(
-    setAttribute,
-    { name: "prism", type: "i32", value: indexTable(shapes.flatMap((s, i) => s.outline.map(() => i))) },
-    "namesGlyphKey",
-  );
-  const which = g.add(
-    setAttribute,
-    { name: "glyph", type: "i32", value: indexTable(shapes.flatMap((s) => s.outline.map(() => s.glyph))) },
-    "namesGlyphWhich",
-  );
+  const slots = pointTable(g, "namesGlyphSlots", shapes.flatMap((s) => s.outline), {
+    prism: ["i32", shapes.flatMap((s, i) => s.outline.map(() => i))],
+    glyph: ["i32", shapes.flatMap((s) => s.outline.map(() => s.glyph))],
+  });
   const paths = g.add(pointsToPath, { groupAttr: "prism", closed: true }, "namesGlyphPaths");
   const solid = g.add(extrudePolygon, { direction: "polygonNormal", distance: 1, caps: "both" }, "namesGlyphSolid");
   const bare = g.add(removeAttribute, { names: ["normal"], domain: "point" }, "namesGlyphs");
-  g.connect(slots, "out", place, "in");
-  g.connect(place, "out", key, "in");
-  g.connect(key, "out", which, "in");
-  g.connect(which, "out", paths, "in");
+  g.connect(slots, "out", paths, "in");
   g.connect(paths, "out", solid, "in");
   g.connect(solid, "out", bare, "in");
   // One target per letter.
   const letters = namesLettering().flatMap((p) =>
     p.glyphs.map((x) => ({ at: x.at, rot: p.rot, scale: p.scale, glyph: ALPHABET.indexOf(x.ch) })),
   );
-  const col = (pick: (x: (typeof letters)[number]) => number) => indexTable(letters.map(pick));
-  const targets = g.add(
-    pointGrid,
-    { countX: letters.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-    "namesLetterSlots",
-  );
-  const at = g.add(
-    setAttribute,
-    { name: "P", type: "f32", tupleSize: 3, value: vec(col((x) => x.at[0]), col((x) => x.at[1]), col((x) => x.at[2])) },
-    "namesLetterPlace",
-  );
-  const rot = g.add(
-    setAttribute,
-    {
-      name: "rot",
-      type: "f32",
-      tupleSize: 4,
-      value: vec(col((x) => x.rot[0]), col((x) => x.rot[1]), col((x) => x.rot[2]), col((x) => x.rot[3])),
-    },
-    "namesLetterTurn",
-  );
-  const size = g.add(
-    setAttribute,
-    {
-      name: "scale",
-      type: "f32",
-      tupleSize: 3,
-      value: vec(col((x) => x.scale[0]), col((x) => x.scale[1]), col((x) => x.scale[2])),
-    },
-    "namesLetterSize",
-  );
-  const ask = g.add(setAttribute, { name: "glyph", type: "i32", value: col((x) => x.glyph) }, "namesLetterGlyph");
+  const targets = pointTable(g, "namesLetterSlots", letters.map((x) => x.at), {
+    rot: ["vec4", letters.map((x) => x.rot)],
+    scale: ["vec3", letters.map((x) => x.scale)],
+    glyph: ["i32", letters.map((x) => x.glyph)],
+  });
   const copies = g.add(
     copyToPoints,
     { topology: "keep", sourceGroupAttr: "glyph", targetGroupAttr: "glyph" },
     "namesLetters",
   );
-  g.connect(targets, "out", at, "in");
-  g.connect(at, "out", rot, "in");
-  g.connect(rot, "out", size, "in");
-  g.connect(size, "out", ask, "in");
   g.connect(bare, "out", copies, "source");
-  g.connect(ask, "out", copies, "target");
+  g.connect(targets, "out", copies, "target");
   return copies;
 }
 
@@ -1680,37 +1622,11 @@ function drawn(g: Graph, id: string, piece: Piece): NodeHandle {
   if (list.length > 0) parts.push(prismMesh(g, blocks.length > 0 ? `${id}Prisms` : id, list));
   if (blocks.length > 0) {
     const name = list.length > 0 ? `${id}Boxes` : id;
-    const col = (pick: (b: Block) => number) => indexTable(blocks.map(pick));
-    const turnOf = (b: Block): Quat => b.rot ?? [0, 0, 0, 1];
-    const slots = g.add(
-      pointGrid,
-      { countX: blocks.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-      `${name}Slots`,
-    );
-    const place = g.add(
-      setAttribute,
-      { name: "P", type: "f32", tupleSize: 3, value: vec(col((b) => b.at[0]), col((b) => b.at[1]), col((b) => b.at[2])) },
-      `${name}Place`,
-    );
-    const rot = g.add(
-      setAttribute,
-      {
-        name: "rot",
-        type: "f32",
-        tupleSize: 4,
-        value: vec(col((b) => turnOf(b)[0]), col((b) => turnOf(b)[1]), col((b) => turnOf(b)[2]), col((b) => turnOf(b)[3])),
-      },
-      `${name}Turn`,
-    );
-    const size = g.add(
-      setAttribute,
-      { name: "scale", type: "f32", tupleSize: 3, value: vec(col((b) => b.size[0]), col((b) => b.size[1]), col((b) => b.size[2])) },
-      `${name}Size`,
-    );
-    g.connect(slots, "out", place, "in");
-    g.connect(place, "out", rot, "in");
-    g.connect(rot, "out", size, "in");
-    parts.push(copiedOnto(g, name, unitBox(g), size));
+    const targets = pointTable(g, `${name}Slots`, blocks.map((b) => b.at), {
+      rot: ["vec4", blocks.map((b) => b.rot ?? [0, 0, 0, 1])],
+      scale: ["vec3", blocks.map((b) => b.size)],
+    });
+    parts.push(copiedOnto(g, name, unitBox(g), targets));
   }
   if (parts.length === 1) return parts[0] as NodeHandle;
   const out = g.add(mergePrimitives, {}, id);
@@ -1765,11 +1681,10 @@ function prisms(g: Graph, id: string, list: readonly Prism[]): NodeHandle {
 
 /**
  * Prisms as one mesh node named `id`: every outline a closed path, its
- * points' coordinates a table over their index (`indexTable`), extruded
- * along its normal by its depth. One table for the whole list: it was once
- * cut into runs of 1,024 points, from when a table's lookup cost grew with
- * the square of its length, which it no longer does (PLAN.md, "The eiffel
- * `PRISM_RUN` split is vestigial").
+ * points one literal table ({@link pointTable}), extruded along its normal
+ * by its depth. One table for the whole list: it was once cut into runs of
+ * 1,024 points, from when a table's lookup cost grew with the square of
+ * its length (PLAN.md, "The eiffel `PRISM_RUN` split is vestigial").
  */
 function prismMesh(g: Graph, id: string, list: readonly Prism[]): NodeHandle {
   const paths = outlinePaths(g, id, list.map((p) => p.outline), { depth: list.map((p) => p.depth) });
@@ -1788,23 +1703,12 @@ function outlinePaths(
   outlines: ReadonlyArray<readonly Vec3[]>,
   per: Record<string, readonly number[]>,
 ): NodeHandle {
-  const pts = outlines.flat();
-  const each = (values: readonly number[]) => indexTable(outlines.flatMap((o, i) => o.map(() => values[i] as number)));
-  const chain = [
-    g.add(pointGrid, { countX: pts.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] }, `${id}Slots`),
-    g.add(
-      setAttribute,
-      { name: "P", type: "f32", tupleSize: 3, value: vec(...[0, 1, 2].map((k) => indexTable(pts.map((p) => p[k] as number)))) },
-      `${id}Place`,
-    ),
-    g.add(setAttribute, { name: "prism", type: "i32", value: each(outlines.map((_, i) => i)) }, `${id}Key`),
-    ...Object.entries(per).map(([name, values]) =>
-      g.add(setAttribute, { name, type: "f32", value: each(values) }, `${id}${name[0]?.toUpperCase()}${name.slice(1)}`),
-    ),
-    g.add(pointsToPath, { groupAttr: "prism", closed: true }, `${id}Paths`),
-  ];
-  chain.forEach((node, i) => i > 0 && g.connect(chain[i - 1] as NodeHandle, "out", node, "in"));
-  return chain[chain.length - 1] as NodeHandle;
+  const each = (values: readonly number[]) => outlines.flatMap((o, i) => o.map(() => values[i] as number));
+  const columns: Record<string, TableColumn> = { prism: ["i32", each(outlines.map((_, i) => i))] };
+  for (const [name, values] of Object.entries(per)) columns[name] = ["f32", each(values)];
+  const paths = g.add(pointsToPath, { groupAttr: "prism", closed: true }, `${id}Paths`);
+  g.connect(pointTable(g, `${id}Slots`, outlines.flat(), columns), "out", paths, "in");
+  return paths;
 }
 
 /**
@@ -2358,44 +2262,14 @@ function fittingSpawn(site: Site, id: string, lots: ReadonlyArray<Lot<readonly F
   for (const lot of lots) {
     const name = `${id}${placeName(lot.place)}`;
     const list = lot.drawn;
-    const col = (pick: (x: Fitting) => number) => indexTable(list.map(pick));
-    const slots = g.add(
-      pointGrid,
-      { countX: list.length, countY: 1, countZ: 1, spacing: [1, 1, 1], origin: [0, 0, 0] },
-      `${name}Slots`,
-    );
-    const place = g.add(
-      setAttribute,
-      { name: "P", type: "f32", tupleSize: 3, value: vec(col((x) => x.at[0]), col((x) => x.at[1]), col((x) => x.at[2])) },
-      `${name}Place`,
-    );
-    const rot = g.add(
-      setAttribute,
-      {
-        name: "rot",
-        type: "f32",
-        tupleSize: 4,
-        value: vec(col((x) => x.rot[0]), col((x) => x.rot[1]), col((x) => x.rot[2]), col((x) => x.rot[3])),
-      },
-      `${name}Turn`,
-    );
-    const size = g.add(
-      setAttribute,
-      {
-        name: "scale",
-        type: "f32",
-        tupleSize: 3,
-        value: vec(col((x) => x.scale[0]), col((x) => x.scale[1]), col((x) => x.scale[2])),
-      },
-      `${name}Size`,
-    );
-    g.connect(slots, "out", place, "in");
-    g.connect(place, "out", rot, "in");
-    g.connect(rot, "out", size, "in");
-    let out: NodeHandle = size;
+    const table = pointTable(g, `${name}Slots`, list.map((x) => x.at), {
+      rot: ["vec4", list.map((x) => x.rot)],
+      scale: ["vec3", list.map((x) => x.scale)],
+    });
+    let out: NodeHandle = table;
     if (lot.place !== null) {
       out = g.add(copyToPoints, {}, `${name}On`);
-      g.connect(size, "out", out, "source");
+      g.connect(table, "out", out, "source");
       g.connect(targetsOf(site, lot.place), "out", out, "target");
     }
     g.connect(out, "out", all, "in");
