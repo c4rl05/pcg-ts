@@ -48,6 +48,7 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import type { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
 import { type BuiltEnv, type EnvSpec, buildEnv, sunDirection } from "./env.js";
+import { passFlat } from "./flat.js";
 import { applyAo, createGtao } from "./gtao.js";
 import type { LightSpec, Look, MaterialSpec } from "./look.js";
 import { VIGNETTE_DEFAULT, applyVignette, createVignette, sizeVignette } from "./vignette.js";
@@ -137,7 +138,11 @@ export function createRig(
   // three only applies `renderer.toneMapping` when it is drawing straight
   // to the canvas, so everything upstream of this pass is linear, which
   // is what the occlusion wants to be multiplying.
-  composer.addPass(new OutputPass());
+  // A flat-painted pixel (flat.ts: the page's highlights) passes through it
+  // untouched instead; every other pixel takes the stock path.
+  const output = new OutputPass();
+  passFlat(output);
+  composer.addPass(output);
 
   let env: BuiltEnv | undefined;
   let envKey = "";

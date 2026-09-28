@@ -21,7 +21,7 @@ beforeAll(async () => {
   plainKeys = Object.keys((await cook(buildEiffel(1889, {}))).outputs);
 }, 120_000);
 
-const IRON = ["uprights", "bracing", "horizontals", "girders", "arches", "gussets", "summit", "platforms"];
+const IRON = ["uprights", "bracing", "horizontals", "girders", "arches", "gussets", "summit", "platforms", "stairs"];
 
 /** Is p inside the block, `shrink` in from every face? */
 function inside(b: Block, p: Vec3, shrink = 0.02): boolean {

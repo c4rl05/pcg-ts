@@ -368,7 +368,7 @@ describe("Eiffel leftovers: Plate I's 18.65, the plan bracing's H, the arch's hi
     for (const id of ["ffArchFeetSkin", "ffArchFeetPaths4RotDone", "planBracingChordPaths"]) {
       expect(positionsOf(again.probe(id)), id).toEqual(positionsOf(plain.probe(id)));
     }
-    for (const name of ["platforms", "summit", "arches", "girders"]) {
+    for (const name of ["platforms", "stairs", "summit", "arches", "girders"]) {
       const a = firstGeometry(plain.outputs[name] ?? []);
       const b = firstGeometry(again.outputs[name] ?? []);
       expect(a, name).toBeDefined();

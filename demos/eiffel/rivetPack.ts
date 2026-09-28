@@ -55,7 +55,9 @@ import {
   type BufferGeometry,
   InstancedBufferAttribute,
   InstancedBufferGeometry,
+  type Material,
   Mesh,
+  type MeshBasicMaterial,
   MeshNormalMaterial,
   type MeshStandardMaterial,
   NoBlending,
@@ -297,7 +299,13 @@ export function unpackMatrix(p: PackedRivets, i: number): number[] {
 /** Marks a packed rivet mesh, and its prepass stand-in (see gtao.ts). */
 export const PACKED_RIVETS = "packedRivets";
 
-/** The shader's three edits; each anchor must be found exactly once. */
+/**
+ * The shader's three edits; each anchor must be found exactly once. The
+ * head's turn and size are functions of its attributes rather than locals
+ * set beside the normal, because an unlit shader computes no normal: the
+ * basic material's `beginnormal_vertex` sits under an `#if` that is off,
+ * and a local declared there would not reach `begin_vertex`.
+ */
 const INJECT: ReadonlyArray<readonly [string, string]> = [
   [
     "#include <common>",
@@ -307,16 +315,20 @@ attribute vec4 rivetTurn;
 attribute vec2 rivetSize;
 vec3 rivetRotate( const in vec4 q, const in vec3 v ) {
 	return v + 2.0 * cross( q.xyz, cross( q.xyz, v ) + q.w * v );
+}
+vec4 rivetQ() {
+	return normalize( rivetTurn );
+}
+vec3 rivetS() {
+	return vec3( rivetSize.x, rivetSize.y, rivetSize.x ) * ${RIVET_SIZE_MAX.toFixed(6)};
 }`,
   ],
   [
     "#include <beginnormal_vertex>",
     `#include <beginnormal_vertex>
-	vec4 rivetQ = normalize( rivetTurn );
-	vec3 rivetS = vec3( rivetSize.x, rivetSize.y, rivetSize.x ) * ${RIVET_SIZE_MAX.toFixed(6)};
-	objectNormal = rivetRotate( rivetQ, objectNormal / rivetS );`,
+	objectNormal = rivetRotate( rivetQ(), objectNormal / rivetS() );`,
   ],
-  ["#include <begin_vertex>", `#include <begin_vertex>\n\ttransformed = rivetRotate( rivetQ, transformed * rivetS ) + rivetAt;`],
+  ["#include <begin_vertex>", `#include <begin_vertex>\n\ttransformed = rivetRotate( rivetQ(), transformed * rivetS() ) + rivetAt;`],
 ];
 
 /**
@@ -355,7 +367,21 @@ export function packedShaderProblem(): string | undefined {
   }
 }
 
-function teach<M extends MeshStandardMaterial | MeshNormalMaterial>(m: M): M {
+/**
+ * The same question of the unlit shader the highlights paint packed heads
+ * with (main.ts, flat.ts). Asked apart, so an anchor gone from it costs the
+ * highlight and not the default look's packed rivets.
+ */
+export function packedUnlitProblem(): string | undefined {
+  try {
+    packedVertexShader(ShaderLib.basic.vertexShader);
+    return undefined;
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
+
+function teach<M extends MeshStandardMaterial | MeshNormalMaterial | MeshBasicMaterial>(m: M): M {
   m.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
     shader.vertexShader = packedVertexShader(shader.vertexShader);
   };
@@ -367,9 +393,12 @@ function teach<M extends MeshStandardMaterial | MeshNormalMaterial>(m: M): M {
   return m;
 }
 
-/** `base` (a rivet material) for packed heads: its colour and finish, the packed vertex shader. */
-export function packedRivetMaterial(base: MeshStandardMaterial): MeshStandardMaterial {
-  return teach(base.clone());
+/**
+ * `base` (a rivet material, or the highlight's unlit paint) for packed
+ * heads: its colour and finish, the packed vertex shader.
+ */
+export function packedRivetMaterial<M extends MeshStandardMaterial | MeshBasicMaterial>(base: M): M {
+  return teach(base.clone() as M);
 }
 
 /**
@@ -386,7 +415,7 @@ export const PACKED_PREPASS = (() => {
  * A packed batch as one mesh: the unit head's own attributes, shared, and
  * the three per-head ones, each dropped from the CPU once uploaded.
  */
-export function packedRivetMesh(p: PackedRivets, head: BufferGeometry, material: MeshStandardMaterial): Mesh {
+export function packedRivetMesh(p: PackedRivets, head: BufferGeometry, material: Material): Mesh {
   const g = new InstancedBufferGeometry();
   g.setIndex(head.index);
   for (const [name, attr] of Object.entries(head.attributes)) g.setAttribute(name, attr);

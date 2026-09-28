@@ -90,7 +90,9 @@ import {
   type InstancedMesh,
   type Material,
   Mesh,
+  type MeshBasicMaterial,
   MeshStandardMaterial,
+  type Object3D,
   PCFShadowMap,
   PerspectiveCamera,
   Scene,
@@ -108,6 +110,7 @@ import { attachWordmark } from "../../shared/wordmark.js";
 import { bandsFrom } from "./bands.js";
 import { type Bands, startBands } from "./bandsView.js";
 import { isoOf } from "./chronology.js";
+import { flatMaterial, flatShaderProblem, teachFlat, unlitMaterial } from "./flat.js";
 import { attachKeyMove } from "./keyMove.js";
 import { buildEiffel } from "./graph.js";
 import {
@@ -139,10 +142,12 @@ import {
   type RivetBatch,
   type RivetFallback,
   isFallback,
+  isPackedRivets,
   packRivets,
   packedRivetMaterial,
   packedRivetMesh,
   packedShaderProblem,
+  packedUnlitProblem,
 } from "./rivetPack.js";
 import { BufferAttribute, DataTexture, NearestFilter, SRGBColorSpace } from "three";
 import { FLAG_BANDS, FLAG_GRID, FLAG_POINTS, flagNormals, flagPose } from "./flag.js";
@@ -168,6 +173,10 @@ const PALETTE: Record<PartClass, { color: number; roughness: number; metalness: 
   // same painted iron as the lattice, so it takes the family's lighter end:
   // it sits in its own shade, and a darker paint read as solid black.
   platforms: { color: 0x7d5e48, roughness: 0.7, metalness: 0.1 },
+  // The stairs were the fit-out's until they were a class of their own
+  // (parts.ts), and keep its paint: the class is there so a stair can be
+  // judged and highlighted apart, not so it reads differently.
+  stairs: { color: 0x7d5e48, roughness: 0.7, metalness: 0.1 },
   masonry: { color: 0xcdc3ae, roughness: 0.93, metalness: 0 },
   // What is under the ground: rubble, concrete and brick, a darker and
   // warmer stone than the pedestals' cast facing.
@@ -276,6 +285,83 @@ const RIVET_SITE = new MeshStandardMaterial({ ...RIVET_TONE.site, metalness: 0.1
 /** The same two, for packed heads (rivetPack.ts). */
 const PACKED_SHOP = packedRivetMaterial(RIVET_SHOP);
 const PACKED_SITE = packedRivetMaterial(RIVET_SITE);
+
+/**
+ * THE HIGHLIGHTS: the stairs, the lifts and the rivets, each in one flat
+ * primary — unlit, unfogged, and carried past the occlusion, the vignette
+ * and the tone map untouched (flat.ts) — so where each runs reads at a
+ * glance against the iron's browns, from any distance. Each has its own
+ * checkbox, and `?hl=stairs,lifts,rivets` opens with them on, the way
+ * "copy view" writes it; off puts back the material each mesh had. A
+ * highlight changes no mesh's shadow, so the shadow map is not redrawn.
+ *
+ * - stairs: the "stairs" class, all of it (parts.ts says what it holds).
+ * - lifts: every car (`car.*`, the leg cars' panes among them), what moves
+ *   with one (carriages, counterweights, pistons, pulleys, cables:
+ *   `LIFT_FOLLOWERS`) and the Roux chains (`chain.*`). Not the machinery
+ *   that stands still: it is one mesh with the ground's iron (the
+ *   caissons, the supports, the machine room's plant) in the "machinery"
+ *   class, and cannot be painted apart from it; nor the tracks and guide
+ *   posts, which are girders.
+ * - rivets: every rivet output, packed or drawn as matrices, and at
+ *   `?bands` every rivet cell as it streams in.
+ */
+const HIGHLIGHTS = ["stairs", "lifts", "rivets"] as const;
+type Highlight = (typeof HIGHLIGHTS)[number];
+const HIGHLIGHT_PAINT: Record<Highlight, number> = { stairs: 0xff0000, lifts: 0x00ff00, rivets: 0x0000ff };
+/** Each highlight's paint, plain and for packed heads (whose edit clones, so it goes first). */
+const FLAT = Object.fromEntries(
+  HIGHLIGHTS.map((h) => [
+    h,
+    {
+      plain: flatMaterial(HIGHLIGHT_PAINT[h]),
+      packed: teachFlat(packedRivetMaterial(unlitMaterial(HIGHLIGHT_PAINT[h]))),
+    },
+  ]),
+) as Record<Highlight, { plain: MeshBasicMaterial; packed: MeshBasicMaterial }>;
+/** Whether this three's shaders take the flat paint and its packed kind, asked once (flat.ts, rivetPack.ts); if not, no highlight. */
+const FLAT_PROBLEM = flatShaderProblem() ?? packedUnlitProblem();
+/** Which highlights are on: read from `?hl` once, then the checkboxes'. */
+const lit: Record<Highlight, boolean> = (() => {
+  const asked = new Set((new URLSearchParams(location.search).get("hl") ?? "").split(","));
+  return Object.fromEntries(HIGHLIGHTS.map((h) => [h, FLAT_PROBLEM === undefined && asked.has(h)])) as Record<
+    Highlight,
+    boolean
+  >;
+})();
+/**
+ * The userData keys a highlightable mesh carries: the paint of the
+ * highlight it answers to (the `FLAT` entry itself, so a toggle finds its
+ * meshes by identity), and the material it was drawn in.
+ */
+const HL = { paint: "highlightPaint", own: "ownMaterial" } as const;
+
+/** The flat paint `mesh` takes under `paint`: the packed kind for a packed head. */
+function flatFor(mesh: Mesh, paint: (typeof FLAT)[Highlight]): Material {
+  return isPackedRivets(mesh) ? paint.packed : paint.plain;
+}
+
+/**
+ * Make `mesh` answer to highlight `h`, keeping the material it was drawn
+ * in, and paint it now if `h` is on. Called once per mesh, when it is
+ * drawn or streams in.
+ */
+function highlightable(mesh: Mesh, h: Highlight): void {
+  mesh.userData[HL.paint] = FLAT[h];
+  mesh.userData[HL.own] = mesh.material;
+  if (lit[h]) mesh.material = flatFor(mesh, FLAT[h]);
+}
+
+/** Turn highlight `h` on or off, on every mesh in `root` that answers to it. */
+function setHighlight(root: Object3D, h: Highlight, on: boolean): void {
+  lit[h] = on;
+  const paint = FLAT[h];
+  root.traverse((o) => {
+    if (o.userData[HL.paint] !== paint) return;
+    const mesh = o as Mesh;
+    mesh.material = on ? flatFor(mesh, paint) : (mesh.userData[HL.own] as Material);
+  });
+}
 
 /** Show the site rivets in their own tone, or lit up against the shop's. */
 function lightSiteRivets(on: boolean): void {
@@ -435,6 +521,7 @@ function drawRivets(name: string, collection: DataCollection, problems: string[]
         if (!isFallback(packed)) {
           const mesh = packedRivetMesh(packed, ASSETS.rivet!.geometry, site ? PACKED_SITE : PACKED_SHOP);
           mesh.name = name;
+          highlightable(mesh, "rivets");
           out.push(mesh);
           rivetPath.packed += packed.count;
           rivetPath.packedBytes += packed.count * PACKED_BYTES;
@@ -451,6 +538,7 @@ function drawRivets(name: string, collection: DataCollection, problems: string[]
           mesh.receiveShadow = true;
           mesh.name = name;
           if (site) mesh.material = RIVET_SITE;
+          highlightable(mesh, "rivets");
           out.push(mesh);
           instances += mesh.count;
           rivetPath.cpu += mesh.count;
@@ -742,6 +830,31 @@ const detailLinks = DETAILS.map((d) => {
 });
 detailSlot.append(detailRow);
 
+// THE HIGHLIGHTS (see `HIGHLIGHTS`), a row under the detail links: each
+// checkbox tinted its paint. Cooked meshes that arrive later take the
+// paint as they are drawn, so the row works before the cook is done.
+const highlightSlot = overlay.addSlot();
+const highlightRow = document.createElement("div");
+highlightRow.style.cssText = "display:flex;gap:0.9em;align-items:baseline;flex-wrap:wrap";
+const highlightLabel = document.createElement("span");
+highlightLabel.textContent = "highlight";
+highlightLabel.style.opacity = "0.7";
+highlightRow.append(highlightLabel);
+for (const h of HIGHLIGHTS) {
+  const label = document.createElement("label");
+  label.style.cssText = "display:inline-flex;gap:0.3em;align-items:baseline;cursor:pointer";
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.checked = lit[h];
+  box.disabled = FLAT_PROBLEM !== undefined;
+  box.style.accentColor = `#${HIGHLIGHT_PAINT[h].toString(16).padStart(6, "0")}`;
+  box.addEventListener("change", () => setHighlight(scene, h, box.checked));
+  label.append(box, h);
+  highlightRow.append(label);
+}
+if (FLAT_PROBLEM !== undefined) highlightRow.title = FLAT_PROBLEM;
+highlightSlot.append(highlightRow);
+
 /** Point every level's link at the current view. */
 function refreshDetailLinks(): void {
   const p = camera.position;
@@ -768,11 +881,11 @@ refreshDetailLinks();
 // now, as one line of URL and one of JSON, for pasting into an issue or a
 // session and for naming a shot. The URL is the repro — the depth and every
 // other query param as they are, plus the pose, the lens, the isolated
-// class, the section, the build's day, the walk's pose and both clocks,
-// with `still` so the frame holds (the lifts' and the flag's clocks are
-// restored by `t`, and would move on from it). The JSON restates it with
-// what a URL cannot carry: the viewport, the pixel ratio, whether the lifts
-// were running and whether a capture probe was driving the camera.
+// class, the section, the highlights, the build's day, the walk's pose and
+// both clocks, with `still` so the frame holds (the lifts' and the flag's
+// clocks are restored by `t`, and would move on from it). The JSON restates
+// it with what a URL cannot carry: the viewport, the pixel ratio, whether
+// the lifts were running and whether a capture probe was driving the camera.
 
 /** The class the "show" select isolates; `all` is none. */
 let showing = "all";
@@ -790,6 +903,7 @@ const VIEW_PARAMS = new Set([
   "show",
   "section",
   "site",
+  "hl",
   "build",
   "walk",
   "walkAt",
@@ -823,6 +937,8 @@ function copyableView(): string {
   if (showing !== "all") query.push(`show=${encodeURIComponent(showing)}`);
   if (sectioned) query.push("section");
   if (siteLit) query.push("site");
+  const highlighted = HIGHLIGHTS.filter((h) => lit[h]);
+  if (highlighted.length > 0) query.push(`hl=${highlighted.join(",")}`);
   // The day the scrubber shows; before the cook has staged it, the day asked for.
   const day = BUILD ? isoOf(scrubber?.day ?? buildDayParam(params.get("build"))) : null;
   if (day !== null) query.push(`build=${day}`);
@@ -831,7 +947,7 @@ function copyableView(): string {
     if (walked.nearShadow) query.push("walkNear");
   }
   // Six places: at a millisecond a pulley's vertices land 0.3 m apart.
-  query.push(`t=${r(clock, 6)},${r(windClock, 6)}`);
+  query.push(`t=${carsParked ? "" : r(clock, 6)},${r(windClock, 6)}`);
   const url = `${location.origin}${location.pathname}?${query.join("&")}`;
   const state = {
     eye,
@@ -843,6 +959,7 @@ function copyableView(): string {
     show: showing,
     section: sectioned,
     site: siteLit,
+    highlight: highlighted,
     build: day,
     walk:
       walked === null
@@ -855,7 +972,7 @@ function copyableView(): string {
             pitch: r(walked.pitch, 2),
             nearShadow: walked.nearShadow,
           },
-    lifts: { t: r(clock, 6), running: liftsRunning },
+    lifts: { t: carsParked ? null : r(clock, 6), running: liftsRunning },
     wind: { t: r(windClock, 6), running: windRunning },
     driven,
   };
@@ -1096,6 +1213,7 @@ async function main(): Promise<void> {
     }
     // Glass casts nothing (see `GLASS`).
     if (cls === "glass") for (const mesh of drawn.meshes) mesh.castShadow = false;
+    if (cls === "stairs") for (const mesh of drawn.meshes) highlightable(mesh, "stairs");
     keep(cls, drawn);
     present.push(cls);
     classStats[cls](drawn.triangles.toLocaleString());
@@ -1142,6 +1260,7 @@ async function main(): Promise<void> {
     if (drawn.meshes.length === 0) continue;
     keep(name, drawn);
     if (!named) present.push(name);
+    if (isCar(name) || isChain(name)) for (const mesh of drawn.meshes) highlightable(mesh, "lifts");
     if (isChain(name)) {
       const chain = LIFT_CHAINS.findIndex((c) => `chain.${c.name}` === name);
       if (chain < 0) problems.push(`${name}: the graph declared this chain but published no circuit for it`);
@@ -1316,6 +1435,9 @@ async function main(): Promise<void> {
         }
         driveHeads(drawn);
         return drawn;
+      },
+      rivetsMade: (made) => {
+        for (const mesh of made) highlightable(mesh, "rivets");
       },
       shadowsChanged: () => {
         renderer.shadowMap.needsUpdate = true;
@@ -1492,6 +1614,7 @@ const ease = (x: number): number => x * x * (3 - 2 * x);
  * allocates: the matrices are written where the meshes keep them.
  */
 function moveCars(t: number): void {
+  carsParked = false;
   for (let i = 0; i < LIFT_CARS.length; i++) {
     const run = LIFT_CARS[i] as CarRun;
     RUN_S[i] = run.from + (run.to - run.from) * carPhase(run, t);
@@ -1599,10 +1722,16 @@ const FLAG_NORMAL = new Float32Array(3 * FLAG_POINTS);
  */
 // `?t=<lifts>,<wind>` opens with the two clocks at those seconds, the way
 // "copy view" writes them beside `still`: the cars and the flag as they
-// were when the view was copied.
-const CLOCKS = new URLSearchParams(location.search).get("t")?.split(",").map(Number);
-const clockAt = (i: number): number => (CLOCKS !== undefined && Number.isFinite(CLOCKS[i]) ? (CLOCKS[i] as number) : 0);
-let windClock = clockAt(1);
+// were when the view was copied. An empty lifts entry (`t=,<wind>`) is a
+// page whose cars never left where the graph built them — which no clock
+// reproduces, since the built pose is not the run's pose at 0.
+const CLOCKS = new URLSearchParams(location.search).get("t")?.split(",");
+const clockAt = (i: number): number | undefined => {
+  const raw = CLOCKS?.[i];
+  const n = raw === undefined || raw === "" ? Number.NaN : Number(raw);
+  return Number.isFinite(n) ? n : undefined;
+};
+let windClock = clockAt(1) ?? 0;
 let windRunning = !STILL;
 
 /**
@@ -1664,7 +1793,9 @@ function waveFlags(t: number): void {
 
 const tickFps = createFpsMeter(statFps);
 
-let clock = clockAt(0);
+let clock = clockAt(0) ?? 0;
+/** Whether every car still stands where the graph built it: `moveCars` has never run. */
+let carsParked = true;
 let lastFrame = performance.now();
 
 renderer.setAnimationLoop(() => {
@@ -1789,10 +1920,8 @@ main()
   .then(() => {
     // A parked page (`?still`) never moves a car itself, so `?t=` puts
     // them, and the flag, where its clocks say once the cook has built them.
-    if (CLOCKS !== undefined) {
-      moveCars(clock);
-      waveFlags(windClock);
-    }
+    if (clockAt(0) !== undefined) moveCars(clock);
+    if (clockAt(1) !== undefined) waveFlags(windClock);
     // Two frames after the scene is complete — the first draws the shadow
     // map — `data-ready` tells a scripted capture it can shoot.
     requestAnimationFrame(() =>

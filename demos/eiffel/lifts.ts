@@ -116,10 +116,10 @@
  * shafts, pistons, tanks), which is swept tubes. The boxes carry their
  * local face normals as `normal`, which `rotateAttrs` turns at every
  * copyToPoints on the way (the block's own turn, then a quadrant's, where
- * one follows). Tracks and the Edoux guide posts go in "girders"; cars and
- * the stairs in "platforms"; the machinery that stands still in
- * "machinery"; everything that moves is its own `car.<name>` mesh, and each
- * Roux chain its own instances output, `chain.<name>`.
+ * one follows). Tracks and the Edoux guide posts go in "girders"; the
+ * stairs in "stairs"; the machinery that stands still in "machinery";
+ * everything that moves is its own `car.<name>` mesh, and each Roux chain
+ * its own instances output, `chain.<name>`.
  */
 import type { Graph, NodeHandle } from "pcg-ts";
 import {
@@ -3700,7 +3700,7 @@ export function buildLifts(g: Graph, quads: NodeHandle, detail: Detail = {}): Pa
   const rails = merge(g, "liftRails", railNodes);
   return {
     girders: [tracks, guides],
-    platforms: [stairs, skin(g, "liftRailSkin", rails, 0.025)],
+    stairs: [stairs, skin(g, "liftRailSkin", rails, 0.025)],
     machinery: [...rouxStill, ...otisStill, ...edoux.machinery],
     cars,
     chains: LIFT_CHAINS.map((c) => ({ name: c.name, spawn: chainSpawn(g, carId(`chain.${c.name}`), c) })),

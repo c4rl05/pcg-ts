@@ -125,13 +125,13 @@ const FOUND: ReadonlyArray<{ flight: string; cls: string; most: number; why: str
   },
   {
     flight: "summit.core",
-    cls: "platforms",
+    cls: "stairs",
     most: 7,
     why: "the same walk passes the mobile ladder's stiles at 0.19",
   },
   {
     flight: "summit.mobile",
-    cls: "platforms",
+    cls: "stairs",
     most: 2,
     why: "the cupola is 1.655 from its floor to the platform's underside: crossing to the last ladder, crouched, the eye comes round close to the axis, 0.24 from its rungs (a stretch of 1-2 samples, so by the phase)",
     phase: true,
@@ -436,7 +436,7 @@ describe("Eiffel walk: the climb on foot", () => {
     }, 600_000);
 
     it("reads the classes a walker could meet", () => {
-      for (const cls of ["uprights", "bracing", "horizontals", "girders", "platforms", "summit", "machinery", "glass"]) {
+      for (const cls of ["uprights", "bracing", "horizontals", "girders", "platforms", "stairs", "summit", "machinery", "glass"]) {
         expect(tower.classes, cls).toContain(cls);
       }
       expect(tower.tris.length).toBeGreaterThan(10_000);
@@ -533,7 +533,8 @@ describe("Eiffel walk: the climb on foot", () => {
     it("controls: an eye in a tread is too close, and a foot in the air has no floor", () => {
       const n = nearest(inTread, tower.bins, tower.tris);
       expect(n.dist).toBeLessThan(CLEAR);
-      expect(tower.tris[n.tri]!.cls).toBe("platforms");
+      // The stairs are their own class (parts.ts).
+      expect(tower.tris[n.tri]!.cls).toBe("stairs");
       const under = floorUnder(inAir, tower.bins, tower.tris);
       expect(under).toBeDefined();
       expect(inAir[1] - under!).toBeGreaterThan(FLOOR_GAP);

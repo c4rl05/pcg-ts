@@ -362,7 +362,7 @@ export interface Census {
  */
 export function census(
   outputs: Record<string, unknown>,
-  classes: readonly string[] = ["gussets", "bracing", "horizontals", "girders", "arches", "platforms", "masonry"],
+  classes: readonly string[] = ["gussets", "bracing", "horizontals", "girders", "arches", "platforms", "stairs", "masonry"],
 ): Census {
   const bump = (r: Record<string, number>, k: string, by = 1) => {
     r[k] = (r[k] ?? 0) + by;
@@ -686,7 +686,7 @@ export function upperCensus(outputs: Record<string, unknown>, closure: number): 
       if (ws.some((w) => w !== best && w.depth > 0.002)) s.buried++;
     }
   }
-  for (const cls of ["gussets", "bracing", "horizontals", "girders", "platforms"]) {
+  for (const cls of ["gussets", "bracing", "horizontals", "girders", "platforms", "stairs"]) {
     const geo = firstGeometry((outputs[cls] ?? []) as never) as Geometry | undefined;
     const P = geo?.attrs.point.get("P")?.data;
     if (geo === undefined || P === undefined) continue;

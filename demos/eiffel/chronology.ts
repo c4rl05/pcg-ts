@@ -493,21 +493,25 @@ export function pieceDay(cls: string, b: Box6): number {
     case "machinery":
       return Math.max(s, machineryDay(b));
     case "platforms":
+    case "stairs":
     case "glass":
     case "silvered": {
+      // The stairs were the floors' until they became a class of their own
+      // (parts.ts), and are dated as the floors' iron still is.
+      const iron = cls === "platforms" || cls === "stairs";
       const floor = floorOf(b);
       if (floor < 0) {
         // Round the legs' feet, in the plinths' ring: their dress (the
         // grilles) and the stairs' first steps, with the soubassements.
-        if (cls === "platforms" && b[4] <= PEDESTAL.height + 0.2 && Math.max(Math.abs(cx), Math.abs(cz)) >= PEDESTAL.innerFoot - 1) {
+        if (iron && b[4] <= PEDESTAL.height + 0.2 && Math.max(Math.abs(cx), Math.abs(cz)) >= PEDESTAL.innerFoot - 1) {
           return Math.max(s, within(SOUBASSEMENTS, b[1] / PEDESTAL.height));
         }
-        if (cls === "platforms" && b[4] < 57 && outsideLegs(cx, cy, cz) === 0) return Math.max(s, within(GROUND_STAIRS, b[4] / 57));
+        if (iron && b[4] < 57 && outsideLegs(cx, cy, cz) === 0) return Math.max(s, within(GROUND_STAIRS, b[4] / 57));
         return s;
       }
       const deck = FLOOR_DAYS[floor]![1];
       // The deck and what holds it: up to 0.5 m over the floor.
-      if (cls === "platforms" && b[4] <= FLOOR_DAYS[floor]![0] + 0.5) return Math.max(s, deck);
+      if (iron && b[4] <= FLOOR_DAYS[floor]![0] + 0.5) return Math.max(s, deck);
       return Math.max(s, deck, fitoutDay(b, floor));
     }
     default:

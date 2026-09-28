@@ -64,11 +64,17 @@ export interface BandsHost {
   /** The page's plain meshes by output name: the laced classes' get the plain cut's depth and prepass. */
   readonly meshes: ReadonlyMap<string, readonly Mesh[]>;
   /** The packed material for a rivet output (shop or site: main.ts). */
-  readonly rivetMaterial: (name: string) => MeshStandardMaterial;
+  readonly rivetMaterial: (name: string) => Material;
   /** The unit rivet head. */
   readonly rivetHead: BufferGeometryType;
   /** A heads batch that would not pack, drawn the page's other way. */
   readonly drawFallback: (name: string, transforms: Float32Array, drive: Float32Array | undefined) => Mesh[];
+  /**
+   * Every rivet mesh a cell adds, packed or not, once made: the page paints
+   * it as its rivets are painted now (main.ts' highlight), so a cell that
+   * streams in after a toggle matches the ones already there.
+   */
+  readonly rivetsMade: (meshes: readonly Mesh[]) => void;
   /** Ask for the shadow map to be redrawn (it does not auto-update). */
   readonly shadowsChanged: () => void;
   /** A stat line. */
@@ -210,6 +216,7 @@ export function startBands(host: BandsHost): Bands {
     }
     for (const r of msg.rivets) {
       const made = rivetMeshes(r, host);
+      host.rivetsMade(made);
       meshes.push(...made);
       h += r.count;
     }

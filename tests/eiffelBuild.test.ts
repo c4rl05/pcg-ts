@@ -239,12 +239,15 @@ describe("the erection's dates", () => {
 
   it("puts the fit-out after the deck under it, the lifts in their windows, the foundations before the iron", () => {
     const at = (cls: string) => plain.find((c) => c.cls === cls);
-    // Every piece of the 1st floor's platforms over the deck is after the 1st platform.
-    const platforms = at("platforms")!;
-    for (let t = 0; t < platforms.index.length / 3; t++) {
-      const v = platforms.index[3 * t]!;
-      const y = platforms.position[3 * v + 1]!;
-      if (y > 58.2 && y < 69) expect(platforms.staged.triDays[t]!).toBeGreaterThanOrEqual(MILESTONES.firstPlatform);
+    // Every piece of the 1st floor's platforms over the deck is after the
+    // 1st platform, and so is every stair there (the entrance flights).
+    for (const cls of ["platforms", "stairs"]) {
+      const c = at(cls)!;
+      for (let t = 0; t < c.index.length / 3; t++) {
+        const v = c.index[3 * t]!;
+        const y = c.position[3 * v + 1]!;
+        if (y > 58.2 && y < 69) expect(c.staged.triDays[t]!, cls).toBeGreaterThanOrEqual(MILESTONES.firstPlatform);
+      }
     }
     // The names, the glass: the spring of 1889 or the autumn before, never with the iron.
     for (const cls of ["names", "glass"]) {

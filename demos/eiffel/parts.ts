@@ -5,7 +5,7 @@
  * so a render colours by class and an inspection counts by class.
  */
 import type { Graph, NodeHandle } from "pcg-ts";
-import { jitterPoints, mergePrimitives } from "pcg-ts";
+import { filterPrimitivesByAttribute, jitterPoints, mergePrimitives, removeAttribute, setAttribute } from "pcg-ts";
 import { gateMesh } from "./region.js";
 
 export const PART_CLASSES = [
@@ -21,6 +21,14 @@ export const PART_CLASSES = [
   "arches",
   /** Floor platforms and the landing. */
   "platforms",
+  /**
+   * Every stair: the 1,710 steps of 1889 run by run with their stringers,
+   * landings, ladders and hand rails (`stairs.ts`, placed by `lifts.ts`),
+   * and the 1st floor's entrance flights on the Français and the Russe
+   * (`platforms.ts`). Painted as the platforms are; a class of its own so
+   * a stair can be isolated and highlighted without the floor it serves.
+   */
+  "stairs",
   /** The masonry pedestals. */
   "masonry",
   /**
@@ -266,13 +274,49 @@ export type Parts = Partial<Record<PartClass, NodeHandle[]>> & {
 };
 
 /**
+ * A class that is jittered WITH another and parted from it afterwards,
+ * rather than jittered on its own: the stairs, which were platforms until
+ * they were a class of their own. A jitter's seed is its node's, so a
+ * `stairsJitter` would have moved every stair point somewhere new within
+ * {@link JITTER} — invisible, but not the tower the platforms' jitter
+ * built, and the page's default look was kept to the bit when the class
+ * was split out. Merged into the platforms, jittered with them, and taken
+ * back out by a primitive tag, every point lands where it did. The cost
+ * is the one the jitter exists to avoid, kept as it was: a stair face that
+ * coincides with a platform's (a newel's foot on its deck) is not parted
+ * from it, which is a tie between two faces of one paint.
+ */
+export const JITTERED_WITH: Partial<Record<PartClass, PartClass>> = { stairs: "platforms" };
+
+/** The primitive tag a class jittered with another is taken back out by: its place in `PART_CLASSES`, plus one. */
+const PARTED = "partedClass";
+
+/**
  * Declare one graph output per class that has parts, named for the class,
  * each {@link jitter}ed off the planes its neighbours share.
  */
 export function assemble(g: Graph, parts: Parts): void {
   for (const cls of PART_CLASSES) {
-    const list = parts[cls];
-    if (list === undefined || list.length === 0) continue;
+    if (JITTERED_WITH[cls] !== undefined) continue;
+    const own = parts[cls] ?? [];
+    // The classes jittered with this one (`JITTERED_WITH`), each part
+    // tagged with its class so the jitter's output can be parted again.
+    const riders = PART_CLASSES.filter((c) => JITTERED_WITH[c] === cls && (parts[c]?.length ?? 0) > 0);
+    const list = [
+      ...own,
+      ...riders.flatMap((c) =>
+        (parts[c] as NodeHandle[]).map((p, k) => {
+          const tag = g.add(
+            setAttribute,
+            { name: PARTED, domain: "primitive", type: "u32", value: PART_CLASSES.indexOf(c) + 1 },
+            `${c}Tag${k}`,
+          );
+          g.connect(p, "out", tag, "in");
+          return tag;
+        }),
+      ),
+    ];
+    if (list.length === 0) continue;
     // In a regional build (region.ts) each part is cut to its cell before
     // the merge, so a cell merges and jitters its own share of the class
     // and not the tower's; the halo covers the jitter still to come.
@@ -282,7 +326,25 @@ export function assemble(g: Graph, parts: Parts): void {
       out = g.add(mergePrimitives, {}, `${cls}Out`);
       for (const p of kept) g.connect(p, "out", out, "in");
     }
-    g.output(jitter(g, `${cls}Jitter`, out), "out", cls);
+    const jittered = jitter(g, `${cls}Jitter`, out);
+    if (riders.length === 0) {
+      g.output(jittered, "out", cls);
+      continue;
+    }
+    // Parted: the merge filled the host's own parts' tag with 0.
+    const part = (c: PartClass, value: number): void => {
+      const kept = g.add(
+        filterPrimitivesByAttribute,
+        { attribute: PARTED, comparison: "eq", value, unreferencedPoints: "drop" },
+        `${c}Parted`,
+      );
+      g.connect(jittered, "out", kept, "in");
+      const clean = g.add(removeAttribute, { names: [PARTED], domain: "primitive" }, `${c}Untagged`);
+      g.connect(kept, "out", clean, "in");
+      g.output(clean, "out", c);
+    };
+    if (own.length > 0) part(cls, 0);
+    for (const c of riders) part(c, PART_CLASSES.indexOf(c) + 1);
   }
   for (const { name, spawn } of parts.rivets ?? []) g.output(spawn, "instances", `rivets.${name}`);
   for (const { name, spawn } of parts.fittings ?? []) g.output(spawn, "instances", `fittings.${name}`);

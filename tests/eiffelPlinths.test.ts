@@ -59,7 +59,7 @@ describe("eiffel plinths: the cooked pedestals", () => {
     const geo = (name: string) => firstGeometry((outputs[name] ?? []) as DataCollection) as Geometry;
     masonry = geo("masonry");
     platforms = geo("platforms");
-    others = ["uprights", "bracing", "horizontals", "girders", "arches", "platforms", "machinery", "masonry"].map(
+    others = ["uprights", "bracing", "horizontals", "girders", "arches", "platforms", "stairs", "machinery", "masonry"].map(
       (n): [string, Geometry] => [n, geo(n)],
     );
   }, 240_000);
@@ -157,7 +157,7 @@ describe("eiffel plinths: the cooked pedestals", () => {
       [PEDESTAL.innerFoot - 0.5, 0, PEDESTAL.innerFoot - 0.5],
       [PEDESTAL.outer + 0.5, PEDESTAL.height + 0.1, PEDESTAL.outer + 0.5],
     ];
-    const iron = others.filter(([name]) => name !== "masonry" && name !== "platforms").flatMap(([, geo]) => surfaceSamples(geo, high, 0.05));
+    const iron = others.filter(([name]) => name !== "masonry" && name !== "platforms" && name !== "stairs").flatMap(([, geo]) => surfaceSamples(geo, high, 0.05));
     for (const h of inside(skirt, iron, 0.005)) report.push(`iron in the skirt at [${h.at.map((v) => v.toFixed(2))}] ${h.depth.toFixed(3)} deep`);
     // Control: the skirt's outer faces 0.4 further in meet the c upright.
     const pushed = pedestalFaces().map((p) => ({ ...p, outline: p.outline.map(([x, y, z]): Vec3 => [x - 0.4, y, z - 0.4]) }));

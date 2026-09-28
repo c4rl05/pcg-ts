@@ -541,6 +541,7 @@ describe("eiffel splices", () => {
       ["bracing", 0, 0, 0],
       ["horizontals", 0, 0, 0],
       ["platforms", 0, 0, 0],
+      ["stairs", 0, 0, 0],
     ] as const) {
       const gm = geo(cls);
       const P = gm.attrs.point.get("P")!.data;

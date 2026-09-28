@@ -84,7 +84,7 @@ const RAIL_HALF = 0.025;
 const E1_TOP = "e1.top";
 const OTIS = new Set(["otis.sud", "otis.nord"]);
 const E1_TOP_FROM = 127.0;
-/** The stair classes of `lifts.ts` (its `platforms` class): the stairs themselves. */
+/** The stair nodes of `lifts.ts` (its `stairs` class): the stairs themselves. */
 const STAIR_IDS = new Set(["liftStairs", "liftRailSkin"]);
 
 // ------------------------------------------------------------ the stair boxes

@@ -368,7 +368,7 @@ beforeAll(async () => {
   // stairs: everything the machinery must keep out of.
   const others = [buildLegs(g, quads), buildShaft(g), buildFirstFloor(g, quads), buildPlatforms(g, quads), buildSummit(g)];
   let n = 0;
-  for (const parts of [...others, { girders: lifts.girders, platforms: lifts.platforms }]) {
+  for (const parts of [...others, { girders: lifts.girders, stairs: lifts.stairs }]) {
     for (const [cls, list] of Object.entries(parts)) {
       if (!Array.isArray(list) || cls === "rivets" || cls === "cars" || cls === "chains" || cls === "fittings") continue;
       for (const node of list as NodeHandle[]) g.output(node, "out", `tower.${n++}`);

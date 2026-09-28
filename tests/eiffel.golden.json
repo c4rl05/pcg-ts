@@ -545,11 +545,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 554520,
-        "vertices": 944970,
-        "primitives": 314990,
+        "points": 405756,
+        "vertices": 668850,
+        "primitives": 222950,
         "instances": 0,
-        "hash": "f70ff020298f9f76"
+        "hash": "1980017fb0f0ad61"
       },
       "silvered": {
         "kind": "geometry",
@@ -559,6 +559,15 @@
         "primitives": 28352,
         "instances": 0,
         "hash": "764ea870009c4a1f"
+      },
+      "stairs": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 148536,
+        "vertices": 276120,
+        "primitives": 92040,
+        "instances": 0,
+        "hash": "07fdabbeee743d92"
       },
       "summit": {
         "kind": "geometry",
@@ -1222,11 +1231,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 554520,
-        "vertices": 944970,
-        "primitives": 314990,
+        "points": 405756,
+        "vertices": 668850,
+        "primitives": 222950,
         "instances": 0,
-        "hash": "f70ff020298f9f76"
+        "hash": "1980017fb0f0ad61"
       },
       "silvered": {
         "kind": "geometry",
@@ -1236,6 +1245,15 @@
         "primitives": 28352,
         "instances": 0,
         "hash": "764ea870009c4a1f"
+      },
+      "stairs": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 148536,
+        "vertices": 276120,
+        "primitives": 92040,
+        "instances": 0,
+        "hash": "07fdabbeee743d92"
       },
       "summit": {
         "kind": "geometry",
@@ -1809,11 +1827,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 554520,
-        "vertices": 944970,
-        "primitives": 314990,
+        "points": 405756,
+        "vertices": 668850,
+        "primitives": 222950,
         "instances": 0,
-        "hash": "f70ff020298f9f76"
+        "hash": "1980017fb0f0ad61"
       },
       "rivets.ff.arches.chords": {
         "kind": "instances",
@@ -2345,6 +2363,15 @@
         "primitives": 28352,
         "instances": 0,
         "hash": "764ea870009c4a1f"
+      },
+      "stairs": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 148536,
+        "vertices": 276120,
+        "primitives": 92040,
+        "instances": 0,
+        "hash": "07fdabbeee743d92"
       },
       "summit": {
         "kind": "geometry",
@@ -2918,11 +2945,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 554520,
-        "vertices": 944970,
-        "primitives": 314990,
+        "points": 405756,
+        "vertices": 668850,
+        "primitives": 222950,
         "instances": 0,
-        "hash": "f70ff020298f9f76"
+        "hash": "1980017fb0f0ad61"
       },
       "rivets.ff.arches.chords": {
         "kind": "instances",
@@ -3463,6 +3490,15 @@
         "primitives": 28352,
         "instances": 0,
         "hash": "764ea870009c4a1f"
+      },
+      "stairs": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 148536,
+        "vertices": 276120,
+        "primitives": 92040,
+        "instances": 0,
+        "hash": "07fdabbeee743d92"
       },
       "summit": {
         "kind": "geometry",
@@ -4027,11 +4063,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 554520,
-        "vertices": 944970,
-        "primitives": 314990,
+        "points": 405756,
+        "vertices": 668850,
+        "primitives": 222950,
         "instances": 0,
-        "hash": "f70ff020298f9f76"
+        "hash": "1980017fb0f0ad61"
       },
       "silvered": {
         "kind": "geometry",
@@ -4041,6 +4077,15 @@
         "primitives": 28352,
         "instances": 0,
         "hash": "764ea870009c4a1f"
+      },
+      "stairs": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 148536,
+        "vertices": 276120,
+        "primitives": 92040,
+        "instances": 0,
+        "hash": "07fdabbeee743d92"
       },
       "summit": {
         "kind": "geometry",

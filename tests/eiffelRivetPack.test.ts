@@ -28,6 +28,7 @@ import {
   packedRivetMaterial,
   packedRivetMesh,
   packedShaderProblem,
+  packedUnlitProblem,
   packedVertexShader,
   unpackMatrix,
   type PackedRivets,
@@ -191,18 +192,23 @@ describe("eiffel packed rivets", () => {
   });
 
   it("edits this three's vertex shaders at their anchors, and throws where one is gone", () => {
-    for (const src of [ShaderLib.physical.vertexShader, ShaderLib.normal.vertexShader]) {
+    // The basic material is the highlight's unlit paint (flat.ts).
+    for (const src of [ShaderLib.physical.vertexShader, ShaderLib.normal.vertexShader, ShaderLib.basic.vertexShader]) {
       const out = packedVertexShader(src);
       expect(out).toContain("attribute vec4 rivetTurn;");
-      expect(out).toContain("objectNormal = rivetRotate( rivetQ, objectNormal / rivetS );");
-      expect(out).toContain("transformed = rivetRotate( rivetQ, transformed * rivetS ) + rivetAt;");
-      // The normal is set up before the position, so rivetQ is declared first.
-      expect(out.indexOf("vec4 rivetQ")).toBeLessThan(out.indexOf("transformed = rivetRotate"));
+      expect(out).toContain("objectNormal = rivetRotate( rivetQ(), objectNormal / rivetS() );");
+      expect(out).toContain("transformed = rivetRotate( rivetQ(), transformed * rivetS() ) + rivetAt;");
+      // The turn and size are functions at file scope, before main, so the
+      // position reads them whether or not the shader set up a normal (the
+      // basic material's normal chunk is under an #if that is off).
+      expect(out.indexOf("vec4 rivetQ()")).toBeLessThan(out.indexOf("void main()"));
+      expect(out.indexOf("vec3 rivetS()")).toBeLessThan(out.indexOf("void main()"));
     }
     expect(() => packedVertexShader(ShaderLib.physical.vertexShader.replace("#include <begin_vertex>", ""))).toThrow(
       /no "#include <begin_vertex>"/,
     );
     // The page asks once, at load, and on this three the answer is yes.
     expect(packedShaderProblem()).toBeUndefined();
+    expect(packedUnlitProblem()).toBeUndefined();
   });
 });
