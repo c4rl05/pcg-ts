@@ -50,6 +50,7 @@ import type { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
 import { type BuiltEnv, type EnvSpec, buildEnv, sunDirection } from "./env.js";
 import { passFlat } from "./flat.js";
 import { applyAo, createGtao } from "./gtao.js";
+import { type Ink, createInk } from "./ink.js";
 import type { LightSpec, Look, MaterialSpec } from "./look.js";
 import { VIGNETTE_DEFAULT, applyVignette, createVignette, sizeVignette } from "./vignette.js";
 
@@ -69,6 +70,13 @@ export interface Rig {
   setSize(width: number, height: number): void;
   /** Draw. Replaces `renderer.render(scene, camera)`. */
   render(): void;
+  /**
+   * Draw the pen elevation (ink.ts) instead of the lit image, or with
+   * false, go back. The look is untouched either way.
+   */
+  setInk(on: boolean): void;
+  /** The drawing, for its dials. */
+  readonly ink: Ink;
   /** True while the occlusion is in the path; false means it was switched off. */
   readonly ao: GTAOPass;
   dispose(): void;
@@ -143,6 +151,10 @@ export function createRig(
   const output = new OutputPass();
   passFlat(output);
   composer.addPass(output);
+
+  // The drawing leaves the ground off: an elevation stands on the paper.
+  const ink = createInk(renderer, scene, camera, size.width, size.height, () => [ground]);
+  let inking = false;
 
   let env: BuiltEnv | undefined;
   let envKey = "";
@@ -351,6 +363,7 @@ export function createRig(
     composer.setSize(width, height);
     gtao.setSize(width, height);
     sizeVignette(vignette, width, height);
+    ink.setSize(width, height);
   }
 
   return {
@@ -359,11 +372,16 @@ export function createRig(
     fitShadowNear,
     shadowTexel,
     setSize,
-    render: () => composer.render(),
+    render: () => (inking ? ink.render() : composer.render()),
+    setInk(on: boolean) {
+      inking = on;
+    },
+    ink,
     ao: gtao,
     dispose() {
       env?.dispose();
       composer.dispose();
+      ink.dispose();
       scene.remove(key, key.target, fill, fill.target, rim, rim.target, bounce, bounce.target, ambient);
     },
   };
