@@ -465,7 +465,7 @@ export function pieceDay(cls: string, b: Box6): number {
   switch (cls) {
     case "foundations":
       // Under the ground, the foundations; above it, the machine room's
-      // chimney and walls, with the machines they house [estimated].
+      // walls, with the machines they house [estimated].
       return b[4] <= 0.5 ? foundationDay(b) : within(LIFT_WORKS.machines, b[1] / 20);
     case "masonry": {
       // The support stones under the shoes are the foundations': under a
@@ -491,6 +491,9 @@ export function pieceDay(cls: string, b: Box6): number {
     case "names":
       return Math.max(s, fitoutDay(b, 0));
     case "machinery":
+    case "groundIron":
+      // One class until the ground's iron was parted from the lifts'
+      // (parts.ts), and dated as that class still is.
       return Math.max(s, machineryDay(b));
     case "platforms":
     case "stairs":

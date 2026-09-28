@@ -240,7 +240,8 @@ describe("the erection's dates", () => {
   it("puts the fit-out after the deck under it, the lifts in their windows, the foundations before the iron", () => {
     const at = (cls: string) => plain.find((c) => c.cls === cls);
     // Every piece of the 1st floor's platforms over the deck is after the
-    // 1st platform, and so is every stair there (the entrance flights).
+    // 1st platform (the entrance flights among them), and so is every stair
+    // there.
     for (const cls of ["platforms", "stairs"]) {
       const c = at(cls)!;
       for (let t = 0; t < c.index.length / 3; t++) {

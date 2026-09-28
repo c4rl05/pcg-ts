@@ -1,12 +1,11 @@
 /**
  * The ground's COOKED geometry against the TypeScript lists it is built
- * from (ground.ts): every prism and every chimney skin face that
- * `buildGround` sends into the graph comes out of the graph as exactly
+ * from (ground.ts): every prism that `buildGround` sends into the graph comes out of the graph as exactly
  * those faces, and nothing else does.
  *
  * The other ground suites (eiffelGround, eiffelFoundations, eiffelPlinths,
- * eiffelSupports, eiffelChimney) audit the LISTS. Nothing checked the
- * graph's side of `prisms()`/`skin()` — the index-table ramps,
+ * eiffelSupports) audit the LISTS. Nothing checked the
+ * graph's side of `prisms()` — the index-table ramps,
  * pointsToPath, extrudePolygon, and the copies that draw the sixteen
  * supports and the massifs from one template each (`supportTemplate`,
  * `massifTemplate`) — which is the side that moved the repetition into
@@ -32,9 +31,8 @@
  *
  * AGAINST A SNAPSHOT, NOT THE LIVE LISTS. The expected faces are built
  * from tests/eiffelGround.snapshot.json -- every labelled prism (outline and
- * depth) and chimney skin face, one per line -- not from `supportFrames`,
- * `supportPieces`, `massifPrisms`, `groundOnce` and `chimneySkin` as they
- * run now. A
+ * depth), one per line -- not from `supportFrames`, `supportPieces`,
+ * `massifPrisms` and `groundOnce` as they run now. A
  * refactor that rewrote those would otherwise move both sides at once and
  * pass. A separate test holds the live lists to the same snapshot, so a
  * change to them is seen on its own; when one is MEANT, regenerate the
@@ -48,19 +46,19 @@
  * ALSO CHECKED on the cook, over every item of every output: each corner's
  * point `normal` agrees with its face (dot > 0.5 against the face's unit
  * normal; `smoothNormals` bends a normal by at most the crease angle, 35
- * degrees here), and every point of the chimney skin (`groundChimney`)
- * carries `seed` 0, the one seed that keeps the skin closed under the class
- * jitter (see `skin` in ground.ts).
+ * degrees here).
+ *
+ * The chimney by pile 4 is modelled but not drawn (ground.ts' header), so
+ * it is not here; eiffelChimney still audits its skin.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
-import { type DataCollection, type Geometry, Graph, type NodeHandle, cook } from "pcg-ts";
+import { type DataCollection, Graph, type NodeHandle, cook } from "pcg-ts";
 import {
   type Prism,
   buildGround,
   caissonPrisms,
-  chimneySkin,
   earthingPipes,
   groundOnce,
   machineRoomPrisms,
@@ -71,7 +69,7 @@ import {
   supportTemplate,
   wallPiers,
 } from "../demos/eiffel/ground.js";
-import { type Face, type Vec3, cookedFaces, matchFaces, normalMisfits, prismFaces, skinFace } from "./support/eiffelGroundPrisms.js";
+import { type Face, type Vec3, cookedFaces, matchFaces, normalMisfits, prismFaces } from "./support/eiffelGroundPrisms.js";
 
 /** Per-coordinate tolerance, metres (see the file comment). */
 const TOL = 1e-4;
@@ -81,11 +79,8 @@ const MIN_NORMAL_DOT = 0.5;
 const SNAPSHOT_PATH = fileURLToPath(new URL("./eiffelGround.snapshot.json", import.meta.url));
 const REGENERATE = "EIFFEL_GROUND=update env -u NODE_ENV npx vitest run tests/eiffelGroundPrisms.test.ts";
 const UPDATE = process.env.EIFFEL_GROUND === "update";
-/** The node `skin(g, "groundChimney", ...)` ends in (ground.ts `buildGround`). */
-const CHIMNEY_NODE = "groundChimney";
-
-type GroundClass = "foundations" | "machinery" | "masonry";
-const CLASSES: readonly GroundClass[] = ["foundations", "machinery", "masonry"];
+type GroundClass = "foundations" | "groundIron" | "masonry";
+const CLASSES: readonly GroundClass[] = ["foundations", "groundIron", "masonry"];
 
 interface Labeled {
   readonly label: string;
@@ -116,12 +111,13 @@ function labeledGround(): Record<GroundClass, Labeled[]> {
     ...rest,
   ];
   // The room's masonry and flue lead both `machineRoomPrisms().foundations`
-  // and `groundOnce().foundations`; what is left of the first is the chimney.
+  // and `groundOnce().foundations`; what is left of the first is the
+  // chimney, which is not drawn.
   const once = groundOnce().foundations;
   const room = machineRoomPrisms().foundations.slice(0, once.length - rest.length);
   return {
     foundations: [...tag("machine room / flue masonry", room), ...found],
-    machinery: [
+    groundIron: [
       ...tag("machine room plant", machineRoomPrisms().plant),
       ...supports.flatMap(({ f, s }) => tag(`support ${name(f)} iron`, s.iron)),
       ...caissons.flatMap(({ f, c }) => tag(`caisson iron ${name(f)}`, c.iron)),
@@ -130,18 +126,15 @@ function labeledGround(): Record<GroundClass, Labeled[]> {
   };
 }
 
-/**
- * One snapshot line: a labelled prism (`depth` present) or a labelled
- * chimney skin face (`depth` absent), with its class.
- */
+/** One snapshot line: a labelled prism, with its class. */
 interface Entry {
   readonly cls: GroundClass;
   readonly label: string;
-  readonly depth?: number;
+  readonly depth: number;
   readonly outline: readonly Vec3[];
 }
 
-/** The live lists as snapshot entries: every labelled prism, then the chimney skin. */
+/** The live lists as snapshot entries: every labelled prism. */
 function liveEntries(labeled: Record<GroundClass, Labeled[]>): Entry[] {
   const out: Entry[] = [];
   for (const cls of CLASSES) {
@@ -149,9 +142,6 @@ function liveEntries(labeled: Record<GroundClass, Labeled[]>): Entry[] {
       out.push({ cls, label, depth: prism.depth, outline: prism.outline.map((v) => [v[0], v[1], v[2]] as const) });
     }
   }
-  chimneySkin().forEach((o, i) => {
-    out.push({ cls: "foundations", label: `chimney skin face #${i}`, outline: o.map((v) => [v[0], v[1], v[2]] as const) });
-  });
   return out;
 }
 
@@ -171,21 +161,15 @@ function readSnapshot(): Entry[] {
   return (JSON.parse(text) as { entries: Entry[] }).entries;
 }
 
-/** Every face each class should hold, from the snapshot: its prisms', and for the foundations the chimney skin's. */
+/** Every face each class should hold, from the snapshot: its prisms'. */
 function expectedFaces(entries: readonly Entry[]): Record<GroundClass, Face[]> {
-  const out: Record<GroundClass, Face[]> = { foundations: [], machinery: [], masonry: [] };
-  for (const e of entries) {
-    const label = `${e.cls}: ${e.label}`;
-    if (e.depth === undefined) out[e.cls].push(skinFace(e.outline, label));
-    else out[e.cls].push(...prismFaces({ outline: e.outline as Vec3[], depth: e.depth }, label));
-  }
+  const out: Record<GroundClass, Face[]> = { foundations: [], groundIron: [], masonry: [] };
+  for (const e of entries) out[e.cls].push(...prismFaces({ outline: e.outline as Vec3[], depth: e.depth }, `${e.cls}: ${e.label}`));
   return out;
 }
 
 interface Cooked {
   readonly faces: Record<GroundClass, Face[]>;
-  /** The chimney skin's cooked meshes: every item of its output. */
-  readonly chimney: Geometry[];
 }
 
 /** `buildGround`'s meshes, cooked alone and merged by class: before the class merge and its jitter. */
@@ -202,10 +186,8 @@ async function cookGround(): Promise<Cooked> {
       names.push({ cls: cls as GroundClass, name, node: (node as NodeHandle).id });
     });
   }
-  if (!names.some((n) => n.node === CHIMNEY_NODE)) throw new Error(`buildGround no longer returns the node "${CHIMNEY_NODE}"; update this suite`);
   const { outputs } = await cook(g);
-  const faces: Record<GroundClass, Face[]> = { foundations: [], machinery: [], masonry: [] };
-  const chimney: Geometry[] = [];
+  const faces: Record<GroundClass, Face[]> = { foundations: [], groundIron: [], masonry: [] };
   for (const { cls, name, node } of names) {
     // Every item of the output, not only the first.
     let geos = 0;
@@ -213,11 +195,10 @@ async function cookGround(): Promise<Cooked> {
       if (item.kind !== "geometry") throw new Error(`buildGround's ${name} (${node}) cooked to a "${item.kind}" item`);
       geos++;
       faces[cls].push(...cookedFaces(item.geo, cls));
-      if (node === CHIMNEY_NODE) chimney.push(item.geo);
     }
     if (geos === 0) throw new Error(`buildGround's ${name} (${node}) cooked to no geometry`);
   }
-  return { faces, chimney };
+  return { faces };
 }
 
 function report(cls: string, r: { missing: Face[]; extra: Face[] }): string {
@@ -256,7 +237,7 @@ describe("eiffel ground: the cooked prisms are the snapshot's prisms", () => {
       const m = massifTemplate(caissons);
       return n + m.prisms.length * m.turns.length;
     }, 0);
-    const piece: Record<GroundClass, "buried" | "iron" | "stone"> = { foundations: "buried", machinery: "iron", masonry: "stone" };
+    const piece: Record<GroundClass, "buried" | "iron" | "stone"> = { foundations: "buried", groundIron: "iron", masonry: "stone" };
     for (const cls of CLASSES) {
       expect(labeled[cls].filter((l) => !copied(l)).map((l) => l.prism), cls).toEqual(cls === "masonry" ? [] : once[cls]);
       expect(labeled[cls].filter((l) => l.label.startsWith("support ")).length, cls).toBe(16 * template[piece[cls]].length);
@@ -264,7 +245,6 @@ describe("eiffel ground: the cooked prisms are the snapshot's prisms", () => {
     expect(labeled.foundations.filter((l) => l.label.startsWith("massif ")).length).toBe(massifs);
     // Nothing empty slips through: every class has pieces.
     for (const cls of CLASSES) expect(labeled[cls].length, cls).toBeGreaterThan(0);
-    expect(chimneySkin().length).toBeGreaterThan(0);
   });
 
   it("the live lists are exactly the snapshot, entry for entry", () => {
@@ -307,24 +287,6 @@ describe("eiffel ground: the cooked prisms are the snapshot's prisms", () => {
     // and so does a face whose mesh carries no normal.
     const bare = m.slice(0, 1).map((f) => ({ ...f, normals: f.verts.map(() => null) }));
     expect(normalMisfits(bare, MIN_NORMAL_DOT).length).toBe(1);
-  });
-
-  it(`every point of the chimney skin (${CHIMNEY_NODE}) is on seed 0`, () => {
-    expect(cooked.chimney.length).toBeGreaterThan(0);
-    for (const geo of cooked.chimney) {
-      expect(geo.pointCount).toBeGreaterThan(0);
-      const seed = geo.attrs.point.get("seed");
-      if (seed === undefined) throw new Error(`${CHIMNEY_NODE} carries no point seed`);
-      let bad = 0;
-      let first = -1;
-      for (let i = 0; i < geo.pointCount * seed.tupleSize; i++) {
-        if (seed.data[i] !== 0) {
-          bad++;
-          if (first < 0) first = i;
-        }
-      }
-      expect(bad, `${bad} of ${geo.pointCount} chimney points off seed 0 (first at element ${first})`).toBe(0);
-    }
   });
 
   it("can fail: a 5 mm move of one corner, and a face turned inside out, are both caught", () => {

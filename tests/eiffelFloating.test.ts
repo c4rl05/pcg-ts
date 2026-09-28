@@ -101,7 +101,7 @@ const ALLOW: readonly Allowed[] = [
   },
   {
     kind: "loose",
-    cls: "machinery",
+    cls: "groundIron",
     box: [42, 2.4, 42, 59, 3.35, 59],
     count: 8,
     reason:
@@ -109,7 +109,7 @@ const ALLOW: readonly Allowed[] = [
   },
   {
     kind: "loose",
-    cls: "machinery",
+    cls: "groundIron",
     box: [42, 2.4, -59, 59, 3.35, -42],
     count: 8,
     reason:
@@ -117,7 +117,7 @@ const ALLOW: readonly Allowed[] = [
   },
   {
     kind: "loose",
-    cls: "machinery",
+    cls: "groundIron",
     box: [-59, 2.4, 42, -42, 3.35, 59],
     count: 8,
     reason:
@@ -125,7 +125,7 @@ const ALLOW: readonly Allowed[] = [
   },
   {
     kind: "loose",
-    cls: "machinery",
+    cls: "groundIron",
     box: [-59, 2.4, -59, -42, 3.35, -42],
     count: 8,
     reason:
@@ -242,14 +242,6 @@ const ALLOW: readonly Allowed[] = [
     count: 1,
     reason:
       "G106: a perimeter wall pier founded at cote 28.00 as sourced (piles 1, 4); it stands on the gravel, which is not modelled (seen only in ?section)",
-  },
-  {
-    kind: "loose",
-    cls: "foundations",
-    box: [98.95, -4.37, 48.95, 99.05, -4.27, 49.05],
-    count: 1,
-    reason:
-      "the chimney by pile 4, drawn as one closed skin (ground.ts chimneySkin), reads as one 18 m member; its foot is its concrete footing 5.88 under the model's ground, bedded in the soil, which is not modelled (seen only in ?section)",
   },
   {
     kind: "loose",

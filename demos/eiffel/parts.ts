@@ -22,19 +22,21 @@ export const PART_CLASSES = [
   /** Floor platforms and the landing. */
   "platforms",
   /**
-   * Every stair: the 1,710 steps of 1889 run by run with their stringers,
-   * landings, ladders and hand rails (`stairs.ts`, placed by `lifts.ts`),
-   * and the 1st floor's entrance flights on the Français and the Russe
-   * (`platforms.ts`). Painted as the platforms are; a class of its own so
-   * a stair can be isolated and highlighted without the floor it serves.
+   * Every stair of the tower's climb: the 1,710 steps of 1889 run by run
+   * with their stringers, landings, ladders and hand rails (`stairs.ts`,
+   * placed by `lifts.ts`). Painted as the platforms are; a class of its
+   * own so a stair can be isolated and highlighted without the floor it
+   * serves. The 1st floor's entrance flights on the Français and the Russe
+   * are the pavilions' dress, not the climb, and stay in "platforms".
    */
   "stairs",
   /** The masonry pedestals. */
   "masonry",
   /**
    * What is under the ground, and what stood on the site's higher ground
-   * round the piles (ground.ts): the machine room's walls and floors, the
-   * flue and its chimney. The ground plane hides what is under it; the
+   * round the piles (ground.ts): the machine room's walls and floors and
+   * the flue (its chimney is modelled, not drawn: ground.ts' header says
+   * why). The ground plane hides what is under it; the
    * page's section view opens it.
    */
   "foundations",
@@ -56,6 +58,13 @@ export const PART_CLASSES = [
    * chains (see `Parts`).
    */
   "machinery",
+  /**
+   * The iron under and round the piles' feet (ground.ts): the caissons'
+   * and the supports' iron, and the machine room's plant. In the
+   * machinery's paint, and jittered with it (`JITTERED_WITH`); a class of
+   * its own so the lifts' machinery can be highlighted without it.
+   */
+  "groundIron",
   /**
    * Clear glass: the pavilions' doors, screens and tympana on the 1st
    * floor, the 3rd-floor gallery's croisées and Eiffel's pavilion's
@@ -286,7 +295,7 @@ export type Parts = Partial<Record<PartClass, NodeHandle[]>> & {
  * coincides with a platform's (a newel's foot on its deck) is not parted
  * from it, which is a tie between two faces of one paint.
  */
-export const JITTERED_WITH: Partial<Record<PartClass, PartClass>> = { stairs: "platforms" };
+export const JITTERED_WITH: Partial<Record<PartClass, PartClass>> = { stairs: "platforms", groundIron: "machinery" };
 
 /** The primitive tag a class jittered with another is taken back out by: its place in `PART_CLASSES`, plus one. */
 const PARTED = "partedClass";

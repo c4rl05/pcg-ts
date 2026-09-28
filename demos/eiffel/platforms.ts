@@ -5597,20 +5597,20 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
   // the Russe; the 2nd platform's 1889 massing, whole; the pavilions' frame
   // and dressing, each piece on its own face(s); and the arcade's dressing,
   // one arcade on all 36 bays, its glass bosses and globes as instances.
-  // The flights are stairs, and go in that class rather than the floor's.
+  // The flights are the pavilions' dress rather than the climb, so they
+  // stay the floor's and not in "stairs".
   const parts = fitOutParts();
-  const partMeshes = ([boxes, curved, prefixes]: readonly [string, string, readonly string[]]): NodeHandle[] => {
-    const of = prefixes.map((p) => parts[p] ?? {});
-    return [placedMesh(site, boxes, gathered(of, blocksOnly)), placedMesh(site, curved, gathered(of, prismsOnly))];
-  };
-  const flights = partMeshes(["entranceRails", "entranceFlights", ["entrance"]]);
   const meshes: ReadonlyArray<readonly [string, string, readonly string[]]> = [
     ["innerArcade", "innerArcadeCurved", ["inner"]],
+    ["entranceRails", "entranceFlights", ["entrance"]],
     ["secondFitOut", "secondFitOutCurved", ["second"]],
     ["pavilionDress", "pavilionDressCurved", ["pavilion", "francais", "russe", "anglo", "flamand"]],
     ["arcadeDress", "arcadeDressCurved", ["arcade"]],
   ];
-  const fitParts = meshes.flatMap(partMeshes);
+  const fitParts = meshes.flatMap(([boxes, curved, prefixes]) => {
+    const of = prefixes.map((p) => parts[p] ?? {});
+    return [placedMesh(site, boxes, gathered(of, blocksOnly)), placedMesh(site, curved, gathered(of, prismsOnly))];
+  });
   const arcade = arcadeDressFace();
   const fittings = [
     {
@@ -5636,7 +5636,6 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
 
   return {
     platforms: [grilles, fitBlocks, fitPrisms, ...fitParts],
-    stairs: flights,
     glass: [placedMesh(site, "restaurantGlass", glazed.glass)],
     silvered: [placedMesh(site, "crescentGlass", glazed.silvered)],
     fittings,

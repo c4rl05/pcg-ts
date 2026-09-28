@@ -6,8 +6,8 @@
  *
  * THE PLANE is the one PL-XX draws its section on, « suivant la diagonale
  * de la pile 1 (Nord) à la pile 3 (Sud) »: x + z = 0 in the render, through
- * both piles' centres. Pile 4's half (x + z > 0) is kept — its caissons,
- * the flue and the chimney whole — and piles 1 and 3 are cut down their
+ * both piles' centres. Pile 4's half (x + z > 0) is kept — its caissons
+ * and the flue whole — and piles 1 and 3 are cut down their
  * diagonals: pile 1's caissons and massifs in half, pile 3's machine room
  * through the middle. Pile 2's half is taken away with the ground over it,
  * so the camera looks from there into the cut.
@@ -20,11 +20,11 @@
  * under it. Cut triangles are split on the plane, so a massif's section
  * shows as its cut outline; being a surface, the cut face itself is open.
  *
- * What is cut: the `foundations` class whole (the chimney stands on the
- * kept side), the ground plane, and of the `machinery` and `masonry`
- * classes only what is under the ground (the machine room's plant, the
- * caissons' shells, the supports' lower stones), so nothing of the tower
- * above the ground is touched.
+ * What is cut: the `foundations` class whole, the ground plane, and of
+ * the `groundIron`, `machinery` and `masonry` classes only what is under
+ * the ground (the machine room's plant, the caissons' shells, the lifts'
+ * machinery where it goes down into the piles, the supports' lower
+ * stones), so nothing of the tower above the ground is touched.
  */
 import { BufferAttribute, BufferGeometry, Mesh, Plane, Vector3, type Object3D } from "three";
 
@@ -106,7 +106,7 @@ export function attachSection(host: SectionHost): (on: boolean) => void {
   const floor = host.controls.maxPolarAngle;
   const swaps: Array<{ mesh: Mesh; whole: BufferGeometry; cut?: BufferGeometry; under?: number }> = [];
   for (const mesh of host.meshes.get("foundations") ?? []) swaps.push({ mesh, whole: mesh.geometry });
-  for (const cls of ["machinery", "masonry"]) {
+  for (const cls of ["groundIron", "machinery", "masonry"]) {
     for (const mesh of host.meshes.get(cls) ?? []) swaps.push({ mesh, whole: mesh.geometry, under: UNDER });
   }
   let ground: Mesh | undefined;

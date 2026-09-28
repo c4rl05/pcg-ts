@@ -1,6 +1,7 @@
 /**
- * The chimney by pile 4 as the page draws it (ground.ts `chimneySkin`):
- * one closed skin, not 544 stave prisms.
+ * The chimney by pile 4 as the page would draw it (ground.ts `chimneySkin`;
+ * it is modelled but no longer drawn, see ground.ts' header): one closed
+ * skin, not 544 stave prisms.
  *
  * Drawn as prisms, each stave's corners were its own points with their own
  * seeds, so the class's jitter (parts.ts `JITTER`) opened every seam by up

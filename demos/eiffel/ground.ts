@@ -1,6 +1,6 @@
 /**
  * THE GROUND AND WHAT IS UNDER IT (SOURCES.md §31): the machine room in
- * pile 3's basement, its flue and chimney; the uprights' supports, their
+ * pile 3's basement and its flue; the uprights' supports, their
  * stones, shoes and anchors (`SUPPORT`, §31.3); the massifs, the caissons,
  * the walls and the earthing (`MASSIF`, `CAISSON`, §31.4).
  *
@@ -23,13 +23,16 @@
  * Otis foundation along its A-C diagonal. The room's walls, floors, the
  * boilers' brick settings and flue chamber go to the `foundations` class;
  * the plant, as simple massing placed where PL-III Fig. 4 draws it, to
- * `machinery`. Positions are read at 1:200 on PL-III Fig. 4 (±0.3-0.5 m)
+ * `groundIron`. Positions are read at 1:200 on PL-III Fig. 4 (±0.3-0.5 m)
  * and sizes not printed are [estimated]; each constant says which.
  *
  * THE FLUE AND THE CHIMNEY: a vaulted culvert 116.23 m from the room's +z
  * wall along the pile 3 - pile 4 centre line, round pile 4's corner, to a
  * round brick chimney « à droite de la pile 4 », 17.23 m over its footing
- * [sourced p. 202, PL-IV Fig. 15; route measured PL-III Fig. 2].
+ * [sourced p. 202, PL-IV Fig. 15; route measured PL-III Fig. 2]. The page
+ * does not draw the chimney (a user decision, 2026-09-28: standing alone
+ * off the tower, it did not read as part of it). It is still modelled (`CHIMNEY`, `chimneySkin`), and still a
+ * solid in `machineRoomPrisms` for the checks that keep things out of it.
  *
  * THE SUPPORTS AND THE FOUNDATIONS stand under the model's uprights,
  * which run down to the sommiers' centre, so they sit 1.10 down each
@@ -592,7 +595,7 @@ function flywheelPits(): Array<{ x: number; z: number; half: number }> {
   return engineAxes().map(({ q }) => ({ x: q[0], z: q[2], half: (r + 0.15) / Math.SQRT2 + 0.1 + 0.25 }));
 }
 
-/** The plant as massing (`machinery`). */
+/** The plant as massing (`groundIron`). */
 function roomPlant(): Prism[] {
   const out: Prism[] = [];
   const f = ROOM.floor;
@@ -870,8 +873,9 @@ function chimneyRing(r: number, y: number): Vec3[] {
 
 /**
  * The chimney as prisms, above and below the model's ground: its SOLID,
- * stave by stave, which is what the clash and dimension checks read. The
- * page draws {@link chimneySkin} instead (see there for why).
+ * stave by stave, which is what the clash and dimension checks read. Drawn,
+ * it would be {@link chimneySkin} instead (see there for why); the page
+ * does not draw it (see the header).
  */
 function chimney(): { above: Prism[]; below: Prism[] } {
   const [x, z] = CHIMNEY.at;
@@ -886,7 +890,7 @@ function chimney(): { above: Prism[]; below: Prism[] } {
 }
 
 /**
- * The chimney as the page draws it: ONE closed skin over the same courses,
+ * The chimney as the page would draw it (it does not: see the header): ONE closed skin over the same courses,
  * as planar convex faces, each wound to face out of the brickwork — the
  * staves' outer and inner faces, the ledges where a course steps in or out
  * against the next, the footing's underside and the flue's floor on it,
@@ -1770,15 +1774,15 @@ export function earthingPipes(): Prism[] {
  * and its flue, its plant, the caissons (each pile's printed edges are
  * its own), the wall piers and the earthing. The supports and the massifs
  * repeat, and the graph draws them by copying ({@link supportTemplate},
- * {@link massifTemplate}); the chimney is drawn as one skin
- * (`chimneySkin`), and its prisms are in `machineRoomPrisms`, for the
- * checks that read it as a solid.
+ * {@link massifTemplate}); the chimney is not drawn (see the header), and
+ * its prisms are in `machineRoomPrisms`, for the checks that read it as a
+ * solid.
  */
-export function groundOnce(): { foundations: Prism[]; machinery: Prism[] } {
+export function groundOnce(): { foundations: Prism[]; groundIron: Prism[] } {
   const caissons = supportFrames().map(caissonPrisms);
   return {
     foundations: [...roomAndFlue(), ...caissons.flatMap((c) => c.concrete), ...wallPiers(), ...earthingPipes()],
-    machinery: [...roomPlant(), ...caissons.flatMap((c) => c.iron)],
+    groundIron: [...roomPlant(), ...caissons.flatMap((c) => c.iron)],
   };
 }
 
@@ -1862,8 +1866,8 @@ function copyOnto(g: Graph, id: string, source: NodeHandle, targets: NodeHandle)
 }
 
 /**
- * Build the ground's parts: the machine room, the flue, the chimney, the
- * supports and the foundations. The supports are {@link supportTemplate}
+ * Build the ground's parts: the machine room, the flue, the supports and
+ * the foundations (not the chimney: see the header). The supports are {@link supportTemplate}
  * copied onto {@link supportSeats}, turned onto the four quadrants; the
  * massifs {@link massifTemplate}'s, onto the quadrants their kind's piles
  * stand on. `quads` are the tower's quadrant targets (`quadrants` in
@@ -1885,19 +1889,17 @@ export function buildGround(g: Graph, quads: NodeHandle = quadrants(g, "groundQu
   });
   const merged = (id: string, parts: readonly NodeHandle[], crease: number) => smoothed(g, id, merge(g, `${id}Flat`, parts), crease);
   return {
-    // A tighter crease for the masonry: the chimney's 64 staves (5.6
-    // degrees apart) and the caissons' corners (18) shade round, and the
-    // chimney's corbel (21 degrees off its shaft and its band) keeps the
-    // two breaks that make it a corbel rather than a swelling.
+    // A tighter crease for the masonry: the caissons' corners (18 degrees)
+    // shade round. (It was set for the chimney's staves and corbel too,
+    // when the page drew the chimney; see the header.)
     foundations: [
       merged(
         "groundFoundations",
         [flatPrisms(g, "groundFoundationsOnce", once.foundations), supports("groundSupportsBuried", support.buried), ...massifs],
         FOUNDATION_CREASE,
       ),
-      skin(g, "groundChimney", chimneySkin(), FOUNDATION_CREASE),
     ],
-    machinery: [merged("groundIron", [flatPrisms(g, "groundIronOnce", once.machinery), supports("groundSupportsIron", support.iron)], CREASE)],
+    groundIron: [merged("groundIron", [flatPrisms(g, "groundIronOnce", once.groundIron), supports("groundSupportsIron", support.iron)], CREASE)],
     masonry: [smoothed(g, "groundStones", supports("groundSupportsStone", support.stone))],
   };
 }

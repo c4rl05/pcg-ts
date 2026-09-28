@@ -189,6 +189,9 @@ const PALETTE: Record<PartClass, { color: number; roughness: number; metalness: 
   // The lifts' machinery: bare iron, oiled and worn rather than painted —
   // the family's darkest step, and a touch more metal.
   machinery: { color: 0x4f3a2e, roughness: 0.5, metalness: 0.3 },
+  // The ground's iron was the machinery's until it was a class of its own
+  // (parts.ts), and keeps its paint, as the stairs keep the platforms'.
+  groundIron: { color: 0x4f3a2e, roughness: 0.5, metalness: 0.3 },
   // Clear glass, faintly green as plate glass is, near-mirror smooth; the
   // see-through rest of it is set on the material below (`GLASS`).
   glass: { color: 0xb9ccc8, roughness: 0.06, metalness: 0 },
@@ -295,14 +298,14 @@ const PACKED_SITE = packedRivetMaterial(RIVET_SITE);
  * "copy view" writes it; off puts back the material each mesh had. A
  * highlight changes no mesh's shadow, so the shadow map is not redrawn.
  *
- * - stairs: the "stairs" class, all of it (parts.ts says what it holds).
+ * - stairs: the "stairs" class, all of it (parts.ts says what it holds:
+ *   the climb, not the 1st floor's entrance flights).
  * - lifts: every car (`car.*`, the leg cars' panes among them), what moves
  *   with one (carriages, counterweights, pistons, pulleys, cables:
- *   `LIFT_FOLLOWERS`) and the Roux chains (`chain.*`). Not the machinery
- *   that stands still: it is one mesh with the ground's iron (the
- *   caissons, the supports, the machine room's plant) in the "machinery"
- *   class, and cannot be painted apart from it; nor the tracks and guide
- *   posts, which are girders.
+ *   `LIFT_FOLLOWERS`), the Roux chains (`chain.*`) and the machinery that
+ *   stands still (the "machinery" class). Not the ground's iron (the
+ *   "groundIron" class: the caissons, the supports, the machine room's
+ *   plant), nor the tracks and guide posts, which are girders.
  * - rivets: every rivet output, packed or drawn as matrices, and at
  *   `?bands` every rivet cell as it streams in.
  */
@@ -1203,7 +1206,7 @@ async function main(): Promise<void> {
       classStats[cls]("absent");
       continue;
     }
-    // The foundations reach 50 m past the pedestals (the chimney) and 12 m
+    // The foundations reach 50 m past the pedestals (the flue) and 12 m
     // under the ground, where the sun's shadow has nothing to fall on: they
     // stay out of the box the shadow is fitted to.
     const drawn = draw(cls, collection, MATERIALS[cls], cls === "foundations" ? new Box3() : box, problems);
@@ -1214,6 +1217,7 @@ async function main(): Promise<void> {
     // Glass casts nothing (see `GLASS`).
     if (cls === "glass") for (const mesh of drawn.meshes) mesh.castShadow = false;
     if (cls === "stairs") for (const mesh of drawn.meshes) highlightable(mesh, "stairs");
+    if (cls === "machinery") for (const mesh of drawn.meshes) highlightable(mesh, "lifts");
     keep(cls, drawn);
     present.push(cls);
     classStats[cls](drawn.triangles.toLocaleString());

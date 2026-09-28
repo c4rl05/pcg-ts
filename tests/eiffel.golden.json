@@ -482,11 +482,11 @@
       "foundations": {
         "kind": "geometry",
         "items": 1,
-        "points": 24696,
-        "vertices": 39768,
-        "primitives": 13256,
+        "points": 17592,
+        "vertices": 28932,
+        "primitives": 9644,
         "instances": 0,
-        "hash": "861f2da98311c2e7"
+        "hash": "8de7f7397c4f845d"
       },
       "girders": {
         "kind": "geometry",
@@ -506,6 +506,15 @@
         "instances": 0,
         "hash": "9b3f54de772d3239"
       },
+      "groundIron": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 25056,
+        "vertices": 44904,
+        "primitives": 14968,
+        "instances": 0,
+        "hash": "01a59e1aa3f182c2"
+      },
       "horizontals": {
         "kind": "geometry",
         "items": 1,
@@ -518,11 +527,11 @@
       "machinery": {
         "kind": "geometry",
         "items": 1,
-        "points": 58524,
-        "vertices": 96744,
-        "primitives": 32248,
+        "points": 33468,
+        "vertices": 51840,
+        "primitives": 17280,
         "instances": 0,
-        "hash": "b0348ce3e3edd392"
+        "hash": "bf3295674474f7ed"
       },
       "masonry": {
         "kind": "geometry",
@@ -545,11 +554,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 405756,
-        "vertices": 668850,
-        "primitives": 222950,
+        "points": 407892,
+        "vertices": 672018,
+        "primitives": 224006,
         "instances": 0,
-        "hash": "1980017fb0f0ad61"
+        "hash": "dcb218e7a7fc1c8c"
       },
       "silvered": {
         "kind": "geometry",
@@ -563,11 +572,11 @@
       "stairs": {
         "kind": "geometry",
         "items": 1,
-        "points": 148536,
-        "vertices": 276120,
-        "primitives": 92040,
+        "points": 146400,
+        "vertices": 272952,
+        "primitives": 90984,
         "instances": 0,
-        "hash": "07fdabbeee743d92"
+        "hash": "e8db4cced2a4b75c"
       },
       "summit": {
         "kind": "geometry",
@@ -1159,11 +1168,11 @@
       "foundations": {
         "kind": "geometry",
         "items": 1,
-        "points": 24696,
-        "vertices": 39768,
-        "primitives": 13256,
+        "points": 17592,
+        "vertices": 28932,
+        "primitives": 9644,
         "instances": 0,
-        "hash": "861f2da98311c2e7"
+        "hash": "8de7f7397c4f845d"
       },
       "girders": {
         "kind": "geometry",
@@ -1182,6 +1191,15 @@
         "primitives": 14880,
         "instances": 0,
         "hash": "9b3f54de772d3239"
+      },
+      "groundIron": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 25056,
+        "vertices": 44904,
+        "primitives": 14968,
+        "instances": 0,
+        "hash": "01a59e1aa3f182c2"
       },
       "gussets": {
         "kind": "geometry",
@@ -1204,11 +1222,11 @@
       "machinery": {
         "kind": "geometry",
         "items": 1,
-        "points": 58524,
-        "vertices": 96744,
-        "primitives": 32248,
+        "points": 33468,
+        "vertices": 51840,
+        "primitives": 17280,
         "instances": 0,
-        "hash": "b0348ce3e3edd392"
+        "hash": "bf3295674474f7ed"
       },
       "masonry": {
         "kind": "geometry",
@@ -1231,11 +1249,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 405756,
-        "vertices": 668850,
-        "primitives": 222950,
+        "points": 407892,
+        "vertices": 672018,
+        "primitives": 224006,
         "instances": 0,
-        "hash": "1980017fb0f0ad61"
+        "hash": "dcb218e7a7fc1c8c"
       },
       "silvered": {
         "kind": "geometry",
@@ -1249,11 +1267,11 @@
       "stairs": {
         "kind": "geometry",
         "items": 1,
-        "points": 148536,
-        "vertices": 276120,
-        "primitives": 92040,
+        "points": 146400,
+        "vertices": 272952,
+        "primitives": 90984,
         "instances": 0,
-        "hash": "07fdabbeee743d92"
+        "hash": "e8db4cced2a4b75c"
       },
       "summit": {
         "kind": "geometry",
@@ -1755,11 +1773,11 @@
       "foundations": {
         "kind": "geometry",
         "items": 1,
-        "points": 24696,
-        "vertices": 39768,
-        "primitives": 13256,
+        "points": 17592,
+        "vertices": 28932,
+        "primitives": 9644,
         "instances": 0,
-        "hash": "861f2da98311c2e7"
+        "hash": "8de7f7397c4f845d"
       },
       "girders": {
         "kind": "geometry",
@@ -1778,6 +1796,15 @@
         "primitives": 14880,
         "instances": 0,
         "hash": "9b3f54de772d3239"
+      },
+      "groundIron": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 25056,
+        "vertices": 44904,
+        "primitives": 14968,
+        "instances": 0,
+        "hash": "01a59e1aa3f182c2"
       },
       "gussets": {
         "kind": "geometry",
@@ -1800,11 +1827,11 @@
       "machinery": {
         "kind": "geometry",
         "items": 1,
-        "points": 58524,
-        "vertices": 96744,
-        "primitives": 32248,
+        "points": 33468,
+        "vertices": 51840,
+        "primitives": 17280,
         "instances": 0,
-        "hash": "b0348ce3e3edd392"
+        "hash": "bf3295674474f7ed"
       },
       "masonry": {
         "kind": "geometry",
@@ -1827,11 +1854,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 405756,
-        "vertices": 668850,
-        "primitives": 222950,
+        "points": 407892,
+        "vertices": 672018,
+        "primitives": 224006,
         "instances": 0,
-        "hash": "1980017fb0f0ad61"
+        "hash": "dcb218e7a7fc1c8c"
       },
       "rivets.ff.arches.chords": {
         "kind": "instances",
@@ -2367,11 +2394,11 @@
       "stairs": {
         "kind": "geometry",
         "items": 1,
-        "points": 148536,
-        "vertices": 276120,
-        "primitives": 92040,
+        "points": 146400,
+        "vertices": 272952,
+        "primitives": 90984,
         "instances": 0,
-        "hash": "07fdabbeee743d92"
+        "hash": "e8db4cced2a4b75c"
       },
       "summit": {
         "kind": "geometry",
@@ -2873,11 +2900,11 @@
       "foundations": {
         "kind": "geometry",
         "items": 1,
-        "points": 24696,
-        "vertices": 39768,
-        "primitives": 13256,
+        "points": 17592,
+        "vertices": 28932,
+        "primitives": 9644,
         "instances": 0,
-        "hash": "861f2da98311c2e7"
+        "hash": "8de7f7397c4f845d"
       },
       "girders": {
         "kind": "geometry",
@@ -2896,6 +2923,15 @@
         "primitives": 14880,
         "instances": 0,
         "hash": "9b3f54de772d3239"
+      },
+      "groundIron": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 25056,
+        "vertices": 44904,
+        "primitives": 14968,
+        "instances": 0,
+        "hash": "01a59e1aa3f182c2"
       },
       "gussets": {
         "kind": "geometry",
@@ -2918,11 +2954,11 @@
       "machinery": {
         "kind": "geometry",
         "items": 1,
-        "points": 58524,
-        "vertices": 96744,
-        "primitives": 32248,
+        "points": 33468,
+        "vertices": 51840,
+        "primitives": 17280,
         "instances": 0,
-        "hash": "b0348ce3e3edd392"
+        "hash": "bf3295674474f7ed"
       },
       "masonry": {
         "kind": "geometry",
@@ -2945,11 +2981,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 405756,
-        "vertices": 668850,
-        "primitives": 222950,
+        "points": 407892,
+        "vertices": 672018,
+        "primitives": 224006,
         "instances": 0,
-        "hash": "1980017fb0f0ad61"
+        "hash": "dcb218e7a7fc1c8c"
       },
       "rivets.ff.arches.chords": {
         "kind": "instances",
@@ -3494,11 +3530,11 @@
       "stairs": {
         "kind": "geometry",
         "items": 1,
-        "points": 148536,
-        "vertices": 276120,
-        "primitives": 92040,
+        "points": 146400,
+        "vertices": 272952,
+        "primitives": 90984,
         "instances": 0,
-        "hash": "07fdabbeee743d92"
+        "hash": "e8db4cced2a4b75c"
       },
       "summit": {
         "kind": "geometry",
@@ -4000,11 +4036,11 @@
       "foundations": {
         "kind": "geometry",
         "items": 1,
-        "points": 24696,
-        "vertices": 39768,
-        "primitives": 13256,
+        "points": 17592,
+        "vertices": 28932,
+        "primitives": 9644,
         "instances": 0,
-        "hash": "861f2da98311c2e7"
+        "hash": "8de7f7397c4f845d"
       },
       "girders": {
         "kind": "geometry",
@@ -4024,6 +4060,15 @@
         "instances": 0,
         "hash": "9b3f54de772d3239"
       },
+      "groundIron": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 25056,
+        "vertices": 44904,
+        "primitives": 14968,
+        "instances": 0,
+        "hash": "01a59e1aa3f182c2"
+      },
       "horizontals": {
         "kind": "geometry",
         "items": 1,
@@ -4036,11 +4081,11 @@
       "machinery": {
         "kind": "geometry",
         "items": 1,
-        "points": 58524,
-        "vertices": 96744,
-        "primitives": 32248,
+        "points": 33468,
+        "vertices": 51840,
+        "primitives": 17280,
         "instances": 0,
-        "hash": "b0348ce3e3edd392"
+        "hash": "bf3295674474f7ed"
       },
       "masonry": {
         "kind": "geometry",
@@ -4063,11 +4108,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 405756,
-        "vertices": 668850,
-        "primitives": 222950,
+        "points": 407892,
+        "vertices": 672018,
+        "primitives": 224006,
         "instances": 0,
-        "hash": "1980017fb0f0ad61"
+        "hash": "dcb218e7a7fc1c8c"
       },
       "silvered": {
         "kind": "geometry",
@@ -4081,11 +4126,11 @@
       "stairs": {
         "kind": "geometry",
         "items": 1,
-        "points": 148536,
-        "vertices": 276120,
-        "primitives": 92040,
+        "points": 146400,
+        "vertices": 272952,
+        "primitives": 90984,
         "instances": 0,
-        "hash": "07fdabbeee743d92"
+        "hash": "e8db4cced2a4b75c"
       },
       "summit": {
         "kind": "geometry",
