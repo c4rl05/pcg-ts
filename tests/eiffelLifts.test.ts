@@ -310,14 +310,18 @@ describe("eiffel lift runs", () => {
   it("tips the rigid Otis car by the chord's slope less 65.6°, and keeps the Roux level on its straight run", () => {
     const pose = new Float64Array(4);
     const tilt = (c: (typeof LEG)[number], s: number): number => {
-      // The cooked lower deck's floor, moved: its -y and +y face centres
-      // give the deck's up; its angle from vertical, signed by which way
-      // along the diagonal it leans (+ = out, as the car tips forward).
+      // The cooked lower deck's floor, moved: its +x and -x face centres
+      // (its outer and inner ends) give the floor's line along the
+      // diagonal; its angle from level, signed so that + is the car
+      // tipping forward (its up leaning out, its outer end down). Read
+      // along the floor's length, not across its thickness: the floor is a
+      // 0.10 slab since the decks became cabins, and f32 points 0.10 apart
+      // cannot hold 5e-4°; 3.9 and 4.67 apart they can.
       const deck = (carBoxes.get(c.id) as Vec3[][])[0] as Vec3[];
       const m = mover(c.run, s);
-      const up = unit3(sub3(m(deck[2] as Vec3), m(deck[3] as Vec3)));
+      const along = unit3(sub3(m(deck[0] as Vec3), m(deck[1] as Vec3)));
       const out = unit3([c.run.path[0]?.[0] as number, 0, c.run.path[0]?.[2] as number]);
-      return Math.atan2(dot3(up, out), up[1]) * DEG;
+      return Math.atan2(-along[1], dot3(along, out)) * DEG;
     };
     const lower: number[] = [];
     const upper: number[] = [];
@@ -338,7 +342,7 @@ describe("eiffel lift runs", () => {
         expect(c.run.level).toBeCloseTo(level, 9);
         const want = (slope - level) * DEG;
         const got = tilt(c, s);
-        // To 5e-4°: the deck is read back from f32 points 2.13 apart.
+        // To 5e-4°: the floor is read back from f32 points 3.9 or more apart.
         expect(got, `${c.run.name} at ${s.toFixed(1)}`).toBeCloseTo(want, 3);
         if (c.system === "otis" && pose[1]! < 50) lower.push(got);
         if (c.system === "otis" && pose[1]! > 90) upper.push(got);

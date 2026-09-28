@@ -494,6 +494,20 @@ function isChain(name: string): boolean {
   return name.startsWith("chain.");
 }
 
+/**
+ * The run a car output rides: its own, or, for a leg car's panes
+ * (`car.<name>.glass`, lifts.ts), its car's — the same rigid body, drawn
+ * in the glass.
+ */
+function carRun(name: string): CarRun | undefined {
+  return LIFT_CARS.find((r) => `car.${r.name}` === name || `car.${r.name}.glass` === name);
+}
+
+/** Is this a car's glass: `car.<name>.glass` for a car with a run? */
+function isCarGlass(name: string): boolean {
+  return name.endsWith(".glass") && carRun(name) !== undefined;
+}
+
 /** Does this `car.<name>` output move WITH a car (`LIFT_FOLLOWERS`) rather than ride a run of its own? */
 function isFollower(name: string): boolean {
   return LIFT_FOLLOWERS.some((f) => `car.${f.name}` === name);
@@ -1109,10 +1123,16 @@ async function main(): Promise<void> {
       continue;
     }
     const named = isRivets(name) || isCar(name) || isFitting(name) || isChain(name);
-    // A car is the lifts' own fit-out, so it wears the platforms' paint;
-    // what moves with it is machinery and wears that; only a genuinely
-    // unclassed output gets the grey.
-    const material = !isCar(name) ? UNCLASSED : isMachine(name) ? MATERIALS.machinery : MATERIALS.platforms;
+    // A car is the lifts' own fit-out, so it wears the platforms' paint,
+    // and its panes the glass; what moves with it is machinery and wears
+    // that; only a genuinely unclassed output gets the grey.
+    const material = !isCar(name)
+      ? UNCLASSED
+      : isMachine(name)
+        ? MATERIALS.machinery
+        : isCarGlass(name)
+          ? MATERIALS.glass
+          : MATERIALS.platforms;
     const drawn = isRivets(name) ? drawRivets(name, collection, problems) : draw(name, collection, material, box, problems);
     if (!named) {
       overlay.addStat(`${name} (unclassed)`)(
@@ -1138,7 +1158,7 @@ async function main(): Promise<void> {
       }
     } else if (isCar(name)) {
       carTriangles += drawn.triangles;
-      const run = LIFT_CARS.find((r) => `car.${r.name}` === name);
+      const run = carRun(name);
       if (run === undefined) {
         problems.push(`${name}: the graph declared this car but published no run for it`);
         continue;
@@ -1156,7 +1176,7 @@ async function main(): Promise<void> {
   }
   if (cars.length > 0) {
     overlay.addStat("lift cars")(
-      `${cars.length}${STILL ? " parked" : " running"}, ${carTriangles.toLocaleString()} tri`,
+      `${cars.filter((c) => !isCarGlass(c.mesh.name)).length}${STILL ? " parked" : " running"}, ${carTriangles.toLocaleString()} tri`,
     );
   }
   statTotal(total.toLocaleString());
@@ -1241,9 +1261,10 @@ async function main(): Promise<void> {
           v === "all" ||
           v === name ||
           (isRivets(name) && (v === "rivets" || name === `rivets.${v}`)) ||
-          // A car rides with the fit-out it is painted like; it has no
-          // entry of its own, the way a class' rivets have none.
-          (isCar(name) && !isMachine(name) && v === "platforms") ||
+          // A car rides with the fit-out it is painted like, and its panes
+          // with the glass; neither has an entry of its own, the way a
+          // class' rivets have none.
+          (isCar(name) && !isMachine(name) && v === (isCarGlass(name) ? "glass" : "platforms")) ||
           // What moves with a car is machinery, and rides with that class.
           ((isChain(name) || isMachine(name)) && v === "machinery") ||
           // The flag flies from the rod, which is the summit's.

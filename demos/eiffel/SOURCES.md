@@ -984,7 +984,7 @@ E1900-TXT (§10.1) is cited by page. Its page images are Gallica bpt6k106381w, v
 - **Tracks.** Each is two 1.30-deep plate girders with rails, 3.80 apart (Otis) or 2.8 (Roux), plus a tie at every node and an X of lateral bracing per panel. The rail line is read at every node from the leg's inner corner plus `RAIL_OFFSET`.
   - Otis: from z −3.5 to 125.63.
   - Roux: from z −3.5 to 68.4.
-- **Cars.** One per leg, each one rigid body: two decks stepped up the slope, level on the slope it was drawn on (Otis 65.6°, Roux the 54.6° base run), a chassis along the rails, and a hanger under the lower deck's outer end. The graph builds each with its lower floor at 30 (Ouest), 42 (Sud), 12 (Est) and 22 (Nord) [estimated moment].
+- **Cars.** One per leg, each one rigid body: two decks stepped up the slope, level on the slope it was drawn on (Otis 65.6°, Roux the 54.6° base run), a chassis along the rails, and a hanger under the lower deck's outer end; each deck a cabin with its glass, and the chassis two longerons beside the cabins, since 2026-09-28 (§34). The graph builds each with its lower floor at 30 (Ouest), 42 (Sud), 12 (Est) and 22 (Nord) [estimated moment].
 - **Runs.** `LIFT_CARS` publishes each leg car's run as the line its axles ride — for the Otis the rail line itself; for the Roux, whose car runs on wheels on the rail heads (two axles, 600 double-flanged wheels, E1900-TXT p. 160), the wheel centres' line, the rail line offset 0.45 up its normal and mitred at the bends — arc-length parameterised, station for station the one the girders are built on, cut where the axles stand at the lowest and highest stations; the stations as arc lengths where the lower floor's centre stands at the station's height (z 1.58, 57.63, and for the Otis 115.73); and the axis and slope the car is level on. The car's two axles stand on the line either side of its arc length, a wheelbase apart (Otis 8.109, Roux 9.80, the chassis), and the body lies along the chord between them, so it tips smoothly where the rail bends. The Otis's are half a wheelbase of ARC either side; the Roux's a CHORD of a wheelbase apart, pushed out equally in arc (`RunLine.chordSpan`), because that is where the rigid body's own axles are: spaced by arc, across the top bend they stood a centimetre or two past their points, off the line, and took the wheels 2.6 mm into the heads. So every Roux wheel's centre is on its line, and its rim is drawn inside its circle (the chords' corners on it, their flats 0.9 mm in, a corner pointing down where built): the wheels stand on the heads on the straight and lift off them by up to 0.9 mm (a whole flat over the head) as the car tips over the top bend, and nowhere are they in them [derived; measured 3 µm, f32 rounding]. The page moves each mesh by one turn and one move from where it was built, at a metre a second, end to end. Measured on the published runs:
   - Otis course, station to station: **128.83** (book 128.61 to 129.96). Tip: −11.0° on the whole 54.6° run, −1.6° at the 1st-floor station, +10.0° to +11.5° in panels 7–10, +8.6° at the 2nd-floor station.
   - Roux course: **68.04** on the wheel centres' line (68.13 on the rail line; printed 66.60). Level to 0.01° up to the point where its upper axle passes XXIV, 14 m short of the top; then tipping forward, 3.4° at z 51, **11.7°** at the 1st-floor station, where its chord spans XXIV to panel 6.
@@ -2589,3 +2589,47 @@ Read from PL-XXIV (« Diagramme du montage. — Grue », Figs 1–7, read on the
 - **The first crane** at pile 3 on 2 Sep 1887, « à partir de la base »; the others « à partir du deuxième panneau » (p. 105), the shear legs having taken those legs to the top of panel 2 (p. 103), so from 10 Oct 1887 [the day estimated].
 - **Measured against the steel** (`tests/eiffelCranes.test.ts`, the whole crane, every 20 days of every crane, 6.6 M samples of the iron standing that day): nothing while the cranes climb the legs to the 2nd floor. Over it, the leg cranes stand among the plan bracing and bands of panels 12–13 that went up round them (5,140 samples, girders), which the real cranes worked over; the post cranes' jibs cross panel 29's corner uprights and bracing at their last station (238), and the stair's flights (443); the one left over the 3rd floor stands in the rooms (2,348, summit), which the model dates with the iron but p. 118 has fitted after it came down (« On se servit de la chèvre ... pour démonter la grue et monter tous les matériaux destinés à l'aménagement de cette plate-forme »). The test bounds each and holds the arches, the horizontals and the gussets to none. A first pass, before the verification, rode the cranes under their girders with the jib at full reach, through the lift girders and upright a.
 - **What it costs** [measured, Node]: six crane outputs of 476 triangles each; the cook is within its noise.
+
+## 34. The leg cars' cabins: frames, glass, interiors (2026-09-28)
+
+Until now each deck of the four leg cars was one solid box. `lifts.ts` `cabin` now builds each deck as a cabin of boxes, the same at every depth (`buildLifts` has one), every part inside the deck's old box, the envelope the clearance, well and stair tests sweep. Tags as in §0; where nothing was read, the tag says "invented".
+
+### 34.1 What was read, and how it is used
+
+- **Otis bands.** Floor to roof top 2.13 is the chain « 205 », « 275 », « 1.00 », « 0.65 » [sourced PL-XXII ter Fig. 1]. The notes never said which band is which. Read from the floor up as a wall: plate to a sill at 0.48 (0.205 + 0.275), windows 1.00 to a head at 1.48, and 0.65 of frieze and roof over them [estimated reading]. The low sill fits a car whose passengers were at first all seated [sourced E1900-TXT p. 135].
+- **Otis doors.** « Porte roulante 2.02 » [sourced Fig. 1]. Read as the doors' height over the floor line [estimated reading]: the doorways rise through the frieze to the roof's underside at 2.02, which leaves the roof 0.11 thick (2.02 → 2.13). Read as a width instead, a 2.02 leaf in the lower deck would have nowhere to roll back to beside the conductor's compartment. That reading is not built. « roulante »: a track inside under the roof, over the doorway and a leaf's width of wall toward the inner end [estimated form].
+- **Where the Otis doors are.** Each deck is served « par une petite passerelle » [sourced p. 135]. Where that bridge stood is not printed, so the model's station geometry decides it [derived from the model]. At the 1st floor the well (`platforms.ts` `LIFT_OPENINGS`) leaves 1.0 beside the car along its whole length. At the 2nd floor the neck between the girders leaves 0.30 beside the inner half of the lower deck, and 1.08 beside its outer half from t 12.9. The upper deck's outer end stands over the lower deck's roof, 1.08 in, and its inner end is in the trough, so no bridge can meet either end. So each deck has a door in each long side, in the bay next to the outermost one: lower deck a 0.475…1.435 from its centre, t about 13.4–14.4 at the 2nd floor. Which of the two sides a bridge actually served is not recorded, so there is a door in both [estimated].
+- **Otis conductor.** "Com." at the lower end [sourced Fig. 1]. Built as the lower deck's outermost side bay, 0.90 from the outer end to the partition's centre [estimated]. The partition is plate to the sill and glazed over it either side of an open doorway 0.60 wide, with a band from the head to the roof [estimated: invented].
+- **Otis fittings.** Later only « un banc à l'arrière et des barres d'appui » [sourced p. 135, as §11.4 reads it]. Built as a bench across each deck against its inner (uphill) end, 0.45 deep with a 0.45 seat, and a grab rail on each long side, 0.035 square at 0.95, on the posts' inner faces from the blind end to the doorway [estimated: which end is "the back"; the rails' height and run invented].
+- **Roux windows.** PL-XXIII Fig. 3 draws the upper cabin's side with three windows; the rest is hidden behind the near girder [sourced drawing, §21.1]. Built as three equal windows in the +E side of both decks. Which side the figure faces, and that the lower deck matches it, are [estimated].
+- **Roux doors.** « par des escaliers terminés par des paliers » [sourced p. 160]. As with the Otis, a landing can only meet a deck at its side: the 1st floor's well leaves 1.0 beside the car, the upper deck's outer end is over the lower's roof, and its inner end is in the trough [derived from the model]. So each deck has one doorway 0.90 wide in its −E side, between two windows, on the side Fig. 3 does not show [estimated]. The ground stair's landings in the screenshots are the public stair (§11.6, §21), which crosses over the car's path 0.41 above its roof; they are not a station and say nothing about the doors.
+- **Roux bands, fittings.** Plate to a sill at 0.90, windows to 1.75, frieze to 1.98, roof to 2.10; a bench across each deck against its inner end [estimated: invented; the book gives the Roux 100 passengers and says nothing of seats].
+
+### 34.2 What is invented outright
+
+All [estimated: invented]:
+- every window count and width but the Roux's three: the Otis sides in four window bays and a doorway, each deck's outer end in three bays;
+- the blind inner ends (they stand in the girders' trough);
+- the floors' 0.10;
+- the plates' 0.04 and the posts' 0.06 square;
+- the doors' form: a panel set 12 mm in, to 1.00 (Otis) or 1.20 (Roux), a light over it and a rail at the head, the Roux's with no track;
+- the roofs as flat slabs, with no lantern and no railing;
+- the closed step between the decks, the upper floor's bearers over the lower roof where the decks overlap;
+- no livery (none is recorded).
+
+The panes are 6 mm on the plates' middle plane and lap 2 mm into the frame round them, the platforms' `GLAZING` (§10.11). They are each car's own output, `car.<name>.glass`, because the page draws glass in its own see-through material. It rides its car's run as the car does (main.ts `carRun`).
+
+### 34.3 The chassis, re-formed
+
+The rail line crosses both decks on the diagonal: each deck's inner end dips 1.1 under it (§21.1). So the old chassis, one member 0.30 deep across the gauge less 0.2, ran through both cabins' interiors. Only the solid decks had hidden it.
+
+It is now two longerons, one each side. Each runs from the cabins' walls out to 0.05 short of the rails, with its inner face on the walls' outer face [estimated form]:
+- Otis: 0.22 wide.
+- Roux: 0.05, a web. Its car is 3.27 wide in a 3.57 gauge.
+
+The Otis « Poutre transv.le du châssis, long.r 3.800 » [sourced Fig. 1] is drawn once, between the longerons at the chassis' lower end. That is under the lower floor, the only place across the gauge that is not a cabin [where estimated]. The longerons are a subset of the old chassis' volume.
+
+### 34.4 Measured
+
+- **Triangles.** Otis car 72 → 1,020, with 336 in its glass. Roux car 2,376 → 2,952 (of which the wheels are 2,256), with 216 in its glass.
+- **Tests.** `tests/eiffelLifts.test.ts`, the stair and machinery clearances and the floating scan pass unchanged on the new cars. The one exception is the tilt check, which read the deck's up from the lower deck box's two faces 2.13 apart. The floor slab is 0.10 thick, and points that close in f32 cannot hold 5e-4°. So it now reads the floor's line from its two ends, 3.9 or 4.67 apart.

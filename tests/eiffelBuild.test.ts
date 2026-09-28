@@ -285,6 +285,8 @@ describe("the erection's dates", () => {
 
   it("gives the lifts' cars, chains and the flag their own days", () => {
     expect(outputDay("car.roux.ouest")).toBe(dayOf("1889-05-26"));
+    // A car's panes are their own output, dated with their car.
+    expect(outputDay("car.otis.nord.glass")).toBe(dayOf("1889-06-04"));
     expect(outputDay("chain.roux.est.left")).toBe(dayOf("1889-06-02"));
     expect(outputDay("car.otis.sud.truck")).toBe(dayOf("1889-06-19"));
     expect(outputDay("car.edoux.pulley.nord.upper")).toBe(dayOf("1889-06-13"));

@@ -71,7 +71,10 @@
  * run and as far forward high in the leg, as E1900-TXT p. 135 says it did;
  * the Roux level on the straight run (see `carLevel`, `LIFT_CARS`). Where
  * each car stands when the graph builds it is a chosen moment
- * [estimated].
+ * [estimated]. Each deck is a cabin of plate, posts, frieze and roof with
+ * its doors, glass and bench (`cabin`, SOURCES.md §34: the Otis bands,
+ * doors and « Com. » and the Roux's three windows read from the plates,
+ * the rest invented and tagged so), its panes the car's own glass output.
  *
  * THE EDOUX [sourced PL-XX, PL-XXIII ter]. Two cars counterbalanced by four
  * cables over pulleys at the top: the upper car, lifted by two pistons 80.20
@@ -136,6 +139,7 @@ import { SAG, circleSegments } from "./chord.js";
 import { flatsSides } from "./ground.js";
 import { type Vec3, copyToQuadrants, indexTable, merge, pointTable, skin } from "./lattice.js";
 import type { Detail, Parts } from "./parts.js";
+import { GLAZING } from "./platforms.js";
 import { FLOORS, NODES, PILES, profileAt } from "./spec.js";
 import { stairRuns } from "./stairs.js";
 import { SUPPORT } from "./ground.js";
@@ -380,6 +384,57 @@ interface CarSpec {
   readonly chassis?: number;
   /** Running wheels on the rails, one at each end of each axle: their diameter and width. Absent: none built. */
   readonly running?: { readonly diameter: number; readonly width: number };
+  /** Each deck's cabin: its walls, openings and fittings ({@link cabin}). */
+  readonly cabin: CabinSpec;
+}
+
+/**
+ * A bay of a cabin's long side, between two posts: a window, or (`door`)
+ * a doorway from the floor to the roof. `clear` is its width between the
+ * posts; a window without one shares what its side has left equally.
+ */
+interface Bay {
+  readonly door?: true;
+  readonly clear?: number;
+}
+
+/**
+ * A leg car's cabin, one per deck, in heights above the deck's floor line
+ * (the deck's underside, which the stations are measured to). Walls of
+ * plate to the sill, window posts to the head, a frieze from the head to
+ * the roof, the roof over all; the inner (uphill) end blind, since it
+ * stands in the girders' trough; the outer end glazed in `endBays`.
+ */
+interface CabinSpec {
+  /** The floor's top. */
+  readonly floor: number;
+  /** The plate's top: the windows' foot. */
+  readonly sill: number;
+  /** The windows' head: the frieze's foot. */
+  readonly head: number;
+  /** The roof's underside, and the doorways' head. */
+  readonly roof: number;
+  /** Plate walls' thickness; posts' square section. */
+  readonly wall: number;
+  readonly post: number;
+  /** The long sides' bays, inner end to outer: the side toward -E, then +E. */
+  readonly sides: readonly [readonly Bay[], readonly Bay[]];
+  /** The outer end's windows. */
+  readonly endBays: number;
+  /** A door leaf's panel, to this height over the floor line, the light over it. */
+  readonly doorPanel: number;
+  /** A sliding door's track inside over the doorway and the wall it rolls along. */
+  readonly track: boolean;
+  /** The bench against the inner end: its depth and its seat's height over the floor. */
+  readonly bench: { readonly depth: number; readonly seat: number };
+  /** Grab rails along the long sides, at this height over the floor line. Absent: none. */
+  readonly grab?: number;
+  /**
+   * The conductor's compartment, the lower deck's outermost side bay, closed
+   * from the passengers by a glazed partition with a doorway this wide.
+   * Absent: none.
+   */
+  readonly com?: { readonly doorway: number };
 }
 
 /**
@@ -400,6 +455,40 @@ const OTIS_CAR: CarSpec = {
   step: 2.376,
   setback: 1.08,
   chassis: 8.109,
+  // The cabin [SOURCES.md §34]. The chain « 205 », « 275 », « 1.00 »,
+  // « 0.65 » read as the wall's bands from the floor up [estimated
+  // reading]: plate to a sill at 0.48, windows 1.00 to 1.48, and 0.65 of
+  // frieze and roof above. « Porte roulante 2.02 » [sourced Fig. 1] read as
+  // the doors' height over the floor line [estimated reading], so they rise
+  // through the frieze to the roof's underside, 0.11 under its top. The
+  // doors on the long sides, one each side of each deck, in its outer half
+  // [estimated: both stations' wells leave about 1.0 beside the car there,
+  // and the 2nd floor's neck 0.30 beside its inner half; the upper deck's
+  // outer end stands over the lower deck's roof, so no passerelle meets
+  // it]. Their width, 0.90, and every other bay, the floor's 0.10 and the
+  // plates' and posts' sections [estimated: invented]. The conductor's
+  // compartment « Com. » at the lower end [sourced Fig. 1], 0.90 deep
+  // [estimated]; « un banc à l'arrière et des barres d'appui » [sourced
+  // E1900-TXT p. 135], the bench against the inner end and the rails along
+  // the sides [estimated: where].
+  cabin: {
+    floor: 0.1,
+    sill: 0.48,
+    head: 1.48,
+    roof: 2.02,
+    wall: 0.04,
+    post: 0.06,
+    sides: [
+      [{}, {}, {}, { door: true, clear: 0.9 }, { clear: 0.81 }],
+      [{}, {}, {}, { door: true, clear: 0.9 }, { clear: 0.81 }],
+    ],
+    endBays: 3,
+    doorPanel: 1.0,
+    track: true,
+    bench: { depth: 0.45, seat: 0.45 },
+    grab: 0.95,
+    com: { doorway: 0.6 },
+  },
 };
 /**
  * Roux (PL-XXIII Fig. 4, 1:50): 3.27 across and about 2.1 floor to roof,
@@ -424,6 +513,31 @@ const ROUX_CAR: CarSpec = {
   top: ROUX.top,
   step: 2.5,
   running: { diameter: 0.6, width: 0.09 },
+  // The cabin [SOURCES.md §34]. PL-XXIII Fig. 3 draws the upper cabin's
+  // side with three windows [sourced drawing], taken here as the +E side of
+  // both decks; which side the figure faces is not recorded. Each deck is
+  // entered « par des escaliers terminés par des paliers » [sourced
+  // E1900-TXT p. 160], which at the 1st floor's well can only stand beside
+  // the car (the upper deck's outer end is over the lower's roof, its inner
+  // end in the trough), so the doorway is in the other long side, the -E,
+  // between two windows [estimated]. The bands, the doorway's 0.90, the
+  // plain doors and the benches [estimated: invented].
+  cabin: {
+    floor: 0.1,
+    sill: 0.9,
+    head: 1.75,
+    roof: 1.98,
+    wall: 0.04,
+    post: 0.06,
+    sides: [
+      [{}, { door: true, clear: 0.9 }, {}],
+      [{}, {}, {}],
+    ],
+    endBays: 3,
+    doorPanel: 1.2,
+    track: false,
+    bench: { depth: 0.45, seat: 0.45 },
+  },
 };
 
 /**
@@ -436,11 +550,157 @@ const ROUX_CAR: CarSpec = {
 const TROUGH = 1.1;
 
 /**
+ * One deck's cabin as boxes, in the +x+z leg's frame: the deck's floor
+ * line's centre at (r, y) on the diagonal, the deck `len` long along it
+ * (its outer end +U), `wide` across and `high` from its floor line to the
+ * roof's top. Everything stays inside that box — the deck's envelope, the
+ * one the clearance and well tests sweep — so a cabin can never reach
+ * where the solid deck it replaced did not. The panes come back apart,
+ * for the car's glass output: `GLAZING.pane` thick on the plates' middle
+ * plane, lapping `GLAZING.rebate` into the frame round them as the
+ * platforms' do.
+ *
+ * `frame[0]` is the floor, whose underside is the floor line
+ * (`tests/eiffelLifts.test.ts` reads the lower floor there).
+ */
+function cabin(
+  spec: CarSpec,
+  r: number,
+  y: number,
+  lower: boolean,
+): { frame: Block[]; glass: Block[] } {
+  const C = spec.cabin;
+  const [len, high, wide] = spec.deck;
+  const A = len / 2;
+  const W = wide / 2;
+  const { wall: w, post: p } = C;
+  const { pane, rebate } = GLAZING;
+  const frame: Block[] = [];
+  const glass: Block[] = [];
+  type Range = readonly [number, number];
+  // A box by its extents: `a` along the deck from its centre, `h` over its
+  // floor line, `c` across it (+E).
+  const box = (a: Range, h: Range, c: Range): Block =>
+    levelBox(onDiag(r + (a[0] + a[1]) / 2, y + (h[0] + h[1]) / 2, (c[0] + c[1]) / 2), a[1] - a[0], h[1] - h[0], c[1] - c[0]);
+  // Across, measured inward from side s's outer face (s = -1 or +1).
+  const inward = (s: number, u: Range): Range => {
+    const c0 = s * (W - u[0]);
+    const c1 = s * (W - u[1]);
+    return c0 < c1 ? [c0, c1] : [c1, c0];
+  };
+  // A pane's layer in a wall: the wall's middle plane.
+  const layer: Range = [w / 2 - pane / 2, w / 2 + pane / 2];
+
+  frame.push(box([-A, A], [0, C.floor], [-W, W]));
+  frame.push(box([-A, A], [C.roof, high], [-W, W]));
+  // The inner end, blind, between the long sides' plates.
+  frame.push(box([-A, -A + w], [C.floor, C.roof], [-W + w, W - w]));
+  // The outer end: plate to the sill, frieze from the head, the windows
+  // between the corner posts (the long sides') and `endBays - 1` more.
+  const endA: Range = [A - w, A];
+  frame.push(box(endA, [C.floor, C.sill], [-W + w, W - w]));
+  frame.push(box(endA, [C.head, C.roof], [-W + w, W - w]));
+  const across = Array.from({ length: C.endBays + 1 }, (_, i) => -W + p / 2 + ((2 * W - p) * i) / C.endBays);
+  for (let i = 1; i < C.endBays; i++) {
+    const c = across[i] as number;
+    frame.push(box([A - p, A], [C.sill, C.head], [c - p / 2, c + p / 2]));
+  }
+  for (let i = 0; i < C.endBays; i++) {
+    glass.push(
+      box(
+        [A - layer[1], A - layer[0]],
+        [C.sill - rebate, C.head + rebate],
+        [(across[i] as number) + p / 2 - rebate, (across[i + 1] as number) - p / 2 + rebate],
+      ),
+    );
+  }
+
+  // The long sides: posts at the bays' ends, the first (the inner corner)
+  // standing against the blind end and so not built as one; a window between two
+  // posts, a doorway between two jambs that run from the floor to the roof,
+  // the plate and the frieze broken for it.
+  let partition: number | undefined;
+  C.sides.forEach((bays, k) => {
+    const s = k === 0 ? -1 : 1;
+    const fixed = bays.reduce((t, b) => t + (b.clear ?? 0), 0);
+    const shared = bays.filter((b) => b.clear === undefined).length;
+    const share = shared > 0 ? (2 * A - p * (bays.length + 1) - fixed) / shared : 0;
+    if (share < 0 || (shared === 0 && Math.abs(2 * A - p * (bays.length + 1) - fixed) > 1e-9)) {
+      throw new Error(`lifts.ts cabin: a long side's bays (${fixed.toFixed(3)} fixed, ${bays.length} bays) do not fill the deck's ${len} between its posts; give the windows no width, or widths that close.`);
+    }
+    const posts = [-A + p / 2];
+    for (const b of bays) posts.push((posts[posts.length - 1] as number) + p + (b.clear ?? share));
+    const jamb = (i: number): boolean => bays[i - 1]?.door === true || bays[i]?.door === true;
+    // At the blind end the corner is the plates' own square, carried up
+    // between the plate and the frieze.
+    frame.push(box([-A, -A + w], [C.sill, C.head], inward(s, [0, w])));
+    for (let i = 1; i < posts.length; i++) {
+      const a = posts[i] as number;
+      frame.push(box([a - p / 2, a + p / 2], jamb(i) ? [C.floor, C.roof] : [C.sill, C.head], inward(s, [0, p])));
+    }
+    // Plate and frieze, from end to end but for the doorways.
+    let from = -A;
+    const run = (to: number): void => {
+      frame.push(box([from, to], [C.floor, C.sill], inward(s, [0, w])));
+      frame.push(box([from, to], [C.head, C.roof], inward(s, [0, w])));
+    };
+    bays.forEach((b, i) => {
+      const a0 = (posts[i] as number) + p / 2;
+      const a1 = (posts[i + 1] as number) - p / 2;
+      if (b.door !== true) {
+        glass.push(box([i === 0 ? -A + w - rebate : a0 - rebate, a1 + rebate], [C.sill - rebate, C.head + rebate], inward(s, layer)));
+        return;
+      }
+      run(a0 - p);
+      from = a1 + p;
+      // The leaf, shut: a panel set 12 mm in, standing higher than the
+      // windows' sill so the doorway reads as one, a light over it, a rail
+      // at the head.
+      const rail = C.roof - 0.06;
+      frame.push(box([a0, a1], [C.floor, C.doorPanel], inward(s, [0.012, w])));
+      frame.push(box([a0, a1], [rail, C.roof], inward(s, [0, w])));
+      glass.push(box([a0 - rebate, a1 + rebate], [C.doorPanel - rebate, rail + rebate], inward(s, layer)));
+      // A rolling door's track, inside under the roof, over the doorway and
+      // the leaf's width of wall it rolls back along (inward).
+      if (C.track) frame.push(box([Math.max(-A + w, a0 - (a1 - a0) - p), a1 + p / 2], [C.roof - 0.08, C.roof], inward(s, [w, w + 0.04])));
+      // Grab rails, on the posts' inner faces from the blind end to the
+      // first doorway's jamb.
+      if (C.grab !== undefined && bays.slice(0, i).every((x) => x.door !== true)) {
+        frame.push(box([-A + w, posts[i] as number], [C.grab, C.grab + 0.035], inward(s, [p, p + 0.035])));
+      }
+    });
+    run(A);
+    if (lower && C.com !== undefined) partition = posts[posts.length - 2] as number;
+  });
+
+  // The conductor's compartment: a partition across the deck on the post
+  // before the outermost bay, plate to the sill and glazed over it either
+  // side of an open doorway, a band from the head to the roof.
+  if (partition !== undefined && C.com !== undefined) {
+    const at: Range = [partition - w / 2, partition + w / 2];
+    const d = C.com.doorway / 2;
+    for (const s of [-1, 1]) {
+      const edge: Range = inward(s, [w, W - d - p]);
+      frame.push(box([partition - p / 2, partition + p / 2], [C.floor, C.roof], inward(s, [W - d - p, W - d])));
+      frame.push(box(at, [C.floor, C.sill], edge));
+      frame.push(box(at, [C.head, C.roof], edge));
+      glass.push(box([partition - pane / 2, partition + pane / 2], [C.sill - rebate, C.head + rebate], inward(s, [p - rebate, W - d - p + rebate])));
+    }
+  }
+
+  // The bench against the inner end, between the long sides' posts.
+  frame.push(box([-A + w, -A + w + C.bench.depth], [C.floor, C.bench.seat + C.floor], [-W + p, W - p]));
+  return { frame, glass };
+}
+
+/**
  * A car as ONE RIGID BODY, in the +x+z leg's frame, built the way it was
  * drawn: on a straight rail at the slope its floors are level on (`level`,
  * see {@link carLevel}), the axle midpoint at the origin. Two level decks,
- * the upper one `step` higher and `setback` further in, on a chassis along
- * the rails, with a hanger under the lower deck's outer end.
+ * the upper one `step` higher and `setback` further in, each a cabin
+ * ({@link cabin}), on a chassis of two longerons along the rails, with a
+ * hanger under the lower deck's outer end. The panes come back apart
+ * (`glass`), for an output of their own.
  *
  * Nothing here reads the leg. Where the car stands and how far it tips are
  * the run's business ({@link carPose}): the graph turns this body onto its
@@ -449,6 +709,8 @@ const TROUGH = 1.1;
 interface CarBody {
   /** The boxes, about the axle midpoint on the rail. */
   readonly blocks: readonly Block[];
+  /** The cabins' panes, about the same point: the car's glass output. */
+  readonly glass: readonly Block[];
   /** The running wheels (the Roux's), about the same point. */
   readonly wheels: readonly Wheel[];
   /** The slope, in radians, on which the floors are level. */
@@ -516,10 +778,18 @@ function carBody(spec: CarSpec): CarBody {
   const r1 = rOf(yRail);
   const back = spec.setback ?? spec.step / slope;
   const r2 = r1 - back;
-  const raw: Block[] = [
-    levelBox(onDiag(r1, high / 2), len, high, wide),
-    levelBox(onDiag(r2, spec.step + high / 2), len, high, wide),
-  ];
+  // The two cabins, each inside its deck's box: the lower's floor first.
+  const lowerCab = cabin(spec, r1, 0, true);
+  const upperCab = cabin(spec, r2, spec.step, false);
+  const raw: Block[] = [...lowerCab.frame, ...upperCab.frame];
+  const panes = [...lowerCab.glass, ...upperCab.glass];
+  // Where the decks overlap along the diagonal, the upper floor's bearers
+  // stand on the lower roof, the step between them closed [estimated].
+  const lapIn = Math.max(r1, r2) - len / 2;
+  const lapOut = Math.min(r1, r2) + len / 2;
+  if (spec.step > high && lapOut > lapIn) {
+    raw.push(levelBox(onDiag((lapIn + lapOut) / 2, (high + spec.step) / 2), lapOut - lapIn, spec.step - high, wide));
+  }
   // The chassis, along the rails: from under the lower deck's outer end to
   // under the upper deck's inner end, or `chassis` long about their middle.
   const yOuter = yRail - (len / 2) * slope;
@@ -533,9 +803,25 @@ function carBody(spec: CarSpec): CarBody {
   }
   const pLow = add3(onDiag(rOf(yLow), yLow), mul3(n, 0.2));
   const pHigh = add3(onDiag(rOf(yHigh), yHigh), mul3(n, 0.2));
-  // Between the rails (0.10 wide on the webs), 0.05 clear of them.
+  // Between the rails (0.10 wide on the webs), 0.05 clear of them. The
+  // rail line crosses both decks on the diagonal (their inner ends dip
+  // TROUGH under it), so the chassis cannot be one frame across the gauge,
+  // which would run through the cabins: it is two longerons, one each side,
+  // from the cabins' walls out to 0.05 short of the rails, their inner faces
+  // on the walls' outer faces [estimated form]. Otis 0.22 wide, Roux (its
+  // car 3.27 in a 3.57 gauge) 0.05, a web.
   const chassis = member(pLow, pHigh, 0.3, n);
-  raw.push({ ...chassis, size: [chassis.size[0], 0.3, spec.gauge - 0.2] });
+  const beam = (spec.gauge - 0.2) / 2 - wide / 2;
+  for (const side of [-1, 1]) {
+    raw.push({ ...chassis, at: add3(chassis.at, mul3(E, side * (wide / 2 + beam / 2))), size: [chassis.size[0], 0.3, beam] });
+  }
+  // The Otis « Poutre transv.le du châssis, long.r 3.800 » [sourced PL-XXII
+  // ter Fig. 1], rail to rail: one at the chassis' lower end, under the lower
+  // floor, the only place across the gauge that is not a cabin [where
+  // estimated]; drawn between the longerons, which make up its ends.
+  if (spec.chassis !== undefined) {
+    raw.push({ ...chassis, at: add3(pLow, mul3(chassis.x, 0.15)), size: [0.3, 0.3, wide] });
+  }
   // The hanger: from the chassis up to the lower floor, at its outer end or
   // at the chassis' end, whichever is further in.
   const rHang = Math.min(r1 + len / 2 - 0.1, rOf(yLow));
@@ -608,6 +894,7 @@ function carBody(spec: CarSpec): CarBody {
   const mid = add3(onDiag(rOf(yMid), yMid), mul3(n, ride));
   return {
     blocks: raw.map((b) => ({ ...b, at: sub3(b.at, mid) })),
+    glass: panes.map((b) => ({ ...b, at: sub3(b.at, mid) })),
     wheels: wheels.map((w) => ({ ...w, centre: sub3(w.centre, mid) })),
     level,
     wheelbase: (yHigh - yLow) / Math.sin(level),
@@ -1754,7 +2041,15 @@ function cutLine(line: RunLine, s0: number, s1: number): RunLine {
  * `RunLine.chordSpan`), so both axles are on it throughout; that both ends
  * are still on the built rail is checked here, not assumed.
  */
-function legRun(k: number): { run: CarRun; blocks: Block[]; wheels: Wheel[]; rail: RunLine; railStart: number; body: CarBody } {
+function legRun(k: number): {
+  run: CarRun;
+  blocks: Block[];
+  glass: Block[];
+  wheels: Wheel[];
+  rail: RunLine;
+  railStart: number;
+  body: CarBody;
+} {
   const system = PILES[k]?.lift === "roux" ? "roux" : "otis";
   const spec = system === "roux" ? ROUX_CAR : OTIS_CAR;
   const body = carBody(spec);
@@ -1823,9 +2118,9 @@ function legRun(k: number): { run: CarRun; blocks: Block[]; wheels: Wheel[]; rai
   const mid: Vec3 = [pose[0] as number, pose[1] as number, pose[2] as number];
   const tip = (pose[3] as number) - body.level;
   const turn = (v: Vec3): Vec3 => rotate3(onLeg(k, v), axis, tip);
-  const placed = body.blocks.map((b) => ({ at: add3(mid, turn(b.at)), x: turn(b.x), y: turn(b.y), size: b.size }));
+  const place = (b: Block): Block => ({ at: add3(mid, turn(b.at)), x: turn(b.x), y: turn(b.y), size: b.size });
   const wheels = body.wheels.map((w) => ({ ...w, centre: add3(mid, turn(w.centre)), axis: turn(w.axis), ref: turn(w.ref) }));
-  return { run, blocks: placed, wheels, rail, railStart: s0, body };
+  return { run, blocks: body.blocks.map(place), glass: body.glass.map(place), wheels, rail, railStart: s0, body };
 }
 
 /** The four leg cars, per quadrant target: each run and its body where the graph builds it. */
@@ -3331,11 +3626,14 @@ export function buildLifts(g: Graph, quads: NodeHandle, detail: Detail = {}): Pa
   // page moves them one at a time along the runs LIFT_CARS publishes. One
   // merged node would be one rigid body and the six would have to travel
   // together, which is the one thing a lift never does.
+  // A leg car's panes are their own mesh, `car.<name>.glass`, because the
+  // page draws glass in its own see-through material (main.ts `GLASS`); it
+  // rides its car's run as the car does.
   const cars = [
-    ...CAR_NAME.map((name, k) => ({
-      name,
-      mesh: gear(g, carId(name), LEG_CARS[k] as Gear),
-    })),
+    ...CAR_NAME.flatMap((name, k) => [
+      { name, mesh: gear(g, carId(name), LEG_CARS[k] as Gear) },
+      { name: `${name}.glass`, mesh: blocks(g, carId(`${name}.glass`), (LEG_CARS[k] as (typeof LEG_CARS)[number]).glass) },
+    ]),
     ...edoux.cars,
     ...ROUX_WHEELS.map((w) => ({ name: w.name, mesh: gear(g, carId(w.name), { blocks: [], wheels: [w.wheel] }) })),
     ...OTIS_MOVING.flatMap(({ carriage, truck }) => [

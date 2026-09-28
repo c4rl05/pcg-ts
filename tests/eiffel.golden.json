@@ -176,11 +176,11 @@
       "car.otis.nord": {
         "kind": "geometry",
         "items": 1,
-        "points": 144,
-        "vertices": 216,
-        "primitives": 72,
+        "points": 2040,
+        "vertices": 3060,
+        "primitives": 1020,
         "instances": 0,
-        "hash": "e1a95a7c7825053b"
+        "hash": "2a83c04985608f52"
       },
       "car.otis.nord.cable.a": {
         "kind": "geometry",
@@ -218,6 +218,15 @@
         "instances": 0,
         "hash": "4e3224245538d8c7"
       },
+      "car.otis.nord.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 672,
+        "vertices": 1008,
+        "primitives": 336,
+        "instances": 0,
+        "hash": "68e946dab86ff883"
+      },
       "car.otis.nord.truck": {
         "kind": "geometry",
         "items": 1,
@@ -230,11 +239,11 @@
       "car.otis.sud": {
         "kind": "geometry",
         "items": 1,
-        "points": 144,
-        "vertices": 216,
-        "primitives": 72,
+        "points": 2040,
+        "vertices": 3060,
+        "primitives": 1020,
         "instances": 0,
-        "hash": "a6c481fce71b7d61"
+        "hash": "f5c22f544cb07396"
       },
       "car.otis.sud.cable.a": {
         "kind": "geometry",
@@ -272,6 +281,15 @@
         "instances": 0,
         "hash": "d3fdcde3fc516bf2"
       },
+      "car.otis.sud.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 672,
+        "vertices": 1008,
+        "primitives": 336,
+        "instances": 0,
+        "hash": "ede373fbb4c6e052"
+      },
       "car.otis.sud.truck": {
         "kind": "geometry",
         "items": 1,
@@ -284,11 +302,20 @@
       "car.roux.est": {
         "kind": "geometry",
         "items": 1,
-        "points": 4752,
-        "vertices": 7128,
-        "primitives": 2376,
+        "points": 5904,
+        "vertices": 8856,
+        "primitives": 2952,
         "instances": 0,
-        "hash": "96e9b178b97b6a78"
+        "hash": "d022663f8e5129c4"
+      },
+      "car.roux.est.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 432,
+        "vertices": 648,
+        "primitives": 216,
+        "instances": 0,
+        "hash": "d05ee5c46f160863"
       },
       "car.roux.est.left.pulley": {
         "kind": "geometry",
@@ -329,11 +356,20 @@
       "car.roux.ouest": {
         "kind": "geometry",
         "items": 1,
-        "points": 4752,
-        "vertices": 7128,
-        "primitives": 2376,
+        "points": 5904,
+        "vertices": 8856,
+        "primitives": 2952,
         "instances": 0,
-        "hash": "bc7729a22baa5fda"
+        "hash": "48932813771d2f7e"
+      },
+      "car.roux.ouest.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 432,
+        "vertices": 648,
+        "primitives": 216,
+        "instances": 0,
+        "hash": "e09237a21ea51f94"
       },
       "car.roux.ouest.left.pulley": {
         "kind": "geometry",
@@ -808,11 +844,11 @@
       "car.otis.nord": {
         "kind": "geometry",
         "items": 1,
-        "points": 144,
-        "vertices": 216,
-        "primitives": 72,
+        "points": 2040,
+        "vertices": 3060,
+        "primitives": 1020,
         "instances": 0,
-        "hash": "e1a95a7c7825053b"
+        "hash": "2a83c04985608f52"
       },
       "car.otis.nord.cable.a": {
         "kind": "geometry",
@@ -850,6 +886,15 @@
         "instances": 0,
         "hash": "4e3224245538d8c7"
       },
+      "car.otis.nord.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 672,
+        "vertices": 1008,
+        "primitives": 336,
+        "instances": 0,
+        "hash": "68e946dab86ff883"
+      },
       "car.otis.nord.truck": {
         "kind": "geometry",
         "items": 1,
@@ -862,11 +907,11 @@
       "car.otis.sud": {
         "kind": "geometry",
         "items": 1,
-        "points": 144,
-        "vertices": 216,
-        "primitives": 72,
+        "points": 2040,
+        "vertices": 3060,
+        "primitives": 1020,
         "instances": 0,
-        "hash": "a6c481fce71b7d61"
+        "hash": "f5c22f544cb07396"
       },
       "car.otis.sud.cable.a": {
         "kind": "geometry",
@@ -904,6 +949,15 @@
         "instances": 0,
         "hash": "d3fdcde3fc516bf2"
       },
+      "car.otis.sud.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 672,
+        "vertices": 1008,
+        "primitives": 336,
+        "instances": 0,
+        "hash": "ede373fbb4c6e052"
+      },
       "car.otis.sud.truck": {
         "kind": "geometry",
         "items": 1,
@@ -916,11 +970,20 @@
       "car.roux.est": {
         "kind": "geometry",
         "items": 1,
-        "points": 4752,
-        "vertices": 7128,
-        "primitives": 2376,
+        "points": 5904,
+        "vertices": 8856,
+        "primitives": 2952,
         "instances": 0,
-        "hash": "96e9b178b97b6a78"
+        "hash": "d022663f8e5129c4"
+      },
+      "car.roux.est.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 432,
+        "vertices": 648,
+        "primitives": 216,
+        "instances": 0,
+        "hash": "d05ee5c46f160863"
       },
       "car.roux.est.left.pulley": {
         "kind": "geometry",
@@ -961,11 +1024,20 @@
       "car.roux.ouest": {
         "kind": "geometry",
         "items": 1,
-        "points": 4752,
-        "vertices": 7128,
-        "primitives": 2376,
+        "points": 5904,
+        "vertices": 8856,
+        "primitives": 2952,
         "instances": 0,
-        "hash": "bc7729a22baa5fda"
+        "hash": "48932813771d2f7e"
+      },
+      "car.roux.ouest.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 432,
+        "vertices": 648,
+        "primitives": 216,
+        "instances": 0,
+        "hash": "e09237a21ea51f94"
       },
       "car.roux.ouest.left.pulley": {
         "kind": "geometry",
@@ -1359,11 +1431,11 @@
       "car.otis.nord": {
         "kind": "geometry",
         "items": 1,
-        "points": 144,
-        "vertices": 216,
-        "primitives": 72,
+        "points": 2040,
+        "vertices": 3060,
+        "primitives": 1020,
         "instances": 0,
-        "hash": "e1a95a7c7825053b"
+        "hash": "2a83c04985608f52"
       },
       "car.otis.nord.cable.a": {
         "kind": "geometry",
@@ -1401,6 +1473,15 @@
         "instances": 0,
         "hash": "4e3224245538d8c7"
       },
+      "car.otis.nord.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 672,
+        "vertices": 1008,
+        "primitives": 336,
+        "instances": 0,
+        "hash": "68e946dab86ff883"
+      },
       "car.otis.nord.truck": {
         "kind": "geometry",
         "items": 1,
@@ -1413,11 +1494,11 @@
       "car.otis.sud": {
         "kind": "geometry",
         "items": 1,
-        "points": 144,
-        "vertices": 216,
-        "primitives": 72,
+        "points": 2040,
+        "vertices": 3060,
+        "primitives": 1020,
         "instances": 0,
-        "hash": "a6c481fce71b7d61"
+        "hash": "f5c22f544cb07396"
       },
       "car.otis.sud.cable.a": {
         "kind": "geometry",
@@ -1455,6 +1536,15 @@
         "instances": 0,
         "hash": "d3fdcde3fc516bf2"
       },
+      "car.otis.sud.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 672,
+        "vertices": 1008,
+        "primitives": 336,
+        "instances": 0,
+        "hash": "ede373fbb4c6e052"
+      },
       "car.otis.sud.truck": {
         "kind": "geometry",
         "items": 1,
@@ -1467,11 +1557,20 @@
       "car.roux.est": {
         "kind": "geometry",
         "items": 1,
-        "points": 4752,
-        "vertices": 7128,
-        "primitives": 2376,
+        "points": 5904,
+        "vertices": 8856,
+        "primitives": 2952,
         "instances": 0,
-        "hash": "96e9b178b97b6a78"
+        "hash": "d022663f8e5129c4"
+      },
+      "car.roux.est.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 432,
+        "vertices": 648,
+        "primitives": 216,
+        "instances": 0,
+        "hash": "d05ee5c46f160863"
       },
       "car.roux.est.left.pulley": {
         "kind": "geometry",
@@ -1512,11 +1611,20 @@
       "car.roux.ouest": {
         "kind": "geometry",
         "items": 1,
-        "points": 4752,
-        "vertices": 7128,
-        "primitives": 2376,
+        "points": 5904,
+        "vertices": 8856,
+        "primitives": 2952,
         "instances": 0,
-        "hash": "bc7729a22baa5fda"
+        "hash": "48932813771d2f7e"
+      },
+      "car.roux.ouest.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 432,
+        "vertices": 648,
+        "primitives": 216,
+        "instances": 0,
+        "hash": "e09237a21ea51f94"
       },
       "car.roux.ouest.left.pulley": {
         "kind": "geometry",
@@ -2432,11 +2540,11 @@
       "car.otis.nord": {
         "kind": "geometry",
         "items": 1,
-        "points": 144,
-        "vertices": 216,
-        "primitives": 72,
+        "points": 2040,
+        "vertices": 3060,
+        "primitives": 1020,
         "instances": 0,
-        "hash": "e1a95a7c7825053b"
+        "hash": "2a83c04985608f52"
       },
       "car.otis.nord.cable.a": {
         "kind": "geometry",
@@ -2474,6 +2582,15 @@
         "instances": 0,
         "hash": "4e3224245538d8c7"
       },
+      "car.otis.nord.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 672,
+        "vertices": 1008,
+        "primitives": 336,
+        "instances": 0,
+        "hash": "68e946dab86ff883"
+      },
       "car.otis.nord.truck": {
         "kind": "geometry",
         "items": 1,
@@ -2486,11 +2603,11 @@
       "car.otis.sud": {
         "kind": "geometry",
         "items": 1,
-        "points": 144,
-        "vertices": 216,
-        "primitives": 72,
+        "points": 2040,
+        "vertices": 3060,
+        "primitives": 1020,
         "instances": 0,
-        "hash": "a6c481fce71b7d61"
+        "hash": "f5c22f544cb07396"
       },
       "car.otis.sud.cable.a": {
         "kind": "geometry",
@@ -2528,6 +2645,15 @@
         "instances": 0,
         "hash": "d3fdcde3fc516bf2"
       },
+      "car.otis.sud.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 672,
+        "vertices": 1008,
+        "primitives": 336,
+        "instances": 0,
+        "hash": "ede373fbb4c6e052"
+      },
       "car.otis.sud.truck": {
         "kind": "geometry",
         "items": 1,
@@ -2540,11 +2666,20 @@
       "car.roux.est": {
         "kind": "geometry",
         "items": 1,
-        "points": 4752,
-        "vertices": 7128,
-        "primitives": 2376,
+        "points": 5904,
+        "vertices": 8856,
+        "primitives": 2952,
         "instances": 0,
-        "hash": "96e9b178b97b6a78"
+        "hash": "d022663f8e5129c4"
+      },
+      "car.roux.est.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 432,
+        "vertices": 648,
+        "primitives": 216,
+        "instances": 0,
+        "hash": "d05ee5c46f160863"
       },
       "car.roux.est.left.pulley": {
         "kind": "geometry",
@@ -2585,11 +2720,20 @@
       "car.roux.ouest": {
         "kind": "geometry",
         "items": 1,
-        "points": 4752,
-        "vertices": 7128,
-        "primitives": 2376,
+        "points": 5904,
+        "vertices": 8856,
+        "primitives": 2952,
         "instances": 0,
-        "hash": "bc7729a22baa5fda"
+        "hash": "48932813771d2f7e"
+      },
+      "car.roux.ouest.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 432,
+        "vertices": 648,
+        "primitives": 216,
+        "instances": 0,
+        "hash": "e09237a21ea51f94"
       },
       "car.roux.ouest.left.pulley": {
         "kind": "geometry",
@@ -3514,11 +3658,11 @@
       "car.otis.nord": {
         "kind": "geometry",
         "items": 1,
-        "points": 144,
-        "vertices": 216,
-        "primitives": 72,
+        "points": 2040,
+        "vertices": 3060,
+        "primitives": 1020,
         "instances": 0,
-        "hash": "e1a95a7c7825053b"
+        "hash": "2a83c04985608f52"
       },
       "car.otis.nord.cable.a": {
         "kind": "geometry",
@@ -3556,6 +3700,15 @@
         "instances": 0,
         "hash": "4e3224245538d8c7"
       },
+      "car.otis.nord.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 672,
+        "vertices": 1008,
+        "primitives": 336,
+        "instances": 0,
+        "hash": "68e946dab86ff883"
+      },
       "car.otis.nord.truck": {
         "kind": "geometry",
         "items": 1,
@@ -3568,11 +3721,11 @@
       "car.otis.sud": {
         "kind": "geometry",
         "items": 1,
-        "points": 144,
-        "vertices": 216,
-        "primitives": 72,
+        "points": 2040,
+        "vertices": 3060,
+        "primitives": 1020,
         "instances": 0,
-        "hash": "a6c481fce71b7d61"
+        "hash": "f5c22f544cb07396"
       },
       "car.otis.sud.cable.a": {
         "kind": "geometry",
@@ -3610,6 +3763,15 @@
         "instances": 0,
         "hash": "d3fdcde3fc516bf2"
       },
+      "car.otis.sud.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 672,
+        "vertices": 1008,
+        "primitives": 336,
+        "instances": 0,
+        "hash": "ede373fbb4c6e052"
+      },
       "car.otis.sud.truck": {
         "kind": "geometry",
         "items": 1,
@@ -3622,11 +3784,20 @@
       "car.roux.est": {
         "kind": "geometry",
         "items": 1,
-        "points": 4752,
-        "vertices": 7128,
-        "primitives": 2376,
+        "points": 5904,
+        "vertices": 8856,
+        "primitives": 2952,
         "instances": 0,
-        "hash": "96e9b178b97b6a78"
+        "hash": "d022663f8e5129c4"
+      },
+      "car.roux.est.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 432,
+        "vertices": 648,
+        "primitives": 216,
+        "instances": 0,
+        "hash": "d05ee5c46f160863"
       },
       "car.roux.est.left.pulley": {
         "kind": "geometry",
@@ -3667,11 +3838,20 @@
       "car.roux.ouest": {
         "kind": "geometry",
         "items": 1,
-        "points": 4752,
-        "vertices": 7128,
-        "primitives": 2376,
+        "points": 5904,
+        "vertices": 8856,
+        "primitives": 2952,
         "instances": 0,
-        "hash": "bc7729a22baa5fda"
+        "hash": "48932813771d2f7e"
+      },
+      "car.roux.ouest.glass": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 432,
+        "vertices": 648,
+        "primitives": 216,
+        "instances": 0,
+        "hash": "e09237a21ea51f94"
       },
       "car.roux.ouest.left.pulley": {
         "kind": "geometry",
