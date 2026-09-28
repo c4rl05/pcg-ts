@@ -300,12 +300,12 @@ const PACKED_SITE = packedRivetMaterial(RIVET_SITE);
  *
  * - stairs: the "stairs" class, all of it (parts.ts says what it holds:
  *   the climb, not the 1st floor's entrance flights).
- * - lifts: every car (`car.*`, the leg cars' panes among them), what moves
- *   with one (carriages, counterweights, pistons, pulleys, cables:
- *   `LIFT_FOLLOWERS`), the Roux chains (`chain.*`) and the machinery that
- *   stands still (the "machinery" class). Not the ground's iron (the
- *   "groundIron" class: the caissons, the supports, the machine room's
- *   plant), nor the tracks and guide posts, which are girders.
+ * - lifts: the cars themselves and nothing that drives them: every
+ *   `car.*` output that is a car (the leg cars' panes among them, and the
+ *   Edoux car that moves with the other), not the machinery (`isMachine`:
+ *   carriages, counterweights, pistons, pulleys, cables), not the Roux
+ *   chains, not the machinery that stands still (the "machinery" class),
+ *   nor the tracks and guide posts, which are girders.
  * - rivets: every rivet output, packed or drawn as matrices, and at
  *   `?bands` every rivet cell as it streams in.
  */
@@ -1217,7 +1217,6 @@ async function main(): Promise<void> {
     // Glass casts nothing (see `GLASS`).
     if (cls === "glass") for (const mesh of drawn.meshes) mesh.castShadow = false;
     if (cls === "stairs") for (const mesh of drawn.meshes) highlightable(mesh, "stairs");
-    if (cls === "machinery") for (const mesh of drawn.meshes) highlightable(mesh, "lifts");
     keep(cls, drawn);
     present.push(cls);
     classStats[cls](drawn.triangles.toLocaleString());
@@ -1264,7 +1263,7 @@ async function main(): Promise<void> {
     if (drawn.meshes.length === 0) continue;
     keep(name, drawn);
     if (!named) present.push(name);
-    if (isCar(name) || isChain(name)) for (const mesh of drawn.meshes) highlightable(mesh, "lifts");
+    if (isCar(name) && !isMachine(name)) for (const mesh of drawn.meshes) highlightable(mesh, "lifts");
     if (isChain(name)) {
       const chain = LIFT_CHAINS.findIndex((c) => `chain.${c.name}` === name);
       if (chain < 0) problems.push(`${name}: the graph declared this chain but published no circuit for it`);

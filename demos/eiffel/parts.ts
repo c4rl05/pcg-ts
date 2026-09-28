@@ -62,7 +62,7 @@ export const PART_CLASSES = [
    * The iron under and round the piles' feet (ground.ts): the caissons'
    * and the supports' iron, and the machine room's plant. In the
    * machinery's paint, and jittered with it (`JITTERED_WITH`); a class of
-   * its own so the lifts' machinery can be highlighted without it.
+   * its own so the lifts' machinery can be shown alone, without it.
    */
   "groundIron",
   /**
