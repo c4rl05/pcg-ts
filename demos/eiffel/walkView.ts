@@ -127,6 +127,9 @@ export function attachWalk(opts: WalkOptions): Walk {
   const host = document.createElement("div");
   host.style.display = "none";
   opts.slot.append(host);
+  // The slot goes with the host: an overlay slot draws its rule even when
+  // what is in it is hidden, so a shut walk would leave a stray line.
+  opts.slot.hidden = true;
 
   function ensurePanel(): void {
     if (panel !== undefined) return;
@@ -329,6 +332,7 @@ export function attachWalk(opts: WalkOptions): Walk {
     if (on) {
       ensurePanel();
       host.style.display = "";
+      opts.slot.hidden = false;
       saved = { pos: camera.position.clone(), target: controls.target.clone(), fov: camera.fov };
       controls.enabled = false;
       camera.fov = FOV;
@@ -339,6 +343,7 @@ export function attachWalk(opts: WalkOptions): Walk {
       last = performance.now();
     } else {
       host.style.display = "none";
+      opts.slot.hidden = true;
       playing = false;
       if (document.pointerLockElement === canvas) document.exitPointerLock();
       texel = opts.shadow.near(null);

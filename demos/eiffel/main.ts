@@ -740,15 +740,9 @@ window.addEventListener("resize", () => {
 // ------------------------------------------------------------------ //
 
 const overlay = createOverlay({
-  title: "eiffel",
-  info:
-    "Eiffel's 29 panels from Plate XXXI — four legs merging into one shaft — with every " +
-    "member below the panel scale placed by rule. Cooked once, drawn as it came out of the " +
-    "graph, one material per part class. The lifts are what moves: the cars " +
-    "ride their runs at about a metre a second, the Edoux pair counterweighted against each " +
-    "other, their chains, trucks, pistons and pulleys moving with them; and the tricolour " +
-    "flies from the rod. Orbit to judge it (W A S D and Q E move, Shift faster); the " +
-    "shadows are how the lattice reads.",
+  title: "The Eiffel Tower",
+  info: "Drag to orbit, right-drag to pan, scroll to zoom. WASD and QE move, Shift faster.",
+  foldStats: true,
 });
 
 const statFps = overlay.addStat("fps");

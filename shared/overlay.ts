@@ -164,6 +164,9 @@ function injectStyles(): void {
    .pcg-stats, so whatever fills it reads as part of the panel rather than as
    something sitting on top of it. */
 .pcg-overlay .pcg-slot { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--ed-rule); }
+/* A slot its tenant never filled (a tool that did not load, a feature the
+   page's depth leaves off) draws nothing, rather than a rule and a gap. */
+.pcg-overlay .pcg-slot:empty { display: none; }
 /* The chevron only exists for the bottom-sheet layout below; on desktop the
    title is not a toggle, so the glyph stays hidden. */
 .pcg-overlay .pcg-chevron { display: none; }
@@ -240,7 +243,18 @@ export interface Overlay {
 }
 
 /** Create the overlay panel and attach it to the page. */
-export function createOverlay(opts: { title: string; info?: string }): Overlay {
+export function createOverlay(opts: {
+  title: string;
+  info?: string;
+  /**
+   * Put the stat lines behind a "stats" disclosure, shut at load. For a
+   * page whose readouts outnumber its controls. The rows stay in the DOM
+   * while shut, so everything that scrapes `.pcg-stat` still reads them,
+   * and the disclosure IS the `.pcg-stats` element, so
+   * `.pcg-stats.previousElementSibling` is still the controls.
+   */
+  foldStats?: boolean;
+}): Overlay {
   injectStyles();
   const el = document.createElement("div");
   el.className = "pcg-overlay";
@@ -291,8 +305,13 @@ export function createOverlay(opts: { title: string; info?: string }): Overlay {
   }
   const controls = document.createElement("div");
   el.appendChild(controls);
-  const stats = document.createElement("div");
+  const stats = document.createElement(opts.foldStats ? "details" : "div");
   stats.className = "pcg-stats";
+  if (opts.foldStats) {
+    const summary = document.createElement("summary");
+    summary.textContent = "stats";
+    stats.appendChild(summary);
+  }
   el.appendChild(stats);
   document.body.appendChild(el);
 
