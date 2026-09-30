@@ -115,7 +115,7 @@ const rockMaterial = new MeshStandardMaterial({
 });
 
 const overlay = createOverlay({
-  title: "cave",
+  title: "Cave",
   info:
     "One node, no inputs: meshFromField contours a noise into triangles. The world is cut into " +
     "CUBE cells — the first 3D-celled level in this repo — and each one contours its own cube " +
@@ -145,12 +145,12 @@ interface Rig {
   disposed: boolean;
 }
 
-const setCells = overlay.addStat("cells");
-const setTris = overlay.addStat("triangles");
-const setPending = overlay.addStat("pending");
-const setCook = overlay.addStat("last cook");
+const setCells = overlay.addStat("Cells");
+const setTris = overlay.addStat("Triangles");
+const setPending = overlay.addStat("Pending");
+const setCook = overlay.addStat("Last cook");
 /** What the camera's own probe says about the way ahead. */
-const setClear = overlay.addStat("ahead");
+const setClear = overlay.addStat("Ahead");
 
 /** Triangles currently in the scene, summed as cells arrive and leave. */
 const cellTriangles = new Map<string, number>();
@@ -188,7 +188,7 @@ function buildWorld(): void {
   });
   const built = makeCaveLevel(options);
   field = built.field;
-  panel.set([{ name: "cave", graph: built.graph }]);
+  panel.set([{ name: "Cave", graph: built.graph }]);
 
   const next: Rig = { world: undefined as unknown as World, group, binding, abort: new AbortController(), disposed: false };
   (next as { world: World }).world = new World({
@@ -242,14 +242,14 @@ overlay.addSeed(options.seed, (seed) => {
   options = { ...options, seed };
   buildWorld();
 });
-overlay.addCheckbox("fly", flying, (on) => {
+overlay.addCheckbox("Fly", flying, (on) => {
   flying = on;
 });
-overlay.addSlider("speed", { min: 0, max: 30, step: 1, value: speed, format: (v) => `${v} u/s` }, (v) => {
+overlay.addSlider("Speed", { min: 0, max: 30, step: 1, value: speed, format: (v) => `${v} u/s` }, (v) => {
   speed = v;
 });
 overlay.addSlider(
-  "cell size",
+  "Cell size",
   { min: 16, max: 64, step: 4, value: options.cellSize, format: (v) => `${v} u` },
   (v) => {
     options = { ...options, cellSize: v };
@@ -257,7 +257,7 @@ overlay.addSlider(
   },
 );
 overlay.addSlider(
-  "radius",
+  "Radius",
   { min: 32, max: 96, step: 4, value: options.generationRadius, format: (v) => `${v} u` },
   (v) => {
     options = { ...options, generationRadius: v };
@@ -265,7 +265,7 @@ overlay.addSlider(
   },
 );
 overlay.addSlider(
-  "lattice",
+  "Lattice",
   { min: 0.5, max: 2, step: 0.1, value: options.lattice, format: (v) => `${v.toFixed(1)} u` },
   (v) => {
     options = { ...options, lattice: v };
@@ -273,7 +273,7 @@ overlay.addSlider(
   },
 );
 overlay.addSlider(
-  "rock",
+  "Rock",
   { min: 0.35, max: 0.6, step: 0.01, value: options.threshold, format: (v) => v.toFixed(2) },
   (v) => {
     options = { ...options, threshold: v };
@@ -281,13 +281,13 @@ overlay.addSlider(
   },
 );
 overlay.addNote(
-  "radius is CUBED here: a 3D world doubles its cell count three times over when you double " +
-    "the radius, where a flat one doubles it twice. lattice is squared again inside each cell, " +
+  "Radius is CUBED here: a 3D world doubles its cell count three times over when you double " +
+    "the radius, where a flat one doubles it twice. Lattice is squared again inside each cell, " +
     "since what it resolves is a surface. Push speed past the streaming and pending stops " +
     "returning to zero — that is the cook budget reporting, not a stutter.",
 );
 const graphSlot = overlay.addSlot();
-const panel = attachGraphPanel([], { into: graphSlot, title: "cave" });
+const panel = attachGraphPanel([], { into: graphSlot, title: "Cave" });
 attachWordmark();
 
 // --- flight -----------------------------------------------------------
@@ -472,7 +472,7 @@ scene.start((dt) => {
         camera.position.z += (grad[2] / len) * push;
       }
     }
-    setClear(inside ? "in rock" : "open");
+    setClear(inside ? "In rock" : "Open");
 
     // Then steer toward the most open direction, unless the pilot is
     // steering. Manual input WINS rather than blending: a demo that

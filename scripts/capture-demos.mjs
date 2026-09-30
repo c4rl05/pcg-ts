@@ -406,8 +406,8 @@ const DEMOS = [
       has(s["dressing"]) &&
       has(s["enclosure"]) &&
       has(s["corner language"]) &&
-      !/cooking the lap/.test(s["dressing"]) &&
-      !/cooking the lap/.test(s["enclosure"]),
+      !/cooking the lap/i.test(s["dressing"]) &&
+      !/cooking the lap/i.test(s["enclosure"]),
   },
   {
     id: "road",
@@ -511,10 +511,12 @@ function pageInstrumentation() {
 
   window.__capStats = () => {
     const out = {};
-    // Shared overlay: .pcg-stat = <span>label</span><span>value</span>
+    // Shared overlay: .pcg-stat = <span>label</span><span>value</span>.
+    // Keyed in lower case: the panels label in sentence case ("Cook",
+    // "FPS") and every lookup below names the reading, not its spelling.
     for (const row of document.querySelectorAll(".pcg-overlay .pcg-stat")) {
       const spans = row.querySelectorAll("span");
-      if (spans.length >= 2) out[text(spans[0])] = text(spans[1]);
+      if (spans.length >= 2) out[text(spans[0]).toLowerCase()] = text(spans[1]);
     }
     // Editor toolbar: .status holds one .stat per reading. Read the
     // label and the value BY TAG rather than by position — the markup

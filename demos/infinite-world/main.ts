@@ -174,7 +174,7 @@ const assets: AssetMap = {
  */
 let evalDerived: GpuFieldEvaluator | undefined;
 let evalStrict: GpuFieldEvaluator | undefined;
-let adapterLabel = "requesting…";
+let adapterLabel = "Requesting…";
 let gpuBlocker: string | undefined;
 let deviceLost = false;
 let deviceLostDetail = "";
@@ -203,11 +203,11 @@ let graphPanel: GraphPanelHandle | undefined;
 
 function showGraphs(landmarks: Graph, rocks: Graph): void {
   const entries = [
-    { name: "landmarks", graph: landmarks },
-    { name: "rocks", graph: rocks },
+    { name: "Landmarks", graph: landmarks },
+    { name: "Rocks", graph: rocks },
   ];
   if (graphPanel) graphPanel.set(entries);
-  else graphPanel = attachGraphPanel(entries, { into: graphSlot, title: "infinite world" });
+  else graphPanel = attachGraphPanel(entries, { into: graphSlot, title: "Infinite world" });
 }
 
 // -- world lifecycle -------------------------------------------------------
@@ -358,7 +358,7 @@ function runUpdate(r: WorldRig, budgetMs: number): void {
       // happened to race a rebuild.
       if (err instanceof CookCancelledError) return;
       console.error(err);
-      if (!r.disposed) setStatus(`update failed: ${errText(err)}`);
+      if (!r.disposed) setStatus(`Update failed: ${errText(err)}`);
     })
     .finally(() => {
       if (token === updateToken) updating = false;
@@ -390,7 +390,7 @@ document.addEventListener("visibilitychange", () => {
 // -- overlay ---------------------------------------------------------------
 
 const overlay = createOverlay({
-  title: "infinite world",
+  title: "Infinite world",
   info: "Unbounded landmark level + world-anchored rock cells streamed around a flying camera. Steer with A/D or arrow keys.",
 });
 
@@ -422,14 +422,14 @@ overlay.addSeed(seed, (s) => {
   buildWorld();
 });
 overlay.addSlider(
-  "speed",
+  "Speed",
   { min: 0, max: 80, step: 1, value: speed, format: (v) => `${v} u/s` },
   (v) => {
     speed = v;
   },
 );
 overlay.addSlider(
-  "gen radius",
+  "Gen radius",
   { min: 60, max: 240, step: 10, value: radius, format: (v) => `${v} u` },
   (v) => {
     radius = v;
@@ -440,7 +440,7 @@ overlay.addSlider(
 // the anchored source the rocks stay exactly where they were and only
 // the grid changes, which is the whole claim in one gesture.
 overlay.addSlider(
-  "cell size",
+  "Cell size",
   { min: 20, max: 80, step: 20, value: fineCell, format: (v) => `${v} u` },
   (v) => {
     fineCell = v;
@@ -448,7 +448,7 @@ overlay.addSlider(
     buildWorld();
   },
 );
-overlay.addCheckbox("world-anchored", anchored, (on) => {
+overlay.addCheckbox("World-anchored", anchored, (on) => {
   anchored = on;
   paintSource();
   buildWorld();
@@ -456,11 +456,11 @@ overlay.addCheckbox("world-anchored", anchored, (on) => {
 // Each rock's size is a measurement of its neighbourhood. Off, the
 // measurement stops at the cell border and every border grows a lattice
 // of undersized rocks — the halo made visible by its absence.
-overlay.addCheckbox(`halo (${HALO} u)`, halo, (on) => {
+overlay.addCheckbox(`Halo (${HALO} u)`, halo, (on) => {
   halo = on;
   buildWorld();
 });
-overlay.addCheckbox("cell grid", showGrid, (on) => {
+overlay.addCheckbox("Cell grid", showGrid, (on) => {
   showGrid = on;
   if (gridHelper) gridHelper.visible = on;
   followGrid();
@@ -485,7 +485,7 @@ hint.textContent = "G switches path · A/D or ←/→ steer";
 const derivedRow = document.createElement("div");
 derivedRow.className = "pcg-row";
 const derivedLabel = document.createElement("label");
-derivedLabel.textContent = "derived specs";
+derivedLabel.textContent = "Derived specs";
 const derivedInput = document.createElement("input");
 derivedInput.type = "checkbox";
 derivedInput.checked = acceptDerived;
@@ -526,19 +526,19 @@ function paintMode(): void {
 
 // -- stats -----------------------------------------------------------------
 
-const statAdapter = overlay.addStat("adapter");
-const statFps = overlay.addStat("fps");
-const statSource = overlay.addStat("rock source");
-const statCells = overlay.addStat("rock cells");
-const statCooked = overlay.addStat("cooked / evicted");
-const statPending = overlay.addStat("pending");
-const statInstances = overlay.addStat("instances");
-const statPos = overlay.addStat("position");
-const statCook = overlay.addStat("cook");
-const statFused = overlay.addStat("resident runs / fused members");
-const statDispatches = overlay.addStat("device dispatches");
-const statFallbacks = overlay.addStat("gpu fallbacks");
-const statStatus = overlay.addStat("status");
+const statAdapter = overlay.addStat("Adapter");
+const statFps = overlay.addStat("FPS");
+const statSource = overlay.addStat("Rock source");
+const statCells = overlay.addStat("Rock cells");
+const statCooked = overlay.addStat("Cooked / evicted");
+const statPending = overlay.addStat("Pending");
+const statInstances = overlay.addStat("Instances");
+const statPos = overlay.addStat("Position");
+const statCook = overlay.addStat("Cook");
+const statFused = overlay.addStat("Resident runs / fused members");
+const statDispatches = overlay.addStat("Device dispatches");
+const statFallbacks = overlay.addStat("GPU fallbacks");
+const statStatus = overlay.addStat("Status");
 
 function setStatus(text: string): void {
   statStatus(text);
@@ -550,13 +550,13 @@ function paintSource(): void {
 }
 
 function deviceLostStatus(): string {
-  return `device lost (${deviceLostDetail}) — the GPU path is disabled; reload for a fresh device`;
+  return `Device lost (${deviceLostDetail}) — the GPU path is disabled; reload for a fresh device`;
 }
 
 function readyStatus(): string {
   if (deviceLost) return deviceLostStatus();
   if (mode === "cpu") return "CPU path — no resolver passed to the cook";
-  if (!gpuReady()) return gpuBlocker ?? "requesting WebGPU adapter…";
+  if (!gpuReady()) return gpuBlocker ?? "Requesting WebGPU adapter…";
   return acceptDerived
     ? "GPU per-node — combinator fields accepted via acceptDerivedSpecs"
     : "GPU per-node — acceptDerivedSpecs off, so every field falls back";
@@ -591,10 +591,10 @@ const graphSlot = overlay.addSlot();
    Every demo is otherwise a page you can arrive at and not leave. */
 attachWordmark();
 overlay.addNote(
-  "Drag “cell size”: the blue grid re-cells the world and the rocks do not move or resize. Untick “halo” to watch every border grow a band of undersized rocks, and “world-anchored” to watch the same drag re-roll the world from scratch.",
+  "Drag “Cell size”: the blue grid re-cells the world and the rocks do not move or resize. Untick “Halo” to watch every border grow a band of undersized rocks, and “World-anchored” to watch the same drag re-roll the world from scratch.",
 );
 
-const anchoring = overlay.addCollapsible("anchoring · what the fine level actually does");
+const anchoring = overlay.addCollapsible("Anchoring · what the fine level actually does");
 anchoring.textContent = `pointScatterInWorld scatters over an INFINITE lattice fixed to
 world coordinates and returns the points inside the query
 window. Position and per-point seed are a pure function of the
@@ -602,10 +602,10 @@ node seed, the seed param, the lattice mode, the lattice cellSize
 and the point's own lattice cell and index — never of the window.
 Three consequences, and this page leans on all three:
 
-  1  the window only SELECTS. Re-cell the world (the cell size
+  1  The window only SELECTS. Re-cell the world (the cell size
      slider) and the same rocks come back, because nothing in
      their derivation ever saw a cell.
-  2  a halo is just a wider query. Each rock's SIZE comes from
+  2  A halo is just a wider query. Each rock's SIZE comes from
      pointNeighborhood counting the rocks within ${NEIGHBOR_RADIUS} u of it,
      which does not stop at a border — so each cell queries
      itself grown by ${HALO} u, measures over that, and only then
@@ -616,7 +616,7 @@ Three consequences, and this page leans on all three:
      the radius; a greedy op like selfPrune, whose verdict for
      one point depends on verdicts for others, has none, which
      is why size here is measured rather than competed for.
-  3  a cell never asks a sibling for anything. It derives the
+  3  A cell never asks a sibling for anything. It derives the
      halo from world coordinates, so cook order, eviction and
      which neighbours happen to be resident change nothing.
 
@@ -639,7 +639,7 @@ calls graph.setSeed: a per-cell whole-graph reseed reaches the
 source's node seed too and quietly turns it back into a per-cell
 scatter — still deterministic, no longer anchored.
 
-Unticking "world-anchored" swaps in pointScatterInBounds over
+Unticking "World-anchored" swaps in pointScatterInBounds over
 the identical window, at the same expected population. Its
 positions are a function OF the window, so the halo reproduces
 nothing: every rock re-rolls when the partition changes, and
@@ -647,8 +647,8 @@ each cell measures its seams against neighbours the cell next
 door has never heard of. Deterministic, still — and useless for
 anything that has to see past its own bounds.`;
 
-const diagnostics = overlay.addCollapsible("diagnostics · why nothing fuses here");
-diagnostics.textContent = `resident runs / fused members reads 0 / 0 on BOTH paths, and
+const diagnostics = overlay.addCollapsible("Diagnostics · why nothing fuses here");
+diagnostics.textContent = `Resident runs / fused members reads 0 / 0 on BOTH paths, and
 that is a property of these graphs, not of the device.
 
 A device-resident run needs two or more ADJACENT fusable nodes.
@@ -690,7 +690,7 @@ Field columns offered to the device per cook:
   landmarks   1   (the scale vec)
   rocks       2   (the density fbm, the scale vec)
 
-Reading the numbers: "cook" is UpdateStats.elapsedMs, the wall time
+Reading the numbers: "Cook" is UpdateStats.elapsedMs, the wall time
 of one budgeted update, which may cook several cells or none. World
 discards each cell's CookStats, so the three counters under it are
 summed from the CookStats.gpu objects captured by the resolver tap
@@ -702,7 +702,7 @@ update cooks nothing.`;
 function onDeviceLost(detail: string): void {
   deviceLost = true;
   deviceLostDetail = detail;
-  adapterLabel = "device lost";
+  adapterLabel = "Device lost";
   statAdapter(adapterLabel);
   setStatus(deviceLostStatus());
   paintMode();
@@ -717,7 +717,7 @@ async function initGpu(): Promise<void> {
   const probe = await requestGpuDevice(onDeviceLost);
   if ("error" in probe) {
     gpuBlocker = probe.error;
-    adapterLabel = "no WebGPU adapter";
+    adapterLabel = "No WebGPU adapter";
     statAdapter(adapterLabel);
     mode = "cpu";
     paintMode();
@@ -730,7 +730,7 @@ async function initGpu(): Promise<void> {
     evalStrict = evals.strict;
   } catch (err) {
     gpuBlocker = `GpuFieldEvaluator construction failed: ${errText(err)}`;
-    adapterLabel = "evaluator unavailable";
+    adapterLabel = "Evaluator unavailable";
     statAdapter(adapterLabel);
     mode = "cpu";
     paintMode();
@@ -755,7 +755,7 @@ let updating = false;
 const fps = createFpsMeter((v) => statFps(v));
 
 statAdapter(adapterLabel);
-setStatus("requesting WebGPU adapter…");
+setStatus("Requesting WebGPU adapter…");
 paintMode();
 paintSource();
 paintGpuStats();
@@ -787,7 +787,7 @@ start((dt) => {
     // A lost device never rejects work already in flight, so a readback
     // that never settles looks exactly like a hung library. Say so.
     stalled = true;
-    setStatus("a cook has been in flight for over 5 s — the GPU device may have been lost.");
+    setStatus("A cook has been in flight for over 5 s — the GPU device may have been lost.");
   }
   if (r) {
     const ws = r.world.stats();

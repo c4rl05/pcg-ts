@@ -317,7 +317,7 @@ export function createOverlay(opts: {
   stats.className = "pcg-stats";
   if (opts.foldStats) {
     const summary = document.createElement("summary");
-    summary.textContent = "stats";
+    summary.textContent = "Stats";
     stats.appendChild(summary);
   }
   el.appendChild(stats);
@@ -352,8 +352,8 @@ export function createOverlay(opts: {
     steps.className = "pcg-steps";
 
     for (const [direction, glyph, label] of [
-      [-1, "−", "decrease"],
-      [1, "+", "increase"],
+      [-1, "−", "Decrease"],
+      [1, "+", "Increase"],
     ] as const) {
       const button = document.createElement("button");
       button.type = "button";
@@ -392,7 +392,7 @@ export function createOverlay(opts: {
   return {
     el,
     addSeed(initial, onChange) {
-      const div = row("seed");
+      const div = row("Seed");
       const input = document.createElement("input");
       input.type = "number";
       input.step = "1";

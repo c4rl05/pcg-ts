@@ -108,8 +108,8 @@ const GUIDES = {
     ready: () =>
       document.body.dataset.ready === "failed" ||
       (document.body.dataset.ready === "1" &&
-        window.__capStats()["triangles"] !== undefined &&
-        !["–", "-", "0"].includes(window.__capStats()["triangles"])),
+        window.__capStats()["Triangles"] !== undefined &&
+        !["–", "-", "0"].includes(window.__capStats()["Triangles"])),
     failed: () => document.body.dataset.ready === "failed",
     shots: [
       // The whole tower, laced, three-quarter view from the +x+z quadrant,
@@ -343,7 +343,7 @@ async function main() {
         const s = r.stats;
         log(
           `${key}: ok  ${shot.out[0]}x${shot.out[1]} ${(r.jpeg.buffer.length / 1024).toFixed(0)} KB` +
-            `  ·  triangles ${s["triangles"] ?? "?"}${s["rivets"] ? `, rivets ${s["rivets"]}` : ""}` +
+            `  ·  triangles ${s["Triangles"] ?? "?"}${s["Rivets"] ? `, rivets ${s["Rivets"]}` : ""}` +
             `  ·  stable via ${r.stability.criterion} in ${(r.stability.elapsed / 1000).toFixed(1)}s` +
             `  ·  ${((Date.now() - t0) / 1000).toFixed(1)}s total`,
         );

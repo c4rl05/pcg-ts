@@ -110,7 +110,7 @@ function describeAdapter(info: GpuAdapterInfoLike | undefined): string {
   return (
     [info?.vendor, info?.architecture, detail]
       .filter((p): p is string => typeof p === "string" && p !== "")
-      .join(" · ") || "adapter (no info exposed)"
+      .join(" · ") || "Adapter (no info exposed)"
   );
 }
 
@@ -277,7 +277,7 @@ let deviceLostDetail = "";
  * which can never cook or draw.
  */
 function deviceLostStatus(): string {
-  return `device lost (${deviceLostDetail}) — both paths are disabled; reload for a fresh device`;
+  return `Device lost (${deviceLostDetail}) — both paths are disabled; reload for a fresh device`;
 }
 
 function residentAvailable(): boolean {
@@ -295,7 +295,7 @@ function residentAvailable(): boolean {
 let graphPanel: GraphPanelHandle | undefined;
 
 function showGraph(spires: Graph): void {
-  const entries = [{ name: "spires", graph: spires }];
+  const entries = [{ name: "Spires", graph: spires }];
   if (graphPanel) graphPanel.set(entries);
   else graphPanel = attachGraphPanel(entries, { into: graphSlot, title: "GPU world" });
 }
@@ -513,7 +513,7 @@ function buildWorld(): void {
 // -- overlay ---------------------------------------------------------------
 
 const overlay = createOverlay({
-  title: "gpu world",
+  title: "GPU world",
   info:
     "A world streamed around a flying camera. Each cell's instance matrices are composed in a " +
     "WGSL kernel and drawn straight from that GPU buffer — they never exist on the CPU. Switch " +
@@ -533,7 +533,7 @@ style.textContent = `
 .pcg09-seg button:disabled { opacity: 0.4; cursor: not-allowed; }
 .pcg09-hint { margin: 0 0 10px; color: var(--ed-ink-faint); font-size: 11px; }
 .pcg09-hud {
-  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 10;
+  position: fixed; left: 50%; bottom: 44px; transform: translateX(-50%); z-index: 10;
   max-width: max(240px, min(680px, calc(100vw - 360px))); padding: 8px 14px; box-sizing: border-box;
   text-align: center; border-radius: var(--ed-radius-lg);
   background: var(--ed-panel); border: 1px solid var(--ed-rule);
@@ -570,14 +570,14 @@ overlay.addSeed(seed, (s) => {
   buildWorld();
 });
 overlay.addSlider(
-  "speed",
+  "Speed",
   { min: 0, max: 90, step: 1, value: speed, format: (v) => `${v} u/s` },
   (v) => {
     speed = v;
   },
 );
 overlay.addSlider(
-  "gen radius",
+  "Gen radius",
   { min: 60, max: 260, step: 10, value: radius, format: (v) => `${v} u` },
   (v) => {
     radius = v;
@@ -585,7 +585,7 @@ overlay.addSlider(
   },
 );
 overlay.addSlider(
-  "per cell",
+  "Per cell",
   { min: 20, max: 600, step: 20, value: perCell, format: (v) => `${v}` },
   (v) => {
     perCell = v;
@@ -599,7 +599,7 @@ const seg = document.createElement("div");
 seg.className = "pcg09-seg";
 const btnDevice = document.createElement("button");
 btnDevice.type = "button";
-btnDevice.textContent = "device-resident";
+btnDevice.textContent = "Device-resident";
 const btnCpu = document.createElement("button");
 btnCpu.type = "button";
 btnCpu.textContent = "CPU readback";
@@ -607,12 +607,12 @@ seg.append(btnDevice, btnCpu);
 
 const hint = document.createElement("p");
 hint.className = "pcg09-hint";
-hint.textContent = "G switches path · space toggles autopilot · A/D or ←/→ steer";
+hint.textContent = "G switches path · Space toggles autopilot · A/D or ←/→ steer";
 
 const autoRow = document.createElement("div");
 autoRow.className = "pcg-row";
 const autoLabel = document.createElement("label");
-autoLabel.textContent = "autopilot";
+autoLabel.textContent = "Autopilot";
 const autoInput = document.createElement("input");
 autoInput.type = "checkbox";
 autoInput.checked = autopilot;
@@ -633,7 +633,7 @@ function setMode(next: PathMode): void {
   if (next === "device" && !residentAvailable()) {
     // The button is disabled, but the keyboard shortcut is not — say why
     // rather than swallow the keystroke.
-    setStatus("device path unavailable — see the banner at the bottom of the page");
+    setStatus("Device path unavailable — see the banner at the bottom of the page");
     return;
   }
   mode = next;
@@ -644,17 +644,17 @@ btnCpu.addEventListener("click", () => setMode("cpu"));
 
 // -- stats -----------------------------------------------------------------
 
-const statAdapter = overlay.addStat("renderer");
-const statFps = overlay.addStat("fps");
-const statCells = overlay.addStat("live cells");
-const statChurn = overlay.addStat("cells cooked / evicted");
-const statRate = overlay.addStat("churn per second");
-const statDrawn = overlay.addStat("instances drawn");
-const statDeviceBytes = overlay.addStat("matrices held on device");
-const statAvoided = overlay.addStat("matrix uploads avoided");
-const statUploaded = overlay.addStat("matrices uploaded");
-const statStatus = overlay.addStat("status");
-statStatus("initialising…");
+const statAdapter = overlay.addStat("Renderer");
+const statFps = overlay.addStat("FPS");
+const statCells = overlay.addStat("Live cells");
+const statChurn = overlay.addStat("Cells cooked / evicted");
+const statRate = overlay.addStat("Churn per second");
+const statDrawn = overlay.addStat("Instances drawn");
+const statDeviceBytes = overlay.addStat("Matrices held on device");
+const statAvoided = overlay.addStat("Matrix uploads avoided");
+const statUploaded = overlay.addStat("Matrices uploaded");
+const statStatus = overlay.addStat("Status");
+statStatus("Initialising…");
 
 /* The graph section, claimed HERE rather than where the panel is filled,
    so this page decides where in its own panel the graph sits. Right after
@@ -666,13 +666,13 @@ const graphSlot = overlay.addSlot();
 /* The mark, bottom left, linking back to the shelf these came from.
    Every demo is otherwise a page you can arrive at and not leave. */
 attachWordmark();
-const diagnostics = overlay.addCollapsible("diagnostics");
+const diagnostics = overlay.addCollapsible("Diagnostics");
 
 overlay.addNote(
   "Every instance is a 4x4 matrix: 64 bytes. On the device path those bytes are written once, on " +
-    "the device, and the renderer draws from that same buffer — `matrix uploads avoided` counts " +
+    "the device, and the renderer draws from that same buffer — `Matrix uploads avoided` counts " +
     "the matrix buffers that never crossed the bus. On the CPU path the same bytes are read " +
-    "back, composed in JS and uploaded per cell, and `matrices uploaded` climbs by exactly the " +
+    "back, composed in JS and uploaded per cell, and `Matrices uploaded` climbs by exactly the " +
     "same arithmetic instead. Both totals survive a switch, so you can fly a while on each and " +
     "compare.",
 );
@@ -690,7 +690,7 @@ function paintMode(): void {
   btnCpu.disabled = deviceLost;
   btnDevice.setAttribute("aria-pressed", String(mode === "device" && canDevice));
   btnCpu.setAttribute("aria-pressed", String(mode !== "device" || !canDevice));
-  if (!canDevice && residentBlocker !== undefined) btnDevice.title = residentBlocker;
+  if (!canDevice && residentBlocker !== undefined) btnDevice.title = capitalFirst(residentBlocker);
   if (deviceLost) {
     btnDevice.title = deviceLostStatus();
     btnCpu.title = deviceLostStatus();
@@ -707,17 +707,17 @@ function paintMode(): void {
     hud.innerHTML =
       `<b>CPU readback</b> — ${escapeHtml(sentence(residentBlocker ?? "the device path is unavailable"))} ` +
       "The world still streams and renders; its matrices are composed in JS and uploaded per cell." +
-      ' <span class="pcg09-keys">space autopilot · A/D steer</span>';
+      ' <span class="pcg09-keys">Space autopilot · A/D steer</span>';
     return;
   }
   hud.innerHTML = onDevice
-    ? "<b>device-resident</b> — each cell's matrices are composed in a WGSL kernel and the " +
+    ? "<b>Device-resident</b> — each cell's matrices are composed in a WGSL kernel and the " +
       "renderer draws from that buffer. Nothing is read back and nothing is uploaded." +
-      ' <span class="pcg09-keys">G to compare · space autopilot · A/D steer</span>'
+      ' <span class="pcg09-keys">G to compare · Space autopilot · A/D steer</span>'
     : "<b>CPU readback</b> — the same graph, the same fields on the same device, but the " +
       "spawner materialises: matrices come back over the bus, are composed in JS, and are " +
       "uploaded per cell." +
-      ' <span class="pcg09-keys">G to compare · space autopilot · A/D steer</span>';
+      ' <span class="pcg09-keys">G to compare · Space autopilot · A/D steer</span>';
 }
 
 /**
@@ -726,6 +726,16 @@ function paintMode(): void {
  */
 function sentence(s: string): string {
   return /[.!?]$/.test(s.trim()) ? s : `${s.trim()}.`;
+}
+
+/**
+ * A blocker read on its own, as the disabled button's tooltip, starts a
+ * sentence; in the banner it follows a dash and stays lowercase. Only a
+ * leading plain word is raised, so a message that opens on an identifier
+ * (`navigator.gpu …`, `requestDevice() …`) is left as written.
+ */
+function capitalFirst(s: string): string {
+  return /^[a-z]+ /.test(s) ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
 function escapeHtml(s: string): string {
@@ -853,13 +863,13 @@ function frame(): void {
           }
         })
         .catch((err: unknown) => {
-          if (!r.disposed && !deviceLost) setStatus(`cook failed: ${errText(err)}`);
+          if (!r.disposed && !deviceLost) setStatus(`Cook failed: ${errText(err)}`);
         })
         .finally(() => {
           updating = false;
         });
     } else if (now - updateStartedAt > STALL_MS) {
-      setStatus("a cook has been in flight for over 5 s — the GPU device may have been lost.");
+      setStatus("A cook has been in flight for over 5 s — the GPU device may have been lost.");
     }
 
     const ws = r.world.stats();
@@ -889,7 +899,7 @@ function frame(): void {
 }
 
 function statusLine(): string {
-  if (rig?.mode === "device") return "device-resident · no matrix readback";
+  if (rig?.mode === "device") return "Device-resident · no matrix readback";
   // The full sentence explaining *why* lives in the banner and on the
   // disabled button's tooltip; the stat line stays one line.
   return residentAvailable()
@@ -911,33 +921,33 @@ function statusLine(): string {
  */
 function diagnosticsText(r: WorldRig): string {
   const lines = [
-    `path            ${r.mode}`,
-    `backend         ${backendLabel}`,
-    `pending cells   ${lastPending}`,
-    `binding buffers ${r.binding.deviceHandleCount}`,
-    `binding bytes   ${r.binding.deviceHandleBytes} logical`,
+    `Path            ${r.mode}`,
+    `Backend         ${backendLabel}`,
+    `Pending cells   ${lastPending}`,
+    `Binding buffers ${r.binding.deviceHandleCount}`,
+    `Binding bytes   ${r.binding.deviceHandleBytes} logical`,
   ];
   const ev = r.mode === "device" ? residentEval : cpuEval;
   if (ev !== undefined) {
     const p = ev.poolStats;
     lines.push(
-      `pool detached   ${p.detachedBuffers} (${fmtBytes(p.detachedBytes)} bucketed)`,
-      `pool idle       ${p.pooledBuffers} (${fmtBytes(p.pooledBytes)})`,
-      `pool made/freed ${p.buffersCreated} / ${p.buffersDestroyed}`,
-      `pool reused     ${p.buffersReused}`,
+      `Pool detached   ${p.detachedBuffers} (${fmtBytes(p.detachedBytes)} bucketed)`,
+      `Pool idle       ${p.pooledBuffers} (${fmtBytes(p.pooledBytes)})`,
+      `Pool made/freed ${p.buffersCreated} / ${p.buffersDestroyed}`,
+      `Pool reused     ${p.buffersReused}`,
     );
   }
   if (deviceAdapter !== undefined) {
     const s = deviceAdapter.stats;
     lines.push(
-      `adapter live    ${s.built - s.released} of ${s.built}`,
-      `adapter adopted ${s.adopted}`,
-      `adapter insts   ${s.liveInstances}`,
+      `Adapter live    ${s.built - s.released} of ${s.built}`,
+      `Adapter adopted ${s.adopted}`,
+      `Adapter insts   ${s.liveInstances}`,
     );
   }
   lines.push(
-    `page            ${document.visibilityState}`,
-    `position        ${camera.position.x.toFixed(0)}, ${camera.position.z.toFixed(0)}`,
+    `Page            ${document.visibilityState}`,
+    `Position        ${camera.position.x.toFixed(0)}, ${camera.position.z.toFixed(0)}`,
   );
   return lines.join("\n");
 }
@@ -1042,7 +1052,7 @@ async function boot(): Promise<void> {
   let info: GpuAdapterInfoLike | undefined;
   if ("error" in probe) {
     residentBlocker = probe.error;
-    adapterLabel = "no WebGPU adapter";
+    adapterLabel = "No WebGPU adapter";
   } else {
     device = probe.device;
     info = probe.info;
@@ -1133,6 +1143,6 @@ async function boot(): Promise<void> {
 }
 
 void boot().catch((err: unknown) => {
-  setStatus(`boot failed: ${errText(err)}`);
+  setStatus(`Boot failed: ${errText(err)}`);
   console.error("gpu-world: boot failed:", err);
 });

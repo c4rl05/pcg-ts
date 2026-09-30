@@ -10,7 +10,8 @@
  *
  * `currentColor` rather than a fill of its own, so the mark takes the
  * colour of whatever it is set in and the light-theme variant is not a
- * second asset to keep in sync.
+ * second asset to keep in sync. On a demo page that colour is white under
+ * `mix-blend-mode: difference` (see the stylesheet below).
  *
  * NOT in `editor/icons.ts`: that module's contract is Phosphor bold in a
  * shared `0 0 256 256` box, and this is different provenance in a
@@ -44,10 +45,13 @@ function injectStyles(): void {
 .pcg-wordmark {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: 20px; z-index: 10;
   display: block; line-height: 0;
-  color: var(--ed-ink); opacity: 0.45;
-  transition: opacity 0.15s;
+  /* Solid white under difference: white over black is white, white over
+     white is black, so the mark reads over a night sky and a pale ground
+     alike without a theme to pick a colour from. A fixed element blends
+     with the page's root stacking context, which is where every demo's
+     canvas is drawn. */
+  color: #fff; mix-blend-mode: difference;
 }
-.pcg-wordmark:hover, .pcg-wordmark:focus-visible { opacity: 0.9; }
 .pcg-wordmark svg { height: 13px; width: auto; display: block; }
 /* Below the shared breakpoint the overlay becomes a full-width bottom
    sheet and takes this edge. See shared/mobile.ts. */

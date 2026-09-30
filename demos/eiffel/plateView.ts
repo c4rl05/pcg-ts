@@ -219,7 +219,7 @@ export function attachPlates(opts: {
     frame(fig);
     quad.visible = false;
     panel.setCurrent(fig.id);
-    panel.setStatus("loading the scan from e-rara…");
+    panel.setStatus("Loading the scan from e-rara…");
     document.body.dataset.plate = "loading";
     setQuery(fig.id);
     loader.load(
@@ -237,7 +237,7 @@ export function attachPlates(opts: {
         quad.visible = true;
         const fit = fitPlate(fig);
         panel.setStatus(
-          `registered on ${fig.controls.length} points: rms ${fit.rms.toFixed(2)} m, ` +
+          `Registered on ${fig.controls.length} points: rms ${fit.rms.toFixed(2)} m, ` +
             `worst ${fit.max.toFixed(2)} m`,
         );
         document.body.dataset.plate = "ready";
@@ -245,7 +245,7 @@ export function attachPlates(opts: {
       undefined,
       () => {
         if (mine !== ticket) return;
-        panel.setStatus("the scan did not load (offline, or e-rara unreachable); the model is in the plate's view");
+        panel.setStatus("The scan did not load (offline, or e-rara unreachable); the model is in the plate's view");
         document.body.dataset.plate = "failed";
       },
     );
@@ -295,7 +295,7 @@ export function attachPlates(opts: {
     draw();
     renderer.domElement.toBlob((blob) => {
       if (blob === null) {
-        panel.setStatus("the frame could not be read back from the canvas");
+        panel.setStatus("The frame could not be read back from the canvas");
         return;
       }
       const a = document.createElement("a");

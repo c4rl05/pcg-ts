@@ -109,7 +109,7 @@
     <button
       type="button"
       tabindex="-1"
-      aria-label="decrease"
+      aria-label="Decrease"
       onpointerdown={(e) => startHold(e, -1)}
       onpointerup={endHold}
       onpointerleave={endHold}
@@ -117,7 +117,7 @@
     <button
       type="button"
       tabindex="-1"
-      aria-label="increase"
+      aria-label="Increase"
       onpointerdown={(e) => startHold(e, 1)}
       onpointerup={endHold}
       onpointerleave={endHold}

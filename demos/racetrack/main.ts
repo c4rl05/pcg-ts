@@ -1174,7 +1174,7 @@ function buildCircuit(circuit: Circuit): void {
     statReference(`${reference.count} boxes`);
   } else {
     referenceMeshes = [];
-    statReference("none — generated only");
+    statReference("None — generated only");
   }
 }
 
@@ -1594,7 +1594,7 @@ function frameMap(circuit: Circuit, zoom: number): void {
 // ------------------------------------------------------------------ //
 
 const overlay = createOverlay({
-  title: "racetrack",
+  title: "Racetrack",
   info:
     "A centreline this page did not make, handed to pcg-ts: it sweeps the road and dresses the verges. " +
     "The rules settle the whole lap at once; the dressing then streams in arc sectors as the car " +
@@ -1630,7 +1630,7 @@ overlay.addSeed(state.seed, (seed) => {
   state.seed = seed;
   recook();
 });
-overlay.addSlider("speed", { min: 0, max: 160, step: 1, value: state.speed }, (v) => {
+overlay.addSlider("Speed", { min: 0, max: 160, step: 1, value: state.speed }, (v) => {
   state.speed = v;
 });
 // DENSITY IS THE ONE RULE PARAMETER ON THE PANEL, because it is the one
@@ -1639,48 +1639,48 @@ overlay.addSlider("speed", { min: 0, max: 160, step: 1, value: state.speed }, (v
 // together did. The readout names D-1's accepted band so the slider
 // cannot quietly imply that every position on it is equally valid.
 overlay.addSlider(
-  "density",
+  "Density",
   { min: 0.4, max: 3, step: 0.05, value: state.density, format: (v) => `x${v.toFixed(2)}` },
   (v) => {
     state.density = v;
     recook();
   },
 );
-overlay.addSlider("chase back", { min: 4, max: 60, step: 1, value: state.chaseBack }, (v) => {
+overlay.addSlider("Chase back", { min: 4, max: 60, step: 1, value: state.chaseBack }, (v) => {
   state.chaseBack = v;
 });
-overlay.addSlider("chase height", { min: 1, max: 30, step: 0.5, value: state.chaseHeight }, (v) => {
+overlay.addSlider("Chase height", { min: 1, max: 30, step: 0.5, value: state.chaseHeight }, (v) => {
   state.chaseHeight = v;
 });
-overlay.addCheckbox("map overlay", state.mapOn, (on) => {
+overlay.addCheckbox("Map overlay", state.mapOn, (on) => {
   state.mapOn = on;
 });
-overlay.addSlider("map zoom", { min: 0.5, max: 4, step: 0.05, value: state.mapZoom }, (v) => {
+overlay.addSlider("Map zoom", { min: 0.5, max: 4, step: 0.05, value: state.mapZoom }, (v) => {
   state.mapZoom = v;
   if (circuit) frameMap(circuit, state.mapZoom);
 });
-overlay.addCheckbox("reference kit", state.referenceOn, (on) => {
+overlay.addCheckbox("Reference kit", state.referenceOn, (on) => {
   state.referenceOn = on;
   for (const m of referenceMeshes) m.visible = on;
 });
-overlay.addCheckbox("pause", state.paused, (on) => {
+overlay.addCheckbox("Pause", state.paused, (on) => {
   state.paused = on;
 });
 
-const statFps = overlay.addStat("fps");
-const statStation = overlay.addStat("station");
-const statLap = overlay.addStat("lap length");
+const statFps = overlay.addStat("FPS");
+const statStation = overlay.addStat("Station");
+const statLap = overlay.addStat("Lap length");
 // WHAT IS RESIDENT AGAINST WHAT THERE IS. Streaming is invisible while it
 // works, and the map — which used to answer "is the whole lap dressed" —
 // now shows only the window. This is the readout that says how big the
 // window is and how much of the circuit it is a window onto.
-const statSectors = overlay.addStat("sectors");
-const statProps = overlay.addStat("dressing");
-const statReference = overlay.addStat("reference");
-const statCover = overlay.addStat("enclosure");
-const statCorners = overlay.addStat("corner language");
-const statRules = overlay.addStat("repairs");
-const statCook = overlay.addStat("cook");
+const statSectors = overlay.addStat("Sectors");
+const statProps = overlay.addStat("Dressing");
+const statReference = overlay.addStat("Reference");
+const statCover = overlay.addStat("Enclosure");
+const statCorners = overlay.addStat("Corner language");
+const statRules = overlay.addStat("Repairs");
+const statCook = overlay.addStat("Cook");
 
 /**
  * How many placements the lap level settled, off its own output.
@@ -1732,10 +1732,10 @@ function showLapStats(): void {
   if (!circuit) return;
   const level = lastLap;
   if (!level) {
-    statProps("cooking the lap");
-    statCover("cooking the lap");
-    statCorners("cooking the lap");
-    statRules("cooking the lap");
+    statProps("Cooking the lap");
+    statCover("Cooking the lap");
+    statCorners("Cooking the lap");
+    statRules("Cooking the lap");
     return;
   }
 
@@ -1932,12 +1932,12 @@ async function cookAndBuild(): Promise<void> {
     // is four nodes beside the lap's few hundred, which is itself the
     // clearest statement of where the cut falls.
     const entries = [
-      { name: "road", graph: next.graph },
-      { name: "lap", graph: graphs.lapGraph },
-      { name: "dressing", graph: graphs.dressingGraph },
+      { name: "Road", graph: next.graph },
+      { name: "Lap", graph: graphs.lapGraph },
+      { name: "Dressing", graph: graphs.dressingGraph },
     ];
     if (graphPanel) graphPanel.set(entries);
-    else graphPanel = attachGraphPanel(entries, { into: graphSlot, title: "graph" });
+    else graphPanel = attachGraphPanel(entries, { into: graphSlot, title: "Graph" });
   }
 }
 

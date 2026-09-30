@@ -746,18 +746,27 @@ const overlay = createOverlay({
   foldStats: true,
 });
 
-const statFps = overlay.addStat("fps");
-const statCook = overlay.addStat("cook");
-const statSize = overlay.addStat("extent (x × z × y)");
-const statTotal = overlay.addStat("triangles");
+/**
+ * A key as the panel shows it, in sentence case. The key itself stays as it
+ * is wherever it is a key: in the URL (`?show=`, `?hl=`), in the output
+ * names and in every comparison, so only what is displayed goes through here.
+ */
+function capital(key: string): string {
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
+const statFps = overlay.addStat("FPS");
+const statCook = overlay.addStat("Cook");
+const statSize = overlay.addStat("Extent (x × z × y)");
+const statTotal = overlay.addStat("Triangles");
 const classStats = Object.fromEntries(
-  PART_CLASSES.map((cls) => [cls, overlay.addStat(cls)]),
+  PART_CLASSES.map((cls) => [cls, overlay.addStat(capital(cls))]),
 ) as Record<PartClass, (value: string | number) => void>;
 
 // ROTATE, WALK AND BUILD are three ways of looking at the tower, and they
 // do not combine: turning rotate or walk on turns the other off, and under
 // build — a reload away — both are off and offered only once it is.
-const rotateBox = overlay.addCheckbox("rotate", false, (on) => {
+const rotateBox = overlay.addCheckbox("Rotate", false, (on) => {
   controls.autoRotate = on;
   if (on && walk.active) {
     walk.set(false);
@@ -768,7 +777,7 @@ const rotateBox = overlay.addCheckbox("rotate", false, (on) => {
 // The lifts run unless `?still` parked them. Off leaves every car exactly
 // where it stands, which is how a car is looked at rather than watched.
 let liftsRunning = !STILL;
-overlay.addCheckbox("lifts", !STILL, (on) => {
+overlay.addCheckbox("Lifts", !STILL, (on) => {
   liftsRunning = on;
 });
 
@@ -778,7 +787,7 @@ overlay.addCheckbox("lifts", !STILL, (on) => {
 // toggle reloads, keeping the view and the depth, because the works are
 // cooked and the staging is done once at load.
 const BUILD = new URLSearchParams(location.search).has("build");
-overlay.addCheckbox("build", BUILD, (on) => {
+overlay.addCheckbox("Build", BUILD, (on) => {
   const q = new URLSearchParams(location.search);
   if (on) {
     q.set("build", "");
@@ -812,14 +821,14 @@ let bands: Bands | undefined;
 // the reload: the point of changing depth is to compare the same spot.
 const DEPTH_TITLES: Record<"laced" | "rivets", Record<Depth, string>> = {
   laced: {
-    off: "the web members as solid bars",
-    streamed: "every web member as four angles laced in X, round the camera, cooked as it moves",
-    whole: "every web member as four angles laced in X, the whole tower at once",
+    off: "The web members as solid bars",
+    streamed: "Every web member as four angles laced in X, round the camera, cooked as it moves",
+    whole: "Every web member as four angles laced in X, the whole tower at once",
   },
   rivets: {
-    off: "no rivets",
-    streamed: "every rivet as an instance, round the camera, cooked as it moves",
-    whole: "every rivet on the tower as an instance, at once",
+    off: "No rivets",
+    streamed: "Every rivet as an instance, round the camera, cooked as it moves",
+    whole: "Every rivet on the tower as an instance, at once",
   },
 };
 const staged: Record<"laced" | "rivets", Depth> = { laced: DEPTH.laced, rivets: DEPTH.rivets };
@@ -841,13 +850,13 @@ for (const ax of ["laced", "rivets"] as const) {
   const row = document.createElement("div");
   row.className = "pcg-row";
   const name = document.createElement("label");
-  name.textContent = ax;
+  name.textContent = capital(ax);
   // Narrower than the panel's 96px label column, so the three choices
   // hold one line inside the section's frame.
   name.style.flexBasis = "46px";
   const group = document.createElement("div");
   group.setAttribute("role", "radiogroup");
-  group.setAttribute("aria-label", ax);
+  group.setAttribute("aria-label", capital(ax));
   group.style.cssText = "display:flex;gap:0.9em;white-space:nowrap";
   for (const d of DEPTHS) {
     const option = document.createElement("label");
@@ -861,12 +870,12 @@ for (const ax of ["laced", "rivets"] as const) {
     // Nothing streams under `?build` (depth.ts), so it is not offered.
     if (BUILD && d === "streamed") {
       radio.disabled = true;
-      option.title = "not with build: the staging dates the whole cook";
+      option.title = "Not with build: the staging dates the whole cook";
       option.style.opacity = "0.4";
       option.style.cursor = "default";
     }
     radio.addEventListener("change", () => stageDepth(ax, d));
-    option.append(radio, d);
+    option.append(radio, capital(d));
     group.append(option);
     depthRadios[ax].push(radio);
   }
@@ -875,7 +884,7 @@ for (const ax of ["laced", "rivets"] as const) {
 }
 const applyButton = document.createElement("button");
 applyButton.type = "button";
-applyButton.textContent = "apply detail changes";
+applyButton.textContent = "Apply detail changes";
 applyButton.style.cssText =
   "cursor:pointer;background:none;border:1px solid currentColor;border-radius:4px;color:inherit;opacity:0.8;padding:0.15em 0.7em";
 applyButton.addEventListener("click", applyDepth);
@@ -908,8 +917,8 @@ function paintDepth(): void {
   applyButton.style.opacity = changed ? "1" : "0.35";
   applyButton.style.cursor = changed ? "pointer" : "default";
   applyButton.title = changed
-    ? "reopen the page at this detail, from this view"
-    : "pick a different detail above to apply it";
+    ? "Reopen the page at this detail, from this view"
+    : "Pick a different detail above to apply it";
   const warning =
     staged.rivets === "whole"
       ? "Whole rivets: 1.2 million instances over 4 million triangles. The cook takes 10 s or more " +
@@ -948,7 +957,7 @@ const highlightSlot = overlay.addSlot("controls");
 const highlightRow = document.createElement("div");
 highlightRow.style.cssText = "display:flex;gap:0.9em;align-items:baseline;flex-wrap:wrap";
 const highlightLabel = document.createElement("span");
-highlightLabel.textContent = "highlight";
+highlightLabel.textContent = "Highlight";
 highlightLabel.style.opacity = "0.7";
 highlightRow.append(highlightLabel);
 for (const h of HIGHLIGHTS) {
@@ -960,7 +969,7 @@ for (const h of HIGHLIGHTS) {
   box.disabled = FLAT_PROBLEM !== undefined;
   box.style.accentColor = `#${HIGHLIGHT_PAINT[h].toString(16).padStart(6, "0")}`;
   box.addEventListener("change", () => setHighlight(scene, h, box.checked));
-  label.append(box, h);
+  label.append(box, capital(h));
   highlightRow.append(label);
 }
 if (FLAT_PROBLEM !== undefined) highlightRow.title = FLAT_PROBLEM;
@@ -1088,8 +1097,8 @@ async function copyText(text: string): Promise<boolean> {
 const copySlot = overlay.addSlot();
 const copyButton = document.createElement("button");
 copyButton.type = "button";
-copyButton.textContent = "copy view";
-copyButton.title = "copy a URL that reopens this exact frame (parked at this moment), and its state as JSON";
+copyButton.textContent = "Copy view";
+copyButton.title = "Copy a URL that reopens this exact frame (parked at this moment), and its state as JSON";
 copyButton.style.cssText =
   "cursor:pointer;background:none;border:1px solid currentColor;border-radius:4px;color:inherit;opacity:0.8;padding:0.15em 0.7em";
 let copyReset: ReturnType<typeof setTimeout> | undefined;
@@ -1098,10 +1107,10 @@ copyButton.addEventListener("click", () => {
   // Logged as well, so a view can be read back where the clipboard cannot.
   console.info(text);
   void copyText(text).then((ok) => {
-    copyButton.textContent = ok ? "copied" : "copy failed: see console";
+    copyButton.textContent = ok ? "Copied" : "Copy failed: see console";
     clearTimeout(copyReset);
     copyReset = setTimeout(() => {
-      copyButton.textContent = "copy view";
+      copyButton.textContent = "Copy view";
     }, 1500);
   });
 });
@@ -1136,7 +1145,7 @@ const walk = attachWalk({
   nearShadow: new URLSearchParams(location.search).has("walkNear"),
 });
 const WALK = BUILD ? null : new URLSearchParams(location.search).get("walk");
-const walkBox = overlay.addCheckbox("walk", WALK !== null, (on) => {
+const walkBox = overlay.addCheckbox("Walk", WALK !== null, (on) => {
   if (on && controls.autoRotate) {
     controls.autoRotate = false;
     rotateBox.checked = false;
@@ -1148,7 +1157,7 @@ if (BUILD) {
     box.disabled = true;
     const row = box.parentElement as HTMLElement;
     row.style.opacity = "0.4";
-    row.title = "not with build: turn build off first";
+    row.title = "Not with build: turn build off first";
   }
 }
 // The highlights follow the toggles; the show section joins them once the
@@ -1190,7 +1199,7 @@ function message(err: unknown): string {
 /** Say what went wrong on the panel, where the person judging will see it. */
 function report(problems: readonly string[]): void {
   if (problems.length === 0) return;
-  overlay.addCollapsible(`problems (${problems.length})`, true).textContent = problems.join("\n\n");
+  overlay.addCollapsible(`Problems (${problems.length})`, true).textContent = problems.join("\n\n");
   for (const p of problems) console.error(`eiffel: ${p}`);
 }
 
@@ -1262,7 +1271,7 @@ function draw(
 
 async function main(): Promise<void> {
   const problems: string[] = [];
-  statCook("cooking…");
+  statCook("Cooking…");
   // Whole lacing builds the web bars as laced lattice struts (about 2.9M
   // triangles more): the second of the tower's self-similar scales. Whole
   // rivets set rivets on them as instances, and so imply whole lacing;
@@ -1280,7 +1289,7 @@ async function main(): Promise<void> {
   const crossPlate = tuned(params, { set: "plateSet", edge: "plateEdge" });
   const graph = buildEiffel(1889, { lacedWeb: laced, rivets, fullRivets, crossPlate, build: BUILD });
   // Shown before the cook, so a graph that fails to cook can still be read.
-  attachGraphPanel([{ name: "eiffel skeleton", graph }], { into: graphSlot, title: "graph" });
+  attachGraphPanel([{ name: "Eiffel skeleton", graph }], { into: graphSlot, title: "Graph" });
 
   const t0 = performance.now();
   const { outputs } = await cook(graph);
@@ -1304,7 +1313,7 @@ async function main(): Promise<void> {
   for (const cls of PART_CLASSES) {
     const collection = outputs[cls];
     if (collection === undefined) {
-      classStats[cls]("absent");
+      classStats[cls]("Absent");
       continue;
     }
     // The foundations reach 50 m past the pedestals (the flue) and 12 m
@@ -1312,7 +1321,7 @@ async function main(): Promise<void> {
     // stay out of the box the shadow is fitted to.
     const drawn = draw(cls, collection, MATERIALS[cls], cls === "foundations" ? new Box3() : box, problems);
     if (drawn.meshes.length === 0) {
-      classStats[cls]("no mesh");
+      classStats[cls]("No mesh");
       continue;
     }
     // Glass casts nothing (see `GLASS`).
@@ -1398,7 +1407,7 @@ async function main(): Promise<void> {
     }
   }
   if (cars.length > 0) {
-    overlay.addStat("lift cars")(
+    overlay.addStat("Lift cars")(
       `${cars.filter((c) => !isCarGlass(c.mesh.name)).length}${STILL ? " parked" : " running"}, ${carTriangles.toLocaleString()} tri`,
     );
   }
@@ -1407,14 +1416,14 @@ async function main(): Promise<void> {
   // (the section's cut): scrub.ts.
   const erection = BUILD ? stageErection(meshes) : undefined;
   if (rivets || riveted > 0) {
-    overlay.addStat("rivets")(riveted > 0 ? riveted.toLocaleString() : "absent");
+    overlay.addStat("Rivets")(riveted > 0 ? riveted.toLocaleString() : "Absent");
   }
   if (riveted > 0) {
     let site = 0;
     for (const [name, list] of meshes) {
       if (isRivets(name) && rivetClass(name).share > 0) for (const m of list) site += headsIn(m);
     }
-    overlay.addStat("site-driven")(`${site.toLocaleString()} (${((100 * site) / riveted).toFixed(0)} %)`);
+    overlay.addStat("Site-driven")(`${site.toLocaleString()} (${((100 * site) / riveted).toFixed(0)} %)`);
     // How the heads went to the GPU device: packed (24 bytes a head,
     // rivetPack.ts), or as matrices (64) where a batch could not pack.
     const mb = (b: number): string => (b / 1048576).toFixed(1);
@@ -1425,13 +1434,13 @@ async function main(): Promise<void> {
         : rivetPath.packed === 0
           ? `matrices, ${mb(64 * rivetPath.cpu)} MB${why === "" ? "" : ` (${why})`}`
           : `${rivetPath.fallbacks.length} batch(es) as matrices: ${why}`;
-    overlay.addStat("rivet path")(`${how}, ${rivetPath.ms.toFixed(0)} ms`);
+    overlay.addStat("Rivet path")(`${how}, ${rivetPath.ms.toFixed(0)} ms`);
     const lightSite = (on: boolean): void => {
       siteLit = on;
       lightSiteRivets(on);
     };
     lightSite(params.has("site"));
-    overlay.addCheckbox("site rivets", params.has("site"), lightSite);
+    overlay.addCheckbox("Site rivets", params.has("site"), lightSite);
   }
   // The foundations in section (`?section`, section.ts): the ground opened
   // and what is under it cut on PL-XX's plane through piles 1 and 3.
@@ -1448,14 +1457,14 @@ async function main(): Promise<void> {
     section(on);
   };
   if (params.has("section")) cut(true);
-  overlay.addCheckbox("section", params.has("section"), cut);
-  if (fitted > 0) overlay.addStat("fittings")(fitted.toLocaleString());
-  if (linked > 0) overlay.addStat("chain pieces")(linked.toLocaleString());
+  overlay.addCheckbox("Section", params.has("section"), cut);
+  if (fitted > 0) overlay.addStat("Fittings")(fitted.toLocaleString());
+  if (linked > 0) overlay.addStat("Chain pieces")(linked.toLocaleString());
   // Only when something was overridden: the default page says nothing about
   // a knob nobody turned.
   const turned = Object.entries(crossPlate);
   if (turned.length > 0) {
-    overlay.addStat("plate")(turned.map(([k, v]) => `${k} ${v}`).join(", "));
+    overlay.addStat("Plate")(turned.map(([k, v]) => `${k} ${v}`).join(", "));
   }
   const hasRivets = [...meshes.keys()].some(isRivets);
 
@@ -1512,7 +1521,7 @@ async function main(): Promise<void> {
     const summary = document.createElement("summary");
     const count = document.createElement("span");
     count.style.cssText = "margin-left:0.5em;color:var(--ed-ink-faint)";
-    summary.append("show", count);
+    summary.append("Show", count);
     const bulk = document.createElement("div");
     bulk.style.cssText = "display:flex;gap:0.9em;margin:6px 0 4px";
     const grid = document.createElement("div");
@@ -1530,13 +1539,13 @@ async function main(): Promise<void> {
         else shown.delete(o);
         apply();
       });
-      label.append(box, o);
+      label.append(box, capital(o));
       grid.append(label);
       boxes.set(o, box);
     }
     for (const [text, all] of [
-      ["all", true],
-      ["none", false],
+      ["All", true],
+      ["None", false],
     ] as const) {
       const button = document.createElement("button");
       button.type = "button";
@@ -1580,7 +1589,7 @@ async function main(): Promise<void> {
       renderer.shadowMap.needsUpdate = true;
     });
     const { ms, bytes } = erection.stats;
-    overlay.addStat("dated")(`${ms.toFixed(0)} ms, ${(bytes / 1024).toFixed(0)} KB`);
+    overlay.addStat("Dated")(`${ms.toFixed(0)} ms, ${(bytes / 1024).toFixed(0)} KB`);
     window.pcgEiffelBuild = { setDay: (iso) => scrubber?.set(buildDayParam(iso)) };
   }
 
@@ -2105,7 +2114,7 @@ main()
     );
   })
   .catch((err: unknown) => {
-    statCook("failed");
+    statCook("Failed");
     report([message(err)]);
     document.body.dataset.ready = "failed";
   });

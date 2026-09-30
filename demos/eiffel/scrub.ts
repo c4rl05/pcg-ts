@@ -403,7 +403,7 @@ export function attachScrubber(
   };
   const paintPlay = (): void => {
     play.textContent = running ? "❚❚" : "▶";
-    play.title = running ? "pause the erection" : "play the erection";
+    play.title = running ? "Pause the erection" : "Play the erection";
   };
   play.addEventListener("click", () => {
     if (!running && day >= SPAN[1]) day = SPAN[0];

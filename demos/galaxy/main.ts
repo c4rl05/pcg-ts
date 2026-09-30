@@ -188,11 +188,11 @@ let graphPanel: GraphPanelHandle | undefined;
 
 function showGraphs(halo: Graph, stars: Graph): void {
   const entries = [
-    { name: "halo", graph: halo },
-    { name: "stars", graph: stars },
+    { name: "Halo", graph: halo },
+    { name: "Stars", graph: stars },
   ];
   if (graphPanel) graphPanel.set(entries);
-  else graphPanel = attachGraphPanel(entries, { into: graphSlot, title: "galaxy" });
+  else graphPanel = attachGraphPanel(entries, { into: graphSlot, title: "Galaxy" });
 }
 
 // -- world lifecycle -------------------------------------------------------
@@ -726,17 +726,17 @@ function showCard(spec: SystemSpec, dist: number): void {
         .filter(Boolean)
         .join(", ");
       return `<tr><td style="padding-right:10px;color:var(--ed-figure)">${p.name}</td>` +
-        `<td style="color:var(--ed-ink-dim)">${p.kind}${extras ? " · " + extras : ""}</td></tr>`;
+        `<td style="color:var(--ed-ink-dim)">${p.kind[0]!.toUpperCase()}${p.kind.slice(1)}${extras ? " · " + extras : ""}</td></tr>`;
     })
     .join("");
   card.innerHTML =
     `<div style="font-size:17px;color:var(--ed-ink-hi)">${spec.name}</div>` +
     `<div style="color:var(--ed-ink-ghost);margin-bottom:8px">${spec.catalog}</div>` +
-    `<div>class ${spec.spectral} · ${spec.tempK.toLocaleString()} K</div>` +
+    `<div>Class ${spec.spectral} · ${spec.tempK.toLocaleString()} K</div>` +
     `<div style="color:var(--ed-ink-dim);margin-bottom:8px">${dist.toFixed(0)} u from your last position</div>` +
     (spec.planets.length > 0
       ? `<table style="border-spacing:0">${rows}</table>`
-      : `<div style="color:var(--ed-ink-dim)">no planets — a lonely star</div>`) +
+      : `<div style="color:var(--ed-ink-dim)">No planets — a lonely star</div>`) +
     `<div style="margin-top:10px;color:var(--ed-ink-ghost)">Esc — back to the galaxy</div>`;
   card.style.display = "block";
 }
@@ -744,20 +744,20 @@ function showCard(spec: SystemSpec, dist: number): void {
 // -- overlay ---------------------------------------------------------------
 
 const overlay = createOverlay({
-  title: "galaxy",
+  title: "Galaxy",
   info:
     "An infinite deterministic spiral galaxy: unbounded halo + dust level above streamed " +
     "100u star cells. Drag to look, W/A/S/D + Q/E to fly (Shift boosts, wheel scales speed). " +
     "Click any star to visit its planetary system.",
 });
-const statFps = overlay.addStat("fps");
-const statGalaxy = overlay.addStat("galaxy");
-const statStars = overlay.addStat("stars");
-const statCells = overlay.addStat("star cells");
-const statCooked = overlay.addStat("cooked / evicted");
-const statPending = overlay.addStat("pending");
-const statCook = overlay.addStat("last update");
-const statPos = overlay.addStat("position");
+const statFps = overlay.addStat("FPS");
+const statGalaxy = overlay.addStat("Galaxy");
+const statStars = overlay.addStat("Stars");
+const statCells = overlay.addStat("Star cells");
+const statCooked = overlay.addStat("Cooked / evicted");
+const statPending = overlay.addStat("Pending");
+const statCook = overlay.addStat("Last update");
+const statPos = overlay.addStat("Position");
 
 /* The graph section, claimed HERE rather than where the panel is filled,
    so this page decides where in its own panel the graph sits. Right after
@@ -774,7 +774,7 @@ overlay.addSeed(seed, (s) => {
   buildWorld();
 });
 overlay.addSlider(
-  "gen radius",
+  "Gen radius",
   { min: 240, max: 640, step: 20, value: genRadius, format: (v) => `${v} u` },
   (v) => {
     genRadius = v;
@@ -782,14 +782,14 @@ overlay.addSlider(
   },
 );
 overlay.addSlider(
-  "brightness",
+  "Brightness",
   { min: 0.4, max: 2.2, step: 0.05, value: brightness },
   (v) => {
     brightness = v;
   },
 );
 overlay.addSlider(
-  "fly speed",
+  "Fly speed",
   { min: 20, max: 600, step: 10, value: flySpeed, format: (v) => `${v} u/s` },
   (v) => {
     flySpeed = v;

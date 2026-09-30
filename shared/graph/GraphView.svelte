@@ -40,7 +40,7 @@
     previews = new Map(),
     interactive = true,
     floor,
-    label = "node graph",
+    label = "Node graph",
   }: {
     nodes: readonly NodeView[];
     edges: readonly EdgeView[];

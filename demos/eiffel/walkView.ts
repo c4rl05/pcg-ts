@@ -46,10 +46,10 @@ const REFIT = 6;
 
 /** The runs, as a walker would name them. */
 const RUN_LABEL: Record<string, string> = {
-  ground: "ground → 1st floor",
+  ground: "Ground → 1st floor",
   e1: "1st → 2nd floor",
   e2: "2nd floor → landing",
-  e3: "landing → 3rd floor",
+  e3: "Landing → 3rd floor",
   summit: "3rd floor → top",
 };
 

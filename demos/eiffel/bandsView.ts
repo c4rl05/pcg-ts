@@ -229,8 +229,8 @@ export function startBands(host: BandsHost): Bands {
   let triangles = 0;
   let status: BandsOut | undefined;
   let longest = 0;
-  const statCells = host.stat("bands");
-  const statCost = host.stat("bands worker");
+  const statCells = host.stat("Bands");
+  const statCost = host.stat("Bands worker");
   let shadowDue = false;
 
   const arrive = (msg: Extract<BandsOut, { type: "cell" }>): void => {
@@ -289,12 +289,12 @@ export function startBands(host: BandsHost): Bands {
       );
     } else if (msg.type === "error") {
       console.error(`eiffel bands: ${msg.message}`);
-      statCost(`error: ${msg.message}`);
+      statCost(`Error: ${msg.message}`);
     }
   };
   worker.onerror = (e): void => {
     console.error("eiffel bands: worker failed", e.message);
-    statCost(`worker failed: ${e.message}`);
+    statCost(`Worker failed: ${e.message}`);
   };
   worker.postMessage({ type: "start", spec: host.spec, crossPlate: host.crossPlate } satisfies BandsIn);
 

@@ -73,7 +73,7 @@ function describeAdapter(info: GpuAdapterInfoLike | undefined): string {
   return (
     [info?.vendor, info?.architecture, detail]
       .filter((p): p is string => typeof p === "string" && p !== "")
-      .join(" · ") || "adapter (no info exposed)"
+      .join(" · ") || "Adapter (no info exposed)"
   );
 }
 

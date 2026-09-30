@@ -355,7 +355,7 @@ function frameMap(circuit: Circuit, zoom: number): void {
 // ------------------------------------------------------------------ //
 
 const overlay = createOverlay({
-  title: "road",
+  title: "Road",
   info:
     "A centreline this page did not make, handed to pcg-ts: it sweeps the road and dresses the verges. " +
     "The map is the whole lap from above; the chase view is the only viewpoint the result is ever " +
@@ -382,31 +382,31 @@ overlay.addSeed(state.seed, (seed) => {
   state.seed = seed;
   void recook();
 });
-overlay.addSlider("speed", { min: 0, max: 160, step: 1, value: state.speed }, (v) => {
+overlay.addSlider("Speed", { min: 0, max: 160, step: 1, value: state.speed }, (v) => {
   state.speed = v;
 });
-overlay.addSlider("chase back", { min: 4, max: 60, step: 1, value: state.chaseBack }, (v) => {
+overlay.addSlider("Chase back", { min: 4, max: 60, step: 1, value: state.chaseBack }, (v) => {
   state.chaseBack = v;
 });
-overlay.addSlider("chase height", { min: 1, max: 30, step: 0.5, value: state.chaseHeight }, (v) => {
+overlay.addSlider("Chase height", { min: 1, max: 30, step: 0.5, value: state.chaseHeight }, (v) => {
   state.chaseHeight = v;
 });
-overlay.addCheckbox("map overlay", state.mapOn, (on) => {
+overlay.addCheckbox("Map overlay", state.mapOn, (on) => {
   state.mapOn = on;
 });
-overlay.addSlider("map zoom", { min: 0.5, max: 4, step: 0.05, value: state.mapZoom }, (v) => {
+overlay.addSlider("Map zoom", { min: 0.5, max: 4, step: 0.05, value: state.mapZoom }, (v) => {
   state.mapZoom = v;
   if (circuit) frameMap(circuit, state.mapZoom);
 });
-overlay.addCheckbox("pause", state.paused, (on) => {
+overlay.addCheckbox("Pause", state.paused, (on) => {
   state.paused = on;
 });
 
-const statFps = overlay.addStat("fps");
-const statStation = overlay.addStat("station");
-const statLap = overlay.addStat("lap length");
-const statProps = overlay.addStat("dressing");
-const statCook = overlay.addStat("cook");
+const statFps = overlay.addStat("FPS");
+const statStation = overlay.addStat("Station");
+const statLap = overlay.addStat("Lap length");
+const statProps = overlay.addStat("Dressing");
+const statCook = overlay.addStat("Cook");
 
 // The slot is claimed HERE, where the panel is built, so this page decides
 // where in its own panel the graph sits — under the readouts.
@@ -433,9 +433,9 @@ async function recook(): Promise<void> {
     statCook(`${next.cookMs.toFixed(0)} ms`);
     // Called only when the graph CHANGED — it re-serializes and re-lays
     // out, which is not free and is wasted every frame.
-    const graphs = [{ name: "road + verges", graph: next.graph }];
+    const graphs = [{ name: "Road + verges", graph: next.graph }];
     if (graphPanel) graphPanel.set(graphs);
-    else graphPanel = attachGraphPanel(graphs, { into: graphSlot, title: "graph" });
+    else graphPanel = attachGraphPanel(graphs, { into: graphSlot, title: "Graph" });
   } finally {
     recooking = false;
   }

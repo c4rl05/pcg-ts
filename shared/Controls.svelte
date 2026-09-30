@@ -206,7 +206,7 @@
      rows is gated off has nothing to show, so it gets neither a tab nor a
      heading. -->
 {#if tabbed}
-  <div class="tabs" role="tablist" aria-label="controls">
+  <div class="tabs" role="tablist" aria-label="Controls">
     {#each shown as { section } (section.title)}
       <button
         class="tab"

@@ -445,12 +445,12 @@ function build(field: LanternField): void {
 // ------------------------------------------------------------------ //
 
 const overlay = createOverlay({
-  title: "lanterns",
+  title: "Lanterns",
   info:
     "Every lantern's colour, pulse and bob is derived in the vertex shader from ONE u32 the graph " +
     "settled — the point's own seed, carried out as a named per-instance channel. The graph has no " +
-    "clock; the shader has no idea where anything is. Switch the id source to the f32 copy of the " +
-    "same id to see what widening an identity hash costs.",
+    "clock; the shader has no idea where anything is. Switch the ID source to the f32 copy of the " +
+    "same ID to see what widening an identity hash costs.",
 });
 
 const state = {
@@ -474,25 +474,25 @@ const recook = makeRecooker(async () => {
   statHues(`${next.loss.huesExact} exact → ${next.loss.huesWidened} widened`);
   // Set only when the graph CHANGED — it re-serializes and re-lays out,
   // which is not free and is wasted every frame.
-  const graphs = [{ name: "lantern field", graph: next.graph }];
+  const graphs = [{ name: "Lantern field", graph: next.graph }];
   if (graphPanel) graphPanel.set(graphs);
-  else graphPanel = attachGraphPanel(graphs, { into: graphSlot, title: "graph" });
+  else graphPanel = attachGraphPanel(graphs, { into: graphSlot, title: "Graph" });
 });
 
 overlay.addSeed(state.seed, (seed) => {
   state.seed = seed;
   recook();
 });
-overlay.addSlider("lanterns", { min: 500, max: 30000, step: 500, value: state.count }, (v) => {
+overlay.addSlider("Lanterns", { min: 500, max: 30000, step: 500, value: state.count }, (v) => {
   state.count = v;
   recook();
 });
-overlay.addSlider("relief", { min: 0, max: 60, step: 1, value: state.relief }, (v) => {
+overlay.addSlider("Relief", { min: 0, max: 60, step: 1, value: state.relief }, (v) => {
   state.relief = v;
   recook();
 });
 overlay.addSelect(
-  "id source",
+  "ID source",
   [
     { value: "exact", label: "seed — u32" },
     { value: "widened", label: "seedWidened — f32" },
@@ -506,20 +506,20 @@ overlay.addSelect(
     applyUniforms();
   },
 );
-overlay.addSlider("pulse", { min: 0, max: 3, step: 0.05, value: state.pulse }, (v) => {
+overlay.addSlider("Pulse", { min: 0, max: 3, step: 0.05, value: state.pulse }, (v) => {
   state.pulse = v;
   applyUniforms();
 });
-overlay.addCheckbox("pause", state.paused, (on) => {
+overlay.addCheckbox("Pause", state.paused, (on) => {
   state.paused = on;
 });
 
-const statFps = overlay.addStat("fps");
-const statCount = overlay.addStat("lanterns");
-const statCook = overlay.addStat("cook");
-const statAltered = overlay.addStat("ids altered by f32");
-const statWorst = overlay.addStat("worst drift");
-const statHues = overlay.addStat("distinct hues");
+const statFps = overlay.addStat("FPS");
+const statCount = overlay.addStat("Lanterns");
+const statCook = overlay.addStat("Cook");
+const statAltered = overlay.addStat("IDs altered by f32");
+const statWorst = overlay.addStat("Worst drift");
+const statHues = overlay.addStat("Distinct hues");
 
 // The slot is claimed HERE, where the panel is built, so this page decides
 // where in its own panel the graph sits — under the readouts.

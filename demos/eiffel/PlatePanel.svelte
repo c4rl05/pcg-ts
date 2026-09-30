@@ -57,9 +57,9 @@
 
 <div class="plates">
   <div class="pcg-row">
-    <label for="eiffel-plate">plate</label>
+    <label for="eiffel-plate">Plate</label>
     <select id="eiffel-plate" value={current} onchange={pick}>
-      <option value="">— the model, orbiting</option>
+      <option value="">— The model, orbiting</option>
       {#each figures as f (f.id)}
         <option value={f.id}>{f.label}</option>
       {/each}
@@ -67,7 +67,7 @@
   </div>
   {#if current !== ""}
     <div class="pcg-row">
-      <label for="eiffel-plate-opacity">scan</label>
+      <label for="eiffel-plate-opacity">Scan</label>
       <input
         id="eiffel-plate-opacity"
         type="range"
@@ -81,8 +81,8 @@
       <span class="figure">{Math.round(opacity * 100)}%</span>
     </div>
     <div class="buttons">
-      <button type="button" onclick={onBack}>back to orbit</button>
-      <button type="button" onclick={onSave} title="the frame as it stands, pan and zoom included">save frame</button>
+      <button type="button" onclick={onBack}>Back to orbit</button>
+      <button type="button" onclick={onSave} title="The frame as it stands, pan and zoom included">Save frame</button>
     </div>
     {#if status !== ""}<p class="status">{status}</p>{/if}
     <p class="credit">

@@ -80,7 +80,7 @@ export function attachGraphPanel(
   opts.into.appendChild(host);
   const app = mount(GraphPanel, {
     target: host,
-    props: { initial: serializeAll(graphs), title: opts.title ?? "graph" },
+    props: { initial: serializeAll(graphs), title: opts.title ?? "Graph" },
   });
   // The component's own `setGraphs`. Props cannot carry the update: making
   // one reactive from here would need a `$state` object, and a rune outside

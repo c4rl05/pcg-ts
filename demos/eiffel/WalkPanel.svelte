@@ -85,7 +85,7 @@
   </p>
   <p class="flight">{label}</p>
   <div class="pcg-row">
-    <label for="eiffel-walk-at">path</label>
+    <label for="eiffel-walk-at">Path</label>
     <input
       id="eiffel-walk-at"
       type="range"
@@ -98,7 +98,7 @@
     />
   </div>
   <div class="pcg-row">
-    <label for="eiffel-walk-pace">pace</label>
+    <label for="eiffel-walk-pace">Pace</label>
     <input
       id="eiffel-walk-pace"
       type="range"
@@ -112,17 +112,17 @@
     <span class="figure">×{(2 ** pace).toFixed(2 ** pace < 10 ? 2 : 0)}</span>
   </div>
   <div class="buttons">
-    <button type="button" onclick={() => onFlight(-1)} title="the last flight (PageDown)">⏮</button>
-    <button type="button" onclick={() => onStep(-1)} title="a step down (↓)">−1</button>
-    <button type="button" class="play" onclick={toggle} title="climb (Space)">{playing ? "pause" : "climb"}</button>
-    <button type="button" onclick={() => onStep(1)} title="a step up (↑)">+1</button>
-    <button type="button" onclick={() => onFlight(1)} title="the next flight (PageUp)">⏭</button>
-    <button type="button" onclick={onLevel} title="look along the path again (R)">level</button>
+    <button type="button" onclick={() => onFlight(-1)} title="The last flight (PageDown)">⏮</button>
+    <button type="button" onclick={() => onStep(-1)} title="A step down (↓)">−1</button>
+    <button type="button" class="play" onclick={toggle} title="Climb (Space)">{playing ? "Pause" : "Climb"}</button>
+    <button type="button" onclick={() => onStep(1)} title="A step up (↑)">+1</button>
+    <button type="button" onclick={() => onFlight(1)} title="The next flight (PageUp)">⏭</button>
+    <button type="button" onclick={onLevel} title="Look along the path again (R)">Level</button>
   </div>
   <div class="pcg-row">
-    <label for="eiffel-walk-near">near shadow</label>
+    <label for="eiffel-walk-near">Near shadow</label>
     <input id="eiffel-walk-near" type="checkbox" checked={near} onchange={nearToggle} />
-    <span class="note">{texel > 0 ? `texel ${(texel * 100).toFixed(1)} cm` : ""}</span>
+    <span class="note">{texel > 0 ? `Texel ${(texel * 100).toFixed(1)} cm` : ""}</span>
   </div>
   <p class="help">Drag to look, double-click to lock the pointer. Space climbs, ↑ ↓ step, PageUp PageDown skip a flight.</p>
 </div>

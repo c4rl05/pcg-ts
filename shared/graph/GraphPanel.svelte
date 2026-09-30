@@ -39,7 +39,7 @@
 
   let {
     initial,
-    title = "graph",
+    title = "Graph",
   }: {
     /** The graphs this page cooks, in the order it wants them offered. */
     initial: readonly { readonly name: string; readonly json: SerializedGraph }[];
@@ -139,7 +139,7 @@
   <button
     class="thumb"
     type="button"
-    aria-label="show the {currentName || title} graph"
+    aria-label="Show the {currentName || title} graph"
     onclick={() => (open = true)}
   >
     <span class="cap">
@@ -182,7 +182,7 @@
     <div class="sheet" role="dialog" aria-modal="true" aria-label="{currentName} graph">
       <header>
         {#if graphs.length > 1}
-          <div class="tabs" role="tablist" aria-label="graphs">
+          <div class="tabs" role="tablist" aria-label="Graphs">
             {#each graphs as g, i (g.name)}
               <button
                 type="button"
@@ -199,7 +199,7 @@
         <span class="meta">
           {#if current}{current.nodes.length} nodes · {current.edges.length} connections{/if}
         </span>
-        <button class="close" type="button" aria-label="close" onclick={() => (open = false)}
+        <button class="close" type="button" aria-label="Close" onclick={() => (open = false)}
           >✕</button
         >
       </header>
@@ -219,7 +219,7 @@
            picture of a node graph — every other one you have used could be
            dragged — so the footer says what this one does instead of
            leaving you to discover what it does not. -->
-      <footer>scroll to zoom · drag to pan · double-click to fit · read-only</footer>
+      <footer>Scroll to zoom · drag to pan · double-click to fit · read-only</footer>
     </div>
   </div>
 {/if}
