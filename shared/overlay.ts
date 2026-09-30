@@ -221,7 +221,8 @@ export interface Overlay {
     initial: string,
     onChange: (value: string) => void,
   ): void;
-  addCheckbox(label: string, initial: boolean, onChange: (checked: boolean) => void): void;
+  /** Returns the input, for a page whose toggles exclude one another. */
+  addCheckbox(label: string, initial: boolean, onChange: (checked: boolean) => void): HTMLInputElement;
   /** A labelled stat line; returns its setter. */
   addStat(label: string): (value: string | number) => void;
   /** A collapsible section holding a <pre>; returns the pre element. */
@@ -243,8 +244,10 @@ export interface Overlay {
    * may be inserted between those two. `"top"` puts it under the caption
    * instead, above the controls — which keeps that pair adjacent — for the
    * one choice a page wants read first; top slots stack in call order.
+   * `"controls"` puts it inside the controls, after the rows added so far,
+   * for a section that belongs with them.
    */
-  addSlot(where?: "top" | "bottom"): HTMLDivElement;
+  addSlot(where?: "top" | "controls" | "bottom"): HTMLDivElement;
 }
 
 /** Create the overlay panel and attach it to the page. */
@@ -454,6 +457,7 @@ export function createOverlay(opts: {
       input.checked = initial;
       input.addEventListener("change", () => onChange(input.checked));
       div.appendChild(input);
+      return input;
     },
     addStat(label) {
       const line = document.createElement("div");
@@ -490,6 +494,7 @@ export function createOverlay(opts: {
       const div = document.createElement("div");
       div.className = where === "top" ? "pcg-slot pcg-slot-top" : "pcg-slot";
       if (where === "top") el.insertBefore(div, controls);
+      else if (where === "controls") controls.appendChild(div);
       else el.appendChild(div);
       return div;
     },

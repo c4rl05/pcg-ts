@@ -754,8 +754,15 @@ const classStats = Object.fromEntries(
   PART_CLASSES.map((cls) => [cls, overlay.addStat(cls)]),
 ) as Record<PartClass, (value: string | number) => void>;
 
-overlay.addCheckbox("rotate", false, (on) => {
+// ROTATE, WALK AND BUILD are three ways of looking at the tower, and they
+// do not combine: turning rotate or walk on turns the other off, and under
+// build — a reload away — both are off and offered only once it is.
+const rotateBox = overlay.addCheckbox("rotate", false, (on) => {
   controls.autoRotate = on;
+  if (on && walk.active) {
+    walk.set(false);
+    walkBox.checked = false;
+  }
 });
 
 // The lifts run unless `?still` parked them. Off leaves every car exactly
@@ -773,8 +780,11 @@ overlay.addCheckbox("lifts", !STILL, (on) => {
 const BUILD = new URLSearchParams(location.search).has("build");
 overlay.addCheckbox("build", BUILD, (on) => {
   const q = new URLSearchParams(location.search);
-  if (on) q.set("build", "");
-  else q.delete("build");
+  if (on) {
+    q.set("build", "");
+    // The walk is not reopened under build (see ROTATE, WALK AND BUILD).
+    for (const k of ["walk", "walkAt", "walkNear"]) q.delete(k);
+  } else q.delete("build");
   const p = camera.position;
   const t = controls.target;
   q.set("cam", [p.x, p.y, p.z, t.x, t.y, t.z].map((v) => v.toFixed(2)).join(","));
@@ -934,7 +944,7 @@ function applyDepth(): void {
 // THE HIGHLIGHTS (see `HIGHLIGHTS`), a row of their own: each
 // checkbox tinted its paint. Cooked meshes that arrive later take the
 // paint as they are drawn, so the row works before the cook is done.
-const highlightSlot = overlay.addSlot();
+const highlightSlot = overlay.addSlot("controls");
 const highlightRow = document.createElement("div");
 highlightRow.style.cssText = "display:flex;gap:0.9em;align-items:baseline;flex-wrap:wrap";
 const highlightLabel = document.createElement("span");
@@ -966,7 +976,7 @@ highlightSlot.append(highlightRow);
 // it with what a URL cannot carry: the viewport, the pixel ratio, whether
 // the lifts were running and whether a capture probe was driving the camera.
 
-/** The class the "show" select isolates; `all` is none. */
+/** The options the "show" section has on, comma-separated; `all` when every one is. */
 let showing = "all";
 /** Whether the foundations are in section. */
 let sectioned = false;
@@ -1013,7 +1023,7 @@ function copyableView(): string {
     // orbit would clamp back: `drive` reopens it the way `pose` put it.
     if (driven) query.push("drive");
   }
-  if (showing !== "all") query.push(`show=${encodeURIComponent(showing)}`);
+  if (showing !== "all") query.push(`show=${showing.split(",").map(encodeURIComponent).join(",")}`);
   if (sectioned) query.push("section");
   if (siteLit) query.push("site");
   const highlighted = HIGHLIGHTS.filter((h) => lit[h]);
@@ -1125,13 +1135,30 @@ const walk = attachWalk({
   // `?walkNear`: the walk's near shadow on, the way "copy view" writes it.
   nearShadow: new URLSearchParams(location.search).has("walkNear"),
 });
-const WALK = new URLSearchParams(location.search).get("walk");
-overlay.addCheckbox("walk", WALK !== null, (on) => walk.set(on));
+const WALK = BUILD ? null : new URLSearchParams(location.search).get("walk");
+const walkBox = overlay.addCheckbox("walk", WALK !== null, (on) => {
+  if (on && controls.autoRotate) {
+    controls.autoRotate = false;
+    rotateBox.checked = false;
+  }
+  walk.set(on);
+});
+if (BUILD) {
+  for (const box of [rotateBox, walkBox]) {
+    box.disabled = true;
+    const row = box.parentElement as HTMLElement;
+    row.style.opacity = "0.4";
+    row.title = "not with build: turn build off first";
+  }
+}
+// The highlights follow the toggles; the show section joins them once the
+// cook says what there is to show.
+highlightSlot.parentElement?.append(highlightSlot);
 // `?walk=` is a step; `?walkAt=<m>,<yaw>,<pitch>` is the exact pose "copy
 // view" writes — metres along the path and the look's turn off it, in
 // degrees — and wins when both are given.
 const WALK_AT = new URLSearchParams(location.search).get("walkAt")?.split(",").map(Number);
-if (WALK_AT !== undefined && WALK_AT.length === 3 && WALK_AT.every(Number.isFinite)) {
+if (!BUILD && WALK_AT !== undefined && WALK_AT.length === 3 && WALK_AT.every(Number.isFinite)) {
   walk.goDist(WALK_AT[0]!, WALK_AT[1], WALK_AT[2]);
 } else if (WALK !== null) walk.go(Number(WALK) || 0);
 
@@ -1264,7 +1291,7 @@ async function main(): Promise<void> {
   let riveted = 0;
   let fitted = 0;
   let linked = 0;
-  /** Drawn outputs the "show" select can isolate one at a time (not rivets). */
+  /** Drawn outputs with a "show" checkbox of their own (rivets have one between them). */
   const present: string[] = [];
   const keep = (name: string, drawn: Drawn): void => {
     for (const mesh of drawn.meshes) scene.add(mesh);
@@ -1441,39 +1468,109 @@ async function main(): Promise<void> {
     rig.fitShadow(box);
   }
 
-  // Isolating one class is how a class is judged on its own; the shadows
-  // are redrawn with it, so an isolated class shades only itself. A class
-  // keeps its own rivets (`rivets.<class>`), and "rivets" shows them alone.
+  // SHOW: which classes are drawn, a checkbox each, folded until wanted.
+  // Hiding classes is how one is judged on its own; the shadows are redrawn
+  // with it, so what is shown shades only itself. Every drawn output rides
+  // with one box: every rivet output with "rivets" (they are named for
+  // where they sit, `rivets.leg.crossings.500`, not for a class), a car
+  // with the fit-out it is painted like and its panes with the glass, what
+  // moves with a car with the machinery, the flag with the summit's rod.
   if (meshes.size > 1) {
+    const names = [...meshes.keys()];
     const options = [
-      { value: "all", label: "all classes" },
-      ...present.map((c) => ({ value: c, label: c })),
+      ...present,
+      ...(hasRivets ? ["rivets"] : []),
+      ...(names.some(isFitting) ? ["fittings"] : []),
+      ...(names.some(isWorks) ? ["works"] : []),
     ];
-    if (hasRivets) options.push({ value: "rivets", label: "rivets" });
-    const isolate = (v: string): void => {
-      showing = v;
+    const owner = (name: string): string =>
+      isRivets(name)
+        ? "rivets"
+        : isWorks(name)
+          ? "works"
+          : isFitting(name)
+            ? "fittings"
+            : isCar(name) && !isMachine(name)
+              ? isCarGlass(name)
+                ? "glass"
+                : "platforms"
+              : isChain(name) || isMachine(name)
+                ? "machinery"
+                : isCloth(name)
+                  ? "summit"
+                  : name;
+    // `?show=<a>,<b>` opens with only those on, the way "copy view" writes
+    // it; `?show=` with nothing named shows nothing, and a list naming no
+    // option shows everything rather than an empty ground.
+    const asked = params.get("show");
+    const listed = (asked ?? "").split(",").filter((o) => options.includes(o));
+    const shown = new Set(asked === null || (asked !== "" && listed.length === 0) ? options : listed);
+
+    const showSlot = overlay.addSlot("controls");
+    const fold = document.createElement("details");
+    fold.style.cssText = "margin:0;padding:0;border:0";
+    const summary = document.createElement("summary");
+    const count = document.createElement("span");
+    count.style.cssText = "margin-left:0.5em;color:var(--ed-ink-faint)";
+    summary.append("show", count);
+    const bulk = document.createElement("div");
+    bulk.style.cssText = "display:flex;gap:0.9em;margin:6px 0 4px";
+    const grid = document.createElement("div");
+    grid.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:2px 10px";
+    const boxes = new Map<string, HTMLInputElement>();
+    for (const o of options) {
+      const label = document.createElement("label");
+      label.style.cssText =
+        "display:flex;gap:0.35em;align-items:center;cursor:pointer;font-size:12px;min-width:0;overflow-wrap:anywhere";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.style.margin = "0";
+      box.addEventListener("change", () => {
+        if (box.checked) shown.add(o);
+        else shown.delete(o);
+        apply();
+      });
+      label.append(box, o);
+      grid.append(label);
+      boxes.set(o, box);
+    }
+    for (const [text, all] of [
+      ["all", true],
+      ["none", false],
+    ] as const) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = text;
+      button.style.cssText =
+        "background:none;border:0;padding:0;color:inherit;font:inherit;font-size:12px;cursor:pointer;" +
+        "text-decoration:underline;text-underline-offset:3px;opacity:0.8";
+      button.addEventListener("click", () => {
+        shown.clear();
+        if (all) for (const o of options) shown.add(o);
+        apply();
+      });
+      bulk.append(button);
+    }
+    fold.append(summary, bulk, grid);
+    showSlot.append(fold);
+
+    const apply = (): void => {
+      const on = options.filter((o) => shown.has(o));
+      showing = on.length === options.length ? "all" : on.join(",");
+      count.textContent = on.length === options.length ? "all" : `${on.length} of ${options.length}`;
+      for (const [o, box] of boxes) box.checked = shown.has(o);
       for (const [name, list] of meshes) {
-        const on =
-          v === "all" ||
-          v === name ||
-          (isRivets(name) && (v === "rivets" || name === `rivets.${v}`)) ||
-          // A car rides with the fit-out it is painted like, and its panes
-          // with the glass; neither has an entry of its own, the way a
-          // class' rivets have none.
-          (isCar(name) && !isMachine(name) && v === (isCarGlass(name) ? "glass" : "platforms")) ||
-          // What moves with a car is machinery, and rides with that class.
-          ((isChain(name) || isMachine(name)) && v === "machinery") ||
-          // The flag flies from the rod, which is the summit's.
-          (isCloth(name) && v === "summit");
-        for (const m of list) m.visible = on;
+        const o = owner(name);
+        const visible = !options.includes(o) || shown.has(o);
+        for (const m of list) m.visible = visible;
       }
       renderer.shadowMap.needsUpdate = true;
     };
-    // `?show=<class>` opens isolated, the way "copy view" writes it.
-    const asked = params.get("show");
-    const initial = options.some((o) => o.value === asked) ? (asked as string) : "all";
-    overlay.addSelect("show", options, initial, isolate);
-    if (initial !== "all") isolate(initial);
+    apply();
+    // Opened when the page opens with something hidden, so it says why.
+    fold.open = showing !== "all";
+    // The highlights sit just above it.
+    showSlot.before(highlightSlot);
   }
 
   if (erection !== undefined) {
