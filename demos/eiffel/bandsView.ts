@@ -1,6 +1,7 @@
 /**
- * `?bands` on the page: the laced and riveted depths drawn round the
- * camera over the plain tower, as the worker (bandsWorker.ts) cooks them.
+ * The streamed depths on the page (depth.ts): the laced and riveted depths,
+ * either or both, drawn round the camera over the tower cooked whole, as
+ * the worker (bandsWorker.ts) cooks them.
  *
  * THE SEAM. A laced cell puts out every primitive whose bounding box
  * meets its cube (bands.ts), so a member crossing a face comes out of both
@@ -19,6 +20,9 @@
  * bars' nowhere else.
  *
  * The rivets need none of this: each head is in exactly one rivet cell.
+ * So when the page streams the rivets alone (its own cook then the laced
+ * tower whole, bands.ts), none of the cut is made: no table, no material
+ * taught or cloned, and the page's meshes are left as they were drawn.
  */
 import {
   type BufferGeometry as BufferGeometryType,
@@ -59,7 +63,7 @@ export interface BandsHost {
   readonly scene: Scene;
   readonly spec: BandsSpec;
   readonly crossPlate: Partial<CrossPlate>;
-  /** The page's class materials: the laced classes' are taught the plain side of the cut, in place. */
+  /** The page's class materials: with a laced level, the laced classes' are taught the plain side of the cut, in place. */
   readonly materials: Record<PartClass, MeshStandardMaterial>;
   /** The page's plain meshes by output name: the laced classes' get the plain cut's depth and prepass. */
   readonly meshes: ReadonlyMap<string, readonly Mesh[]>;
@@ -147,9 +151,18 @@ ${shader.fragmentShader.replace("void main() {", `void main() {\n  if (${test}) 
   m.needsUpdate = true;
 }
 
-/** Start the bands: the worker, the cut, the stat lines. */
-export function startBands(host: BandsHost): Bands {
-  const { cell } = host.spec.laced;
+/** The cut, once taught: a laced mesh for an arrived payload, and a cell's texel set or cleared. */
+interface Cut {
+  mesh(m: MeshPayload): Mesh;
+  flag(coord: readonly number[], on: boolean): void;
+}
+
+/**
+ * Teach the page's plain meshes of the laced classes the cut, over laced
+ * cells of side `cell`. Only with a laced level: under the rivets alone the
+ * page's cook is the laced tower already, and there is nothing to hide.
+ */
+function startCut(host: BandsHost, cell: number): Cut {
   const grid = flagGrid(cell);
   const [nx, ny, nz] = grid.dims;
   const flags = new Uint8Array(nx * nz * ny);
@@ -193,6 +206,22 @@ export function startBands(host: BandsHost): Bands {
       mesh.userData.prepassMaterial = prepass.plain;
     }
   }
+  return {
+    mesh: (m) => lacedMesh(m, laced[m.cls], depth.laced, prepass.laced),
+    flag: (coord, on) => {
+      const i = flagAt(coord);
+      if (i < 0) return;
+      flags[i] = on ? 255 : 0;
+      texture.needsUpdate = true;
+    },
+  };
+}
+
+/** Start the bands: the worker, the cut (with a laced level), the stat lines. */
+export function startBands(host: BandsHost): Bands {
+  const levels = (["laced", "rivets"] as const).filter((l) => host.spec[l] !== undefined);
+  if (levels.length === 0) throw new Error("eiffel bands: the spec streams neither level; give it laced, rivets or both (bandsFrom)");
+  const cut = host.spec.laced === undefined ? undefined : startCut(host, host.spec.laced.cell);
 
   const worker = new Worker(new URL("./bandsWorker.ts", import.meta.url), { type: "module" });
   const cells = new Map<string, { level: BandLevel; meshes: Mesh[]; heads: number; triangles: number }>();
@@ -210,8 +239,10 @@ export function startBands(host: BandsHost): Bands {
     const meshes: Mesh[] = [];
     let h = 0;
     let tris = 0;
+    // Meshes only ever come from a laced cell, so only with a cut.
     for (const m of msg.meshes) {
-      meshes.push(lacedMesh(m, laced[m.cls], depth.laced, prepass.laced));
+      if (cut === undefined) throw new Error(`eiffel bands: a ${msg.level} cell brought meshes, but no laced level is streamed`);
+      meshes.push(cut.mesh(m));
       tris += m.triangles;
     }
     for (const r of msg.rivets) {
@@ -226,7 +257,7 @@ export function startBands(host: BandsHost): Bands {
     cells.set(key, { level: msg.level, meshes, heads: h, triangles: tris });
     heads += h;
     triangles += tris;
-    if (msg.level === "laced") setFlag(msg.coord, 255);
+    if (msg.level === "laced") cut?.flag(msg.coord, true);
     shadowDue = true;
     longest = Math.max(longest, performance.now() - t);
   };
@@ -242,19 +273,13 @@ export function startBands(host: BandsHost): Bands {
     cells.delete(key);
     shadowDue = true;
   };
-  const setFlag = (coord: readonly number[], v: number): void => {
-    const i = flagAt(coord);
-    if (i < 0) return;
-    flags[i] = v;
-    texture.needsUpdate = true;
-  };
 
   worker.onmessage = (e: MessageEvent<BandsOut>): void => {
     const msg = e.data;
     if (msg.type === "cell") arrive(msg);
     else if (msg.type === "evict") {
       drop(`${msg.level}:${msg.coord.join(",")}`);
-      if (msg.level === "laced") setFlag(msg.coord, 0);
+      if (msg.level === "laced") cut?.flag(msg.coord, false);
     } else if (msg.type === "status") {
       status = msg;
       statCost(
@@ -296,10 +321,13 @@ export function startBands(host: BandsHost): Bands {
       let r = 0;
       for (const c of cells.values()) c.level === "laced" ? l++ : r++;
       const pending = status?.type === "status" ? status.pending : 0;
-      statCells(
-        `laced ${l}, rivets ${r} cells; ${triangles.toLocaleString()} tri, ${heads.toLocaleString()} heads` +
-          (pending > 0 ? ", cooking" : ""),
-      );
+      // Only the levels streamed: a "laced 0" under the rivets alone would read as a stall.
+      const counts = levels.map((name) => `${name} ${name === "laced" ? l : r}`).join(", ");
+      const drawn = [
+        ...(host.spec.laced === undefined ? [] : [`${triangles.toLocaleString()} tri`]),
+        ...(host.spec.rivets === undefined ? [] : [`${heads.toLocaleString()} heads`]),
+      ].join(", ");
+      statCells(`${counts} cells; ${drawn}` + (pending > 0 ? ", cooking" : ""));
     },
     state: () => {
       let l = 0;
@@ -366,7 +394,7 @@ function release(this: { array: unknown }): void {
 
 declare global {
   interface Window {
-    /** The running bands (`?bands`), for a probe or a capture to read. */
+    /** The running bands (a streamed depth), for a probe or a capture to read. */
     pcgEiffelBands?: Bands;
   }
 }

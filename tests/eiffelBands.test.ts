@@ -29,9 +29,19 @@
  * are byte-identical to the laced depth's (measured; the laced level
  * cooks the laced graph), so both levels answer to it.
  */
-import { type CellOutputs, type DataCollection, cook, serializeGraph } from "pcg-ts";
+import { type CellContext, type CellOutputs, type DataCollection, type Graph, World, cook, serializeGraph } from "pcg-ts";
 import { beforeAll, describe, expect, it } from "vitest";
-import { BANDS, ENVELOPE, LACED_CLASSES, bandsGraphs, bandsWorld, inEnvelope } from "../demos/eiffel/bands.js";
+import {
+  BANDS,
+  ENVELOPE,
+  LACED_CLASSES,
+  bandsFrom,
+  bandsGraphs,
+  bandsLevels,
+  bandsWorld,
+  finestCell,
+  inEnvelope,
+} from "../demos/eiffel/bands.js";
 import { buildEiffel } from "../demos/eiffel/graph.js";
 import { gateCount, regionNodes, setRegion } from "../demos/eiffel/region.js";
 import { profileAt } from "../demos/eiffel/spec.js";
@@ -75,6 +85,12 @@ function cubes(s: number): Box[] {
 
 let whole: CellOutputs;
 const graphs = bandsGraphs();
+const need = <T>(v: T | undefined, what: string): T => {
+  if (v === undefined) throw new Error(`bandsGraphs() built no ${what} graph`);
+  return v;
+};
+const lacedGraph = need(graphs.laced, "laced");
+const rivetGraph = need(graphs.rivets, "rivets");
 
 beforeAll(async () => {
   whole = (await cook(buildEiffel(1889, { rivets: true }))).outputs;
@@ -83,8 +99,8 @@ beforeAll(async () => {
 describe("a regional graph", () => {
   it("is the whole graph node for node — id, type, seed and every param — plus only its gates", () => {
     for (const [depth, regional] of [
-      [{ lacedWeb: true }, graphs.laced],
-      [{ rivets: true }, graphs.rivets],
+      [{ lacedWeb: true }, lacedGraph],
+      [{ rivets: true }, rivetGraph],
     ] as const) {
       const whole = buildEiffel(1889, depth);
       const w = whole.describe();
@@ -119,8 +135,8 @@ describe("every laced cube is the whole cook inside it", () => {
     const cells = cubes(BANDS.laced.cell);
     let through = 0;
     for (const box of cells) {
-      setRegion(graphs.laced, box);
-      const { outputs } = await cook(graphs.laced, { outputs: graphs.lacedOutputs });
+      setRegion(lacedGraph, box);
+      const { outputs } = await cook(lacedGraph, { outputs: graphs.lacedOutputs });
       for (const cls of LACED_CLASSES) {
         const mine = meshHashes(outputs[cls] ?? []);
         const inner = meshHashes(whole[cls] ?? [], boxMeets(box, -EPS));
@@ -157,8 +173,8 @@ describe("every rivet cube is the whole cook's heads seated in it", () => {
     const bad: string[] = [];
     const cells = cubes(BANDS.rivets.cell);
     for (const box of cells) {
-      setRegion(graphs.rivets, box);
-      const { outputs } = await cook(graphs.rivets, { outputs: graphs.rivetOutputs });
+      setRegion(rivetGraph, box);
+      const { outputs } = await cook(rivetGraph, { outputs: graphs.rivetOutputs });
       for (const name of graphs.rivetOutputs) {
         const mine = instanceHashes(outputs[name] ?? []);
         const theirs = instanceHashes(whole[name] ?? [], seatedIn(box));
@@ -232,5 +248,113 @@ describe("the page's World", () => {
       expect(Object.keys(world.getCell(d.level, d.coord as [number, number, number])?.outputs ?? { x: 1 })).toEqual([]);
     }
     expect(heads).toBeGreaterThan(10_000);
+  }, 600_000);
+});
+
+describe("bandsFrom", () => {
+  it("reads the radii by position over the defaults, and keeps only the levels asked for", () => {
+    expect(bandsFrom(null)).toEqual(BANDS);
+    expect(bandsFrom("")).toEqual(BANDS);
+    expect(bandsFrom("x,-5")).toEqual(BANDS);
+    expect(bandsFrom("90,30")).toEqual({ laced: { cell: 32, radius: 90 }, rivets: { cell: 16, radius: 30 } });
+    expect(bandsFrom(",30")).toEqual({ laced: BANDS.laced, rivets: { cell: 16, radius: 30 } });
+    // Positional whichever levels are kept: the second number is the rivets'.
+    const laced = bandsFrom("90,30", { laced: true, rivets: false });
+    const rivets = bandsFrom("90,30", { laced: false, rivets: true });
+    expect(laced).toEqual({ laced: { cell: 32, radius: 90 } });
+    expect(rivets).toEqual({ rivets: { cell: 16, radius: 30 } });
+    // No key at all for the level left out (toEqual would pass an undefined
+    // one), and none after the trip to the worker either.
+    expect(Object.keys(laced)).toEqual(["laced"]);
+    expect(Object.keys(structuredClone(rivets))).toEqual(["rivets"]);
+    expect(() => bandsFrom("90,30", { laced: false, rivets: false })).toThrow(/neither level/);
+    expect(finestCell(BANDS)).toBe(16);
+    expect(finestCell(laced)).toBe(32);
+    expect(finestCell(rivets)).toBe(16);
+  });
+
+  it("builds only the graphs and levels asked for, and names what is missing", () => {
+    const none = { lacedOutputs: [], rivetOutputs: [] };
+    expect(() => bandsLevels(none, {})).toThrow(/neither level/);
+    expect(() => bandsLevels(none, { rivets: BANDS.rivets })).toThrow(/"rivets" but its graph was not built/);
+    expect(bandsLevels(graphs).map((l) => l.name)).toEqual(["laced", "rivets"]);
+    expect(bandsLevels(graphs, { rivets: BANDS.rivets }).map((l) => l.name)).toEqual(["rivets"]);
+  });
+});
+
+/** Where the page's World tests stand: beside pile 4's leg, 30 m up. */
+const AT = [60, 30, 60] as const;
+
+/** The cube `coord` of side `s`. */
+const cubeAt = (coord: readonly number[], s: number): Box => ({
+  min: [coord[0]! * s, coord[1]! * s, coord[2]! * s],
+  max: [(coord[0]! + 1) * s, (coord[1]! + 1) * s, (coord[2]! + 1) * s],
+});
+
+describe("a World of one level", () => {
+  it("laced alone: laced cells, the whole cook inside each, and no rivet level or graph", async () => {
+    const spec = bandsFrom("40", { laced: true, rivets: false });
+    const delivered: Array<{ level: string; coord: readonly number[]; outputs: CellOutputs }> = [];
+    const { world, graphs: built } = bandsWorld({
+      spec,
+      onCellReady: (level, coord, outputs) => delivered.push({ level, coord: coord as readonly number[], outputs }),
+    });
+    expect(built.laced).toBeDefined();
+    expect(built.rivets).toBeUndefined();
+    expect(built.rivetOutputs).toEqual([]);
+    expect((await world.update(AT)).pending).toBe(0);
+    expect(world.stats().levels.map((l) => l.name)).toEqual(["laced"]);
+    expect(delivered.length).toBeGreaterThan(2);
+    for (const d of delivered) {
+      expect(d.level).toBe("laced");
+      const box = cubeAt(d.coord, BANDS.laced.cell);
+      expect(inEnvelope(box)).toBe(true);
+      expect(Object.keys(d.outputs).sort()).toEqual([...built.lacedOutputs].sort());
+      for (const cls of LACED_CLASSES) {
+        const mine = meshHashes(d.outputs[cls] ?? []);
+        expect(diffSorted(meshHashes(whole[cls] ?? [], boxMeets(box, -EPS)), mine).missing, `${d.coord} ${cls} lost`).toBe(0);
+        expect(diffSorted(mine, meshHashes(whole[cls] ?? [], mayCarry(box))).missing, `${d.coord} ${cls} stray`).toBe(0);
+      }
+    }
+  }, 600_000);
+
+  it("rivets alone: rivet cells at the top, with no parent, the whole cook's heads in each, and no laced level or graph", async () => {
+    const spec = bandsFrom(",30", { laced: false, rivets: true });
+    const built = bandsGraphs(1889, undefined, { laced: false, rivets: true });
+    expect(built.laced).toBeUndefined();
+    expect(built.lacedOutputs).toEqual([]);
+    // bandsWorld's levels, each bind watched for the parent it is handed.
+    const parented: boolean[] = [];
+    const levels = bandsLevels(built, spec).map((l) => ({
+      ...l,
+      bind: (graph: Graph, ctx: CellContext): void => {
+        parented.push(ctx.parent !== undefined);
+        l.bind?.(graph, ctx);
+      },
+    }));
+    const delivered: Array<{ level: string; coord: readonly number[]; outputs: CellOutputs }> = [];
+    const world = new World({
+      seed: 1889,
+      levels,
+      onCellReady: (level, coord, outputs) => delivered.push({ level, coord: coord as readonly number[], outputs }),
+    });
+    expect((await world.update(AT)).pending).toBe(0);
+    expect(world.stats().levels.map((l) => l.name)).toEqual(["rivets"]);
+    expect(delivered.length).toBeGreaterThan(2);
+    expect(parented.length).toBe(delivered.length);
+    expect(parented.every((p) => !p)).toBe(true);
+    let heads = 0;
+    for (const d of delivered) {
+      expect(d.level).toBe("rivets");
+      const box = cubeAt(d.coord, BANDS.rivets.cell);
+      const c = box.min.map((v) => v + BANDS.rivets.cell / 2);
+      expect(Math.hypot(c[0]! - AT[0], c[1]! - AT[1], c[2]! - AT[2])).toBeLessThanOrEqual(30);
+      for (const name of built.rivetOutputs) {
+        const mine = instanceHashes(d.outputs[name] ?? []);
+        expect(diffSorted(instanceHashes(whole[name] ?? [], seatedIn(box)), mine), `${d.coord} ${name}`).toEqual({ missing: 0, extra: 0 });
+        heads += mine.length;
+      }
+    }
+    expect(heads).toBeGreaterThan(1000);
   }, 600_000);
 });

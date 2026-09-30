@@ -14,7 +14,8 @@
  * the worker runs one `World.update` after another from the latest
  * position until nothing it wants is left to cook, then sleeps until the
  * next move. An update in flight is ABORTED when the camera has moved
- * more than a rivet cell from where it began — the cell being cooked is
+ * more than the finest streamed cell (a rivet cell, unless the rivets are
+ * not streamed) from where it began — the cell being cooked is
  * dropped half way and the next update starts from where the camera now
  * is, nearest cell first — so the queue follows the camera instead of
  * finishing a list for a place it has left.
@@ -32,6 +33,7 @@ import {
   type MeshPayload,
   type RivetPayload,
   bandsWorld,
+  finestCell,
 } from "./bands.js";
 import { HEAD_DRIVE_ATTR } from "./heads.js";
 import type { CrossPlate, PartClass } from "./parts.js";
@@ -64,7 +66,7 @@ function start(spec: BandsSpec, crossPlate: Partial<CrossPlate>): (at: Vec3) => 
     crossPlate,
     // Every cell a level keeps is ALSO the page's meshes: the World need
     // not hold its outputs once they have crossed (`keepOutputs: false`
-    // on both levels), and a resident cell is never cooked twice.
+    // on every level), and a resident cell is never cooked twice.
     maxCellsPerLevel: 4096,
     onCellReady: (level, coord, outputs) => {
       cooked++;
@@ -81,7 +83,10 @@ function start(spec: BandsSpec, crossPlate: Partial<CrossPlate>): (at: Vec3) => 
   let from: Vec3 | undefined;
   let ctrl: AbortController | undefined;
   let pumping = false;
-  const far = (a: Vec3, b: Vec3): boolean => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) > spec.rivets.cell;
+  const finest = finestCell(spec);
+  const far = (a: Vec3, b: Vec3): boolean => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) > finest;
+  // By name: a level the spec leaves out is not in the World at all.
+  const resident = (name: BandLevel): number => world.stats().levels.find((l) => l.name === name)?.cellCount ?? 0;
 
   const pump = async (): Promise<void> => {
     pumping = true;
@@ -101,12 +106,11 @@ function start(spec: BandsSpec, crossPlate: Partial<CrossPlate>): (at: Vec3) => 
         cancelled++;
         pending = 1;
       }
-      const s = world.stats();
       const memory = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
       post({
         type: "status",
-        laced: s.levels[0]?.cellCount ?? 0,
-        rivets: s.levels[1]?.cellCount ?? 0,
+        laced: resident("laced"),
+        rivets: resident("rivets"),
         pending,
         cooked,
         evicted,

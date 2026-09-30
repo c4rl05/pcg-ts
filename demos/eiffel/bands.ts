@@ -2,16 +2,21 @@
  * DETAIL BY DISTANCE: the tower's two finer depths streamed around the
  * camera by the library's runtime, rather than cooked for the whole tower.
  *
- * The page's own cook is the plain tower, whole and always present. Above
- * it this file stands a `World` of two cube-celled levels:
+ * The page's own cook is the whole tower, always present. Above it this
+ * file stands a `World` of up to two cube-celled levels, either of which
+ * the page may leave out ({@link BandsSpec}):
  *
  * - `laced`: every web member as four angles laced in X, with the gussets
  *   and the as-built uprights (`Detail.lacedWeb`), in {@link BANDS}.laced
- *   cells, cooked for the cells whose centre lies within its radius;
+ *   cells, cooked for the cells whose centre lies within its radius. The
+ *   page's cook under it is the plain tower, cut away where a cell has
+ *   arrived (bandsView.ts);
  * - `rivets`: every head (`Detail.rivets`), in the finer cells of
- *   {@link BANDS}.rivets, nearer still. A rivet cell cooks only once the
- *   laced cell holding it has (the World's parent rule), so heads never
- *   stand on a solid bar.
+ *   {@link BANDS}.rivets, nearer still. Under a laced level a rivet cell
+ *   cooks only once the laced cell holding it has (the World's parent
+ *   rule), so heads never stand on a solid bar; alone, it is the top level,
+ *   and the page's cook under it is already the laced tower whole, so it
+ *   has nothing to wait on and the page nothing to cut.
  *
  * Each level cooks ONE regional graph (`region.ts`): the whole tower's
  * graph at that depth, node for node and seed for seed, whose gates the
@@ -54,10 +59,26 @@ import { profileAt } from "./spec.js";
  */
 export const LACED_CLASSES: readonly PartClass[] = ["uprights", "bracing", "horizontals", "girders", "arches", "gussets"];
 
-/** The cells and how far out each depth is cooked, in metres. */
+/** One level's cube and how far out it is cooked, in metres. */
+export interface BandSpec {
+  readonly cell: number;
+  readonly radius: number;
+}
+
+/**
+ * The levels a bands World streams: a level left out is not streamed and
+ * its graph is never built. At least one is present ({@link bandsLevels}
+ * throws otherwise).
+ */
 export interface BandsSpec {
-  readonly laced: { readonly cell: number; readonly radius: number };
-  readonly rivets: { readonly cell: number; readonly radius: number };
+  readonly laced?: BandSpec;
+  readonly rivets?: BandSpec;
+}
+
+/** Which levels to stream. */
+export interface BandsWhich {
+  readonly laced: boolean;
+  readonly rivets: boolean;
 }
 
 /**
@@ -67,38 +88,68 @@ export interface BandsSpec {
  * a 19 mm head is a pixel at 27 m. The cells are the World's cubes, laced
  * twice the rivets' (a level's cell must be finer than the one above it).
  */
-export const BANDS: BandsSpec = {
+export const BANDS: Required<BandsSpec> = {
   laced: { cell: 32, radius: 120 },
   rivets: { cell: 16, radius: 40 },
 };
 
-/** Read `?bands=<laced radius>,<rivets radius>` over the defaults. */
-export function bandsFrom(param: string | null): BandsSpec {
+const BOTH: BandsWhich = { laced: true, rivets: true };
+
+/**
+ * Read `?bands=<laced radius>,<rivets radius>` over the defaults, keeping
+ * only the levels in `which`. The radii are read by position whichever
+ * levels are kept, so `?bands=,30` sets the rivets' alone.
+ */
+export function bandsFrom(param: string | null, which: BandsWhich = BOTH): BandsSpec {
+  if (!which.laced && !which.rivets) {
+    throw new Error("eiffel bands: bandsFrom was asked for neither level; ask for laced, rivets or both");
+  }
   const [l, r] = (param ?? "").split(",").map(Number);
   const pick = (v: number | undefined, d: number): number => (v !== undefined && Number.isFinite(v) && v > 0 ? v : d);
+  // No key at all for a level left out: the spec crosses to the worker by
+  // structured clone, and `in` or `Object.keys` should not see a ghost.
   return {
-    laced: { ...BANDS.laced, radius: pick(l, BANDS.laced.radius) },
-    rivets: { ...BANDS.rivets, radius: pick(r, BANDS.rivets.radius) },
+    ...(which.laced ? { laced: { ...BANDS.laced, radius: pick(l, BANDS.laced.radius) } } : {}),
+    ...(which.rivets ? { rivets: { ...BANDS.rivets, radius: pick(r, BANDS.rivets.radius) } } : {}),
   };
 }
 
-/** The two regional graphs a bands World cooks, and what each level puts out. */
+/** The levels `spec` streams; throws when it streams none. */
+function levelsOf(spec: BandsSpec): BandsWhich {
+  const which = { laced: spec.laced !== undefined, rivets: spec.rivets !== undefined };
+  if (!which.laced && !which.rivets) throw new Error("eiffel bands: the spec streams neither level; give it laced, rivets or both");
+  return which;
+}
+
+/** The finest cell `spec` streams, metres. */
+export function finestCell(spec: BandsSpec): number {
+  levelsOf(spec);
+  return Math.min(spec.laced?.cell ?? Number.POSITIVE_INFINITY, spec.rivets?.cell ?? Number.POSITIVE_INFINITY);
+}
+
+/** The regional graphs a bands World cooks, and what each level puts out. A level not built is absent. */
 export interface BandsGraphs {
-  readonly laced: Graph;
-  readonly rivets: Graph;
+  readonly laced?: Graph;
+  readonly rivets?: Graph;
+  /** Empty when `laced` is absent. */
   readonly lacedOutputs: readonly string[];
+  /** Empty when `rivets` is absent. */
   readonly rivetOutputs: readonly string[];
 }
 
-/** Build the two regional graphs, at the page's by-eye plate dimensions. */
-export function bandsGraphs(seed = 1889, crossPlate?: Partial<CrossPlate>): BandsGraphs {
+/**
+ * Build the regional graphs `which` asks for, at the page's by-eye plate
+ * dimensions. Only those: each is the whole tower's graph construction,
+ * paid for nothing when its level is not streamed.
+ */
+export function bandsGraphs(seed = 1889, crossPlate?: Partial<CrossPlate>, which: BandsWhich = BOTH): BandsGraphs {
   const plate = crossPlate === undefined ? {} : { crossPlate };
-  const laced = buildEiffel(seed, { lacedWeb: true, region: true, ...plate });
-  const rivets = buildEiffel(seed, { rivets: true, region: true, ...plate });
-  const declared = (g: Graph): string[] => g.describe().outputs.map((o) => o.name);
+  const laced = which.laced ? buildEiffel(seed, { lacedWeb: true, region: true, ...plate }) : undefined;
+  const rivets = which.rivets ? buildEiffel(seed, { rivets: true, region: true, ...plate }) : undefined;
+  const declared = (g: Graph | undefined): string[] => g?.describe().outputs.map((o) => o.name) ?? [];
   return {
-    laced,
-    rivets,
+    ...(laced === undefined ? {} : { laced }),
+    ...(rivets === undefined ? {} : { rivets }),
     lacedOutputs: declared(laced).filter((n) => (LACED_CLASSES as readonly string[]).includes(n)),
     rivetOutputs: declared(rivets).filter((n) => n.startsWith("rivets.")),
   };
@@ -133,40 +184,41 @@ function bindCell(graph: Graph, ctx: CellContext): void {
   setRegion(graph, { min: ctx.min, max: ctx.max });
 }
 
-/** The two levels, over the graphs {@link bandsGraphs} built. */
+/**
+ * The levels `spec` streams, over the graphs {@link bandsGraphs} built:
+ * `laced` above `rivets` when both (so a rivet cell waits on its laced
+ * parent), else the one alone, as the top level.
+ */
 export function bandsLevels(graphs: BandsGraphs, spec: BandsSpec = BANDS): LevelDef[] {
-  return [
-    {
-      name: "laced",
-      cellSize: spec.laced.cell,
+  levelsOf(spec);
+  const level = (name: BandLevel, band: BandSpec, graph: Graph | undefined, outputs: readonly string[]): LevelDef => {
+    if (graph === undefined) {
+      throw new Error(`eiffel bands: the spec streams "${name}" but its graph was not built; pass bandsGraphs a \`which\` with ${name}: true`);
+    }
+    return {
+      name,
+      cellSize: band.cell,
       cellMode: "xyz",
-      generationRadius: spec.laced.radius,
-      graph: graphs.laced,
-      cookOutputs: graphs.lacedOutputs,
+      generationRadius: band.radius,
+      graph,
+      cookOutputs: outputs,
       cellFilter: inEnvelope,
       keepOutputs: false,
       bind: bindCell,
-    },
-    {
-      name: "rivets",
-      cellSize: spec.rivets.cell,
-      cellMode: "xyz",
-      generationRadius: spec.rivets.radius,
-      graph: graphs.rivets,
-      cookOutputs: graphs.rivetOutputs,
-      cellFilter: inEnvelope,
-      keepOutputs: false,
-      bind: bindCell,
-    },
-  ];
+    };
+  };
+  const levels: LevelDef[] = [];
+  if (spec.laced !== undefined) levels.push(level("laced", spec.laced, graphs.laced, graphs.lacedOutputs));
+  if (spec.rivets !== undefined) levels.push(level("rivets", spec.rivets, graphs.rivets, graphs.rivetOutputs));
+  return levels;
 }
 
-/** A bands World: {@link bandsLevels} over fresh {@link bandsGraphs}. */
+/** A bands World: {@link bandsLevels} over fresh {@link bandsGraphs}, only the graphs `spec` streams built. */
 export function bandsWorld(
   opts: Omit<WorldOptions, "seed" | "levels"> & { spec?: BandsSpec; crossPlate?: Partial<CrossPlate>; seed?: number } = {},
 ): { world: World; graphs: BandsGraphs } {
-  const { spec, crossPlate, seed, ...rest } = opts;
-  const graphs = bandsGraphs(seed ?? 1889, crossPlate);
+  const { spec = BANDS, crossPlate, seed, ...rest } = opts;
+  const graphs = bandsGraphs(seed ?? 1889, crossPlate, levelsOf(spec));
   const world = new World({ seed: seed ?? 1889, levels: bandsLevels(graphs, spec), ...rest });
   return { world, graphs };
 }
@@ -235,6 +287,7 @@ export type BandsOut =
   | { readonly type: "evict"; readonly level: BandLevel; readonly coord: readonly [number, number, number] }
   | {
       readonly type: "status";
+      /** Resident cells per level; 0 for a level the spec leaves out. */
       readonly laced: number;
       readonly rivets: number;
       readonly pending: number;

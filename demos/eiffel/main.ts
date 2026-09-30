@@ -112,6 +112,7 @@ import { type Bands, startBands } from "./bandsView.js";
 import { isoOf } from "./chronology.js";
 import { flatMaterial, flatShaderProblem, teachFlat, unlitMaterial } from "./flat.js";
 import { attachKeyMove } from "./keyMove.js";
+import { type Depth, DEPTHS, cookedDetail, depthParams, pageDepth, streamed } from "./depth.js";
 import { buildEiffel } from "./graph.js";
 import {
   CHAIN_ASSETS,
@@ -307,7 +308,7 @@ const PACKED_SITE = packedRivetMaterial(RIVET_SITE);
  *   chains, not the machinery that stands still (the "machinery" class),
  *   nor the tracks and guide posts, which are girders.
  * - rivets: every rivet output, packed or drawn as matrices, and at
- *   `?bands` every rivet cell as it streams in.
+ *   streamed rivets every rivet cell as it streams in.
  */
 const HIGHLIGHTS = ["stairs", "lifts", "rivets"] as const;
 type Highlight = (typeof HIGHLIGHTS)[number];
@@ -784,50 +785,153 @@ const buildSlot = overlay.addSlot();
 /** The scrubber, once `?build` has staged the tower; the loop plays it. */
 let scrubber: ReturnType<typeof attachScrubber> | undefined;
 
-// DETAIL BY DISTANCE (`?bands`, or `?bands=<laced m>,<rivets m>` for the
-// two radii): the plain tower cooked whole as ever, and the laced and
-// riveted depths cooked round the camera by the runtime's World, off the
-// page's thread, a cube at a time (bands.ts, bandsView.ts). Not with
-// `?build`, whose staging dates the whole cook's meshes.
-const BANDS = new URLSearchParams(location.search).has("bands") && !BUILD;
+// THE DEPTH (depth.ts): how far the lacing and the rivets go, each off,
+// streamed or whole. A streamed axis is cooked round the camera by the
+// runtime's World, off the page's thread, a cube at a time (bands.ts,
+// bandsView.ts), over the tower cooked whole at the depth below it.
+const DEPTH = pageDepth(location.search);
+/** The levels streamed, if any; undefined when everything is cooked whole. */
+const STREAMED = streamed(DEPTH);
 /** The streamed depths, once the plain tower is drawn; the loop ticks them. */
 let bands: Bands | undefined;
 
-// THE DETAIL LEVELS, as links rather than a control: each is a plain URL
-// (the page reads it once, at load, and cooks at that depth), so a level
-// can be bookmarked or sent, and each link carries the current camera pose
-// in `cam`, so moving between levels keeps the view — the point of having
-// them side by side is to compare the same spot at each depth.
-const DETAILS = [
-  { key: "", label: "skeleton", title: "solid members: the panels and their rules" },
-  { key: "laced", label: "laced", title: "every web member as four angles laced in X" },
-  { key: "rivets", label: "rivets", title: "laced, and every rivet as an instance" },
-  { key: "bands", label: "streamed", title: "laced and riveted round the camera, cooked as it moves" },
-] as const;
+// THE DEPTH, at the top of the panel: one row per axis, a choice staged
+// here and "apply" to open the page at it. The page reads its depth once,
+// at load, so a change is a new URL — which can be bookmarked or sent — and
+// that URL carries the current camera pose in `cam`, so the view survives
+// the reload: the point of changing depth is to compare the same spot.
+const DEPTH_TITLES: Record<"laced" | "rivets", Record<Depth, string>> = {
+  laced: {
+    off: "the web members as solid bars",
+    streamed: "every web member as four angles laced in X, round the camera, cooked as it moves",
+    whole: "every web member as four angles laced in X, the whole tower at once",
+  },
+  rivets: {
+    off: "no rivets",
+    streamed: "every rivet as an instance, round the camera, cooked as it moves",
+    whole: "every rivet on the tower as an instance, at once",
+  },
+};
+const staged: Record<"laced" | "rivets", Depth> = { laced: DEPTH.laced, rivets: DEPTH.rivets };
+const depthRadios: Record<"laced" | "rivets", HTMLInputElement[]> = { laced: [], rivets: [] };
+// A framed section with its own heading, so it reads apart from the
+// caption above and the live controls below, and so its button reads as
+// belonging to it: nothing here takes effect until that button reloads.
+const depthSlot = overlay.addSlot("top");
+const depthSection = document.createElement("section");
+depthSection.setAttribute("aria-labelledby", "depth-heading");
+depthSection.style.cssText = "border:1px solid var(--ed-edge);padding:8px 10px 10px";
+const depthHeading = document.createElement("h2");
+depthHeading.id = "depth-heading";
+depthHeading.textContent = "Detail";
+depthHeading.style.cssText = "margin:0 0 2px;font-size:13px;font-weight:600;color:var(--ed-ink-hi)";
+depthSection.append(depthHeading);
+depthSlot.append(depthSection);
+for (const ax of ["laced", "rivets"] as const) {
+  const row = document.createElement("div");
+  row.className = "pcg-row";
+  const name = document.createElement("label");
+  name.textContent = ax;
+  // Narrower than the panel's 96px label column, so the three choices
+  // hold one line inside the section's frame.
+  name.style.flexBasis = "46px";
+  const group = document.createElement("div");
+  group.setAttribute("role", "radiogroup");
+  group.setAttribute("aria-label", ax);
+  group.style.cssText = "display:flex;gap:0.9em;white-space:nowrap";
+  for (const d of DEPTHS) {
+    const option = document.createElement("label");
+    option.style.cssText = "display:inline-flex;gap:0.3em;align-items:center;cursor:pointer";
+    option.title = DEPTH_TITLES[ax][d];
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = `depth-${ax}`;
+    radio.value = d;
+    radio.style.cssText = "margin:0;accent-color:var(--ed-accent)";
+    // Nothing streams under `?build` (depth.ts), so it is not offered.
+    if (BUILD && d === "streamed") {
+      radio.disabled = true;
+      option.title = "not with build: the staging dates the whole cook";
+      option.style.opacity = "0.4";
+      option.style.cursor = "default";
+    }
+    radio.addEventListener("change", () => stageDepth(ax, d));
+    option.append(radio, d);
+    group.append(option);
+    depthRadios[ax].push(radio);
+  }
+  row.append(name, group);
+  depthSection.append(row);
+}
+const applyButton = document.createElement("button");
+applyButton.type = "button";
+applyButton.textContent = "apply detail changes";
+applyButton.style.cssText =
+  "cursor:pointer;background:none;border:1px solid currentColor;border-radius:4px;color:inherit;opacity:0.8;padding:0.15em 0.7em";
+applyButton.addEventListener("click", applyDepth);
+// A whole axis is the whole tower cooked on this page's thread at load.
+// Numbers from the guide's table (Node, performance cores) and the page's
+// own measurements; a browser cooks slower, hence "or more".
+const depthWarning = document.createElement("p");
+depthWarning.setAttribute("role", "status");
+depthWarning.style.cssText =
+  "margin:8px 0 0;padding:6px 8px;background:var(--ed-alert-bg);border-left:2px solid var(--ed-edge-warn);" +
+  "color:var(--ed-ink);font-size:12px";
+applyButton.style.marginTop = "4px";
+depthSection.append(applyButton, depthWarning);
 
-function currentDetail(): string {
-  const params = new URLSearchParams(location.search);
-  return BANDS ? "bands" : params.has("rivets") ? "rivets" : params.has("laced") ? "laced" : "";
+function stageDepth(ax: "laced" | "rivets", d: Depth): void {
+  staged[ax] = d;
+  // The rivets never go further than the lacing they sit on (depth.ts).
+  const at = (x: Depth): number => DEPTHS.indexOf(x);
+  if (ax === "laced" && at(staged.rivets) > at(d)) staged.rivets = d;
+  if (ax === "rivets" && at(staged.laced) < at(d)) staged.laced = d;
+  paintDepth();
 }
 
-const detailSlot = overlay.addSlot();
-const detailRow = document.createElement("div");
-detailRow.style.cssText = "display:flex;gap:0.9em;align-items:baseline";
-const detailLabel = document.createElement("span");
-detailLabel.textContent = "detail";
-detailLabel.style.opacity = "0.7";
-detailRow.append(detailLabel);
-const detailLinks = DETAILS.map((d) => {
-  const a = document.createElement("a");
-  a.textContent = d.label;
-  a.title = d.title;
-  a.style.cssText = "color:inherit;text-underline-offset:3px";
-  detailRow.append(a);
-  return { d, a };
-});
-detailSlot.append(detailRow);
+function paintDepth(): void {
+  for (const ax of ["laced", "rivets"] as const) {
+    for (const radio of depthRadios[ax]) radio.checked = radio.value === staged[ax];
+  }
+  const changed = staged.laced !== DEPTH.laced || staged.rivets !== DEPTH.rivets;
+  applyButton.disabled = !changed;
+  applyButton.style.opacity = changed ? "1" : "0.35";
+  applyButton.style.cursor = changed ? "pointer" : "default";
+  applyButton.title = changed
+    ? "reopen the page at this detail, from this view"
+    : "pick a different detail above to apply it";
+  const warning =
+    staged.rivets === "whole"
+      ? "Whole rivets: 1.2 million instances over 4 million triangles. The cook takes 10 s or more " +
+        "and a few hundred MB, and the page stalls while it runs."
+      : staged.laced === "whole"
+        ? "Whole lacing: 4 million triangles. The cook takes several seconds, and the page stalls while it runs."
+        : "";
+  depthWarning.textContent = warning;
+  depthWarning.hidden = warning === "";
+}
+paintDepth();
 
-// THE HIGHLIGHTS (see `HIGHLIGHTS`), a row under the detail links: each
+function applyDepth(): void {
+  const p = camera.position;
+  const t = controls.target;
+  const cam = [p.x, p.y, p.z, t.x, t.y, t.z].map((v) => v.toFixed(2)).join(",");
+  // The radii ride along while anything still streams. `still` rides along
+  // with the pose: a scripted capture that moves between depths would
+  // never settle on a page that started its lifts again.
+  const radii = new URLSearchParams(location.search).get("bands");
+  const streaming = staged.laced === "streamed" || staged.rivets === "streamed";
+  const query = [
+    ...depthParams(staged.laced, staged.rivets, DEPTH.fullRivets),
+    streaming && radii ? `bands=${radii}` : "",
+    STILL ? "still" : "",
+    BUILD ? "build" : "",
+    `cam=${cam}`,
+  ].filter(Boolean);
+  location.href = `?${query.join("&")}`;
+}
+
+// THE HIGHLIGHTS (see `HIGHLIGHTS`), a row of their own: each
 // checkbox tinted its paint. Cooked meshes that arrive later take the
 // paint as they are drawn, so the row works before the cook is done.
 const highlightSlot = overlay.addSlot();
@@ -851,28 +955,6 @@ for (const h of HIGHLIGHTS) {
 }
 if (FLAT_PROBLEM !== undefined) highlightRow.title = FLAT_PROBLEM;
 highlightSlot.append(highlightRow);
-
-/** Point every level's link at the current view. */
-function refreshDetailLinks(): void {
-  const p = camera.position;
-  const t = controls.target;
-  const cam = [p.x, p.y, p.z, t.x, t.y, t.z].map((v) => v.toFixed(2)).join(",");
-  const here = currentDetail();
-  for (const { d, a } of detailLinks) {
-    // `still` rides along with the pose, for the same reason: a scripted
-    // capture moves between depths by following these links, and a page
-    // that started its lifts again at the next depth would never settle.
-    const query = [d.key, STILL ? "still" : "", BUILD ? "build" : "", `cam=${cam}`].filter(Boolean).join("&");
-    a.href = `?${query}`;
-    const current = d.key === here;
-    a.style.fontWeight = current ? "600" : "400";
-    a.style.opacity = current ? "1" : "0.75";
-    if (current) a.setAttribute("aria-current", "page");
-    else a.removeAttribute("aria-current");
-  }
-}
-controls.addEventListener("end", refreshDetailLinks);
-refreshDetailLinks();
 
 // COPY VIEW: everything it takes to open this page on the frame it shows
 // now, as one line of URL and one of JSON, for pasting into an issue or a
@@ -952,7 +1034,7 @@ function copyableView(): string {
     fov: r(camera.fov, 2),
     viewport: [window.innerWidth, window.innerHeight],
     dpr: r(renderer.getPixelRatio(), 2),
-    detail: currentDetail() || "skeleton",
+    detail: { laced: DEPTH.laced, rivets: DEPTH.rivets },
     show: showing,
     section: sectioned,
     site: siteLit,
@@ -1059,7 +1141,6 @@ const keyMove = attachKeyMove({
   camera,
   controls,
   enabled: () => !walk.active && !driven && plates?.active !== true,
-  moved: refreshDetailLinks,
 });
 
 // Claimed here, where the panel is built, so the graph sits under the
@@ -1155,16 +1236,15 @@ function draw(
 async function main(): Promise<void> {
   const problems: string[] = [];
   statCook("cooking…");
-  // `?laced` builds the web bars as laced lattice struts (about 2.9M
-  // triangles more): the second of the tower's self-similar scales.
-  // `?rivets` sets rivets on them as instances, and so implies `?laced`;
+  // Whole lacing builds the web bars as laced lattice struts (about 2.9M
+  // triangles more): the second of the tower's self-similar scales. Whole
+  // rivets set rivets on them as instances, and so imply whole lacing;
   // `?rivets=full` adds the built-up uprights' rows as built (about 120,000
-  // heads more, `Detail.fullRivets`).
+  // heads more, `Detail.fullRivets`). A streamed axis is cooked here at the
+  // depth below it, and streamed over that (bands.ts). depth.ts reads the
+  // query, and the golden (tests/support/eiffelGolden.ts) reads it the same.
   const params = new URLSearchParams(location.search);
-  // `?bands` cooks the plain tower here and streams the rest (bands.ts).
-  const rivets = !BANDS && params.has("rivets");
-  const fullRivets = rivets && params.get("rivets") === "full";
-  const laced = !BANDS && (params.has("laced") || rivets);
+  const { lacedWeb: laced, rivets, fullRivets } = cookedDetail(DEPTH);
   // `?plateSet=` and `?plateEdge=` are the crossing plates' two by-eye
   // dimensions (`CrossPlate` in parts.ts), in metres, while they are being
   // settled: the plate's depth under the corner angles and its half-width
@@ -1407,11 +1487,11 @@ async function main(): Promise<void> {
     window.pcgEiffelBuild = { setDay: (iso) => scrubber?.set(buildDayParam(iso)) };
   }
 
-  // `?bands`: the finer depths, streamed over the plain tower just drawn.
-  if (BANDS) {
+  // The streamed depths, over the tower just drawn.
+  if (STREAMED !== undefined) {
     bands = startBands({
       scene,
-      spec: bandsFrom(params.get("bands")),
+      spec: bandsFrom(params.get("bands"), STREAMED),
       crossPlate,
       materials: MATERIALS,
       meshes,

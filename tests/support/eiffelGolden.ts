@@ -21,8 +21,8 @@
  * count, packed transforms and every per-instance channel (sorted by name;
  * `colors` is a view of one of them). Item tags are hashed too, sorted.
  *
- * DEPTHS are the page's own: {@link pageDetail} is main.ts's query ->
- * `Detail` mapping, copied, so the golden cooks exactly what `?rivets`,
+ * DEPTHS are the page's own: {@link pageDetail} reads the query through
+ * the page's own depth.ts, so the golden cooks exactly what `?rivets`,
  * `?rivets=full` or `?build` cooks in the browser.
  *
  * ORDER IS HASHED: points, primitives and instances in the order the cook
@@ -36,6 +36,7 @@
  */
 import { type Attribute, type DataCollection, type Geometry, type InstancesItem, cook } from "pcg-ts";
 import { buildEiffel } from "../../demos/eiffel/graph.js";
+import { cookedDetail, pageDepth } from "../../demos/eiffel/depth.js";
 import type { Detail } from "../../demos/eiffel/parts.js";
 
 /** One output's digest: its counts, summed over its items, and its hash. */
@@ -243,19 +244,14 @@ function tuned<K extends string>(params: URLSearchParams, keys: Record<K, string
 }
 
 /**
- * The `Detail` demos/eiffel/main.ts builds from a page query, copied line
- * for line (`BUILD`, `BANDS`, then the block in `main()` that calls
- * `buildEiffel`); main.ts cannot be imported here, it builds a page as it
- * loads. Keep the two in step: a depth the page cooks differently from
- * this is a depth the golden does not pin.
+ * The `Detail` demos/eiffel/main.ts builds from a page query: the depth
+ * through depth.ts, which the page imports too, and the crossing plates
+ * through `tuned`, copied (main.ts cannot be imported here, it builds a
+ * page as it loads). A depth the page cooks differently from this is a
+ * depth the golden does not pin.
  */
 export function pageDetail(search: string): Detail {
   const params = new URLSearchParams(search);
-  const BUILD = params.has("build");
-  const BANDS = params.has("bands") && !BUILD;
-  const rivets = !BANDS && params.has("rivets");
-  const fullRivets = rivets && params.get("rivets") === "full";
-  const laced = !BANDS && (params.has("laced") || rivets);
   const crossPlate = tuned(params, { set: "plateSet", edge: "plateEdge" });
-  return { lacedWeb: laced, rivets, fullRivets, crossPlate, build: BUILD };
+  return { ...cookedDetail(pageDepth(params)), crossPlate };
 }

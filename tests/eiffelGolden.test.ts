@@ -82,16 +82,15 @@ function differences(want: Record<string, OutputDigest>, got: Record<string, Out
 }
 
 describe("eiffel cooked output against the golden", () => {
-  it("pageDetail is still main.ts's query -> Detail mapping, line for line", () => {
-    // main.ts cannot be imported (it builds a page as it loads), so the
-    // support copies its mapping; this fails when the page's copy moves.
+  it("pageDetail is still main.ts's query -> Detail mapping", () => {
+    // main.ts cannot be imported (it builds a page as it loads). The depth
+    // is read by depth.ts, which both import; the lines around it are
+    // checked here, and fail when the page stops reading it that way.
     const main = readFileSync(fileURLToPath(new URL("../demos/eiffel/main.ts", import.meta.url)), "utf8");
     for (const line of [
       'const BUILD = new URLSearchParams(location.search).has("build");',
-      'const BANDS = new URLSearchParams(location.search).has("bands") && !BUILD;',
-      'const rivets = !BANDS && params.has("rivets");',
-      'const fullRivets = rivets && params.get("rivets") === "full";',
-      'const laced = !BANDS && (params.has("laced") || rivets);',
+      "const DEPTH = pageDepth(location.search);",
+      "const { lacedWeb: laced, rivets, fullRivets } = cookedDetail(DEPTH);",
       'const crossPlate = tuned(params, { set: "plateSet", edge: "plateEdge" });',
       "const graph = buildEiffel(1889, { lacedWeb: laced, rivets, fullRivets, crossPlate, build: BUILD });",
     ]) {
@@ -100,6 +99,9 @@ describe("eiffel cooked output against the golden", () => {
     expect(pageDetail("?rivets")).toEqual({ lacedWeb: true, rivets: true, fullRivets: false, crossPlate: {}, build: false });
     expect(pageDetail("?rivets=full")).toMatchObject({ lacedWeb: true, rivets: true, fullRivets: true });
     expect(pageDetail("?build")).toMatchObject({ lacedWeb: false, rivets: false, build: true });
+    // A streamed axis cooks the depth below it whole.
+    expect(pageDetail("?bands")).toMatchObject({ lacedWeb: false, rivets: false });
+    expect(pageDetail("?laced&rivets=streamed")).toMatchObject({ lacedWeb: true, rivets: false });
   });
 
   it("hashes a typed array's type, not only its bits: f32 and u32 with equal bytes differ", () => {

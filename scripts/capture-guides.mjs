@@ -93,8 +93,8 @@ const QUALITY = 0.8;
  * aspect equal to `out`'s), optional `ui: true` to keep the page chrome,
  * optional `quality`.
  *
- * Depths are named as the page's own detail links name them: the bare path
- * is "skeleton", then `?laced` and `?rivets`.
+ * Depths are the page's own query (demos/eiffel/depth.ts): the bare path
+ * is the skeleton, `?laced` whole lacing and `?rivets` whole rivets.
  */
 const GUIDES = {
   eiffel: {
@@ -177,9 +177,9 @@ const GUIDES = {
       // passengers changed cars.
       { id: "shaft-landing", query: "laced&cam=-20,205,32,0,196,0", out: [1720, 968] },
 
-      // The page as it opens, chrome and all: the control panel's per-class
-      // triangle counts, the skeleton / laced / rivets links and the graph
-      // thumbnail. The opening pose, named so a change to it does not
+      // The page as it opens, chrome and all: the control panel's depth
+      // choices (laced and rivets: off / streamed / whole), its controls,
+      // the folded stats and the graph thumbnail. The opening pose, named so a change to it does not
       // reframe this figure.
       { id: "page-ui", query: "cam=360,140,470,0,110,0", out: [1720, 968], ui: true },
     ],

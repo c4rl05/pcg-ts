@@ -165,8 +165,8 @@ export interface Detail {
    * Build the tower to be cooked a region at a time (`region.ts`): the
    * same graph, node for node, plus gates and clips whose box
    * `setRegion` moves, so one cell's output is exactly the whole cook's
-   * inside that cell. The page's `?bands` streams the laced and riveted
-   * depths this way (`bands.ts`).
+   * inside that cell. The page streams the laced and riveted depths
+   * this way (`bands.ts`, `depth.ts`).
    */
   readonly region?: boolean;
 }

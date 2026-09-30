@@ -167,6 +167,9 @@ function injectStyles(): void {
 /* A slot its tenant never filled (a tool that did not load, a feature the
    page's depth leaves off) draws nothing, rather than a rule and a gap. */
 .pcg-overlay .pcg-slot:empty { display: none; }
+/* A slot at the top sits between the caption and the controls. It draws
+   no rule of its own: what fills it frames itself, as a section. */
+.pcg-overlay .pcg-slot-top { margin: 12px 0 12px; padding: 0; border-top: 0; }
 /* The chevron only exists for the bottom-sheet layout below; on desktop the
    title is not a toggle, so the glyph stays hidden. */
 .pcg-overlay .pcg-chevron { display: none; }
@@ -237,9 +240,11 @@ export interface Overlay {
    * Appended, like {@link Overlay.addCollapsible} and
    * {@link Overlay.addNote} and for the same reason: some pages find the
    * controls container as `.pcg-stats.previousElementSibling`, so nothing
-   * may be inserted between those two.
+   * may be inserted between those two. `"top"` puts it under the caption
+   * instead, above the controls — which keeps that pair adjacent — for the
+   * one choice a page wants read first; top slots stack in call order.
    */
-  addSlot(): HTMLDivElement;
+  addSlot(where?: "top" | "bottom"): HTMLDivElement;
 }
 
 /** Create the overlay panel and attach it to the page. */
@@ -481,10 +486,11 @@ export function createOverlay(opts: {
       p.textContent = text;
       el.appendChild(p);
     },
-    addSlot() {
+    addSlot(where = "bottom") {
       const div = document.createElement("div");
-      div.className = "pcg-slot";
-      el.appendChild(div);
+      div.className = where === "top" ? "pcg-slot pcg-slot-top" : "pcg-slot";
+      if (where === "top") el.insertBefore(div, controls);
+      else el.appendChild(div);
       return div;
     },
   };
