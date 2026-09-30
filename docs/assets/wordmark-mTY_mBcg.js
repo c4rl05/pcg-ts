@@ -34,10 +34,13 @@ https://svelte.dev/e/state_proxy_unmount`,Mb,Nb)}function qb(){console.warn("%c[
 .pcg-wordmark {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: 20px; z-index: 10;
   display: block; line-height: 0;
-  color: var(--ed-ink); opacity: 0.45;
-  transition: opacity 0.15s;
+  /* Solid white under difference: white over black is white, white over
+     white is black, so the mark reads over a night sky and a pale ground
+     alike without a theme to pick a colour from. A fixed element blends
+     with the page's root stacking context, which is where every demo's
+     canvas is drawn. */
+  color: #fff; mix-blend-mode: difference;
 }
-.pcg-wordmark:hover, .pcg-wordmark:focus-visible { opacity: 0.9; }
 .pcg-wordmark svg { height: 13px; width: auto; display: block; }
 /* Below the shared breakpoint the overlay becomes a full-width bottom
    sheet and takes this edge. See shared/mobile.ts. */
