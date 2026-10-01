@@ -118,6 +118,14 @@ export interface InkSpec {
   readonly inner: number;
   readonly crease: number;
   /**
+   * A gap narrower than this, in canvas pixels, is outlined at the inner
+   * contours' weight rather than as a silhouette: the paper glimpsed
+   * between the bars of a lattice is a gap in it, and ringed at full
+   * weight a dense lattice reads as a perforated sheet. 0 outlines every
+   * gap as a silhouette.
+   */
+  readonly gap: number;
+  /**
    * How far a far line takes the colour under it rather than the ink's,
    * 0 to 1, by the same distance as the fade: a faded grey line over a
    * rose wash greys the whole lattice, where a darker rose keeps it rose.
@@ -158,6 +166,7 @@ export const INK_DEFAULT: InkSpec = {
   fadeFloor: 1,
   inner: 1,
   crease: 1,
+  gap: 0,
   farTint: 0,
 };
 
@@ -206,6 +215,7 @@ const FRAGMENT = /* glsl */ `
   uniform float inner;
   uniform float creaseWeight;
   uniform vec2 hazeRange;
+  uniform float gap;
   varying vec2 vUv;
 
   // 1 / (distance along the view axis); 0 where nothing was drawn.
@@ -233,19 +243,21 @@ const FRAGMENT = /* glsl */ `
   // The contour test along one axis. A tap off the frame would clamp to
   // the border texel, which bends the chord and inks a band round the
   // frame; an axis that leaves the frame is simply not asked.
-  // A silhouette's weight: full near, the inner contours' far off, where
-  // the paper seen through a lattice is a field of small holes and each
-  // outlined at full weight reads as a dark blot rather than as a gap.
-  float silhouette = 1.0;
-
   float axis(float c, vec2 d) {
     vec2 a = vUv - d;
     vec2 b = vUv + d;
     if (any(lessThan(min(a, b), vec2(0.0))) || any(greaterThan(max(a, b), vec2(1.0)))) return 0.0;
     float ia = invDepth(a);
     float ib = invDepth(b);
-    // A silhouette has paper on one side; anything else is an inner contour.
-    return dip(c, ia, ib) * (ia > 0.0 && ib > 0.0 ? inner : silhouette);
+    // A silhouette has paper on one side; anything else is an inner
+    // contour. And paper with something drawn again a gap's width past it
+    // is a gap, not an outside.
+    if (ia > 0.0 && ib > 0.0) return dip(c, ia, ib) * inner;
+    vec2 across = d / width * gap;
+    vec2 beyond = ia == 0.0 ? vUv - across : vUv + across;
+    bool small = gap > 0.0 && all(greaterThanEqual(beyond, vec2(0.0))) && all(lessThanEqual(beyond, vec2(1.0)))
+      && invDepth(beyond) > 0.0;
+    return dip(c, ia, ib) * (small ? inner : 1.0);
   }
 
   float crease(vec3 n, vec2 at, float c) {
@@ -266,7 +278,6 @@ const FRAGMENT = /* glsl */ `
     }
     float dist = 1.0 / c;
     float far = smoothstep(fade.x, fade.y, dist);
-    silhouette = mix(1.0, inner, far);
     vec2 dx = vec2(texel.x * width, 0.0);
     vec2 dy = vec2(0.0, texel.y * width);
     float line = 0.0;
@@ -398,6 +409,7 @@ export function createInk(
       inner: { value: 1 },
       creaseWeight: { value: 1 },
       hazeRange: { value: new Vector2(1e9, 2e9) },
+      gap: { value: 0 },
     },
     depthTest: false,
     depthWrite: false,
@@ -449,6 +461,8 @@ export function createInk(
     edges.setSize(sw, sh);
     (material.uniforms.texel.value as Vector2).set(1 / sw, 1 / sh);
     material.uniforms.width.value = reach;
+    // In supersampled texels, which is what `axis` steps in.
+    material.uniforms.gap.value = spec.gap * scale;
     (resolveMaterial.uniforms.texel.value as Vector2).set(1 / w, 1 / h);
     // At a small sigma every tap sits at the pixel's centre and one bilinear
     // read covers 2x2 texels: above 2x that is no longer the whole pixel,

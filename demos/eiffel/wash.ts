@@ -113,7 +113,7 @@ const GLASS_OPACITY = 0.55;
  * A ROLE overrides the relation where it would carry the wrong thing:
  * stone is a near-grey of the main colour, never its red; glass a pale
  * cool grey-blue whatever the main is; `warm` a pale cream-yellow a little
- * (22 degrees) round from it, the lit interior's colour of the illustrated
+ * (16 degrees) round from it, the lit interior's colour of the illustrated
  * cutaway;
  * `own` keeps the material's own paint and map (a flag's colours are its
  * own, not the tower's), shaded and tinted like the rest.
@@ -133,7 +133,7 @@ export function washColor(
   if (role === "stone") return out.setHSL(turn(-0.02), 0.07, reanchor(b.l, r.l, m.l), SRGBColorSpace);
   if (role === "own") return out.copy(base);
   if (role === "glass") return out.setHSL(0.56, 0.2, 0.78, SRGBColorSpace);
-  if (role === "warm") return out.setHSL(turn(0.06), 0.6, 0.86, SRGBColorSpace);
+  if (role === "warm") return out.setHSL(turn(0.045), 0.5, 0.86, SRGBColorSpace);
   const h = (((m.h + b.h - r.h) % 1) + 1) % 1;
   return out.setHSL(h, reanchor(b.s, r.s, m.s), reanchor(b.l, r.l, m.l), SRGBColorSpace);
 }

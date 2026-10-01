@@ -78,11 +78,11 @@ export const DRAWING_DEFAULT: DrawingSpec = {
   washed: true,
   lift: 0.2,
   litTint: 0.45,
-  shadeTint: 0.45,
+  shadeTint: 0.55,
   saturation: 0.85,
   softEdges: true,
-  farLines: 0.5,
-  innerLines: 0.45,
+  farLines: 0.95,
+  innerLines: 0.55,
   lineWidth: 1.5,
   lineStrength: 1,
   depth: 0.35,
@@ -107,6 +107,7 @@ export function drawingInk(spec: DrawingSpec, base: InkSpec = INK_DEFAULT): InkS
     fadeFar: 450,
     fadeFloor: spec.farLines,
     farTint: 0.6,
+    gap: 6,
     inner: spec.innerLines,
     crease: 0.75 * spec.innerLines,
   };
@@ -137,7 +138,7 @@ export function drawingShading(spec: DrawingSpec): WashShading {
     // A cream a little round toward yellow, and a pale rose: light shows as
     // a turn of hue more than as a step in value, the shade staying the
     // paint's own colour, paler.
-    litTint: tint(0.07, 0.7, 0.87),
+    litTint: tint(0.08, 0.6, 0.88),
     shadeTint: tint(-0.01, 0.28, 0.82),
     litLift: washed ? spec.litTint : 0,
     shadeLift: washed ? spec.shadeTint : 0,
