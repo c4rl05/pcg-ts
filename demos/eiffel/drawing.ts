@@ -178,12 +178,15 @@ export function drawingLook(look: Look, spec: DrawingSpec): Look {
   };
 }
 
-/** What ink.ts does to the wash on the way to the paper; null is no wash. */
-/** The pale behind the focus; none without a colour to pale. */
+/**
+ * The pale behind the focus; none without a washed colour to pale (its
+ * dial sits with the wash's).
+ */
 export function drawingHaze(spec: DrawingSpec): Haze | null {
-  return spec.colour && spec.depth > 0 ? { amount: spec.depth, depth: 150 } : null;
+  return spec.colour && spec.washed && spec.depth > 0 ? { amount: spec.depth, depth: 150 } : null;
 }
 
+/** What ink.ts does to the wash on the way to the paper; null is no wash. */
 export function drawingComposite(spec: DrawingSpec): WashComposite | null {
   if (!spec.colour) return null;
   return spec.washed ? { lift: spec.lift, saturation: spec.saturation } : { lift: 0, saturation: 1 };

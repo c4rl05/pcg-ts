@@ -2386,9 +2386,9 @@ renderer.setAnimationLoop(() => {
   bands?.tick(camera);
   sectionTick?.();
   // The drawing pales what lies behind what the view is looking at: the
-  // orbit's target, or a near storey's depth for a driven camera, whose
-  // target is not where it looks.
-  rig.ink.focus(driven ? 60 : camera.position.distanceTo(controls.target));
+  // orbit's target (which a scripted pose sets too), or a near storey's
+  // depth on the walk, which leaves the orbit's target behind.
+  rig.ink.focus(walk.active ? 60 : camera.position.distanceTo(controls.target));
   if (plates?.active === true) plates.render();
   else rig.render();
   tickFps();
