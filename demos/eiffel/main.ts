@@ -790,7 +790,7 @@ let inked = new URLSearchParams(location.search).has("ink");
 (window as unknown as { __ink: (spec: Partial<InkSpec>) => void }).__ink = (spec) =>
   rig.ink.apply({ ...INK_DEFAULT, ...spec });
 rig.setInk(inked);
-overlay.addCheckbox("drawing", inked, (on) => {
+overlay.addCheckbox("Drawing", inked, (on) => {
   inked = on;
   rig.setInk(on);
 });
