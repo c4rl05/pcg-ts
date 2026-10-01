@@ -46,8 +46,8 @@
    * error twice in two voices.
    */
   const note = $derived.by((): string | null => {
-    if (tree === null) return "this is not valid JSON — the editor below says where";
-    if (tree.nodes.length === 0) return 'no field expression here: the JSON has no "fn"';
+    if (tree === null) return "This is not valid JSON — the editor below says where";
+    if (tree.nodes.length === 0) return 'No field expression here: the JSON has no "fn"';
     return null;
   });
 
@@ -66,7 +66,7 @@
   width={note === null && tree !== null ? tree.width : 420}
   height={note === null && tree !== null ? tree.height : 30}
   role="img"
-  aria-label="field expression diagram"
+  aria-label="Field expression diagram"
 >
   {#if note !== null}
     <text class="note" x={PAD} y="19">{note}</text>

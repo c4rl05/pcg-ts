@@ -53,6 +53,6 @@ export function createCopier(onChange: (state: CopyState) => void): Copier {
 }
 
 /** The button's text for a state. `idle` is the panel's own wording. */
-export function copyLabel(state: CopyState, idle: string, manual = "select it below ↓"): string {
-  return state === "done" ? "copied!" : state === "manual" ? manual : idle;
+export function copyLabel(state: CopyState, idle: string, manual = "Select it below ↓"): string {
+  return state === "done" ? "Copied!" : state === "manual" ? manual : idle;
 }

@@ -112,12 +112,12 @@
    */
   const legibilityTitle = $derived(
     legibilityApplies
-      ? "graph legibility — how far the scene is pushed back so the graph can be read over it. " +
+      ? "Graph legibility — how far the scene is pushed back so the graph can be read over it. " +
         "At 0 the render is untouched; by the top of the range a cable is traceable from its " +
         "output pin to its input across a dense one. The node boxes were never the problem; " +
         "the wires are. An overlay redraw: it changes nothing about the render, and nothing " +
         "about the cook."
-      : "graph legibility — only in `scene + graph`. The scene view has no graph to read, and " +
+      : "Graph legibility — only in `scene + graph`. The scene view has no graph to read, and " +
         "the graph view has no render left to push back.",
   );
 
@@ -185,24 +185,25 @@
   });
 
   const stats = $derived.by((): Stat[] => {
-    if (status === null) return [{ value: "cooking…", label: "" }];
+    if (status === null) return [{ value: "Cooking…", label: "" }];
     return [
       { value: host.fps, label: "fps" },
-      { value: `${status.elapsedMs.toFixed(1)} ms`, label: "cook", labelFirst: true },
+      { value: `${status.elapsedMs.toFixed(1)} ms`, label: "Cook", labelFirst: true },
       { value: `${group(status.cooked)} / ${group(status.cached)}`, label: "cooked / cached" },
       { value: group(status.outputs), label: "out" },
       { value: group(status.points), label: "pts" },
       { value: group(status.instances), label: "inst" },
-      { value: host.drew, label: "drew", labelFirst: true },
+      { value: host.drew, label: "Drew", labelFirst: true },
       ...gpuStats,
       ...(status.errors.length > 0
         ? [{ value: String(status.errors.length), label: "error(s)", tone: "err" as const }]
         : []),
       // Label first, and the wording is load-bearing: the capture
-      // tooling's readiness probe scrapes this line for /hash [0-9a-f]{8}/
-      // to know the first cook has landed. It also happens to be how you
-      // would say it — "hash 6f8d3476", not "6f8d3476 hash".
-      { value: status.hash, label: "hash", labelFirst: true },
+      // tooling's readiness probe scrapes this line for /hash [0-9a-f]{8}/i
+      // to know the first cook has landed (case-insensitively, so the
+      // sentence-case "Hash" still matches). It also happens to be how you
+      // would say it — "Hash 6f8d3476", not "6f8d3476 hash".
+      { value: status.hash, label: "Hash", labelFirst: true },
     ];
   });
 
@@ -213,12 +214,24 @@
    */
   const gpuTitle = $derived(
     host.gpu.error !== null
-      ? `no device — ${host.gpu.error}`
+      ? `No device — ${host.gpu.error}`
       : host.gpu.ready
         ? `${host.gpu.label} — the two device paths agree bit for bit, so the hash holds across them. ` +
           `The CPU hash differs: GPU floats are not byte-identical to CPU floats.`
-        : "probing for a WebGPU adapter…",
+        : "Probing for a WebGPU adapter…",
   );
+
+  /**
+   * The cook path's name as the menu shows it. `cookPathLabel` speaks in
+   * lower case ("cpu", "gpu · fused"); the bar is sentence case, where
+   * the acronyms are capitals. Done here rather than in `shared/gpu.ts`
+   * so the label helper stays a plain description of the path; the option
+   * VALUES are the `CookPath` ids and do not move, which is what the
+   * capture tooling selects by.
+   */
+  function displayCookPath(path: CookPath): string {
+    return cookPathLabel(path).replace(/\b[cg]pu\b/g, (s) => s.toUpperCase());
+  }
 
   function commitSeed(raw: number): void {
     const v = Math.floor(raw);
@@ -284,11 +297,11 @@
        loaded and how it cooks. -->
   <div class="grp on-bar">
     <label class="graph on-bar">
-      graph
+      Graph
       <select value={preset} onchange={(e) => onPreset(e.currentTarget.value)}>
-        <option value="">starter graph</option>
+        <option value="">Starter graph</option>
         {#each byGroup as { group, items } (group)}
-          <optgroup label={group}>
+          <optgroup label={group.charAt(0).toUpperCase() + group.slice(1)}>
             {#each items as p (p.name)}
               <option value={p.name} title={p.description}>{p.title}</option>
             {/each}
@@ -297,9 +310,9 @@
       </select>
     </label>
     <label>
-      seed
+      Seed
       <span class="seedbox">
-        <NumberBox step={1} min={0} value={seed} ariaLabel="seed" onCommit={commitSeed} />
+        <NumberBox step={1} min={0} value={seed} ariaLabel="Seed" onCommit={commitSeed} />
       </span>
     </label>
     <!-- Icons from here on, and the WORD IS NOT GONE: every one of these
@@ -307,9 +320,9 @@
          a screen reader. These are conventional verbs, which is what
          makes a glyph readable here at all — an icon nobody has a
          convention for is a control you learn by clicking it. -->
-    <button onclick={onExport} aria-label="export" title="export — serializeGraph → JSON"
+    <button onclick={onExport} aria-label="Export" title="Export — serializeGraph → JSON"
       >{@render icon(TOOLBAR_ICONS.export)}</button>
-    <button onclick={onImport} aria-label="import" title="import — paste JSON → deserializeGraph"
+    <button onclick={onImport} aria-label="Import" title="Import — paste JSON → deserializeGraph"
       >{@render icon(TOOLBAR_ICONS.import)}</button>
   </div>
 
@@ -318,7 +331,7 @@
        far the whole thing is pushed back behind the graph. `shade` is
        here rather than beside `cook` because it changes nothing about the
        cook — it is a redraw of the same result, judged by eye. -->
-  <div class="grp on-bar" title="the render">
+  <div class="grp on-bar" title="The render">
     <!-- TWO TOGGLES, not one cycler, and each one leads the group for the
          layer it switches. The view is two independent layers, so the bar
          shows two switches and each says whether its own layer is up — a
@@ -340,9 +353,9 @@
       class="view scene on-bar"
       class:on={sceneOn}
       aria-pressed={sceneOn}
-      aria-label="scene"
+      aria-label="Scene"
       onclick={() => onToggleLayer("scene")}
-      title="scene — the render. Turning it off leaves the graph alone on screen, never nothing. Over `scene + graph` the mouse follows what it is on: a node moves and zooms the graph, the space between nodes flies the scene."
+      title="Scene — the render. Turning it off leaves the graph alone on screen, never nothing. Over `scene + graph` the mouse follows what it is on: a node moves and zooms the graph, the space between nodes flies the scene."
       >{@render icon(TOOLBAR_ICONS.scene)}</button>
     <!-- Inert while the scene is hidden, like everything else in this
          group: pointing a camera nobody can see is a control that appears
@@ -353,10 +366,10 @@
       class:off={!sceneOn}
       disabled={!sceneOn}
       onclick={onFrame}
-      aria-label="frame"
+      aria-label="Frame"
       title={sceneOn
-        ? "frame — point the camera at what the graph made (F) — done automatically whenever a graph loads"
-        : "frame — only while the scene is on. There is no camera to point at anything you can see."}
+        ? "Frame — point the camera at what the graph made (F) — done automatically whenever a graph loads"
+        : "Frame — only while the scene is on. There is no camera to point at anything you can see."}
       >{@render icon(TOOLBAR_ICONS.frame)}</button>
     <!-- `.shade` is not decoration: the capture tooling selects
          `.toolbar .path.shade select` to shoot the editor in both modes.
@@ -367,17 +380,17 @@
       class="path shade"
       class:off={!sceneOn}
       title={sceneOn
-        ? "how the geometry is shaded — normals read volume and overlap where a single key light flattens them into one silhouette. A redraw, not a recook; vertex colours only show under `lit`."
-        : "shade — only while the scene is on. Nothing is being drawn for it to decide the look of."}
+        ? "How the geometry is shaded — normals read volume and overlap where a single key light flattens them into one silhouette. A redraw, not a recook; vertex colours only show under `lit`."
+        : "Shade — only while the scene is on. Nothing is being drawn for it to decide the look of."}
     >
       <select
         value={host.shading}
         disabled={!sceneOn}
-        aria-label="shade"
+        aria-label="Shade"
         onchange={(e) => onShading(e.currentTarget.value as "lit" | "normals")}
       >
-        <option value="lit">lit</option>
-        <option value="normals">normals</option>
+        <option value="lit">Lit</option>
+        <option value="normals">Normals</option>
       </select>
     </label>
     <!-- Acts on the SCENE — it pushes the render back — even though what
@@ -413,7 +426,7 @@
         value={legibility}
         style="--p: {(Math.min(LEGIBILITY_MAX, Math.max(0, legibility)) / LEGIBILITY_MAX) * 100}%"
         disabled={!legibilityApplies}
-        aria-label="how far the scene is pushed back so the graph can be read over it"
+        aria-label="How far the scene is pushed back so the graph can be read over it"
         oninput={(e) => onLegibility(e.currentTarget.valueAsNumber)}
       />
     </label>
@@ -423,16 +436,16 @@
        on it. Both zooms and the relayout move BOXES, never the camera —
        which is the whole reason `fit` is here and `frame` is in the group
        above, two groups apart instead of two buttons apart. -->
-  <div class="grp on-bar" title="the node canvas">
+  <div class="grp on-bar" title="The node canvas">
     <!-- The other half of the pair — see the scene toggle above for the
          invariant these two keep and for why their classes are hooks. -->
     <button
       class="view graph on-bar"
       class:on={graphOn}
       aria-pressed={graphOn}
-      aria-label="graph"
+      aria-label="Graph"
       onclick={() => onToggleLayer("graph")}
-      title="graph — the node canvas. Turning it off leaves the render alone on screen, never nothing. Space cycles the three views, shift-space goes back."
+      title="Graph — the node canvas. Turning it off leaves the render alone on screen, never nothing. Space cycles the three views, Shift+Space goes back."
       >{@render icon(TOOLBAR_ICONS.graph)}</button>
     <!-- One pill, because these two are one question asked twice: what
          zoom is the canvas at. `fit` takes whatever zoom shows everything
@@ -448,10 +461,10 @@
         class:off={!graphOn}
         disabled={!graphOn}
         onclick={onFit}
-        aria-label="fit"
+        aria-label="Fit"
         title={graphOn
-          ? "fit — zoom out until every node is on screen, however small. The canvas pans with the right button and zooms on the wheel"
-          : "fit — only while the graph is on. There is no canvas on screen to zoom."}
+          ? "Fit — zoom out until every node is on screen, however small. The canvas pans with the right button and zooms on the wheel"
+          : "Fit — only while the graph is on. There is no canvas on screen to zoom."}
         >{@render icon(TOOLBAR_ICONS.fit)}</button>
       <button
         class:off={!graphOn}
@@ -459,7 +472,7 @@
         onclick={onActual}
         aria-label="100%, actual size"
         title={graphOn
-          ? "100% — actual size: back to 1:1, centred on the graph (ctrl+0) — the zoom a graph opens at whenever it fits there"
+          ? "100% — actual size: back to 1:1, centred on the graph (Ctrl+0) — the zoom a graph opens at whenever it fits there"
           : "100% — only while the graph is on. There is no canvas on screen to zoom."}
         >{@render icon(TOOLBAR_ICONS.actual)}</button>
     </span>
@@ -467,10 +480,10 @@
       class:off={!graphOn}
       disabled={!graphOn}
       onclick={onLayout}
-      aria-label="layout"
+      aria-label="Layout"
       title={graphOn
-        ? "layout — re-run the deterministic topological layout"
-        : "layout — only while the graph is on. The nodes would be rearranged out of sight."}
+        ? "Layout — re-run the deterministic topological layout"
+        : "Layout — only while the graph is on. The nodes would be rearranged out of sight."}
       >{@render icon(TOOLBAR_ICONS.layout)}</button>
   </div>
 
@@ -481,13 +494,13 @@
        rather than assumed — without it the GPU capture silently shoots
        the CPU path. -->
   <label class="path cook grp" class:off={!host.gpu.ready} title={gpuTitle}>
-    cook
+    Cook
     <select
       value={host.gpu.path}
       onchange={(e) => onCookPath(e.currentTarget.value as CookPath)}
     >
       {#each COOK_PATHS as p (p)}
-        <option value={p} disabled={p !== "cpu" && !host.gpu.ready}>{cookPathLabel(p)}</option>
+        <option value={p} disabled={p !== "cpu" && !host.gpu.ready}>{displayCookPath(p)}</option>
       {/each}
     </select>
   </label>

@@ -132,7 +132,7 @@ const ready = (page) =>
       const status = document.querySelector(".toolbar .status");
       return (
         !!status &&
-        /hash [0-9a-f]{8}/.test(status.textContent || "") &&
+        /hash [0-9a-f]{8}/i.test(status.textContent || "") &&
         !document.querySelector(".toast")
       );
     },
@@ -200,7 +200,7 @@ async function captureGraph(page, origin, name) {
   // graph somewhere that is not the middle of this one.
   await sleep(250);
   await page.evaluate(() => {
-    const button = document.querySelector('.toolbar button[aria-label="fit"]');
+    const button = document.querySelector('.toolbar button[aria-label="fit" i]');
     if (!button) throw new Error("no fit button");
     button.click();
   });

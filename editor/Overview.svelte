@@ -181,7 +181,7 @@
 
   let copyState = $state<CopyState>("idle");
   const copier = createCopier((next) => (copyState = next));
-  const label = $derived(copyLabel(copyState, "copy link"));
+  const label = $derived(copyLabel(copyState, "Copy link"));
   /** A refused clipboard reveals the link, which is the point of the button. */
   const copyLink = (): Promise<CopyState> => copier.copy(shareUrl(patch), () => (showPatch = true));
 
@@ -238,7 +238,7 @@
   {#if panel.sections.length > 0}
     <div class="share">
       <button onclick={copyLink}>{label}</button>
-      <button disabled={changed === 0} onclick={onReset}>reset</button>
+      <button disabled={changed === 0} onclick={onReset}>Reset</button>
       <button
         class="link"
         aria-expanded={showPatch}
@@ -261,7 +261,7 @@
 
   {#if panel.unknown.length > 0}
     <p class="warn">
-      panel spec names {panel.unknown.length} param(s) this graph does not expose: {panel.unknown.join(
+      Panel spec names {panel.unknown.length} param(s) this graph does not expose: {panel.unknown.join(
         ", ",
       )}
     </p>

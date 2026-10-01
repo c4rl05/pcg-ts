@@ -102,12 +102,12 @@
         <div class="type">{info.label}</div>
         <div class="id">{node.id}</div>
       </div>
-      <button class="danger" onclick={() => onDelete(node.id)}>delete</button>
+      <button class="danger" onclick={() => onDelete(node.id)}>Delete</button>
     </div>
     <p class="desc">{info.description}</p>
     {#if WRAPPER_TYPES.has(node.type)}
       <p class="note">
-        composite: its inner graph is not editable here, but its params are — an exposed one writes
+        Composite: its inner graph is not editable here, but its params are — an exposed one writes
         into the inner nodes it was declared over, and a wrapper's own (a loop's rounds, its settle
         attribute) drives the wrapping instead of the body
       </p>
@@ -119,7 +119,7 @@
           <span class="ptype">{view.schema.type}{view.schema.acceptsField ? " · field" : ""}</span>
         </div>
         {#if view.mode === "items"}
-          <div class="readonly">runtime-injected (bound via graph.setParam; never serialized)</div>
+          <div class="readonly">Runtime-injected (bound via graph.setParam; never serialized)</div>
         {:else if view.schema.acceptsField}
           <FieldParam
             {view}
@@ -162,7 +162,7 @@
                 <button onclick={() => removeListItem(view, i)}>✕</button>
               </div>
             {/each}
-            <button class="add" onclick={() => addListItem(view)}>+ add</button>
+            <button class="add" onclick={() => addListItem(view)}>+ Add</button>
           </div>
         {/if}
       </div>

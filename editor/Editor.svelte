@@ -198,8 +198,8 @@
   let exportText = $state("");
   let hashBeforeImport = $state<string | null>(null);
   let awaitingImportCook = $state(false);
-  /** How the pending import got here, for its toast ("imported", a title). */
-  let importLabel = $state("imported");
+  /** How the pending import got here, for its toast ("Imported", a title). */
+  let importLabel = $state("Imported");
   /**
    * Why the pending import is a FALLBACK. The load that follows a bad
    * `?graph=` publishes its own cheerful hash toast a moment later, which
@@ -224,7 +224,7 @@
   /** A patch carried in the URL, applied once the graph it names is in. */
   let pendingPatch: KnobPatch | null = null;
   const graphTitle = $derived(
-    preset === "" ? "starter graph" : (findPreset(preset)?.title ?? preset),
+    preset === "" ? "Starter graph" : (findPreset(preset)?.title ?? preset),
   );
 
   const groups = paletteGroups();
@@ -359,7 +359,7 @@
       } catch (err) {
         // Held, not shown: the graph has not loaded yet, and its own
         // toast would bury this one a moment later.
-        importError = `settings in the link could not be read (${
+        importError = `Settings in the link could not be read (${
           err instanceof Error ? err.message : String(err)
         })`;
       }
@@ -367,7 +367,7 @@
     const wanted = params.get("graph");
     if (wanted !== null && wanted !== "") {
       if (findPreset(wanted) === undefined) {
-        importError = `no graph named "${wanted}" in the corpus — opened the default instead`;
+        importError = `No graph named "${wanted}" in the corpus — opened the default instead`;
       } else {
         void openPreset(wanted, { updateUrl: false });
         return;
@@ -479,7 +479,7 @@
     if (patch.seed !== undefined && typeof patch.seed === "number") model.seed = patch.seed >>> 0;
     paramsRev++;
     if (problems.length === 0) return;
-    const message = `${source === "link" ? "shared settings" : "reset"}: applied ${applied}, could not apply ${problems.length} — ${problems.join("; ")}`;
+    const message = `${source === "link" ? "Shared settings" : "Reset"}: applied ${applied}, could not apply ${problems.length} — ${problems.join("; ")}`;
     // A patch from a link lands mid-import, and the import's own hash
     // toast is still to come — hand the message to that, or it is shown
     // and buried within the same second.
@@ -609,7 +609,7 @@
     modal = "export";
   }
 
-  function applyImport(text: string, label = "imported"): string | null {
+  function applyImport(text: string, label = "Imported"): string | null {
     hashBeforeImport = status?.hash ?? null;
     const res = controller.importText(text);
     if ("error" in res) return res.error;
@@ -863,15 +863,15 @@
     {/if}
     <!-- Narrow-screen drawer toggle for the param column, floating over
          the canvas edge. display: none outside the media query. The label
-         "params" is chosen to dodge the capture tooling's
+         "Params" is chosen to dodge the capture tooling's
          click-button-by-substring needles. -->
     <button
       class="drawer-tab right"
-      aria-label="toggle the param drawer"
+      aria-label="Toggle the param drawer"
       aria-expanded={panelsOpen}
       onclick={() => (panelsOpen = !panelsOpen)}
     >
-      params
+      Params
     </button>
   </div>
   <Palette
@@ -886,14 +886,14 @@
 
 {#if modal === "export"}
   <Modal
-    title="export — serializeGraph JSON"
+    title="Export — serializeGraph JSON"
     initial={exportText}
     mode="export"
     onClose={() => (modal = null)}
   />
 {:else if modal === "import"}
   <Modal
-    title="import — paste serialized graph JSON"
+    title="Import — paste serialized graph JSON"
     initial=""
     mode="import"
     onApply={applyPastedImport}
@@ -1076,7 +1076,7 @@
     color: #ffffff;
     font-family: var(--ed-mono);
     font-size: var(--ed-t-meta);
-    /* Room for a capped list of load faults (five and an "and K more"),
+    /* Room for a capped list of load faults (five and an "And K more"),
        which wrap to more than the 110px an acknowledgement needs. */
     max-height: 35%;
   }

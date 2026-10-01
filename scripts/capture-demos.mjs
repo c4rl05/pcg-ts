@@ -146,7 +146,7 @@ const DEMOS = [
   {
     id: "editor",
     // The graph is cooked behind a 150 ms debounce; the toolbar reads
-    // "cooking…" until the first cook lands. There is no stats card to
+    // "Cooking…" until the first cook lands. There is no stats card to
     // scrape any more — the status line carries the readouts.
     //
     // The load toast has to be gone as well. It carries the hash of the
@@ -158,7 +158,7 @@ const DEMOS = [
       const status = document.querySelector(".toolbar .status");
       return (
         !!status &&
-        /hash [0-9a-f]{8}/.test(status.textContent || "") &&
+        /hash [0-9a-f]{8}/i.test(status.textContent || "") &&
         !document.querySelector(".toast")
       );
     },
@@ -201,14 +201,14 @@ const DEMOS = [
        */
       const cook = () => {
         const t = line();
-        return [/cook [\d.]+ ms/, /\d+ \/ \d+ cooked \/ cached/, /\d+ disp/, /hash [0-9a-f]{8}/]
+        return [/cook [\d.]+ ms/i, /\d+ \/ \d+ cooked \/ cached/i, /\d+ disp/i, /hash [0-9a-f]{8}/i]
           .map((re) => (t.match(re) ?? [""])[0])
           .join("|");
       };
       const changedFrom = async (before) => {
         for (let i = 0; i < 1800; i++) {
           const c = cook();
-          if (c !== before && /hash [0-9a-f]{8}/.test(c)) return c;
+          if (c !== before && /hash [0-9a-f]{8}/i.test(c)) return c;
           await new Promise((r) => setTimeout(r, 100));
         }
         throw new Error("the status line never settled after a cook");
@@ -241,7 +241,7 @@ const DEMOS = [
       const status = document.querySelector(".toolbar .status");
       const text = status ? status.textContent || "" : "";
       return (
-        /hash [0-9a-f]{8}/.test(text) &&
+        /hash [0-9a-f]{8}/i.test(text) &&
         /[1-9]\d* disp/.test(text) &&
         !document.querySelector(".toast")
       );
@@ -264,7 +264,7 @@ const DEMOS = [
       const settled = async (before) => {
         for (let i = 0; i < 1800; i++) {
           const t = line();
-          if (t !== before && /hash [0-9a-f]{8}/.test(t)) return;
+          if (t !== before && /hash [0-9a-f]{8}/i.test(t)) return;
           await new Promise((r) => setTimeout(r, 100));
         }
         throw new Error("the status line never settled");
@@ -305,7 +305,7 @@ const DEMOS = [
       const status = document.querySelector(".toolbar .status");
       return (
         !!status &&
-        /hash [0-9a-f]{8}/.test(status.textContent || "") &&
+        /hash [0-9a-f]{8}/i.test(status.textContent || "") &&
         !document.querySelector(".toast")
       );
     },
@@ -524,10 +524,12 @@ function pageInstrumentation() {
     // count, last for a unit like "21.4 ms"), so an index would pick up
     // the value as the key on half of them. A stat with an empty label
     // renders no <i> at all and is skipped: it has no name to file under.
+    // Keyed in lower case for the same reason as the overlay above: the
+    // toolbar labels in sentence case ("Cook", "Hash").
     for (const row of document.querySelectorAll(".status .stat")) {
       const k = row.querySelector("i");
       const v = row.querySelector("b");
-      if (k && v) out[text(k)] = text(v);
+      if (k && v) out[text(k).toLowerCase()] = text(v);
     }
     return out;
   };

@@ -17,7 +17,7 @@ import { diagnosticsOf } from "pcg-ts";
  * One line per diagnostic record of `err`, in the order the loader reported
  * them (phase order, then document order): `<path>: <message>`, or the
  * message alone when the record has no path. Past `max` records the rest
- * are folded into a final `and K more`. A value that carries no records —
+ * are folded into a final `And K more`. A value that carries no records —
  * a foreign `Error`, a string — is one line holding its message.
  */
 export function loadErrorLines(err: unknown, max = 5): string[] {
@@ -26,6 +26,6 @@ export function loadErrorLines(err: unknown, max = 5): string[] {
   const lines = records
     .slice(0, cap)
     .map((r) => (r.path !== undefined && r.path !== "" ? `${r.path}: ${r.message}` : r.message));
-  if (records.length > cap) lines.push(`and ${records.length - cap} more`);
+  if (records.length > cap) lines.push(`And ${records.length - cap} more`);
   return lines;
 }

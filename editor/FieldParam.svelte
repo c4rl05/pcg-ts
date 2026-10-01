@@ -160,8 +160,8 @@
 
 <div class="fieldparam">
   <div class="modes">
-    <button class:active={mode === "constant"} onclick={toConstant}>constant</button>
-    <button class:active={mode === "field"} onclick={toField}>field</button>
+    <button class:active={mode === "constant"} onclick={toConstant}>Constant</button>
+    <button class:active={mode === "field"} onclick={toField}>Field</button>
   </div>
   {#if mode === "constant"}
     {#if view.schema.type === "vec3" || view.schema.type === "vec4"}
@@ -188,12 +188,12 @@
   {:else}
     <textarea rows="7" spellcheck="false" bind:value={text}></textarea>
     <div class="apply-row">
-      <button class="diagram" disabled={!parses} onclick={() => (diagram = true)}>diagram</button>
-      <button class="apply" onclick={apply}>apply field</button>
+      <button class="diagram" disabled={!parses} onclick={() => (diagram = true)}>Diagram</button>
+      <button class="apply" onclick={apply}>Apply field</button>
     </div>
     {#if readNames.length > 0}
       <div class="reads">
-        reads {readNames.map((n) => `"${n}"`).join(", ")} — supplied by an exposed param of that
+        Reads {readNames.map((n) => `"${n}"`).join(", ")} — supplied by an exposed param of that
         name on an enclosing subgraph, never by this graph's own knobs
       </div>
     {/if}
@@ -212,10 +212,10 @@
         role="presentation"
         onclick={(e) => e.target === e.currentTarget && (diagram = false)}
       >
-        <div class="ft-modal" role="dialog" aria-label="field expression diagram">
+        <div class="ft-modal" role="dialog" aria-label="Field expression diagram">
           <div class="ft-head">
-            <span>field expression — read-only</span>
-            <button onclick={() => (diagram = false)}>close</button>
+            <span>Field expression — read-only</span>
+            <button onclick={() => (diagram = false)}>Close</button>
           </div>
           <div class="ft-scroll">
             <FieldTree spec={parsed} />

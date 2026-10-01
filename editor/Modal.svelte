@@ -48,18 +48,18 @@
       <span>{title}</span>
       <div class="buttons">
         {#if mode === "export"}
-          <button onclick={copy}>{copied ? "copied!" : "copy"}</button>
+          <button onclick={copy}>{copied ? "Copied!" : "Copy"}</button>
         {:else}
-          <button class="primary" onclick={apply}>import</button>
+          <button class="primary" onclick={apply}>Import</button>
         {/if}
-        <button onclick={onClose}>close</button>
+        <button onclick={onClose}>Close</button>
       </div>
     </div>
     <textarea
       rows="18"
       spellcheck="false"
       readonly={mode === "export"}
-      placeholder={mode === "import" ? "paste serialized graph JSON here…" : ""}
+      placeholder={mode === "import" ? "Paste serialized graph JSON here…" : ""}
       bind:value={text}
     ></textarea>
     {#if error !== null}

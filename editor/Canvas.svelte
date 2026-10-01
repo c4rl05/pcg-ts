@@ -240,7 +240,7 @@
   class="canvas"
   class:porous
   role="application"
-  aria-label="node graph canvas"
+  aria-label="Node graph canvas"
   onwheel={onWheel}
   oncontextmenu={(e) => e.preventDefault()}
   onpointerdown={(e) => {
@@ -280,7 +280,7 @@
           {d}
           role="button"
           tabindex="-1"
-          aria-label="disconnect {edge.from}.{edge.fromPin} → {edge.to}.{edge.toPin}"
+          aria-label="Disconnect {edge.from}.{edge.fromPin} → {edge.to}.{edge.toPin}"
           onclick={() => onDeleteEdge(i)}
           onkeydown={(e) => e.key === "Enter" && onDeleteEdge(i)}
         >
@@ -318,7 +318,7 @@
        positioned relative to, and a hint that pans away from the viewport
        is a hint nobody reads. -->
   {#if model.nodes.length === 0}
-    <text class="blank" x="50%" y="50%">press Tab to add a node</text>
+    <text class="blank" x="50%" y="50%">Press Tab to add a node</text>
   {/if}
 </svg>
 

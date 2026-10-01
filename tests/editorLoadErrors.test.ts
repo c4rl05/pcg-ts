@@ -63,7 +63,7 @@ describe("loadErrorLines", () => {
       "/nodes/3/type",
       "/nodes/4/type",
     ]);
-    expect(lines[5]).toBe("and 3 more");
+    expect(lines[5]).toBe("And 3 more");
   });
 
   it("does not fold when the records fit exactly", () => {

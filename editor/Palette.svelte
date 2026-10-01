@@ -142,7 +142,7 @@
     class="menu"
     bind:this={menuEl}
     role="dialog"
-    aria-label="add a node"
+    aria-label="Add a node"
     tabindex="-1"
     style="left: {Math.min(at.x, Math.max(8, window.innerWidth - 260))}px; top: {Math.min(
       at.y,
@@ -153,7 +153,7 @@
     <input
       class="search"
       type="search"
-      placeholder="search nodes…"
+      placeholder="Search nodes…"
       bind:this={searchEl}
       bind:value={search} />
     <div class="list">
@@ -181,7 +181,7 @@
         {/each}
       {/each}
       {#if filtered.length === 0}
-        <div class="empty">no node type matches "{search}"</div>
+        <div class="empty">No node type matches "{search}"</div>
       {/if}
     </div>
   </div>
