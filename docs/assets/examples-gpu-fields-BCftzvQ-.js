@@ -1,0 +1,47 @@
+var e=`{
+  "_comment": "Panel spec — presentation only; the graph cooks identically without it. See shared/graphUi.ts. The count ceiling is deliberate: this graph costs about 14.5 us per point on the CPU, so 200k is roughly three seconds of blocked tab, which is the most a page with no cook budget should be able to ask for. The device path is what makes that count comfortable, and comparing the two is the point of the graph.",
+  "sections": [
+    {
+      "title": "Cloud",
+      "controls": [
+        {
+          "param": "scatter.count",
+          "label": "Points",
+          "min": 1000,
+          "max": 200000,
+          "step": 1000
+        },
+        {
+          "param": "scatter.seed",
+          "label": "Scatter seed"
+        },
+        {
+          "param": "scatter.boundsMin",
+          "label": "Bounds min"
+        },
+        {
+          "param": "scatter.boundsMax",
+          "label": "Bounds max"
+        }
+      ]
+    },
+    {
+      "title": "Chain",
+      "controls": [
+        {
+          "param": "jitter.seed",
+          "label": "Jitter seed"
+        },
+        {
+          "param": "place.rotateEuler",
+          "label": "Rotate"
+        },
+        {
+          "param": "place.scale",
+          "label": "Scale"
+        }
+      ]
+    }
+  ]
+}
+`;export{e as default};

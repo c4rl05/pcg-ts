@@ -1,0 +1,18 @@
+var e=`{
+  "_comment": "Panel spec — presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
+  "sections": [
+    {
+      "title": "Centreline",
+      "controls": [
+        { "param": "curve.wander", "label": "Wander", "min": 0, "max": 1, "step": 0.01 },
+        { "param": "curve.frequency", "label": "Frequency", "min": 0.5, "max": 6, "step": 0.1 },
+        { "param": "even.count", "label": "Samples", "min": 4, "max": 400, "step": 1 }
+      ]
+    },
+    {
+      "title": "Band",
+      "controls": [{ "param": "road.flip", "label": "Flip" }]
+    }
+  ]
+}
+`;export{e as default};

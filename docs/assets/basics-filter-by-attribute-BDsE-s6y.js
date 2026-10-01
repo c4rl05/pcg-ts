@@ -1,0 +1,38 @@
+var e=`{
+  "_comment": "Panel spec \\u2014 presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
+  "sections": [
+    {
+      "title": "Scatter",
+      "controls": [
+        {
+          "param": "scatter.count",
+          "label": "Points",
+          "min": 50,
+          "max": 4000,
+          "step": 50
+        },
+        {
+          "param": "scatter.seed",
+          "label": "Seed"
+        }
+      ]
+    },
+    {
+      "title": "Gate",
+      "controls": [
+        {
+          "param": "ridge.comparison",
+          "label": "Keep where"
+        },
+        {
+          "param": "ridge.value",
+          "label": "Threshold",
+          "min": -1,
+          "max": 1,
+          "step": 0.01
+        }
+      ]
+    }
+  ]
+}
+`;export{e as default};

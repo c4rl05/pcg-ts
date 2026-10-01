@@ -1,0 +1,59 @@
+var e=`{
+  "formatVersion": 1,
+  "seed": 1047,
+  "meta": {
+    "title": "Shade a faceted curve round, keep an edge sharp",
+    "description": "\`extrudePolygon\` gives every wall band its own four points and one flat normal, so its creases are exact — and a twenty-sided tank shades as twenty planks. \`smoothNormals\` decides which creases were meant by ANGLE: each point's normal becomes the angle-weighted average of the faces around its position whose normals lie within \`angle\` degrees of its own, so the tank's walls (18 degrees apart) shade round while its lid and floor (90 degrees) stay sharp, and the square block merged beside it keeps every edge. Nothing else changes: no point is merged, split or moved, so the output has exactly the input's points, triangles and attributes, and only \`normal\` differs. Points are matched by POSITION within \`weldDistance\`, not by index, which is what lets bands that share no point shade as one surface. The faceted copy behind is the same tank without the node, for comparison. Run it on the rounded part before merging it with neighbours whose shallow corners it should not smooth into.",
+    "tags": ["basics", "surface", "mesh", "normals", "shading"]
+  },
+  "nodes": [
+    {
+      "id": "tankPlan",
+      "type": "subgraph",
+      "params": { "count": 20, "size": [6, 6, 6], "center": [-5, 0, 0], "rotate": [0, 0, 0] },
+      "ref": { "name": "shape/path-loop" }
+    },
+    {
+      "id": "blockPlan",
+      "type": "subgraph",
+      "params": { "count": 4, "size": [5, 5, 5], "center": [5, 0, 0], "rotate": [0, 0, 0] },
+      "ref": { "name": "shape/path-loop" }
+    },
+    {
+      "id": "flatPlan",
+      "type": "subgraph",
+      "params": { "count": 20, "size": [6, 6, 6], "center": [-5, 0, -9], "rotate": [0, 0, 0] },
+      "ref": { "name": "shape/path-loop" }
+    },
+    {
+      "id": "tank",
+      "type": "extrudePolygon",
+      "params": { "distance": 4, "direction": "+y", "vector": [0, 1, 0], "caps": "both", "sides": true }
+    },
+    {
+      "id": "block",
+      "type": "extrudePolygon",
+      "params": { "distance": 3, "direction": "+y", "vector": [0, 1, 0], "caps": "both", "sides": true }
+    },
+    {
+      "id": "faceted",
+      "type": "extrudePolygon",
+      "params": { "distance": 4, "direction": "+y", "vector": [0, 1, 0], "caps": "both", "sides": true }
+    },
+    { "id": "both", "type": "mergePrimitives", "params": {} },
+    { "id": "smooth", "type": "smoothNormals", "params": { "angle": 35, "weldDistance": 0.0001 } }
+  ],
+  "connections": [
+    { "from": ["tankPlan", "out"], "to": ["tank", "in"] },
+    { "from": ["blockPlan", "out"], "to": ["block", "in"] },
+    { "from": ["flatPlan", "out"], "to": ["faceted", "in"] },
+    { "from": ["tank", "out"], "to": ["both", "in"] },
+    { "from": ["block", "out"], "to": ["both", "in"] },
+    { "from": ["both", "out"], "to": ["smooth", "in"] }
+  ],
+  "outputs": [
+    { "id": "smooth", "pin": "out", "name": "smooth" },
+    { "id": "faceted", "pin": "out", "name": "faceted" }
+  ]
+}
+`;export{e as default};

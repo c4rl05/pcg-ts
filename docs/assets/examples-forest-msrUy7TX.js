@@ -1,0 +1,22 @@
+var e=`{
+  "_comment": "Panel spec — presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
+  "sections": [
+    {
+      "title": "Terrain",
+      "controls": [
+        { "param": "terrain.amount", "label": "Relief", "min": 0, "max": 60, "step": 1, "unit": " m" },
+        { "param": "terrain.frequency", "label": "Noise scale", "min": 0.005, "max": 0.08, "step": 0.001 },
+        { "param": "terrain.variant", "label": "Variant", "min": 0, "max": 20, "step": 1 }
+      ]
+    },
+    {
+      "title": "Planting",
+      "controls": [
+        { "param": "scatter.count", "label": "Candidates", "min": 200, "max": 6000, "step": 100 },
+        { "param": "gentle.value", "label": "Max slope", "min": 0, "max": 0.6, "step": 0.01 },
+        { "param": "treeline.value", "label": "Treeline", "min": -12, "max": 12, "step": 0.5, "unit": " m" }
+      ]
+    }
+  ]
+}
+`;export{e as default};
