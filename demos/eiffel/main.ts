@@ -765,16 +765,106 @@ const classStats = Object.fromEntries(
   PART_CLASSES.map((cls) => [cls, overlay.addStat(capital(cls))]),
 ) as Record<PartClass, (value: string | number) => void>;
 
+/**
+ * A framed box of the panel's, with its own heading, in a top slot: the
+ * Detail box's frame, which the View and Look boxes share. Top slots stack
+ * in the order they are claimed.
+ */
+function framedBox(id: string, title: string): HTMLElement {
+  const slot = overlay.addSlot("top");
+  const box = document.createElement("section");
+  box.setAttribute("aria-labelledby", `${id}-heading`);
+  box.style.cssText = "border:1px solid var(--ed-edge);padding:8px 10px 10px";
+  const heading = document.createElement("h2");
+  heading.id = `${id}-heading`;
+  heading.textContent = title;
+  heading.style.cssText = "margin:0 0 2px;font-size:13px;font-weight:600;color:var(--ed-ink-hi)";
+  box.append(heading);
+  slot.append(box);
+  return box;
+}
+
+/**
+ * One way of looking in the View box: its toggle's row, and under it the
+ * controls that only mean something while it is on (`sub`, indented and
+ * hidden while off). The row is made by the overlay, which puts it with
+ * the loose toggles, and moved in here.
+ */
+interface ViewGroup {
+  readonly sub: HTMLDivElement;
+  /** Move an overlay row (a toggle's, or a slider's) into the group. */
+  take(row: HTMLElement, into?: "head" | "sub"): void;
+  /** Show or hide the controls under the toggle. */
+  open(on: boolean): void;
+}
+/** The rows under a toggle sit 12 px in, inside the box's frame: a narrower label column. */
+const VIEW_SUB_CSS = ".pcg-overlay .eiffel-view-sub .pcg-row > label { flex-basis: 72px; }";
+{
+  const style = document.createElement("style");
+  style.textContent = VIEW_SUB_CSS;
+  document.head.append(style);
+}
+function viewGroup(box: HTMLElement): ViewGroup {
+  const group = document.createElement("div");
+  const head = document.createElement("div");
+  const sub = document.createElement("div");
+  sub.className = "eiffel-view-sub";
+  sub.style.cssText = "margin:0 0 4px 12px";
+  sub.hidden = true;
+  group.append(head, sub);
+  box.append(group);
+  return {
+    sub,
+    take(row, into = "head") {
+      // The box is narrower than the panel; the sub rows' labels are
+      // narrowed by VIEW_SUB_CSS, which reaches the walk's own rows too.
+      const label = row.querySelector(":scope > label") as HTMLElement | null;
+      if (label !== null && into === "head") label.style.flexBasis = "84px";
+      (into === "head" ? head : sub).append(row);
+    },
+    open(on) {
+      sub.hidden = !on;
+    },
+  };
+}
+
+// THE VIEW BOX: the ways of looking at the tower, each toggle with the
+// controls it brings unfolded under it — rotate's speed, the walk's path
+// and play, build's day and play, the section's cut. Claimed after the
+// Detail box, which is moved above it once it exists.
+const viewBox = framedBox("view", "View");
+const rotateGroup = viewGroup(viewBox);
+const walkGroup = viewGroup(viewBox);
+const buildGroup = viewGroup(viewBox);
+const sectionGroup = viewGroup(viewBox);
+// THE LOOK BOX, on the dev server only: settings for the look that is not
+// settled yet, which the published page will not offer (`import.meta.hot`
+// is the dev server's hallmark, plateTool.ts says why not `env.DEV`). A
+// `?ink` link still opens the drawing anywhere.
+const lookBox = import.meta.hot !== undefined ? framedBox("look", "Look") : undefined;
+
 // ROTATE, WALK AND BUILD are three ways of looking at the tower, and they
 // do not combine: turning rotate or walk on turns the other off, and under
 // build — a reload away — both are off and offered only once it is.
 const rotateBox = overlay.addCheckbox("Rotate", false, (on) => {
   controls.autoRotate = on;
+  rotateGroup.open(on);
   if (on && walk.active) {
     walk.set(false);
     walkBox.checked = false;
   }
 });
+rotateGroup.take(rotateBox.parentElement as HTMLElement);
+rotateGroup.take(
+  overlay.addSlider(
+    "Speed",
+    { min: 0.05, max: 2, step: 0.05, value: controls.autoRotateSpeed, format: (v) => v.toFixed(2) },
+    (v) => {
+      controls.autoRotateSpeed = v;
+    },
+  ),
+  "sub",
+);
 
 // THE DRAWING (`?ink`, or `?ink=2` for a heavier line in device pixels):
 // the tower as a pen elevation, black on white, no light and no shade
@@ -790,10 +880,15 @@ let inked = new URLSearchParams(location.search).has("ink");
 (window as unknown as { __ink: (spec: Partial<InkSpec>) => void }).__ink = (spec) =>
   rig.ink.apply({ ...INK_DEFAULT, ...spec });
 rig.setInk(inked);
-overlay.addCheckbox("Drawing", inked, (on) => {
-  inked = on;
-  rig.setInk(on);
-});
+if (lookBox !== undefined) {
+  const drawingBox = overlay.addCheckbox("Drawing", inked, (on) => {
+    inked = on;
+    rig.setInk(on);
+  });
+  const row = drawingBox.parentElement as HTMLElement;
+  (row.querySelector(":scope > label") as HTMLElement).style.flexBasis = "84px";
+  lookBox.append(row);
+}
 
 // The lifts run unless `?still` parked them. Off leaves every car exactly
 // where it stands, which is how a car is looked at rather than watched.
@@ -817,7 +912,7 @@ overlay.addCheckbox("Cloth sim", clothSim, (on) => {
 // toggle reloads, keeping the view and the depth, because the works are
 // cooked and the staging is done once at load.
 const BUILD = new URLSearchParams(location.search).has("build");
-overlay.addCheckbox("Build", BUILD, (on) => {
+const buildBox = overlay.addCheckbox("Build", BUILD, (on) => {
   const q = new URLSearchParams(location.search);
   if (on) {
     q.set("build", "");
@@ -829,8 +924,10 @@ overlay.addCheckbox("Build", BUILD, (on) => {
   q.set("cam", [p.x, p.y, p.z, t.x, t.y, t.z].map((v) => v.toFixed(2)).join(","));
   location.search = q.toString().replace(/build=(&|$)/, "build$1");
 });
-/** Claimed here, under the toggles; filled once the cook is drawn. */
-const buildSlot = overlay.addSlot();
+buildGroup.take(buildBox.parentElement as HTMLElement);
+buildGroup.open(BUILD);
+/** Under the toggle in the View box; filled once the cook is drawn. */
+const buildSlot = buildGroup.sub;
 /** The scrubber, once `?build` has staged the tower; the loop plays it. */
 let scrubber: ReturnType<typeof attachScrubber> | undefined;
 
@@ -866,16 +963,9 @@ const depthRadios: Record<"laced" | "rivets", HTMLInputElement[]> = { laced: [],
 // A framed section with its own heading, so it reads apart from the
 // caption above and the live controls below, and so its button reads as
 // belonging to it: nothing here takes effect until that button reloads.
-const depthSlot = overlay.addSlot("top");
-const depthSection = document.createElement("section");
-depthSection.setAttribute("aria-labelledby", "depth-heading");
-depthSection.style.cssText = "border:1px solid var(--ed-edge);padding:8px 10px 10px";
-const depthHeading = document.createElement("h2");
-depthHeading.id = "depth-heading";
-depthHeading.textContent = "Detail";
-depthHeading.style.cssText = "margin:0 0 2px;font-size:13px;font-weight:600;color:var(--ed-ink-hi)";
-depthSection.append(depthHeading);
-depthSlot.append(depthSection);
+const depthSection = framedBox("depth", "Detail");
+// Claimed after the View and Look boxes, shown above them.
+viewBox.parentElement?.before(depthSection.parentElement as HTMLElement);
 for (const ax of ["laced", "rivets"] as const) {
   const row = document.createElement("div");
   row.className = "pcg-row";
@@ -1181,7 +1271,8 @@ const walk = attachWalk({
   camera,
   controls,
   canvas: renderer.domElement,
-  slot: overlay.addSlot(),
+  // Under the toggle in the View box; the walk shows and hides it itself.
+  slot: walkGroup.sub,
   shadow: { near: (box) => rig.fitShadowNear(box), texel: () => rig.shadowTexel() },
   // `?walkNear`: the walk's near shadow on, the way "copy view" writes it.
   nearShadow: new URLSearchParams(location.search).has("walkNear"),
@@ -1191,9 +1282,11 @@ const walkBox = overlay.addCheckbox("Walk", WALK !== null, (on) => {
   if (on && controls.autoRotate) {
     controls.autoRotate = false;
     rotateBox.checked = false;
+    rotateGroup.open(false);
   }
   walk.set(on);
 });
+walkGroup.take(walkBox.parentElement as HTMLElement);
 if (BUILD) {
   for (const box of [rotateBox, walkBox]) {
     box.disabled = true;
@@ -1202,9 +1295,6 @@ if (BUILD) {
     row.title = "Not with build: turn build off first";
   }
 }
-// The highlights follow the toggles; the show section joins them once the
-// cook says what there is to show.
-highlightSlot.parentElement?.append(highlightSlot);
 // `?walk=` is a step; `?walkAt=<m>,<yaw>,<pitch>` is the exact pose "copy
 // view" writes — metres along the path and the look's turn off it, in
 // degrees — and wins when both are given.
@@ -1507,9 +1597,10 @@ async function main(): Promise<void> {
   const cut = (on: boolean): void => {
     sectioned = on;
     section.set(on);
-    cutRow.hidden = !on;
+    sectionGroup.open(on);
   };
-  overlay.addCheckbox("Section", params.has("section"), cut);
+  const sectionBox = overlay.addCheckbox("Section", params.has("section"), cut);
+  sectionGroup.take(sectionBox.parentElement as HTMLElement);
   const cutRow = overlay.addSlider(
     "Cut at",
     {
@@ -1524,6 +1615,7 @@ async function main(): Promise<void> {
       section.move(v);
     },
   );
+  sectionGroup.take(cutRow, "sub");
   cut(params.has("section"));
   if (fitted > 0) overlay.addStat("Fittings")(fitted.toLocaleString());
   if (linked > 0) overlay.addStat("Chain pieces")(linked.toLocaleString());
@@ -2150,6 +2242,8 @@ window.pcgEiffel = {
     controls.enabled = false;
     controls.enableDamping = false;
     controls.autoRotate = false;
+    rotateBox.checked = false;
+    rotateGroup.open(false);
     camera.position.set(eye[0], eye[1], eye[2]);
     controls.target.set(target[0], target[1], target[2]);
     if (fov !== undefined && fov !== camera.fov) {

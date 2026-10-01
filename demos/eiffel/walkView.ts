@@ -127,8 +127,8 @@ export function attachWalk(opts: WalkOptions): Walk {
   const host = document.createElement("div");
   host.style.display = "none";
   opts.slot.append(host);
-  // The slot goes with the host: an overlay slot draws its rule even when
-  // what is in it is hidden, so a shut walk would leave a stray line.
+  // The slot goes with the host, so a shut walk leaves nothing in the
+  // panel (the page's slot is the walk toggle's fold in the View box).
   opts.slot.hidden = true;
 
   function ensurePanel(): void {

@@ -355,8 +355,8 @@ export function describeDay(day: number): string {
 
 /**
  * The scrubber: a date slider and a play button, in plain DOM in the
- * panel's slot (the overlay's own slider cannot be moved from code, and
- * play has to move it). `initial` is the day it opens on; `playing`
+ * slot the page gives it (the overlay's own slider cannot be moved from
+ * code, and play has to move it). `initial` is the day it opens on; `playing`
  * whether it opens running. `onDay` is called with every day it shows.
  */
 export function attachScrubber(
