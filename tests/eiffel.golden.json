@@ -446,11 +446,11 @@
       "cloth.flag": {
         "kind": "geometry",
         "items": 1,
-        "points": 325,
-        "vertices": 1728,
-        "primitives": 576,
+        "points": 1125,
+        "vertices": 6336,
+        "primitives": 2112,
         "instances": 0,
-        "hash": "ef5cb388885a76a3"
+        "hash": "d368fec4b4ccc492"
       },
       "fittings.balusters": {
         "kind": "instances",
@@ -1132,11 +1132,11 @@
       "cloth.flag": {
         "kind": "geometry",
         "items": 1,
-        "points": 325,
-        "vertices": 1728,
-        "primitives": 576,
+        "points": 1125,
+        "vertices": 6336,
+        "primitives": 2112,
         "instances": 0,
-        "hash": "ef5cb388885a76a3"
+        "hash": "d368fec4b4ccc492"
       },
       "fittings.balusters": {
         "kind": "instances",
@@ -1737,11 +1737,11 @@
       "cloth.flag": {
         "kind": "geometry",
         "items": 1,
-        "points": 325,
-        "vertices": 1728,
-        "primitives": 576,
+        "points": 1125,
+        "vertices": 6336,
+        "primitives": 2112,
         "instances": 0,
-        "hash": "ef5cb388885a76a3"
+        "hash": "d368fec4b4ccc492"
       },
       "fittings.balusters": {
         "kind": "instances",
@@ -2864,11 +2864,11 @@
       "cloth.flag": {
         "kind": "geometry",
         "items": 1,
-        "points": 325,
-        "vertices": 1728,
-        "primitives": 576,
+        "points": 1125,
+        "vertices": 6336,
+        "primitives": 2112,
         "instances": 0,
-        "hash": "ef5cb388885a76a3"
+        "hash": "d368fec4b4ccc492"
       },
       "fittings.balusters": {
         "kind": "instances",
@@ -4000,11 +4000,11 @@
       "cloth.flag": {
         "kind": "geometry",
         "items": 1,
-        "points": 325,
-        "vertices": 1728,
-        "primitives": 576,
+        "points": 1125,
+        "vertices": 6336,
+        "primitives": 2112,
         "instances": 0,
-        "hash": "ef5cb388885a76a3"
+        "hash": "d368fec4b4ccc492"
       },
       "fittings.balusters": {
         "kind": "instances",

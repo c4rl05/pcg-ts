@@ -9,9 +9,11 @@
  *   flag bent on its outer run, its head under the pulley.
  * - THE CLOTH as the graph builds it: a flat grid in the rod's plane whose
  *   `uv` runs 0 at the hoist to 1 at the fly, and the hoist band blue.
- * - THE PAGE'S POSE is pure in time: the same t gives the same bytes, the
- *   hoist never moves, no horizontal edge changes length and no vertical
- *   one stretches more than 10%, and at no sampled moment does the cloth
+ * - THE PAGE'S POSE, simulated (`flagPose`) or the closed-form wave the
+ *   panel can swap in (`flagWave`), is pure in time: the same t gives the
+ *   same bytes however it was reached, the hoist never moves, the cloth
+ *   stays within its stretch budget (the wave's rows keep their length
+ *   exactly, the simulation's edges within 8%), and at no sampled moment does the cloth
  *   cross the plane that separates it from every piece of the summit near
  *   it — a separating plane, so the check covers every triangle, not
  *   samples of them.
@@ -20,7 +22,7 @@
  */
 import { beforeAll, describe, expect, it } from "vitest";
 import { type Geometry, Graph, type NodeHandle, cook, firstGeometry } from "pcg-ts";
-import { FLAG_BANDS, FLAG_GRID, FLAG_POINTS, buildFlag, flagNormals, flagPose, flagWind } from "../demos/eiffel/flag.js";
+import { FLAG_BANDS, FLAG_GRID, FLAG_POINTS, buildFlag, flagNormals, flagPose, flagWave, flagWind } from "../demos/eiffel/flag.js";
 import { assemble } from "../demos/eiffel/parts.js";
 import { FLAG_GEAR, FLAG_SIZE, FLAG_SIZES, type FlagSize, ROD, buildSummit, flagHoist, lanternLevels } from "../demos/eiffel/summit.js";
 import { FLOORS } from "../demos/eiffel/spec.js";
@@ -52,10 +54,72 @@ function polygons(geo: Geometry): Vec3[][] {
   return out;
 }
 
+type Pose = typeof flagPose;
+
+/**
+ * The two flags the page can fly, and how long each is sampled: the wave
+ * is closed-form, so ten minutes cost nothing; the simulation costs its
+ * run, so five minutes, every gust period in `flag.ts` several times over
+ * and the lulls the text's flag droops lowest in.
+ */
+const FLAGS: ReadonlyArray<{ name: string; pose: Pose; span: number }> = [
+  { name: "wave", pose: flagWave, span: 600 },
+  { name: "sim", pose: flagPose, span: 300 },
+];
+
 /** The poses of `size` at every `step` seconds over `span`. */
-function* poses(size: FlagSize, span = 600, step = 0.1): Generator<Float32Array> {
+function* poses(size: FlagSize, pose: Pose, span: number, step = 0.1): Generator<Float32Array> {
   const out = new Float32Array(3 * FLAG_POINTS);
-  for (let k = 0; k * step <= span; k++) yield flagPose(k * step, out, size);
+  for (let k = 0; k * step <= span; k++) yield pose(k * step, out, size);
+}
+
+/** What the pose tests read off a sweep of one flag at one size, taken once. */
+interface Sweep {
+  /** Every sampled hoist point exactly where the cord holds it. */
+  hoistHeld: boolean;
+  worstU: number;
+  worstV: number;
+  maxX: number;
+  y0: number;
+  y1: number;
+}
+
+const sweeps = new Map<string, Sweep>();
+function sweep(size: FlagSize, flag: (typeof FLAGS)[number]): Sweep {
+  const key = `${flag.name}:${size.fly}`;
+  const got = sweeps.get(key);
+  if (got !== undefined) return got;
+  const { nu, nv } = FLAG_GRID;
+  const row = nu + 1;
+  const h = flagHoist(size);
+  const ds = h.fly / nu;
+  const dv = h.hoist / nv;
+  const r: Sweep = { hoistHeld: true, worstU: 0, worstV: 0, maxX: -Infinity, y0: Infinity, y1: -Infinity };
+  for (const P of poses(size, flag.pose, flag.span)) {
+    for (let j = 0; j <= nv; j++) {
+      const o = 3 * j * row;
+      if (P[o] !== Math.fround(h.x) || P[o + 1] !== Math.fround(h.foot + (j / nv) * h.hoist) || P[o + 2] !== 0) r.hoistHeld = false;
+      for (let i = 0; i < nu; i++) {
+        const p = o + 3 * i;
+        const q = p + 3;
+        r.worstU = Math.max(r.worstU, Math.abs(Math.hypot(P[q]! - P[p]!, P[q + 1]! - P[p + 1]!, P[q + 2]! - P[p + 2]!) / ds - 1));
+      }
+    }
+    for (let j = 0; j < nv; j++) {
+      for (let i = 0; i <= nu; i++) {
+        const p = 3 * (j * row + i);
+        const q = p + 3 * row;
+        r.worstV = Math.max(r.worstV, Math.abs(Math.hypot(P[q]! - P[p]!, P[q + 1]! - P[p + 1]!, P[q + 2]! - P[p + 2]!) / dv - 1));
+      }
+    }
+    for (let i = 0; i < FLAG_POINTS; i++) {
+      r.maxX = Math.max(r.maxX, P[3 * i]!);
+      r.y0 = Math.min(r.y0, P[3 * i + 1]!);
+      r.y1 = Math.max(r.y1, P[3 * i + 1]!);
+    }
+  }
+  sweeps.set(key, r);
+  return r;
 }
 
 /**
@@ -135,8 +199,10 @@ describe("Eiffel summit: the tricolour on the rod", () => {
     expect(flagHoist(FLAG_SIZES.text).foot).not.toBeCloseTo(flagHoist().foot, 2);
   });
 
-  it("builds the cloth as a 24 x 12 grid whose uv runs from the hoist to the fly", () => {
+  it("builds the cloth as a 44 x 24 grid of square quads whose uv runs from the hoist to the fly", () => {
     const { nu, nv } = FLAG_GRID;
+    expect([nu, nv]).toEqual([44, 24]);
+    expect(PLATE.fly / nu).toBeCloseTo(PLATE.hoist / nv, 9);
     expect(a.cloth.pointCount).toBe(FLAG_POINTS);
     expect(FLAG_POINTS).toBe((nu + 1) * (nv + 1));
     expect(polygons(a.cloth).length).toBe(2 * nu * nv);
@@ -198,64 +264,43 @@ describe("Eiffel summit: the tricolour on the rod", () => {
     expect(Math.min(...clips.map((p) => p[1]))).toBeCloseTo(h.foot - FLAG_GEAR.axle, 2);
   });
 
-  it("keeps the hoist on the cord and the cloth from stretching, at every tenth of a second for ten minutes", () => {
+  it.each(FLAGS)("$name: keeps the hoist on the cord and the cloth within its stretch budget, every tenth of a second", (flag) => {
     const { nu, nv } = FLAG_GRID;
     const row = nu + 1;
     for (const size of [FLAG_SIZES.plate, FLAG_SIZES.text]) {
-      const h = flagHoist(size);
-      const ds = h.fly / nu;
-      const dv = h.hoist / nv;
-      let worstU = 0;
-      let worstV = 0;
-      for (const P of poses(size)) {
-        for (let j = 0; j <= nv; j++) {
-          const o = 3 * j * row;
-          expect(P[o]).toBe(Math.fround(h.x));
-          expect(P[o + 1]).toBe(Math.fround(h.foot + (j / nv) * h.hoist));
-          expect(P[o + 2]).toBe(0);
-          for (let i = 0; i < nu; i++) {
-            const p = o + 3 * i;
-            const q = p + 3;
-            worstU = Math.max(worstU, Math.abs(Math.hypot(P[q]! - P[p]!, P[q + 1]! - P[p + 1]!, P[q + 2]! - P[p + 2]!) / ds - 1));
-          }
-        }
-        for (let j = 0; j < nv; j++) {
-          for (let i = 0; i <= nu; i++) {
-            const p = 3 * (j * row + i);
-            const q = p + 3 * row;
-            worstV = Math.max(worstV, Math.abs(Math.hypot(P[q]! - P[p]!, P[q + 1]! - P[p + 1]!, P[q + 2]! - P[p + 2]!) / dv - 1));
-          }
-        }
+      const r = sweep(size, flag);
+      expect(r.hoistHeld).toBe(true);
+      if (flag.pose === flagWave) {
+        // Along the fly the rows are integrated from their headings, so only f32 rounding.
+        expect(r.worstU).toBeLessThan(1e-4);
+        expect(r.worstV).toBeLessThan(0.1);
+      } else {
+        // The solver's edges give a little at the peak of a whip, never more.
+        expect(r.worstU).toBeLessThan(0.08);
+        expect(r.worstV).toBeLessThan(0.06);
+        // ...and do give: the cloth is simulated, not laid out.
+        expect(r.worstU).toBeGreaterThan(1e-3);
       }
-      // Along the fly the rows are integrated from their headings, so only f32 rounding.
-      expect(worstU).toBeLessThan(1e-4);
-      expect(worstV).toBeLessThan(0.1);
-      // Control: a sheared row is caught.
-      const P = flagPose(0, new Float32Array(3 * FLAG_POINTS), size);
-      P[3 * (nv * row + nu)] += 0.3 * dv;
+      // Control: the fly's head pulled 30% of a quad up its edge is caught,
+      // over either budget.
+      const h = flagHoist(size);
+      const dv = h.hoist / nv;
+      const P = flag.pose(0, new Float32Array(3 * FLAG_POINTS), size);
+      P[3 * (nv * row + nu) + 1] += 0.3 * dv;
       let sheared = 0;
       for (let i = 0; i <= nu; i++) {
         const p = 3 * ((nv - 1) * row + i);
         const q = p + 3 * row;
         sheared = Math.max(sheared, Math.abs(Math.hypot(P[q]! - P[p]!, P[q + 1]! - P[p + 1]!, P[q + 2]! - P[p + 2]!) / dv - 1));
       }
-      expect(sheared).toBeGreaterThan(0.01);
+      expect(sheared).toBeGreaterThan(0.1);
     }
-  });
+  }, 120_000);
 
-  it("never reaches the rod, its gear or anything else of the summit: a separating plane at every sampled moment", () => {
+  it.each(FLAGS)("$name: never reaches the rod, its gear or anything else of the summit: a separating plane at every sampled moment", (flag) => {
     for (const size of [FLAG_SIZES.plate, FLAG_SIZES.text]) {
       const h = flagHoist(size);
-      let maxX = -Infinity;
-      let y0 = Infinity;
-      let y1 = -Infinity;
-      for (const P of poses(size)) {
-        for (let i = 0; i < FLAG_POINTS; i++) {
-          maxX = Math.max(maxX, P[3 * i]!);
-          y0 = Math.min(y0, P[3 * i + 1]!);
-          y1 = Math.max(y1, P[3 * i + 1]!);
-        }
-      }
+      const { maxX, y0, y1 } = sweep(size, flag);
       // The cloth never comes round past its own hoist line toward the rod...
       expect(maxX).toBeLessThanOrEqual(Math.fround(h.x));
       // ...and nothing of the summit in its height band, but the clips that
@@ -273,20 +318,44 @@ describe("Eiffel summit: the tricolour on the rod", () => {
     // The band the check covered, for the record: the plate's flag from the
     // head down to where the fly droops in the lulls.
     expect(flagHoist().head).toBeLessThan(lanternLevels().pointsFrom);
-  });
+  }, 120_000);
 
-  it("is pure in time: the same t gives the same bytes, another t another pose", () => {
+  it.each(FLAGS)("$name: is pure in time: the same t gives the same bytes, another t another pose", (flag) => {
     const one = new Float32Array(3 * FLAG_POINTS);
     const two = new Float32Array(3 * FLAG_POINTS);
-    for (const t of [0, 0.1, 12.5, 333.3]) {
-      flagPose(t, one);
-      flagPose(99, two); // history must not matter
-      flagPose(t, two);
+    for (const t of flag.pose === flagWave ? [0, 0.1, 12.5, 333.3] : [0, 0.1, 12.5, 66.6]) {
+      flag.pose(t, one);
+      flag.pose(99, two); // history must not matter
+      flag.pose(t, two);
       expect(Buffer.from(two.buffer).equals(Buffer.from(one.buffer))).toBe(true);
     }
-    flagPose(12.5, one);
-    flagPose(12.6, two);
+    flag.pose(12.5, one);
+    flag.pose(12.6, two);
     expect(Buffer.from(two.buffer).equals(Buffer.from(one.buffer))).toBe(false);
+  }, 120_000);
+
+  it("sim: lands on the same bytes stepped there frame by frame, from rest, or from a checkpoint", () => {
+    // A seed no other test uses, so its run starts from rest here.
+    const seed = 4242;
+    const size = FLAG_SIZE;
+    const cold = flagPose(65, new Float32Array(3 * FLAG_POINTS), size, seed);
+    const out = new Float32Array(3 * FLAG_POINTS);
+    // Back to 10 s, then forward: the run jumps ahead to the checkpoint at
+    // 64 s (step 4200 from -6 s) rather than replaying from 10 s.
+    flagPose(10, out, size, seed);
+    const jumped = Buffer.from(flagPose(65, out, size, seed).buffer).equals(Buffer.from(cold.buffer));
+    expect(jumped).toBe(true);
+    // Frame by frame, at a page's uneven frame times, from a minute before.
+    for (let t = 5; t < 65; t += 1 / 47) flagPose(t, out, size, seed);
+    expect(Buffer.from(flagPose(65, out, size, seed).buffer).equals(Buffer.from(cold.buffer))).toBe(true);
+    // Controls: another seed is another flight; the next frame another pose.
+    expect(Buffer.from(flagPose(65, out, size, seed + 1).buffer).equals(Buffer.from(cold.buffer))).toBe(false);
+    expect(Buffer.from(flagPose(65 + 1 / 60, out, size, seed).buffer).equals(Buffer.from(cold.buffer))).toBe(false);
+    // A clock that is not a number is refused, not looped on.
+    expect(() => flagPose(Number.POSITIVE_INFINITY, out)).toThrow(/finite/);
+  }, 120_000);
+
+  it("draws one wind for both flags, from its seed", () => {
     // The wind is drawn from its seed: another seed, another wind.
     expect(flagWind(10).strength).toBe(flagWind(10).strength);
     expect(flagWind(10, 7).strength).not.toBe(flagWind(10).strength);
@@ -316,6 +385,7 @@ describe("Eiffel summit: the tricolour on the rod", () => {
     const n = flagNormals(rest, new Float32Array(3 * FLAG_POINTS));
     for (let i = 0; i < FLAG_POINTS; i++) expect(n[3 * i + 2]).toBeCloseTo(1, 6);
     const flying = flagNormals(flagPose(3, new Float32Array(3 * FLAG_POINTS)), new Float32Array(3 * FLAG_POINTS));
+    for (let i = 0; i < FLAG_POINTS; i++) expect(Number.isFinite(flying[3 * i]!)).toBe(true);
     for (let i = 0; i < FLAG_POINTS; i++) expect(Math.hypot(flying[3 * i]!, flying[3 * i + 1]!, flying[3 * i + 2]!)).toBeCloseTo(1, 5);
     // Control: flying, not every normal is still +z.
     expect(Math.min(...Array.from({ length: FLAG_POINTS }, (_, i) => flying[3 * i + 2]!))).toBeLessThan(0.99);

@@ -91,6 +91,7 @@ import {
   type Material,
   Mesh,
   type MeshBasicMaterial,
+  MeshPhysicalMaterial,
   MeshStandardMaterial,
   type Object3D,
   PCFShadowMap,
@@ -151,7 +152,7 @@ import {
   packedUnlitProblem,
 } from "./rivetPack.js";
 import { BufferAttribute, DataTexture, NearestFilter, SRGBColorSpace } from "three";
-import { FLAG_BANDS, FLAG_GRID, FLAG_POINTS, flagNormals, flagPose } from "./flag.js";
+import { FLAG_BANDS, FLAG_GRID, FLAG_POINTS, flagNormals, flagPose, flagWave } from "./flag.js";
 import { TIMBER, attachScrubber, buildDayParam, isWorks, isWorksIron, stageErection } from "./scrub.js";
 
 // ------------------------------------------------------------------ //
@@ -781,6 +782,15 @@ overlay.addCheckbox("Lifts", !STILL, (on) => {
   liftsRunning = on;
 });
 
+// THE FLAG flies as a simulated cloth (flag.ts) unless `?wave` asks for the
+// closed-form wave it used to be. Both are pure in the wind's clock, so
+// switching lands the other one on the same moment rather than restarting.
+let clothSim = !new URLSearchParams(location.search).has("wave");
+overlay.addCheckbox("Cloth sim", clothSim, (on) => {
+  clothSim = on;
+  waveFlags(windClock);
+});
+
 // THE ERECTION, 1887-89 (`?build`, or `?build=1887-10-10` to open on a
 // day): the tower shown as it stood on a day, with a date scrubber
 // (scrub.ts), and the temporary works it stood in (erection.ts). The
@@ -1007,6 +1017,7 @@ const VIEW_PARAMS = new Set([
   "walkAt",
   "walkNear",
   "still",
+  "wave",
 ]);
 
 function copyableView(): string {
@@ -1035,6 +1046,7 @@ function copyableView(): string {
   if (showing !== "all") query.push(`show=${showing.split(",").map(encodeURIComponent).join(",")}`);
   if (sectioned) query.push("section");
   if (siteLit) query.push("site");
+  if (!clothSim) query.push("wave");
   const highlighted = HIGHLIGHTS.filter((h) => lit[h]);
   if (highlighted.length > 0) query.push(`hl=${highlighted.join(",")}`);
   // The day the scrubber shows; before the cook has staged it, the day asked for.
@@ -1872,11 +1884,18 @@ function flagBands(): DataTexture {
   return tex;
 }
 
-/** Wool bunting: matte, both sides seen. */
-const FLAG_MATERIAL = new MeshStandardMaterial({
+/**
+ * Wool bunting: matte, both sides seen, and a sheen — the fibres' own
+ * retroreflection at grazing angles, which is what makes a fold read as
+ * cloth rather than painted card.
+ */
+const FLAG_MATERIAL = new MeshPhysicalMaterial({
   map: flagBands(),
-  roughness: 0.9,
+  roughness: 0.88,
   metalness: 0,
+  sheen: 1,
+  sheenRoughness: 0.55,
+  sheenColor: 0xd8d4cc,
   side: DoubleSide,
 });
 
@@ -1895,13 +1914,15 @@ interface Cloth {
 const cloths: Cloth[] = [];
 const FLAG_AT = new Float32Array(3 * FLAG_POINTS);
 const FLAG_NORMAL = new Float32Array(3 * FLAG_POINTS);
+/** Where the simulation is kept stepping while the wave is shown; never drawn. */
+const FLAG_IDLE = new Float32Array(3 * FLAG_POINTS);
 
 /**
  * THE FLAG'S CLOCK is its own. It runs whenever the page is not `?still`
  * or paused by the capture probe — not with the lifts' checkbox, which
  * parks the cars, not the wind — and `setClock` sets it with the lifts',
  * so a probed frame at t shows the cars AND the flag as any run has them
- * at t: `flagPose` is pure in time.
+ * at t: `flagPose` and `flagWave` are both pure in time.
  */
 // `?t=<lifts>,<wind>` opens with the two clocks at those seconds, the way
 // "copy view" writes them beside `still`: the cars and the flag as they
@@ -1947,10 +1968,11 @@ function hang(name: string, drawn: readonly Mesh[], problems: string[]): void {
   waveFlags(windClock);
 }
 
-/** Put every cloth where `flagPose` has it at `t`. Allocates nothing. */
+/** Put every cloth where `flagPose` (or, with "cloth sim" off, `flagWave`) has it at `t`. Allocates nothing. */
 function waveFlags(t: number): void {
   if (cloths.length === 0) return;
-  flagPose(t, FLAG_AT);
+  if (clothSim) flagPose(t, FLAG_AT);
+  else flagWave(t, FLAG_AT);
   flagNormals(FLAG_AT, FLAG_NORMAL);
   for (let c = 0; c < cloths.length; c++) {
     const { slot, position, normal } = cloths[c] as Cloth;
@@ -1997,6 +2019,10 @@ renderer.setAnimationLoop(() => {
   if (windRunning) {
     windClock += Math.min((now - lastFrame) / 1000, 0.1);
     waveFlags(windClock);
+    // The simulation keeps flying while the wave is shown, a step a frame,
+    // so checking "cloth sim" again lands on it at once rather than
+    // replaying every second it was off.
+    if (!clothSim && cloths.length > 0) flagPose(windClock, FLAG_IDLE);
   }
   scrubber?.tick(Math.min((now - lastFrame) / 1000, 0.1));
   const frameSeconds = Math.min((now - lastFrame) / 1000, 0.1);
