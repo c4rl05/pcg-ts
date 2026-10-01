@@ -1017,8 +1017,12 @@ highlightSlot.append(highlightRow);
 
 /** The options the "show" section has on, comma-separated; `all` when every one is. */
 let showing = "all";
-/** Whether the foundations are in section. */
+/** Whether the tower is in section. */
 let sectioned = false;
+/** Where the section's plane stands, in metres along its normal (section.ts). */
+let sectionAt = 0;
+/** The open section's per-frame upkeep (section.ts `tick`); unset until the cook attaches it. */
+let sectionTick: (() => void) | undefined;
 /** Whether the site rivets are lit against the shop's. */
 let siteLit = false;
 
@@ -1065,7 +1069,7 @@ function copyableView(): string {
     if (driven) query.push("drive");
   }
   if (showing !== "all") query.push(`show=${showing.split(",").map(encodeURIComponent).join(",")}`);
-  if (sectioned) query.push("section");
+  if (sectioned) query.push(sectionAt !== 0 ? `section=${sectionAt}` : "section");
   if (siteLit) query.push("site");
   if (!clothSim) query.push("wave");
   const highlighted = HIGHLIGHTS.filter((h) => lit[h]);
@@ -1093,6 +1097,7 @@ function copyableView(): string {
     detail: { laced: DEPTH.laced, rivets: DEPTH.rivets },
     show: showing,
     section: sectioned,
+    sectionAt,
     site: siteLit,
     highlight: highlighted,
     build: day,
@@ -1449,8 +1454,8 @@ async function main(): Promise<void> {
     );
   }
   statTotal(total.toLocaleString());
-  // Staged by date here, before anything below can swap a mesh's geometry
-  // (the section's cut): scrub.ts.
+  // Staged by date here, before anything below can swap a mesh's
+  // geometry: scrub.ts.
   const erection = BUILD ? stageErection(meshes) : undefined;
   if (rivets || riveted > 0) {
     overlay.addStat("Rivets")(riveted > 0 ? riveted.toLocaleString() : "Absent");
@@ -1479,22 +1484,47 @@ async function main(): Promise<void> {
     lightSite(params.has("site"));
     overlay.addCheckbox("Site rivets", params.has("site"), lightSite);
   }
-  // The foundations in section (`?section`, section.ts): the ground opened
-  // and what is under it cut on PL-XX's plane through piles 1 and 3.
+  // The tower in section (`?section`, or `?section=<m>` for the plane
+  // moved off the axis; section.ts): cut on a plane parallel to PL-XX's
+  // through piles 1 and 3, the ground opened on the side taken away.
   const section = attachSection({
     scene,
+    renderer,
     meshes,
     controls,
     changed: () => {
       renderer.shadowMap.needsUpdate = true;
     },
   });
+  sectionTick = () => section.tick();
+  // Half a metre past the tower either way, so the ends keep all of it and none.
+  const span = Math.ceil(section.reach + 0.5);
+  // On the slider's metre steps and inside its span, so the bar, its
+  // readout and the plane agree.
+  const askedAt = Math.round(Number(params.get("section")));
+  sectionAt = Number.isFinite(askedAt) ? Math.min(span, Math.max(-span, askedAt)) : 0;
+  section.move(sectionAt);
   const cut = (on: boolean): void => {
     sectioned = on;
-    section(on);
+    section.set(on);
+    cutRow.hidden = !on;
   };
-  if (params.has("section")) cut(true);
   overlay.addCheckbox("Section", params.has("section"), cut);
+  const cutRow = overlay.addSlider(
+    "Cut at",
+    {
+      min: -span,
+      max: span,
+      step: 1,
+      value: sectionAt,
+      format: (v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v)} m`,
+    },
+    (v) => {
+      sectionAt = v;
+      section.move(v);
+    },
+  );
+  cut(params.has("section"));
   if (fitted > 0) overlay.addStat("Fittings")(fitted.toLocaleString());
   if (linked > 0) overlay.addStat("Chain pieces")(linked.toLocaleString());
   // Only when something was overridden: the default page says nothing about
@@ -2062,6 +2092,7 @@ renderer.setAnimationLoop(() => {
   if (walk.active) walk.tick();
   else if (!driven) controls.update();
   bands?.tick(camera);
+  sectionTick?.();
   if (plates?.active === true) plates.render();
   else rig.render();
   tickFps();

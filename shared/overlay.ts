@@ -48,6 +48,8 @@ function injectStyles(): void {
 .pcg-overlay h1 { margin: 0 0 2px; font-size: 15px; font-weight: 600; color: var(--ed-ink-hi); }
 .pcg-overlay .pcg-info { margin: 0 0 10px; color: var(--ed-ink-dim); font-size: 12px; }
 .pcg-overlay .pcg-row { display: flex; align-items: center; gap: 8px; margin: 7px 0; }
+/* The flex above outranks the UA's [hidden] rule; a page hides a row with the hidden attribute. */
+.pcg-overlay .pcg-row[hidden] { display: none; }
 .pcg-overlay .pcg-row > label { flex: 0 0 96px; color: var(--ed-ink-mid); font-size: 12px; }
 /* The slider: a solid bar filled to its value, and no thumb. Kept
    character for character in step with the same rule in
@@ -214,7 +216,7 @@ export interface Overlay {
     label: string,
     opts: { min: number; max: number; step: number; value: number; format?: (v: number) => string },
     onChange: (value: number) => void,
-  ): void;
+  ): HTMLDivElement;
   addSelect(
     label: string,
     options: readonly { value: string; label: string }[],
@@ -436,6 +438,7 @@ export function createOverlay(opts: {
       });
       div.appendChild(input);
       div.appendChild(val);
+      return div;
     },
     addSelect(label, options, initial, onChange) {
       const div = row(label);

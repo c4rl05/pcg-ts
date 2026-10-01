@@ -19,8 +19,8 @@
  * Only `?build` (or the panel's "build" toggle, which reloads into it)
  * runs any of this; the default page never reorders a thing. The staging
  * holds each GEOMETRY, not its mesh, so a view that swaps a mesh's
- * geometry for another (the section's cut, section.ts) leaves the staged
- * one as it was and shows its own whole.
+ * geometry for another leaves the staged one as it was and shows its own
+ * whole. (The section, section.ts, swaps nothing: it is a clipping plane.)
  */
 import type { BufferGeometry, InstancedBufferAttribute, InstancedBufferGeometry, InstancedMesh, Mesh } from "three";
 import { BufferAttribute, DoubleSide, MeshStandardMaterial } from "three";

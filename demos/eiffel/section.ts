@@ -1,126 +1,160 @@
 /**
- * THE SECTION VIEW: the ground opened, and what is under it cut on a
- * vertical plane, so the foundations (ground.ts, SOURCES.md §31.4) can be
- * seen where they stand. The graph builds them whole; the page owns the
- * cut.
+ * THE SECTION VIEW: the whole tower cut on a vertical plane, and the
+ * ground opened on the side taken away, so the structure and the
+ * foundations under it (ground.ts, SOURCES.md §31.4) can be seen in
+ * section. The graph builds everything whole; the page owns the cut.
  *
- * THE PLANE is the one PL-XX draws its section on, « suivant la diagonale
- * de la pile 1 (Nord) à la pile 3 (Sud) »: x + z = 0 in the render, through
- * both piles' centres. Pile 4's half (x + z > 0) is kept — its caissons
- * and the flue whole — and piles 1 and 3 are cut down their
- * diagonals: pile 1's caissons and massifs in half, pile 3's machine room
- * through the middle. Pile 2's half is taken away with the ground over it,
- * so the camera looks from there into the cut.
+ * THE PLANE is parallel to the one PL-XX draws its section on, « suivant
+ * la diagonale de la pile 1 (Nord) à la pile 3 (Sud) »: x + z = OFFSET·√2
+ * in the render. At offset 0 it runs through both piles' centres, and
+ * pile 4's half (x + z > 0) is kept — its caissons and the flue whole —
+ * while piles 1 and 3 are cut down their diagonals and pile 2's half is
+ * taken away with the ground over it, so the camera looks from there into
+ * the cut. The page's slider moves the plane along its normal, from
+ * keeping everything to keeping nothing.
  *
- * THE CUT IS GEOMETRY, made once on the CPU when the view is first opened
- * and swapped in and out after that. A clipping plane would be simpler,
- * but the occlusion pass draws its own normal-and-depth prepass with one
- * override material, which knows nothing of a material's clipping planes:
- * the opened ground would still be in the prepass and shade everything
- * under it. Cut triangles are split on the plane, so a massif's section
- * shows as its cut outline; being a surface, the cut face itself is open.
+ * THE CUT IS A CLIPPING PLANE, so moving it costs nothing. It is set in
+ * two places, because neither reaches every pass alone:
  *
- * What is cut: the `foundations` class whole, the ground plane, and of
- * the `groundIron`, `machinery` and `masonry` classes only what is under
- * the ground (the machine room's plant, the caissons' shells, the lifts'
- * machinery where it goes down into the piles, the supports' lower
- * stones), so nothing of the tower above the ground is touched.
+ * - the renderer's global planes, which every draw of the scene with a
+ *   built-in material is clipped by: the lit image, and the passes that
+ *   draw the scene through ONE override material — the occlusion's
+ *   normal-and-depth prepass, the drawing's normal pass — which know
+ *   nothing of a material's own planes. Without them the opened half
+ *   would still be in the prepass and shade the cut. A ShaderMaterial is
+ *   clipped only with `clipping: true`, so the sky and the full-screen
+ *   passes are left alone;
+ * - each material's own planes, with `clipShadows`, because the shadow
+ *   pass applies no global plane: without them the half taken away would
+ *   still throw its shadow into the cut. A custom depth material (the
+ *   streamed bands') needs nothing of its own: the shadow pass copies the
+ *   mesh material's planes onto it. Meshes arrive after the view is
+ *   opened (the streamed detail, the build's days), so the page calls
+ *   `tick` every frame while it is open; materials already carrying the
+ *   plane are skipped.
+ *
+ * Being a clip, the cut face is open: a massif shows its cut outline, and
+ * a hollow member is seen into.
  */
-import { BufferAttribute, BufferGeometry, Mesh, Plane, Vector3, type Object3D } from "three";
+import { Box3, InstancedMesh, type Material, Mesh, type Object3D, Plane, Vector3 } from "three";
 
-/** PL-XX's section plane, as the half-space kept: x + z ≥ 0. */
-export const SECTION_PLANE = new Plane(new Vector3(1, 0, 1).normalize(), 0);
-
-/** Under the ground: a triangle lower than this everywhere is cut with the foundations. */
-const UNDER = 0.05;
+/** The plane's normal: PL-XX's diagonal, pointing into the half that is kept (pile 4's). */
+export const SECTION_NORMAL = new Vector3(1, 0, 1).normalize();
 
 /**
- * `geo` less what lies on the negative side of `plane`, its triangles
- * split on it; with `under`, only triangles wholly under that height are
- * cut and the rest kept as they are. Positions and normals are carried;
- * the result is unindexed.
+ * The half-space kept at `offset` metres along SECTION_NORMAL from the
+ * tower's axis: SECTION_NORMAL · p ≥ offset. Written into `target`.
  */
-export function cutGeometry(geo: BufferGeometry, plane: Plane, under?: number): BufferGeometry {
-  const src = geo.index !== null ? geo.toNonIndexed() : geo;
-  const P = src.getAttribute("position");
-  const N = src.getAttribute("normal");
-  const pos: number[] = [];
-  const nor: number[] = [];
-  const a = new Vector3();
-  const b = new Vector3();
-  const push = (p: Vector3, n: Vector3 | undefined) => {
-    pos.push(p.x, p.y, p.z);
-    if (n !== undefined) nor.push(n.x, n.y, n.z);
-  };
-  for (let t = 0; t < P.count; t += 3) {
-    const v = [0, 1, 2].map((k) => new Vector3().fromBufferAttribute(P, t + k));
-    const n = N === undefined ? undefined : [0, 1, 2].map((k) => new Vector3().fromBufferAttribute(N, t + k));
-    const d = v.map((p) => plane.distanceToPoint(p));
-    const high = Math.max(v[0]!.y, v[1]!.y, v[2]!.y);
-    if ((under !== undefined && high >= under) || d.every((x) => x >= 0)) {
-      for (let k = 0; k < 3; k++) push(v[k]!, n?.[k]);
-      continue;
-    }
-    if (d.every((x) => x < 0)) continue;
-    // The kept part of the triangle, in order round it.
-    const ring: Array<{ p: Vector3; n: Vector3 | undefined }> = [];
-    for (let k = 0; k < 3; k++) {
-      const j = (k + 1) % 3;
-      if (d[k]! >= 0) ring.push({ p: v[k]!, n: n?.[k] });
-      if (d[k]! >= 0 !== d[j]! >= 0) {
-        const s = d[k]! / (d[k]! - d[j]!);
-        a.copy(v[k]!).lerp(v[j]!, s);
-        const nn = n === undefined ? undefined : b.copy(n[k]!).lerp(n[j]!, s).normalize().clone();
-        ring.push({ p: a.clone(), n: nn });
-      }
-    }
-    for (let k = 1; k + 1 < ring.length; k++) {
-      for (const q of [ring[0]!, ring[k]!, ring[k + 1]!]) push(q.p, q.n);
+export function sectionPlane(offset: number, target = new Plane()): Plane {
+  return target.set(SECTION_NORMAL, -offset);
+}
+
+/**
+ * How far along SECTION_NORMAL the boxes reach, either way: the slider's
+ * span, so its ends keep everything and nothing.
+ */
+export function sectionReach(boxes: Iterable<Box3>): number {
+  let reach = 0;
+  const corner = new Vector3();
+  for (const box of boxes) {
+    if (box.isEmpty()) continue;
+    for (let k = 0; k < 8; k++) {
+      corner.set(k & 1 ? box.max.x : box.min.x, k & 2 ? box.max.y : box.min.y, k & 4 ? box.max.z : box.min.z);
+      reach = Math.max(reach, Math.abs(corner.dot(SECTION_NORMAL)));
     }
   }
-  const out = new BufferGeometry();
-  out.setAttribute("position", new BufferAttribute(new Float32Array(pos), 3));
-  if (N !== undefined) out.setAttribute("normal", new BufferAttribute(new Float32Array(nor), 3));
-  out.computeBoundingBox();
-  out.computeBoundingSphere();
-  return out;
+  return reach;
 }
 
 /** What the section needs from the page. */
 export interface SectionHost {
-  /** The scene, to find the rig's ground plane in (the one `PlaneGeometry` it holds). */
+  /** The scene, every material in which is cut. */
   readonly scene: Object3D;
-  /** The drawn meshes by output name, as the page keeps them. */
+  /** The renderer, whose global planes cut every pass but the shadows. */
+  readonly renderer: { clippingPlanes: Plane[]; localClippingEnabled: boolean };
+  /** The drawn meshes by output name, as the page keeps them: what the slider spans. */
   readonly meshes: ReadonlyMap<string, readonly Mesh[]>;
   /** The orbit controls, whose floor the view lowers so the camera can look into the cut. */
   readonly controls: { maxPolarAngle: number };
-  /** Called after every switch: the page redraws its shadow map. */
+  /** Called after every change: the page redraws its shadow map. */
   readonly changed: () => void;
 }
 
+/** The section view's handle. */
+export interface Section {
+  /** Open or close the view. */
+  set(on: boolean): void;
+  /** Move the plane to `offset` metres along SECTION_NORMAL. */
+  move(offset: number): void;
+  /** Every frame while open: give materials that arrived since the plane. */
+  tick(): void;
+  /** How far the tower reaches along SECTION_NORMAL, either way. */
+  readonly reach: number;
+}
+
+/** A material the plane can cut: a ShaderMaterial only if it asked for clipping. */
+function clippable(m: Material): boolean {
+  const shader = m as Material & { isShaderMaterial?: boolean; clipping?: boolean };
+  return shader.isShaderMaterial !== true || shader.clipping === true;
+}
+
 /**
- * Prepare the section view and return its switch. Nothing is cut until it
- * is first switched on.
+ * Prepare the section view and return its handle. Nothing is cut until it
+ * is first opened.
  */
-export function attachSection(host: SectionHost): (on: boolean) => void {
+export function attachSection(host: SectionHost, offset = 0): Section {
   const floor = host.controls.maxPolarAngle;
-  const swaps: Array<{ mesh: Mesh; whole: BufferGeometry; cut?: BufferGeometry; under?: number }> = [];
-  for (const mesh of host.meshes.get("foundations") ?? []) swaps.push({ mesh, whole: mesh.geometry });
-  for (const cls of ["groundIron", "machinery", "masonry"]) {
-    for (const mesh of host.meshes.get(cls) ?? []) swaps.push({ mesh, whole: mesh.geometry, under: UNDER });
+  const plane = sectionPlane(offset);
+  const planes = [plane];
+  const given = new Set<Material>();
+  let open = false;
+
+  // Instanced batches (rivets, fittings) sit on the members they dress, and
+  // bounding them walks every instance, so they are left out of the span.
+  const boxes: Box3[] = [];
+  for (const list of host.meshes.values()) {
+    for (const mesh of list) if (!(mesh instanceof InstancedMesh)) boxes.push(new Box3().setFromObject(mesh));
   }
-  let ground: Mesh | undefined;
-  host.scene.traverse((o) => {
-    if (ground === undefined && o instanceof Mesh && (o.geometry as BufferGeometry).type === "PlaneGeometry") ground = o;
-  });
-  if (ground !== undefined) swaps.push({ mesh: ground, whole: ground.geometry });
-  return (on: boolean) => {
-    for (const s of swaps) {
-      if (on && s.cut === undefined) s.cut = cutGeometry(s.whole, SECTION_PLANE, s.under);
-      s.mesh.geometry = on ? (s.cut as BufferGeometry) : s.whole;
+  const reach = sectionReach(boxes);
+
+  const give = (m: Material | undefined, on: boolean): void => {
+    if (m === undefined || !clippable(m)) return;
+    if (on === given.has(m)) return;
+    m.clippingPlanes = on ? planes : null;
+    m.clipShadows = on;
+    if (on) given.add(m);
+    else given.delete(m);
+  };
+  const giveAll = (on: boolean): void => {
+    if (!on) {
+      for (const m of [...given]) give(m, false);
+      return;
     }
-    // Low enough to look up under the kept ground from the opened side.
-    host.controls.maxPolarAngle = on ? Math.PI * 0.62 : floor;
-    host.changed();
+    host.scene.traverse((o) => {
+      if (!(o instanceof Mesh)) return;
+      const ms = Array.isArray(o.material) ? (o.material as Material[]) : [o.material as Material];
+      for (const m of ms) give(m, true);
+    });
+  };
+
+  return {
+    reach,
+    set(on: boolean) {
+      if (on === open) return;
+      open = on;
+      host.renderer.localClippingEnabled = on;
+      host.renderer.clippingPlanes = on ? planes : [];
+      giveAll(on);
+      // Low enough to look up under the kept ground from the opened side.
+      host.controls.maxPolarAngle = on ? Math.PI * 0.62 : floor;
+      host.changed();
+    },
+    move(to: number) {
+      sectionPlane(to, plane);
+      if (open) host.changed();
+    },
+    tick() {
+      if (open) giveAll(true);
+    },
   };
 }

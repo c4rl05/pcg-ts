@@ -356,12 +356,18 @@ export function attachPlates(opts: {
     const planes = renderer.clippingPlanes;
     if (clip) renderer.clippingPlanes = GROUND_CLIP;
     renderer.render(scene, camera);
-    renderer.clippingPlanes = planes;
-    if (!quad.visible) return;
+    if (!quad.visible) {
+      renderer.clippingPlanes = planes;
+      return;
+    }
+    // The scan is drawn whole: the section's plane (section.ts) is the
+    // renderer's global one while it is open, and would cut the quad.
+    renderer.clippingPlanes = [];
     const autoClear = renderer.autoClear;
     renderer.autoClear = false;
     renderer.render(overlayScene, camera);
     renderer.autoClear = autoClear;
+    renderer.clippingPlanes = planes;
   }
 
   return {

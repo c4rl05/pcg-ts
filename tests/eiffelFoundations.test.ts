@@ -248,30 +248,26 @@ describe("eiffel foundations: under the ground, clear of the tower", () => {
   });
 });
 
-describe("eiffel foundations: the page's section (section.ts)", () => {
-  it("cuts on PL-XX's plane, keeping pile 4's half, and leaves the tower above the ground alone", async () => {
-    const { BoxGeometry } = await import("three");
-    const { SECTION_PLANE, cutGeometry } = await import("../demos/eiffel/section.js");
-    // The plane through piles 1 and 3, keeping pile 4 (+x +z).
-    expect(SECTION_PLANE.distanceToPoint(new (await import("three")).Vector3(50.7, 0, 50.7))).toBeGreaterThan(0);
-    expect(SECTION_PLANE.distanceToPoint(new (await import("three")).Vector3(50.7, 0, -50.7))).toBeCloseTo(0, 9);
-    // A 10 m box on the plane, under the ground: what is left lies on the kept side, and half its area.
-    const box = new BoxGeometry(10, 4, 10).translate(0, -3, 0);
-    const cut = cutGeometry(box, SECTION_PLANE);
-    const P = cut.getAttribute("position");
-    let area = 0;
-    for (let i = 0; i < P.count; i++) expect(P.getX(i) + P.getZ(i)).toBeGreaterThan(-1e-5);
-    const tri = (i: number) => {
-      const v = [0, 1, 2].map((k) => [P.getX(i + k), P.getY(i + k), P.getZ(i + k)] as const);
-      const u = [v[1]![0] - v[0]![0], v[1]![1] - v[0]![1], v[1]![2] - v[0]![2]];
-      const w = [v[2]![0] - v[0]![0], v[2]![1] - v[0]![1], v[2]![2] - v[0]![2]];
-      return Math.hypot(u[1]! * w[2]! - u[2]! * w[1]!, u[2]! * w[0]! - u[0]! * w[2]!, u[0]! * w[1]! - u[1]! * w[0]!) / 2;
-    };
-    for (let i = 0; i < P.count; i += 3) area += tri(i);
-    // Half the box's surface, less the two 4 m end faces the cut opens: (2·100 + 4·40) / 2.
-    expect(area).toBeCloseTo((2 * 100 + 4 * 40) / 2, 3);
-    // With `under`, a box standing above the ground is kept whole.
-    const tall = new BoxGeometry(10, 4, 10).translate(0, 3, 0);
-    expect(cutGeometry(tall, SECTION_PLANE, 0.05).getAttribute("position").count).toBe(36);
+describe("eiffel: the page's section (section.ts)", () => {
+  it("cuts on a plane parallel to PL-XX's, keeping pile 4's half, and moves it along its normal", async () => {
+    const { Box3, Vector3 } = await import("three");
+    const { SECTION_NORMAL, sectionPlane, sectionReach } = await import("../demos/eiffel/section.js");
+    // At 0, the plane through piles 1 and 3, keeping pile 4 (+x +z).
+    const axis = sectionPlane(0);
+    expect(axis.distanceToPoint(new Vector3(50.7, 0, 50.7))).toBeGreaterThan(0);
+    expect(axis.distanceToPoint(new Vector3(50.7, 0, -50.7))).toBeCloseTo(0, 9);
+    expect(axis.distanceToPoint(new Vector3(-50.7, 0, -50.7))).toBeLessThan(0);
+    // Moved 10 m toward pile 4: a point 10 m along the normal is on it, the axis is cut away.
+    const moved = sectionPlane(10);
+    expect(moved.distanceToPoint(SECTION_NORMAL.clone().multiplyScalar(10))).toBeCloseTo(0, 9);
+    expect(moved.distanceToPoint(new Vector3(0, 300, 0))).toBeCloseTo(-10, 9);
+    // The same Plane is reused, so the materials holding it follow the slider.
+    expect(sectionPlane(-4, axis)).toBe(axis);
+    expect(axis.distanceToPoint(new Vector3())).toBeCloseTo(4, 9);
+    // The slider's span: the farthest corner along the normal, either way.
+    const base = new Box3(new Vector3(-62.5, 0, -62.5), new Vector3(62.5, 300, 62.5));
+    expect(sectionReach([base])).toBeCloseTo(62.5 * Math.SQRT2, 9);
+    expect(sectionReach([new Box3(new Vector3(-80, 0, 0), new Vector3(-70, 1, 1))])).toBeCloseTo(80 / Math.SQRT2, 9);
+    expect(sectionReach([new Box3()])).toBe(0);
   });
 });
