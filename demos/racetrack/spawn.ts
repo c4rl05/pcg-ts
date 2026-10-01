@@ -6,7 +6,7 @@
  * stuffed a `THREE.InstancedMesh` by hand. That works and it is a dead
  * end: there is no place for real art to attach, because nothing in the
  * pipeline ever names an ASSET. Here the dressing becomes what every
- * other pcg-ts spawn is — a point cloud carrying the standard transform
+ * other PCG-TS spawn is — a point cloud carrying the standard transform
  * attributes plus an `asset` id — and the renderer resolves those ids
  * against an `AssetMap`. Swapping a unit cube for a real mesh is then a
  * change to the asset map and to nothing else.

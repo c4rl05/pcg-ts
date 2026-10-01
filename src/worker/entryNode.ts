@@ -11,7 +11,7 @@ import type { MainToWorkerMessage } from "./protocol.js";
 
 if (parentPort === null) {
   throw new Error(
-    "pcg-ts cook worker entry was imported on a main thread; it only runs inside a worker_threads Worker — spawn it via CookWorkerPool (pcg-ts/worker) or new Worker(new URL(...))",
+    "PCG-TS cook worker entry was imported on a main thread; it only runs inside a worker_threads Worker — spawn it via CookWorkerPool (pcg-ts/worker) or new Worker(new URL(...))",
   );
 }
 const port = parentPort;

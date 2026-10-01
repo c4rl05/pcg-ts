@@ -181,9 +181,9 @@ async function bundlePage(): Promise<string> {
   writeFileSync(
     join(outDir, "index.html"),
     `<!doctype html>
-<html><head><meta charset="utf-8"><title>pcg-ts instance channels</title></head>
+<html><head><meta charset="utf-8"><title>PCG-TS instance channels</title></head>
 <body style="background:#111;color:#ddd;font:13px ui-monospace,monospace;padding:12px">
-<h1 style="font-size:14px">pcg-ts per-instance channel render harness</h1>
+<h1 style="font-size:14px">PCG-TS per-instance channel render harness</h1>
 <p>Each strip below is a 64x16 render target blown up: four instances, one per column,
 coloured by a per-instance channel that only the shader can see.</p>
 <script type="module" src="./page.js"></script>

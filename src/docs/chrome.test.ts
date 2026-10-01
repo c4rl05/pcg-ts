@@ -125,6 +125,7 @@ describe("the breadcrumb", () => {
     const html = renderChromeHeader("guides/racetrack.html", "0.17.0");
     const crumb = html.slice(html.indexOf("sitehdr-crumb"), html.indexOf("sitehdr-meta"));
     expect(crumb).not.toContain(">pcg-ts<");
+    expect(crumb).not.toContain(">PCG-TS<");
   });
 });
 

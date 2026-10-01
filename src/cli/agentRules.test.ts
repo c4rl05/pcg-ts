@@ -65,7 +65,7 @@ describe("the agent-rules block", () => {
     const lines = BLOCK.split("\n");
     expect(lines[0]).toBe(AGENT_BLOCK_BEGIN);
     expect(lines.at(-1)).toBe(AGENT_BLOCK_END);
-    expect(lines[1]).toContain(`pcg-ts ${VERSION}`);
+    expect(lines[1]).toContain(`PCG-TS ${VERSION}`);
     expect(BLOCK).toContain("`npx pcg agents --write` regenerates this block");
     expect(BLOCK).toContain("edits inside the markers are overwritten");
   });

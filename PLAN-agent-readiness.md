@@ -5,10 +5,10 @@ Opened 2026-09-15, at `main` @ `4228032`, npm `latest` 0.17.0. Not started.
 This follows `PLAN-agent-authoring.md`, the 2026-08-17 blind-authoring
 friction log. That log fixed what one agent tripped over. This plan starts
 from the other end: what published practice and measurement say a library
-has to give an agent that has never seen it, checked against what pcg-ts
+has to give an agent that has never seen it, checked against what PCG-TS
 ships today.
 
-**The short version.** pcg-ts already has most of the substance: complete
+**The short version.** PCG-TS already has most of the substance: complete
 registry metadata, a CLI that covers validate → cook → inspect → render,
 strict load-time validation, 95 described graphs, and llms.txt plus three
 skills inside the npm package. What is missing is the first minute and the

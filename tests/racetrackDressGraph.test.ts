@@ -2,7 +2,7 @@
  * Level 1's first three stages, checked against the TypeScript they mirror.
  *
  * WHAT THIS SUITE IS FOR. `demos/racetrack/dressGraph.ts` states box
- * building, Z-1 and the enclosure measurement as a pcg-ts graph. Those
+ * building, Z-1 and the enclosure measurement as a PCG-TS graph. Those
  * three already exist as synchronous TypeScript over a cooked `Lap`
  * (`buildBoxes` in `dress.ts`, `resolveCorridor` in `zones.ts`,
  * `enclosureMask` in `enclosure.ts`) and that TypeScript is not going

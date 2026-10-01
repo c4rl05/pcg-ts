@@ -266,7 +266,7 @@
     aria-expanded={!collapsed}
     onclick={onToggle}
     onkeydown={onTitleKeydown}
-  ><!-- The pcg-ts wordmark. The geometry lives in `shared/wordmark.ts`,
+  ><!-- The PCG-TS wordmark. The geometry lives in `shared/wordmark.ts`,
        which the demos draw from too; see that file for why it is inline
        rather than a `src`, and for the two standalone SVGs it has to stay
        in agreement with. -->

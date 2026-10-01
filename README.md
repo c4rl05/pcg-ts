@@ -4,7 +4,7 @@
      also the fallback wherever <picture> is not honoured. -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./docs/logo-dark.svg">
-  <img alt="pcg-ts" src="./docs/logo-light.svg" width="420">
+  <img alt="PCG-TS" src="./docs/logo-light.svg" width="420">
 </picture>
 
 <!-- THE LEDE, AND THE LANDING PAGE'S TOO. `npm run docs:site` converts
@@ -17,17 +17,17 @@
 <!--pcg:lede-->
 **Build worlds out of rules instead of files.** You write the recipe —
 scatter points over this ground, thin them out with noise, turn each
-survivor a random amount, put a tree on every one — and pcg-ts runs it.
+survivor a random amount, put a tree on every one — and PCG-TS runs it.
 The recipe is a small graph of nodes; running it is called a *cook*. Feed
 it the same seed and you get the same world back, byte for byte, on any
 machine, forever.
 
-pcg-ts is built for real-time use — cooking is budgeted and cancellable so
+PCG-TS is built for real-time use — cooking is budgeted and cancellable so
 it can run inside a frame, and the field grammar compiles to WGSL to run
 on a GPU device when one is there.
 <!--/pcg:lede-->
 
-<img alt="The pcg-ts editor showing a four-node graph laid out left to right across the middle of the frame, floating over the scene it just produced: a few hundred conifers standing on a dark ground grid, gathered into clumps with open clearings between them rather than spread evenly. The nodes read fill/scatter-even (count 700, minDistance 0.8), filter/mask-by-noise (threshold 0.45, frequency 0.03), write/random-scale (min 2, max 5) and spawnInstances. A panel down the left titled compose several primitives into a scatter offers tabs for scatter, mask and size with sliders for points at 700, spacing at 0.8 m and seed, and a copy link button. The status line along the top reads 60 fps, cook 11.5 ms, 4 of 4 cooked and cached, 2 out, 541 points, 541 instances, drawn as instances and points." src="./docs/manual-assets/editor.jpg" width="100%">
+<img alt="The PCG-TS editor showing a four-node graph laid out left to right across the middle of the frame, floating over the scene it just produced: a few hundred conifers standing on a dark ground grid, gathered into clumps with open clearings between them rather than spread evenly. The nodes read fill/scatter-even (count 700, minDistance 0.8), filter/mask-by-noise (threshold 0.45, frequency 0.03), write/random-scale (min 2, max 5) and spawnInstances. A panel down the left titled compose several primitives into a scatter offers tabs for scatter, mask and size with sliders for points at 700, spacing at 0.8 m and seed, and a copy link button. The status line along the top reads 60 fps, cook 11.5 ms, 4 of 4 cooked and cached, 2 out, 541 points, 541 instances, drawn as instances and points." src="./docs/manual-assets/editor.jpg" width="100%">
 
 *Four nodes and a forest. `scatter-even` fills a square with points
 under a minimum spacing so light it barely prunes, which leaves the
@@ -40,9 +40,9 @@ dropped in as one node. The graph floats over the thing it just made;
 the panel on the left drives it.
 ([Open it live.](https://c4rl05.github.io/pcg-ts/editor/?graph=basics-compose-primitives))*
 
-## What is pcg-ts?
+## What is PCG-TS?
 
-pcg-ts is a TypeScript library, not an application. It is built for
+PCG-TS is a TypeScript library, not an application. It is built for
 three kinds of work:
 
 - **A world with no edges** — terrain, a city, a galaxy — streamed in
@@ -469,7 +469,7 @@ with no graph file at all.
 
 ### Paths and networks
 
-<img alt="A cooked scene from the suspended-rig graph in the pcg-ts editor, shaded by surface normals on black. A long slender rig hangs in a shallow catenary from upper left to lower right: a spine of swept tubes reading cyan and pale blue, bristling with hundreds of short magenta and violet struts, with thin cyan cables looping in even swags beneath it and a row of dotted vertical masts rising above. A ground grid recedes behind it. The status line reports 60 fps, cook 62.2 ms, 67 of 72 cooked, 57,855 points and 899 instances, drawn as 21 meshes, 2 instance batches, lines and 2 point clouds." src="./docs/manual-assets/editor-rig.jpg" width="100%">
+<img alt="A cooked scene from the suspended-rig graph in the PCG-TS editor, shaded by surface normals on black. A long slender rig hangs in a shallow catenary from upper left to lower right: a spine of swept tubes reading cyan and pale blue, bristling with hundreds of short magenta and violet struts, with thin cyan cables looping in even swags beneath it and a row of dotted vertical masts rising above. A ground grid recedes behind it. The status line reports 60 fps, cook 62.2 ms, 67 of 72 cooked, 57,855 points and 899 instances, drawn as 21 meshes, 2 instance batches, lines and 2 point clouds." src="./docs/manual-assets/editor-rig.jpg" width="100%">
 
 *[`graphs/examples-rig.json`](https://c4rl05.github.io/pcg-ts/editor/?graph=examples-rig),
 shaded by normals. Every tube, strut, cable and swag here is a path: one
@@ -528,7 +528,7 @@ filtering one.
 
 ## The editor
 
-<img alt="The pcg-ts editor open on the suspended-rig graph, shaded by surface normals so the swept tubes read as vivid magenta, cyan and green ribbons filling the frame. A toolbar across the top carries the graph picker, seed 3, a shade selector reading normals and a cook selector reading cpu; the status line beside it reads 60 fps, cook 47.3 ms, 56 of 83 cooked and cached, 11 out, 56,900 points and 899 instances, drawn as 21 meshes, 2 instance batches, lines and 2 point clouds. Dozens of connected nodes float over the render as a full-bleed overlay. On the left a curated knobs panel offers tabs for spine, truss, components, cables, swags and skins, with sliders for samples, wander and variant. On the right the inspector shows a selected transformPoints node named trussMove5, its registry prose, and its field-capable translate parameter holding an expression written as TEXT: param(&quot;trussHalfWidth&quot;) * 1.4142135623730951 * lerp(...) * attribute(&quot;curveNormal&quot;, 3), with a note that trussHalfWidth is supplied by an exposed param on an enclosing subgraph." src="./docs/manual-assets/pcg-ts-node-editor.jpg" width="100%">
+<img alt="The PCG-TS editor open on the suspended-rig graph, shaded by surface normals so the swept tubes read as vivid magenta, cyan and green ribbons filling the frame. A toolbar across the top carries the graph picker, seed 3, a shade selector reading normals and a cook selector reading cpu; the status line beside it reads 60 fps, cook 47.3 ms, 56 of 83 cooked and cached, 11 out, 56,900 points and 899 instances, drawn as 21 meshes, 2 instance batches, lines and 2 point clouds. Dozens of connected nodes float over the render as a full-bleed overlay. On the left a curated knobs panel offers tabs for spine, truss, components, cables, swags and skins, with sliders for samples, wander and variant. On the right the inspector shows a selected transformPoints node named trussMove5, its registry prose, and its field-capable translate parameter holding an expression written as TEXT: param(&quot;trussHalfWidth&quot;) * 1.4142135623730951 * lerp(...) * attribute(&quot;curveNormal&quot;, 3), with a note that trussHalfWidth is supplied by an exposed param on an enclosing subgraph." src="./docs/manual-assets/pcg-ts-node-editor.jpg" width="100%">
 
 *The editor with everything turned on, on the same rig graph: the node
 graph as a full-bleed overlay over its own cook, a per-graph knobs panel
@@ -848,7 +848,7 @@ compute a bounding sphere from.
 
 ## GPU cooking (WebGPU)
 
-<img alt="The pcg-ts editor cooking a six-node chain on the device. The nodes run left to right along the bottom: pointScatterInBounds (count 40000), setAttribute named wobble, jitterPoints whose amount param is marked with an f for field and reads attribute(...), transformPoints, then setAttribute color and setAttribute psize. Behind them a 40,000-point cloud fills a box in faint teal on black. The cook selector in the toolbar reads gpu, fused, and the status line reports 60 fps, cook 27.6 ms, 6 of 0 cooked and cached, 40,000 points, 6 dispatches, 1 of 2 runs fused, 1 readback saved, and 1 suffix-fused." src="./docs/manual-assets/editor-gpu.jpg" width="100%">
+<img alt="The PCG-TS editor cooking a six-node chain on the device. The nodes run left to right along the bottom: pointScatterInBounds (count 40000), setAttribute named wobble, jitterPoints whose amount param is marked with an f for field and reads attribute(...), transformPoints, then setAttribute color and setAttribute psize. Behind them a 40,000-point cloud fills a box in faint teal on black. The cook selector in the toolbar reads gpu, fused, and the status line reports 60 fps, cook 27.6 ms, 6 of 0 cooked and cached, 40,000 points, 6 dispatches, 1 of 2 runs fused, 1 readback saved, and 1 suffix-fused." src="./docs/manual-assets/editor-gpu.jpg" width="100%">
 
 *The `cook` selector switched to **gpu · fused** under an unchanged
 graph. `1 / 2 run / fused`, `1 readbacks saved` and `suffix-fused` in the

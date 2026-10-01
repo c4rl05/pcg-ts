@@ -1,4 +1,4 @@
-# pcg-ts
+# PCG-TS
 
 > Deterministic procedural content generation for TypeScript: attributes on point, vertex, primitive and detail domains, node graphs that serialize to JSON, deferred fields, hierarchical streaming, optional GPU cooking and three.js interop.
 
@@ -18,9 +18,9 @@ In a project that depends on pcg-ts, `npx pcg agents --write` puts a short, vers
 
 ## Skills
 
-- [graph-authoring](skills/graph-authoring/SKILL.md): Doctrine for building a pcg-ts graph. Use before writing or editing pcg-ts graph JSON, when choosing between a shipped primitive and hand-wired node types, when a graph rejects a param or pin you guessed at, or when it cooks without error but the output looks wrong.
-- [determinism](skills/determinism/SKILL.md): Doctrine for keeping pcg-ts output reproducible. Use when adding randomness or noise to a graph, when choosing a seed or a per-instance variation knob, when output changes between runs or between machines, when writing a World level's per-cell bind, when content must look the same from either side of a cell boundary or a halo, when adding or sizing a neighbourhood, prune or topology op, when touching subgraph or GPU code paths, or before claiming any change is deterministic.
-- [performance-and-budgets](skills/performance-and-budgets/SKILL.md): Doctrine for what a pcg-ts cook costs and for keeping it from blocking the frame. Use when a cook is slower than expected, when reading `pcg cook --stats`, when choosing a budget for a frame loop or a World update, when sizing candidate counts or deciding where a filter belongs, when a graph is fine standalone but seams or stutters inside a World, or before optimizing anything inside the library.
+- [graph-authoring](skills/graph-authoring/SKILL.md): Doctrine for building a PCG-TS graph. Use before writing or editing PCG-TS graph JSON, when choosing between a shipped primitive and hand-wired node types, when a graph rejects a param or pin you guessed at, or when it cooks without error but the output looks wrong.
+- [determinism](skills/determinism/SKILL.md): Doctrine for keeping PCG-TS output reproducible. Use when adding randomness or noise to a graph, when choosing a seed or a per-instance variation knob, when output changes between runs or between machines, when writing a World level's per-cell bind, when content must look the same from either side of a cell boundary or a halo, when adding or sizing a neighbourhood, prune or topology op, when touching subgraph or GPU code paths, or before claiming any change is deterministic.
+- [performance-and-budgets](skills/performance-and-budgets/SKILL.md): Doctrine for what a PCG-TS cook costs and for keeping it from blocking the frame. Use when a cook is slower than expected, when reading `pcg cook --stats`, when choosing a budget for a frame loop or a World update, when sizing candidate counts or deciding where a filter belongs, when a graph is fine standalone but seams or stutters inside a World, or before optimizing anything inside the library.
 
 ## CLI lookups
 

@@ -98,7 +98,7 @@ describe("pcg agents", () => {
   it("--write keeps every byte outside the markers, CRLF included", async () => {
     const before = "# Our rules\r\n\r\nUse tabs.\r\n\r\n";
     const after = "\r\n\r\n## Ours again\r\nno final newline";
-    const stale = [AGENT_BLOCK_BEGIN, "## pcg-ts 0.0.1: old", AGENT_BLOCK_END].join("\r\n");
+    const stale = [AGENT_BLOCK_BEGIN, "## PCG-TS 0.0.1: old", AGENT_BLOCK_END].join("\r\n");
     const r = await run(["agents", "--write", "--file", "docs/AGENTS.md"], { "docs/AGENTS.md": before + stale + after });
     expect(r.code).toBe(EXIT_OK);
     const text = r.fs.files.get("docs/AGENTS.md") as string;
@@ -106,7 +106,7 @@ describe("pcg agents", () => {
     expect(text.endsWith(after)).toBe(true);
     expect(text).not.toContain("0.0.1");
     expect(text.replaceAll("\r\n", "")).not.toContain("\n");
-    expect(r.out).toContain(`docs/AGENTS.md: wrote the pcg-ts ${VERSION} agent rules`);
+    expect(r.out).toContain(`docs/AGENTS.md: wrote the PCG-TS ${VERSION} agent rules`);
   });
 
   it("--check exits 0 when current and 1 when missing or stale, naming the fix", async () => {
@@ -126,7 +126,7 @@ describe("pcg agents", () => {
     expect(envelope.errors[0]?.code).toBe("agent-rules-missing");
 
     const stale = await run(["agents", "--check", "--json"], {
-      "AGENTS.md": written.replace(`pcg-ts ${VERSION}`, "pcg-ts 0.0.1"),
+      "AGENTS.md": written.replace(`PCG-TS ${VERSION}`, "PCG-TS 0.0.1"),
     });
     expect(stale.code).toBe(EXIT_FAILURE);
     expect((JSON.parse(stale.out) as { errors: { code: string }[] }).errors[0]?.code).toBe("agent-rules-stale");

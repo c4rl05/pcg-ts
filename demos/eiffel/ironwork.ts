@@ -54,7 +54,7 @@
  * centrelines; `ironworkSolid` sweeps each with a rectangular section,
  * mitred at every bend, so a scroll has no notch at one.
  *
- * Pure geometry apart from `ironworkSolid`; no pcg-ts node knows about
+ * Pure geometry apart from `ironworkSolid`; no PCG-TS node knows about
  * panels.
  */
 import {

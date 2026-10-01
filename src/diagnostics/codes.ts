@@ -102,8 +102,8 @@ export const DIAGNOSTIC_CODES = Object.freeze({
   "unknown-tag": "A tag was asked for on the command line that no graph in the shipped corpus carries.",
 
   // Agent rules (pcg agents).
-  "agent-rules-missing": "The file pcg agents --check reads carries no pcg-ts agent-rules block, or does not exist.",
-  "agent-rules-stale": "The file's pcg-ts agent-rules block differs from the one the installed version renders.",
+  "agent-rules-missing": "The file pcg agents --check reads carries no PCG-TS agent-rules block, or does not exist.",
+  "agent-rules-stale": "The file's PCG-TS agent-rules block differs from the one the installed version renders.",
   "agent-rules-malformed": "The agent-rules markers are not one BEGIN line followed by one END line, each alone on its line.",
   "agent-import-missing": "CLAUDE.md does not import the file that carries the agent-rules block, so Claude Code never reads it.",
 } as const);

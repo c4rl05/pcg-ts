@@ -20,7 +20,7 @@
  * WHAT THIS PAGE IS FOR. A road is not the interesting part of a road —
  * the interesting part is everything standing beside it, and what decides
  * where each of those things goes. So the page is handed a centreline it
- * did not make (`spline.ts`), pcg-ts turns it into a surface and
+ * did not make (`spline.ts`), PCG-TS turns it into a surface and
  * populates its verges (`graph.ts`), and the page's whole job is to let
  * you judge the result from the two viewpoints that can actually judge it.
  *
@@ -357,7 +357,7 @@ function frameMap(circuit: Circuit, zoom: number): void {
 const overlay = createOverlay({
   title: "Road",
   info:
-    "A centreline this page did not make, handed to pcg-ts: it sweeps the road and dresses the verges. " +
+    "A centreline this page did not make, handed to PCG-TS: it sweeps the road and dresses the verges. " +
     "The map is the whole lap from above; the chase view is the only viewpoint the result is ever " +
     "consumed from. Both are wireframe, drawn over each other, and the car is one object in both.",
 });

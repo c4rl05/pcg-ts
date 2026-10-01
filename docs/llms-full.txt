@@ -1,6 +1,6 @@
-# pcg-ts — agent guide
+# PCG-TS — agent guide
 
-pcg-ts is a deterministic procedural content generation library for
+PCG-TS is a deterministic procedural content generation library for
 TypeScript (browser + Node, ESM, package `pcg-ts`, optional three.js
 adapter `pcg-ts/three`, optional WebGPU field evaluation `pcg-ts/gpu`,
 shipped primitive vocabulary `pcg-ts/primitives`).

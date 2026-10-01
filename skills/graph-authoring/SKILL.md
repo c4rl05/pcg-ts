@@ -1,9 +1,9 @@
 ---
 name: graph-authoring
-description: "Doctrine for building a pcg-ts graph. Use before writing or editing pcg-ts graph JSON, when choosing between a shipped primitive and hand-wired node types, when a graph rejects a param or pin you guessed at, or when it cooks without error but the output looks wrong. Covers what to read first, how to discover what exists, exposing knobs instead of hardcoding them, and the validate/cook/inspect/render loop with the pcg CLI."
+description: "Doctrine for building a PCG-TS graph. Use before writing or editing PCG-TS graph JSON, when choosing between a shipped primitive and hand-wired node types, when a graph rejects a param or pin you guessed at, or when it cooks without error but the output looks wrong. Covers what to read first, how to discover what exists, exposing knobs instead of hardcoding them, and the validate/cook/inspect/render loop with the pcg CLI."
 ---
 
-# Building a pcg-ts graph
+# Building a PCG-TS graph
 
 This is doctrine — the order to do things in and how to tell whether the
 result is right. *What exists* lives in the generated references, and they

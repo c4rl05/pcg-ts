@@ -111,7 +111,7 @@ Useful as evidence that four is the natural number here rather than a
 local preference. Scene interchange and rendering formats reached the
 same set independently, under other names:
 
-| pcg-ts | glTF accessor role | USD interpolation | RenderMan primvar class |
+| PCG-TS | glTF accessor role | USD interpolation | RenderMan primvar class |
 | --- | --- | --- | --- |
 | `detail` | asset/mesh-level extras | `constant` | constant |
 | `primitive` | per-face (via indices) | `uniform` | uniform |

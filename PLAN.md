@@ -1,4 +1,4 @@
-# pcg-ts — plan
+# PCG-TS — plan
 
 What is still ahead, and what was deliberately decided against.
 

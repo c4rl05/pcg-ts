@@ -1,5 +1,5 @@
 /**
- * The GIVEN spline — the one thing on this page pcg-ts does not make.
+ * The GIVEN spline — the one thing on this page PCG-TS does not make.
  *
  * The demo's claim is "hand the library a spline you already have and it
  * dresses the roadside of it", so the spline has to come from outside the

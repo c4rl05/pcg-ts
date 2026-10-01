@@ -243,8 +243,8 @@ const GITHUB_MARK = [
  * The wordmark is the only route home, so it is a link with an accessible
  * name of its own (an `aria-label`, because site.css's `.vh` helper is
  * scoped to `.hero-title` and does not reach here) — the breadcrumb
- * beside it does NOT repeat "pcg-ts",
- * because the mark already says it and a bar that reads "pcg-ts pcg-ts /
+ * beside it does NOT repeat "PCG-TS",
+ * because the mark already says it and a bar that reads "PCG-TS PCG-TS /
  * Guides" is how a stutter ships. The crumb therefore opens on its
  * separator, which reads as "…/ Guides / Racetrack" hanging off the mark.
  */
@@ -269,7 +269,7 @@ export function renderChromeHeader(page: string, version: string): string {
     '<a class="skip-to-main" href="#main">Skip to content</a>',
     '<header class="sitehdr">',
     '  <div class="sitehdr-row">',
-    `    <a class="sitehdr-home" href="${home}" aria-label="pcg-ts — home">${WORDMARK}</a>`,
+    `    <a class="sitehdr-home" href="${home}" aria-label="PCG-TS — home">${WORDMARK}</a>`,
     crumbHtml,
     '    <nav class="sitehdr-sections" aria-label="Sections">',
     SITE_INDEX.map((group) => {

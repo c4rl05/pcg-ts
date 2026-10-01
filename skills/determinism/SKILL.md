@@ -1,9 +1,9 @@
 ---
 name: determinism
-description: "Doctrine for keeping pcg-ts output reproducible. Use when adding randomness or noise to a graph, when choosing a seed or a per-instance variation knob, when output changes between runs or between machines, when writing a World level's per-cell bind, when content must look the same from either side of a cell boundary or a halo, when adding or sizing a neighbourhood, prune or topology op, when touching subgraph or GPU code paths, or before claiming any change is deterministic. Covers the seed chain and its one exception, what a seed re-rolls and what it provably cannot, the tagged `opts.seed` that makes a saved noise answer the seed box and when a noise must keep a literal one instead, world-anchoring and identity-keyed randomness, the hop count that decides whether an op can be partitioned at all, the GPU approximation boundary, and how to verify reproducibility rather than assume it."
+description: "Doctrine for keeping PCG-TS output reproducible. Use when adding randomness or noise to a graph, when choosing a seed or a per-instance variation knob, when output changes between runs or between machines, when writing a World level's per-cell bind, when content must look the same from either side of a cell boundary or a halo, when adding or sizing a neighbourhood, prune or topology op, when touching subgraph or GPU code paths, or before claiming any change is deterministic. Covers the seed chain and its one exception, what a seed re-rolls and what it provably cannot, the tagged `opts.seed` that makes a saved noise answer the seed box and when a noise must keep a literal one instead, world-anchoring and identity-keyed randomness, the hop count that decides whether an op can be partitioned at all, the GPU approximation boundary, and how to verify reproducibility rather than assume it."
 ---
 
-# Keeping pcg-ts output reproducible
+# Keeping PCG-TS output reproducible
 
 Determinism is a hard invariant here: same graph, same seed, byte-identical
 output across runs, platforms, cook orders and streaming paths. It holds by

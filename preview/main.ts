@@ -16,7 +16,7 @@
  * WHY IT LOOKS DIFFERENT FROM THE DEMOS. The demos share a dark studio
  * look from `shared/scene.ts`. This page is judged against outdoor
  * reference imagery, so it uses a daylight sky, fog, tone mapping and a
- * shadow-casting sun. That is renderer work, not generation work — pcg-ts
+ * shadow-casting sun. That is renderer work, not generation work — PCG-TS
  * sets neither `castShadow` nor `receiveShadow` anywhere — and it lives
  * here rather than in `shared/scene.ts` precisely so it cannot move the
  * committed demo screenshots.

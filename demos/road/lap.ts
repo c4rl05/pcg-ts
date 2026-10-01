@@ -1,7 +1,7 @@
 /**
  * Reading the cooked lap back, and driving a camera round it.
  *
- * The half of the page that touches pcg-ts data. It is separate from
+ * The half of the page that touches PCG-TS data. It is separate from
  * `main.ts` because what it produces — a position, a direction and an up
  * at a distance travelled — is what BOTH views need and neither owns: the
  * chase camera rides it, and the map marker is the same pose flattened.

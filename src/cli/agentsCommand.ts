@@ -195,8 +195,8 @@ export function makeAgentsCommand(commandNames: () => readonly string[]): Comman
           const present = target.exists && findManagedBlock(target.text, file) !== undefined;
           throw new CliError(
             present
-              ? `agents: ${file} carries a pcg-ts agent-rules block that differs from the one pcg-ts ${VERSION} renders (an upgrade, or an edit inside the markers); run "npx pcg agents --write" and commit the result`
-              : `agents: ${file} ${target.exists ? "has no" : "does not exist, so it has no"} pcg-ts agent-rules block; run "npx pcg agents --write" and commit the result`,
+              ? `agents: ${file} carries a PCG-TS agent-rules block that differs from the one PCG-TS ${VERSION} renders (an upgrade, or an edit inside the markers); run "npx pcg agents --write" and commit the result`
+              : `agents: ${file} ${target.exists ? "has no" : "does not exist, so it has no"} PCG-TS agent-rules block; run "npx pcg agents --write" and commit the result`,
             { code: present ? "agent-rules-stale" : "agent-rules-missing", path: file },
           );
         }
@@ -210,7 +210,7 @@ export function makeAgentsCommand(commandNames: () => readonly string[]): Comman
           }
         }
         return Promise.resolve({
-          text: `${file}: the pcg-ts ${VERSION} agent rules are current\n`,
+          text: `${file}: the PCG-TS ${VERSION} agent rules are current\n`,
           json: { file, changed: false, bytes, version: VERSION },
         });
       }
@@ -218,8 +218,8 @@ export function makeAgentsCommand(commandNames: () => readonly string[]): Comman
       if (merged.changed) io.writeFile(file, merged.text);
       const lines = [
         merged.changed
-          ? `${file}: wrote the pcg-ts ${VERSION} agent rules (${bytes} bytes)`
-          : `${file}: the pcg-ts ${VERSION} agent rules are already current`,
+          ? `${file}: wrote the PCG-TS ${VERSION} agent rules (${bytes} bytes)`
+          : `${file}: the PCG-TS ${VERSION} agent rules are already current`,
       ];
       const json: Record<string, unknown> = { file, changed: merged.changed, bytes, version: VERSION };
 

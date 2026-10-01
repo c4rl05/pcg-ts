@@ -56,10 +56,10 @@
  * WHERE THE LIBRARY ENDS
  *
  * The look is dominated by lighting, materials, tone mapping and post —
- * none of which pcg-ts touches. `castShadow` and `receiveShadow` are set
+ * none of which PCG-TS touches. `castShadow` and `receiveShadow` are set
  * by the preview page, never by `src/three`. Expect critique of these
  * images to land on renderer and asset work as often as on generation;
- * what pcg-ts is answerable for is PLACEMENT — density, slope, declutter,
+ * what PCG-TS is answerable for is PLACEMENT — density, slope, declutter,
  * species mix, clearings, trails.
  *
  * ---------------------------------------------------------------------------

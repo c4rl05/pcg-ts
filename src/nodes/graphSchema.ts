@@ -87,7 +87,7 @@ function isWrapper(type: string): type is WrapperKind {
  * one that depends on values only a cook has.
  */
 const OUT_OF_SCOPE =
-  "Generated from the pcg-ts registries by graphJsonSchema(); deserializeGraph is the authority, and this schema " +
+  "Generated from the PCG-TS registries by graphJsonSchema(); deserializeGraph is the authority, and this schema " +
   "is built never to reject a document it accepts. Not checked here: that numbers are finite and not -0 (JSON " +
   "cannot carry a non-finite number, and a -0 reloads as 0, so serializeGraph refuses one); field-spec nesting " +
   "depth (256 levels); tuple-width broadcast rules between field arguments, and a component index or ramp stops " +
@@ -819,7 +819,7 @@ export function graphJsonSchema(opts: GraphJsonSchemaOptions = {}): JsonSchemaOb
       $schema: DRAFT_2020_12,
       $id: GRAPH_SCHEMA_ID,
       $comment: OUT_OF_SCOPE,
-      ...described(ctx, body, "A pcg-ts graph in the serialized interchange format (formatVersion 1)."),
+      ...described(ctx, body, "A PCG-TS graph in the serialized interchange format (formatVersion 1)."),
       $defs: reachable(body, defs),
     };
   }

@@ -126,7 +126,7 @@ function fieldSubject(descriptions: boolean): JsonObject {
     $schema: DRAFT_2020_12,
     $comment: FIELD_OUT_OF_SCOPE,
     $ref: "#/$defs/fieldSpec",
-    ...(descriptions ? { title: "pcg-ts field expression" } : {}),
+    ...(descriptions ? { title: "PCG-TS field expression" } : {}),
     $defs: reachableDefs("fieldSpec", defs as JsonObject),
   }) as JsonObject;
 }
@@ -183,7 +183,7 @@ function diagnosticSubject(descriptions: boolean): JsonObject {
     ...(descriptions
       ? {
           description:
-            "One fault in machine-readable form: the record a pcg-ts error carries and every `pcg --json` " +
+            "One fault in machine-readable form: the record a PCG-TS error carries and every `pcg --json` " +
             "failure reports. Only code, severity and message are always present; a field is set only where " +
             "it applies. Codes are additive-only.",
         }

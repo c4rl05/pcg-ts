@@ -286,8 +286,8 @@ export function renderGallery(
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="dark" />
-<title>pcg-ts — the graph corpus</title>
-<meta name="description" content="Every graph in the pcg-ts corpus, cooked in the editor: ${entries.length} files, ${escapeHtml(breakdown)}." />
+<title>PCG-TS — the graph corpus</title>
+<meta name="description" content="Every graph in the PCG-TS corpus, cooked in the editor: ${entries.length} files, ${escapeHtml(breakdown)}." />
 <link rel="icon" href="./icon.svg" type="image/svg+xml" />
 </head>
 <body>
@@ -517,7 +517,7 @@ ${families.map(([family, group]) => renderFamily(family, group, options)).join("
 
 <footer>
   <div class="wrap">
-    <span>pcg-ts v${options.version}</span>
+    <span>PCG-TS v${options.version}</span>
     <span>${entries.length} graphs${missing === 0 ? "" : `, ${missing} without a frame`}</span>
     <a href="./index.html">home</a>
     <a href="./manual.html">user manual</a>

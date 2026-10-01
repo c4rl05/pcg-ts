@@ -1,5 +1,5 @@
 /**
- * three.js interop for pcg-ts, exported as `pcg-ts/three`. This is the
+ * three.js interop for PCG-TS, exported as `pcg-ts/three`. This is the
  * only module of the package allowed to import `three` (an optional peer
  * dependency); the core stays renderer-agnostic.
  */

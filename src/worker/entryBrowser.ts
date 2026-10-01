@@ -26,7 +26,7 @@ interface WorkerScope {
 const scope = globalThis as unknown as WorkerScope;
 if (typeof scope.postMessage !== "function" || typeof scope.addEventListener !== "function") {
   throw new Error(
-    "pcg-ts cook worker entry was imported outside a worker scope; load it with new Worker(url, { type: \"module\" }) (or a bundler's ?worker import) and hand the Worker to CookWorkerPool via createWorker",
+    "PCG-TS cook worker entry was imported outside a worker scope; load it with new Worker(url, { type: \"module\" }) (or a bundler's ?worker import) and hand the Worker to CookWorkerPool via createWorker",
   );
 }
 const handle = createCookWorkerHost((msg, transfer) => scope.postMessage(msg, transfer));

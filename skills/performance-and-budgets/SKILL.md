@@ -1,9 +1,9 @@
 ---
 name: performance-and-budgets
-description: "Doctrine for what a pcg-ts cook costs and for keeping it from blocking the frame. Use when a cook is slower than expected, when reading `pcg cook --stats`, when choosing a budget for a frame loop or a World update, when sizing candidate counts or deciding where a filter belongs, when a graph is fine standalone but seams or stutters inside a World, or before optimizing anything inside the library. Covers the two unrelated budgets, what each stats number means, the cost asymmetry you control, the SoA rules for hot loops, and the optimization determinism forbids."
+description: "Doctrine for what a PCG-TS cook costs and for keeping it from blocking the frame. Use when a cook is slower than expected, when reading `pcg cook --stats`, when choosing a budget for a frame loop or a World update, when sizing candidate counts or deciding where a filter belongs, when a graph is fine standalone but seams or stutters inside a World, or before optimizing anything inside the library. Covers the two unrelated budgets, what each stats number means, the cost asymmetry you control, the SoA rules for hot loops, and the optimization determinism forbids."
 ---
 
-# Cost and budgets in pcg-ts
+# Cost and budgets in PCG-TS
 
 Two questions get conflated, and conflating them wastes the work: **how
 much a cook does**, and **whether doing it blocks the frame**. Budgets

@@ -1,6 +1,6 @@
 # Authoring graphs
 
-How to author pcg-ts graphs as JSON (the interchange format used by
+How to author PCG-TS graphs as JSON (the interchange format used by
 `serializeGraph` / `deserializeGraph`) and in code. Node-by-node schemas
 live in [nodes.md](./nodes.md) (generated; machine-readable twin:
 [nodes.json](./nodes.json)); at runtime the same metadata comes from

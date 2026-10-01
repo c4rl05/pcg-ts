@@ -195,7 +195,7 @@ export function agentBlockSections(data: AgentRulesData): AgentBlockSection[] {
   const header: AgentBlockSection = {
     name: "header",
     lines: [
-      `## pcg-ts ${data.version}: rules for coding agents`,
+      `## PCG-TS ${data.version}: rules for coding agents`,
       "",
       "Managed: `npx pcg agents --write` regenerates this block; edits inside the markers are overwritten.",
     ],
@@ -211,7 +211,7 @@ export function agentBlockSections(data: AgentRulesData): AgentBlockSection[] {
     name: "rules",
     lines: [
       "",
-      "- pcg-ts is pre-alpha and its API and graph JSON change between releases. Your training data about it is likely wrong or missing: do not write pcg-ts code or graph JSON from memory.",
+      "- PCG-TS is pre-alpha and its API and graph JSON change between releases. Your training data about it is likely wrong or missing: do not write PCG-TS code or graph JSON from memory.",
       `- Everything for the installed version is in ${p("")} and the \`npx pcg\` CLI, run from the project root. Read the docs below before writing anything. Do not search the disk or the web, and do not read \`dist/*.js\` or \`*.d.ts\` to learn the API.`,
       "- Never guess a node type, param, pin, field fn or primitive name: look up one entry at a time with the commands below. Do not cat or grep a whole catalog (nodes.md, nodes.json): each runs to hundreds of KB. An unknown name is refused with a did-you-mean, never corrected silently.",
       `- Write the graph as JSON${
@@ -380,7 +380,7 @@ export function renderLlmsIndex(data: AgentRulesData, base: "package" | "site"):
     return `- [${d.title}](${link(d.rel, base)}): ${d.what}${twin}`;
   };
   const lines = [
-    "# pcg-ts",
+    "# PCG-TS",
     "",
     "> Deterministic procedural content generation for TypeScript: attributes on point, vertex, primitive and detail domains, node graphs that serialize to JSON, deferred fields, hierarchical streaming, optional GPU cooking and three.js interop.",
     "",

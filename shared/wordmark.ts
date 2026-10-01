@@ -1,5 +1,5 @@
 /**
- * The pcg-ts wordmark, as geometry rather than as a file.
+ * The PCG-TS wordmark, as geometry rather than as a file.
  *
  * INLINE AND NOT A `src`. The pages that draw it are served from two roots
  * — the vite dev server at the repository root, and the built site under
@@ -93,8 +93,8 @@ export function attachWordmark(opts: { href?: string; label?: string } = {}): HT
   const a = document.createElement("a");
   a.className = "pcg-wordmark";
   a.href = opts.href ?? LANDING_PAGE;
-  a.title = opts.label ?? "pcg-ts";
-  a.setAttribute("aria-label", opts.label ?? "pcg-ts");
+  a.title = opts.label ?? "PCG-TS";
+  a.setAttribute("aria-label", opts.label ?? "PCG-TS");
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", WORDMARK_VIEWBOX);
   svg.setAttribute("aria-hidden", "true");
