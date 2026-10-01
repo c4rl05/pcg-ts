@@ -117,6 +117,23 @@ export interface InkSpec {
    */
   readonly inner: number;
   readonly crease: number;
+  /**
+   * How far a far line takes the colour under it rather than the ink's,
+   * 0 to 1, by the same distance as the fade: a faded grey line over a
+   * rose wash greys the whole lattice, where a darker rose keeps it rose.
+   * Only over a colour.
+   */
+  readonly farTint: number;
+}
+
+/**
+ * Depth in the colour: how far what lies behind the focus is paled toward
+ * the paper, 0 to 1, reaching it `depth` metres past the focus. A drawing
+ * pales the planes it sets back, where light would darken them.
+ */
+export interface Haze {
+  readonly amount: number;
+  readonly depth: number;
 }
 
 /** What the composite does to the colour on the way to the paper (see the file's note). */
@@ -141,6 +158,7 @@ export const INK_DEFAULT: InkSpec = {
   fadeFloor: 1,
   inner: 1,
   crease: 1,
+  farTint: 0,
 };
 
 /**
@@ -157,6 +175,10 @@ export interface Ink {
   render(color?: Texture): void;
   /** How `color` is laid under the lines; null draws on bare paper even when one is given. */
   composite(spec: WashComposite | null): void;
+  /** Pale what is behind the focus (`Haze`); null for none. */
+  haze(spec: Haze | null): void;
+  /** The distance in metres to what the view is looking at, every frame the haze is on. */
+  focus(distance: number): void;
   setSize(width: number, height: number): void;
   apply(spec: InkSpec): void;
   dispose(): void;
@@ -183,6 +205,7 @@ const FRAGMENT = /* glsl */ `
   uniform vec3 fade;
   uniform float inner;
   uniform float creaseWeight;
+  uniform vec2 hazeRange;
   varying vec2 vUv;
 
   // 1 / (distance along the view axis); 0 where nothing was drawn.
@@ -210,6 +233,11 @@ const FRAGMENT = /* glsl */ `
   // The contour test along one axis. A tap off the frame would clamp to
   // the border texel, which bends the chord and inks a band round the
   // frame; an axis that leaves the frame is simply not asked.
+  // A silhouette's weight: full near, the inner contours' far off, where
+  // the paper seen through a lattice is a field of small holes and each
+  // outlined at full weight reads as a dark blot rather than as a gap.
+  float silhouette = 1.0;
+
   float axis(float c, vec2 d) {
     vec2 a = vUv - d;
     vec2 b = vUv + d;
@@ -217,7 +245,7 @@ const FRAGMENT = /* glsl */ `
     float ia = invDepth(a);
     float ib = invDepth(b);
     // A silhouette has paper on one side; anything else is an inner contour.
-    return dip(c, ia, ib) * (ia > 0.0 && ib > 0.0 ? inner : 1.0);
+    return dip(c, ia, ib) * (ia > 0.0 && ib > 0.0 ? inner : silhouette);
   }
 
   float crease(vec3 n, vec2 at, float c) {
@@ -236,6 +264,9 @@ const FRAGMENT = /* glsl */ `
       gl_FragColor = vec4(0.0);
       return;
     }
+    float dist = 1.0 / c;
+    float far = smoothstep(fade.x, fade.y, dist);
+    silhouette = mix(1.0, inner, far);
     vec2 dx = vec2(texel.x * width, 0.0);
     vec2 dy = vec2(0.0, texel.y * width);
     float line = 0.0;
@@ -247,8 +278,10 @@ const FRAGMENT = /* glsl */ `
     line = max(line, crease(n, vUv + dx, c));
     line = max(line, crease(n, vUv + dy, c));
     line = max(line, crease(n, vUv + dx + dy, c));
-    line *= mix(1.0, fade.z, smoothstep(fade.x, fade.y, 1.0 / c));
-    gl_FragColor = vec4(line, 1.0, 0.0, 1.0);
+    line *= mix(1.0, fade.z, far);
+    // Red the line, green the coverage, blue how far behind the focus,
+    // alpha how far off for the fade.
+    gl_FragColor = vec4(line, 1.0, smoothstep(hazeRange.x, hazeRange.y, dist), far);
   }
 `;
 
@@ -264,6 +297,8 @@ const RESOLVE = /* glsl */ `
   uniform float useColor;
   uniform float lift;
   uniform float saturation;
+  uniform float hazeAmount;
+  uniform float farTint;
   uniform vec2 texel;
   uniform float sigma;
   uniform float strength;
@@ -277,25 +312,31 @@ const RESOLVE = /* glsl */ `
   }
 
   void main() {
-    vec2 sum = vec2(0.0);
+    vec4 sum = vec4(0.0);
     float total = 0.0;
     for (int j = -2; j <= 2; j++) {
       for (int i = -2; i <= 2; i++) {
         vec2 k = vec2(float(i), float(j)) * 0.75;
         float w = exp(-0.5 * dot(k, k));
-        sum += w * texture2D(tEdge, vUv + k * sigma * texel).rg;
+        sum += w * texture2D(tEdge, vUv + k * sigma * texel);
         total += w;
       }
     }
     float coverage = min(1.0, strength * sum.x / total);
     vec3 base = paper;
+    vec3 pen = ink;
     if (useColor > 0.5) {
       vec3 c = toSRGB(texture2D(tColor, vUv).rgb);
       c = mix(vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), c, saturation);
       c = mix(c, paper, lift);
+      // Blue and alpha are only written where something was drawn, so
+      // they are averaged over the coverage, not over the kernel.
+      float drawn = max(sum.y, 1e-4);
+      c = mix(c, paper, hazeAmount * sum.z / drawn);
+      pen = mix(ink, c * 0.62, farTint * sum.w / drawn);
       base = mix(paper, c, sum.y / total);
     }
-    gl_FragColor = vec4(mix(base, ink, coverage), 1.0);
+    gl_FragColor = vec4(mix(base, pen, coverage), 1.0);
   }
 `;
 
@@ -356,9 +397,12 @@ export function createInk(
       fade: { value: new Vector3() },
       inner: { value: 1 },
       creaseWeight: { value: 1 },
+      hazeRange: { value: new Vector2(1e9, 2e9) },
     },
     depthTest: false,
     depthWrite: false,
+    // All four channels are data (see main()), not a colour to blend.
+    blending: NoBlending,
   });
   const quad = new FullScreenQuad(material);
 
@@ -371,6 +415,8 @@ export function createInk(
       useColor: { value: 0 },
       lift: { value: 0 },
       saturation: { value: 1 },
+      hazeAmount: { value: 0 },
+      farTint: { value: 0 },
       texel: { value: new Vector2(1 / width, 1 / height) },
       sigma: { value: 0 },
       strength: { value: 1 },
@@ -384,6 +430,7 @@ export function createInk(
 
   let spec = INK_DEFAULT;
   let wash: WashComposite | null = null;
+  let haze: Haze | null = null;
   let canvas = { width, height };
 
   /** Size the buffers for the canvas and the spec, and every uniform that follows from the scale. */
@@ -416,6 +463,7 @@ export function createInk(
     (material.uniforms.fade.value as Vector3).set(spec.fadeNear, spec.fadeFar, spec.fadeFloor);
     material.uniforms.inner.value = spec.inner;
     material.uniforms.creaseWeight.value = spec.crease;
+    resolveMaterial.uniforms.farTint.value = spec.farTint;
     const r = resolveMaterial.uniforms;
     r.strength.value = spec.strength;
     (r.ink.value as Color).copy(srgb(spec.ink));
@@ -508,6 +556,14 @@ export function createInk(
     },
     composite(next) {
       wash = next;
+    },
+    haze(next) {
+      haze = next;
+      resolveMaterial.uniforms.hazeAmount.value = next?.amount ?? 0;
+      if (next === null) (material.uniforms.hazeRange.value as Vector2).set(1e9, 2e9);
+    },
+    focus(distance) {
+      if (haze !== null) (material.uniforms.hazeRange.value as Vector2).set(distance, distance + haze.depth);
     },
     setSize(w, h) {
       canvas = { width: w, height: h };

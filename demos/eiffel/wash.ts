@@ -62,7 +62,7 @@ export interface WashShading {
  * `userData.washRole` by the host. Unset is paint: it keeps its relation to
  * the reference.
  */
-export type WashRole = "paint" | "stone" | "glass" | "warm";
+export type WashRole = "paint" | "stone" | "glass" | "warm" | "own";
 
 export interface Wash {
   /** Teach and colour every painted material in the scene. Every frame, before the wash renders. */
@@ -83,6 +83,23 @@ export const WASH_REFERENCE = 0x6b4d3b;
 const TAUGHT = "eiffelWash";
 
 /**
+ * A taught material's own uniforms. Kept here rather than on the
+ * material, so a clone of a taught material (which copies its userData
+ * but not its patch) is simply untaught, and is taught in its turn.
+ */
+interface Taught {
+  readonly albedo: { value: Color };
+  /** -1 keeps the material's own opacity. */
+  readonly opacity: { value: number };
+  /** 1 keeps the material's own paint (role `own`). */
+  readonly own: { value: number };
+}
+const taught = new WeakMap<Material, Taught>();
+
+/** The glass's opacity in the wash. */
+const GLASS_OPACITY = 0.55;
+
+/**
  * A material's wash colour: its own paint, moved by however far the main
  * colour sits from the reference. Hue turns by the same angle; saturation
  * and lightness are re-anchored, each scaled toward 0 below the
@@ -96,7 +113,10 @@ const TAUGHT = "eiffelWash";
  * A ROLE overrides the relation where it would carry the wrong thing:
  * stone is a near-grey of the main colour, never its red; glass a pale
  * cool grey-blue whatever the main is; `warm` a pale cream-yellow a little
- * (22 degrees) round from it, the lit interior's colour of the illustrated cutaway.
+ * (22 degrees) round from it, the lit interior's colour of the illustrated
+ * cutaway;
+ * `own` keeps the material's own paint and map (a flag's colours are its
+ * own, not the tower's), shaded and tinted like the rest.
  */
 export function washColor(
   base: Color,
@@ -111,8 +131,9 @@ export function washColor(
   const r = reference.getHSL({ h: 0, s: 0, l: 0 }, SRGBColorSpace);
   const turn = (d: number): number => (((m.h + d) % 1) + 1) % 1;
   if (role === "stone") return out.setHSL(turn(-0.02), 0.07, reanchor(b.l, r.l, m.l), SRGBColorSpace);
-  if (role === "glass") return out.setHSL(0.56, 0.2, 0.74, SRGBColorSpace);
-  if (role === "warm") return out.setHSL(turn(0.06), 0.6, 0.8, SRGBColorSpace);
+  if (role === "own") return out.copy(base);
+  if (role === "glass") return out.setHSL(0.56, 0.2, 0.78, SRGBColorSpace);
+  if (role === "warm") return out.setHSL(turn(0.06), 0.6, 0.86, SRGBColorSpace);
   const h = (((m.h + b.h - r.h) % 1) + 1) % 1;
   return out.setHSL(h, reanchor(b.s, r.s, m.s), reanchor(b.l, r.l, m.l), SRGBColorSpace);
 }
@@ -142,6 +163,8 @@ uniform float washCel;
 uniform float washBands;
 uniform float washSoft;
 uniform vec3 washAlbedo;
+uniform float washOpacity;
+uniform float washOwn;
 uniform float washSun;
 uniform vec3 washLitTint;
 uniform vec3 washShadeTint;
@@ -194,7 +217,7 @@ export function washFragmentShader(src: string): string {
   out = replaceOnce(
     out,
     "#include <color_fragment>",
-    "#include <color_fragment>\n\tif (washOn > 0.5) diffuseColor.rgb = washAlbedo;",
+    "#include <color_fragment>\n\tif (washOn > 0.5) { if (washOwn < 0.5) diffuseColor.rgb = washAlbedo; if (washOpacity >= 0.0) diffuseColor.a = washOpacity; }",
     "fragment shader",
   );
   out = replaceOnce(
@@ -206,7 +229,7 @@ export function washFragmentShader(src: string): string {
   out = replaceOnce(
     out,
     "#include <lights_fragment_end>",
-    "#include <lights_fragment_end>\n\tif (washOn > 0.5) { reflectedLight.directSpecular = vec3(0.0); reflectedLight.indirectSpecular = vec3(0.0); }",
+    "#include <lights_fragment_end>\n\tif (washOn > 0.5) { reflectedLight.directSpecular = vec3(0.0); reflectedLight.indirectSpecular = vec3(0.0); }\n\t#ifdef USE_SHEEN\n\tif (washOn > 0.5) { sheenSpecularDirect = vec3(0.0); sheenSpecularIndirect = vec3(0.0); }\n\t#endif\n\t#ifdef USE_CLEARCOAT\n\tif (washOn > 0.5) { clearcoatSpecularDirect = vec3(0.0); clearcoatSpecularIndirect = vec3(0.0); }\n\t#endif",
     "fragment shader",
   );
   out = replaceOnce(
@@ -222,18 +245,23 @@ export function washFragmentShader(src: string): string {
   return out;
 }
 
-function teach(m: MeshStandardMaterial): void {
-  const albedo = { value: new Color() };
-  m.userData[TAUGHT] = albedo;
+function teach(m: MeshStandardMaterial): Taught {
+  const state: Taught = { albedo: { value: new Color() }, opacity: { value: -1 }, own: { value: 0 } };
+  taught.set(m, state);
   const before = m.onBeforeCompile;
   const key = m.customProgramCacheKey.bind(m);
   m.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms, renderer: WebGLRenderer) => {
     before.call(m, shader, renderer);
-    Object.assign(shader.uniforms, uniforms, { washAlbedo: albedo });
+    Object.assign(shader.uniforms, uniforms, {
+      washAlbedo: state.albedo,
+      washOpacity: state.opacity,
+      washOwn: state.own,
+    });
     shader.fragmentShader = washFragmentShader(shader.fragmentShader);
   };
   m.customProgramCacheKey = () => `${key()}|${TAUGHT}`;
   m.needsUpdate = true;
+  return state;
 }
 
 export function createWash(): Wash {
@@ -242,22 +270,24 @@ export function createWash(): Wash {
   /** Each material's paint the last time its wash colour was worked out, and the main colour then. */
   const seen = new Map<Material, { base: number; main: number; role: WashRole }>();
 
-  function colour(m: MeshStandardMaterial): void {
-    const albedo = m.userData[TAUGHT] as { value: Color };
+  function colour(m: MeshStandardMaterial, state: Taught): void {
     const base = m.color.getHex();
     const role = (m.userData.washRole as WashRole | undefined) ?? "paint";
     const was = seen.get(m);
     if (was !== undefined && was.base === base && was.main === main.getHex() && was.role === role) return;
     seen.set(m, { base, main: main.getHex(), role });
     // A Color holds linear, which is what the shader wants.
-    washColor(m.color, main, reference, albedo.value, role);
+    washColor(m.color, main, reference, state.albedo.value, role);
+    // A pane at the lit look's fifth is a pane the wash cannot show; the
+    // drawing tints its glass plainly.
+    state.opacity.value = role === "glass" ? GLASS_OPACITY : -1;
+    state.own.value = role === "own" ? 1 : 0;
   }
 
   function visit(material: Material): void {
     // MeshPhysicalMaterial is one too.
     if (!(material instanceof MeshStandardMaterial)) return;
-    if (material.userData[TAUGHT] === undefined) teach(material);
-    colour(material);
+    colour(material, taught.get(material) ?? teach(material));
   }
 
   return {

@@ -11,7 +11,7 @@
  * where members meet. No paper grain: the colour, the edges, the light
  * and the occlusion are the look, each a toggle over the plain pen.
  */
-import { INK_DEFAULT, type InkSpec, type WashComposite } from "./ink.js";
+import { type Haze, INK_DEFAULT, type InkSpec, type WashComposite } from "./ink.js";
 import type { Look } from "./look.js";
 import type { WashShading } from "./wash.js";
 import { Color, SRGBColorSpace } from "three";
@@ -50,6 +50,8 @@ export interface DrawingSpec {
   readonly lineWidth: number;
   /** Line darkness, 0 to 1 (ink.ts `strength`). */
   readonly lineStrength: number;
+  /** How far behind the focus is paled toward the paper (ink.ts `Haze`), 0 to 1. */
+  readonly depth: number;
   readonly ao: boolean;
   /** 0 to 1, how much of the occlusion is laid over the colour. */
   readonly aoStrength: number;
@@ -74,22 +76,23 @@ export const DRAWING_DEFAULT: DrawingSpec = {
   bands: 2,
   bandSoftness: 0.3,
   washed: true,
-  lift: 0.15,
-  litTint: 0.35,
-  shadeTint: 0.2,
+  lift: 0.2,
+  litTint: 0.45,
+  shadeTint: 0.45,
   saturation: 0.85,
   softEdges: true,
   farLines: 0.5,
-  innerLines: 0.75,
+  innerLines: 0.45,
   lineWidth: 1.5,
   lineStrength: 1,
+  depth: 0.35,
   ao: true,
-  aoStrength: 0.6,
+  aoStrength: 0.3,
   aoRadius: 1.2,
-  sunElevation: 55,
+  sunElevation: 38,
   sunAzimuth: -42,
-  sun: 0.65,
-  shade: 0.65,
+  sun: 0.55,
+  shade: 0.92,
   shadows: true,
 };
 
@@ -100,9 +103,10 @@ export function drawingInk(spec: DrawingSpec, base: InkSpec = INK_DEFAULT): InkS
     width: base.width * spec.lineWidth,
     strength: base.strength * spec.lineStrength,
     // Past a storey's framing, where a lattice seen whole starts to close up.
-    fadeNear: 250,
-    fadeFar: 700,
+    fadeNear: 150,
+    fadeFar: 450,
     fadeFloor: spec.farLines,
+    farTint: 0.6,
     inner: spec.innerLines,
     crease: 0.75 * spec.innerLines,
   };
@@ -113,7 +117,7 @@ export function drawingInk(spec: DrawingSpec, base: InkSpec = INK_DEFAULT): InkS
   return {
     ...base,
     ...lines,
-    soften: Math.max(base.soften, 0.6),
+    soften: Math.max(base.soften, 0.8),
     ink: spec.colour ? line : 0x3a3532,
   };
 }
@@ -130,10 +134,11 @@ export function drawingShading(spec: DrawingSpec): WashShading {
     softness: spec.bandSoftness,
     // The key is white, so its luminance is its intensity (drawingLook).
     sun: spec.sun * Math.PI,
-    // A cream a little round toward yellow; a greige, nearly grey, a little
-    // further round, so the shade cools as the light warms.
+    // A cream a little round toward yellow, and a pale rose: light shows as
+    // a turn of hue more than as a step in value, the shade staying the
+    // paint's own colour, paler.
     litTint: tint(0.07, 0.7, 0.87),
-    shadeTint: tint(0.04, 0.08, 0.8),
+    shadeTint: tint(-0.01, 0.28, 0.82),
     litLift: washed ? spec.litTint : 0,
     shadeLift: washed ? spec.shadeTint : 0,
   };
@@ -173,6 +178,11 @@ export function drawingLook(look: Look, spec: DrawingSpec): Look {
 }
 
 /** What ink.ts does to the wash on the way to the paper; null is no wash. */
+/** The pale behind the focus; none without a colour to pale. */
+export function drawingHaze(spec: DrawingSpec): Haze | null {
+  return spec.colour && spec.depth > 0 ? { amount: spec.depth, depth: 150 } : null;
+}
+
 export function drawingComposite(spec: DrawingSpec): WashComposite | null {
   if (!spec.colour) return null;
   return spec.washed ? { lift: spec.lift, saturation: spec.saturation } : { lift: 0, saturation: 1 };

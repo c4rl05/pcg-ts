@@ -138,6 +138,7 @@ import {
   DRAWING_DEFAULT,
   type DrawingSpec,
   drawingComposite,
+  drawingHaze,
   drawingInk,
   drawingLook,
   drawingShading,
@@ -906,6 +907,7 @@ let inkBase: InkSpec = INK_DEFAULT;
 function applyDrawing(): void {
   rig.ink.apply(drawingInk(drawing, inkBase));
   rig.ink.composite(drawingComposite(drawing));
+  rig.ink.haze(drawingHaze(drawing));
   rig.wash.shade(drawingShading(drawing));
   rig.wash.paint(drawing.main);
   const colour = inked && drawing.colour;
@@ -1004,14 +1006,15 @@ if (lookBox !== undefined) {
 
   type Field = keyof DrawingSpec;
   type Slider = readonly [label: string, field: Field, min: number, max: number, step: number, format: (v: number) => string];
-  const sliders = new Map<Field, HTMLInputElement>();
+  const sliders = new Map<Field, { input: HTMLInputElement; slider: Slider }>();
   const boxes = new Map<Field, { box: HTMLInputElement; group: ViewGroup }>();
-  const slider = (into: ViewGroup, [label, field, min, max, step, format]: Slider): void => {
+  const slider = (into: ViewGroup, s: Slider): void => {
+    const [label, field, min, max, step, format] = s;
     const row = overlay.addSlider(label, { min, max, step, value: drawing[field] as number, format }, (v) =>
       set({ [field]: v }),
     );
     into.take(row, "sub");
-    sliders.set(field, row.querySelector("input") as HTMLInputElement);
+    sliders.set(field, { input: row.querySelector("input") as HTMLInputElement, slider: s });
   };
   // A toggle and the sliders that only mean something while it is on.
   const toggle = (into: HTMLElement, label: string, field: Field, under: readonly Slider[] = []): void => {
@@ -1029,31 +1032,32 @@ if (lookBox !== undefined) {
   const deg = (v: number): string => `${v.toFixed(0)}°`;
   toggle(colourGroup.sub, "Cel", "cel", [
     ["Bands", "bands", 2, 6, 1, (v) => v.toFixed(0)],
-    ["Band edge", "bandSoftness", 0, 1, 0.05, f2],
+    ["Band edge", "bandSoftness", 0, 1, 0.01, f2],
   ]);
   toggle(colourGroup.sub, "Washed", "washed", [
-    ["Lift", "lift", 0, 0.8, 0.02, f2],
-    ["Light tint", "litTint", 0, 1, 0.05, f2],
-    ["Shade tint", "shadeTint", 0, 1, 0.05, f2],
-    ["Saturation", "saturation", 0, 1.5, 0.05, f2],
+    ["Lift", "lift", 0, 0.8, 0.01, f2],
+    ["Light tint", "litTint", 0, 1, 0.01, f2],
+    ["Shade tint", "shadeTint", 0, 1, 0.01, f2],
+    ["Saturation", "saturation", 0, 1.5, 0.01, f2],
+    ["Depth", "depth", 0, 1, 0.01, f2],
   ]);
   toggle(colourGroup.sub, "AO", "ao", [
-    ["Strength", "aoStrength", 0, 1, 0.05, f2],
+    ["Strength", "aoStrength", 0, 1, 0.01, f2],
     ["Radius", "aoRadius", 0.1, 3, 0.05, (v) => `${v.toFixed(2)} m`],
   ]);
   toggle(colourGroup.sub, "Shadows", "shadows");
   const light: readonly Slider[] = [
     ["Sun height", "sunElevation", 5, 85, 1, deg],
     ["Sun turn", "sunAzimuth", -180, 180, 1, deg],
-    ["Sun", "sun", 0, 1.5, 0.05, f2],
-    ["Shade", "shade", 0, 1.5, 0.05, f2],
+    ["Sun", "sun", 0, 1.5, 0.01, f2],
+    ["Shade", "shade", 0, 1.5, 0.01, f2],
   ];
   for (const s of light) slider(colourGroup, s);
   toggle(drawingGroup.sub, "Soft edges", "softEdges");
-  slider(drawingGroup, ["Far lines", "farLines", 0, 1, 0.05, f2]);
-  slider(drawingGroup, ["Inner lines", "innerLines", 0, 1, 0.05, f2]);
+  slider(drawingGroup, ["Far lines", "farLines", 0, 1, 0.01, f2]);
+  slider(drawingGroup, ["Inner lines", "innerLines", 0, 1, 0.01, f2]);
   slider(drawingGroup, ["Line width", "lineWidth", 1, 3, 0.5, (v) => `${v.toFixed(1)} px`]);
-  slider(drawingGroup, ["Line dark", "lineStrength", 0, 1, 0.05, f2]);
+  slider(drawingGroup, ["Line dark", "lineStrength", 0, 1, 0.01, f2]);
 
   syncDrawingControls = () => {
     drawingBox.checked = inked;
@@ -1066,10 +1070,14 @@ if (lookBox !== undefined) {
       box.checked = drawing[field] as boolean;
       group.open(box.checked);
     }
-    for (const [field, input] of sliders) {
-      input.value = String(drawing[field]);
-      // The readout beside it follows its own input event.
-      input.dispatchEvent(new Event("input"));
+    // The bar, its fill and its readout, but not its input event: that
+    // would set the spec again from the bar, rounded to the bar's step.
+    for (const [field, { input, slider: [, , min, max, , format] }] of sliders) {
+      const v = drawing[field] as number;
+      input.value = String(v);
+      input.style.setProperty("--p", `${Math.min(1, Math.max(0, (v - min) / (max - min))) * 100}%`);
+      const readout = input.nextElementSibling;
+      if (readout !== null) readout.textContent = format(v);
     }
   };
 }
@@ -1786,6 +1794,7 @@ async function main(): Promise<void> {
   const cut = (on: boolean): void => {
     sectioned = on;
     section.set(on);
+    rig.showUnderground(on);
     sectionGroup.open(on);
   };
   const sectionBox = overlay.addCheckbox("Section", params.has("section"), cut);
@@ -2234,6 +2243,8 @@ const FLAG_MATERIAL = new MeshPhysicalMaterial({
   sheenColor: 0xd8d4cc,
   side: DoubleSide,
 });
+// The flag's colours are its own, in the drawing too (wash.ts `WashRole`).
+FLAG_MATERIAL.userData.washRole = "own" satisfies WashRole;
 
 /**
  * A cloth mesh and, for each of its vertices, its point of `flagPose`'s
@@ -2374,6 +2385,10 @@ renderer.setAnimationLoop(() => {
   else if (!driven) controls.update();
   bands?.tick(camera);
   sectionTick?.();
+  // The drawing pales what lies behind what the view is looking at: the
+  // orbit's target, or a near storey's depth for a driven camera, whose
+  // target is not where it looks.
+  rig.ink.focus(driven ? 60 : camera.position.distanceTo(controls.target));
   if (plates?.active === true) plates.render();
   else rig.render();
   tickFps();

@@ -38,6 +38,7 @@ import {
   Mesh,
   MeshStandardMaterial,
   type PerspectiveCamera,
+  Plane,
   PlaneGeometry,
   type Scene,
   type Texture,
@@ -84,6 +85,12 @@ export interface Rig {
   readonly ink: Ink;
   /** The colour under a coloured drawing's lines, for its dials. */
   readonly wash: Wash;
+  /**
+   * Whether the drawing shows what is under the ground. The lit look's
+   * ground plane hides it; the drawing has no ground plane, so it cuts
+   * there instead, unless the host has opened the ground (a section).
+   */
+  showUnderground(on: boolean): void;
   /** True while the occlusion is in the path; false means it was switched off. */
   readonly ao: GTAOPass;
   dispose(): void;
@@ -169,6 +176,20 @@ export function createRig(
   // shared, with its last two passes swapped for the pen's.
   const wash = createWash();
   let colouring = false;
+  let underground = false;
+  /** The ground's cut: keeps what is above it (three keeps a plane's positive side). */
+  const groundCut = new Plane(new Vector3(0, 1, 0), 0);
+  /** Draw `draw` with the ground cut added to whatever planes the host set, and those put back. */
+  function aboveGround(draw: () => void): void {
+    if (underground) return draw();
+    const planes = renderer.clippingPlanes;
+    renderer.clippingPlanes = [...planes, groundCut];
+    try {
+      draw();
+    } finally {
+      renderer.clippingPlanes = planes;
+    }
+  }
   const inkPass = new (class extends Pass {
     override render(_r: WebGLRenderer, _write: unknown, read: { texture: Texture }): void {
       ink.render(read.texture);
@@ -413,13 +434,17 @@ export function createRig(
     fitShadowNear,
     shadowTexel,
     setSize,
-    render: () => (inking ? (colouring ? renderColour() : ink.render()) : composer.render()),
+    render: () =>
+      inking ? aboveGround(() => (colouring ? renderColour() : ink.render())) : composer.render(),
     setInk(on: boolean, colour = false) {
       inking = on;
       colouring = colour;
     },
     ink,
     wash,
+    showUnderground(on: boolean) {
+      underground = on;
+    },
     ao: gtao,
     dispose() {
       env?.dispose();
