@@ -133,6 +133,7 @@ import { PART_CLASSES, type PartClass } from "./parts.js";
 import { type PlateOverlay, loadPlateTool } from "./plateTool.js";
 import { BALUSTER, CABOCHON_RISE, FITTING_ASSETS } from "./platforms.js";
 import { FITTING_SEGMENTS } from "./fittingSegments.js";
+import { INK_DEFAULT, type InkSpec } from "./ink.js";
 import { NEUTRAL, createRig } from "./rig.js";
 import { attachSection } from "./section.js";
 import { attachWalk } from "./walkView.js";
@@ -775,6 +776,25 @@ const rotateBox = overlay.addCheckbox("Rotate", false, (on) => {
   }
 });
 
+// THE DRAWING (`?ink`, or `?ink=2` for a heavier line in device pixels):
+// the tower as a pen elevation, black on white, no light and no shade
+// (ink.ts). A second way to draw the same scene, not a look: the palette,
+// the sun and the occlusion are left as they were and come back with it.
+let inked = new URLSearchParams(location.search).has("ink");
+{
+  const weight = Number(new URLSearchParams(location.search).get("ink"));
+  if (Number.isFinite(weight) && weight > 0) rig.ink.apply({ ...INK_DEFAULT, width: weight });
+}
+// For tuning the pen from the console or a capture script: any subset of
+// the spec, over the defaults.
+(window as unknown as { __ink: (spec: Partial<InkSpec>) => void }).__ink = (spec) =>
+  rig.ink.apply({ ...INK_DEFAULT, ...spec });
+rig.setInk(inked);
+overlay.addCheckbox("drawing", inked, (on) => {
+  inked = on;
+  rig.setInk(on);
+});
+
 // The lifts run unless `?still` parked them. Off leaves every car exactly
 // where it stands, which is how a car is looked at rather than watched.
 let liftsRunning = !STILL;
@@ -1012,6 +1032,7 @@ const VIEW_PARAMS = new Set([
   "section",
   "site",
   "hl",
+  "ink",
   "build",
   "walk",
   "walkAt",
@@ -1049,6 +1070,10 @@ function copyableView(): string {
   if (!clothSim) query.push("wave");
   const highlighted = HIGHLIGHTS.filter((h) => lit[h]);
   if (highlighted.length > 0) query.push(`hl=${highlighted.join(",")}`);
+  if (inked) {
+    const weight = new URLSearchParams(location.search).get("ink");
+    query.push(weight !== null && weight !== "" ? `ink=${encodeURIComponent(weight)}` : "ink");
+  }
   // The day the scrubber shows; before the cook has staged it, the day asked for.
   const day = BUILD ? isoOf(scrubber?.day ?? buildDayParam(params.get("build"))) : null;
   if (day !== null) query.push(`build=${day}`);
