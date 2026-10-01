@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 1008,
   "meta": {
-    "title": "enforce a minimum distance between points",
+    "title": "Enforce a minimum distance between points",
     "description": "`selfPrune` scans points in index order and keeps one only when every already-kept point is at least `minDistance` away, which turns a clumpy uniform scatter into evenly spaced points for anything with physical extent. Over-scatter deliberately: the output count is emergent, capped by the area divided by minDistance squared, so raising `count` past that adds nothing and the real knob is `minDistance`.",
     "tags": ["basics", "filter", "spacing"]
   },

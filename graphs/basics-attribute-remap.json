@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 1004,
   "meta": {
-    "title": "rescale an attribute to a new range",
+    "title": "Rescale an attribute to a new range",
     "description": "`attributeRemap` in mode 'fit' measures an attribute's actual minimum and maximum over the domain and stretches them onto [outMin, outMax], which is how a quantity of unknown scale — a raw noise value, a neighbour count, an invented score — becomes something a density or a colour can consume. `outName` writes the result beside the original instead of over it, so both columns survive for inspection.",
     "tags": ["basics", "attributes", "remap"]
   },

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 1015,
   "meta": {
-    "title": "move an attribute between domains",
+    "title": "Move an attribute between domains",
     "description": "Attributes live on domains — point, vertex, primitive, detail — and `promoteAttribute` walks the geometry's topology to move one between them. Here a per-point `height` becomes a per-triangle `height` by averaging the corners, which is what a shader or an exporter that colours faces rather than corners needs. Elements with no contributors keep the attribute default, and string attributes support only mode 'first'.",
     "tags": ["basics", "attributes", "domains", "promote"]
   },

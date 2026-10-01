@@ -2,11 +2,11 @@
   "_comment": "Panel spec \u2014 presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "volume",
+      "title": "Volume",
       "controls": [
         {
           "param": "volume.cellSize",
-          "label": "cell",
+          "label": "Cell",
           "min": 0.7,
           "max": 3.5,
           "step": 0.1,
@@ -14,25 +14,25 @@
         },
         {
           "param": "volume.seed",
-          "label": "jitter seed"
+          "label": "Jitter seed"
         }
       ]
     },
     {
-      "title": "carve",
+      "title": "Carve",
       "controls": [
         {
           "param": "carve.mode",
-          "label": "mode"
+          "label": "Mode"
         }
       ]
     },
     {
-      "title": "blocks",
+      "title": "Blocks",
       "controls": [
         {
           "param": "blocks.assetId",
-          "label": "asset"
+          "label": "Asset"
         }
       ]
     }

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 1013,
   "meta": {
-    "title": "scatter points over a mesh surface",
+    "title": "Scatter points over a mesh surface",
     "description": "`surfaceSample` picks each candidate's triangle with probability proportional to its area and then a uniform position inside it, so coverage is even in world units rather than per triangle. Output points carry P, the flat per-triangle `normal`, density 1 and a hashed per-point seed. `densityField` is field-capable and applied after placement, so the count is at most `count` and exactly `count` while density stays 1.",
     "tags": ["basics", "mesh", "sampler", "placement"]
   },

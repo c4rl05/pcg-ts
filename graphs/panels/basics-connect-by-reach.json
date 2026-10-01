@@ -2,27 +2,27 @@
   "_comment": "Panel spec \u2014 presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "cloud",
+      "title": "Cloud",
       "controls": [
         {
           "param": "camps.count",
-          "label": "points",
+          "label": "Points",
           "min": 40,
           "max": 600,
           "step": 10
         },
         {
           "param": "camps.seed",
-          "label": "seed"
+          "label": "Seed"
         }
       ]
     },
     {
-      "title": "network",
+      "title": "Network",
       "controls": [
         {
           "param": "net.mode",
-          "label": "pairs"
+          "label": "Pairs"
         }
       ]
     }

@@ -2,32 +2,32 @@
   "_comment": "Panel spec \u2014 presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "mesh",
+      "title": "Mesh",
       "controls": [
         {
           "param": "ground.size",
-          "label": "size"
+          "label": "Size"
         },
         {
           "param": "ground.subdivisions",
-          "label": "subdivisions"
+          "label": "Subdivisions"
         }
       ]
     },
     {
-      "title": "promote",
+      "title": "Promote",
       "controls": [
         {
           "param": "perFace.from",
-          "label": "from"
+          "label": "From"
         },
         {
           "param": "perFace.to",
-          "label": "to"
+          "label": "To"
         },
         {
           "param": "perFace.mode",
-          "label": "combine"
+          "label": "Combine"
         }
       ]
     }

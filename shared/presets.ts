@@ -62,10 +62,7 @@ export const PRESETS: readonly Preset[] = Object.keys(META)
     const dash = name.indexOf("-");
     return {
       name,
-      // The corpus writes its titles in lower case; the editor shows them in
-      // sentence case like the rest of its chrome. The file-name fallback is
-      // an identifier and keeps its spelling.
-      title: meta?.title ? meta.title.charAt(0).toUpperCase() + meta.title.slice(1) : name,
+      title: meta?.title ?? name,
       description: meta?.description ?? "",
       group: dash < 0 ? name : name.slice(0, dash),
     };

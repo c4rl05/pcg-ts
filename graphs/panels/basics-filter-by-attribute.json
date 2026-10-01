@@ -2,31 +2,31 @@
   "_comment": "Panel spec \u2014 presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "scatter",
+      "title": "Scatter",
       "controls": [
         {
           "param": "scatter.count",
-          "label": "points",
+          "label": "Points",
           "min": 50,
           "max": 4000,
           "step": 50
         },
         {
           "param": "scatter.seed",
-          "label": "seed"
+          "label": "Seed"
         }
       ]
     },
     {
-      "title": "gate",
+      "title": "Gate",
       "controls": [
         {
           "param": "ridge.comparison",
-          "label": "keep where"
+          "label": "Keep where"
         },
         {
           "param": "ridge.value",
-          "label": "threshold",
+          "label": "Threshold",
           "min": -1,
           "max": 1,
           "step": 0.01

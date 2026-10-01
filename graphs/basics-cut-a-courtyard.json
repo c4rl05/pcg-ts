@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 1104,
   "meta": {
-    "title": "cut a courtyard out of a block",
+    "title": "Cut a courtyard out of a block",
     "description": "`polygonBoolean` computes the union, intersection or difference of two sets of closed polylines in a plane — the ground plane 'xz' by default. The subject here is TWO overlapping squares on the `in` pin: loops of one set simply union, so they read as one L-shaped block. The `clip` pin carries a round courtyard, and 'difference' keeps what is inside the block and outside the courtyard. The result is closed polylines: the outer loop counter-clockwise, then its hole clockwise, with an i32 primitive attribute `holeOf` — -1 on an outline, and on a hole the primitive index of the outline it pierces. That is the convention `extrudePolygon` reads, so the plan extrudes AS IT COMES: a concave outline with a hole, the caps ear-clipped around the courtyard and the courtyard given walls of its own facing into it. Switch `operation` to 'union' and the courtyard fills the block's corner instead; 'intersection' keeps only the part of the courtyard inside the block. `snapDistance` is the documented epsilon: corners closer than it weld, so geometry that should meet but differs by f32 rounding still does.",
     "tags": ["basics", "surface", "mesh", "extrude", "topology"]
   },

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 1006,
   "meta": {
-    "title": "keep points with a predicate expression",
+    "title": "Keep points with a predicate expression",
     "description": "`filterByExpression` decides per point from a field expression, so a test that would otherwise need a scratch attribute plus a comparison node becomes one node with no leftover column. The comparison functions emit 1 and 0, `mul` combines them as AND (and `max` as OR): this predicate keeps points inside a radius of 20 AND where a value-noise field rises above 0.4. NaN never passes, so a predicate that fails to compute drops the point.",
     "tags": ["basics", "filter", "fields", "predicate"]
   },

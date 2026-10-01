@@ -2,38 +2,38 @@
   "_comment": "Panel spec — presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "ground",
+      "title": "Ground",
       "controls": [
         {
           "param": "ground.countX",
-          "label": "samples x",
+          "label": "Samples x",
           "min": 40,
           "max": 260,
           "step": 10
         },
         {
           "param": "ground.countZ",
-          "label": "samples z",
+          "label": "Samples z",
           "min": 40,
           "max": 260,
           "step": 10
         },
         {
           "param": "ground.spacing",
-          "label": "spacing"
+          "label": "Spacing"
         },
         {
           "param": "ground.origin",
-          "label": "origin"
+          "label": "Origin"
         }
       ]
     },
     {
-      "title": "cells",
+      "title": "Cells",
       "controls": [
         {
           "param": "cells.seed",
-          "label": "diagram seed"
+          "label": "Diagram seed"
         }
       ]
     }

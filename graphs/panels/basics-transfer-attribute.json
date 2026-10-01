@@ -2,43 +2,43 @@
   "_comment": "Panel spec \u2014 presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "surface",
+      "title": "Surface",
       "controls": [
         {
           "param": "ground.size",
-          "label": "size"
+          "label": "Size"
         },
         {
           "param": "ground.subdivisions",
-          "label": "subdivisions"
+          "label": "Subdivisions"
         }
       ]
     },
     {
-      "title": "samples",
+      "title": "Samples",
       "controls": [
         {
           "param": "scatter.count",
-          "label": "points",
+          "label": "Points",
           "min": 50,
           "max": 2000,
           "step": 25
         },
         {
           "param": "scatter.seed",
-          "label": "seed"
+          "label": "Seed"
         },
         {
           "param": "sampleDown.mapping",
-          "label": "mapping"
+          "label": "Mapping"
         },
         {
           "param": "sampleDown.direction",
-          "label": "direction"
+          "label": "Direction"
         },
         {
           "param": "sampleDown.maxDistance",
-          "label": "max distance",
+          "label": "Max distance",
           "min": 0,
           "max": 100,
           "step": 1,

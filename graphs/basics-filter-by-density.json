@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 1007,
   "meta": {
-    "title": "thin a cloud by the density attribute",
+    "title": "Thin a cloud by the density attribute",
     "description": "The standard thinning idiom: write the standard `density` attribute from a 0..1 noise field, then let `filterByDensity` in mode 'probabilistic' keep each point with probability equal to its own density. The result is soft-edged — dense regions stay full, sparse ones fade out, with no visible boundary. Mode 'threshold' on the same input gives the hard-edged version instead.",
     "tags": ["basics", "filter", "density", "noise"]
   },

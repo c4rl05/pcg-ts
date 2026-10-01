@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 1009,
   "meta": {
-    "title": "break up a lattice with deterministic jitter",
+    "title": "Break up a lattice with deterministic jitter",
     "description": "`jitterPoints` offsets each point by a random vector drawn per axis from (seed, point index, axis), so the result is reproducible and independent of cook order — the lattice stops reading as a lattice without giving up determinism. `amount` is the maximum offset per axis and is field-capable, so the jitter can itself vary across space; here y is left at 0 to keep the cloud flat.",
     "tags": ["basics", "jitter", "determinism"]
   },

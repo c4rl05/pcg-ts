@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 1026,
   "meta": {
-    "title": "turn a path's own points to follow it",
+    "title": "Turn a path's own points to follow it",
     "description": "A path built by `pointsToPath` carries no `tangent` — only a sampler writes one, for the points it created — so `orientAlongVector` has nothing to read. `writeTangents` supplies it, from the normalized central difference between each point's neighbours along the polyline, which stays smooth through corners and wraps on a closed path. Both nodes keep the points, their attributes and the topology exactly as they arrived, so the `width` column written before the path was built is still on the output after the rotation: that is the whole difference from `place/along-curve`, which resamples and hands back new points carrying none of it. Run the pair BEFORE any filter — every filter drops topology, and `writeTangents` would then find no paths.",
     "tags": ["basics", "path", "rotation", "attributes"]
   },

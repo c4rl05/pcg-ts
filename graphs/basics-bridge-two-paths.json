@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 1103,
   "meta": {
-    "title": "span the band between two paths",
+    "title": "Span the band between two paths",
     "description": "`bridgePaths` joins a polyline on `from` to one on `to` with a strip of quads, point i to point i, emitted as three-vertex 'poly' triangles — the same mesh topology `sweepProfile` and `meshPrimitive` emit. Here the two paths are the two edges of a road, made from one centreline: `writeTangents` gives each point its direction of travel, the cross product with up is the sideways unit, and each edge is the centreline moved half a width to one side. Because both edges come from the same points, they have the SAME point count, which is the one thing a pair must share — the node does not resample or match, point i simply meets point i, so two paths from different sources want `pathResample` mode 'count' first. The half-width widens along `curveU`, so the road flares from 1.5 to 7 units across, and the band follows whatever its edges do. FACING: with `from` on the right of the direction of travel and `to` on its left, the band faces UP; swap the pins or set `flip` to turn it over. The node writes a `normal` shared across each rung, so a bending band shades round, and a `uv` whose `u` is each edge's own normalized arc length and whose `v` runs 0 on `from` to 1 on `to`.",
     "tags": ["basics", "path", "curve", "surface", "mesh", "fields"]
   },

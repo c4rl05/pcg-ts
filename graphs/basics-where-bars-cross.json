@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 1102,
   "meta": {
-    "title": "put a part where two bars cross",
+    "title": "Put a part where two bars cross",
     "description": "A braced panel: `connectPoints` joins every grid point to its neighbours along the rows, the columns and both diagonals, so each cell carries an X. `segmentCrossings` asks where those bars cross and emits ONE POINT PER CROSSING — here one at the middle of each cell's X, twenty-four in all. The row and column bars meet their neighbours only at the joints, and a meeting at a segment's END is a touch, not a crossing: the default `endpoints: \"exclude\"` leaves the joints out, which is what 'where do the bars cross' means on a lattice. Two segments cross when their closest approach is within `tolerance`, so the same rule finds coplanar bars (distance 0, give or take f32 rounding) and bars built a hair apart in 3D. Each point carries the two primitive ids (`primA` < `primB`) and the unit `bisector` of the two bars — the axis that halves their ACUTE angle — and a part set into the X lies along it: the cells are wider than they are tall, so the bosses here lie flat, along the shallow angle between the diagonals. Make the cells taller than they are wide and they stand up. The output is a plain point cloud, so it feeds `spawnInstances` directly.",
     "tags": ["basics", "topology", "sampler", "instancing"]
   },

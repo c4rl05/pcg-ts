@@ -2,20 +2,20 @@
   "_comment": "Panel spec — presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "footprint",
+      "title": "Footprint",
       "controls": [
-        { "param": "plot.count", "label": "corners", "min": 3, "max": 48, "step": 1 },
-        { "param": "plot.size", "label": "size" },
-        { "param": "plot.rotate", "label": "rotate" }
+        { "param": "plot.count", "label": "Corners", "min": 3, "max": 48, "step": 1 },
+        { "param": "plot.size", "label": "Size" },
+        { "param": "plot.rotate", "label": "Rotate" }
       ]
     },
     {
-      "title": "massing",
+      "title": "Massing",
       "controls": [
-        { "param": "massing.direction", "label": "direction" },
-        { "param": "massing.vector", "label": "vector" },
-        { "param": "massing.caps", "label": "caps" },
-        { "param": "massing.sides", "label": "walls" }
+        { "param": "massing.direction", "label": "Direction" },
+        { "param": "massing.vector", "label": "Vector" },
+        { "param": "massing.caps", "label": "Caps" },
+        { "param": "massing.sides", "label": "Walls" }
       ]
     }
   ]

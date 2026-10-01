@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 20260808,
   "meta": {
-    "title": "headless scatter",
+    "title": "Headless scatter",
     "description": "Scatter points across a 60x60 patch, write a height attribute from fbm perlin noise, keep the points above the midline, and jitter what survives. Cooks in plain Node with no renderer and no page — the graph is data, and the CLI is its feedback loop.",
     "tags": ["headless", "scatter", "fields", "cli"]
   },

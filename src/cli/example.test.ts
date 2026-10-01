@@ -43,7 +43,7 @@ describe("graphs/examples-headless-scatter.json through the CLI", () => {
     expect(await runCli(["validate", GRAPH, "--json"], io.io)).toBe(EXIT_OK);
     const report = JSON.parse(io.stdout());
     expect(report.ok).toBe(true);
-    expect(report.meta.title).toBe("headless scatter");
+    expect(report.meta.title).toBe("Headless scatter");
     expect(report.meta.tags).toContain("headless");
     expect(report.nodes.map((n: { id: string }) => n.id)).toEqual([
       "scatter",

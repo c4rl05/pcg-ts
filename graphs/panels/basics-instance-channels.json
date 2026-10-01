@@ -2,19 +2,19 @@
   "_comment": "Panel spec — presentation only; the graph cooks identically without it. See shared/graphUi.ts. `spawn.instanceAttrs` is deliberately absent: a stringList has no widget, so listing it would silently show nothing.",
   "sections": [
     {
-      "title": "scatter",
+      "title": "Scatter",
       "controls": [
-        { "param": "scatter.count", "label": "points", "min": 50, "max": 2000, "step": 25 },
-        { "param": "scatter.boundsMin", "label": "bounds min" },
-        { "param": "scatter.boundsMax", "label": "bounds max" },
-        { "param": "scatter.seed", "label": "seed" }
+        { "param": "scatter.count", "label": "Points", "min": 50, "max": 2000, "step": 25 },
+        { "param": "scatter.boundsMin", "label": "Bounds min" },
+        { "param": "scatter.boundsMax", "label": "Bounds max" },
+        { "param": "scatter.seed", "label": "Seed" }
       ]
     },
     {
-      "title": "spawn",
+      "title": "Spawn",
       "controls": [
-        { "param": "spawn.assetId", "label": "asset" },
-        { "param": "spawn.colorAttr", "label": "colour attr" }
+        { "param": "spawn.assetId", "label": "Asset" },
+        { "param": "spawn.colorAttr", "label": "Colour attr" }
       ]
     }
   ]

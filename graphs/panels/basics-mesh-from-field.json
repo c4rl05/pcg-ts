@@ -2,11 +2,11 @@
   "_comment": "Panel spec — presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "the shape",
+      "title": "The shape",
       "controls": [
         {
           "param": "cave.isoValue",
-          "label": "iso value",
+          "label": "Iso value",
           "description": "Where the surface sits in the field. For a signed distance it is a plain offset, so this grows and shrinks the rock without re-cutting anything — the same graph, one number.",
           "min": -4,
           "max": 4,
@@ -15,18 +15,18 @@
       ]
     },
     {
-      "title": "the lattice",
+      "title": "The lattice",
       "controls": [
         {
           "param": "cave.cellSize",
-          "label": "cell size",
+          "label": "Cell size",
           "description": "Cube edge in world units, and EXACT rather than a request. Cost grows with its cube and every corner is a field evaluation, so halving it is eight times the work. It changes how finely the surface is resolved and never where the surface is.",
           "min": 0.25,
           "max": 1.5,
           "step": 0.05,
           "unit": "m"
         },
-        { "param": "cave.inside", "label": "solid side" }
+        { "param": "cave.inside", "label": "Solid side" }
       ]
     }
   ]

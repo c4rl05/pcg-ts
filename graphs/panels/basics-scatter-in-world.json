@@ -2,11 +2,11 @@
   "_comment": "Panel spec \u2014 presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "scatter",
+      "title": "Scatter",
       "controls": [
         {
           "param": "scatter.density",
-          "label": "density",
+          "label": "Density",
           "min": 0.005,
           "max": 0.3,
           "step": 0.005,
@@ -14,7 +14,7 @@
         },
         {
           "param": "scatter.cellSize",
-          "label": "cell size",
+          "label": "Cell size",
           "min": 2,
           "max": 40,
           "step": 1,
@@ -22,11 +22,11 @@
         },
         {
           "param": "scatter.latticeMode",
-          "label": "lattice"
+          "label": "Lattice"
         },
         {
           "param": "scatter.height",
-          "label": "height",
+          "label": "Height",
           "min": -10,
           "max": 10,
           "step": 0.5,
@@ -34,15 +34,15 @@
         },
         {
           "param": "scatter.boundsMin",
-          "label": "bounds min"
+          "label": "Bounds min"
         },
         {
           "param": "scatter.boundsMax",
-          "label": "bounds max"
+          "label": "Bounds max"
         },
         {
           "param": "scatter.seed",
-          "label": "seed"
+          "label": "Seed"
         }
       ]
     }

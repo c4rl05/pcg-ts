@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 1105,
   "meta": {
-    "title": "split a window into lights",
+    "title": "Split a window into lights",
     "description": "`splitPolygons` cuts every polygon on `in` along the polylines on `cutters`, removes a strip `kerf` wide around each cut, and puts out the PIECES. The polygon here is an upright window opening in the 'xy' plane; the cutters are two mullions and a transom, drawn longer than the opening so they cut clean through it. Each cutter segment is buffered into a rectangle `kerf` wide with square ends, so where the transom meets a mullion the two gaps join squarely. `kerf` is field-capable on the CUTTERS' PRIMITIVE domain — one width per cutter polyline — so the transom, which carries a `barWidth` of 0.4, cuts a heavier gap than the mullions' 0.15 in the same cook. The primitive domain carries no P: a per-cutter value is a primitive attribute, written here by `setAttribute` with `domain: \"primitive\"`. Every piece carries its polygon's primitive attributes and comes out as a closed polyline, so six lights extrude straight into panes of glass. The opening's four corners come from a grid whose point order is not a walk round the edge, so `pointsToPath` sorts them by their angle about the centre (`atan2`) before closing the loop.",
     "tags": ["basics", "surface", "mesh", "extrude", "fields"]
   },

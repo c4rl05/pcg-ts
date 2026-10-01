@@ -2,31 +2,31 @@
   "_comment": "Panel spec \u2014 presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "mesh",
+      "title": "Mesh",
       "controls": [
         {
           "param": "ground.shape",
-          "label": "shape"
+          "label": "Shape"
         },
         {
           "param": "ground.size",
-          "label": "size"
+          "label": "Size"
         },
         {
           "param": "ground.center",
-          "label": "centre"
+          "label": "Centre"
         },
         {
           "param": "ground.subdivisions",
-          "label": "subdivisions"
+          "label": "Subdivisions"
         },
         {
           "param": "ground.orientation",
-          "label": "orientation"
+          "label": "Orientation"
         },
         {
           "param": "ground.flip",
-          "label": "flip normals"
+          "label": "Flip normals"
         }
       ]
     }

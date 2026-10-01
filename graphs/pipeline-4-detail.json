@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 40100,
   "meta": {
-    "title": "staged pipeline 4/5 — buildings, wall posts and forest",
+    "title": "Staged pipeline 4/5 — buildings, wall posts and forest",
     "description": "Stages 1-3 verbatim, plus everything that gets drawn. ADDS `buildings` (one asset per lot, chosen per point and spawned), `props` (posts spaced every 6 units along the boundary wall and turned to follow it) and `vegetation` (plantable scatter on the terrain, cut to the ground outside the wall, yawed at random and split into species batches). Every earlier output — `terrain`, `boundary`, `districts`, `lots`, `footprints` — is bit-identical to the stage that introduced it. Staging works because a node's seed is hashCombine(graphSeed, hashString(nodeId)) — node-local, independent of where the node sits in the DAG — so every earlier stage reproduces bit-identically inside every later one.",
     "tags": [
       "pipeline",

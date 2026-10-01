@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 1011,
   "meta": {
-    "title": "turn each point to face a direction",
+    "title": "Turn each point to face a direction",
     "description": "`orientAlongVector` writes the standard `rot` quaternion so a chosen local axis points along `direction`, with `up` fixing the roll. `direction` is field-capable and resolved per point, so an expression is what makes each point face somewhere different: here `vec(P.x, 0, P.z)` points every point radially away from the origin. A zero-length direction leaves that point's rotation alone rather than inventing one.",
     "tags": ["basics", "transform", "rotation", "fields"]
   },

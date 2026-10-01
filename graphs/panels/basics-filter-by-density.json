@@ -2,32 +2,32 @@
   "_comment": "Panel spec — presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "scatter",
+      "title": "Scatter",
       "controls": [
         {
           "param": "scatter.count",
-          "label": "candidates",
+          "label": "Candidates",
           "min": 100,
           "max": 6000,
           "step": 100
         },
         {
           "param": "scatter.seed",
-          "label": "seed"
+          "label": "Seed"
         }
       ]
     },
     {
-      "title": "thinning",
+      "title": "Thinning",
       "_comment": "Two gates pointing opposite ways, which is the whole shape of this node: 'threshold' reads a cutoff and ignores the seed, 'probabilistic' rolls per point and ignores the cutoff. The graph ships in probabilistic mode, so flipping the one enum swaps which row is on screen with nothing else moving.",
       "controls": [
         {
           "param": "thin.mode",
-          "label": "mode"
+          "label": "Mode"
         },
         {
           "param": "thin.threshold",
-          "label": "threshold",
+          "label": "Threshold",
           "min": 0,
           "max": 1,
           "step": 0.01,
@@ -35,7 +35,7 @@
         },
         {
           "param": "thin.seed",
-          "label": "seed",
+          "label": "Seed",
           "visibleWhen": { "thin.mode": "probabilistic" }
         }
       ]

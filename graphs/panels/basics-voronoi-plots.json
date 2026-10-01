@@ -2,18 +2,18 @@
   "_comment": "Panel spec — presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "the cloud",
+      "title": "The cloud",
       "controls": [
-        { "param": "sites.count", "label": "sites", "min": 20, "max": 400, "step": 10 },
-        { "param": "sites.seed", "label": "seed" }
+        { "param": "sites.count", "label": "Sites", "min": 20, "max": 400, "step": 10 },
+        { "param": "sites.seed", "label": "Seed" }
       ]
     },
     {
-      "title": "gather — widen until the count stops rising",
+      "title": "Gather — widen until the count stops rising",
       "controls": [
         {
           "param": "plots.radius",
-          "label": "radius",
+          "label": "Radius",
           "description": "How far a site looks for the sites that bound it. Not a plot size: a cell is either the answer the whole cloud would give or nothing at all. Narrow it and plots vanish from the middle; widen it and they come back, then stop coming back — what is left out at that point is the hull, whose cells are unbounded.",
           "min": 2,
           "max": 24,
@@ -23,8 +23,8 @@
       ]
     },
     {
-      "title": "massing",
-      "controls": [{ "param": "massing.caps", "label": "caps" }]
+      "title": "Massing",
+      "controls": [{ "param": "massing.caps", "label": "Caps" }]
     }
   ]
 }

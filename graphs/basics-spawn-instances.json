@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 1019,
   "meta": {
-    "title": "turn points into instance batches",
+    "title": "Turn points into instance batches",
     "description": "`spawnInstances` is a terminal: it converts a point cloud into render-agnostic instance batches, one 4x4 world matrix per point composed as T(P) * R(rot) * S(scale) from the standard attributes. Points group into one batch per asset id. The node has two output pins — `instances` for the batches and `points`, which passes the input through unchanged for chaining or debug rendering — and this graph declares only the first.",
     "tags": ["basics", "spawn", "instancing"]
   },

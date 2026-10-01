@@ -2,42 +2,42 @@
   "_comment": "Panel spec \u2014 presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "grid",
+      "title": "Grid",
       "controls": [
         {
           "param": "grid.countX",
-          "label": "columns",
+          "label": "Columns",
           "min": 1,
           "max": 40,
           "step": 1
         },
         {
           "param": "grid.countZ",
-          "label": "rows",
+          "label": "Rows",
           "min": 1,
           "max": 40,
           "step": 1
         },
         {
           "param": "grid.spacing",
-          "label": "spacing"
+          "label": "Spacing"
         }
       ]
     },
     {
-      "title": "transform",
+      "title": "Transform",
       "controls": [
         {
           "param": "place.translate",
-          "label": "move"
+          "label": "Move"
         },
         {
           "param": "place.rotateEuler",
-          "label": "turn"
+          "label": "Turn"
         },
         {
           "param": "place.scale",
-          "label": "size"
+          "label": "Size"
         }
       ]
     }

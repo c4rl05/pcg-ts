@@ -2,39 +2,39 @@
   "_comment": "Panel spec \u2014 presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "scatter",
+      "title": "Scatter",
       "controls": [
         {
           "param": "scatter.count",
-          "label": "points",
+          "label": "Points",
           "min": 50,
           "max": 2000,
           "step": 25
         },
         {
           "param": "scatter.boundsMin",
-          "label": "bounds min"
+          "label": "Bounds min"
         },
         {
           "param": "scatter.boundsMax",
-          "label": "bounds max"
+          "label": "Bounds max"
         },
         {
           "param": "scatter.seed",
-          "label": "seed"
+          "label": "Seed"
         }
       ]
     },
     {
-      "title": "spawn",
+      "title": "Spawn",
       "controls": [
         {
           "param": "spawn.assetId",
-          "label": "fallback asset"
+          "label": "Fallback asset"
         },
         {
           "param": "spawn.assetAttr",
-          "label": "split by"
+          "label": "Split by"
         }
       ]
     }

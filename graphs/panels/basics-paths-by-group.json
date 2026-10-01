@@ -2,34 +2,34 @@
   "_comment": "Panel spec \u2014 presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "grid",
+      "title": "Grid",
       "controls": [
         {
           "param": "grid.countX",
-          "label": "points per row",
+          "label": "Points per row",
           "min": 2,
           "max": 40,
           "step": 1
         },
         {
           "param": "grid.countZ",
-          "label": "rows",
+          "label": "Rows",
           "min": 1,
           "max": 20,
           "step": 1
         },
         {
           "param": "grid.spacing",
-          "label": "spacing"
+          "label": "Spacing"
         }
       ]
     },
     {
-      "title": "paths",
+      "title": "Paths",
       "controls": [
         {
           "param": "paths.closed",
-          "label": "close each path"
+          "label": "Close each path"
         }
       ]
     }

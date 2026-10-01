@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 1005,
   "meta": {
-    "title": "keep points by an attribute comparison",
+    "title": "Keep points by an attribute comparison",
     "description": "The first of the three ways to remove points: write a scalar column, then compare it. `filterByAttribute` tests one named point attribute against `value` with one of eq/ne/lt/le/gt/ge and keeps the survivors with every attribute carried. The scratch column stays on the output — `removeAttribute` is what takes it off again — which is the cost this idiom pays and `filterByExpression` avoids.",
     "tags": ["basics", "filter", "attributes"]
   },

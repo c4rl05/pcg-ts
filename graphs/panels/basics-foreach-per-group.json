@@ -2,35 +2,35 @@
   "_comment": "Panel spec — presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "cloud",
+      "title": "Cloud",
       "controls": [
         {
           "param": "scatter.count",
-          "label": "points",
+          "label": "Points",
           "min": 100,
           "max": 4000,
           "step": 50
         },
         {
           "param": "scatter.seed",
-          "label": "scatter seed"
+          "label": "Scatter seed"
         },
         {
           "param": "scatter.boundsMin",
-          "label": "bounds min"
+          "label": "Bounds min"
         },
         {
           "param": "scatter.boundsMax",
-          "label": "bounds max"
+          "label": "Bounds max"
         }
       ]
     },
     {
-      "title": "groups",
+      "title": "Groups",
       "controls": [
         {
           "param": "groups.name",
-          "label": "split on"
+          "label": "Split on"
         }
       ]
     }

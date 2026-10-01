@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 1014,
   "meta": {
-    "title": "read a value off a surface below each point",
+    "title": "Read a value off a surface below each point",
     "description": "`transferAttribute` copies an attribute from its `source` geometry onto the main input's points. Mapping 'raycast' casts a ray from each point along `direction` and interpolates the value at the nearest forward hit, which is how a scattered cloud reads the terrain under it. A point whose ray hits nothing keeps the value it already had — never an invented one — and `missCountAttr` records how many missed as a detail attribute so a graph can assert on it.",
     "tags": ["basics", "transfer", "mesh", "raycast"]
   },

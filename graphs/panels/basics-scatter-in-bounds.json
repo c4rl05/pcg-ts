@@ -2,11 +2,11 @@
   "_comment": "Panel spec — presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "scatter",
+      "title": "Scatter",
       "controls": [
-        { "param": "scatter.count", "label": "points", "min": 50, "max": 5000, "step": 50 },
-        { "param": "scatter.boundsMin", "label": "bounds min" },
-        { "param": "scatter.boundsMax", "label": "bounds max" }
+        { "param": "scatter.count", "label": "Points", "min": 50, "max": 5000, "step": 50 },
+        { "param": "scatter.boundsMin", "label": "Bounds min" },
+        { "param": "scatter.boundsMax", "label": "Bounds max" }
       ]
     }
   ]

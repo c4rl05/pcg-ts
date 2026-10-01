@@ -2,31 +2,31 @@
   "_comment": "Panel spec \u2014 presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
   "sections": [
     {
-      "title": "scatter",
+      "title": "Scatter",
       "controls": [
         {
           "param": "scatter.count",
-          "label": "points",
+          "label": "Points",
           "min": 50,
           "max": 2000,
           "step": 25
         },
         {
           "param": "scatter.seed",
-          "label": "seed"
+          "label": "Seed"
         }
       ]
     },
     {
-      "title": "orientation",
+      "title": "Orientation",
       "controls": [
         {
           "param": "face.axis",
-          "label": "aim axis"
+          "label": "Aim axis"
         },
         {
           "param": "face.up",
-          "label": "up"
+          "label": "Up"
         }
       ]
     }

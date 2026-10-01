@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "seed": 40100,
   "meta": {
-    "title": "staged pipeline 5/5, edited — the settlement, its roads and authored plots",
+    "title": "Staged pipeline 5/5, edited — the settlement, its roads and authored plots",
     "description": "`pipeline-5-roads.json` verbatim plus the same authored edit layer `pipeline-3-lots-edits.json` adds, so it is a superset of BOTH. The road net is built from the district centres, upstream of the `edits` slot, so `roads` and `lamps` join `terrain`, `boundary` and `districts` on the list of outputs an edit provably cannot reach — while `lots`, `footprints`, `buildings` and everything downstream of them respond to the hand-placed geometry. An edit reaches exactly as far as the dependency graph says it does, and no further.",
     "tags": [
       "pipeline",
