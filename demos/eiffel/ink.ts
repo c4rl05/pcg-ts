@@ -26,6 +26,14 @@
  * measured, not guessed — and the second is the pen: a line that fades at
  * its edges instead of stopping at a pixel's.
  *
+ * COLOUR, when the host hands one over (`render(color)`: the lit scene in
+ * the wash's palette, wash.ts), is laid under the lines rather than the
+ * paper: paled toward the paper and calmed (`WashComposite`), and only
+ * where the prepass drew something, so the background, the sky and the
+ * glass seen against it all stay paper. That coverage is the mask's second
+ * channel, resolved through the same Gaussian as the line, so a member's
+ * colour ends exactly where its line does.
+ *
  * Paper is where nothing was drawn. Nothing see-through is drawn — a pane
  * would stand in for the members behind it, exactly as in the occlusion's
  * prepass (gtao.ts) — and neither is anything the host asks to hide (the
@@ -52,7 +60,9 @@ import {
   ShaderMaterial,
   type Side,
   SRGBColorSpace,
+  type Texture,
   Vector2,
+  Vector3,
   WebGLRenderTarget,
   type WebGLRenderer,
 } from "three";
@@ -90,6 +100,31 @@ export interface InkSpec {
   readonly contour: number;
   readonly ink: number;
   readonly paper: number;
+  /**
+   * The line lightens with distance, from full at `fadeNear` metres to
+   * `fadeFloor` of itself at `fadeFar`: a lattice seen whole is a mass of
+   * edges a few pixels apart, and drawn at full weight it reads as a dark
+   * shape rather than as a drawing of one. `fadeFloor` 1 is no fade.
+   */
+  readonly fadeNear: number;
+  readonly fadeFar: number;
+  readonly fadeFloor: number;
+  /**
+   * A HIERARCHY of lines, each a fraction of the silhouette's full weight:
+   * `inner` for a contour with something drawn on both sides of it (a bar
+   * in front of a bar), `crease` for a fold. 1 and 1 is the plain pen,
+   * every line alike.
+   */
+  readonly inner: number;
+  readonly crease: number;
+}
+
+/** What the composite does to the colour on the way to the paper (see the file's note). */
+export interface WashComposite {
+  /** How far toward the paper, 0 to 1. */
+  readonly lift: number;
+  /** 1 keeps the colour's saturation, 0 is grey. */
+  readonly saturation: number;
 }
 
 export const INK_DEFAULT: InkSpec = {
@@ -101,6 +136,11 @@ export const INK_DEFAULT: InkSpec = {
   contour: 0.02,
   ink: 0x111111,
   paper: 0xffffff,
+  fadeNear: 150,
+  fadeFar: 600,
+  fadeFloor: 1,
+  inner: 1,
+  crease: 1,
 };
 
 /**
@@ -113,7 +153,10 @@ export const INK_DEFAULT: InkSpec = {
 const PIXEL_BUDGET = 36_000_000;
 
 export interface Ink {
-  render(): void;
+  /** Draw to the canvas: lines on paper, or over `color` (linear, the canvas' size) when given. */
+  render(color?: Texture): void;
+  /** How `color` is laid under the lines; null draws on bare paper even when one is given. */
+  composite(spec: WashComposite | null): void;
   setSize(width: number, height: number): void;
   apply(spec: InkSpec): void;
   dispose(): void;
@@ -137,6 +180,9 @@ const FRAGMENT = /* glsl */ `
   uniform float cameraFar;
   uniform float creaseCos;
   uniform float contour;
+  uniform vec3 fade;
+  uniform float inner;
+  uniform float creaseWeight;
   varying vec2 vUv;
 
   // 1 / (distance along the view axis); 0 where nothing was drawn.
@@ -168,7 +214,10 @@ const FRAGMENT = /* glsl */ `
     vec2 a = vUv - d;
     vec2 b = vUv + d;
     if (any(lessThan(min(a, b), vec2(0.0))) || any(greaterThan(max(a, b), vec2(1.0)))) return 0.0;
-    return dip(c, invDepth(a), invDepth(b));
+    float ia = invDepth(a);
+    float ib = invDepth(b);
+    // A silhouette has paper on one side; anything else is an inner contour.
+    return dip(c, ia, ib) * (ia > 0.0 && ib > 0.0 ? inner : 1.0);
   }
 
   float crease(vec3 n, vec2 at, float c) {
@@ -177,11 +226,12 @@ const FRAGMENT = /* glsl */ `
     // A neighbour across a contour is not a crease of this surface.
     if (abs(o - c) / c > 4.0 * contour) return 0.0;
     float cosine = dot(n, normalAt(at));
-    return 1.0 - smoothstep(creaseCos - 0.15, creaseCos, cosine);
+    return creaseWeight * (1.0 - smoothstep(creaseCos - 0.15, creaseCos, cosine));
   }
 
   void main() {
     float c = invDepth(vUv);
+    // Nothing drawn: no line, and no coverage (green, 1 below).
     if (c == 0.0) {
       gl_FragColor = vec4(0.0);
       return;
@@ -197,7 +247,8 @@ const FRAGMENT = /* glsl */ `
     line = max(line, crease(n, vUv + dx, c));
     line = max(line, crease(n, vUv + dy, c));
     line = max(line, crease(n, vUv + dx + dy, c));
-    gl_FragColor = vec4(line, 0.0, 0.0, 1.0);
+    line *= mix(1.0, fade.z, smoothstep(fade.x, fade.y, 1.0 / c));
+    gl_FragColor = vec4(line, 1.0, 0.0, 1.0);
   }
 `;
 
@@ -209,6 +260,10 @@ const FRAGMENT = /* glsl */ `
  */
 const RESOLVE = /* glsl */ `
   uniform sampler2D tEdge;
+  uniform sampler2D tColor;
+  uniform float useColor;
+  uniform float lift;
+  uniform float saturation;
   uniform vec2 texel;
   uniform float sigma;
   uniform float strength;
@@ -216,19 +271,31 @@ const RESOLVE = /* glsl */ `
   uniform vec3 paper;
   varying vec2 vUv;
 
+  vec3 toSRGB(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
+  }
+
   void main() {
-    float sum = 0.0;
+    vec2 sum = vec2(0.0);
     float total = 0.0;
     for (int j = -2; j <= 2; j++) {
       for (int i = -2; i <= 2; i++) {
         vec2 k = vec2(float(i), float(j)) * 0.75;
         float w = exp(-0.5 * dot(k, k));
-        sum += w * texture2D(tEdge, vUv + k * sigma * texel).r;
+        sum += w * texture2D(tEdge, vUv + k * sigma * texel).rg;
         total += w;
       }
     }
-    float coverage = min(1.0, strength * sum / total);
-    gl_FragColor = vec4(mix(paper, ink, coverage), 1.0);
+    float coverage = min(1.0, strength * sum.x / total);
+    vec3 base = paper;
+    if (useColor > 0.5) {
+      vec3 c = toSRGB(texture2D(tColor, vUv).rgb);
+      c = mix(vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), c, saturation);
+      c = mix(c, paper, lift);
+      base = mix(paper, c, sum.y / total);
+    }
+    gl_FragColor = vec4(mix(base, ink, coverage), 1.0);
   }
 `;
 
@@ -286,6 +353,9 @@ export function createInk(
       cameraFar: { value: camera.far },
       creaseCos: { value: 0 },
       contour: { value: 0 },
+      fade: { value: new Vector3() },
+      inner: { value: 1 },
+      creaseWeight: { value: 1 },
     },
     depthTest: false,
     depthWrite: false,
@@ -297,6 +367,10 @@ export function createInk(
     fragmentShader: RESOLVE,
     uniforms: {
       tEdge: { value: edges.texture },
+      tColor: { value: null },
+      useColor: { value: 0 },
+      lift: { value: 0 },
+      saturation: { value: 1 },
       texel: { value: new Vector2(1 / width, 1 / height) },
       sigma: { value: 0 },
       strength: { value: 1 },
@@ -309,6 +383,7 @@ export function createInk(
   const resolveQuad = new FullScreenQuad(resolveMaterial);
 
   let spec = INK_DEFAULT;
+  let wash: WashComposite | null = null;
   let canvas = { width, height };
 
   /** Size the buffers for the canvas and the spec, and every uniform that follows from the scale. */
@@ -338,6 +413,9 @@ export function createInk(
     spec = next;
     material.uniforms.creaseCos.value = Math.cos((spec.creaseDegrees * Math.PI) / 180);
     material.uniforms.contour.value = spec.contour;
+    (material.uniforms.fade.value as Vector3).set(spec.fadeNear, spec.fadeFar, spec.fadeFloor);
+    material.uniforms.inner.value = spec.inner;
+    material.uniforms.creaseWeight.value = spec.crease;
     const r = resolveMaterial.uniforms;
     r.strength.value = spec.strength;
     (r.ink.value as Color).copy(srgb(spec.ink));
@@ -412,14 +490,24 @@ export function createInk(
   }
 
   return {
-    render() {
+    render(color) {
       prepass();
       material.uniforms.cameraNear.value = camera.near;
       material.uniforms.cameraFar.value = camera.far;
       renderer.setRenderTarget(edges);
       quad.render(renderer);
       renderer.setRenderTarget(null);
+      const r = resolveMaterial.uniforms;
+      r.useColor.value = color !== undefined && wash !== null ? 1 : 0;
+      r.tColor.value = color ?? null;
+      if (wash !== null) {
+        r.lift.value = wash.lift;
+        r.saturation.value = wash.saturation;
+      }
       resolveQuad.render(renderer);
+    },
+    composite(next) {
+      wash = next;
     },
     setSize(w, h) {
       canvas = { width: w, height: h };

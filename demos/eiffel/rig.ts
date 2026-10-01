@@ -40,11 +40,13 @@ import {
   type PerspectiveCamera,
   PlaneGeometry,
   type Scene,
+  type Texture,
   Vector3,
   type WebGLRenderer,
 } from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { Pass } from "three/addons/postprocessing/Pass.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import type { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
 import { type BuiltEnv, type EnvSpec, buildEnv, sunDirection } from "./env.js";
@@ -53,6 +55,7 @@ import { applyAo, createGtao } from "./gtao.js";
 import { type Ink, createInk } from "./ink.js";
 import type { LightSpec, Look, MaterialSpec } from "./look.js";
 import { VIGNETTE_DEFAULT, applyVignette, createVignette, sizeVignette } from "./vignette.js";
+import { type Wash, createWash } from "./wash.js";
 
 export interface Rig {
   /** Push a whole look. Rebuilds the environment only if its spec changed. */
@@ -72,11 +75,15 @@ export interface Rig {
   render(): void;
   /**
    * Draw the pen elevation (ink.ts) instead of the lit image, or with
-   * false, go back. The look is untouched either way.
+   * false, go back; `colour` lays the wash (wash.ts) under its lines. The
+   * look is untouched either way: a coloured drawing's lights are a look
+   * of their own (drawing.ts), which the host applies.
    */
-  setInk(on: boolean): void;
+  setInk(on: boolean, colour?: boolean): void;
   /** The drawing, for its dials. */
   readonly ink: Ink;
+  /** The colour under a coloured drawing's lines, for its dials. */
+  readonly wash: Wash;
   /** True while the occlusion is in the path; false means it was switched off. */
   readonly ao: GTAOPass;
   dispose(): void;
@@ -155,6 +162,37 @@ export function createRig(
   // The drawing leaves the ground off: an elevation stands on the paper.
   const ink = createInk(renderer, scene, camera, size.width, size.height, () => [ground]);
   let inking = false;
+  // A COLOURED DRAWING is the composer's own render and occlusion in the
+  // wash's palette, handed to the pen instead of going through the
+  // vignette and the tone map: the pen lays it on the paper itself
+  // (ink.ts). The same composer, so the occlusion pass and its buffers are
+  // shared, with its last two passes swapped for the pen's.
+  const wash = createWash();
+  let colouring = false;
+  const inkPass = new (class extends Pass {
+    override render(_r: WebGLRenderer, _write: unknown, read: { texture: Texture }): void {
+      ink.render(read.texture);
+    }
+  })();
+  inkPass.needsSwap = false;
+  inkPass.enabled = false;
+  composer.addPass(inkPass);
+  function renderColour(): void {
+    wash.prepare(scene);
+    wash.set(true);
+    const vignetteOn = vignette.enabled;
+    vignette.enabled = false;
+    output.enabled = false;
+    inkPass.enabled = true;
+    try {
+      composer.render();
+    } finally {
+      inkPass.enabled = false;
+      output.enabled = true;
+      vignette.enabled = vignetteOn;
+      wash.set(false);
+    }
+  }
 
   let env: BuiltEnv | undefined;
   let envKey = "";
@@ -213,7 +251,10 @@ export function createRig(
       key.shadow.map = null;
     }
 
-    for (const [name, material] of Object.entries(materials)) {
+    // Only when the overrides changed: a look derived from another (the
+    // drawing's, whose sliders re-apply it on every move) shares its
+    // table, and re-marking every material each time is a stall.
+    for (const [name, material] of look.material === current?.material ? [] : Object.entries(materials)) {
       const spec = { ...(base.get(name) ?? {}), ...(look.material[name] ?? {}) };
       if (spec.color !== undefined) material.color.setHex(spec.color);
       if (spec.roughness !== undefined) material.roughness = spec.roughness;
@@ -372,11 +413,13 @@ export function createRig(
     fitShadowNear,
     shadowTexel,
     setSize,
-    render: () => (inking ? ink.render() : composer.render()),
-    setInk(on: boolean) {
+    render: () => (inking ? (colouring ? renderColour() : ink.render()) : composer.render()),
+    setInk(on: boolean, colour = false) {
       inking = on;
+      colouring = colour;
     },
     ink,
+    wash,
     ao: gtao,
     dispose() {
       env?.dispose();

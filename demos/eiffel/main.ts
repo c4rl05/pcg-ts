@@ -134,6 +134,15 @@ import { type PlateOverlay, loadPlateTool } from "./plateTool.js";
 import { BALUSTER, CABOCHON_RISE, FITTING_ASSETS } from "./platforms.js";
 import { FITTING_SEGMENTS } from "./fittingSegments.js";
 import { INK_DEFAULT, type InkSpec } from "./ink.js";
+import {
+  DRAWING_DEFAULT,
+  type DrawingSpec,
+  drawingComposite,
+  drawingInk,
+  drawingLook,
+  drawingShading,
+} from "./drawing.js";
+import { WASH_REFERENCE, type WashRole, washColor } from "./wash.js";
 import { NEUTRAL, createRig } from "./rig.js";
 import { attachSection } from "./section.js";
 import { attachWalk } from "./walkView.js";
@@ -152,7 +161,7 @@ import {
   packedShaderProblem,
   packedUnlitProblem,
 } from "./rivetPack.js";
-import { BufferAttribute, DataTexture, NearestFilter, SRGBColorSpace } from "three";
+import { BufferAttribute, Color, DataTexture, NearestFilter, SRGBColorSpace } from "three";
 import { FLAG_BANDS, FLAG_GRID, FLAG_POINTS, flagNormals, flagPose, flagWave } from "./flag.js";
 import { TIMBER, attachScrubber, buildDayParam, isWorks, isWorksIron, stageErection } from "./scrub.js";
 
@@ -236,6 +245,21 @@ Object.assign(MATERIALS.glass, {
   depthWrite: false,
   side: FrontSide,
 });
+
+/**
+ * What the drawing's palette generator makes of each class whose relation
+ * to the iron would carry the wrong thing (wash.ts `WashRole`): the stone
+ * is a near-grey, never the iron's red; the glass a pale cool grey-blue;
+ * and the floors' fit-out the warm cream of a lit interior, which is what
+ * sets the floors apart from the lattice in an illustrated cutaway.
+ */
+const WASH_ROLES: Partial<Record<PartClass, WashRole>> = {
+  masonry: "stone",
+  foundations: "stone",
+  glass: "glass",
+  platforms: "warm",
+};
+for (const [cls, role] of Object.entries(WASH_ROLES)) MATERIALS[cls as PartClass].userData.washRole = role;
 
 /**
  * An output no class names — a module under construction declaring its
@@ -867,27 +891,187 @@ rotateGroup.take(
 );
 
 // THE DRAWING (`?ink`, or `?ink=2` for a heavier line in device pixels):
-// the tower as a pen elevation, black on white, no light and no shade
-// (ink.ts). A second way to draw the same scene, not a look: the palette,
-// the sun and the occlusion are left as they were and come back with it.
+// the tower as a pen drawing (ink.ts), by default filled with a washed,
+// cel-shaded colour under soft lines (drawing.ts, wash.ts); with Colour off
+// it is the plain pen, black on white. A second way to draw the same scene:
+// the lit look's palette, sun and occlusion are left as they were and come
+// back with it.
 let inked = new URLSearchParams(location.search).has("ink");
+let drawing: DrawingSpec = DRAWING_DEFAULT;
+let inkBase: InkSpec = INK_DEFAULT;
 {
   const weight = Number(new URLSearchParams(location.search).get("ink"));
-  if (Number.isFinite(weight) && weight > 0) rig.ink.apply({ ...INK_DEFAULT, width: weight });
+  if (Number.isFinite(weight) && weight > 0) inkBase = { ...INK_DEFAULT, width: weight };
 }
-// For tuning the pen from the console or a capture script: any subset of
-// the spec, over the defaults.
-(window as unknown as { __ink: (spec: Partial<InkSpec>) => void }).__ink = (spec) =>
-  rig.ink.apply({ ...INK_DEFAULT, ...spec });
-rig.setInk(inked);
+function applyDrawing(): void {
+  rig.ink.apply(drawingInk(drawing, inkBase));
+  rig.ink.composite(drawingComposite(drawing));
+  rig.wash.shade(drawingShading(drawing));
+  rig.wash.paint(drawing.main);
+  const colour = inked && drawing.colour;
+  rig.setInk(inked, colour);
+  rig.apply(colour ? drawingLook(LOOK, drawing) : LOOK);
+}
+/** Puts a console or script change (`__drawing`) into the Look box's controls; set once they exist. */
+let syncDrawingControls = (): void => {};
+// For tuning from the console or a capture script: any subset of the pen's
+// spec, or of the drawing's, over what is set now.
+(window as unknown as { __ink: (spec: Partial<InkSpec>) => void }).__ink = (spec) => {
+  inkBase = { ...inkBase, ...spec };
+  applyDrawing();
+};
+(window as unknown as { __drawing: (spec?: Partial<DrawingSpec>) => DrawingSpec }).__drawing = (spec = {}) => {
+  drawing = { ...drawing, ...spec };
+  applyDrawing();
+  syncDrawingControls();
+  return drawing;
+};
+applyDrawing();
 if (lookBox !== undefined) {
+  const set = (patch: Partial<DrawingSpec>): void => {
+    drawing = { ...drawing, ...patch };
+    applyDrawing();
+  };
+  // A group inside another's controls: its toggle takes the narrower label
+  // the controls it sits among have (VIEW_SUB_CSS), not a head's.
+  const nestedHead = (group: ViewGroup, row: HTMLElement): void => {
+    group.take(row);
+    const label = row.querySelector(":scope > label") as HTMLElement | null;
+    if (label !== null) label.style.flexBasis = "";
+  };
+  const drawingGroup = viewGroup(lookBox);
   const drawingBox = overlay.addCheckbox("Drawing", inked, (on) => {
     inked = on;
-    rig.setInk(on);
+    drawingGroup.open(on);
+    applyDrawing();
   });
-  const row = drawingBox.parentElement as HTMLElement;
-  (row.querySelector(":scope > label") as HTMLElement).style.flexBasis = "84px";
-  lookBox.append(row);
+  drawingGroup.take(drawingBox.parentElement as HTMLElement);
+  drawingGroup.open(inked);
+
+  // Colour, with the main colour beside it and the palette it generates
+  // under it, then everything that only means something over a colour.
+  const colourGroup = viewGroup(drawingGroup.sub);
+  const colourBox = overlay.addCheckbox("Colour", drawing.colour, (on) => {
+    colourGroup.open(on);
+    set({ colour: on });
+  });
+  const colourRow = colourBox.parentElement as HTMLElement;
+  const picker = document.createElement("input");
+  picker.type = "color";
+  picker.title = "The main colour, the iron's: the rest of the palette is generated from it";
+  picker.style.cssText =
+    "width:28px;height:18px;padding:0;border:1px solid var(--ed-edge);background:none;margin-left:auto";
+  const hex = (n: number): string => `#${n.toString(16).padStart(6, "0")}`;
+  picker.value = hex(drawing.main);
+  picker.addEventListener("input", () => {
+    set({ main: Number.parseInt(picker.value.slice(1), 16) });
+    paintSwatches();
+  });
+  colourRow.append(picker);
+  nestedHead(colourGroup, colourRow);
+  const swatches = document.createElement("div");
+  swatches.style.cssText = "display:flex;gap:2px;margin:2px 0 4px";
+  swatches.title = "The palette, generated from the main colour";
+  const SHOWN: readonly PartClass[] = [
+    "uprights",
+    "bracing",
+    "arches",
+    "platforms",
+    "machinery",
+    "masonry",
+    "foundations",
+    "glass",
+    "names",
+  ];
+  const chips = SHOWN.map((cls) => {
+    const chip = document.createElement("span");
+    chip.title = cls;
+    chip.style.cssText = "flex:1;height:10px;border:1px solid var(--ed-edge)";
+    swatches.append(chip);
+    return chip;
+  });
+  const paintSwatches = (): void => {
+    const main = new Color(drawing.main);
+    const reference = new Color(WASH_REFERENCE);
+    SHOWN.forEach((cls, i) => {
+      const c = washColor(new Color(PALETTE[cls].color), main, reference, new Color(), WASH_ROLES[cls]);
+      (chips[i] as HTMLElement).style.background = `#${c.getHexString()}`;
+    });
+  };
+  paintSwatches();
+  colourGroup.sub.prepend(swatches);
+  colourGroup.open(drawing.colour);
+
+  type Field = keyof DrawingSpec;
+  type Slider = readonly [label: string, field: Field, min: number, max: number, step: number, format: (v: number) => string];
+  const sliders = new Map<Field, HTMLInputElement>();
+  const boxes = new Map<Field, { box: HTMLInputElement; group: ViewGroup }>();
+  const slider = (into: ViewGroup, [label, field, min, max, step, format]: Slider): void => {
+    const row = overlay.addSlider(label, { min, max, step, value: drawing[field] as number, format }, (v) =>
+      set({ [field]: v }),
+    );
+    into.take(row, "sub");
+    sliders.set(field, row.querySelector("input") as HTMLInputElement);
+  };
+  // A toggle and the sliders that only mean something while it is on.
+  const toggle = (into: HTMLElement, label: string, field: Field, under: readonly Slider[] = []): void => {
+    const group = viewGroup(into);
+    const box = overlay.addCheckbox(label, drawing[field] as boolean, (on) => {
+      group.open(on);
+      set({ [field]: on });
+    });
+    nestedHead(group, box.parentElement as HTMLElement);
+    boxes.set(field, { box, group });
+    for (const s of under) slider(group, s);
+    group.open(drawing[field] as boolean);
+  };
+  const f2 = (v: number): string => v.toFixed(2);
+  const deg = (v: number): string => `${v.toFixed(0)}°`;
+  toggle(colourGroup.sub, "Cel", "cel", [
+    ["Bands", "bands", 2, 6, 1, (v) => v.toFixed(0)],
+    ["Band edge", "bandSoftness", 0, 1, 0.05, f2],
+  ]);
+  toggle(colourGroup.sub, "Washed", "washed", [
+    ["Lift", "lift", 0, 0.8, 0.02, f2],
+    ["Light tint", "litTint", 0, 1, 0.05, f2],
+    ["Shade tint", "shadeTint", 0, 1, 0.05, f2],
+    ["Saturation", "saturation", 0, 1.5, 0.05, f2],
+  ]);
+  toggle(colourGroup.sub, "AO", "ao", [
+    ["Strength", "aoStrength", 0, 1, 0.05, f2],
+    ["Radius", "aoRadius", 0.1, 3, 0.05, (v) => `${v.toFixed(2)} m`],
+  ]);
+  toggle(colourGroup.sub, "Shadows", "shadows");
+  const light: readonly Slider[] = [
+    ["Sun height", "sunElevation", 5, 85, 1, deg],
+    ["Sun turn", "sunAzimuth", -180, 180, 1, deg],
+    ["Sun", "sun", 0, 1.5, 0.05, f2],
+    ["Shade", "shade", 0, 1.5, 0.05, f2],
+  ];
+  for (const s of light) slider(colourGroup, s);
+  toggle(drawingGroup.sub, "Soft edges", "softEdges");
+  slider(drawingGroup, ["Far lines", "farLines", 0, 1, 0.05, f2]);
+  slider(drawingGroup, ["Inner lines", "innerLines", 0, 1, 0.05, f2]);
+  slider(drawingGroup, ["Line width", "lineWidth", 1, 3, 0.5, (v) => `${v.toFixed(1)} px`]);
+  slider(drawingGroup, ["Line dark", "lineStrength", 0, 1, 0.05, f2]);
+
+  syncDrawingControls = () => {
+    drawingBox.checked = inked;
+    drawingGroup.open(inked);
+    colourBox.checked = drawing.colour;
+    colourGroup.open(drawing.colour);
+    picker.value = hex(drawing.main);
+    paintSwatches();
+    for (const [field, { box, group }] of boxes) {
+      box.checked = drawing[field] as boolean;
+      group.open(box.checked);
+    }
+    for (const [field, input] of sliders) {
+      input.value = String(drawing[field]);
+      // The readout beside it follows its own input event.
+      input.dispatchEvent(new Event("input"));
+    }
+  };
 }
 
 // The lifts run unless `?still` parked them. Off leaves every car exactly
