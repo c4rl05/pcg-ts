@@ -909,8 +909,10 @@ overlay.addCheckbox("Cloth sim", clothSim, (on) => {
 // THE ERECTION, 1887-89 (`?build`, or `?build=1887-10-10` to open on a
 // day): the tower shown as it stood on a day, with a date scrubber
 // (scrub.ts), and the temporary works it stood in (erection.ts). The
-// toggle reloads, keeping the view and the depth, because the works are
-// cooked and the staging is done once at load.
+// toggle reloads, because the works are cooked and the staging is done
+// once at load. It keeps the depth; turning build on opens on the page's
+// own framing, the whole site, wherever the camera had gone, and turning
+// it off keeps the view.
 const BUILD = new URLSearchParams(location.search).has("build");
 const buildBox = overlay.addCheckbox("Build", BUILD, (on) => {
   const q = new URLSearchParams(location.search);
@@ -918,10 +920,13 @@ const buildBox = overlay.addCheckbox("Build", BUILD, (on) => {
     q.set("build", "");
     // The walk is not reopened under build (see ROTATE, WALK AND BUILD).
     for (const k of ["walk", "walkAt", "walkNear"]) q.delete(k);
-  } else q.delete("build");
-  const p = camera.position;
-  const t = controls.target;
-  q.set("cam", [p.x, p.y, p.z, t.x, t.y, t.z].map((v) => v.toFixed(2)).join(","));
+    q.delete("cam");
+  } else {
+    q.delete("build");
+    const p = camera.position;
+    const t = controls.target;
+    q.set("cam", [p.x, p.y, p.z, t.x, t.y, t.z].map((v) => v.toFixed(2)).join(","));
+  }
   location.search = q.toString().replace(/build=(&|$)/, "build$1");
 });
 buildGroup.take(buildBox.parentElement as HTMLElement);
@@ -1004,7 +1009,7 @@ for (const ax of ["laced", "rivets"] as const) {
 }
 const applyButton = document.createElement("button");
 applyButton.type = "button";
-applyButton.textContent = "Apply detail changes";
+applyButton.textContent = "Apply";
 applyButton.style.cssText =
   "cursor:pointer;background:none;border:1px solid currentColor;border-radius:4px;color:inherit;opacity:0.8;padding:0.15em 0.7em";
 applyButton.addEventListener("click", applyDepth);
