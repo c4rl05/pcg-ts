@@ -1,0 +1,24 @@
+var e=`{
+  "_comment": "Panel spec — presentation only; the graph cooks identically without it. See shared/graphUi.ts.",
+  "sections": [
+    {
+      "title": "Opening",
+      "controls": [{ "param": "corners.spacing", "label": "Size" }]
+    },
+    {
+      "title": "Bars",
+      "controls": [
+        { "param": "mullionEnds.spacing", "label": "Mullion span" },
+        { "param": "transomEnds.start", "label": "Transom from" },
+        { "param": "transomEnds.end", "label": "Transom to" },
+        { "param": "mullionWidth.value", "label": "Mullion width", "min": 0, "max": 1, "step": 0.01 },
+        { "param": "transomWidth.value", "label": "Transom width", "min": 0, "max": 1, "step": 0.01 }
+      ]
+    },
+    {
+      "title": "Glass",
+      "controls": [{ "param": "glass.distance", "label": "Thickness", "min": 0.01, "max": 1, "step": 0.01 }]
+    }
+  ]
+}
+`;export{e as default};
