@@ -485,7 +485,7 @@ const DEMOS = [
     // of an empty ground plane.
     ready: (s, has) =>
       document.body.dataset.ready === "failed" ||
-      (document.body.dataset.ready === "1" && has(s["triangles"]) && s["triangles"] !== "0"),
+      (document.body.dataset.ready === "1" && has(s["total triangles"]) && s["total triangles"] !== "0"),
     failed: () => document.body.dataset.ready === "failed",
   },
 ];

@@ -536,6 +536,7 @@ function drawRivets(name: string, collection: DataCollection, problems: string[]
   const site = rivetClass(name).share > 0;
   const out: Mesh[] = [];
   let instances = 0;
+  let instancedTris = 0;
   for (const item of collection) {
     if (item.kind !== "instances") continue;
     if (item.deviceBatches !== undefined) {
@@ -557,6 +558,7 @@ function drawRivets(name: string, collection: DataCollection, problems: string[]
           rivetPath.packed += packed.count;
           rivetPath.packedBytes += packed.count * PACKED_BYTES;
           instances += packed.count;
+          instancedTris += packed.count * trianglesOf(ASSETS.rivet!.geometry);
           continue;
         }
         if (packed.reason !== "cpu-requested") {
@@ -572,6 +574,7 @@ function drawRivets(name: string, collection: DataCollection, problems: string[]
           highlightable(mesh, "rivets");
           out.push(mesh);
           instances += mesh.count;
+          instancedTris += mesh.count * triangles(mesh);
           rivetPath.cpu += mesh.count;
         }
         driveHeads(drawn);
@@ -581,7 +584,7 @@ function drawRivets(name: string, collection: DataCollection, problems: string[]
     }
   }
   rivetPath.ms += performance.now() - t0;
-  return { meshes: out, triangles: 0, instances };
+  return { meshes: out, triangles: 0, instances, instancedTriangles: instancedTris };
 }
 
 /** Instances a drawn rivet mesh carries, packed or not. */
@@ -785,7 +788,12 @@ function capital(key: string): string {
 const statFps = overlay.addStat("FPS");
 const statCook = overlay.addStat("Cook");
 const statSize = overlay.addStat("Extent (x × z × y)");
-const statTotal = overlay.addStat("Triangles");
+// Mesh triangles are the cooked geometry's own; instanced ones are each
+// instance's asset triangles (a rivet head's 80, a globe's 960), which at
+// `?rivets` outnumber the meshes about 25 to 1.
+const statMesh = overlay.addStat("Mesh triangles");
+const statInstanced = overlay.addStat("Instanced triangles");
+const statTotal = overlay.addStat("Total triangles");
 const classStats = Object.fromEntries(
   PART_CLASSES.map((cls) => [cls, overlay.addStat(capital(cls))]),
 ) as Record<PartClass, (value: string | number) => void>;
@@ -1155,6 +1163,8 @@ const DEPTH_TITLES: Record<"laced" | "rivets", Record<Depth, string>> = {
     whole: "Every rivet on the tower as an instance, at once",
   },
 };
+/** What the Detail box calls each depth: "whole" reads as "Full" on the panel; the URL keeps `whole`. */
+const DEPTH_LABELS: Record<Depth, string> = { off: "Off", streamed: "Streamed", whole: "Full" };
 const staged: Record<"laced" | "rivets", Depth> = { laced: DEPTH.laced, rivets: DEPTH.rivets };
 const depthRadios: Record<"laced" | "rivets", HTMLInputElement[]> = { laced: [], rivets: [] };
 // A framed section with its own heading, so it reads apart from the
@@ -1192,7 +1202,7 @@ for (const ax of ["laced", "rivets"] as const) {
       option.style.cursor = "default";
     }
     radio.addEventListener("change", () => stageDepth(ax, d));
-    option.append(radio, capital(d));
+    option.append(radio, DEPTH_LABELS[d]);
     group.append(option);
     depthRadios[ax].push(radio);
   }
@@ -1238,10 +1248,10 @@ function paintDepth(): void {
     : "Pick a different detail above to apply it";
   const warning =
     staged.rivets === "whole"
-      ? "Whole rivets: 1.2 million instances over 4 million triangles. The cook takes 10 s or more " +
-        "and a few hundred MB, and the page stalls while it runs."
+      ? "Full rivets: 1.2 million rivet heads, about 100 million triangles with the 4 million of the " +
+        "meshes. The cook takes 10 s or more and several gigabytes, and the page stalls while it runs."
       : staged.laced === "whole"
-        ? "Whole lacing: 4 million triangles. The cook takes several seconds, and the page stalls while it runs."
+        ? "Full lacing: 4 million triangles. The cook takes several seconds, and the page stalls while it runs."
         : "";
   depthWarning.textContent = warning;
   depthWarning.hidden = warning === "";
@@ -1533,7 +1543,10 @@ function report(problems: readonly string[]): void {
 }
 
 function triangles(mesh: Mesh): number {
-  const g = mesh.geometry;
+  return trianglesOf(mesh.geometry);
+}
+
+function trianglesOf(g: BufferGeometry): number {
   return (g.index ? g.index.count : g.getAttribute("position").count) / 3;
 }
 
@@ -1544,6 +1557,8 @@ interface Drawn {
   readonly triangles: number;
   /** Instances across its instance batches. */
   readonly instances: number;
+  /** Triangles its instances draw: each instance's asset triangles. */
+  readonly instancedTriangles: number;
 }
 
 /**
@@ -1564,6 +1579,7 @@ function draw(
   const out: Mesh[] = [];
   let tris = 0;
   let instances = 0;
+  let instancedTris = 0;
   for (const item of collection) {
     try {
       if (item.kind === "geometry") {
@@ -1589,13 +1605,14 @@ function draw(
           mesh.name = name;
           out.push(mesh);
           instances += mesh.count;
+          instancedTris += mesh.count * triangles(mesh);
         }
       }
     } catch (err) {
       problems.push(`${name}: ${message(err)}`);
     }
   }
-  return { meshes: out, triangles: tris, instances };
+  return { meshes: out, triangles: tris, instances, instancedTriangles: instancedTris };
 }
 
 async function main(): Promise<void> {
@@ -1626,6 +1643,7 @@ async function main(): Promise<void> {
 
   const box = new Box3();
   let total = 0;
+  let instancedTotal = 0;
   let riveted = 0;
   let fitted = 0;
   let linked = 0;
@@ -1635,6 +1653,7 @@ async function main(): Promise<void> {
     for (const mesh of drawn.meshes) scene.add(mesh);
     meshes.set(name, drawn.meshes);
     total += drawn.triangles;
+    instancedTotal += drawn.instancedTriangles;
     if (isFitting(name)) fitted += drawn.instances;
     else if (isChain(name)) linked += drawn.instances;
     else riveted += drawn.instances;
@@ -1740,7 +1759,9 @@ async function main(): Promise<void> {
       `${cars.filter((c) => !isCarGlass(c.mesh.name)).length}${STILL ? " parked" : " running"}, ${carTriangles.toLocaleString()} tri`,
     );
   }
-  statTotal(total.toLocaleString());
+  statMesh(total.toLocaleString());
+  statInstanced(instancedTotal.toLocaleString());
+  statTotal((total + instancedTotal).toLocaleString());
   // Staged by date here, before anything below can swap a mesh's
   // geometry: scrub.ts.
   const erection = BUILD ? stageErection(meshes) : undefined;
