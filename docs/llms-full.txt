@@ -120,6 +120,12 @@ whatever `VERSION` says.
   is created with `add(name, type, tupleSize, defaultValue?)`, which
   THROWS if the name is already taken, or replaced in place with
   `replace(...)`; one attribute is `geo.attrs[domain].get(name)`.
+  Reading one back, an attribute's `data` is sized by its CAPACITY, not
+  the element count: past the live elements it carries trailing slack
+  (a 160,000-point grid measured 262,144 slots, the tail all zeros), so
+  a sum, histogram or hash over the whole array is silently wrong. Slice
+  to the live elements first —
+  `a.data.subarray(0, geo.attrs[domain].count * a.tupleSize)`.
   Iteration is insertion order — stable and deterministic, and `rename`
   keeps an attribute's position rather than moving it to the end, so
   nothing that walks a domain depends on when a column was added.
