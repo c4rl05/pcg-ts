@@ -229,7 +229,7 @@ Connects a point cloud into a NETWORK: one 2-vertex `polyline` primitive per edg
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-filter-primitives-by-attribute.json](../graphs/basics-filter-primitives-by-attribute.json), [basics-connect-by-reach.json](../graphs/basics-connect-by-reach.json), [basics-merge-primitives.json](../graphs/basics-merge-primitives.json) — 10 total (`pcg graphs --node connectPoints`)
+**Examples:** [basics-filter-primitives-by-attribute.json](../graphs/basics-filter-primitives-by-attribute.json), [basics-connect-by-reach.json](../graphs/basics-connect-by-reach.json), [basics-merge-primitives.json](../graphs/basics-merge-primitives.json) — 11 total (`pcg graphs --node connectPoints`)
 
 **Params:**
 
@@ -250,7 +250,7 @@ Copies the source point cloud onto every target point (output count = source poi
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-copy-to-points.json](../graphs/basics-copy-to-points.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 16 total (`pcg graphs --node copyToPoints`)
+**Examples:** [basics-copy-to-points.json](../graphs/basics-copy-to-points.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 17 total (`pcg graphs --node copyToPoints`)
 
 **Params:**
 
@@ -379,7 +379,7 @@ Keeps points where a field-capable `predicate` evaluates to a non-zero number. T
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-filter-by-expression.json](../graphs/basics-filter-by-expression.json), [basics-worley-cells.json](../graphs/basics-worley-cells.json), [basics-suspension-bridge.json](../graphs/basics-suspension-bridge.json) — 15 total (`pcg graphs --node filterByExpression`)
+**Examples:** [basics-filter-by-expression.json](../graphs/basics-filter-by-expression.json), [basics-worley-cells.json](../graphs/basics-worley-cells.json), [basics-suspension-bridge.json](../graphs/basics-suspension-bridge.json) — 16 total (`pcg graphs --node filterByExpression`)
 
 **Params:**
 
@@ -460,7 +460,7 @@ Offsets each point by a deterministic random vector: each axis moves by a unifor
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-jitter-points.json](../graphs/basics-jitter-points.json), [basics-foreach-per-group.json](../graphs/basics-foreach-per-group.json), [examples-headless-scatter.json](../graphs/examples-headless-scatter.json) — 5 total (`pcg graphs --node jitterPoints`)
+**Examples:** [basics-jitter-points.json](../graphs/basics-jitter-points.json), [basics-foreach-per-group.json](../graphs/basics-foreach-per-group.json), [examples-headless-scatter.json](../graphs/examples-headless-scatter.json) — 6 total (`pcg graphs --node jitterPoints`)
 
 **Params:**
 
@@ -530,7 +530,7 @@ Builds a parametric triangle mesh with no input: shape 'plane' is one axis-align
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-mesh-primitive.json](../graphs/basics-mesh-primitive.json), [basics-surface-sample.json](../graphs/basics-surface-sample.json), [basics-promote-attribute.json](../graphs/basics-promote-attribute.json) — 17 total (`pcg graphs --node meshPrimitive`)
+**Examples:** [basics-mesh-primitive.json](../graphs/basics-mesh-primitive.json), [basics-surface-sample.json](../graphs/basics-surface-sample.json), [basics-promote-attribute.json](../graphs/basics-promote-attribute.json) — 18 total (`pcg graphs --node meshPrimitive`)
 
 **Params:**
 
@@ -685,7 +685,7 @@ Resamples every polyline primitive at even arc-length steps and emits a PATH, no
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-path-resample.json](../graphs/basics-path-resample.json), [basics-clip-a-path.json](../graphs/basics-clip-a-path.json), [basics-scatter-along-a-path.json](../graphs/basics-scatter-along-a-path.json) — 11 total (`pcg graphs --node pathResample`)
+**Examples:** [basics-path-resample.json](../graphs/basics-path-resample.json), [basics-clip-a-path.json](../graphs/basics-clip-a-path.json), [basics-scatter-along-a-path.json](../graphs/basics-scatter-along-a-path.json) — 12 total (`pcg graphs --node pathResample`)
 
 **Params:**
 
@@ -758,7 +758,7 @@ Emits ONE POINT PER SEGMENT of every polyline primitive, placed and oriented so 
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-path-segments.json](../graphs/basics-path-segments.json), [examples-rig.json](../graphs/examples-rig.json) — 2 total (`pcg graphs --node pathSegments`)
+**Examples:** [basics-path-segments.json](../graphs/basics-path-segments.json), [examples-archipelago.json](../graphs/examples-archipelago.json), [examples-rig.json](../graphs/examples-rig.json) — 3 total (`pcg graphs --node pathSegments`)
 
 **Params:**
 
@@ -801,7 +801,7 @@ Creates a regular grid of points: countX * countY * countZ points starting at or
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-point-grid.json](../graphs/basics-point-grid.json), [basics-inline-field-params.json](../graphs/basics-inline-field-params.json), [basics-jitter-points.json](../graphs/basics-jitter-points.json) — 28 total (`pcg graphs --node pointGrid`)
+**Examples:** [basics-point-grid.json](../graphs/basics-point-grid.json), [basics-inline-field-params.json](../graphs/basics-inline-field-params.json), [basics-jitter-points.json](../graphs/basics-jitter-points.json) — 29 total (`pcg graphs --node pointGrid`)
 
 **Params:**
 
@@ -890,7 +890,7 @@ Scatters `count` points uniformly inside the axis-aligned box [boundsMin, bounds
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-scatter-in-bounds.json](../graphs/basics-scatter-in-bounds.json), [basics-attribute-from-noise.json](../graphs/basics-attribute-from-noise.json), [basics-even-spacing.json](../graphs/basics-even-spacing.json) — 41 total (`pcg graphs --node pointScatterInBounds`)
+**Examples:** [basics-scatter-in-bounds.json](../graphs/basics-scatter-in-bounds.json), [basics-attribute-from-noise.json](../graphs/basics-attribute-from-noise.json), [basics-even-spacing.json](../graphs/basics-even-spacing.json) — 42 total (`pcg graphs --node pointScatterInBounds`)
 
 **Params:**
 
@@ -1180,7 +1180,7 @@ Enforces a minimum distance between points, under one of two rules chosen by `mo
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-even-spacing.json](../graphs/basics-even-spacing.json), [basics-subgraph-exposed-params.json](../graphs/basics-subgraph-exposed-params.json), [pipeline-2-districts.json](../graphs/pipeline-2-districts.json) — 10 total (`pcg graphs --node selfPrune`)
+**Examples:** [basics-even-spacing.json](../graphs/basics-even-spacing.json), [basics-subgraph-exposed-params.json](../graphs/basics-subgraph-exposed-params.json), [pipeline-2-districts.json](../graphs/pipeline-2-districts.json) — 11 total (`pcg graphs --node selfPrune`)
 
 **Params:**
 
@@ -1201,7 +1201,7 @@ Creates or overwrites an attribute on the chosen domain. Numeric types fill from
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-attribute-from-noise.json](../graphs/basics-attribute-from-noise.json), [basics-mask-by-species.json](../graphs/basics-mask-by-species.json), [basics-attribute-remap.json](../graphs/basics-attribute-remap.json) — 65 total (`pcg graphs --node setAttribute`)
+**Examples:** [basics-attribute-from-noise.json](../graphs/basics-attribute-from-noise.json), [basics-mask-by-species.json](../graphs/basics-mask-by-species.json), [basics-attribute-remap.json](../graphs/basics-attribute-remap.json) — 66 total (`pcg graphs --node setAttribute`)
 
 **Params:**
 
@@ -1266,7 +1266,7 @@ Spawner terminal: converts the input point cloud into render-agnostic instance b
 
 **Outputs:** `instances` (instances), `points` (geometry)
 
-**Examples:** [basics-spawn-instances.json](../graphs/basics-spawn-instances.json), [basics-props-along-a-path.json](../graphs/basics-props-along-a-path.json), [basics-radial-on-curve.json](../graphs/basics-radial-on-curve.json) — 27 total (`pcg graphs --node spawnInstances`)
+**Examples:** [basics-spawn-instances.json](../graphs/basics-spawn-instances.json), [basics-props-along-a-path.json](../graphs/basics-props-along-a-path.json), [basics-radial-on-curve.json](../graphs/basics-radial-on-curve.json) — 28 total (`pcg graphs --node spawnInstances`)
 
 **Params:**
 
@@ -1332,7 +1332,7 @@ Composite node wrapping an inner graph as a single node. Pins and params are per
 
 **Outputs:** *(none)*
 
-**Examples:** [basics-subgraph-exposed-params.json](../graphs/basics-subgraph-exposed-params.json), [basics-primitive-ref.json](../graphs/basics-primitive-ref.json), [basics-gather-on-path.json](../graphs/basics-gather-on-path.json) — 37 total (`pcg graphs --node subgraph`)
+**Examples:** [basics-subgraph-exposed-params.json](../graphs/basics-subgraph-exposed-params.json), [basics-primitive-ref.json](../graphs/basics-primitive-ref.json), [basics-gather-on-path.json](../graphs/basics-gather-on-path.json) — 38 total (`pcg graphs --node subgraph`)
 
 **Params:** *(none)*
 
@@ -1417,7 +1417,7 @@ Transfers an attribute from the `source` geometry onto the main input's points, 
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-transfer-attribute.json](../graphs/basics-transfer-attribute.json), [examples-rig.json](../graphs/examples-rig.json) — 2 total (`pcg graphs --node transferAttribute`)
+**Examples:** [basics-transfer-attribute.json](../graphs/basics-transfer-attribute.json), [examples-archipelago.json](../graphs/examples-archipelago.json), [examples-rig.json](../graphs/examples-rig.json) — 3 total (`pcg graphs --node transferAttribute`)
 
 **Params:**
 
@@ -1466,7 +1466,7 @@ Transforms every point: P' = R * (scale * P) + translate, with R from rotateEule
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-transform-points.json](../graphs/basics-transform-points.json), [basics-inline-field-params.json](../graphs/basics-inline-field-params.json), [basics-reseed-a-noise.json](../graphs/basics-reseed-a-noise.json) — 34 total (`pcg graphs --node transformPoints`)
+**Examples:** [basics-transform-points.json](../graphs/basics-transform-points.json), [basics-inline-field-params.json](../graphs/basics-inline-field-params.json), [basics-reseed-a-noise.json](../graphs/basics-reseed-a-noise.json) — 35 total (`pcg graphs --node transformPoints`)
 
 **Params:**
 

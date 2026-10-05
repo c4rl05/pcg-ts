@@ -1,0 +1,1562 @@
+var e=`{
+  "formatVersion": 1,
+  "seed": 1,
+  "meta": {
+    "title": "An archipelago with forests, towns and roads",
+    "description": "Islands, forests, towns and the roads between them, from two noises and one idea about where things land. A flat \`meshPrimitive\` plane carries two fields as attributes: \`elev\`, a six-octave fBm pulled under the sea toward the map edge so the land breaks into an archipelago, and \`moist\`, a slower three-octave one. \`landColour\` turns them into the standard \`color\` attribute through two elevation \`ramp\`s, one for dry ground and one for wet, mixed by moisture: sea, shoal, sand and rock are the same everywhere and only the green moves. \`terrain\` then lifts each vertex by \`elev\` times the \`heightScale\` graph param and leaves everything below sea level at y = 0, so the sea is a flat surface whose colour says how deep it is. EVERYTHING ELSE IS SCATTERED IN THE SKY AND DROPPED. Tree and town candidates start at y = 80, above the highest peak the expression can reach even at the largest \`heightScale\`, and read \`elev\` and \`moist\` off the finished terrain with \`transferAttribute\`'s 'raycast' mapping, which interpolates inside the triangle it hits instead of copying the nearest vertex. The survivors land with \`place/drop-to-surface\`, and the roads move their own resampled points down with the same ray, so the height scale is read in exactly one node and turning it carries trees, houses and roads with the ground. Trees are kept where it is moist, above the beach and below the bare tops, at a rate the \`treeDensity\` param scales, then thinned by \`selfPrune\`; \`species\` picks \`bush\`, \`birch\` or \`pine\` out of its \`values\` table by elevation band. Towns take low ground a little back from the shore, kept 24 units apart by a random priority, and each is a jittered three-by-three block of houses and barns stamped by \`copyToPoints\`. \`connectPoints\` joins the town centres into a relative-neighbourhood network, \`pathSegments\` paves it with one tube per 1.5-unit step, squashed flat into a ribbon by scaling the axis that the segment roll leaves vertical, and a segment that lands on the sea is dropped, which leaves the crossings between islands as gaps: the network says two towns are neighbours, the ground says there is water in the way. IT STARTED AS AN AGENT-WRITTEN GRAPH, authored against the published package with a 2D map renderer of its own, and the placement rules are still the agent's: the tree and town predicates, the species bands, the town spacing and the road rule. What changed is what a 3D viewer needs in order to see them. The 160,000-point grid that never left y = 0 became a 40,401-point displaced mesh with a colour; every scatter now lands on that surface rather than on a plane; the elevation noise runs at about twice the agent's frequency with the edge falloff starting further out, which is what turned one large island into an archipelago; and the asset ids became ones the shared placeholder vocabulary draws (\`bush\`, \`birch\`, \`pine\`, \`house\`, \`barn\`, \`tube\`) where the agent had invented \`palm\` and \`oak\`, which cooked and validated and would have drawn as anonymous stand-ins.",
+    "tags": [
+      "examples",
+      "terrain",
+      "island",
+      "scatter",
+      "network",
+      "spawner"
+    ]
+  },
+  "params": [
+    {
+      "name": "treeDensity",
+      "value": 1,
+      "min": 0,
+      "max": 2,
+      "description": "Multiplier on forest cover: the moisture-driven acceptance chance of every tree candidate is scaled by it, so 0 clears the islands and 2 fills every moist slope."
+    },
+    {
+      "name": "heightScale",
+      "value": 26,
+      "min": 2,
+      "max": 40,
+      "description": "World units of height per unit of \`elev\`. Read by the terrain lift only; everything else lands on the surface by ray, so trees, buildings and roads follow it without a second copy of the number."
+    }
+  ],
+  "nodes": [
+    {
+      "id": "ground",
+      "type": "meshPrimitive",
+      "params": {
+        "shape": "plane",
+        "size": [
+          200,
+          0,
+          200
+        ],
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "orientation": "xz",
+        "subdivisions": [
+          200,
+          1,
+          200
+        ],
+        "flip": false,
+        "normals": false
+      }
+    },
+    {
+      "id": "elev",
+      "type": "setAttribute",
+      "params": {
+        "name": "elev",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "sub",
+          "args": [
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "fbm",
+                          "base": "perlinNoise",
+                          "opts": {
+                            "seed": {
+                              "from": "node",
+                              "variant": {
+                                "fn": "param",
+                                "name": "islands",
+                                "value": 1
+                              }
+                            },
+                            "frequency": 0.03,
+                            "octaves": 6,
+                            "normalized": true,
+                            "offset": [
+                              0.37,
+                              0,
+                              0.71
+                            ]
+                          }
+                        },
+                        0.5
+                      ]
+                    },
+                    3.4
+                  ]
+                },
+                0.07
+              ]
+            },
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "smoothstep",
+                  "args": [
+                    0.65,
+                    1,
+                    {
+                      "fn": "div",
+                      "args": [
+                        {
+                          "fn": "length",
+                          "args": [
+                            {
+                              "fn": "position"
+                            }
+                          ]
+                        },
+                        100
+                      ]
+                    }
+                  ]
+                },
+                1.1
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "moist",
+      "type": "setAttribute",
+      "params": {
+        "name": "moist",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "fbm",
+          "base": "perlinNoise",
+          "opts": {
+            "seed": {
+              "from": "node",
+              "variant": {
+                "fn": "param",
+                "name": "moisture",
+                "value": 2
+              }
+            },
+            "frequency": 0.02,
+            "octaves": 3,
+            "normalized": true,
+            "offset": [
+              0.53,
+              0,
+              0.19
+            ]
+          }
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "landColour",
+      "type": "setAttribute",
+      "params": {
+        "name": "color",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 4,
+        "value": {
+          "fn": "lerp",
+          "args": [
+            {
+              "fn": "vec",
+              "args": [
+                {
+                  "fn": "ramp",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "elev"
+                    }
+                  ],
+                  "stops": [
+                    [
+                      -0.6,
+                      0.04
+                    ],
+                    [
+                      -0.07,
+                      0.07
+                    ],
+                    [
+                      -0.012,
+                      0.3
+                    ],
+                    [
+                      0.012,
+                      0.97
+                    ],
+                    [
+                      0.045,
+                      0.93
+                    ],
+                    [
+                      0.1,
+                      0.62
+                    ],
+                    [
+                      0.28,
+                      0.55
+                    ],
+                    [
+                      0.45,
+                      0.5
+                    ],
+                    [
+                      0.58,
+                      0.55
+                    ],
+                    [
+                      0.72,
+                      0.92
+                    ]
+                  ]
+                },
+                {
+                  "fn": "ramp",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "elev"
+                    }
+                  ],
+                  "stops": [
+                    [
+                      -0.6,
+                      0.13
+                    ],
+                    [
+                      -0.07,
+                      0.3
+                    ],
+                    [
+                      -0.012,
+                      0.68
+                    ],
+                    [
+                      0.012,
+                      0.85
+                    ],
+                    [
+                      0.045,
+                      0.8
+                    ],
+                    [
+                      0.1,
+                      0.7
+                    ],
+                    [
+                      0.28,
+                      0.6
+                    ],
+                    [
+                      0.45,
+                      0.5
+                    ],
+                    [
+                      0.58,
+                      0.52
+                    ],
+                    [
+                      0.72,
+                      0.92
+                    ]
+                  ]
+                },
+                {
+                  "fn": "ramp",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "elev"
+                    }
+                  ],
+                  "stops": [
+                    [
+                      -0.6,
+                      0.32
+                    ],
+                    [
+                      -0.07,
+                      0.55
+                    ],
+                    [
+                      -0.012,
+                      0.74
+                    ],
+                    [
+                      0.012,
+                      0.52
+                    ],
+                    [
+                      0.045,
+                      0.48
+                    ],
+                    [
+                      0.1,
+                      0.32
+                    ],
+                    [
+                      0.28,
+                      0.3
+                    ],
+                    [
+                      0.45,
+                      0.32
+                    ],
+                    [
+                      0.58,
+                      0.48
+                    ],
+                    [
+                      0.72,
+                      0.92
+                    ]
+                  ]
+                },
+                1
+              ]
+            },
+            {
+              "fn": "vec",
+              "args": [
+                {
+                  "fn": "ramp",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "elev"
+                    }
+                  ],
+                  "stops": [
+                    [
+                      -0.6,
+                      0.04
+                    ],
+                    [
+                      -0.07,
+                      0.07
+                    ],
+                    [
+                      -0.012,
+                      0.3
+                    ],
+                    [
+                      0.012,
+                      0.97
+                    ],
+                    [
+                      0.045,
+                      0.93
+                    ],
+                    [
+                      0.1,
+                      0.3
+                    ],
+                    [
+                      0.28,
+                      0.2
+                    ],
+                    [
+                      0.45,
+                      0.22
+                    ],
+                    [
+                      0.58,
+                      0.55
+                    ],
+                    [
+                      0.72,
+                      0.92
+                    ]
+                  ]
+                },
+                {
+                  "fn": "ramp",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "elev"
+                    }
+                  ],
+                  "stops": [
+                    [
+                      -0.6,
+                      0.13
+                    ],
+                    [
+                      -0.07,
+                      0.3
+                    ],
+                    [
+                      -0.012,
+                      0.68
+                    ],
+                    [
+                      0.012,
+                      0.85
+                    ],
+                    [
+                      0.045,
+                      0.8
+                    ],
+                    [
+                      0.1,
+                      0.6
+                    ],
+                    [
+                      0.28,
+                      0.47
+                    ],
+                    [
+                      0.45,
+                      0.4
+                    ],
+                    [
+                      0.58,
+                      0.52
+                    ],
+                    [
+                      0.72,
+                      0.92
+                    ]
+                  ]
+                },
+                {
+                  "fn": "ramp",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "elev"
+                    }
+                  ],
+                  "stops": [
+                    [
+                      -0.6,
+                      0.32
+                    ],
+                    [
+                      -0.07,
+                      0.55
+                    ],
+                    [
+                      -0.012,
+                      0.74
+                    ],
+                    [
+                      0.012,
+                      0.52
+                    ],
+                    [
+                      0.045,
+                      0.48
+                    ],
+                    [
+                      0.1,
+                      0.22
+                    ],
+                    [
+                      0.28,
+                      0.18
+                    ],
+                    [
+                      0.45,
+                      0.2
+                    ],
+                    [
+                      0.58,
+                      0.48
+                    ],
+                    [
+                      0.72,
+                      0.92
+                    ]
+                  ]
+                },
+                1
+              ]
+            },
+            {
+              "fn": "smoothstep",
+              "args": [
+                0.35,
+                0.65,
+                {
+                  "fn": "attribute",
+                  "name": "moist"
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "terrain",
+      "type": "transformPoints",
+      "params": {
+        "translate": {
+          "fn": "vec",
+          "args": [
+            0,
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "max",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "elev"
+                    },
+                    0
+                  ]
+                },
+                {
+                  "fn": "param",
+                  "name": "heightScale"
+                }
+              ]
+            },
+            0
+          ]
+        },
+        "rotateEuler": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "treeSeeds",
+      "type": "pointScatterInBounds",
+      "params": {
+        "count": 50000,
+        "boundsMin": [
+          -100,
+          80,
+          -100
+        ],
+        "boundsMax": [
+          100,
+          80,
+          100
+        ],
+        "seed": 0
+      }
+    },
+    {
+      "id": "treeElev",
+      "type": "transferAttribute",
+      "params": {
+        "name": "elev",
+        "mapping": "raycast",
+        "attrDomain": "point",
+        "uvAttr": "uv",
+        "direction": [
+          0,
+          -1,
+          0
+        ],
+        "directionAttr": "",
+        "maxDistance": 0,
+        "missCountAttr": "",
+        "hitAttr": ""
+      }
+    },
+    {
+      "id": "treeMoist",
+      "type": "transferAttribute",
+      "params": {
+        "name": "moist",
+        "mapping": "raycast",
+        "attrDomain": "point",
+        "uvAttr": "uv",
+        "direction": [
+          0,
+          -1,
+          0
+        ],
+        "directionAttr": "",
+        "maxDistance": 0,
+        "missCountAttr": "",
+        "hitAttr": ""
+      }
+    },
+    {
+      "id": "treeMask",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "mul",
+          "args": [
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "gt",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "elev"
+                    },
+                    0.05
+                  ]
+                },
+                {
+                  "fn": "lt",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "elev"
+                    },
+                    0.62
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "lt",
+              "args": [
+                {
+                  "fn": "randomField",
+                  "key": "thin"
+                },
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "smoothstep",
+                      "args": [
+                        0.35,
+                        0.65,
+                        {
+                          "fn": "attribute",
+                          "name": "moist"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "param",
+                      "name": "treeDensity"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "treeSpacing",
+      "type": "selfPrune",
+      "params": {
+        "mode": "greedy",
+        "minDistance": 1.05,
+        "priority": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "treeDrop",
+      "type": "subgraph",
+      "params": {
+        "direction": [
+          0,
+          -1,
+          0
+        ],
+        "maxDistance": 0
+      },
+      "ref": {
+        "name": "place/drop-to-surface"
+      }
+    },
+    {
+      "id": "treeSpecies",
+      "type": "setAttribute",
+      "params": {
+        "name": "species",
+        "domain": "point",
+        "type": "string",
+        "tupleSize": 1,
+        "value": {
+          "fn": "add",
+          "args": [
+            {
+              "fn": "gt",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "elev"
+                },
+                0.12
+              ]
+            },
+            {
+              "fn": "gt",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "elev"
+                },
+                0.38
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [
+          "bush",
+          "birch",
+          "pine"
+        ],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "treeSize",
+      "type": "setAttribute",
+      "params": {
+        "name": "scale",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "remap",
+          "args": [
+            {
+              "fn": "randomField",
+              "key": "size"
+            },
+            0,
+            1,
+            1.7,
+            2.6
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "trees",
+      "type": "spawnInstances",
+      "params": {
+        "assetId": "birch",
+        "assetAttr": "species",
+        "colorAttr": "",
+        "instanceAttrs": []
+      }
+    },
+    {
+      "id": "townSeeds",
+      "type": "pointScatterInBounds",
+      "params": {
+        "count": 600,
+        "boundsMin": [
+          -100,
+          80,
+          -100
+        ],
+        "boundsMax": [
+          100,
+          80,
+          100
+        ],
+        "seed": 0
+      }
+    },
+    {
+      "id": "townElev",
+      "type": "transferAttribute",
+      "params": {
+        "name": "elev",
+        "mapping": "raycast",
+        "attrDomain": "point",
+        "uvAttr": "uv",
+        "direction": [
+          0,
+          -1,
+          0
+        ],
+        "directionAttr": "",
+        "maxDistance": 0,
+        "missCountAttr": "",
+        "hitAttr": ""
+      }
+    },
+    {
+      "id": "townMask",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "mul",
+          "args": [
+            {
+              "fn": "gt",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "elev"
+                },
+                0.06
+              ]
+            },
+            {
+              "fn": "lt",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "elev"
+                },
+                0.3
+              ]
+            }
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "towns",
+      "type": "selfPrune",
+      "params": {
+        "mode": "greedy",
+        "minDistance": 24,
+        "priority": {
+          "fn": "randomField",
+          "key": "rank"
+        },
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "townPlan",
+      "type": "pointGrid",
+      "params": {
+        "countX": 3,
+        "countY": 1,
+        "countZ": 3,
+        "spacing": [
+          2.6,
+          1,
+          2.6
+        ],
+        "origin": [
+          -2.6,
+          0,
+          -2.6
+        ]
+      }
+    },
+    {
+      "id": "townLots",
+      "type": "jitterPoints",
+      "params": {
+        "amount": [
+          0.5,
+          0,
+          0.5
+        ],
+        "seed": 0
+      }
+    },
+    {
+      "id": "houseSeeds",
+      "type": "copyToPoints",
+      "params": {
+        "targetNames": [],
+        "targetIndexAttr": "",
+        "rotateAttrs": [],
+        "sourceGroupAttr": "",
+        "targetGroupAttr": "",
+        "mirrorAware": true,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "houseDrop",
+      "type": "subgraph",
+      "params": {
+        "direction": [
+          0,
+          -1,
+          0
+        ],
+        "maxDistance": 0
+      },
+      "ref": {
+        "name": "place/drop-to-surface"
+      }
+    },
+    {
+      "id": "houseLand",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "gt",
+          "args": [
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "position"
+                }
+              ],
+              "index": 1
+            },
+            0.2
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "houseKind",
+      "type": "setAttribute",
+      "params": {
+        "name": "kind",
+        "domain": "point",
+        "type": "string",
+        "tupleSize": 1,
+        "value": {
+          "fn": "gt",
+          "args": [
+            {
+              "fn": "randomField",
+              "key": "kind"
+            },
+            0.72
+          ]
+        },
+        "select": 0,
+        "values": [
+          "house",
+          "barn"
+        ],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "houseSize",
+      "type": "setAttribute",
+      "params": {
+        "name": "scale",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": 2.2,
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "buildings",
+      "type": "spawnInstances",
+      "params": {
+        "assetId": "house",
+        "assetAttr": "kind",
+        "colorAttr": "",
+        "instanceAttrs": []
+      }
+    },
+    {
+      "id": "roads",
+      "type": "connectPoints",
+      "params": {
+        "mode": "relativeNeighborhood",
+        "radius": 75,
+        "degreeAttr": "",
+        "lengthAttr": "length"
+      }
+    },
+    {
+      "id": "roadSamples",
+      "type": "pathResample",
+      "params": {
+        "mode": "spacing",
+        "count": 10,
+        "spacing": 1.5,
+        "fit": "exact",
+        "align": "start",
+        "lengthAttr": "",
+        "stepAttr": "",
+        "resampledLengthAttr": "",
+        "sampleArcAttr": ""
+      }
+    },
+    {
+      "id": "roadDrop",
+      "type": "transferAttribute",
+      "params": {
+        "name": "P",
+        "mapping": "raycast",
+        "attrDomain": "point",
+        "uvAttr": "uv",
+        "direction": [
+          0,
+          -1,
+          0
+        ],
+        "directionAttr": "",
+        "maxDistance": 0,
+        "missCountAttr": "",
+        "hitAttr": ""
+      }
+    },
+    {
+      "id": "roadSegments",
+      "type": "pathSegments",
+      "params": {
+        "axis": "+y",
+        "radius": 0.45,
+        "extend": 0.45,
+        "segmentIndexAttr": ""
+      }
+    },
+    {
+      "id": "roadLand",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "gt",
+          "args": [
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "position"
+                }
+              ],
+              "index": 1
+            },
+            0.2
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "roadFlat",
+      "type": "setAttribute",
+      "params": {
+        "name": "scale",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "mul",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "scale",
+              "tupleSize": 3
+            },
+            {
+              "fn": "vec",
+              "args": [
+                1,
+                1,
+                0.3
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "roadColour",
+      "type": "setAttribute",
+      "params": {
+        "name": "color",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 4,
+        "value": {
+          "fn": "vec",
+          "args": [
+            1,
+            0.82,
+            0.55,
+            1
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "roadPaving",
+      "type": "spawnInstances",
+      "params": {
+        "assetId": "tube",
+        "assetAttr": "",
+        "colorAttr": "color",
+        "instanceAttrs": []
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": [
+        "ground",
+        "out"
+      ],
+      "to": [
+        "elev",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "elev",
+        "out"
+      ],
+      "to": [
+        "moist",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "moist",
+        "out"
+      ],
+      "to": [
+        "landColour",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "landColour",
+        "out"
+      ],
+      "to": [
+        "terrain",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "treeSeeds",
+        "out"
+      ],
+      "to": [
+        "treeElev",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "treeElev",
+        "out"
+      ],
+      "to": [
+        "treeMoist",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "treeMoist",
+        "out"
+      ],
+      "to": [
+        "treeMask",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "treeMask",
+        "out"
+      ],
+      "to": [
+        "treeSpacing",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "treeSpecies",
+        "out"
+      ],
+      "to": [
+        "treeSize",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "treeSize",
+        "out"
+      ],
+      "to": [
+        "trees",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "townSeeds",
+        "out"
+      ],
+      "to": [
+        "townElev",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "townElev",
+        "out"
+      ],
+      "to": [
+        "townMask",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "townMask",
+        "out"
+      ],
+      "to": [
+        "towns",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "townPlan",
+        "out"
+      ],
+      "to": [
+        "townLots",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "houseDrop",
+        "out"
+      ],
+      "to": [
+        "houseLand",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "houseLand",
+        "out"
+      ],
+      "to": [
+        "houseKind",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "houseKind",
+        "out"
+      ],
+      "to": [
+        "houseSize",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "houseSize",
+        "out"
+      ],
+      "to": [
+        "buildings",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "towns",
+        "out"
+      ],
+      "to": [
+        "roads",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "roads",
+        "out"
+      ],
+      "to": [
+        "roadSamples",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "roadSamples",
+        "out"
+      ],
+      "to": [
+        "roadDrop",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "roadDrop",
+        "out"
+      ],
+      "to": [
+        "roadSegments",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "roadSegments",
+        "out"
+      ],
+      "to": [
+        "roadLand",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "roadLand",
+        "out"
+      ],
+      "to": [
+        "roadFlat",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "roadFlat",
+        "out"
+      ],
+      "to": [
+        "roadColour",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "roadColour",
+        "out"
+      ],
+      "to": [
+        "roadPaving",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "terrain",
+        "out"
+      ],
+      "to": [
+        "treeElev",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "terrain",
+        "out"
+      ],
+      "to": [
+        "treeMoist",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "treeSpacing",
+        "out"
+      ],
+      "to": [
+        "treeDrop",
+        "points"
+      ]
+    },
+    {
+      "from": [
+        "terrain",
+        "out"
+      ],
+      "to": [
+        "treeDrop",
+        "surface"
+      ]
+    },
+    {
+      "from": [
+        "treeDrop",
+        "out"
+      ],
+      "to": [
+        "treeSpecies",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "terrain",
+        "out"
+      ],
+      "to": [
+        "townElev",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "townLots",
+        "out"
+      ],
+      "to": [
+        "houseSeeds",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "towns",
+        "out"
+      ],
+      "to": [
+        "houseSeeds",
+        "target"
+      ]
+    },
+    {
+      "from": [
+        "houseSeeds",
+        "out"
+      ],
+      "to": [
+        "houseDrop",
+        "points"
+      ]
+    },
+    {
+      "from": [
+        "terrain",
+        "out"
+      ],
+      "to": [
+        "houseDrop",
+        "surface"
+      ]
+    },
+    {
+      "from": [
+        "terrain",
+        "out"
+      ],
+      "to": [
+        "roadDrop",
+        "source"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "id": "terrain",
+      "pin": "out",
+      "name": "terrain"
+    },
+    {
+      "id": "trees",
+      "pin": "instances",
+      "name": "trees"
+    },
+    {
+      "id": "buildings",
+      "pin": "instances",
+      "name": "towns"
+    },
+    {
+      "id": "roadPaving",
+      "pin": "instances",
+      "name": "roads"
+    }
+  ]
+}
+`;export{e as default};

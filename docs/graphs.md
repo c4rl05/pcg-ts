@@ -4,7 +4,7 @@ Generated from the graphs in [`graphs`](../graphs) by `node scripts/gen-graphs.m
 
 Each file teaches ONE thing and cooks from JSON alone — no runtime-injected data, so `pcg cook <file>` on a clean install reproduces exactly what the corpus test asserts.
 
-102 examples, alphabetical by file:
+103 examples, alphabetical by file:
 
 - [basics-a-draw-that-survives-a-move.json](#basics-a-draw-that-survives-a-movejson) — Keep a random draw when the point moves
 - [basics-a-table-of-points.json](#basics-a-table-of-pointsjson) — Write a table of points into the graph
@@ -90,6 +90,7 @@ Each file teaches ONE thing and cooks from JSON alone — no runtime-injected da
 - [basics-where-bars-cross.json](#basics-where-bars-crossjson) — Put a part where two bars cross
 - [basics-worley-cells.json](#basics-worley-cellsjson) — Colour and lift a Voronoi cell
 - [basics-worley-feature.json](#basics-worley-featurejson) — Draw the answer: every point reaches for its own cell
+- [examples-archipelago.json](#examples-archipelagojson) — An archipelago with forests, towns and roads
 - [examples-coral.json](#examples-coraljson) — A dendrite grown by aggregation
 - [examples-facade.json](#examples-facadejson) — Split a box until the pieces are small enough
 - [examples-floorplan.json](#examples-floorplanjson) — Rooms from a split footprint, with a circulation net
@@ -1788,6 +1789,24 @@ Cook it: `pcg cook graphs/basics-worley-cells.json --stats`
 **Outputs:** `reach` (from `reach`.`out`)
 
 Cook it: `pcg cook graphs/basics-worley-feature.json --stats`
+
+## examples-archipelago.json
+
+**An archipelago with forests, towns and roads**
+
+Islands, forests, towns and the roads between them, from two noises and one idea about where things land. A flat `meshPrimitive` plane carries two fields as attributes: `elev`, a six-octave fBm pulled under the sea toward the map edge so the land breaks into an archipelago, and `moist`, a slower three-octave one. `landColour` turns them into the standard `color` attribute through two elevation `ramp`s, one for dry ground and one for wet, mixed by moisture: sea, shoal, sand and rock are the same everywhere and only the green moves. `terrain` then lifts each vertex by `elev` times the `heightScale` graph param and leaves everything below sea level at y = 0, so the sea is a flat surface whose colour says how deep it is. EVERYTHING ELSE IS SCATTERED IN THE SKY AND DROPPED. Tree and town candidates start at y = 80, above the highest peak the expression can reach even at the largest `heightScale`, and read `elev` and `moist` off the finished terrain with `transferAttribute`'s 'raycast' mapping, which interpolates inside the triangle it hits instead of copying the nearest vertex. The survivors land with `place/drop-to-surface`, and the roads move their own resampled points down with the same ray, so the height scale is read in exactly one node and turning it carries trees, houses and roads with the ground. Trees are kept where it is moist, above the beach and below the bare tops, at a rate the `treeDensity` param scales, then thinned by `selfPrune`; `species` picks `bush`, `birch` or `pine` out of its `values` table by elevation band. Towns take low ground a little back from the shore, kept 24 units apart by a random priority, and each is a jittered three-by-three block of houses and barns stamped by `copyToPoints`. `connectPoints` joins the town centres into a relative-neighbourhood network, `pathSegments` paves it with one tube per 1.5-unit step, squashed flat into a ribbon by scaling the axis that the segment roll leaves vertical, and a segment that lands on the sea is dropped, which leaves the crossings between islands as gaps: the network says two towns are neighbours, the ground says there is water in the way. IT STARTED AS AN AGENT-WRITTEN GRAPH, authored against the published package with a 2D map renderer of its own, and the placement rules are still the agent's: the tree and town predicates, the species bands, the town spacing and the road rule. What changed is what a 3D viewer needs in order to see them. The 160,000-point grid that never left y = 0 became a 40,401-point displaced mesh with a colour; every scatter now lands on that surface rather than on a plane; the elevation noise runs at about twice the agent's frequency with the edge falloff starting further out, which is what turned one large island into an archipelago; and the asset ids became ones the shared placeholder vocabulary draws (`bush`, `birch`, `pine`, `house`, `barn`, `tube`) where the agent had invented `palm` and `oak`, which cooked and validated and would have drawn as anonymous stand-ins.
+
+**Tags:** `examples`, `terrain`, `island`, `scatter`, `network`, `spawner`
+
+**Seed:** 1
+
+**Node types:** `connectPoints`, `copyToPoints`, `filterByExpression`, `jitterPoints`, `meshPrimitive`, `pathResample`, `pathSegments`, `pointGrid`, `pointScatterInBounds`, `selfPrune`, `setAttribute`, `spawnInstances`, `subgraph`, `transferAttribute`, `transformPoints`
+
+**Primitives:** `place/drop-to-surface`
+
+**Outputs:** `terrain` (from `terrain`.`out`), `trees` (from `trees`.`instances`), `towns` (from `buildings`.`instances`), `roads` (from `roadPaving`.`instances`)
+
+Cook it: `pcg cook graphs/examples-archipelago.json --stats`
 
 ## examples-coral.json
 

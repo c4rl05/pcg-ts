@@ -476,7 +476,7 @@ Casts a ray from every point along a direction, moves each one to where it hits 
 | `direction` | vec3 | `[0,-1,0]` |  |  | yes | snap.direction | Which way the ray travels. [0,-1,0] drops straight down; rays are forward-only, so points below the surface miss. |
 | `maxDistance` | f32 | `0` | >= 0 |  | yes | snap.maxDistance | Longest drop that still counts as a landing, in world units. 0 means unlimited. |
 
-**Examples:** [pipeline-2-districts.json](../graphs/pipeline-2-districts.json), [pipeline-3-lots.json](../graphs/pipeline-3-lots.json), [pipeline-3-lots-edits.json](../graphs/pipeline-3-lots-edits.json) — 7 total (`pcg graphs --primitive place/drop-to-surface`)
+**Examples:** [pipeline-2-districts.json](../graphs/pipeline-2-districts.json), [pipeline-3-lots.json](../graphs/pipeline-3-lots.json), [examples-archipelago.json](../graphs/examples-archipelago.json) — 8 total (`pcg graphs --primitive place/drop-to-surface`)
 
 Wire it: `pcg run` cannot bind its geometry inputs (geometry has no JSON form), so reference it from a graph:
 
