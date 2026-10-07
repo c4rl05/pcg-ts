@@ -202,6 +202,7 @@ import {
   UPRIGHT_SEAMS,
   faceSkin,
   flatBars,
+  outlinePlates,
   lineRivets,
   rivetOutputs,
   seamRivets,
@@ -1589,7 +1590,7 @@ function crossingsOf(list: readonly Member[], table: ReadonlyArray<readonly [num
       const up = unit([-n[0] * n[1], 1 - n[1] * n[1], -n[2] * n[1]]);
       const u1 = unit(dot(d1, up) < 0 ? [-d1[0], -d1[1], -d1[2]] : d1);
       const u2 = unit(dot(d2, up) < 0 ? [-d2[0], -d2[1], -d2[2]] : d2);
-      out.push({ at, along: unit([u1[0] + u2[0], u1[1] + u2[1], u1[2] + u2[2]]), n, w: tableAt(table, at[1]) });
+      out.push({ at, along: unit([u1[0] + u2[0], u1[1] + u2[1], u1[2] + u2[2]]), n, w: tableAt(table, at[1]), arms: [u1, u2] });
     }
   }
   return out;
@@ -1700,11 +1701,13 @@ export function buildFirstFloor(g: Graph, quads: NodeHandle, detail: Detail = {}
   // that interpenetrate, with no daylight at a crossing to cover, and
   // `gussets` does not exist there. Built on the +z face and copied, like
   // every member here; split by section (the girders' 360s, panel 10's
-  // 600s) because `flatBars` takes one width a set. The page's by-eye
+  // 600s), which keys the node ids and the rivet sets. The page's by-eye
   // knobs (`?plateSet`, `?plateEdge`) reach these as they reach the legs'.
   const crossSets = crossPlateSets([...crossLists.bars, ...crossLists.cross, ...crossLists.web10], tune);
   const crossPlates = crossSets.map((set) =>
-    flatBars(g, `ffCrossPlates${set.key}`, four(`ffCrossPlates${set.key}`, set.members), set.width, CROSS_THICK),
+    outlinePlates(g, `ffCrossPlates${set.key}`, set.outlines, CROSS_THICK, (h) =>
+      copyToQuadrants(g, `ffCrossPlates${set.key}4`, h, quads),
+    ),
   );
   if (riveted) {
     for (const set of crossSets) {

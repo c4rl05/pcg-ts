@@ -195,8 +195,11 @@ describe("every rivet cube is the whole cook's heads seated in it", () => {
     // (spec.ts ENTRETOISE.openAt), laced and riveted across the old opening;
     // + 208: the central posts under and over the belts' chord plates
     // (XXIV, XXIII, XVIII) bearing on them, 0.05 longer (legs.ts
-    // `postStretch`), their lacing rivets with them.
-    expect(heads).toBe(1_208_132);
+    // `postStretch`), their lacing rivets with them; - 3,200: the X's
+    // crossing plates laid along their struts as rhombi (crossing.ts
+    // `plateFrame`), their edge rows cut to whole pitches and the lacing
+    // heads they cover moved with them.
+    expect(heads).toBe(1_204_932);
     expect(cells.length).toBe(532);
   }, 900_000);
 });

@@ -24,7 +24,10 @@
  * the chords' axes — where a plate's rivets belong, fastening it to the
  * angles rather than to air. Along its member it is square unless the
  * caller asks for more, which one family does: a post landing on a
- * horizontal has a cut end to cover and reaches past it.
+ * horizontal has a cut end to cover and reaches past it. An X of two
+ * struts has no member of its own to run along, so its plate runs along
+ * BOTH: its edges lie on the two struts' sides and it is the rhombus they
+ * overlap in (`plateFrame`).
  *
  * Both of those are the only numbers in the tower settled by eye rather
  * than read off a plate, which is why they are the only ones the page can
@@ -46,6 +49,7 @@ const cross3 = (p: Vec3, q: Vec3): Vec3 => [
   p[0] * q[1] - p[1] * q[0],
 ];
 const unit3 = (p: Vec3): Vec3 => scale3(p, 1 / Math.hypot(p[0], p[1], p[2]));
+const dot3 = (p: Vec3, q: Vec3): number => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
 
 /**
  * A crossing plate's thickness [sourced PL-XIV Fig. 5 bis prints "2
@@ -72,25 +76,97 @@ export interface Crossing {
   /** The struts' half-width there, which sets both the plate's depth and its width. */
   readonly w: number;
   /**
-   * Half the plate's length along `along`. Omitted, the plate is square:
-   * an X of two diagonals cuts nothing, so there is nothing to reach past
-   * and a square is what the drawings show. The post-on-horizontal family
+   * Half the plate's length along `along`. Omitted, the plate is square
+   * (or, given `arms`, the rhombus they overlap in): an X of two diagonals
+   * cuts nothing, so there is nothing to reach past. The post-on-horizontal family
    * passes one, because it has a cut cap to cover.
    */
   readonly half?: number;
+  /**
+   * The two members' directions in the plane, unit, each read rising: an
+   * X of two struts. Given (and `half` not), the plate is laid ALONG the
+   * struts rather than along `along`: its edges are the struts' sides, so
+   * it is the rhombus the two struts overlap in, which is a square only
+   * where they cross at a right angle (see {@link plateFrame}). Omitted
+   * where one member runs along `along` itself, as a post does, or where
+   * `along` is a member, as the summit's girder is.
+   */
+  readonly arms?: readonly [Vec3, Vec3];
 }
 
 /**
- * A family of crossing plates that share a strut section, and so one
- * width: `flatBars` takes one width for a whole set, and 800s, 600s and
- * 500s cannot ride together or the 500s get 0.80 plates.
+ * A plate's outline in its plane: the parallelogram `at ± hu u ± hv v`.
+ * `u` and `v` are unit and in the plane, its two edge directions; `nu` and
+ * `nv` are the in-plane normals of the edges that run along them (`nu`
+ * square to `u`, toward `v`), and `du`, `dv` how far those edges stand
+ * from the centre: the half-widths of the two strips the plate is the
+ * overlap of. For a rectangle `u` is `along`, `v` is across it, and the
+ * normals are the axes themselves.
+ */
+interface PlateFrame {
+  readonly u: Vec3;
+  readonly v: Vec3;
+  readonly hu: number;
+  readonly hv: number;
+  readonly nu: Vec3;
+  readonly nv: Vec3;
+  readonly du: number;
+  readonly dv: number;
+  /** sin of the angle between `u` and `v`: 1 for a rectangle. */
+  readonly sin: number;
+  /** Laid along an X's two struts, rather than a rectangle. */
+  readonly rhombus: boolean;
+}
+
+/**
+ * Where a crossing's plate lies, as {@link crossPlateSets} builds it and
+ * {@link crossFootprints} reports it.
+ *
+ * AN X'S PLATE IS LAID ALONG ITS STRUTS. Its edges run on the two struts'
+ * sides, `edge` (scaled) either side of each strut's axis, so the plate is
+ * exactly the patch the two struts share and no corner of it points down
+ * a strut. Where the X is square that patch is a square turned 45 degrees
+ * to the bay's midline; the tower's X's cross at 27 to 102 degrees, so in
+ * general it is a rhombus, its edges `edge / sin` long. A square on the
+ * midline, which this replaced, is symmetric on both arms but runs along
+ * neither: its corners sat on the struts' axes and its edges crossed them.
+ *
+ * Every other plate is the rectangle `half` along `along` by `edge` across.
+ */
+function plateFrame(c: Crossing, halfAcross: number): PlateFrame {
+  const B = unit3(cross3(c.n, c.along));
+  if (c.arms === undefined || c.half !== undefined) {
+    const hu = c.half ?? halfAcross;
+    return { u: c.along, v: B, hu, hv: halfAcross, nu: B, nv: c.along, du: halfAcross, dv: hu, sin: 1, rhombus: false };
+  }
+  const [u, v] = c.arms;
+  // Each strip's in-plane normal, turned toward the other arm.
+  const toward = (p: Vec3, q: Vec3): Vec3 => {
+    const m = unit3(cross3(c.n, p));
+    return dot3(m, q) < 0 ? scale3(m, -1) : m;
+  };
+  const nu = toward(u, v);
+  const nv = toward(v, u);
+  const sin = dot3(nu, v);
+  const h = halfAcross / sin;
+  return { u, v, hu: h, hv: h, nu, nv, du: halfAcross, dv: halfAcross, sin, rhombus: true };
+}
+
+/**
+ * A family of crossing plates that share a strut section, which keys their
+ * node ids and their rivet sets.
  */
 export interface CrossPlateSet {
   /** The section this set is for, in millimetres — "800", "600", "500" — for a stable node id. */
   readonly key: string;
-  readonly members: SegmentMember[];
+  /**
+   * Each plate's outline on its INNER face, the one against the struts,
+   * wound counter-clockwise seen from its own outward normal: extruded
+   * `CROSS_THICK` along that normal (`outlinePlates` in strut.ts), it is
+   * the plate.
+   */
+  readonly outlines: Vec3[][];
   readonly rivetLines: SegmentMember[];
-  readonly width: number;
 }
 
 /**
@@ -107,8 +183,9 @@ export interface CrossPlateSet {
  * w0 = w1 and the fraction is a half. Above panel 5 the leg tapers and the
  * crossing rises to 0.502-0.519.
  *
- * The plate runs along that midline, which is the one direction every
- * crossing has whether or not a post happens to lie on it.
+ * `along` is that midline, which is the one direction every crossing has
+ * whether or not a post happens to lie on it; the plate itself is laid
+ * along the two diagonals, `arms` (see `plateFrame`).
  */
 export function bayCrossing(
   p0: Vec3,
@@ -129,11 +206,12 @@ export function bayCrossing(
   const along = unit3(rise);
   const n = unit3(cross3(unit3(sub3(q0, p0)), along));
   const at = add3(m0, scale3(rise, w0 / (w0 + w1)));
-  return { at, along, n, w: halfWidth(at[1]) };
+  const arms = [unit3(sub3(q1, p0)), unit3(sub3(p1, q0))] as const;
+  return { at, along, n, w: halfWidth(at[1]), arms };
 }
 
 /**
- * Turn crossings into the plate segments and the rivet rows round their
+ * Turn crossings into the plates' outlines and the rivet rows round their
  * edges, a pair at each crossing, one either side of the lattice, grouped
  * into one set per strut section (widest first, so a set's key is stable
  * against another section being added later).
@@ -154,45 +232,72 @@ export function crossPlateSets(
   // ever goes SHALLOWER on a smaller strut, which is the safe direction,
   // and one rule for both knobs is one rule to tune.
   const scale = (v: number, w: number) => (v * w) / CROSS_PLATE_AT;
-  const sets = new Map<string, { w: number; members: SegmentMember[]; rivetLines: SegmentMember[] }>();
+  const sets = new Map<string, { w: number; outlines: Vec3[][]; rivetLines: SegmentMember[] }>();
   for (const c of list) {
     const key = String(Math.round(c.w * 2000));
-    const set = sets.get(key) ?? { w: c.w, members: [], rivetLines: [] };
+    const set = sets.get(key) ?? { w: c.w, outlines: [], rivetLines: [] };
     sets.set(key, set);
-    const B = unit3(cross3(c.n, c.along));
-    const halfAcross = scale(tune.edge, c.w);
-    const half = c.half ?? halfAcross;
+    const f = plateFrame(c, scale(tune.edge, c.w));
     for (const side of [1, -1]) {
       const n = scale3(c.n, side);
       const o = add3(c.at, scale3(c.n, side * (c.w - scale(tune.set, c.w) + CROSS_THICK / 2)));
-      const at = (t: number, b: number) => add3(add3(o, scale3(c.along, t)), scale3(B, b));
-      set.members.push({ a: at(-half, 0), b: at(half, 0), n });
-      // Four rows round the edge, on the plate's mid-plane; the end rows
-      // stop a pitch short of the long ones so no two heads coincide.
-      const t = half - CROSS_RIVETS.inset;
-      const b = halfAcross - CROSS_RIVETS.inset;
+      const at = (t: number, b: number) => add3(add3(o, scale3(f.u, t)), scale3(f.v, b));
+      // On the inner face, counter-clockwise about this plate's own normal.
+      const inner = scale3(n, -CROSS_THICK / 2);
+      const ring = [at(-f.hu, -f.hv), at(f.hu, -f.hv), at(f.hu, f.hv), at(-f.hu, f.hv)].map((p) => add3(p, inner));
+      set.outlines.push(dot3(cross3(f.u, f.v), n) > 0 ? ring : ring.reverse());
+      // Four rows round the edge, on the plate's mid-plane, each `inset`
+      // in from its edge (square to it, so `inset / sin` along the other
+      // edge direction); the end rows stop a pitch short of the long ones
+      // so no two heads coincide.
+      const t = f.hu - CROSS_RIVETS.inset / f.sin;
+      const b = f.hv - CROSS_RIVETS.inset / f.sin;
       if (!(t > 0 && b > 0)) continue;
+      const P = CROSS_RIVETS.pitch;
+      // An X's rows are cut to a whole number of pitches, centred, since
+      // the heads go every pitch from a row's start AND on its end: a
+      // rhombus's rows run any length, and left whole the last step came
+      // out as short as 9 mm, two heads overlapping [measured over the
+      // tower's 189 X's: closest pair of heads 0.009 left whole, 0.050
+      // cut, the latter at the 27.5-degree X's acute corner, against a
+      // 38 mm head]. The rectangles keep their rows as they were.
+      //
+      // A millimetre SHORT of the whole pitches, not on them: the rows are
+      // stored in f32, and one that reads a hair over k pitches gets a
+      // head at k pitches AND one on its end, 0.07 mm apart [measured on
+      // the cooked heads: 296 of the tower's X plates gained 1 to 3 such
+      // heads with the cut exact]. Short by `SHY`, the last step is 99 mm.
+      const SHY = 1e-3;
+      const cut = (half: number) => {
+        const k = Math.floor((2 * half) / P + 1e-9);
+        return !f.rhombus || k === 0 ? half : (k * P - SHY) / 2;
+      };
+      const [tu, bv] = [cut(t), cut(b - P)];
       set.rivetLines.push(
-        { a: at(-t, b), b: at(t, b), n },
-        { a: at(-t, -b), b: at(t, -b), n },
-        { a: at(t, -b + CROSS_RIVETS.pitch), b: at(t, b - CROSS_RIVETS.pitch), n },
-        { a: at(-t, -b + CROSS_RIVETS.pitch), b: at(-t, b - CROSS_RIVETS.pitch), n },
+        { a: at(-tu, b), b: at(tu, b), n },
+        { a: at(-tu, -b), b: at(tu, -b), n },
+        { a: at(t, -bv), b: at(t, bv), n },
+        { a: at(-t, -bv), b: at(-t, bv), n },
       );
     }
   }
   return [...sets.entries()]
-    .map(([key, s]) => ({ key, members: s.members, rivetLines: s.rivetLines, width: 2 * scale(tune.edge, s.w) }))
-    .sort((a, b) => b.width - a.width);
+    .sort((a, b) => b[1].w - a[1].w)
+    .map(([key, s]) => ({ key, outlines: s.outlines, rivetLines: s.rivetLines }));
 }
 
 /**
  * What a crossing's pair of plates covers, as the struts under it see it:
- * a rectangle on the members' shared face plane, centred on the crossing,
- * `half` along `along` and `halfAcross` along `across`, the pair either
- * side of the plane along `n`. The lacing's rivets must stay out of it
- * (`WebOpts.covers` in strut.ts): the plate is set under the corner angles'
- * outer face, so a lacing head on that face within the rectangle stands in
- * the plate, and next to the plate's own edge rows.
+ * a parallelogram on the members' shared face plane, centred on the
+ * crossing — the points within `half` of it along `along` AND within
+ * `halfAcross` along `across` — the pair either side of the plane along
+ * `n`. For a rectangle those are its length and its width; for an X's
+ * rhombus `along` and `across` are its edges' normals, not square to each
+ * other, and both bounds are the struts' own sides ({@link plateFrame}).
+ * The lacing's rivets must stay out of it (`WebOpts.covers` in strut.ts):
+ * the plate is set under the corner angles' outer face, so a lacing head
+ * on that face within the outline stands in the plate, and next to the
+ * plate's own edge rows.
  */
 export interface PlateFootprint {
   readonly at: Vec3;
@@ -206,15 +311,8 @@ export interface PlateFootprint {
 /** The footprints {@link crossPlateSets} lays its plates over, one per crossing, sized as it sizes them. */
 export function crossFootprints(list: readonly Crossing[], tune: CrossPlate): PlateFootprint[] {
   return list.map((c) => {
-    const halfAcross = (tune.edge * c.w) / CROSS_PLATE_AT;
-    return {
-      at: c.at,
-      along: c.along,
-      across: unit3(cross3(c.n, c.along)),
-      n: c.n,
-      half: c.half ?? halfAcross,
-      halfAcross,
-    };
+    const f = plateFrame(c, (tune.edge * c.w) / CROSS_PLATE_AT);
+    return { at: c.at, along: f.nv, across: f.nu, n: c.n, half: f.dv, halfAcross: f.du };
   });
 }
 

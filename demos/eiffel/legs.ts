@@ -133,6 +133,7 @@ import {
   UPRIGHT_SEAMS,
   faceSkin,
   flatBars,
+  outlinePlates,
   gussetMeshes,
   lineRivets,
   THROUGH_HALF,
@@ -2008,8 +2009,8 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
   //     "central plate" PL-VII Fig. 2 draws and this model has never built.
   //
   // The gap's members ride the same quadrant copy as the leg's, so they can
-  // share a set; the sets are split by SECTION, not by family, because
-  // `flatBars` takes one width for a set.
+  // share a set; the sets are split by SECTION, not by family, which keys
+  // their node ids and their rivet sets.
   const crossSets = crossList.length > 0 ? crossPlateSets(crossList, crossPlate(detail)) : [];
   return {
     uprights: [
@@ -2091,7 +2092,7 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
       // interpenetrate, so there is no daylight at a crossing to cover,
       // and `gussets` is a class that does not exist there at all.
       ...crossSets.map((set) =>
-        plates(`legCrossPlates${set.key}`, set.members, set.width, CROSS_THICK),
+        outlinePlates(g, `legCrossPlates${set.key}`, set.outlines, CROSS_THICK, (h) => four(`legCrossPlates${set.key}4`, h)),
       ),
     ],
     rivets: [

@@ -172,6 +172,7 @@ import {
   type WebMembers,
   faceSkin,
   flatBars,
+  outlinePlates,
   lineRivets,
   rivetOutputs,
   rivetSpawn,
@@ -2423,15 +2424,7 @@ function diagonalGirders(g: Graph, y0: number, detail: Detail): Parts {
     detail.lacedWeb === true || detail.rivets === true
       ? crossPlateSets([crossing], { set: 0, edge: (CROSS_PLATE_AT * G.breadth) / G.height })
       : [];
-  const gussets = crossSets.map((set) =>
-    flatBars(
-      g,
-      `girderCrossPlates${set.key}`,
-      segmentMembers(g, `girderCrossPlates${set.key}`, set.members),
-      set.width,
-      CROSS_THICK,
-    ),
-  );
+  const gussets = crossSets.map((set) => outlinePlates(g, `girderCrossPlates${set.key}`, set.outlines, CROSS_THICK));
   if (detail.rivets !== true) return { summit, gussets };
 
   // RIVETS. The mesh bars' ends, clear of the chords, the plates and the

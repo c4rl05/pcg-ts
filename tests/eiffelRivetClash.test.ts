@@ -30,6 +30,8 @@ import { SWEPT_BOX_POINTS, isSweptBox, sweptBoxCorners } from "./support/sweptBo
 type Vec3 = readonly [number, number, number];
 
 const sub3 = (p: Vec3, q: Vec3): Vec3 => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+const add3 = (p: Vec3, q: Vec3): Vec3 => [p[0] + q[0], p[1] + q[1], p[2] + q[2]];
+const mul3 = (p: Vec3, s: number): Vec3 => [p[0] * s, p[1] * s, p[2] * s];
 const dot3 = (p: Vec3, q: Vec3): number => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
 const len3 = (p: Vec3): number => Math.hypot(p[0], p[1], p[2]);
 const unit3 = (p: Vec3): Vec3 => {
@@ -102,14 +104,21 @@ interface Plate {
 }
 
 /**
- * Every thin box of a box-mesh class. Two layouts reach it. A copied unit
+ * Every thin box of a box-mesh class. Three layouts reach it. A copied unit
  * box is 24 points, three per corner (each face its own normals). A flat
  * bar (strut.ts `flatBars`) is a 'rect' sweep of its member's two ends,
  * also 24 points, in the layout tests/support/sweptBox.ts states, told from
- * the copied box by `isSweptBox`; its caps' 8 points are its corners. A
- * box's corners are the distinct positions in its corner points.
- * From one corner, the two longer of its three edges span the plate and
- * their cross product is its normal.
+ * the copied box by `isSweptBox`; its caps' 8 points are its corners. An
+ * extruded four-cornered outline (strut.ts `outlinePlates`, the crossing
+ * plates) is 24 points too, four a wall and four a cap. A box's corners
+ * are the distinct positions in its corner points.
+ *
+ * Not every box is square-cornered: an X's crossing plate is a rhombus
+ * (crossing.ts `plateFrame`), a slab whose faces are parallelograms. So
+ * from one corner the thickness is the shortest offset, and the plate is
+ * spanned by the three other corners of that corner's own face (the
+ * offsets square to the thickness): two edges and the diagonal that is
+ * their sum. Their cross product is its normal.
  */
 function plates(geo: Geometry): Plate[] {
   const P = geo.attrs.point.get("P")!.data;
@@ -126,17 +135,27 @@ function plates(geo: Geometry): Plate[] {
     expect(pts.length).toBe(8);
     const c = pts.reduce<Vec3>((a, p) => [a[0] + p[0] / 8, a[1] + p[1] / 8, a[2] + p[2] / 8], [0, 0, 0]);
     const p0 = pts[0]!;
-    // The three edges from p0: the shortest offset, then each next shortest
-    // square to those taken. (Its three NEAREST corners will not do: past
-    // the thickness, a long edge plus the thickness is nearer than the
-    // other long edge, and all but parallel to the first.)
-    const e: Vec3[] = [];
-    for (const v of pts.slice(1).map((p) => sub3(p, p0)).sort((x, y) => len3(x) - len3(y))) {
-      if (e.every((u) => Math.abs(dot3(u, v)) < 0.1 * len3(u) * len3(v))) e.push(v);
-    }
-    expect(e.length).toBe(3);
-    const [t, a, b] = e as [Vec3, Vec3, Vec3];
+    // The thickness: the shortest offset from p0. (Its three NEAREST
+    // corners will not do for the rest: past the thickness, a long edge plus
+    // the thickness is nearer than the other long edge, and all but
+    // parallel to the first; and a rhombus's short diagonal can be shorter
+    // than its edges.)
+    const offs = pts.slice(1).map((p) => sub3(p, p0)).sort((x, y) => len3(x) - len3(y));
+    const t = offs[0]!;
     if (len3(t) > 0.02) continue; // not a plate
+    // p0's own face: the three corners less than half a thickness off it.
+    // (An angle test will not do: across a plate a metre long, an edge and
+    // an edge plus the thickness are within half a degree of each other.)
+    const face = offs.slice(1).filter((v) => Math.abs(dot3(v, t)) < 0.5 * dot3(t, t));
+    expect(face.length).toBe(3);
+    // The two edges are the pair whose sum is the third.
+    const pair = [
+      [0, 1, 2],
+      [0, 2, 1],
+      [1, 2, 0],
+    ].find(([i, j, k]) => len3(sub3(add3(face[i]!, face[j]!), face[k]!)) < 1e-4);
+    expect(pair, "a plate's face is a parallelogram").toBeDefined();
+    const [a, b] = [face[pair![0]!]!, face[pair![1]!]!];
     out.push({ c, n: unit3(cross3(a, b)), u: unit3(a), v: unit3(b), hu: len3(a) / 2, hv: len3(b) / 2, ht: len3(t) / 2 });
   }
   return out;
@@ -147,7 +166,8 @@ function plateGrid(list: readonly Plate[], cell: number): (p: Vec3) => Plate[] {
   const map = new Map<string, Plate[]>();
   const key = (i: number, j: number, k: number) => `${i},${j},${k}`;
   for (const b of list) {
-    const r = Math.hypot(b.hu, b.hv, b.ht) + HEAD_R + HEAD_H;
+    // Half the longer diagonal is at most hu + hv, whatever the angle.
+    const r = Math.hypot(b.hu + b.hv, b.ht) + HEAD_R + HEAD_H;
     const lo = b.c.map((v) => Math.floor((v - r) / cell));
     const hi = b.c.map((v) => Math.floor((v + r) / cell));
     for (let i = lo[0]!; i <= hi[0]!; i++)
@@ -163,15 +183,22 @@ function plateGrid(list: readonly Plate[], cell: number): (p: Vec3) => Plate[] {
 }
 
 /**
- * Whether a head stands in a plate: its base inside the plate's rectangle
+ * Whether a head stands in a plate: its base inside the plate's outline
+ * (a parallelogram: the base's coordinates along the two edge directions,
+ * each within its half-length less `slack` measured square to the edge)
  * and its dome, rising along its axis, overlapping the slab. A head on the
  * plate's outer face (a joint or crossing row) rises away from it and is
  * not; nor is a head on another face, standing across the plate's normal.
  */
 function inPlate(r: Rivet, b: Plate, slack: number): boolean {
   const d = sub3(r.base, b.c);
-  if (Math.abs(dot3(d, b.u)) > b.hu - slack) return false;
-  if (Math.abs(dot3(d, b.v)) > b.hv - slack) return false;
+  const g = dot3(b.u, b.v);
+  const sin2 = 1 - g * g;
+  const sin = Math.sqrt(sin2);
+  const du = dot3(d, b.u);
+  const dv = dot3(d, b.v);
+  if (Math.abs((du - g * dv) / sin2) > b.hu - slack / sin) return false;
+  if (Math.abs((dv - g * du) / sin2) > b.hv - slack / sin) return false;
   const up = dot3(r.axis, b.n);
   if (Math.abs(up) < 0.5) return false;
   // The base's height above the slab's mid-plane, along the head's sense.
@@ -186,6 +213,22 @@ describe("eiffel rivet clash", () => {
     const { outputs } = await cook(g);
     const all = plates(firstGeometry(outputs["probe:gussetsOut"]!)!);
     expect(all.length).toBeGreaterThan(4000);
+    // The rhombi are read as rhombi: a head seated in one, just inside its
+    // acute corner, IS in it, and the same head just outside that corner,
+    // still inside the rectangle the edges' lengths would describe, is not.
+    const rhombi = all.filter((b) => Math.abs(dot3(b.u, b.v)) > 0.05);
+    expect(rhombi.length).toBeGreaterThan(400);
+    for (const b of rhombi.slice(0, 50)) {
+      const acute = dot3(b.u, b.v) > 0 ? 1 : -1;
+      const corner = (k: number): Rivet => ({
+        base: add3(b.c, add3(mul3(b.u, k * b.hu), mul3(b.v, acute * k * b.hv))),
+        axis: b.n,
+      });
+      expect(inPlate(corner(0.9), b, 0)).toBe(true);
+      expect(inPlate(corner(1.1), b, 0)).toBe(false);
+      const sideways: Rivet = { base: add3(b.c, mul3(b.u, 0.9 * b.hu)), axis: b.n };
+      expect(inPlate(sideways, b, 0)).toBe(true);
+    }
     const near = plateGrid(all, 1);
     const slack = 2 * JITTER * Math.sqrt(3);
     const hits: Record<string, number> = {};

@@ -36,6 +36,14 @@ const SETTLE = (JITTER + 2e-5) * Math.sqrt(3);
  */
 const CROSS = { thick: 0.01, set: 0.015, edge: 0.4, at: 0.4, pitch: 0.1, inset: 0.04 } as const;
 const GUSSET = 1.13;
+/**
+ * The first floor's crossing-plate heads as the rule lays them
+ * (`plateHeads`). Panel 10's 600 X crosses at 88.7 degrees: rows 0.520 and
+ * 0.320 long, cut to 5 and 3 pitches, 6 + 6 + 4 + 4 = 20 heads a plate,
+ * 16 plates.
+ */
+const WANT_360 = 5568;
+const WANT_600 = 320;
 /** The first floor's laced sections: the girders' 360s and panel 10's 600s (firstFloor.ts). */
 const W = { bars: 0.18, web10: 0.3, cross: 0.2 } as const;
 
@@ -132,6 +140,8 @@ interface Crossing {
   readonly n: Vec3;
   /** The strut's outer half-width. */
   readonly w: number;
+  /** The two members' axes, unit: the struts the plate's edges must run on. */
+  readonly arms: readonly [Vec3, Vec3];
 }
 
 /**
@@ -165,7 +175,7 @@ function crossingsIn(lines: readonly Vec3[][], ns: readonly Vec3[], family: Cros
       const le = Math.hypot(...e);
       const lf = Math.hypot(...f);
       if (t * le <= 1e-3 || (1 - t) * le <= 1e-3 || u * lf <= 1e-3 || (1 - u) * lf <= 1e-3) continue;
-      out.push({ family, at: add3(a, mul3(U, t * le)), n, w });
+      out.push({ family, at: add3(a, mul3(U, t * le)), n, w, arms: [U, unit3(sub3(d, c))] });
     }
   }
   return out;
@@ -177,25 +187,164 @@ const faceOf = (p: Vec3): number =>
 
 // --------------------------------------------------------- the plates, cooked
 
+/** A half-plane `a d + b e <= c` in a plate's (D, B) frame, (a, b) unit: one edge of its outline. */
+type Bound = readonly [number, number, number];
+
+/**
+ * One plate: the parallelogram `o ± hu u ± hv v` on its mid-plane, `thick`
+ * through along its own outward normal. A rectangle is the case `u . v = 0`;
+ * an X's plate is a rhombus whose edges run along its two struts.
+ */
 interface Plate {
-  /** Its centre, its own outward normal, along and across it. */
+  /** Its mid-plane centre and its own outward normal. */
   readonly o: Vec3;
   readonly n: Vec3;
+  /** Its corners on the mid-plane, in ring order. */
+  readonly corners: readonly Vec3[];
+  /** Its two edge directions (unit, in its plane) and half its edge lengths. */
+  readonly u: Vec3;
+  readonly v: Vec3;
+  readonly hu: number;
+  readonly hv: number;
+  /** An orthonormal frame in its plane (D = u), and its outline as half-planes in that frame. */
   readonly D: Vec3;
   readonly B: Vec3;
-  readonly half: number;
-  readonly across: number;
+  readonly bounds: readonly Bound[];
+  /** How far its farthest corner stands from its centre. */
+  readonly R: number;
 }
 
-/** The plate members (two-point axes carrying the plate's own normal), as plates `across` wide. */
-function platesFrom(geo: Geometry, across: number): Plate[] {
-  const ns = faceNormals(geo);
-  return polylines(geo).map((l, i) => {
-    const [a, b] = [l[0]!, l[l.length - 1]!];
-    const D = unit3(sub3(b, a));
-    const n = unit3(ns[i]!);
-    return { o: mul3(add3(a, b), 0.5), n, D, B: cross3(n, D), half: len3(sub3(b, a)) / 2, across };
+/** A plate from its four mid-plane corners, in ring order, and its outward normal. */
+function plateOf(corners: readonly Vec3[], n: Vec3): Plate {
+  const [c0, c1, , c3] = corners as [Vec3, Vec3, Vec3, Vec3];
+  const o = mul3(corners.reduce((a, p) => add3(a, p), [0, 0, 0] as Vec3), 1 / corners.length);
+  const u = unit3(sub3(c1, c0));
+  const v = unit3(sub3(c3, c0));
+  const hu = len3(sub3(c1, c0)) / 2;
+  const hv = len3(sub3(c3, c0)) / 2;
+  const D = u;
+  const B = cross3(n, D);
+  // Each edge pair's in-plane normal and how far it stands from the centre.
+  const bounds: Bound[] = [];
+  for (const [dir, other, h] of [
+    [u, v, hv],
+    [v, u, hu],
+  ] as const) {
+    const m = unit3(cross3(n, dir));
+    const a = dot3(m, D);
+    const b = dot3(m, B);
+    const c = h * Math.abs(dot3(other, m));
+    bounds.push([a, b, c], [-a, -b, c]);
+  }
+  return { o, n, corners, u, v, hu, hv, D, B, bounds, R: Math.max(...corners.map((p) => len3(sub3(p, o)))) };
+}
+
+/**
+ * The plates an outline set describes (`outlinePlates` in strut.ts): each
+ * closed four-point polyline is a plate's INNER face, wound counter-
+ * clockwise about its outward normal, so its Newell normal IS that normal
+ * and the mid-plane is half the thickness out along it.
+ */
+function platesFrom(geo: Geometry): Plate[] {
+  return polylines(geo).map((l) => {
+    const ring = l.length === 5 && len3(sub3(l[0]!, l[4]!)) < 1e-9 ? l.slice(0, 4) : l;
+    expect(ring, "a crossing plate's outline is four corners").toHaveLength(4);
+    let N: Vec3 = [0, 0, 0];
+    for (let i = 0; i < 4; i++) N = add3(N, cross3(ring[i]!, ring[(i + 1) % 4]!));
+    const n = unit3(N);
+    // A parallelogram, and flat.
+    expect(len3(sub3(add3(ring[0]!, ring[2]!), add3(ring[1]!, ring[3]!)))).toBeLessThan(5e-5);
+    for (const p of ring) expect(Math.abs(dot3(sub3(p, ring[0]!), n))).toBeLessThan(5e-5);
+    return plateOf(
+      ring.map((p) => add3(p, mul3(n, CROSS.thick / 2))),
+      n,
+    );
   });
+}
+
+/** Whether (d, e) in a plate's frame is inside its outline, with `slack` to spare. */
+const insideBounds = (bounds: readonly Bound[], d: number, e: number, slack = 0) =>
+  bounds.every(([a, b, c]) => a * d + b * e <= c + slack);
+
+/** A plate's eight corners: its mid-plane outline half the thickness either side. */
+const solidCorners = (p: Plate): Vec3[] =>
+  [-1, 1].flatMap((s) => p.corners.map((c) => add3(c, mul3(p.n, (s * CROSS.thick) / 2))));
+
+/** A geometry's points in a hash of 1 cm cells, for "is there a point within r of here". */
+function pointHash(pts: Float64Array | Float32Array): (q: Vec3) => number {
+  const cell = 0.01;
+  const key = (x: number, y: number, z: number) => `${x},${y},${z}`;
+  const map = new Map<string, number[]>();
+  for (let i = 0; i < pts.length; i += 3) {
+    const k = key(Math.floor(pts[i]! / cell), Math.floor(pts[i + 1]! / cell), Math.floor(pts[i + 2]! / cell));
+    const list = map.get(k);
+    if (list === undefined) map.set(k, [i]);
+    else list.push(i);
+  }
+  return (q) => {
+    const [x, y, z] = q.map((t) => Math.floor(t / cell)) as [number, number, number];
+    let best = Infinity;
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          for (const i of map.get(key(x + dx, y + dy, z + dz)) ?? []) {
+            best = Math.min(best, Math.hypot(pts[i]! - q[0], pts[i + 1]! - q[1], pts[i + 2]! - q[2]));
+          }
+        }
+      }
+    }
+    return best;
+  };
+}
+
+/**
+ * The SOLID the outlines extrude to (`extrudePolygon`, the node with the
+ * set's own id): every one of its points is a corner of one of the plates,
+ * and every corner of every plate is one of its points — each outline
+ * swept `thick` along its own outward normal, nothing more and nothing
+ * missing. Returns the worst miss either way.
+ */
+function solidMiss(geo: Geometry, plates: readonly Plate[]): number {
+  const corners = plates.flatMap(solidCorners);
+  const cornerAt = pointHash(Float64Array.from(corners.flat()));
+  const P = geo.attrs.point.get("P")!.data;
+  const solidAt = pointHash(P as Float32Array);
+  let worst = 0;
+  for (let i = 0; i < P.length; i += 3) worst = Math.max(worst, cornerAt([P[i]!, P[i + 1]!, P[i + 2]!]));
+  for (const c of corners) worst = Math.max(worst, solidAt(c));
+  return worst;
+}
+
+/**
+ * THE RULE FOR AN X: the plate's edges run along its two struts, each edge
+ * on a strut's side, `w` from the crossing measured square to it. Returns
+ * the worst |u x arm| over the pairing of edge directions to struts that
+ * fits best, and the worst |distance - w| over the four edges.
+ */
+function onStruts(q: Plate, arms: readonly [Vec3, Vec3], at: Vec3, w: number): { parallel: number; side: number } {
+  const par = (a: Vec3, b: Vec3) => len3(cross3(a, b));
+  const parallel = Math.min(
+    Math.max(par(q.u, arms[0]), par(q.v, arms[1])),
+    Math.max(par(q.u, arms[1]), par(q.v, arms[0])),
+  );
+  // The crossing dropped onto the plate's plane, and each edge's line.
+  const c = sub3(at, mul3(q.n, dot3(sub3(at, q.o), q.n)));
+  let side = 0;
+  for (let i = 0; i < 4; i++) {
+    const a = q.corners[i]!;
+    const b = q.corners[(i + 1) % 4]!;
+    side = Math.max(side, Math.abs(len3(cross3(unit3(sub3(b, a)), sub3(c, a))) - w));
+  }
+  return { parallel, side };
+}
+
+/** A plate turned `by` radians about its own normal through its centre: the control for {@link onStruts}. */
+function turned(q: Plate, by: number): Plate {
+  const rot = (p: Vec3): Vec3 => {
+    const r = sub3(p, q.o);
+    return add3(q.o, add3(mul3(r, Math.cos(by)), mul3(cross3(q.n, r), Math.sin(by))));
+  };
+  return plateOf(q.corners.map(rot), q.n);
 }
 
 /** Faces of a skin, indexed by mean height, for clipping to a plate's footprint. */
@@ -259,15 +408,10 @@ function fromHeight(f: Faces, y: number): number {
   return a;
 }
 
-/** Clip a convex (d, e) polygon to [-half, half] x [-across, across] (Sutherland-Hodgman). */
-function clipToFootprint(poly: number[][], half: number, across: number): number[][] {
+/** Clip a convex (d, e) polygon to a plate's outline, its half-planes in turn (Sutherland-Hodgman). */
+function clipToFootprint(poly: number[][], bounds: readonly Bound[]): number[][] {
   let out = poly;
-  for (const [a, b, c] of [
-    [1, 0, half],
-    [-1, 0, half],
-    [0, 1, across],
-    [0, -1, across],
-  ] as const) {
+  for (const [a, b, c] of bounds) {
     const inp = out;
     out = [];
     for (let i = 0; i < inp.length; i++) {
@@ -293,7 +437,7 @@ function clipToFootprint(poly: number[][], half: number, across: number): number
  * the plate's own strut's chords this is its depth under the angles.
  */
 function overPlate(f: Faces, p: Plate): number[] {
-  const R = Math.hypot(p.half, p.across) + 1.4;
+  const R = p.R + 1.4;
   const out: number[] = [];
   for (let i = fromHeight(f, p.o[1] - R); i < fromHeight(f, p.o[1] + R); i++) {
     const j = f.order[i] as number;
@@ -316,7 +460,7 @@ function overPlate(f: Faces, p: Plate): number[] {
       poly.push([d, e]);
     }
     if (Math.abs(h0) > 0.12) continue;
-    const kept = clipToFootprint(poly, p.half, p.across);
+    const kept = clipToFootprint(poly, p.bounds);
     if (kept.length < 3) continue;
     const ds = kept.map((q) => q[0]!);
     const es = kept.map((q) => q[1]!);
@@ -333,10 +477,10 @@ function pointsOverPlate(pts: Float64Array, p: Plate): number {
   let best = -Infinity;
   for (let i = 0; i < pts.length; i += 3) {
     const q = sub3([pts[i]!, pts[i + 1]!, pts[i + 2]!], p.o);
-    if (Math.abs(q[1]) > 1) continue;
+    if (Math.abs(q[1]) > p.R + 0.2) continue;
     const h = dot3(q, p.n);
     if (h > 0.1 || h < -0.25) continue;
-    if (Math.abs(dot3(q, p.D)) > p.half || Math.abs(dot3(q, p.B)) > p.across) continue;
+    if (!insideBounds(p.bounds, dot3(q, p.D), dot3(q, p.B))) continue;
     best = Math.max(best, h + CROSS.thick / 2);
   }
   return best;
@@ -345,7 +489,7 @@ function pointsOverPlate(pts: Float64Array, p: Plate): number {
 const pointsOf = (geo: Geometry): Float64Array => Float64Array.from(geo.attrs.point.get("P")!.data);
 
 /** A plate moved along its own normal: the displaced control every zero check is tried on first. */
-const moved = (p: Plate, by: number): Plate => ({ ...p, o: add3(p.o, mul3(p.n, by)) });
+const moved = (p: Plate, by: number): Plate => plateOf(p.corners.map((c) => add3(c, mul3(p.n, by))), p.n);
 
 /** The samples a spacing resample lays on a row of length L at the pitch (as eiffelSkeleton.test.ts counts them). */
 const heads = (L: number) => {
@@ -353,20 +497,66 @@ const heads = (L: number) => {
   return whole + 1 + (L - whole * CROSS.pitch > 1e-4 ? 1 : 0);
 };
 
+/**
+ * The heads the rule lays round one plate: two rows along `u` and two along
+ * `v`, each `inset` in from its own edge measured SQUARE to it (so `inset /
+ * sin` along the other edge direction, sin the angle between them), the
+ * rows along `v` stopping a pitch short of the others. For a rectangle
+ * that is `half - inset` and `across - inset - pitch`, as it always was.
+ *
+ * An X's rhombus (`x`) has rows of any length, and a spacing resample puts
+ * a head every pitch from a row's start AND one on its end, so each of its
+ * rows is cut to the longest whole number of pitches that fits, centred: k
+ * pitches, k + 1 heads.
+ */
+const plateHeads = (q: Plate, x: boolean) => {
+  const sin = len3(cross3(q.u, q.v));
+  const t = q.hu - CROSS.inset / sin;
+  const b = q.hv - CROSS.inset / sin;
+  if (!x) return 2 * heads(2 * t) + 2 * heads(2 * (b - CROSS.pitch));
+  const whole = (L: number) => Math.floor(L / CROSS.pitch + 1e-9) + 1;
+  return 2 * whole(2 * t) + 2 * whole(2 * (b - CROSS.pitch));
+};
+
+/** The closest any two of a set of points stand. */
+function closestPair(pts: readonly Vec3[]): number {
+  let best = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) best = Math.min(best, len3(sub3(pts[i]!, pts[j]!)));
+  }
+  return best;
+}
+
+/**
+ * How far a point stands off a plate's rivet rows: off its outer face, and
+ * outside the outline shrunk `inset` square to each edge (one figure per
+ * edge pair, as the rows run along them).
+ */
+function offRows(q: Plate, at: Vec3): number {
+  const v = sub3(at, q.o);
+  const d = dot3(v, q.D);
+  const e = dot3(v, q.B);
+  const out = [0, 2].map((k) => {
+    const [a, b, c] = q.bounds[k]!;
+    return Math.max(0, Math.abs(a * d + b * e) - (c - CROSS.inset));
+  });
+  return Math.hypot(dot3(v, q.n) - CROSS.thick / 2, out[0]!, out[1]!);
+}
+
 const FF_PROBES = {
   bars: "ffBars4RotDone",
   web10: "ffWeb104RotDone",
   cross: "ffCross4RotDone",
-  plates360: "ffCrossPlates3604RotDone",
-  plates600: "ffCrossPlates6004RotDone",
-  lit360: "ffCrossPlates360Lit",
-  lit600: "ffCrossPlates600Lit",
+  plates360: "ffCrossPlates3604",
+  plates600: "ffCrossPlates6004",
+  solid360: "ffCrossPlates360",
+  solid600: "ffCrossPlates600",
   chords360: "ffWebChordSkin",
   lace360: "ffWebLaceSkin",
   chords600: "ffPanel10ChordSkin",
   lace600: "ffPanel10LaceSkin",
-  gusset: "girderCrossPlates4500",
-  gussetLit: "girderCrossPlates4500Lit",
+  gusset: "girderCrossPlates4500Bare",
+  gussetSolid: "girderCrossPlates4500",
   cover: "girderCoverLit",
   flange: "girderFlangeLit",
 } as const;
@@ -432,12 +622,11 @@ describe("eiffel crossing plates: first floor and summit", () => {
   it("puts one pair at each crossing, centred on it, square to the members' face, sized by the rule", async () => {
     const p = await lacedProbe();
     const all = derivedCrossings(p);
-    const plates = [
-      ...platesFrom(p.geo("plates360"), W.bars),
-      ...platesFrom(p.geo("plates600"), W.web10),
-    ];
-    expect(platesFrom(p.geo("plates360"), W.bars)).toHaveLength(2 * 232);
-    expect(platesFrom(p.geo("plates600"), W.web10)).toHaveLength(2 * 8);
+    const plates360 = platesFrom(p.geo("plates360"));
+    const plates600 = platesFrom(p.geo("plates600"));
+    expect(plates360).toHaveLength(2 * 232);
+    expect(plates600).toHaveLength(2 * 8);
+    const plates = [...plates360, ...plates600];
     const taken = new Set<number>();
     /** The plate nearest where the rule puts the pair's `side` plate of crossing c, and how far off. */
     const nearest = (c: Crossing, side: number) => {
@@ -457,8 +646,19 @@ describe("eiffel crossing plates: first floor and summit", () => {
     // The matcher can say "no": a crossing a millimetre off finds nothing.
     const c0 = all[0]!;
     expect(nearest({ ...c0, at: add3(c0.at, [1e-3, 0, 0]) }, 1).best).toBeGreaterThan(1e-4);
+    // And the strut rule can: the first plate turned a milliradian about
+    // its own normal is off both struts' axes by that much, and slid a
+    // millimetre in its plane its edges are off the struts' sides by that.
+    {
+      const q = plates[nearest(c0, 1).bi]!;
+      expect(onStruts(turned(q, 1e-3), c0.arms, c0.at, c0.w).parallel).toBeGreaterThan(9e-4);
+      const slid = plateOf(q.corners.map((c) => add3(c, mul3(q.B, 1e-3))), q.n);
+      expect(onStruts(slid, c0.arms, c0.at, c0.w).side).toBeGreaterThan(9e-4);
+    }
     let worstCentre = 0;
     let worstNormal = 0;
+    let worstParallel = 0;
+    let worstSide = 0;
     for (const c of all) {
       for (const side of [1, -1]) {
         const { best, bi } = nearest(c, side);
@@ -470,51 +670,45 @@ describe("eiffel crossing plates: first floor and summit", () => {
         worstCentre = Math.max(worstCentre, len3(sub3(off, mul3(c.n, dot3(off, c.n)))));
         // SQUARE TO THE FACE, with its own outward normal (the pair cannot share one).
         worstNormal = Math.max(worstNormal, 1 - dot3(q.n, mul3(c.n, side)));
-        expect(Math.abs(dot3(q.D, c.n))).toBeLessThan(5e-5);
-        // Square, as wide as its strut: 2w by 2w at the default edge.
-        expect(q.half).toBeCloseTo(c.w, 5);
+        expect(Math.abs(dot3(q.u, c.n))).toBeLessThan(5e-5);
+        expect(Math.abs(dot3(q.v, c.n))).toBeLessThan(5e-5);
+        // ALONG ITS STRUTS: each edge parallel to one of the two members'
+        // cooked axes and on that strut's side, `w` from the crossing
+        // square to it at the default edge — the rhombus the two struts
+        // overlap in, edges `w / sin` long (`hu = hv`).
+        const on = onStruts(q, c.arms, c.at, c.w);
+        worstParallel = Math.max(worstParallel, on.parallel);
+        worstSide = Math.max(worstSide, on.side);
+        expect(q.hu).toBeCloseTo(q.hv, 4);
+        expect(q.hu).toBeCloseTo(c.w / len3(cross3(c.arms[0], c.arms[1])), 4);
       }
     }
     expect(taken.size).toBe(plates.length);
     expect(worstCentre).toBeLessThan(1e-4);
     expect(worstNormal).toBeLessThan(1e-9);
+    // MEASURED: 6.9 microradians and 3.4 microns at worst, the f32 the
+    // cooked axes and outlines are stored in at 57 m.
+    expect(worstParallel, "an edge off its strut's axis").toBeLessThan(2e-5);
+    expect(worstSide, "an edge off its strut's side").toBeLessThan(1e-5);
 
-    // The boxes the flat bars make, sized by the rule, and IN the gussets class.
-    const gussets = flatBoxes(firstGeometry(p.outputs.gussets as never)!);
-    for (const [lit, list] of [
-      ["lit360", plates.filter((q) => q.across === W.bars)],
-      ["lit600", plates.filter((q) => q.across === W.web10)],
+    // The solids the outlines extrude to, and IN the gussets class.
+    const gussets = pointHash(firstGeometry(p.outputs.gussets as never)!.attrs.point.get("P")!.data as Float32Array);
+    for (const [solid, list] of [
+      ["solid360", plates360],
+      ["solid600", plates600],
     ] as const) {
-      const boxes = flatBoxes(p.geo(lit));
-      expect(boxes).toHaveLength(list.length);
-      for (const q of list) {
-        let best = Infinity;
-        let box = boxes[0]!;
-        for (const b of boxes) {
-          const d = len3(sub3(b.centre, q.o));
-          if (d < best) [best, box] = [d, b];
-        }
-        expect(best).toBeLessThan(5e-5);
-        for (const [axis, half] of [
-          [q.D, q.half],
-          [q.B, q.across],
-          [q.n, CROSS.thick / 2],
-        ] as const) {
-          const got = Math.max(...box.points.map((r) => Math.abs(dot3(sub3(r, box.centre), axis))));
-          expect(Math.abs(got - half)).toBeLessThan(5e-5);
-        }
-        let placed = Infinity;
-        for (const b of gussets) placed = Math.min(placed, len3(sub3(b.centre, q.o)));
-        expect(placed).toBeLessThan(SETTLE);
-      }
+      expect(solidMiss(p.geo(solid), list), solid).toBeLessThan(5e-5);
+      // The control: the same plates 1 mm out miss by 1 mm.
+      expect(solidMiss(p.geo(solid), list.map((q) => moved(q, 0.001))), solid).toBeGreaterThan(9e-4);
+      for (const q of list) for (const c of solidCorners(q)) expect(gussets(c), solid).toBeLessThan(SETTLE);
     }
   });
 
   it("sets every first-floor plate under its struts' angles and outside their lacing", async () => {
     const p = await lacedProbe();
     const sets = [
-      { plates: platesFrom(p.geo("plates360"), W.bars), chords: faceIndex(p.geo("chords360")), lace: p.geo("lace360"), w: W.bars },
-      { plates: platesFrom(p.geo("plates600"), W.web10), chords: faceIndex(p.geo("chords600")), lace: p.geo("lace600"), w: W.web10 },
+      { plates: platesFrom(p.geo("plates360")), chords: faceIndex(p.geo("chords360")), lace: p.geo("lace360"), w: W.bars },
+      { plates: platesFrom(p.geo("plates600")), chords: faceIndex(p.geo("chords600")), lace: p.geo("lace600"), w: W.web10 },
     ];
     const report: Record<string, { depth: [number, number]; clear: number }> = {};
     for (const s of sets) {
@@ -564,20 +758,26 @@ describe("eiffel crossing plates: first floor and summit", () => {
 
   it("lays the summit's two gussets on the girders' crossing: 1.130 square, flush on the plating", async () => {
     const p = await lacedProbe();
-    const plates = platesFrom(p.geo("gusset"), GUSSET / 2);
+    const plates = platesFrom(p.geo("gusset"));
     expect(plates).toHaveLength(2);
     const covers = flatBoxes(p.geo("cover")).flatMap((b) => b.points);
     const flanges = flatBoxes(p.geo("flange")).flatMap((b) => b.points);
     const coverTop = Math.max(...covers.map((q) => q[1]));
     const flangeFoot = Math.min(...flanges.map((q) => q[1]));
     const [top, bottom] = [...plates].sort((a, b) => b.o[1] - a.o[1]) as [Plate, Plate];
+    // The continuous (N-S) girder's axis, and across it in plan.
+    const girder: Vec3 = [Math.SQRT1_2, 0, -Math.SQRT1_2];
+    const athwart: Vec3 = [Math.SQRT1_2, 0, Math.SQRT1_2];
     for (const q of plates) {
-      // On the tower's axis, where the girders cross; square to the
-      // continuous (N-S) girder; flat.
+      // On the tower's axis, where the girders cross; flat; a SQUARE (the
+      // summit's crossing has no struts of its own to run along, so it
+      // keeps the rectangle), one edge pair along the continuous girder.
       expect(Math.hypot(q.o[0], q.o[2])).toBeLessThan(1e-4);
-      expect(Math.abs(dot3(q.D, [Math.SQRT1_2, 0, -Math.SQRT1_2]))).toBeCloseTo(1, 6);
       expect(Math.abs(q.n[1])).toBeCloseTo(1, 9);
-      expect(q.half).toBeCloseTo(GUSSET / 2, 5);
+      expect(Math.abs(dot3(q.u, q.v))).toBeLessThan(1e-6);
+      expect(Math.max(Math.abs(dot3(q.u, girder)), Math.abs(dot3(q.v, girder)))).toBeCloseTo(1, 6);
+      expect(q.hu).toBeCloseTo(GUSSET / 2, 5);
+      expect(q.hv).toBeCloseTo(GUSSET / 2, 5);
     }
     expect(top.n[1]).toBeGreaterThan(0);
     expect(bottom.n[1]).toBeLessThan(0);
@@ -589,33 +789,21 @@ describe("eiffel crossing plates: first floor and summit", () => {
     expect(Math.abs(inner(moved(top, 0.002)) - coverTop)).toBeGreaterThan(0.0019);
     expect(Math.abs(gapTop)).toBeLessThan(1e-4);
     expect(Math.abs(gapBottom)).toBeLessThan(1e-4);
-    // The boxes: 1.130 x 1.130 x 10 mm, in the gussets class.
-    const boxes = flatBoxes(p.geo("gussetLit"));
-    const gussets = flatBoxes(firstGeometry(p.outputs.gussets as never)!);
-    expect(boxes).toHaveLength(2);
-    for (const q of plates) {
-      const box = boxes.reduce((a, b) => (len3(sub3(b.centre, q.o)) < len3(sub3(a.centre, q.o)) ? b : a));
-      expect(len3(sub3(box.centre, q.o))).toBeLessThan(1e-4);
-      for (const [axis, half] of [
-        [q.D, GUSSET / 2],
-        [q.B, GUSSET / 2],
-        [q.n, CROSS.thick / 2],
-      ] as const) {
-        const got = Math.max(...box.points.map((r) => Math.abs(dot3(sub3(r, box.centre), axis))));
-        expect(Math.abs(got - half)).toBeLessThan(1e-4);
-      }
-      expect(Math.min(...gussets.map((b) => len3(sub3(b.centre, q.o))))).toBeLessThan(SETTLE);
-    }
+    // The solids: those squares 10 mm through, and in the gussets class.
+    expect(solidMiss(p.geo("gussetSolid"), plates)).toBeLessThan(1e-4);
+    expect(solidMiss(p.geo("gussetSolid"), plates.map((q) => moved(q, 0.001)))).toBeGreaterThan(9e-4);
+    const gussets = pointHash(firstGeometry(p.outputs.gussets as never)!.attrs.point.get("P")!.data as Float32Array);
+    for (const q of plates) for (const c of solidCorners(q)) expect(gussets(c)).toBeLessThan(SETTLE);
     // All of the top one's footprint is over the cover, which is the
     // continuous girder's, 1.130 broad and running through the crossing.
     const coverBoxes = flatBoxes(p.geo("cover"));
     const under = coverBoxes.filter((b) => {
       const v = sub3(b.centre, top.o);
-      return Math.abs(dot3(v, top.B)) < 1e-3 && Math.abs(v[1]) < 0.05;
+      return Math.abs(dot3(v, athwart)) < 1e-3 && Math.abs(v[1]) < 0.05;
     });
     expect(under.length).toBeGreaterThan(0);
     const reach = Math.max(
-      ...under.flatMap((b) => b.points.map((r) => Math.abs(dot3(sub3(r, top.o), top.D)))),
+      ...under.flatMap((b) => b.points.map((r) => Math.abs(dot3(sub3(r, top.o), girder)))),
     );
     expect(reach).toBeGreaterThan(GUSSET / 2);
   });
@@ -623,52 +811,57 @@ describe("eiffel crossing plates: first floor and summit", () => {
   it("rivets every new plate round its own edges: on the outer face, inside the outline, pointing out", async () => {
     const p = await cookProbed({ rivets: true });
     const sets = [
-      ["rivets.ff.crossings.360", platesFrom(p.geo("plates360"), W.bars), 12, 5568],
-      ["rivets.ff.crossings.600", platesFrom(p.geo("plates600"), W.web10), 24, 384],
-      ["rivets.summit.crossings", platesFrom(p.geo("gusset"), GUSSET / 2), 44, 88],
+      ["rivets.ff.crossings.360", platesFrom(p.geo("plates360")), WANT_360, true],
+      ["rivets.ff.crossings.600", platesFrom(p.geo("plates600")), WANT_600, true],
+      ["rivets.summit.crossings", platesFrom(p.geo("gusset")), 88, false],
     ] as const;
     let total = 0;
-    for (const [name, plates, per, want] of sets) {
-      // Four rows round the edge: the long ones `inset` in from the ends,
-      // the short ones stopping a pitch clear of them.
-      const q0 = plates[0]!;
-      expect(2 * heads(2 * (q0.half - CROSS.inset)) + 2 * heads(2 * (q0.across - CROSS.inset - CROSS.pitch))).toBe(per);
-      expect(per * plates.length, name).toBe(want);
+    let closestX = Infinity;
+    for (const [name, plates, want, x] of sets) {
+      // Four rows round the edge, each `inset` in from its own edge square
+      // to it, the end rows stopping a pitch clear of the long ones: what
+      // that lays on each plate, from the plate's own outline.
+      expect(plates.reduce((n, q) => n + plateHeads(q, x), 0), name).toBe(want);
       const frames = rivetFrames((p.outputs[name] as Array<{ kind: string }> | undefined)?.[0]);
       expect(frames, name).toHaveLength(want);
       total += frames.length;
-      const count = new Map<number, number>();
+      const count = new Map<number, Vec3[]>();
       for (const { at, axis } of frames) {
         let best = Infinity;
         let bi = -1;
         plates.forEach((q, i) => {
-          const v = sub3(at, q.o);
-          const off = (t: number, lim: number) => Math.max(0, Math.abs(t) - lim);
-          const d = Math.hypot(
-            dot3(v, q.n) - CROSS.thick / 2,
-            off(dot3(v, q.D), q.half - CROSS.inset),
-            off(dot3(v, q.B), q.across - CROSS.inset),
-          );
+          const d = offRows(q, at);
           if (d < best) [best, bi] = [d, i];
         });
         expect(best, name).toBeLessThan(SETTLE);
         expect(dot3(axis, plates[bi]!.n), name).toBeCloseTo(1, 5);
-        count.set(bi, (count.get(bi) ?? 0) + 1);
+        count.set(bi, [...(count.get(bi) ?? []), at]);
       }
       expect(count.size, name).toBe(plates.length);
-      expect(Math.min(...count.values()), name).toBe(per);
+      // Each plate carries exactly its own rows' heads, no more and no fewer.
+      plates.forEach((q, i) => {
+        const own = count.get(i)!;
+        expect(own, `${name} at y=${q.o[1].toFixed(3)}`).toHaveLength(plateHeads(q, x));
+        if (x) closestX = Math.min(closestX, closestPair(own));
+      });
     }
-    expect(total).toBe(5568 + 384 + 88);
+    expect(total).toBe(WANT_360 + WANT_600 + 88);
+    // NO TWO HEADS ON AN X's PLATE CLOSER THAN 45 mm: each rhombus row is
+    // cut to whole pitches (above), so no short last step puts two 38 mm
+    // heads on each other. The control: a head added 30 mm from another
+    // reads 30 mm.
+    expect(closestPair([[0, 0, 0], [1, 0, 0], [0.03, 0, 0]])).toBeCloseTo(0.03, 9);
+    expect(closestX, "the closest heads on a first-floor X plate").toBeGreaterThan(0.045);
 
     // AND NO LACING HEAD UNDER A PLATE. The plate is set under the angles'
     // outer face, so a lacing rivet on the face it covers would stand in
     // it: the struts are told the footprints (`WebOpts.covers`) and drop
     // those heads. Read on every head turned along a plate's normal and
     // within 30 mm of its plane, inside its outline. The control: the same
-    // footprints slid 0.6 m along their struts catch plenty.
+    // footprints slid 0.6 m along one of their struts catch plenty.
     for (const [name, plates] of [
-      ["rivets.ff.girders.web", platesFrom(p.geo("plates360"), W.bars)],
-      ["rivets.ff.second.web", platesFrom(p.geo("plates600"), W.web10)],
+      ["rivets.ff.girders.web", platesFrom(p.geo("plates360"))],
+      ["rivets.ff.second.web", platesFrom(p.geo("plates600"))],
     ] as const) {
       const frames = rivetFrames((p.outputs[name] as Array<{ kind: string }> | undefined)?.[0]);
       const inside = (list: readonly Plate[]) =>
@@ -678,12 +871,12 @@ describe("eiffel crossing plates: first floor and summit", () => {
             return (
               dot3(axis, q.n) > 0.99 &&
               Math.abs(dot3(v, q.n)) < 0.03 &&
-              Math.abs(dot3(v, q.D)) < q.half &&
-              Math.abs(dot3(v, q.B)) < q.across
+              insideBounds(q.bounds, dot3(v, q.D), dot3(v, q.B))
             );
           }),
         ).length;
-      expect(inside(plates.map((q) => ({ ...q, o: add3(q.o, mul3(q.D, 0.6)) }))), name).toBeGreaterThan(0);
+      const slid = plates.map((q) => plateOf(q.corners.map((c) => add3(c, mul3(q.u, 0.6))), q.n));
+      expect(inside(slid), name).toBeGreaterThan(0);
       expect(inside(plates), name).toBe(0);
     }
   });

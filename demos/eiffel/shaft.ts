@@ -81,6 +81,7 @@ import {
   UPRIGHT_SEAMS,
   faceSkin,
   flatBars,
+  outlinePlates,
   gussetMeshes,
   lineRivets,
   offJointPlates,
@@ -665,13 +666,7 @@ export function buildShaft(g: Graph, detail: Detail = {}): Parts {
     gussets: [
       ...gussetMeshes([horizontalWeb, bracingWeb]),
       ...crossSets.map((set) =>
-        flatBars(
-          g,
-          `shaftCrossPlates${set.key}`,
-          segmentMembers(g, `shaftCrossMembers${set.key}`, set.members),
-          set.width,
-          CROSS_THICK,
-        ),
+        outlinePlates(g, `shaftCrossPlates${set.key}`, set.outlines, CROSS_THICK),
       ),
     ],
     rivets: [

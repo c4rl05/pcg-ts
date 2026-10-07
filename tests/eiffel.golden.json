@@ -1208,7 +1208,7 @@
         "vertices": 193320,
         "primitives": 64440,
         "instances": 0,
-        "hash": "0286d9660f94f249"
+        "hash": "c7d18d2f56b61ca0"
       },
       "horizontals": {
         "kind": "geometry",
@@ -1813,7 +1813,7 @@
         "vertices": 193320,
         "primitives": 64440,
         "instances": 0,
-        "hash": "0286d9660f94f249"
+        "hash": "c7d18d2f56b61ca0"
       },
       "horizontals": {
         "kind": "geometry",
@@ -1885,7 +1885,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 5568,
-        "hash": "b9c07587e9d927d7"
+        "hash": "d0e654115688fdac"
       },
       "rivets.ff.crossings.600": {
         "kind": "instances",
@@ -1893,8 +1893,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 384,
-        "hash": "993a9f4750aac553"
+        "instances": 320,
+        "hash": "58c4e1888fede25d"
       },
       "rivets.ff.entretoises": {
         "kind": "instances",
@@ -1956,8 +1956,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 112392,
-        "hash": "3c0e96e54f7371bd"
+        "instances": 111464,
+        "hash": "14b84b8a36669df5"
       },
       "rivets.ff.second.band": {
         "kind": "instances",
@@ -1983,8 +1983,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 4432,
-        "hash": "3b9e41c87a57a086"
+        "instances": 4384,
+        "hash": "3926591fab3d0f41"
       },
       "rivets.leg.bracing": {
         "kind": "instances",
@@ -1992,8 +1992,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 70232,
-        "hash": "1e63e59902dd2201"
+        "instances": 69976,
+        "hash": "68bf9ff114344c7c"
       },
       "rivets.leg.bracing.joints": {
         "kind": "instances",
@@ -2082,8 +2082,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 2720,
-        "hash": "61ddbaff2390c732"
+        "instances": 2400,
+        "hash": "7d7e39dcb01b1bce"
       },
       "rivets.leg.crossings.600": {
         "kind": "instances",
@@ -2091,8 +2091,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 2368,
-        "hash": "ab7c74365ff5999f"
+        "instances": 2112,
+        "hash": "0524f81834eef174"
       },
       "rivets.leg.crossings.800": {
         "kind": "instances",
@@ -2100,8 +2100,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 16512,
-        "hash": "ec6efccc60cf05ac"
+        "instances": 16000,
+        "hash": "d6a1b32849285275"
       },
       "rivets.leg.entretoises": {
         "kind": "instances",
@@ -2127,8 +2127,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 5152,
-        "hash": "940b640587f649af"
+        "instances": 5072,
+        "hash": "7d6587aa85a3f290"
       },
       "rivets.leg.gap.bracing.joints": {
         "kind": "instances",
@@ -2181,8 +2181,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 19936,
-        "hash": "aef9ebd70e764d33"
+        "instances": 20016,
+        "hash": "de590b91a2e07862"
       },
       "rivets.leg.uprights": {
         "kind": "instances",
@@ -2217,8 +2217,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 26688,
-        "hash": "d1a1a3523871b117"
+        "instances": 26576,
+        "hash": "c0162de087f1c723"
       },
       "rivets.shaft.bracing.joints": {
         "kind": "instances",
@@ -2235,8 +2235,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 3520,
-        "hash": "4fe6ae015e5a350b"
+        "instances": 2816,
+        "hash": "0bd08d003545b34c"
       },
       "rivets.shaft.horizontals": {
         "kind": "instances",
@@ -2940,7 +2940,7 @@
         "vertices": 193320,
         "primitives": 64440,
         "instances": 0,
-        "hash": "0286d9660f94f249"
+        "hash": "c7d18d2f56b61ca0"
       },
       "horizontals": {
         "kind": "geometry",
@@ -3012,7 +3012,7 @@
         "vertices": 0,
         "primitives": 0,
         "instances": 5568,
-        "hash": "b9c07587e9d927d7"
+        "hash": "d0e654115688fdac"
       },
       "rivets.ff.crossings.600": {
         "kind": "instances",
@@ -3020,8 +3020,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 384,
-        "hash": "993a9f4750aac553"
+        "instances": 320,
+        "hash": "58c4e1888fede25d"
       },
       "rivets.ff.entretoises": {
         "kind": "instances",
@@ -3083,8 +3083,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 112392,
-        "hash": "3c0e96e54f7371bd"
+        "instances": 111464,
+        "hash": "14b84b8a36669df5"
       },
       "rivets.ff.second.band": {
         "kind": "instances",
@@ -3110,8 +3110,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 4432,
-        "hash": "3b9e41c87a57a086"
+        "instances": 4384,
+        "hash": "3926591fab3d0f41"
       },
       "rivets.leg.bracing": {
         "kind": "instances",
@@ -3119,8 +3119,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 70232,
-        "hash": "1e63e59902dd2201"
+        "instances": 69976,
+        "hash": "68bf9ff114344c7c"
       },
       "rivets.leg.bracing.joints": {
         "kind": "instances",
@@ -3209,8 +3209,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 2720,
-        "hash": "61ddbaff2390c732"
+        "instances": 2400,
+        "hash": "7d7e39dcb01b1bce"
       },
       "rivets.leg.crossings.600": {
         "kind": "instances",
@@ -3218,8 +3218,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 2368,
-        "hash": "ab7c74365ff5999f"
+        "instances": 2112,
+        "hash": "0524f81834eef174"
       },
       "rivets.leg.crossings.800": {
         "kind": "instances",
@@ -3227,8 +3227,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 16512,
-        "hash": "ec6efccc60cf05ac"
+        "instances": 16000,
+        "hash": "d6a1b32849285275"
       },
       "rivets.leg.entretoises": {
         "kind": "instances",
@@ -3254,8 +3254,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 5152,
-        "hash": "940b640587f649af"
+        "instances": 5072,
+        "hash": "7d6587aa85a3f290"
       },
       "rivets.leg.gap.bracing.joints": {
         "kind": "instances",
@@ -3308,8 +3308,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 19936,
-        "hash": "aef9ebd70e764d33"
+        "instances": 20016,
+        "hash": "de590b91a2e07862"
       },
       "rivets.leg.uprights": {
         "kind": "instances",
@@ -3353,8 +3353,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 26688,
-        "hash": "d1a1a3523871b117"
+        "instances": 26576,
+        "hash": "c0162de087f1c723"
       },
       "rivets.shaft.bracing.joints": {
         "kind": "instances",
@@ -3371,8 +3371,8 @@
         "points": 0,
         "vertices": 0,
         "primitives": 0,
-        "instances": 3520,
-        "hash": "4fe6ae015e5a350b"
+        "instances": 2816,
+        "hash": "0bd08d003545b34c"
       },
       "rivets.shaft.horizontals": {
         "kind": "instances",

@@ -34,6 +34,7 @@ import {
   lerp,
   copyToPoints,
   div,
+  extrudePolygon,
   filterByExpression,
   ge,
   gt,
@@ -144,6 +145,35 @@ export function flatBars(
   g.connect(members, "out", tips, "in");
   g.connect(tips, "out", boxes, "in");
   return boxes;
+}
+
+/**
+ * Flat plates from their outlines: each a closed polygon on the plate's
+ * inner face, wound counter-clockwise about the way the plate thickens,
+ * extruded `thickness` that way. `place` runs on the outlines before the
+ * extrusion (a quadrant copy, say), so each plate's normal is its own on
+ * every copy. What `flatBars` cannot build: a plate that is not a
+ * rectangle, as an X's crossing plate is not (crossing.ts).
+ */
+export function outlinePlates(
+  g: Graph,
+  id: string,
+  outlines: readonly (readonly Vec3[])[],
+  thickness: number,
+  place: (outlines: NodeHandle) => NodeHandle = (h) => h,
+): NodeHandle {
+  const slots = pointTable(g, `${id}Slots`, outlines.flat(), {
+    plate: ["i32", outlines.flatMap((o, i) => o.map(() => i))],
+  });
+  const paths = g.add(pointsToPath, { groupAttr: "plate", closed: true }, `${id}Paths`);
+  const bare = g.add(removeAttribute, { names: ["plate"], domain: "point" }, `${id}Bare`);
+  g.connect(slots, "out", paths, "in");
+  g.connect(paths, "out", bare, "in");
+  // The extrusion writes a flat `normal` for every wall and cap, which a
+  // merge with swept members keeps (a missing one is filled with zeros).
+  const solid = g.add(extrudePolygon, { direction: "polygonNormal", distance: thickness, caps: "both" }, id);
+  g.connect(place(bare), "out", solid, "in");
+  return solid;
 }
 
 /**
@@ -1100,7 +1130,7 @@ export interface StrutOpts {
    * crossing plate is set UNDER the corner angles' outer face, covering the
    * lacing between them, so a lacing head (at a chord or at a crossing of
    * the lacing) on a face the plate lies on,
-   * within its rectangle (plus a head's radius), would stand in the plate
+   * within its outline (plus a head's radius), would stand in the plate
    * and beside the plate's own edge rows: none is spawned there. Each
    * section corner's heads are tested where they sit, against the plate
    * whose centre is nearest the sample.
@@ -1123,7 +1153,9 @@ const COVER_INDEX = "coverIdx";
 /**
  * How far a sample looks for a crossing plate's centre: beyond the
  * farthest a covered head can be from it (a post landing's plate is about
- * 0.8 x 1.1 m) [derived], so a miss is a sample no plate reaches.
+ * 0.8 x 1.1 m; the farthest grown corner of any is 1.13 m, the long
+ * rhombus over the 27.5-degree X) [derived], so a miss is a sample no
+ * plate reaches.
  */
 const COVER_REACH = 1.5;
 
@@ -1148,7 +1180,7 @@ const FACE_OUT = [
 
 /**
  * A crossing plate's frame, gathered onto a sample from its nearest plate
- * (`coverFilter`): the centre, the rectangle's two axes and the plane's
+ * (`coverFilter`): the centre, the outline's two edge normals and the plane's
  * normal (vectors), and its two half-extents.
  */
 const COVER_AT = "coverAt";
@@ -1201,7 +1233,8 @@ function coverCloudOf(g: Graph, id: string, covers: readonly PlateFootprint[]): 
  * point finds the nearest (crossing plates are metres apart, and where two
  * families cross at one point only one plate is built), gathers that
  * plate's frame by index, and is dropped when the head is within the
- * rectangle, grown by a head's radius, and near the plate's plane.
+ * outline (two strips' overlap: a rectangle, or an X's rhombus), grown by
+ * a head's radius, and near the plate's plane.
  */
 function coverFilter(
   g: Graph,
