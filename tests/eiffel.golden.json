@@ -558,7 +558,7 @@
         "vertices": 672018,
         "primitives": 224006,
         "instances": 0,
-        "hash": "dcb218e7a7fc1c8c"
+        "hash": "a691e42adbf217f7"
       },
       "silvered": {
         "kind": "geometry",
@@ -1253,7 +1253,7 @@
         "vertices": 672018,
         "primitives": 224006,
         "instances": 0,
-        "hash": "dcb218e7a7fc1c8c"
+        "hash": "a691e42adbf217f7"
       },
       "silvered": {
         "kind": "geometry",
@@ -1858,7 +1858,7 @@
         "vertices": 672018,
         "primitives": 224006,
         "instances": 0,
-        "hash": "dcb218e7a7fc1c8c"
+        "hash": "a691e42adbf217f7"
       },
       "rivets.ff.arches.chords": {
         "kind": "instances",
@@ -2985,7 +2985,7 @@
         "vertices": 672018,
         "primitives": 224006,
         "instances": 0,
-        "hash": "dcb218e7a7fc1c8c"
+        "hash": "a691e42adbf217f7"
       },
       "rivets.ff.arches.chords": {
         "kind": "instances",
@@ -4112,7 +4112,7 @@
         "vertices": 672018,
         "primitives": 224006,
         "instances": 0,
-        "hash": "dcb218e7a7fc1c8c"
+        "hash": "a691e42adbf217f7"
       },
       "silvered": {
         "kind": "geometry",

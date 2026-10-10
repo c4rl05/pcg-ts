@@ -561,6 +561,13 @@ const SKIRT_TILT = Math.atan2(SKIRT.lean, SKIRT_DROP);
  *   meets its mouldings rather than running into them.
  * - PILASTERS between the names, under the consoles, over the plaques'
  *   height [sourced drawing], 0.40 wide [measured: 0.4-0.6 with their bases].
+ *   The last console station on a face stands on the corner: the plate's
+ *   arris runs from 0.025 beyond it at the band's top to 0.064 short of
+ *   it at the band's foot, so a pilaster centred there would run off the plate and
+ *   through the next face's. The corner carries one pilaster wrapped
+ *   round the arris instead: each face's half runs from where a pilaster
+ *   would start out to the mitre, as the mouldings do (`skirtBand`)
+ *   [inference: the plate draws the corner pilaster's front only].
  */
 const SKIRT_ORNAMENT = {
   console: { top: 0.6, foot: 2.1, reach: 0.4, width: 0.3, segments: 5 },
@@ -4901,13 +4908,29 @@ function skirtOrnament(): Array<Lot<Piece>> {
     const [y1, r1] = skirtAt(d1);
     mouldings.push(skirtBand(y0, r0, y1, r1, proud));
   }
+  // The corner pilaster's two halves on this face, one at each end: a
+  // band's ends (`skirtBand`) from where a pilaster at the last station
+  // would start out to the mitre.
+  const [py0, pr0] = skirtAt(P.top);
+  const [py1, pr1] = skirtAt(P.bottom);
+  const corner = skirtBand(py0, pr0, py1, pr1, P.proud);
+  const inner = n * pitch - P.width / 2;
+  const [tl, tr, br, bl] = corner.outline as [Vec3, Vec3, Vec3, Vec3];
+  mouldings.push(
+    { outline: [tl, [-inner, tl[1], tl[2]], [-inner, bl[1], bl[2]], bl], depth: P.proud },
+    { outline: [[inner, tr[1], tr[2]], tr, br, [inner, br[1], br[2]]], depth: P.proud },
+  );
   return [
     {
       place: { faces: ALL, along: consoles },
       drawn: { prisms: [slab(0, C.width, bracket(yTop, rTop, C.reach, skirtAt(C.foot), C.segments))], blocks: [] },
     },
     {
-      place: { faces: ALL, along: { ...consoles, name: "SkirtPilasters", skirt: true } },
+      // Every console station's but the corners' (see the mouldings).
+      place: {
+        faces: ALL,
+        along: { name: "SkirtPilasters", first: (1 - n) * pitch, pitch, count: 2 * n - 1, skirt: true },
+      },
       drawn: { prisms: [], blocks: [flatOnSkirt(0, (P.top + P.bottom) / 2, P.width, (P.bottom - P.top) * up, P.proud)] },
     },
     { place: { faces: ALL, along: bays }, drawn: { prisms: [], blocks: bay } },
