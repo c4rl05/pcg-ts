@@ -23,9 +23,10 @@
  * then orbit target, in metres; y up, the tower's axis at x = z = 0) and
  * `?laced` / `?rivets` (rivets implies laced), so every shot is one URL and
  * nothing is driven with the mouse. Two limits of that hook shape the list:
- *   - OrbitControls clamps the polar angle to just under 90 degrees, so the
- *     eye is always at or above its target. No shot can look UP; a "view up
- *     a leg" is taken level from inside the tower instead.
+ *   - The orbit keeps the eye above the ground (`groundPolar` in
+ *     demos/eiffel/main.ts), so a shot may look up as well as down, but
+ *     not from under the ground. Older shots predate that and take a "view
+ *     up a leg" level from inside the tower.
  *   - Each shot is a fresh page load and therefore a fresh cook (about 1 s
  *     at the skeleton depth, 3-5 s laced or riveted on the capture machine),
  *     because the page exposes no handle to move the camera after loading.

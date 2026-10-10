@@ -112,7 +112,7 @@ import { bandsFrom } from "./bands.js";
 import { type Bands, startBands } from "./bandsView.js";
 import { isoOf } from "./chronology.js";
 import { flatMaterial, flatShaderProblem, teachFlat, unlitMaterial } from "./flat.js";
-import { attachKeyMove } from "./keyMove.js";
+import { FLOOR as EYE_FLOOR, attachKeyMove } from "./keyMove.js";
 import { type Depth, DEPTHS, cookedDetail, depthParams, pageDepth, streamed } from "./depth.js";
 import { buildEiffel } from "./graph.js";
 import {
@@ -735,8 +735,7 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.minDistance = 0.2;
 controls.maxDistance = 1500;
-// Never under the ground plane: from below it the ground is a lid.
-controls.maxPolarAngle = Math.PI / 2 - 0.01;
+controls.maxPolarAngle = groundPolar();
 controls.autoRotateSpeed = 0.35;
 controls.update();
 
@@ -875,6 +874,53 @@ const sectionGroup = viewGroup(viewBox);
 // is the dev server's hallmark, plateTool.ts says why not `env.DEV`). A
 // `?ink` link still opens the drawing anywhere.
 const lookBox = import.meta.hot !== undefined ? framedBox("look", "Look") : undefined;
+/**
+ * THE ORBIT'S FLOOR is the ground, not the target's level: the eye may
+ * stand anywhere about its target but under the ground plane, from below
+ * which the ground is a lid. So it looks up as freely as down wherever the
+ * ground does not stop it: from the foot of the tower up its legs, from
+ * the summit down onto the Champ-de-Mars, either way between them. The
+ * polar angle that puts the eye at `EYE_FLOOR` (keyMove.ts' floor too)
+ * for its distance from the target, the steepest it may look up; never
+ * quite straight up, where the orbit loses its azimuth.
+ */
+function groundPolar(): number {
+  const reach = Math.max(camera.position.distanceTo(controls.target), 1e-6);
+  const cos = (EYE_FLOOR - controls.target.y) / reach;
+  return Math.min(Math.PI - 0.01, Math.acos(Math.min(1, Math.max(-1, cos))));
+}
+
+/**
+ * The orbit's update held off the ground (see `groundPolar`). The clamp
+ * is set before it for the turn; a zoom out changes the distance inside
+ * the update, after the clamp, so an eye looking up and backing away would
+ * sink under the ground for a frame: it is lifted back onto the floor
+ * along the same sphere, keeping its bearing.
+ */
+const lift = new Vector3();
+function orbit(): void {
+  // The section view sets its own floor, under the ground it opens.
+  if (!sectioned) controls.maxPolarAngle = groundPolar();
+  controls.update();
+  if (sectioned || camera.position.y >= EYE_FLOOR) return;
+  lift.subVectors(camera.position, controls.target);
+  const reach = lift.length();
+  const dy = EYE_FLOOR - controls.target.y;
+  if (dy >= reach) {
+    // The target is further under the ground than the eye is from it (a
+    // look down from low, then a zoom in): no turn reaches the floor, so
+    // the two rise together, as the keys move them.
+    const up = EYE_FLOOR - camera.position.y;
+    camera.position.y += up;
+    controls.target.y += up;
+    return;
+  }
+  const across = Math.hypot(lift.x, lift.z);
+  const k = across > 1e-9 ? Math.sqrt(reach * reach - dy * dy) / across : 0;
+  camera.position.set(controls.target.x + lift.x * k, controls.target.y + dy, controls.target.z + lift.z * k);
+  camera.lookAt(controls.target);
+}
+
 
 // ROTATE, WALK AND BUILD are three ways of looking at the tower, and they
 // do not combine: turning rotate or walk on turns the other off, and under
@@ -2403,7 +2449,7 @@ renderer.setAnimationLoop(() => {
   // the orbit was not the camera's.
   keyMove.tick(frameSeconds);
   if (walk.active) walk.tick();
-  else if (!driven) controls.update();
+  else if (!driven) orbit();
   bands?.tick(camera);
   sectionTick?.();
   // The drawing pales what lies behind what the view is looking at: the

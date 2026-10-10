@@ -4,8 +4,7 @@
  *
  * It moves the camera AND the orbit's target by the same step, so the
  * orbit is never broken: a drag after a move turns about a point the same
- * distance ahead as before, and the polar clamp holds because the angle
- * between them never changes. The speed follows that distance for the same
+ * distance ahead as before, at the same angle. The speed follows that distance for the same
  * reason — zoomed in on a rivet row the keys creep, zoomed out on the whole
  * tower they cross it in a few seconds — so how fast is chosen by how close,
  * with nothing new to set.
@@ -30,7 +29,7 @@ const FASTEST = 250;
 /** Shift's multiplier. */
 const FAST = 4;
 /** The camera's lowest eye height: under the ground plane it is a lid. */
-const FLOOR = 0.3;
+export const FLOOR = 0.3;
 
 const MOVES = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyE"]);
 

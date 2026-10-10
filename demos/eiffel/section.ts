@@ -145,8 +145,9 @@ export function attachSection(host: SectionHost, offset = 0): Section {
       host.renderer.localClippingEnabled = on;
       host.renderer.clippingPlanes = on ? planes : [];
       giveAll(on);
-      // Low enough to look up under the kept ground from the opened side.
-      host.controls.maxPolarAngle = on ? Math.PI * 0.62 : floor;
+      // Low enough to look up under the kept ground from the opened side,
+      // and never lower than the orbit's own floor had it.
+      host.controls.maxPolarAngle = on ? Math.max(Math.PI * 0.62, host.controls.maxPolarAngle) : floor;
       host.changed();
     },
     move(to: number) {
