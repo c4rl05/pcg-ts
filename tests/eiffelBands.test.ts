@@ -198,8 +198,10 @@ describe("every rivet cube is the whole cook's heads seated in it", () => {
     // `postStretch`), their lacing rivets with them; - 3,200: the X's
     // crossing plates laid along their struts as rhombi (crossing.ts
     // `plateFrame`), their edge rows cut to whole pitches and the lacing
-    // heads they cover moved with them.
-    expect(heads).toBe(1_204_932);
+    // heads they cover moved with them; + 360: the uprights' splice heads
+    // the legs' joint plates no longer cover, the plates stopping short of
+    // the box's corners (strut.ts `JointOpts.corners`).
+    expect(heads).toBe(1_205_292);
     expect(cells.length).toBe(532);
   }, 900_000);
 });

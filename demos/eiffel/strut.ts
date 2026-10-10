@@ -41,6 +41,7 @@ import {
   le,
   lt,
   max,
+  min,
   meshPrimitive,
   mergePoints,
   mergePrimitives,
@@ -69,7 +70,7 @@ import {
   vec,
 } from "pcg-ts";
 import type { PlateFootprint } from "./crossing.js";
-import { END_SINE, END_SINE_MIN, FACE_NORMAL, type Vec3, merge, pointTable, skin } from "./lattice.js";
+import { END_CORNER, END_SINE, END_SINE_MIN, FACE_NORMAL, type Vec3, merge, pointTable, skin } from "./lattice.js";
 import { HEAD_DRIVE_ATTR } from "./heads.js";
 import { clipHeads, gatePaths, gatePoints } from "./region.js";
 
@@ -252,6 +253,14 @@ export interface JointOpts {
    * every end is a joint.
    */
   readonly endFlags?: boolean;
+  /**
+   * The members carry an edge rule's {@link END_CORNER}: at a column where
+   * the lattice turns a corner, a plate stops where it would meet the next
+   * face's plates, rather than running on past the corner through them.
+   * Default false: no member brings it but an edge rule's, on a lattice
+   * that asks for it (`LatticeSpec.corners`).
+   */
+  readonly corners?: boolean;
 }
 
 /** The primitive attribute {@link JointOpts.endFlags} reads: which ends are joints. */
@@ -662,7 +671,9 @@ function trimToJoints(
  * from the upright's axis along a flat diagonal and 1.423 m along the
  * horizontal [sourced]. A rectangle cannot follow the face, so its near
  * edge is placed where its obtuse corner meets the upright's face: the
- * rest of that edge is inside the upright's box. The plate lies just
+ * rest of that edge is inside the upright's box, and at a corner
+ * (`JointOpts.corners`) the plate narrows so that its acute corner stops
+ * short of the next face's plates. The plate lies just
  * outside the upright's faces parallel to it: 8 mm off the lower uprights'
  * webs (an 800 strut is 16 mm deeper than their lozenge, 0.784 square to
  * the lattice plane in panels 1-4), where it meets what stands out of them
@@ -721,17 +732,51 @@ function memberJoints(
     g.connect(regionTips, "out", plateTips, "in");
   }
   const start = select(first, clearAt(0), clearAt(1));
-  // The plate's near edge, along the member from the node: where a point
-  // `across` off the axis on the obtuse side reaches the upright's face,
-  // (r - across cos t) / sin t, and never behind the node.
-  // The plate covers the chords' extent along B (a square's is its width).
-  const across = add(add(wB, CHORD), 0.08);
-  const faceAt = (end: 0 | 1): Field => {
-    const sine = endSineAt(joints, end);
-    const cosine = sqrt(sub(1, mul(sine, sine)));
+  // The plate covers the chords' extent along B (a square's is its width)
+  // and a margin.
+  const coveredB = add(wB, CHORD);
+  const across = add(coveredB, 0.08);
+  const shape = (end: 0 | 1): { half: Field; near: Field } => {
     const r = joints.uprightAt ?? ramp(y, joints.face ?? joints.upright);
-    return max(div(sub(r, mul(across, cosine)), sine), 0);
+    // The near edge, along the member from the node: where a point `half`
+    // off the axis on the obtuse side reaches the upright's face,
+    // (r - half cos t) / sin t, and never behind the node; t against the
+    // column's bisector.
+    const onFace = (half: Field, sine: Field): Field =>
+      div(sub(r, mul(half, sqrt(sub(1, mul(sine, sine))))), sine);
+    const bisector = endSineAt(joints, end);
+    if (joints.corners !== true) return { half: across, near: max(onFace(across, bisector), 0) };
+    // At a corner the near edge's acute corner, 2 half cos t - r beyond
+    // the axis, stops at `far`, where the plate meets the next face's:
+    // a leg's diagonals meet its outer corner at about 35 degrees below
+    // XVII, and their plates ran 7 cm past the arris and crossed the other
+    // face's there. So the plate narrows, down to the chords' extent, and
+    // where even that is too wide it starts further out,
+    // (half cos t - far) / sin t, its obtuse corner then short of the face.
+    // Here t is against the line the two faces' plates meet along, the
+    // column's chord over the member's band (`END_CORNER`): where the
+    // column kinks the bisector is a few degrees off it, and the acute
+    // corner overshot by a centimetre. The obtuse corner is held clear in
+    // both frames, so it stands no nearer the upright than it did.
+    const band = max(component(attribute(END_CORNER, 4), end + 2), joints.minSine ?? 0.25);
+    const cosine = sqrt(sub(1, mul(band, band)));
+    const far = cornerReach(end);
+    const half = max(min(across, div(add(r, far), mul(max(cosine, 1e-6), 2))), coveredB);
+    const short = div(sub(mul(half, cosine), far), band);
+    return { half, near: max(max(max(onFace(half, bisector), onFace(half, band)), short), 0) };
   };
+  // How far past the column's axis, across the face away from the member,
+  // a plate can reach before it meets the plate on the next face, its
+  // inner face (`off` out) against the other's: (off (1 - c) - PLATE c) /
+  // sqrt(1 - c^2), for c the cosine between the faces. Out of reach where
+  // the faces lie in one plane (a post at a face centre) or there is no
+  // next face, c near 1.
+  const cornerReach = (end: 0 | 1): Field => {
+    const c = component(attribute(END_CORNER, 4), end);
+    const reachTo = div(sub(mul(off, sub(1, c)), mul(PLATE, c)), sqrt(max(sub(1, mul(c, c)), 1e-6)));
+    return select(gt(c, 0.95), 1e3, reachTo);
+  };
+  const [end0, end1] = [shape(0), shape(1)];
   // The span (near edge, far edge, width) is fixed at the tips, before the
   // plates move: their size is set after the move, where position() is no
   // longer the member's end and would read the tables elsewhere.
@@ -741,7 +786,7 @@ function memberJoints(
       name: GUSSET_SPAN,
       type: "f32",
       tupleSize: 3,
-      value: vec(select(first, faceAt(0), faceAt(1)), add(start, reach), mul(across, 2)),
+      value: vec(select(first, end0.near, end1.near), add(start, reach), mul(select(first, end0.half, end1.half), 2)),
     },
     `${id}PlateSpan`,
   );

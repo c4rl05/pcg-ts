@@ -65,6 +65,11 @@ export interface LatticeSpec {
   readonly closed: boolean;
   /** Bottom to top. */
   readonly levels: readonly Level[];
+  /**
+   * Whether its edge rules write {@link END_CORNER}, for joints that stop
+   * their plates at a corner (`JointOpts.corners`). Default false.
+   */
+  readonly corners?: boolean;
 }
 
 /** A placed lattice: its stations, with `s` and `k` point attributes. */
@@ -74,6 +79,8 @@ export interface Lattice {
   readonly ringSize: number;
   readonly levelCount: number;
   readonly closed: boolean;
+  /** Whether its edge rules write {@link END_CORNER}. */
+  readonly corners: boolean;
   readonly stations: NodeHandle;
   /**
    * Where every station sits, positions[k][s], known before the cook: the
@@ -231,6 +238,7 @@ export function stationLattice(g: Graph, spec: LatticeSpec): Lattice {
     ringSize: ring.length,
     levelCount: levels.length,
     closed: spec.closed,
+    corners: spec.corners === true,
     stations: place,
     positions,
   };
@@ -275,7 +283,7 @@ export function placedLattice(
     k: ["i32", rows.flatMap((r, k) => r.map(() => k))],
     ...columns,
   });
-  return { g, id, ringSize, levelCount: rows.length, closed, stations, positions: rows };
+  return { g, id, ringSize, levelCount: rows.length, closed, corners: false, stations, positions: rows };
 }
 
 /** Evaluate a mask over every station, in point order. */
@@ -323,15 +331,27 @@ export function edges(
   const sinB: number[] = [];
   const minA: number[] = [];
   const minB: number[] = [];
+  const turnA: number[] = [];
+  const turnB: number[] = [];
+  const bandA: number[] = [];
+  const bandB: number[] = [];
   for (let k = 0; k < lat.levelCount; k++) {
     for (let s = 0; s < R; s++) {
       if (mask[k * R + s] !== 1) continue;
-      normals.push(faceNormal(lat, s, k, ds, dk));
+      const n = faceNormal(lat, s, k, ds, dk);
+      normals.push(n);
       const s2 = (((s + ds) % R) + R) % R;
       sinA.push(endSine(lat, s, k, s2, k + dk));
       sinB.push(endSine(lat, s2, k + dk, s, k));
       minA.push(endSineMin(lat, s, k, s2, k + dk));
       minB.push(endSineMin(lat, s2, k + dk, s, k));
+      if (!lat.corners) continue;
+      // The face on the column's other side: back from the first end, on
+      // past the second (s + ds unwrapped, so an open ring's end is seen).
+      turnA.push(cornerCos(lat, s, k, -ds, dk, n));
+      turnB.push(cornerCos(lat, s + ds, k + dk, ds, -dk, n));
+      bandA.push(bandSine(lat, s, k, s2, k + dk));
+      bandB.push(bandSine(lat, s2, k + dk, s, k));
     }
   }
   const faces = lat.g.add(
@@ -374,7 +394,67 @@ export function edges(
   lat.g.connect(node, "out", faces, "in");
   lat.g.connect(faces, "out", ends, "in");
   lat.g.connect(ends, "out", endsMin, "in");
-  return endsMin;
+  if (!lat.corners) return endsMin;
+  const corners = lat.g.add(
+    setAttribute,
+    {
+      name: END_CORNER,
+      domain: "primitive",
+      type: "f32",
+      tupleSize: 4,
+      value: vec(indexTable(turnA), indexTable(turnB), indexTable(bandA), indexTable(bandB)),
+    },
+    `${lat.id}${id}Corners`,
+  );
+  lat.g.connect(endsMin, "out", corners, "in");
+  return corners;
+}
+
+/**
+ * Beside the end sines, an edge rule on a lattice that asks for it
+ * (`LatticeSpec.corners`) writes (f32 x 4): at its first end and its
+ * second, |cos| of the angle between the member's face and the face on the
+ * other side of its column there, where the lattice turns a corner (1
+ * where the two lie in one plane or no face is there: a post, an open
+ * ring's end); then at each end the sine the member makes with the line
+ * those two faces meet along, the column's chord over the member's own
+ * band of levels — which, where the column kinks, is not its bisector
+ * (`END_SINE`). Where the faces turn, the planes a joint's plates lie in,
+ * off the two faces, cross short of the corner, and a plate running on
+ * past that line runs through the other face's (strut.ts,
+ * `JointOpts.corners`). Scalars, so a copy onto turned targets carries
+ * them unchanged.
+ */
+export const END_CORNER = "endCorner";
+
+/**
+ * The sine between the member from (s, k) to (s2, k2) and column s's chord
+ * over the band of levels the member's face spans (`faceNormal`'s).
+ */
+function bandSine(lat: Lattice, s: number, k: number, s2: number, k2: number): number {
+  let k0 = Math.min(k, k2);
+  let k1 = k0 + Math.max(Math.abs(k2 - k), 1);
+  if (k1 >= lat.levelCount) {
+    k1 = k0;
+    k0 = k0 - 1;
+  }
+  const P = lat.positions;
+  const c = cross3(unit3(sub3(P[k1]![s]!, P[k0]![s]!)), unit3(sub3(P[k2]![s2]!, P[k]![s]!)));
+  return Math.hypot(c[0], c[1], c[2]);
+}
+
+/**
+ * |cos| between face normal `n` and the face from station s toward s + ds
+ * between levels k and k + dk; 1 where there is none (ds 0, or off an open
+ * ring).
+ */
+function cornerCos(lat: Lattice, s: number, k: number, ds: number, dk: number, n: Vec3): number {
+  if (ds === 0) return 1;
+  const R = lat.ringSize;
+  const s2 = s + ds;
+  if (!lat.closed && (s < 0 || s >= R || s2 < 0 || s2 >= R)) return 1;
+  const m = faceNormal(lat, ((s % R) + R) % R, k, ds, dk);
+  return Math.min(1, Math.abs(n[0] * m[0] + n[1] * m[1] + n[2] * m[2]));
 }
 
 /**

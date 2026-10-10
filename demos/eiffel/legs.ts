@@ -1616,6 +1616,8 @@ function gapLattice(g: Graph): Lattice {
       [0, 1],
     ],
     closed: false,
+    // No corner on an open pair, but its joints read the attribute.
+    corners: true,
     levels: NODES.slice(from, to + 1).map((n) => ({
       y: n.y,
       x0: -n.inner,
@@ -1656,6 +1658,8 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     ring: LEG_RING,
     closed: true,
     levels: levels.map(legLevel),
+    // Its joints stop their plates at the box's corners (`onUpright`).
+    corners: true,
   });
 
   // The uprights' axes, on their own levels (the nodes, and a ring either
@@ -1746,6 +1750,7 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
     ring: squareRing(2),
     closed: true,
     levels: [legLevel(levelAt(band10Top())), legLevel(node("XVIII"))],
+    corners: true,
   });
   const p10Crosses = merge(g, "leg10Crosses", [
     edges(p10, "CrossA", 1, 1),
@@ -1801,9 +1806,12 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
   // of the face it lands on, and its plates meet the web
   // (`jointUpright`, `jointFace`); above, of the 0.50 box, which has
   // nothing standing out of its webs (its plies grow inward; no C.J.s).
+  // Each upright is a corner of the leg's box, where two faces' plates
+  // meet (`JointOpts.corners`).
   const onUpright = {
     upright: jointUpright(MEMBERS.uprightAbove),
     face: jointFace(MEMBERS.uprightAbove),
+    corners: true,
   };
   const diagonals = { ...onUpright, reach: JOINT_REACH.diagonal, kinks: true };
   const across = { ...onUpright, reach: JOINT_REACH.horizontal, kinks: true };
@@ -1842,6 +1850,9 @@ export function buildLegs(g: Graph, quads: NodeHandle, detail: Detail = {}): Par
         [node("XVII").y, UPRIGHT_BOX.planHalf * Math.SQRT2],
       ]),
       endFlags: true,
+      // Inside the leg, along its diagonal: no face of the box turns there,
+      // and its members are no edge rule's.
+      corners: false,
     },
     {
       lacingStep: [[ENTRETOISE.width / 2, ENTRETOISE.step]],

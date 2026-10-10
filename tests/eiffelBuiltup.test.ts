@@ -406,8 +406,10 @@ describe("eiffel built-up uprights", () => {
     // it. Counted in the +x+z leg, panels 1-5 only, until the joint is
     // re-derived: 120 plates pierced by a channel's leg (84 mm past the
     // plate at most), 120 by a fin's flat legs (8 mm), 2 by a fin (32 mm).
-    // The same on the tower from before the box.
-    expect(c.platesPierced).toEqual({ channelLeg: 120, finFlat: 120, cj: 2, channelFlat: 2, fin: 2 });
+    // The same on the tower from before the box. No C.J. since the plates
+    // stop short of the box's corners (strut.ts `JointOpts.corners`): the
+    // two it met were at the bend, over the arris.
+    expect(c.platesPierced).toEqual({ channelLeg: 120, finFlat: 120, channelFlat: 2, fin: 2 });
     expect(c.pierceDeepest["channelLeg"]!).toBeLessThan(0.085);
     expect(c.pierceDeepest["fin"]!).toBeLessThan(0.033);
     expect(c.pierceDeepest["finFlat"]!).toBeLessThan(0.008);
