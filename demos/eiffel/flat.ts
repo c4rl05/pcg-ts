@@ -1,5 +1,6 @@
 /**
- * Flat paint: a colour that reaches the screen exactly as it was given.
+ * Flat paint: a colour that reaches the screen exactly as it was given;
+ * and the keep mark (`teachKeep`), which the page's highlights wear.
  *
  * WHY IT TAKES TWO EDITS. An unlit material is not enough on this page.
  * Everything the scene draws lands in the composer's linear buffer, and
@@ -19,7 +20,7 @@
  * marked pixel arrives as its colour times some k in (0, 1]; the pass
  * divides by the brightest channel. That restores a colour whose
  * brightest channel is 1 exactly, and no other: flat paint is a hue at
- * full value, which is what a highlight is. (A pixel seen through a
+ * full value, which is what a marker colour is. (A pixel seen through a
  * see-through pane is the pane blended over the paint, and comes out the
  * blend brightened, which is honest: there is glass in front of it.)
  *
@@ -40,6 +41,8 @@ import { OutputShader } from "three/addons/shaders/OutputShader.js";
 
 /** Marks a flat material's program. */
 const FLAT_KEY = "flatPaint";
+/** Marks a kept material's program (see {@link teachKeep}). */
+const KEEP_KEY = "keepMark";
 
 /** The mark: after everything the fragment shader does, the alpha the output pass looks for. */
 const MARK: readonly [string, string] = ["#include <dithering_fragment>", "#include <dithering_fragment>\n\tgl_FragColor.a = -1.0;"];
@@ -79,6 +82,36 @@ export function teachFlat<M extends Material>(m: M): M {
 }
 
 /**
+ * THE KEEP MARK: alpha -2, a pixel that is to be KEPT whole under the
+ * drawing's ghost (ink.ts) but is otherwise any lit pixel — tone mapped as
+ * usual, its colour left alone. A highlight wears it in the drawing, where
+ * the rest of the tower fades and it does not. Taught on top of whatever
+ * edit `m` already carries, behind a switch, `on.value` 1 or 0, so a
+ * material wears it only while its highlight is on: the mark is the
+ * fragment's alpha, which a blended material blends with, so it is never
+ * on while `m` is `transparent`.
+ */
+export function teachKeep<M extends Material>(m: M, on: { value: number }): M {
+  const before = m.onBeforeCompile;
+  const key = m.customProgramCacheKey.bind(m);
+  m.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms, renderer: WebGLRenderer) => {
+    before.call(m, shader, renderer);
+    shader.uniforms.keepMark = on;
+    shader.fragmentShader = `uniform float keepMark;
+${keepFragmentShader(shader.fragmentShader)}`;
+  };
+  m.customProgramCacheKey = () => `${key()}|${KEEP_KEY}`;
+  m.needsUpdate = true;
+  return m;
+}
+
+/** A fragment shader taught the keep mark, behind its `keepMark` switch. */
+function keepFragmentShader(src: string): string {
+  return replaceOnce(src, MARK[0], `${MARK[0]}
+	if ( keepMark > 0.5 ) gl_FragColor.a = -2.0;`, "the material's fragment shader");
+}
+
+/**
  * Unlit paint in `color`, both faces, no fog, not yet marked: what
  * {@link teachFlat} marks, after any other edit it takes first (a clone
  * does not carry an edit over, so an edit that clones goes first).
@@ -95,11 +128,13 @@ export function flatMaterial(color: number): MeshBasicMaterial {
   return teachFlat(unlitMaterial(color));
 }
 
-/** The output pass's three edits: where a marked pixel is caught, and the tone map it skips. */
+/** The output pass's three edits: where a marked pixel is caught (a kept one let through), and the tone map it skips. */
 const OUTPUT_EDITS: ReadonlyArray<readonly [string, string]> = [
   [
     "gl_FragColor = texture2D( tDiffuse, vUv );",
     `gl_FragColor = texture2D( tDiffuse, vUv );
+			// The keep mark (-2) is lit paint: drop it and draw as usual.
+			if ( gl_FragColor.a < -1.5 ) gl_FragColor.a = 1.0;
 			bool flatPaint = gl_FragColor.a < 0.0;
 			if ( flatPaint ) gl_FragColor = vec4( gl_FragColor.rgb / max( max( gl_FragColor.r, gl_FragColor.g ), max( gl_FragColor.b, 1e-6 ) ), 1.0 );`,
   ],
@@ -114,14 +149,15 @@ function outputShader(src: string): string {
 }
 
 /**
- * Whether this three's shaders take both edits — the basic material's mark
- * and the output pass's catch — asked once at load the way rivetPack.ts'
+ * Whether this three's shaders take the edits — the basic material's mark,
+ * the standard material's keep mark and the output pass's catch — asked once at load the way rivetPack.ts'
  * `packedShaderProblem` asks of its own: `undefined` when they do, else
  * why not, and the page offers no highlight rather than failing to draw.
  */
 export function flatShaderProblem(): string | undefined {
   try {
     flatFragmentShader(ShaderLib.basic.fragmentShader);
+    keepFragmentShader(ShaderLib.standard.fragmentShader);
     outputShader(OutputShader.fragmentShader);
     return undefined;
   } catch (err) {

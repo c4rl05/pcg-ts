@@ -180,6 +180,14 @@ export interface Detail {
 export const RIVET_ASSET = "rivet";
 
 /**
+ * The userData key, set true, on every mesh of the tower itself — the
+ * page's cooked outputs and the bands' streamed cells — and on nothing
+ * else the scene holds (the ground, the sky, a plate): what main.ts'
+ * highlight draws see-through around what it paints.
+ */
+export const TOWER_MESH = "towerMesh";
+
+/**
  * One millimetre: the most any built position moves, per axis (plus one
  * f32 ULP, which the store adds and which matters at 300 m, where the ULP
  * is 15 µm — see the bound in `tests/eiffelSkeleton.test.ts`).

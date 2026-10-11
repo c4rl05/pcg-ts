@@ -54,7 +54,7 @@ import {
   type MeshPayload,
   type RivetPayload,
 } from "./bands.js";
-import type { CrossPlate, PartClass } from "./parts.js";
+import { type CrossPlate, type PartClass, TOWER_MESH } from "./parts.js";
 import { type PackedRivets, packedRivetMesh } from "./rivetPack.js";
 import { profileAt } from "./spec.js";
 
@@ -251,7 +251,10 @@ export function startBands(host: BandsHost): Bands {
       meshes.push(...made);
       h += r.count;
     }
-    for (const mesh of meshes) host.scene.add(mesh);
+    for (const mesh of meshes) {
+      mesh.userData[TOWER_MESH] = true;
+      host.scene.add(mesh);
+    }
     const old = cells.get(key);
     if (old !== undefined) drop(key);
     cells.set(key, { level: msg.level, meshes, heads: h, triangles: tris });

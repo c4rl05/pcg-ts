@@ -368,9 +368,9 @@ export function packedShaderProblem(): string | undefined {
 }
 
 /**
- * The same question of the unlit shader the highlights paint packed heads
- * with (main.ts, flat.ts). Asked apart, so an anchor gone from it costs the
- * highlight and not the default look's packed rivets.
+ * The same question of the unlit shader, for packed heads in flat paint
+ * (flat.ts). Asked apart, so an anchor gone from it costs only them and
+ * not the default look's packed rivets.
  */
 export function packedUnlitProblem(): string | undefined {
   try {
@@ -394,8 +394,8 @@ function teach<M extends MeshStandardMaterial | MeshNormalMaterial | MeshBasicMa
 }
 
 /**
- * `base` (a rivet material, or the highlight's unlit paint) for packed
- * heads: its colour and finish, the packed vertex shader.
+ * `base` (a rivet material, or flat paint) for packed heads: its colour
+ * and finish, the packed vertex shader.
  */
 export function packedRivetMaterial<M extends MeshStandardMaterial | MeshBasicMaterial>(base: M): M {
   return teach(base.clone() as M);

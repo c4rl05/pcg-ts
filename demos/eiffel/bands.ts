@@ -85,11 +85,13 @@ export interface BandsWhich {
  * The defaults, from what a pixel holds [derived for the page's 42°
  * camera at 1080 rows: 0.71 mm a pixel per metre of distance]: a 45 mm
  * lacing bar is a pixel at 63 m and still reads as hatching well past it,
- * a 19 mm head is a pixel at 27 m. The cells are the World's cubes, laced
- * twice the rivets' (a level's cell must be finer than the one above it).
+ * a 19 mm head is a pixel at 27 m. The laced radius sits past that, at
+ * 180 m, so the lacing has arrived before the eye looks for it rather than
+ * as it does. The cells are the World's cubes, laced twice the rivets' (a
+ * level's cell must be finer than the one above it).
  */
 export const BANDS: Required<BandsSpec> = {
-  laced: { cell: 32, radius: 120 },
+  laced: { cell: 32, radius: 180 },
   rivets: { cell: 16, radius: 40 },
 };
 

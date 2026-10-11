@@ -67,6 +67,7 @@ import {
   type WebGLRenderer,
 } from "three";
 import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
+import { seeThrough } from "./gtao.js";
 
 /** Everything the drawing can be asked to change. */
 export interface InkSpec {
@@ -110,6 +111,13 @@ export interface InkSpec {
   readonly fadeFar: number;
   readonly fadeFloor: number;
   /**
+   * The fade's curve between `fadeNear` and `fadeFar`: what is left of the
+   * line at `t` of the way out is `(e^(k (1 - t)) - 1) / (e^k - 1)`, `k`
+   * this. So coming in from far the line arrives slowly and then quickly
+   * as `fadeNear` nears; 0 is a straight line.
+   */
+  readonly fadeCurve: number;
+  /**
    * A HIERARCHY of lines, each a fraction of the silhouette's full weight:
    * `inner` for a contour with something drawn on both sides of it (a bar
    * in front of a bar), `crease` for a fold. 1 and 1 is the plain pen,
@@ -132,16 +140,30 @@ export interface InkSpec {
    * Only over a colour.
    */
   readonly farTint: number;
+  /**
+   * How much darker the colour goes where the lines have faded, 0 to 1,
+   * in proportion to how much of the line the fade took (none with
+   * `fadeFloor` 1). The lines are a share of a lattice's tone: faded with
+   * nothing in their place, the tower pales as the camera backs off, the
+   * way fog would, and 0.12 puts back about what a near view's lines carry.
+   * Only over a colour.
+   */
+  readonly farFill: number;
 }
 
 /**
- * Depth in the colour: how far what lies behind the focus is paled toward
- * the paper, 0 to 1, reaching it `depth` metres past the focus. A drawing
- * pales the planes it sets back, where light would darken them.
+ * Depth fade: how far the farthest of what is drawn is paled toward the
+ * paper, 0 to 1, lines and colour together. It runs over the depth range
+ * the host gives each frame (`Ink.hazeRange`), none at its near end and
+ * all of `amount` at its far one, along an exponential: `(e^(k t) - 1) /
+ * (e^k - 1)` of the way through the range at `t`, `k` the `falloff`. So the
+ * near half barely pales and the far end goes most of the way; 0 is a
+ * straight line. A drawing pales the planes it sets back, where light
+ * would darken them.
  */
 export interface Haze {
   readonly amount: number;
-  readonly depth: number;
+  readonly falloff: number;
 }
 
 /** What the composite does to the colour on the way to the paper (see the file's note). */
@@ -164,10 +186,12 @@ export const INK_DEFAULT: InkSpec = {
   fadeNear: 150,
   fadeFar: 600,
   fadeFloor: 1,
+  fadeCurve: 0,
   inner: 1,
   crease: 1,
   gap: 0,
   farTint: 0,
+  farFill: 0,
 };
 
 /**
@@ -184,10 +208,34 @@ export interface Ink {
   render(color?: Texture): void;
   /** How `color` is laid under the lines; null draws on bare paper even when one is given. */
   composite(spec: WashComposite | null): void;
-  /** Pale what is behind the focus (`Haze`); null for none. */
+  /** Pale what is far off (`Haze`); null for none. */
   haze(spec: Haze | null): void;
-  /** The distance in metres to what the view is looking at, every frame the haze is on. */
-  focus(distance: number): void;
+  /** The depths in metres along the view axis the haze runs between, every frame it is on. */
+  hazeRange(near: number, far: number): void;
+  /**
+   * Lay the ground's shadow on the paper in `colour`, null for none. The
+   * shadow comes in the colour handed to `render`: off the drawn surfaces
+   * it holds the shadow's strength, 0 to 1 (rig.ts' shadow catcher).
+   */
+  groundShadow(colour: number | null): void;
+  /**
+   * Under a coloured drawing, everything but the flat-painted and kept
+   * pixels (flat.ts' marks, carried in the colour's alpha: the page's
+   * highlights wear the keep mark) laid on the paper at `opacity`, lines
+   * and colour alike, and the lines over a flat pixel at it too, so a
+   * highlight seen through the tower keeps its colour. A kept pixel keeps
+   * its lines, which are its own. 1 is none, and the plain pen never has it.
+   */
+  ghost(opacity: number): void;
+  /**
+   * The meshes drawn OVER the rest (the page's highlights, which a depth
+   * clear puts over the tower), or null for none. The prepass draws them
+   * as a layer of their own, read wherever it drew something, so the rest
+   * keeps its own depth under them: its lines, its haze and its fade. One
+   * prepass with the clear in it would leave the rest no depth at all,
+   * which reads as nothing drawn.
+   */
+  over(test: ((mesh: Mesh) => boolean) | null): void;
   setSize(width: number, height: number): void;
   apply(spec: InkSpec): void;
   dispose(): void;
@@ -205,6 +253,9 @@ const FRAGMENT = /* glsl */ `
   #include <packing>
   uniform sampler2D tNormal;
   uniform sampler2D tDepth;
+  uniform sampler2D tNormalOver;
+  uniform sampler2D tDepthOver;
+  uniform float useOver;
   uniform vec2 texel;
   uniform float width;
   uniform float cameraNear;
@@ -212,15 +263,23 @@ const FRAGMENT = /* glsl */ `
   uniform float creaseCos;
   uniform float contour;
   uniform vec3 fade;
+  uniform float fadeCurve;
   uniform float inner;
   uniform float creaseWeight;
   uniform vec2 hazeRange;
+  uniform float hazeFalloff;
   uniform float gap;
   varying vec2 vUv;
 
+  // The depth of the layer drawn over the rest (\`over\`): 1 where it has nothing.
+  float overDepth(vec2 uv) {
+    return useOver > 0.5 ? texture2D(tDepthOver, uv).x : 1.0;
+  }
+
   // 1 / (distance along the view axis); 0 where nothing was drawn.
   float invDepth(vec2 uv) {
-    float d = texture2D(tDepth, uv).x;
+    float o = overDepth(uv);
+    float d = o < 1.0 ? o : texture2D(tDepth, uv).x;
     if (d >= 1.0) return 0.0;
     #ifdef LOG_DEPTH
       return 1.0 / (exp2(d * log2(cameraFar + 1.0)) - 1.0);
@@ -230,7 +289,8 @@ const FRAGMENT = /* glsl */ `
   }
 
   vec3 normalAt(vec2 uv) {
-    return normalize(texture2D(tNormal, uv).xyz * 2.0 - 1.0);
+    vec3 n = overDepth(uv) < 1.0 ? texture2D(tNormalOver, uv).xyz : texture2D(tNormal, uv).xyz;
+    return normalize(n * 2.0 - 1.0);
   }
 
   // How far past the threshold this pixel's depth sits above the chord
@@ -277,7 +337,8 @@ const FRAGMENT = /* glsl */ `
       return;
     }
     float dist = 1.0 / c;
-    float far = smoothstep(fade.x, fade.y, dist);
+    float fadeT = clamp((dist - fade.x) / (fade.y - fade.x), 0.0, 1.0);
+    float far = fadeCurve < 1e-3 ? fadeT : 1.0 - (exp(fadeCurve * (1.0 - fadeT)) - 1.0) / (exp(fadeCurve) - 1.0);
     vec2 dx = vec2(texel.x * width, 0.0);
     vec2 dy = vec2(0.0, texel.y * width);
     float line = 0.0;
@@ -290,9 +351,11 @@ const FRAGMENT = /* glsl */ `
     line = max(line, crease(n, vUv + dy, c));
     line = max(line, crease(n, vUv + dx + dy, c));
     line *= mix(1.0, fade.z, far);
-    // Red the line, green the coverage, blue how far behind the focus,
-    // alpha how far off for the fade.
-    gl_FragColor = vec4(line, 1.0, smoothstep(hazeRange.x, hazeRange.y, dist), far);
+    // Red the line, green the coverage, blue how far into the haze's
+    // range, alpha how far off for the fade.
+    float t = clamp((dist - hazeRange.x) / (hazeRange.y - hazeRange.x), 0.0, 1.0);
+    float hazed = hazeFalloff < 1e-3 ? t : (exp(hazeFalloff * t) - 1.0) / (exp(hazeFalloff) - 1.0);
+    gl_FragColor = vec4(line, 1.0, hazed, far);
   }
 `;
 
@@ -310,6 +373,10 @@ const RESOLVE = /* glsl */ `
   uniform float saturation;
   uniform float hazeAmount;
   uniform float farTint;
+  uniform float farFill;
+  uniform float shadowOn;
+  uniform vec3 shadowColour;
+  uniform float ghost;
   uniform vec2 texel;
   uniform float sigma;
   uniform float strength;
@@ -336,18 +403,41 @@ const RESOLVE = /* glsl */ `
     float coverage = min(1.0, strength * sum.x / total);
     vec3 base = paper;
     vec3 pen = ink;
+    float flatPaint = 0.0;
+    float keptPaint = 0.0;
     if (useColor > 0.5) {
-      vec3 c = toSRGB(texture2D(tColor, vUv).rgb);
+      vec4 texel4 = texture2D(tColor, vUv);
+      vec3 raw = texel4.rgb;
+      flatPaint = step(texel4.a, -0.5);
+      // Kept (flat.ts' keep mark, -2): lit paint, kept whole under the ghost.
+      keptPaint = step(texel4.a, -1.5);
+      // A flat pixel at full value, as the lit look's output pass gives it
+      // (flat.ts): the occlusion of the iron in front multiplied it down.
+      raw = mix(raw, raw / max(max(raw.r, raw.g), max(raw.b, 1e-6)), flatPaint - keptPaint);
+      vec3 c = toSRGB(raw);
       c = mix(vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), c, saturation);
       c = mix(c, paper, lift);
       // Blue and alpha are only written where something was drawn, so
       // they are averaged over the coverage, not over the kernel.
       float drawn = max(sum.y, 1e-4);
-      c = mix(c, paper, hazeAmount * sum.z / drawn);
-      pen = mix(ink, c * 0.62, farTint * sum.w / drawn);
-      base = mix(paper, c, sum.y / total);
+      float far = sum.w / drawn;
+      // The tone the faded lines took with them, put back in the colour.
+      c *= 1.0 - farFill * far;
+      pen = mix(ink, c * 0.62, farTint * far);
+      // Off the drawn surfaces the colour is the ground's shadow strength.
+      vec3 ground = mix(paper, shadowColour, shadowOn * clamp(raw.g, 0.0, 1.0));
+      base = mix(ground, c, sum.y / total);
     }
-    gl_FragColor = vec4(mix(base, pen, coverage), 1.0);
+    // The haze over the line and the colour together, so the farthest of
+    // the drawing goes into the paper rather than leaving its lines on it.
+    // Averaged over the coverage too, as above.
+    float hazed = hazeAmount * sum.z / max(sum.y, 1e-4);
+    // The ghost: a flat pixel keeps its colour under faded lines, a kept
+    // one its lines too (they are its own: it is drawn over the tower), the
+    // rest of the drawing fades whole. With no ghost (1) all are no change.
+    coverage *= mix(1.0, ghost, flatPaint - keptPaint);
+    vec3 drawn = mix(mix(base, pen, coverage), paper, hazed);
+    gl_FragColor = vec4(mix(mix(paper, drawn, ghost), drawn, flatPaint), 1.0);
   }
 `;
 
@@ -358,6 +448,17 @@ function srgb(hex: number): Color {
   const out = { r: 0, g: 0, b: 0 };
   c.getRGB(out, SRGBColorSpace);
   return new Color(out.r, out.g, out.b);
+}
+
+/** A normals target with its depth as a texture, both read texel for texel. */
+function normalsTarget(width: number, height: number): WebGLRenderTarget {
+  // 8-bit normals: the finest step is about half a degree, and a crease is
+  // tens of degrees.
+  return new WebGLRenderTarget(width, height, {
+    minFilter: NearestFilter,
+    magFilter: NearestFilter,
+    depthTexture: new DepthTexture(width, height, FloatType),
+  });
 }
 
 /**
@@ -372,14 +473,14 @@ export function createInk(
   height: number,
   hidden: () => readonly Object3D[],
 ): Ink {
-  const depthTexture = new DepthTexture(width, height, FloatType);
-  // 8-bit normals: the finest step is about half a degree, and a crease is
-  // tens of degrees.
-  const target = new WebGLRenderTarget(width, height, {
-    minFilter: NearestFilter,
-    magFilter: NearestFilter,
-    depthTexture,
-  });
+  const target = normalsTarget(width, height);
+  const depthTexture = target.depthTexture as DepthTexture;
+  // The layer over the rest (`over`), made the first time one is drawn.
+  let overTarget: WebGLRenderTarget | null = null;
+  let overTest: ((mesh: Mesh) => boolean) | null = null;
+  // What each layer's prepass leaves off: the over layer's meshes, or all but them.
+  const under = (mesh: Mesh): boolean => overTest !== null && overTest(mesh);
+  const over = (mesh: Mesh): boolean => overTest !== null && !overTest(mesh);
   // The mask is read BETWEEN its texels on the way down, so it filters.
   const edges = new WebGLRenderTarget(width, height, {
     minFilter: LinearFilter,
@@ -399,6 +500,10 @@ export function createInk(
     uniforms: {
       tNormal: { value: target.texture },
       tDepth: { value: depthTexture },
+      // The base layer's own until an over layer is made: never read then.
+      tNormalOver: { value: target.texture },
+      tDepthOver: { value: depthTexture },
+      useOver: { value: 0 },
       texel: { value: new Vector2(1 / width, 1 / height) },
       width: { value: 1 },
       cameraNear: { value: camera.near },
@@ -406,9 +511,11 @@ export function createInk(
       creaseCos: { value: 0 },
       contour: { value: 0 },
       fade: { value: new Vector3() },
+      fadeCurve: { value: 0 },
       inner: { value: 1 },
       creaseWeight: { value: 1 },
       hazeRange: { value: new Vector2(1e9, 2e9) },
+      hazeFalloff: { value: 0 },
       gap: { value: 0 },
     },
     depthTest: false,
@@ -429,6 +536,10 @@ export function createInk(
       saturation: { value: 1 },
       hazeAmount: { value: 0 },
       farTint: { value: 0 },
+      farFill: { value: 0 },
+      shadowOn: { value: 0 },
+      shadowColour: { value: new Color() },
+      ghost: { value: 1 },
       texel: { value: new Vector2(1 / width, 1 / height) },
       sigma: { value: 0 },
       strength: { value: 1 },
@@ -458,6 +569,7 @@ export function createInk(
     const sw = Math.round(w * scale);
     const sh = Math.round(h * scale);
     target.setSize(sw, sh);
+    overTarget?.setSize(sw, sh);
     edges.setSize(sw, sh);
     (material.uniforms.texel.value as Vector2).set(1 / sw, 1 / sh);
     material.uniforms.width.value = reach;
@@ -475,9 +587,13 @@ export function createInk(
     material.uniforms.creaseCos.value = Math.cos((spec.creaseDegrees * Math.PI) / 180);
     material.uniforms.contour.value = spec.contour;
     (material.uniforms.fade.value as Vector3).set(spec.fadeNear, spec.fadeFar, spec.fadeFloor);
+    material.uniforms.fadeCurve.value = spec.fadeCurve;
     material.uniforms.inner.value = spec.inner;
     material.uniforms.creaseWeight.value = spec.crease;
     resolveMaterial.uniforms.farTint.value = spec.farTint;
+    // The shader's `far` is how far through the fade, not how much of the
+    // line it took: with no fade there is no tone to put back.
+    resolveMaterial.uniforms.farFill.value = spec.farFill * (1 - spec.fadeFloor);
     const r = resolveMaterial.uniforms;
     r.strength.value = spec.strength;
     (r.ink.value as Color).copy(srgb(spec.ink));
@@ -492,7 +608,8 @@ export function createInk(
   const sided = new Map<Material, Side>();
   const clear = new Color();
 
-  function prepass(): void {
+  /** Draw the prepass into `into`: every mesh but the see-through and what `leave` names. */
+  function prepass(into: WebGLRenderTarget, leave: (mesh: Mesh) => boolean): void {
     for (const o of hidden()) {
       if (o.visible) {
         o.visible = false;
@@ -503,8 +620,8 @@ export function createInk(
       const mesh = object as Mesh;
       if (mesh.isMesh !== true || !mesh.visible) return;
       const own = mesh.material;
-      const seeThrough = Array.isArray(own) ? own.some((m) => m.transparent) : own.transparent;
-      if (seeThrough) {
+      // `prepassSkip`: a host's marker for what no prepass draws (main.ts' depth clear).
+      if (leave(mesh) || mesh.userData.prepassSkip === true || seeThrough(own)) {
         mesh.visible = false;
         hid.push(mesh);
         return;
@@ -532,7 +649,7 @@ export function createInk(
     const alpha = renderer.getClearAlpha();
     renderer.getClearColor(clear);
     renderer.setClearColor(0x000000, 0);
-    renderer.setRenderTarget(target);
+    renderer.setRenderTarget(into);
     renderer.clear();
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
@@ -553,7 +670,16 @@ export function createInk(
 
   return {
     render(color) {
-      prepass();
+      prepass(target, under);
+      if (overTest !== null) {
+        if (overTarget === null) {
+          overTarget = normalsTarget(target.width, target.height);
+          material.uniforms.tNormalOver.value = overTarget.texture;
+          material.uniforms.tDepthOver.value = overTarget.depthTexture;
+        }
+        prepass(overTarget, over);
+      }
+      material.uniforms.useOver.value = overTest !== null ? 1 : 0;
       material.uniforms.cameraNear.value = camera.near;
       material.uniforms.cameraFar.value = camera.far;
       renderer.setRenderTarget(edges);
@@ -574,10 +700,21 @@ export function createInk(
     haze(next) {
       haze = next;
       resolveMaterial.uniforms.hazeAmount.value = next?.amount ?? 0;
+      material.uniforms.hazeFalloff.value = next?.falloff ?? 0;
       if (next === null) (material.uniforms.hazeRange.value as Vector2).set(1e9, 2e9);
     },
-    focus(distance) {
-      if (haze !== null) (material.uniforms.hazeRange.value as Vector2).set(distance, distance + haze.depth);
+    groundShadow(colour) {
+      resolveMaterial.uniforms.shadowOn.value = colour === null ? 0 : 1;
+      if (colour !== null) (resolveMaterial.uniforms.shadowColour.value as Color).copy(srgb(colour));
+    },
+    ghost(opacity) {
+      resolveMaterial.uniforms.ghost.value = opacity;
+    },
+    over(test) {
+      overTest = test;
+    },
+    hazeRange(near, far) {
+      if (haze !== null) (material.uniforms.hazeRange.value as Vector2).set(near, Math.max(far, near + 1e-3));
     },
     setSize(w, h) {
       canvas = { width: w, height: h };
@@ -588,6 +725,8 @@ export function createInk(
       target.dispose();
       edges.dispose();
       depthTexture.dispose();
+      overTarget?.dispose();
+      overTarget?.depthTexture?.dispose();
       resolveMaterial.dispose();
       resolveQuad.dispose();
       normals.dispose();

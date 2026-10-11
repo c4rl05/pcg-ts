@@ -38,6 +38,7 @@
 import type { WebGLRenderer } from "three";
 import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
 import type { Camera, Material, Mesh, Object3D, Scene } from "three";
+import { NoBlending } from "three";
 
 /** What `GTAOPass` ships, verbatim. Both must match or we throw. */
 const STOCK_VIEW_POSITION = `		vec3 getViewPosition( const in vec2 screenPosition, const in float depth ) {
@@ -137,6 +138,47 @@ export function createGtao(
 }
 
 /**
+ * Point `pass` at `from`'s normal-and-depth buffer and stop it drawing its
+ * own, so a second occlusion at another radius costs a screen pass, not a
+ * second draw of the tower. `from` must run first in the same frame (rig.ts
+ * keeps it on, at no blend, while only the second is wanted). Its own
+ * buffer stays allocated, unused: `GTAOPass.setSize` resizes it whatever.
+ * Asserts what it reaches into, like the patches below.
+ */
+export function shareGBuffer(pass: GTAOPass, from: GTAOPass): void {
+  const inner = pass as unknown as { _renderGBuffer?: boolean };
+  const gtao = pass.gtaoMaterial.uniforms;
+  const pd = pass.pdMaterial.uniforms;
+  if (
+    typeof inner._renderGBuffer !== "boolean" ||
+    gtao.tNormal === undefined ||
+    gtao.tDepth === undefined ||
+    pd.tNormal === undefined ||
+    pd.tDepth === undefined
+  ) {
+    throw new Error(
+      "GTAO shared prepass: this three's GTAOPass no longer has _renderGBuffer / tNormal / tDepth. " +
+        "Re-read node_modules/three/examples/jsm/postprocessing/GTAOPass.js and update gtao.ts.",
+    );
+  }
+  gtao.tNormal.value = from.normalTexture;
+  gtao.tDepth.value = from.depthTexture;
+  pd.tNormal.value = from.normalTexture;
+  pd.tDepth.value = from.depthTexture;
+  inner._renderGBuffer = false;
+}
+
+/**
+ * See-through: any of its materials transparent and blended. Unblended is
+ * opaque, sorted late (main.ts' highlights). What both prepasses, this
+ * one and the drawing's (ink.ts), leave out.
+ */
+export function seeThrough(material: Material | Material[] | undefined): boolean {
+  const blends = (m: Material): boolean => m.transparent && m.blending !== NoBlending;
+  return Array.isArray(material) ? material.some(blends) : material !== undefined && blends(material);
+}
+
+/**
  * The pass's own prepass hides points and lines, "which do not contribute
  * to AO", and nothing else. A see-through surface does not either: a pane
  * drawn into the normal-and-depth buffer would stand in for everything
@@ -171,8 +213,9 @@ function skipSeeThrough(pass: GTAOPass): void {
     const cache = this._visibilityCache as Object3D[];
     scene.traverse((object) => {
       const material = (object as Mesh).material as Material | Material[] | undefined;
-      const seeThrough = Array.isArray(material) ? material.some((m) => m.transparent) : material?.transparent === true;
-      if ((object as Mesh).isMesh === true && object.visible && seeThrough) {
+      // A host's marker for what the prepass must not draw (main.ts' depth clear).
+      const skip = seeThrough(material) || object.userData.prepassSkip === true;
+      if ((object as Mesh).isMesh === true && object.visible && skip) {
         object.visible = false;
         cache.push(object);
       }

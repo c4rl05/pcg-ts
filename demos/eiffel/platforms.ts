@@ -5663,6 +5663,6 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
     silvered: [placedMesh(site, "crescentGlass", glazed.silvered)],
     fittings,
     names: [namesLetters(g)],
-    masonry: [copyToQuadrants(g, "pedestals", pedestal, quads)],
+    masonry: [copyToQuadrants(g, "pedestals", pedestal, quads, ["normal"])],
   };
 }

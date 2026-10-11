@@ -21,6 +21,24 @@ export interface DrawingSpec {
   readonly colour: boolean;
   /** The colour the palette is generated from (wash.ts `washColor`): the iron's. */
   readonly main: number;
+  /**
+   * Mono: every colour the palette generates, the light's tints with them,
+   * takes the main colour's hue and saturation and keeps only its own
+   * lightness — one colour in steps of value. A grey main colour makes a
+   * grey drawing.
+   */
+  readonly mono: boolean;
+  /**
+   * The platforms' tone: the floors' fit-out (the `warm` role, wash.ts
+   * `washColor`) as a lightness, 0 black to 1 the paper's white.
+   */
+  readonly platformShade: number;
+  /**
+   * The names' tone: the gilded names on the frieze (the `gilt` role, wash.ts
+   * `washColor`) as a lightness, 0 black to 1 the paper's white; past 1,
+   * brighter than white, so its shaded faces stay light too.
+   */
+  readonly namesShade: number;
   readonly paper: number;
   /** The sun's light stepped into bands (wash.ts `washRamp`). */
   readonly cel: boolean;
@@ -31,6 +49,8 @@ export interface DrawingSpec {
   readonly washed: boolean;
   /** How far toward the paper, 0 to 1. */
   readonly lift: number;
+  /** The flag's wash (wash.ts `ownWash`): 0 its own colours untouched, 1 the paper. */
+  readonly flagWash: number;
   /**
    * Light as a hue (wash.ts `WashShading`): how far a lit face goes toward
    * a cream, and a face in shade toward a rose-grey, both generated from
@@ -44,56 +64,114 @@ export interface DrawingSpec {
   readonly softEdges: boolean;
   /** What is left of a line far off (ink.ts `fadeFloor`): 1 keeps it whole. */
   readonly farLines: number;
+  /** Metres from the camera where the lines start fading, and where they reach `farLines` (ink.ts `fadeNear`, `fadeFar`). */
+  readonly lineFadeNear: number;
+  readonly lineFadeFar: number;
+  /** The line fade's curve (ink.ts `fadeCurve`): 0 straight, higher arrives later and faster coming in. */
+  readonly lineFadeCurve: number;
+  /** How much darker the colour goes where the lines have faded (ink.ts `farFill`): 0 none. */
+  readonly farFill: number;
   /** Inner contours and creases against the silhouette's weight (ink.ts `inner`, `crease`). */
   readonly innerLines: number;
   /** Line weight in device pixels, over the `?ink=` weight (ink.ts `width`). */
   readonly lineWidth: number;
-  /** Line darkness, 0 to 1 (ink.ts `strength`). */
+  /** Line darkness (ink.ts `strength`): past 1 a soft or faint line inks fuller, up to the pen's own colour. */
   readonly lineStrength: number;
-  /** How far behind the focus is paled toward the paper (ink.ts `Haze`), 0 to 1. */
+  /**
+   * Depth fade (ink.ts `Haze`), 0 to 1: how far the tower's farthest point
+   * is paled toward the paper, over the depth its bounding box spans from
+   * the camera — none at the box's nearest point, wherever the camera is.
+   */
   readonly depth: number;
+  /** How the fade gathers toward the far end (ink.ts `Haze.falloff`): 0 even, higher keeps more of the near untouched. */
+  readonly depthFalloff: number;
   readonly ao: boolean;
   /** 0 to 1, how much of the occlusion is laid over the colour. */
   readonly aoStrength: number;
   /** Metres the occlusion gathers over. */
   readonly aoRadius: number;
+  /** A second occlusion over the first, its own strength and radius: one for the joints, one for the depth (rig.ts `ao2`). */
+  readonly ao2: boolean;
+  readonly ao2Strength: number;
+  readonly ao2Radius: number;
   /** Degrees above the horizon. */
   readonly sunElevation: number;
   /** Degrees round from the camera's opening view, as `SunAngle.azimuth`. */
   readonly sunAzimuth: number;
   /** The lit face's light as a fraction of its paint (before the shade adds to it). */
   readonly sun: number;
+  /**
+   * A second light, shining straight up (`LIGHT2_ANGLE`) and weighed like
+   * the sun (rig.ts's fill: it casts no shadow). Its light is cel-stepped
+   * and tinted as the sun's is, measured against the sun's strength.
+   */
+  readonly light2: boolean;
+  readonly light2Strength: number;
   /** The light every face gets, the shade's floor, as a fraction of its paint. */
   readonly shade: number;
   readonly shadows: boolean;
+  /** The tower's shadow on the ground, laid on the paper in `shadowColour` (rig.ts `setGroundShadow`). */
+  readonly groundShadow: boolean;
+  readonly shadowColour: number;
+}
+
+/** The second light's aim: from straight below, shining up, as the ground throws the sun back. */
+const LIGHT2_ANGLE = { elevation: -90, azimuth: 0 };
+
+/** The ground shadow's default on dark paper and on light: a dark grey on black, a light grey on white. */
+export const SHADOW_ON_DARK = 0x333333;
+export const SHADOW_ON_LIGHT = 0xd4d4d4;
+
+/** Whether `paper` is light (its sRGB luma past half): which of the two shadow defaults goes with it. */
+export function lightPaper(paper: number): boolean {
+  const r = (paper >> 16) & 0xff;
+  const g = (paper >> 8) & 0xff;
+  const b = paper & 0xff;
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 127.5;
 }
 
 export const DRAWING_DEFAULT: DrawingSpec = {
   colour: true,
-  main: 0xc3967f,
-  paper: 0xfffcf5,
+  main: 0xc0c0c0,
+  mono: true,
+  platformShade: 1,
+  namesShade: 3,
+  paper: 0xffffff,
   cel: true,
-  bands: 2,
+  bands: 4,
   bandSoftness: 0.3,
-  washed: true,
+  washed: false,
   lift: 0.2,
-  litTint: 0.45,
-  shadeTint: 0.55,
+  flagWash: 0.3,
+  litTint: 0.67,
+  shadeTint: 0,
   saturation: 0.85,
   softEdges: true,
-  farLines: 0.95,
-  innerLines: 0.55,
-  lineWidth: 1.5,
-  lineStrength: 1,
-  depth: 0.35,
+  farLines: 0,
+  lineFadeNear: 50,
+  lineFadeFar: 200,
+  lineFadeCurve: 4,
+  farFill: 0.12,
+  innerLines: 1,
+  lineWidth: 1,
+  lineStrength: 0.5,
+  depth: 1,
+  depthFalloff: 4,
   ao: true,
-  aoStrength: 0.3,
-  aoRadius: 1.2,
-  sunElevation: 38,
-  sunAzimuth: -42,
-  sun: 0.55,
-  shade: 0.92,
+  aoStrength: 1,
+  aoRadius: 3,
+  ao2: false,
+  ao2Strength: 1,
+  ao2Radius: 0.5,
+  sunElevation: 57,
+  sunAzimuth: -15,
+  sun: 1,
+  light2: true,
+  light2Strength: 0.2,
+  shade: 0.1,
   shadows: true,
+  groundShadow: true,
+  shadowColour: SHADOW_ON_LIGHT,
 };
 
 /** The pen for a drawing: the plain one, or a soft one in a dark of the main colour. */
@@ -103,10 +181,12 @@ export function drawingInk(spec: DrawingSpec, base: InkSpec = INK_DEFAULT): InkS
     width: base.width * spec.lineWidth,
     strength: base.strength * spec.lineStrength,
     // Past a storey's framing, where a lattice seen whole starts to close up.
-    fadeNear: 150,
-    fadeFar: 450,
+    fadeNear: spec.lineFadeNear,
+    fadeFar: Math.max(spec.lineFadeFar, spec.lineFadeNear + 1),
     fadeFloor: spec.farLines,
+    fadeCurve: spec.lineFadeCurve,
     farTint: 0.6,
+    farFill: spec.farFill,
     gap: 6,
     inner: spec.innerLines,
     crease: 0.75 * spec.innerLines,
@@ -127,7 +207,9 @@ export function drawingInk(spec: DrawingSpec, base: InkSpec = INK_DEFAULT): InkS
 export function drawingShading(spec: DrawingSpec): WashShading {
   const hsl = new Color(spec.main).getHSL({ h: 0, s: 0, l: 0 }, SRGBColorSpace);
   const tint = (dh: number, s: number, l: number): number =>
-    new Color().setHSL((((hsl.h + dh) % 1) + 1) % 1, s, l, SRGBColorSpace).getHex(SRGBColorSpace);
+    spec.mono
+      ? new Color().setHSL(hsl.h, hsl.s, l, SRGBColorSpace).getHex(SRGBColorSpace)
+      : new Color().setHSL((((hsl.h + dh) % 1) + 1) % 1, s, l, SRGBColorSpace).getHex(SRGBColorSpace);
   const washed = spec.washed;
   return {
     cel: spec.cel,
@@ -147,8 +229,8 @@ export function drawingShading(spec: DrawingSpec): WashShading {
 
 /**
  * The lights for a coloured drawing, over `look` (the lit look's, so the
- * shadow and occlusion settings it does not name carry over). One sun and
- * a white hemisphere, both stated as a fraction of the paint they light
+ * shadow and occlusion settings it does not name carry over). One sun, an
+ * optional shadowless second light and a white hemisphere, both stated as a fraction of the paint they light
  * (three's lambert is paint x light / pi), no environment in the paint, no
  * fog, no ground and no vignette: the drawing stands on the paper.
  */
@@ -168,22 +250,25 @@ export function drawingLook(look: Look, spec: DrawingSpec): Look {
       angle: { elevation: spec.sunElevation, azimuth: spec.sunAzimuth },
       shadow: { ...look.key.shadow, on: spec.shadows },
     },
-    fill: { ...look.fill, on: false },
+    fill: {
+      on: spec.light2,
+      color: 0xffffff,
+      intensity: spec.light2Strength * Math.PI,
+      angle: LIGHT2_ANGLE,
+    },
     rim: { ...look.rim, on: false },
     bounce: { ...look.bounce, on: false },
     ambient: { intensity: spec.shade * Math.PI, sky: 0xffffff, ground: 0xffffff },
     envIntensity: 0,
     vignette: { on: false, amount: 0, start: 0.4 },
     ao: { ...look.ao, on: spec.ao, blend: spec.aoStrength, radius: spec.aoRadius },
+    ao2: { ...look.ao, on: spec.ao2, blend: spec.ao2Strength, radius: spec.ao2Radius },
   };
 }
 
-/**
- * The pale behind the focus; none without a washed colour to pale (its
- * dial sits with the wash's).
- */
+/** The depth fade, over the colour or the plain pen alike. */
 export function drawingHaze(spec: DrawingSpec): Haze | null {
-  return spec.colour && spec.washed && spec.depth > 0 ? { amount: spec.depth, depth: 150 } : null;
+  return spec.depth > 0 ? { amount: spec.depth, falloff: spec.depthFalloff } : null;
 }
 
 /** What ink.ts does to the wash on the way to the paper; null is no wash. */

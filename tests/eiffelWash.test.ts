@@ -52,6 +52,34 @@ describe("washColor", () => {
     expect(turned).toBeCloseTo(expected, 2);
   });
 
+  it("mono gives every generated colour the main colour's hue and saturation, keeping its lightness", () => {
+    const main = new Color(0xb87a66);
+    const m = hsl(main);
+    const roles = ["paint", "stone", "glass", "warm", "gilt"] as const;
+    for (const hex of [0x6b4d3b, 0xcdc3ae, 0xb9ccc8, 0xc9a14a, 0x4f3a2e]) {
+      for (const role of roles) {
+        const plain = hsl(washColor(new Color(hex), main, ref, new Color(), role));
+        const mono = hsl(washColor(new Color(hex), main, ref, new Color(), role, true));
+        const dh = Math.abs(mono.h - m.h);
+        expect(Math.min(dh, 1 - dh)).toBeLessThan(1e-3);
+        expect(Math.abs(mono.s - m.s)).toBeLessThan(1e-3);
+        expect(Math.abs(mono.l - plain.l)).toBeLessThan(1e-3);
+      }
+    }
+    // A grey main colour makes a grey palette; off, the stone, glass and gilt keep theirs.
+    const grey = new Color(0x808080);
+    for (const role of roles) {
+      for (const hex of [0x6b4d3b, 0xcdc3ae, 0xb9ccc8, 0xc9a14a]) {
+        const c = washColor(new Color(hex), grey, ref, new Color(), role, true);
+        expect(Math.max(Math.abs(c.r - c.g), Math.abs(c.g - c.b))).toBeLessThan(1e-6);
+      }
+    }
+    expect(hsl(washColor(new Color(0xb9ccc8), grey, ref, new Color(), "glass")).s).toBeGreaterThan(0.1);
+    // Not generated, so not flattened.
+    const flag = new Color(0x2050c0);
+    expect(washColor(flag, main, ref, new Color(), "own", true).getHex()).toBe(flag.getHex());
+  });
+
   it("holds stone near grey whatever the main colour", () => {
     const stone = hsl(washColor(new Color(0x9a8a76), new Color(0xd02020), ref, new Color(), "stone"));
     expect(stone.s).toBeLessThan(0.1);

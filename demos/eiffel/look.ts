@@ -86,6 +86,11 @@ export interface Look {
   readonly material: Readonly<Record<string, MaterialSpec>>;
   readonly ao: AoSpec;
   /**
+   * A second occlusion over the first, at its own radius and strength, read
+   * from the first's prepass (gtao.ts `shareGBuffer`). Omitted is none.
+   */
+  readonly ao2?: AoSpec;
+  /**
    * OPTIONAL, and the one field a look may arrive without. Everything
    * else here is stated by whatever tuned the look; the vignette is the
    * page's own, so a look that says nothing about it gets

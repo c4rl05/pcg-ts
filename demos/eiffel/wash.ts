@@ -62,7 +62,7 @@ export interface WashShading {
  * `userData.washRole` by the host. Unset is paint: it keeps its relation to
  * the reference.
  */
-export type WashRole = "paint" | "stone" | "glass" | "warm" | "own";
+export type WashRole = "paint" | "stone" | "glass" | "warm" | "gilt" | "own";
 
 export interface Wash {
   /** Teach and colour every painted material in the scene. Every frame, before the wash renders. */
@@ -70,8 +70,19 @@ export interface Wash {
   /** Turn the taught programs to the wash (true) or back to the lit look. */
   set(on: boolean): void;
   shade(spec: WashShading): void;
-  /** The colour the palette is generated from. */
-  paint(main: number): void;
+  /**
+   * The colour the palette is generated from, whether it is all at that
+   * colour's hue, and the floors' and the names' lightness (`washColor`'s
+   * `warm` and `gilt`).
+   */
+  paint(main: number, mono?: boolean, warm?: number, gilt?: number): void;
+  /**
+   * How far a material that keeps its own paint (role `own`: the flag) is
+   * washed: 0 its own colours, untouched by the light's tints; 1 the paper,
+   * tinted like the rest. Between, its paint goes that far toward `paper`
+   * and takes that much of the tints.
+   */
+  ownWash(amount: number, paper: number): void;
 }
 
 /**
@@ -114,9 +125,20 @@ const GLASS_OPACITY = 0.55;
  * stone is a near-grey of the main colour, never its red; glass a pale
  * cool grey-blue whatever the main is; `warm` a pale cream-yellow a little
  * (16 degrees) round from it, the lit interior's colour of the illustrated
- * cutaway;
+ * cutaway; `gilt` keeps the paint's relation in hue and saturation but
+ * is set near the paper in lightness, so the gilded lettering reads as a
+ * light band on the iron rather than another step of it;
  * `own` keeps the material's own paint and map (a flag's colours are its
  * own, not the tower's), shaded and tinted like the rest.
+ *
+ * A `gilt` past 1 is brighter than white: the colour at lightness 1, its
+ * linear light scaled by `gilt`, so the names' faces the sun reaches only
+ * in part still come out at or near the paper.
+ *
+ * MONO gives every generated colour the main colour's hue AND saturation,
+ * keeping only its own lightness: the palette becomes one colour in steps
+ * of value, so a grey main colour makes a grey palette. `own` is not
+ * generated, and stays its own.
  */
 export function washColor(
   base: Color,
@@ -124,19 +146,48 @@ export function washColor(
   reference: Color,
   out = new Color(),
   role: WashRole = "paint",
+  mono = false,
+  warm = WARM_LIGHTNESS,
+  gilt = GILT_LIGHTNESS,
 ): Color {
   // In sRGB, where the palette was chosen and where a step reads as one.
   const b = base.getHSL({ h: 0, s: 0, l: 0 }, SRGBColorSpace);
   const m = main.getHSL({ h: 0, s: 0, l: 0 }, SRGBColorSpace);
   const r = reference.getHSL({ h: 0, s: 0, l: 0 }, SRGBColorSpace);
+  if (role === "gilt" && gilt > 1) {
+    return washColor(base, main, reference, out, role, mono, warm, 1).multiplyScalar(gilt);
+  }
+  if (mono && role !== "own") {
+    const l =
+      role === "glass"
+        ? 0.78
+        : role === "warm"
+          ? warm
+          : role === "gilt"
+            ? gilt
+            : reanchor(b.l, r.l, m.l);
+    return out.setHSL(m.h, m.s, l, SRGBColorSpace);
+  }
   const turn = (d: number): number => (((m.h + d) % 1) + 1) % 1;
   if (role === "stone") return out.setHSL(turn(-0.02), 0.07, reanchor(b.l, r.l, m.l), SRGBColorSpace);
   if (role === "own") return out.copy(base);
   if (role === "glass") return out.setHSL(0.56, 0.2, 0.78, SRGBColorSpace);
-  if (role === "warm") return out.setHSL(turn(0.045), 0.5, 0.86, SRGBColorSpace);
-  const h = (((m.h + b.h - r.h) % 1) + 1) % 1;
-  return out.setHSL(h, reanchor(b.s, r.s, m.s), reanchor(b.l, r.l, m.l), SRGBColorSpace);
+  if (role === "warm") return out.setHSL(turn(0.045), 0.5, warm, SRGBColorSpace);
+  const h = turn(b.h - r.h);
+  const l = role === "gilt" ? gilt : reanchor(b.l, r.l, m.l);
+  return out.setHSL(h, reanchor(b.s, r.s, m.s), l, SRGBColorSpace);
 }
+
+/**
+ * The `warm` role's lightness (sRGB HSL): the floors' fit-out. A step
+ * under the paper rather than at it, so a floor reads as a lit interior
+ * and not as a gap in the drawing. The default of `washColor`'s `warm`,
+ * which the drawing's Platform shade sets.
+ */
+export const WARM_LIGHTNESS = 0xc6 / 0xff; // #c6c6c6 under a grey main colour
+
+/** The `gilt` role's lightness (sRGB HSL; past 1, brighter than white): the gilded names. The default of `washColor`'s `gilt`, which the drawing's Names shade sets. */
+export const GILT_LIGHTNESS = 0.92;
 
 /** `v`'s place against `from`, carried to the same place against `to`, in [0, 1]. */
 function reanchor(v: number, from: number, to: number): number {
@@ -155,6 +206,8 @@ const uniforms = {
   washShadeTint: { value: new Color() },
   washLitLift: { value: 0 },
   washShadeLift: { value: 0 },
+  washOwnWash: { value: 0 },
+  washPaper: { value: new Color() },
 };
 
 const PARS = /* glsl */ `
@@ -170,6 +223,8 @@ uniform vec3 washLitTint;
 uniform vec3 washShadeTint;
 uniform float washLitLift;
 uniform float washShadeLift;
+uniform float washOwnWash;
+uniform vec3 washPaper;
 
 // How lit this fragment is by the sun, 0 to 1, after its bands and its
 // shadow: written by the direct light, read once the light is summed.
@@ -217,7 +272,7 @@ export function washFragmentShader(src: string): string {
   out = replaceOnce(
     out,
     "#include <color_fragment>",
-    "#include <color_fragment>\n\tif (washOn > 0.5) { if (washOwn < 0.5) diffuseColor.rgb = washAlbedo; if (washOpacity >= 0.0) diffuseColor.a = washOpacity; }",
+    "#include <color_fragment>\n\tif (washOn > 0.5) { if (washOwn < 0.5) diffuseColor.rgb = washAlbedo; else diffuseColor.rgb = mix(diffuseColor.rgb, washPaper, washOwnWash); if (washOpacity >= 0.0) diffuseColor.a = washOpacity; }",
     "fragment shader",
   );
   out = replaceOnce(
@@ -237,7 +292,9 @@ export function washFragmentShader(src: string): string {
     "#include <opaque_fragment>",
     `if (washOn > 0.5) {
 		float washK = clamp(washLit, 0.0, 1.0);
-		outgoingLight = mix(outgoingLight, mix(washShadeTint, washLitTint, washK), mix(washShadeLift, washLitLift, washK));
+		// A material that keeps its own paint takes the tints as far as its own wash.
+		float washTinted = mix(washShadeLift, washLitLift, washK) * (washOwn > 0.5 ? washOwnWash : 1.0);
+		outgoingLight = mix(outgoingLight, mix(washShadeTint, washLitTint, washK), washTinted);
 	}
 	#include <opaque_fragment>`,
     "fragment shader",
@@ -268,16 +325,31 @@ export function createWash(): Wash {
   const main = new Color(WASH_REFERENCE);
   const reference = new Color(WASH_REFERENCE);
   /** Each material's paint the last time its wash colour was worked out, and the main colour then. */
-  const seen = new Map<Material, { base: number; main: number; role: WashRole }>();
+  let mono = false;
+  let warm = WARM_LIGHTNESS;
+  let gilt = GILT_LIGHTNESS;
+  const seen = new Map<
+    Material,
+    { base: number; main: number; role: WashRole; mono: boolean; warm: number; gilt: number }
+  >();
 
   function colour(m: MeshStandardMaterial, state: Taught): void {
     const base = m.color.getHex();
     const role = (m.userData.washRole as WashRole | undefined) ?? "paint";
     const was = seen.get(m);
-    if (was !== undefined && was.base === base && was.main === main.getHex() && was.role === role) return;
-    seen.set(m, { base, main: main.getHex(), role });
+    if (
+      was !== undefined &&
+      was.base === base &&
+      was.main === main.getHex() &&
+      was.role === role &&
+      was.mono === mono &&
+      was.warm === warm &&
+      was.gilt === gilt
+    )
+      return;
+    seen.set(m, { base, main: main.getHex(), role, mono, warm, gilt });
     // A Color holds linear, which is what the shader wants.
-    washColor(m.color, main, reference, state.albedo.value, role);
+    washColor(m.color, main, reference, state.albedo.value, role, mono, warm, gilt);
     // A pane at the lit look's fifth is a pane the wash cannot show; the
     // drawing tints its glass plainly.
     state.opacity.value = role === "glass" ? GLASS_OPACITY : -1;
@@ -313,8 +385,16 @@ export function createWash(): Wash {
       uniforms.washLitLift.value = spec.litLift;
       uniforms.washShadeLift.value = spec.shadeLift;
     },
-    paint(hex) {
+    ownWash(amount, paper) {
+      uniforms.washOwnWash.value = amount;
+      // A Color set from a hex holds linear, which is what the shader wants.
+      uniforms.washPaper.value.setHex(paper);
+    },
+    paint(hex, all = false, floors = WARM_LIGHTNESS, names = GILT_LIGHTNESS) {
       main.setHex(hex);
+      mono = all;
+      warm = floors;
+      gilt = names;
     },
   };
 }

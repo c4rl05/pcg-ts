@@ -41,6 +41,7 @@ import {
   Plane,
   PlaneGeometry,
   type Scene,
+  ShadowMaterial,
   type Texture,
   Vector3,
   type WebGLRenderer,
@@ -52,7 +53,7 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import type { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
 import { type BuiltEnv, type EnvSpec, buildEnv, sunDirection } from "./env.js";
 import { passFlat } from "./flat.js";
-import { applyAo, createGtao } from "./gtao.js";
+import { applyAo, createGtao, shareGBuffer } from "./gtao.js";
 import { type Ink, createInk } from "./ink.js";
 import type { LightSpec, Look, MaterialSpec } from "./look.js";
 import { VIGNETTE_DEFAULT, applyVignette, createVignette, sizeVignette } from "./vignette.js";
@@ -81,6 +82,12 @@ export interface Rig {
    * of their own (drawing.ts), which the host applies.
    */
   setInk(on: boolean, colour?: boolean): void;
+  /**
+   * The tower's shadow on the ground under a coloured drawing, laid on the
+   * paper in `colour`; null for none. Only a coloured drawing has it: the
+   * shadow is caught in the colour pass, which the plain pen does not run.
+   */
+  setGroundShadow(colour: number | null): void;
   /** The drawing, for its dials. */
   readonly ink: Ink;
   /** The colour under a coloured drawing's lines, for its dials. */
@@ -133,6 +140,25 @@ export function createRig(
   ground.castShadow = false;
   scene.add(ground);
 
+  /**
+   * The drawing's ground: nothing but the shadow on it. Shown only in the
+   * colour pass, over a black clear, so a pixel off the tower holds the
+   * shadow's strength there (white times the shadow's alpha) and the pen
+   * reads it as that (ink.ts `groundShadow`). Just above y = 0, which the
+   * drawing cuts at.
+   */
+  const shadowCatcher = new Mesh(
+    new PlaneGeometry(5000, 5000).rotateX(-Math.PI / 2),
+    new ShadowMaterial({ color: 0xffffff, opacity: 1, depthWrite: false }),
+  );
+  shadowCatcher.position.y = 0.02;
+  shadowCatcher.receiveShadow = true;
+  shadowCatcher.castShadow = false;
+  shadowCatcher.visible = false;
+  scene.add(shadowCatcher);
+  let groundShadow = false;
+  const clearWas = new Color();
+
   // The base each look's overrides are applied to, captured once so that
   // switching from a look that pushed metalness to one that does not
   // returns the paint to where the host had it, rather than leaving the
@@ -151,6 +177,11 @@ export function createRig(
   composer.addPass(new RenderPass(scene, camera));
   const gtao = createGtao(scene, camera, size.width, size.height, renderer);
   composer.addPass(gtao);
+  // A second occlusion over the first (Look `ao2`), reading its prepass.
+  const gtao2 = createGtao(scene, camera, size.width, size.height, renderer);
+  shareGBuffer(gtao2, gtao);
+  gtao2.enabled = false;
+  composer.addPass(gtao2);
   // Upstream of the output pass on purpose: the vignette is light the lens
   // did not deliver, so it is multiplied into a linear image and tone
   // mapped along with everything else. `vignette.ts` says why at length.
@@ -160,14 +191,15 @@ export function createRig(
   // three only applies `renderer.toneMapping` when it is drawing straight
   // to the canvas, so everything upstream of this pass is linear, which
   // is what the occlusion wants to be multiplying.
-  // A flat-painted pixel (flat.ts: the page's highlights) passes through it
-  // untouched instead; every other pixel takes the stock path.
+  // A flat-painted pixel (flat.ts) passes through it untouched instead,
+  // a kept one (the page's highlights) loses its mark; every other pixel
+  // takes the stock path.
   const output = new OutputPass();
   passFlat(output);
   composer.addPass(output);
 
   // The drawing leaves the ground off: an elevation stands on the paper.
-  const ink = createInk(renderer, scene, camera, size.width, size.height, () => [ground]);
+  const ink = createInk(renderer, scene, camera, size.width, size.height, () => [ground, shadowCatcher]);
   let inking = false;
   // A COLOURED DRAWING is the composer's own render and occlusion in the
   // wash's palette, handed to the pen instead of going through the
@@ -205,9 +237,19 @@ export function createRig(
     vignette.enabled = false;
     output.enabled = false;
     inkPass.enabled = true;
+    // Off the tower the colour pass holds only the ground's shadow, over black.
+    const background = scene.background;
+    const clearAlpha = renderer.getClearAlpha();
+    renderer.getClearColor(clearWas);
+    scene.background = null;
+    renderer.setClearColor(0x000000, 1);
+    shadowCatcher.visible = groundShadow;
     try {
       composer.render();
     } finally {
+      shadowCatcher.visible = false;
+      scene.background = background;
+      renderer.setClearColor(clearWas, clearAlpha);
       inkPass.enabled = false;
       output.enabled = true;
       vignette.enabled = vignetteOn;
@@ -285,6 +327,15 @@ export function createRig(
     }
 
     applyAo(gtao, look.ao);
+    const ao2 = look.ao2;
+    if (ao2?.on === true) {
+      applyAo(gtao2, ao2);
+      // The second reads the first's prepass, so the first runs, unseen, if only the second is wanted.
+      if (!look.ao.on) {
+        gtao.enabled = true;
+        gtao.blendIntensity = 0;
+      }
+    } else gtao2.enabled = false;
     applyVignette(vignette, look.vignette ?? VIGNETTE_DEFAULT);
     current = look;
     if (nearBox !== null) fitNear(nearBox);
@@ -424,6 +475,7 @@ export function createRig(
   function setSize(width: number, height: number): void {
     composer.setSize(width, height);
     gtao.setSize(width, height);
+    gtao2.setSize(width, height);
     sizeVignette(vignette, width, height);
     ink.setSize(width, height);
   }
@@ -440,6 +492,10 @@ export function createRig(
       inking = on;
       colouring = colour;
     },
+    setGroundShadow(colour) {
+      groundShadow = colour !== null;
+      ink.groundShadow(colour);
+    },
     ink,
     wash,
     showUnderground(on: boolean) {
@@ -450,7 +506,7 @@ export function createRig(
       env?.dispose();
       composer.dispose();
       ink.dispose();
-      scene.remove(key, key.target, fill, fill.target, rim, rim.target, bounce, bounce.target, ambient);
+      scene.remove(key, key.target, fill, fill.target, rim, rim.target, bounce, bounce.target, ambient, shadowCatcher);
     },
   };
 }

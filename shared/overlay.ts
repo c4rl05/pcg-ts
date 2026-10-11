@@ -266,6 +266,12 @@ export function createOverlay(opts: {
   foldStats?: boolean;
 }): Overlay {
   injectStyles();
+  /* The right button orbits or pans the camera, so the browser's menu only
+     ever lands on top of a drag. A text field keeps it, for copy and paste. */
+  document.addEventListener("contextmenu", (ev) => {
+    const target = ev.target as HTMLElement | null;
+    if (target?.closest("input, textarea, [contenteditable]") == null) ev.preventDefault();
+  });
   const el = document.createElement("div");
   el.className = "pcg-overlay";
   const h1 = document.createElement("h1");

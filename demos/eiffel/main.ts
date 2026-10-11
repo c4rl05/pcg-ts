@@ -81,7 +81,8 @@ import {
   ACESFilmicToneMapping,
   Box3,
   BoxGeometry,
-  type BufferGeometry,
+  BufferGeometry,
+  CustomBlending,
   CylinderGeometry,
   LatheGeometry,
   DoubleSide,
@@ -90,17 +91,24 @@ import {
   type InstancedMesh,
   type Material,
   Mesh,
-  type MeshBasicMaterial,
+  MeshBasicMaterial,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
   type Object3D,
+  OneFactor,
+  OneMinusSrcAlphaFactor,
   PCFShadowMap,
   PerspectiveCamera,
   Scene,
   SphereGeometry,
+  SrcAlphaFactor,
   Vector2,
   Vector3,
   WebGLRenderer,
+  ZeroFactor,
+  Float32BufferAttribute,
+  NoBlending,
+  NormalBlending,
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -111,7 +119,7 @@ import { attachWordmark } from "../../shared/wordmark.js";
 import { bandsFrom } from "./bands.js";
 import { type Bands, startBands } from "./bandsView.js";
 import { isoOf } from "./chronology.js";
-import { flatMaterial, flatShaderProblem, teachFlat, unlitMaterial } from "./flat.js";
+import { flatShaderProblem, teachKeep } from "./flat.js";
 import { FLOOR as EYE_FLOOR, attachKeyMove } from "./keyMove.js";
 import { type Depth, DEPTHS, cookedDetail, depthParams, pageDepth, streamed } from "./depth.js";
 import { buildEiffel } from "./graph.js";
@@ -129,13 +137,16 @@ import {
   placeChain,
 } from "./lifts.js";
 import { LOOK } from "./look.js";
-import { PART_CLASSES, type PartClass } from "./parts.js";
+import { PART_CLASSES, type PartClass, TOWER_MESH } from "./parts.js";
 import { type PlateOverlay, loadPlateTool } from "./plateTool.js";
 import { BALUSTER, CABOCHON_RISE, FITTING_ASSETS } from "./platforms.js";
 import { FITTING_SEGMENTS } from "./fittingSegments.js";
 import { INK_DEFAULT, type InkSpec } from "./ink.js";
 import {
   DRAWING_DEFAULT,
+  SHADOW_ON_DARK,
+  SHADOW_ON_LIGHT,
+  lightPaper,
   type DrawingSpec,
   drawingComposite,
   drawingHaze,
@@ -155,12 +166,10 @@ import {
   type RivetBatch,
   type RivetFallback,
   isFallback,
-  isPackedRivets,
   packRivets,
   packedRivetMaterial,
   packedRivetMesh,
   packedShaderProblem,
-  packedUnlitProblem,
 } from "./rivetPack.js";
 import { BufferAttribute, Color, DataTexture, NearestFilter, SRGBColorSpace } from "three";
 import { FLAG_BANDS, FLAG_GRID, FLAG_POINTS, flagNormals, flagPose, flagWave } from "./flag.js";
@@ -245,6 +254,14 @@ Object.assign(MATERIALS.glass, {
   opacity: GLASS.opacity,
   depthWrite: false,
   side: FrontSide,
+  // Its colour blended as usual, the alpha under it kept: everything
+  // behind is opaque at 1 but a highlight, whose keep mark (flat.ts,
+  // alpha -2) a pane at the drawing's 0.55 would otherwise wash out.
+  blending: CustomBlending,
+  blendSrc: SrcAlphaFactor,
+  blendDst: OneMinusSrcAlphaFactor,
+  blendSrcAlpha: ZeroFactor,
+  blendDstAlpha: OneFactor,
 });
 
 /**
@@ -252,13 +269,15 @@ Object.assign(MATERIALS.glass, {
  * to the iron would carry the wrong thing (wash.ts `WashRole`): the stone
  * is a near-grey, never the iron's red; the glass a pale cool grey-blue;
  * and the floors' fit-out the warm cream of a lit interior, which is what
- * sets the floors apart from the lattice in an illustrated cutaway.
+ * sets the floors apart from the lattice in an illustrated cutaway; the
+ * gilded names a pale band on the iron.
  */
 const WASH_ROLES: Partial<Record<PartClass, WashRole>> = {
   masonry: "stone",
   foundations: "stone",
   glass: "glass",
   platforms: "warm",
+  names: "gilt",
 };
 for (const [cls, role] of Object.entries(WASH_ROLES)) MATERIALS[cls as PartClass].userData.washRole = role;
 
@@ -318,13 +337,13 @@ const PACKED_SHOP = packedRivetMaterial(RIVET_SHOP);
 const PACKED_SITE = packedRivetMaterial(RIVET_SITE);
 
 /**
- * THE HIGHLIGHTS: the stairs, the lifts and the rivets, each in one flat
- * primary — unlit, unfogged, and carried past the occlusion, the vignette
- * and the tone map untouched (flat.ts) — so where each runs reads at a
- * glance against the iron's browns, from any distance. Each has its own
+ * THE HIGHLIGHTS: the stairs, the lifts and the rivets, each seen through
+ * the rest of the tower, X-ray fashion, in its own paint: a highlight
+ * changes nothing about how its parts are drawn, only how everything else
+ * is (the ghost, below), and that they are drawn over it. Each has its own
  * checkbox, and `?hl=stairs,lifts,rivets` opens with them on, the way
- * "copy view" writes it; off puts back the material each mesh had. A
- * highlight changes no mesh's shadow, so the shadow map is not redrawn.
+ * "copy view" writes it. A highlight changes no mesh's shadow, so the
+ * shadow map is not redrawn.
  *
  * - stairs: the "stairs" class, all of it (parts.ts says what it holds:
  *   the climb, not the 1st floor's entrance flights).
@@ -336,62 +355,144 @@ const PACKED_SITE = packedRivetMaterial(RIVET_SITE);
  *   nor the tracks and guide posts, which are girders.
  * - rivets: every rivet output, packed or drawn as matrices, and at
  *   streamed rivets every rivet cell as it streams in.
+ *
+ * The ghost is set on materials, which meshes share, so a highlight's
+ * parts wear materials nothing else does: the stairs' class material, the
+ * rivets' own, and the cars' (`CAR_SHELL`, `CAR_GLASS`), the platforms'
+ * and the glass' paint kept apart for this.
  */
 const HIGHLIGHTS = ["stairs", "lifts", "rivets"] as const;
 type Highlight = (typeof HIGHLIGHTS)[number];
-const HIGHLIGHT_PAINT: Record<Highlight, number> = { stairs: 0xff0000, lifts: 0x00ff00, rivets: 0x0000ff };
-/** Each highlight's paint, plain and for packed heads (whose edit clones, so it goes first). */
-const FLAT = Object.fromEntries(
-  HIGHLIGHTS.map((h) => [
-    h,
-    {
-      plain: flatMaterial(HIGHLIGHT_PAINT[h]),
-      packed: teachFlat(packedRivetMaterial(unlitMaterial(HIGHLIGHT_PAINT[h]))),
-    },
-  ]),
-) as Record<Highlight, { plain: MeshBasicMaterial; packed: MeshBasicMaterial }>;
-/** Whether this three's shaders take the flat paint and its packed kind, asked once (flat.ts, rivetPack.ts); if not, no highlight. */
-const FLAT_PROBLEM = flatShaderProblem() ?? packedUnlitProblem();
+/**
+ * The cars' paint: the platforms' and the glass', as materials of their
+ * own so the cars can be highlighted while the floors are ghosted. Each
+ * frame they take the look's paint from the class they copy (`syncCars`).
+ */
+const CAR_SHELL = new MeshStandardMaterial({ ...PALETTE.platforms, side: DoubleSide });
+CAR_SHELL.userData.washRole = MATERIALS.platforms.userData.washRole;
+const CAR_GLASS = MATERIALS.glass.clone();
+function syncCars(): void {
+  for (const [car, from] of [
+    [CAR_SHELL, MATERIALS.platforms],
+    [CAR_GLASS, MATERIALS.glass],
+  ] as const) {
+    car.color.copy(from.color);
+    car.roughness = from.roughness;
+    car.metalness = from.metalness;
+    car.envMapIntensity = from.envMapIntensity;
+  }
+}
+/** Each highlight's keep-mark switch (flat.ts `teachKeep`). */
+const KEEP_ON = Object.fromEntries(HIGHLIGHTS.map((h) => [h, { value: 0 }])) as Record<Highlight, { value: number }>;
+/**
+ * The materials of each highlight's parts that take its mark and its
+ * sorting (`ghostTower`): not the panes, which are see-through already,
+ * and blend — a mark in their alpha would blend too.
+ */
+const HIGHLIGHT_MATERIALS: Record<Highlight, readonly Material[]> = {
+  stairs: [MATERIALS.stairs],
+  lifts: [CAR_SHELL],
+  rivets: [RIVET_SHOP, RIVET_SITE, PACKED_SHOP, PACKED_SITE],
+};
+for (const h of HIGHLIGHTS) for (const m of HIGHLIGHT_MATERIALS[h]) teachKeep(m, KEEP_ON[h]);
+/** A highlighted mesh's renderOrder: after the ghost and the depth clear, only while its highlight is on. */
+const HIGHLIGHT_LAST = 2;
+/** Whether this three's shaders take the keep mark (flat.ts); if not, no highlight. */
+const KEEP_PROBLEM = flatShaderProblem();
 /** Which highlights are on: read from `?hl` once, then the checkboxes'. */
 const lit: Record<Highlight, boolean> = (() => {
   const asked = new Set((new URLSearchParams(location.search).get("hl") ?? "").split(","));
-  return Object.fromEntries(HIGHLIGHTS.map((h) => [h, FLAT_PROBLEM === undefined && asked.has(h)])) as Record<
+  return Object.fromEntries(HIGHLIGHTS.map((h) => [h, KEEP_PROBLEM === undefined && asked.has(h)])) as Record<
     Highlight,
     boolean
   >;
 })();
-/**
- * The userData keys a highlightable mesh carries: the paint of the
- * highlight it answers to (the `FLAT` entry itself, so a toggle finds its
- * meshes by identity), and the material it was drawn in.
- */
-const HL = { paint: "highlightPaint", own: "ownMaterial" } as const;
+/** The userData key a highlightable mesh carries: the highlight it answers to. */
+const HL = "highlight";
 
-/** The flat paint `mesh` takes under `paint`: the packed kind for a packed head. */
-function flatFor(mesh: Mesh, paint: (typeof FLAT)[Highlight]): Material {
-  return isPackedRivets(mesh) ? paint.packed : paint.plain;
-}
-
-/**
- * Make `mesh` answer to highlight `h`, keeping the material it was drawn
- * in, and paint it now if `h` is on. Called once per mesh, when it is
- * drawn or streams in.
- */
+/** Make `mesh` answer to highlight `h`. Called once per mesh, when it is drawn or streams in. */
 function highlightable(mesh: Mesh, h: Highlight): void {
-  mesh.userData[HL.paint] = FLAT[h];
-  mesh.userData[HL.own] = mesh.material;
-  if (lit[h]) mesh.material = flatFor(mesh, FLAT[h]);
+  mesh.userData[HL] = h;
+  mesh.renderOrder = lit[h] ? HIGHLIGHT_LAST : 0;
 }
 
 /** Turn highlight `h` on or off, on every mesh in `root` that answers to it. */
 function setHighlight(root: Object3D, h: Highlight, on: boolean): void {
   lit[h] = on;
-  const paint = FLAT[h];
   root.traverse((o) => {
-    if (o.userData[HL.paint] !== paint) return;
-    const mesh = o as Mesh;
-    mesh.material = on ? flatFor(mesh, paint) : (mesh.userData[HL.own] as Material);
+    if (o.userData[HL] === h) o.renderOrder = on ? HIGHLIGHT_LAST : 0;
   });
+}
+
+/**
+ * THE GHOST: while any highlight is on, the rest of the tower is drawn at
+ * `ghostOpacity` and the highlights over it, in their own paint. The
+ * tower stays opaque: the colour's render clears the depth after it
+ * (`DEPTH_CLEAR`) so the highlights draw over it, and the line prepass
+ * draws them as a layer of its own over the tower's (ink.ts `over`), so
+ * the tower keeps its depth, lines and haze under them. Their materials
+ * sort after it as the see-through do but unblended (`NoBlending`), which
+ * the prepasses count as opaque, and wear the keep mark (flat.ts), so the
+ * pen lays the finished drawing on the paper at this opacity, all but
+ * them (ink.ts `ghost`): opacity, so 1 is the drawing as it is. The plain
+ * pen has no colour to carry the mark: its highlights draw over the
+ * tower's lines, which do not fade.
+ */
+let ghostOpacity = 0.3;
+
+/**
+ * THE DEPTH CLEAR: an object that draws nothing, ordered after the tower
+ * and before the highlights (`HIGHLIGHT_LAST`), which clears the depth as
+ * it comes up, so what draws after it is drawn over the tower. Sorted
+ * with the see-through (`transparent`) so it comes after the glass and the
+ * ground's shadow catcher too, which would otherwise draw over the tower
+ * after it; unblended (`NoBlending`), which the drawing's line prepass
+ * counts as opaque (ink.ts). The shadow map never calls it. Shown while a
+ * highlight is on.
+ */
+const DEPTH_CLEAR = (() => {
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new Float32BufferAttribute([0, 0, 0, 0, 0, 0, 0, 0, 0], 3));
+  geometry.setDrawRange(0, 0);
+  const clear = new Mesh(geometry, new MeshBasicMaterial({ transparent: true, blending: NoBlending }));
+  clear.name = "highlightDepthClear";
+  clear.frustumCulled = false;
+  clear.renderOrder = HIGHLIGHT_LAST - 1;
+  clear.visible = false;
+  clear.onBeforeRender = (r) => r.clearDepth();
+  // Not in the occlusion's prepass: there it would take the tower's depth
+  // with it, and the tower its occlusion (gtao.ts). The drawing's prepass
+  // draws the highlights as a layer of their own instead (`overHighlights`).
+  clear.userData.prepassSkip = true;
+  return clear;
+})();
+
+/** What the drawing's prepass draws over the tower: the meshes of the highlights that are on. */
+function overHighlights(mesh: Mesh): boolean {
+  const h = mesh.userData[HL] as Highlight | undefined;
+  return h !== undefined && lit[h];
+}
+
+/** Every frame: the ghost, if any highlight is on, and the highlights' materials set for it. */
+function ghostTower(): void {
+  const any = HIGHLIGHTS.some((h) => lit[h]);
+  syncCars();
+  for (const h of HIGHLIGHTS) {
+    const on = lit[h];
+    KEEP_ON[h].value = on ? 1 : 0;
+    // Sorted late only while marked: every one of them is opaque otherwise.
+    for (const m of HIGHLIGHT_MATERIALS[h]) {
+      if (m.transparent === on) continue;
+      m.transparent = on;
+      m.blending = on ? NoBlending : NormalBlending;
+      // Opaque at full opacity: a two-sided one needs no back-faces-first pass.
+      m.forceSinglePass = on;
+      m.needsUpdate = true;
+    }
+  }
+  rig.ink.ghost(any && drawing.colour ? ghostOpacity : 1);
+  rig.ink.over(any ? overHighlights : null);
+  DEPTH_CLEAR.visible = any;
 }
 
 /** Show the site rivets in their own tone, or lit up against the shop's. */
@@ -565,12 +666,14 @@ function drawRivets(name: string, collection: DataCollection, problems: string[]
           rivetPath.fallbacks.push({ output: name, ...packed });
           console.info(`rivets: ${name} drawn on the CPU path`, { output: name, ...packed });
         }
-        const drawn = toInstancedMeshes([batch], ASSETS);
+        // The shared rivet material, not the per-mesh clone the library
+        // makes (a WebGPU renderer's need; this page draws WebGL): the
+        // highlight is set on it (`HIGHLIGHT_MATERIALS`).
+        const drawn = toInstancedMeshes([batch], ASSETS, { materialFor: () => (site ? RIVET_SITE : RIVET_SHOP) });
         for (const mesh of drawn) {
           mesh.castShadow = false;
           mesh.receiveShadow = true;
           mesh.name = name;
-          if (site) mesh.material = RIVET_SITE;
           highlightable(mesh, "rivets");
           out.push(mesh);
           instances += mesh.count;
@@ -647,6 +750,34 @@ function isMachine(name: string): boolean {
  */
 const NOMINAL = new Box3(new Vector3(-90, 0, -90), new Vector3(90, 320, 90));
 
+/** What the cook built (the box the shadow is fitted to), NOMINAL until it has: the drawing's depth fade spans it. */
+const towerBox = NOMINAL.clone();
+const boxCorner = new Vector3();
+/**
+ * The depths along the view axis the tower's box spans from the camera,
+ * for the drawing's depth fade: its nearest corner (or the camera, inside
+ * it) to its farthest. So the fade is the tower's own front to back from
+ * any distance, and the nearest of it is never faded.
+ */
+function towerDepths(): [near: number, far: number] {
+  camera.updateMatrixWorld();
+  let near = Infinity;
+  let far = 0;
+  for (let i = 0; i < 8; i++) {
+    boxCorner
+      .set(
+        i & 1 ? towerBox.max.x : towerBox.min.x,
+        i & 2 ? towerBox.max.y : towerBox.min.y,
+        i & 4 ? towerBox.max.z : towerBox.min.z,
+      )
+      .applyMatrix4(camera.matrixWorldInverse);
+    const depth = -boxCorner.z;
+    near = Math.min(near, depth);
+    far = Math.max(far, depth);
+  }
+  return [Math.max(0, near), far];
+}
+
 // ------------------------------------------------------------------ //
 // The scene.
 // ------------------------------------------------------------------ //
@@ -671,18 +802,19 @@ renderer.shadowMap.needsUpdate = true;
 document.body.appendChild(renderer.domElement);
 
 const scene = new Scene();
+scene.add(DEPTH_CLEAR);
 // Until the rig is applied, a few lines down. Everything about the sky,
 // the fog and the ground is the look's from then on.
 scene.background = NEUTRAL;
 
-// 3/4 view from about 600 m out, a little above the first floor: the
-// whole 312 m fits with room over the lantern, and the base square is
-// seen on its diagonal so all four legs are in view.
+// 3/4 view from about 600 m out, looking at the tower's axis 137 m up,
+// so the whole 312 m sits centred in the frame both ways, and the base
+// square is seen on its diagonal so all four legs are in view.
 const camera = new PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.05, 2000);
-camera.position.set(360, 140, 470);
+camera.position.set(360, 167.3, 470);
 
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 110, 0);
+controls.target.set(0, 137.3, 0);
 /**
  * `?still` parks every lift car where the graph built it.
  *
@@ -738,6 +870,53 @@ controls.maxDistance = 1500;
 controls.maxPolarAngle = groundPolar();
 controls.autoRotateSpeed = 0.35;
 controls.update();
+
+/**
+ * THE ORBIT'S FLOOR is the ground, not the target's level: the eye may
+ * stand anywhere about its target but under the ground plane, from below
+ * which the ground is a lid. So it looks up as freely as down wherever the
+ * ground does not stop it: from the foot of the tower up its legs, from
+ * the summit down onto the Champ-de-Mars, either way between them. The
+ * polar angle that puts the eye at `EYE_FLOOR` (keyMove.ts' floor too)
+ * for its distance from the target, the steepest it may look up; never
+ * quite straight up, where the orbit loses its azimuth.
+ */
+function groundPolar(): number {
+  const reach = Math.max(camera.position.distanceTo(controls.target), 1e-6);
+  const cos = (EYE_FLOOR - controls.target.y) / reach;
+  return Math.min(Math.PI - 0.01, Math.acos(Math.min(1, Math.max(-1, cos))));
+}
+
+/**
+ * The orbit's update held off the ground (see `groundPolar`). The clamp
+ * is set before it for the turn; a zoom out changes the distance inside
+ * the update, after the clamp, so an eye looking up and backing away would
+ * sink under the ground for a frame: it is lifted back onto the floor
+ * along the same sphere, keeping its bearing.
+ */
+const lift = new Vector3();
+function orbit(): void {
+  // The section view sets its own floor, under the ground it opens.
+  if (!sectioned) controls.maxPolarAngle = groundPolar();
+  controls.update();
+  if (sectioned || camera.position.y >= EYE_FLOOR) return;
+  lift.subVectors(camera.position, controls.target);
+  const reach = lift.length();
+  const dy = EYE_FLOOR - controls.target.y;
+  if (dy >= reach) {
+    // The target is further under the ground than the eye is from it (a
+    // look down from low, then a zoom in): no turn reaches the floor, so
+    // the two rise together, as the keys move them.
+    const up = EYE_FLOOR - camera.position.y;
+    camera.position.y += up;
+    controls.target.y += up;
+    return;
+  }
+  const across = Math.hypot(lift.x, lift.z);
+  const k = across > 1e-9 ? Math.sqrt(reach * reach - dy * dy) / across : 0;
+  camera.position.set(controls.target.x + lift.x * k, controls.target.y + dy, controls.target.z + lift.z * k);
+  camera.lookAt(controls.target);
+}
 
 /**
  * The look, made into a scene.
@@ -869,69 +1048,41 @@ const rotateGroup = viewGroup(viewBox);
 const walkGroup = viewGroup(viewBox);
 const buildGroup = viewGroup(viewBox);
 const sectionGroup = viewGroup(viewBox);
-// THE LOOK BOX, on the dev server only: settings for the look that is not
-// settled yet, which the published page will not offer (`import.meta.hot`
-// is the dev server's hallmark, plateTool.ts says why not `env.DEV`). A
-// `?ink` link still opens the drawing anywhere.
-const lookBox = import.meta.hot !== undefined ? framedBox("look", "Look") : undefined;
-/**
- * THE ORBIT'S FLOOR is the ground, not the target's level: the eye may
- * stand anywhere about its target but under the ground plane, from below
- * which the ground is a lid. So it looks up as freely as down wherever the
- * ground does not stop it: from the foot of the tower up its legs, from
- * the summit down onto the Champ-de-Mars, either way between them. The
- * polar angle that puts the eye at `EYE_FLOOR` (keyMove.ts' floor too)
- * for its distance from the target, the steepest it may look up; never
- * quite straight up, where the orbit loses its azimuth.
- */
-function groundPolar(): number {
-  const reach = Math.max(camera.position.distanceTo(controls.target), 1e-6);
-  const cos = (EYE_FLOOR - controls.target.y) / reach;
-  return Math.min(Math.PI - 0.01, Math.acos(Math.min(1, Math.max(-1, cos))));
-}
 
-/**
- * The orbit's update held off the ground (see `groundPolar`). The clamp
- * is set before it for the turn; a zoom out changes the distance inside
- * the update, after the clamp, so an eye looking up and backing away would
- * sink under the ground for a frame: it is lifted back onto the floor
- * along the same sphere, keeping its bearing.
- */
-const lift = new Vector3();
-function orbit(): void {
-  // The section view sets its own floor, under the ground it opens.
-  if (!sectioned) controls.maxPolarAngle = groundPolar();
-  controls.update();
-  if (sectioned || camera.position.y >= EYE_FLOOR) return;
-  lift.subVectors(camera.position, controls.target);
-  const reach = lift.length();
-  const dy = EYE_FLOOR - controls.target.y;
-  if (dy >= reach) {
-    // The target is further under the ground than the eye is from it (a
-    // look down from low, then a zoom in): no turn reaches the floor, so
-    // the two rise together, as the keys move them.
-    const up = EYE_FLOOR - camera.position.y;
-    camera.position.y += up;
-    controls.target.y += up;
-    return;
+// THE MODE: Look (the orbit, the default), Walk and Build, three ways of
+// looking at the tower that do not combine, as one row of buttons over the
+// View box. The one lit is the mode the page is in (`paintMode`).
+type ViewMode = "look" | "walk" | "build";
+const modeButtons = new Map<ViewMode, HTMLButtonElement>();
+{
+  const bar = document.createElement("div");
+  bar.setAttribute("role", "group");
+  bar.setAttribute("aria-label", "Mode");
+  bar.style.cssText = "display:flex;gap:4px;margin:4px 0 6px";
+  for (const [mode, label] of [
+    ["look", "Look"],
+    ["walk", "Walk"],
+    ["build", "Build"],
+  ] as const) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.style.cssText =
+      "flex:1;cursor:pointer;border:1px solid currentColor;border-radius:4px;padding:0.15em 0.7em;font:inherit";
+    button.addEventListener("click", () => setMode(mode));
+    modeButtons.set(mode, button);
+    bar.append(button);
   }
-  const across = Math.hypot(lift.x, lift.z);
-  const k = across > 1e-9 ? Math.sqrt(reach * reach - dy * dy) / across : 0;
-  camera.position.set(controls.target.x + lift.x * k, controls.target.y + dy, controls.target.z + lift.z * k);
-  camera.lookAt(controls.target);
+  (viewBox.firstElementChild as HTMLElement).after(bar);
 }
+// THE LOOK BOX, only with `?drawing`: the drawing's settings, which are
+// not settled yet and which the page does not offer unasked.
+const lookBox = new URLSearchParams(location.search).has("drawing") ? framedBox("look", "Look") : undefined;
 
-
-// ROTATE, WALK AND BUILD are three ways of looking at the tower, and they
-// do not combine: turning rotate or walk on turns the other off, and under
-// build — a reload away — both are off and offered only once it is.
+// ROTATE is part of the Look mode, and offered only in it (`paintMode`).
 const rotateBox = overlay.addCheckbox("Rotate", false, (on) => {
   controls.autoRotate = on;
   rotateGroup.open(on);
-  if (on && walk.active) {
-    walk.set(false);
-    walkBox.checked = false;
-  }
 });
 rotateGroup.take(rotateBox.parentElement as HTMLElement);
 rotateGroup.take(
@@ -945,13 +1096,10 @@ rotateGroup.take(
   "sub",
 );
 
-// THE DRAWING (`?ink`, or `?ink=2` for a heavier line in device pixels):
-// the tower as a pen drawing (ink.ts), by default filled with a washed,
-// cel-shaded colour under soft lines (drawing.ts, wash.ts); with Colour off
-// it is the plain pen, black on white. A second way to draw the same scene:
-// the lit look's palette, sun and occlusion are left as they were and come
-// back with it.
-let inked = new URLSearchParams(location.search).has("ink");
+// THE DRAWING, the page's only look (`?ink=2` draws it with a heavier
+// line in device pixels): the tower as a pen drawing (ink.ts), by default
+// filled with a washed, cel-shaded colour under soft lines (drawing.ts,
+// wash.ts); with Colour off it is the plain pen, black on white.
 let drawing: DrawingSpec = DRAWING_DEFAULT;
 let inkBase: InkSpec = INK_DEFAULT;
 {
@@ -963,9 +1111,11 @@ function applyDrawing(): void {
   rig.ink.composite(drawingComposite(drawing));
   rig.ink.haze(drawingHaze(drawing));
   rig.wash.shade(drawingShading(drawing));
-  rig.wash.paint(drawing.main);
-  const colour = inked && drawing.colour;
-  rig.setInk(inked, colour);
+  rig.wash.paint(drawing.main, drawing.mono, drawing.platformShade, drawing.namesShade);
+  rig.wash.ownWash(drawing.washed ? drawing.flagWash : 0, drawing.paper);
+  const colour = drawing.colour;
+  rig.setInk(true, colour);
+  rig.setGroundShadow(colour && drawing.shadows && drawing.groundShadow ? drawing.shadowColour : null);
   rig.apply(colour ? drawingLook(LOOK, drawing) : LOOK);
 }
 /** Puts a console or script change (`__drawing`) into the Look box's controls; set once they exist. */
@@ -996,17 +1146,82 @@ if (lookBox !== undefined) {
     if (label !== null) label.style.flexBasis = "";
   };
   const drawingGroup = viewGroup(lookBox);
-  const drawingBox = overlay.addCheckbox("Drawing", inked, (on) => {
-    inked = on;
-    drawingGroup.open(on);
-    applyDrawing();
-  });
-  drawingGroup.take(drawingBox.parentElement as HTMLElement);
-  drawingGroup.open(inked);
+  drawingGroup.open(true);
 
-  // Colour, with the main colour beside it and the palette it generates
-  // under it, then everything that only means something over a colour.
-  const colourGroup = viewGroup(drawingGroup.sub);
+  type Field = keyof DrawingSpec;
+  type Slider = readonly [label: string, field: Field, min: number, max: number, step: number, format: (v: number) => string];
+  const sliders = new Map<Field, { input: HTMLInputElement; slider: Slider }>();
+  const boxes = new Map<Field, { box: HTMLInputElement; group: ViewGroup }>();
+  const slider = (into: HTMLElement, s: Slider): void => {
+    const [label, field, min, max, step, format] = s;
+    const row = overlay.addSlider(label, { min, max, step, value: drawing[field] as number, format }, (v) =>
+      set({ [field]: v }),
+    );
+    into.append(row);
+    sliders.set(field, { input: row.querySelector("input") as HTMLInputElement, slider: s });
+  };
+  // A toggle and the sliders that only mean something while it is on.
+  const toggle = (into: HTMLElement, label: string, field: Field, under: readonly Slider[] = []): void => {
+    const group = viewGroup(into);
+    const box = overlay.addCheckbox(label, drawing[field] as boolean, (on) => {
+      group.open(on);
+      set({ [field]: on });
+    });
+    nestedHead(group, box.parentElement as HTMLElement);
+    boxes.set(field, { box, group });
+    for (const s of under) slider(group.sub, s);
+    group.open(drawing[field] as boolean);
+  };
+  // The drawing's controls in sections, each under a rule and, but for the
+  // colour's own toggle, a title.
+  const section = (into: HTMLElement, title?: string): HTMLDivElement => {
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "border-top:1px solid var(--ed-edge);margin-top:6px;padding-top:4px";
+    if (title !== undefined) {
+      const heading = document.createElement("h3");
+      heading.textContent = title;
+      heading.style.cssText = "margin:0 0 2px;font-size:11px;font-weight:600;color:var(--ed-ink-hi);opacity:0.75";
+      wrap.append(heading);
+    }
+    into.append(wrap);
+    return wrap;
+  };
+  const f2 = (v: number): string => v.toFixed(2);
+  const deg = (v: number): string => `${v.toFixed(0)}°`;
+  const hex = (n: number): string => `#${n.toString(16).padStart(6, "0")}`;
+  const PICKER_CSS = "width:28px;height:18px;padding:0;border:1px solid var(--ed-edge);background:none;margin-left:auto";
+
+  // PAPER: what the drawing stands on and the depth fade pales toward.
+  // A checkbox's row with the box traded for a picker, so it lines up with the rows round it.
+  const paperSection = section(drawingGroup.sub, "Paper");
+  const paperBox = overlay.addCheckbox("Background", false, () => {});
+  const paperRow = paperBox.parentElement as HTMLElement;
+  const paperPicker = document.createElement("input");
+  paperPicker.type = "color";
+  paperPicker.title = "The paper: the background, and what the depth fade pales toward";
+  paperPicker.style.cssText = PICKER_CSS;
+  paperPicker.value = hex(drawing.paper);
+  paperPicker.addEventListener("input", () => {
+    const paper = Number.parseInt(paperPicker.value.slice(1), 16);
+    // A shadow still at the other paper's default follows the paper across
+    // light and dark; one picked by hand stays as picked.
+    const light = lightPaper(paper);
+    const shadowColour =
+      drawing.shadowColour === (light ? SHADOW_ON_DARK : SHADOW_ON_LIGHT)
+        ? light
+          ? SHADOW_ON_LIGHT
+          : SHADOW_ON_DARK
+        : drawing.shadowColour;
+    shadowPicker.value = hex(shadowColour);
+    set({ paper, shadowColour });
+  });
+  paperBox.replaceWith(paperPicker);
+  paperSection.append(paperRow);
+
+  // COLOUR, with the main colour beside it, then everything that only means
+  // something over a colour, each in its own section: the palette it
+  // generates, the shading, the light and the occlusion.
+  const colourGroup = viewGroup(section(drawingGroup.sub));
   const colourBox = overlay.addCheckbox("Colour", drawing.colour, (on) => {
     colourGroup.open(on);
     set({ colour: on });
@@ -1015,9 +1230,7 @@ if (lookBox !== undefined) {
   const picker = document.createElement("input");
   picker.type = "color";
   picker.title = "The main colour, the iron's: the rest of the palette is generated from it";
-  picker.style.cssText =
-    "width:28px;height:18px;padding:0;border:1px solid var(--ed-edge);background:none;margin-left:auto";
-  const hex = (n: number): string => `#${n.toString(16).padStart(6, "0")}`;
+  picker.style.cssText = PICKER_CSS;
   picker.value = hex(drawing.main);
   picker.addEventListener("input", () => {
     set({ main: Number.parseInt(picker.value.slice(1), 16) });
@@ -1025,6 +1238,8 @@ if (lookBox !== undefined) {
   });
   colourRow.append(picker);
   nestedHead(colourGroup, colourRow);
+
+  const palette = section(colourGroup.sub, "Palette");
   const swatches = document.createElement("div");
   swatches.style.cssText = "display:flex;gap:2px;margin:2px 0 4px";
   swatches.title = "The palette, generated from the main colour";
@@ -1050,75 +1265,141 @@ if (lookBox !== undefined) {
     const main = new Color(drawing.main);
     const reference = new Color(WASH_REFERENCE);
     SHOWN.forEach((cls, i) => {
-      const c = washColor(new Color(PALETTE[cls].color), main, reference, new Color(), WASH_ROLES[cls]);
+      const c = washColor(
+        new Color(PALETTE[cls].color),
+        main,
+        reference,
+        new Color(),
+        WASH_ROLES[cls],
+        drawing.mono,
+        drawing.platformShade,
+        drawing.namesShade,
+      );
       (chips[i] as HTMLElement).style.background = `#${c.getHexString()}`;
     });
   };
   paintSwatches();
-  colourGroup.sub.prepend(swatches);
-  colourGroup.open(drawing.colour);
+  palette.append(swatches);
+  // Mono, under the palette it flattens to one hue.
+  const monoBox = overlay.addCheckbox("Mono", drawing.mono, (on) => {
+    set({ mono: on });
+    paintSwatches();
+  });
+  monoBox.title = "Every generated colour at the main colour's hue and saturation: a grey main makes a grey drawing";
+  palette.append(monoBox.parentElement as HTMLElement);
+  // The floors' fit-out, which the palette otherwise sets a step under the paper.
+  slider(palette, ["Platform shade", "platformShade", 0, 1, 0.01, f2]);
+  slider(palette, ["Names shade", "namesShade", 0, 3, 0.01, f2]);
+  for (const field of ["platformShade", "namesShade"] as const)
+    sliders.get(field)?.input.addEventListener("input", paintSwatches);
 
-  type Field = keyof DrawingSpec;
-  type Slider = readonly [label: string, field: Field, min: number, max: number, step: number, format: (v: number) => string];
-  const sliders = new Map<Field, { input: HTMLInputElement; slider: Slider }>();
-  const boxes = new Map<Field, { box: HTMLInputElement; group: ViewGroup }>();
-  const slider = (into: ViewGroup, s: Slider): void => {
-    const [label, field, min, max, step, format] = s;
-    const row = overlay.addSlider(label, { min, max, step, value: drawing[field] as number, format }, (v) =>
-      set({ [field]: v }),
-    );
-    into.take(row, "sub");
-    sliders.set(field, { input: row.querySelector("input") as HTMLInputElement, slider: s });
-  };
-  // A toggle and the sliders that only mean something while it is on.
-  const toggle = (into: HTMLElement, label: string, field: Field, under: readonly Slider[] = []): void => {
-    const group = viewGroup(into);
-    const box = overlay.addCheckbox(label, drawing[field] as boolean, (on) => {
-      group.open(on);
-      set({ [field]: on });
-    });
-    nestedHead(group, box.parentElement as HTMLElement);
-    boxes.set(field, { box, group });
-    for (const s of under) slider(group, s);
-    group.open(drawing[field] as boolean);
-  };
-  const f2 = (v: number): string => v.toFixed(2);
-  const deg = (v: number): string => `${v.toFixed(0)}°`;
-  toggle(colourGroup.sub, "Cel", "cel", [
+  const shading = section(colourGroup.sub, "Shading");
+  toggle(shading, "Cel", "cel", [
     ["Bands", "bands", 2, 6, 1, (v) => v.toFixed(0)],
     ["Band edge", "bandSoftness", 0, 1, 0.01, f2],
   ]);
-  toggle(colourGroup.sub, "Washed", "washed", [
+  toggle(shading, "Washed", "washed", [
     ["Lift", "lift", 0, 0.8, 0.01, f2],
+    ["Flag wash", "flagWash", 0, 1, 0.01, f2],
     ["Light tint", "litTint", 0, 1, 0.01, f2],
     ["Shade tint", "shadeTint", 0, 1, 0.01, f2],
     ["Saturation", "saturation", 0, 1.5, 0.01, f2],
-    ["Depth", "depth", 0, 1, 0.01, f2],
   ]);
-  toggle(colourGroup.sub, "AO", "ao", [
+
+  const lighting = section(colourGroup.sub, "Light");
+  slider(lighting, ["Sun height", "sunElevation", 5, 85, 1, deg]);
+  slider(lighting, ["Sun turn", "sunAzimuth", -180, 180, 1, deg]);
+  slider(lighting, ["Sun", "sun", 0, 1.5, 0.01, f2]);
+  toggle(lighting, "Second light", "light2", [
+    ["Strength", "light2Strength", 0, 1.5, 0.01, f2],
+  ]);
+  slider(lighting, ["Shade", "shade", 0, 1.5, 0.01, f2]);
+  toggle(lighting, "Shadows", "shadows");
+  toggle(lighting, "Ground", "groundShadow");
+  const shadowPicker = document.createElement("input");
+  shadowPicker.type = "color";
+  shadowPicker.title = "The ground shadow's colour";
+  shadowPicker.style.cssText = PICKER_CSS;
+  shadowPicker.value = hex(drawing.shadowColour);
+  shadowPicker.addEventListener("input", () => set({ shadowColour: Number.parseInt(shadowPicker.value.slice(1), 16) }));
+  (boxes.get("groundShadow")?.box.parentElement as HTMLElement).append(shadowPicker);
+
+  const occlusion = section(colourGroup.sub, "Occlusion");
+  toggle(occlusion, "AO", "ao", [
     ["Strength", "aoStrength", 0, 1, 0.01, f2],
     ["Radius", "aoRadius", 0.1, 3, 0.05, (v) => `${v.toFixed(2)} m`],
   ]);
-  toggle(colourGroup.sub, "Shadows", "shadows");
-  const light: readonly Slider[] = [
-    ["Sun height", "sunElevation", 5, 85, 1, deg],
-    ["Sun turn", "sunAzimuth", -180, 180, 1, deg],
-    ["Sun", "sun", 0, 1.5, 0.01, f2],
-    ["Shade", "shade", 0, 1.5, 0.01, f2],
-  ];
-  for (const s of light) slider(colourGroup, s);
-  toggle(drawingGroup.sub, "Soft edges", "softEdges");
-  slider(drawingGroup, ["Far lines", "farLines", 0, 1, 0.01, f2]);
-  slider(drawingGroup, ["Inner lines", "innerLines", 0, 1, 0.01, f2]);
-  slider(drawingGroup, ["Line width", "lineWidth", 1, 3, 0.5, (v) => `${v.toFixed(1)} px`]);
-  slider(drawingGroup, ["Line dark", "lineStrength", 0, 1, 0.01, f2]);
+  toggle(occlusion, "AO 2", "ao2", [
+    ["Strength", "ao2Strength", 0, 1, 0.01, f2],
+    ["Radius", "ao2Radius", 0.1, 3, 0.05, (v) => `${v.toFixed(2)} m`],
+  ]);
+  colourGroup.open(drawing.colour);
+
+  const lines = section(drawingGroup.sub, "Lines");
+  toggle(lines, "Soft edges", "softEdges");
+  slider(lines, ["Line width", "lineWidth", 1, 3, 0.5, (v) => `${v.toFixed(1)} px`]);
+  slider(lines, ["Line dark", "lineStrength", 0, 3, 0.01, f2]);
+  slider(lines, ["Inner lines", "innerLines", 0, 1, 0.01, f2]);
+  slider(lines, ["Far lines", "farLines", 0, 1, 0.01, f2]);
+  slider(lines, ["Line fade from", "lineFadeNear", 0, 1000, 10, (v) => `${v.toFixed(0)} m`]);
+  slider(lines, ["Line fade to", "lineFadeFar", 0, 1500, 10, (v) => `${v.toFixed(0)} m`]);
+  slider(lines, ["Line fade curve", "lineFadeCurve", 0, 10, 0.1, (v) => v.toFixed(1)]);
+  slider(lines, ["Far fill", "farFill", 0, 0.5, 0.01, f2]);
+
+  const depth = section(drawingGroup.sub, "Depth");
+  slider(depth, ["Depth fade", "depth", 0, 1, 0.01, f2]);
+  slider(depth, ["Fade falloff", "depthFalloff", 0, 10, 0.1, (v) => v.toFixed(1)]);
+  // The whole spec as the console line that sets it again, colours in hex.
+  const COLOURS: readonly Field[] = ["main", "paper", "shadowColour"];
+  const drawingText = (): string => {
+    const value = (k: Field): string => {
+      const v = drawing[k];
+      if (COLOURS.includes(k)) return `0x${(v as number).toString(16).padStart(6, "0")}`;
+      return String(v);
+    };
+    return `__drawing({ ${(Object.keys(drawing) as Field[]).map((k) => `${k}: ${value(k)}`).join(", ")} })`;
+  };
+  const copyRow = document.createElement("div");
+  const copyDrawing = document.createElement("button");
+  copyDrawing.type = "button";
+  copyDrawing.textContent = "Copy drawing";
+  copyDrawing.title = "Copy every drawing setting as a `__drawing({...})` line for the console";
+  copyDrawing.style.cssText =
+    "cursor:pointer;background:none;border:1px solid currentColor;border-radius:4px;color:inherit;opacity:0.8;padding:0.15em 0.7em";
+  let copyDrawingReset: ReturnType<typeof setTimeout> | undefined;
+  copyDrawing.addEventListener("click", () => {
+    const text = drawingText();
+    // Logged as well, so the settings can be read back where the clipboard cannot.
+    console.info(text);
+    void copyText(text).then((ok) => {
+      copyDrawing.textContent = ok ? "Copied" : "Copy failed: see console";
+      clearTimeout(copyDrawingReset);
+      copyDrawingReset = setTimeout(() => {
+        copyDrawing.textContent = "Copy drawing";
+      }, 1500);
+    });
+  });
+  // Back to the drawing the page opens with (DRAWING_DEFAULT).
+  const resetDrawing = document.createElement("button");
+  resetDrawing.type = "button";
+  resetDrawing.textContent = "Reset drawing";
+  resetDrawing.title = "Every drawing setting back to the page's default";
+  resetDrawing.style.cssText = `${copyDrawing.style.cssText};margin-left:0.5em`;
+  resetDrawing.addEventListener("click", () => {
+    drawing = { ...DRAWING_DEFAULT };
+    applyDrawing();
+    syncDrawingControls();
+  });
+  copyRow.append(copyDrawing, resetDrawing);
+  drawingGroup.take(copyRow, "sub");
 
   syncDrawingControls = () => {
-    drawingBox.checked = inked;
-    drawingGroup.open(inked);
     colourBox.checked = drawing.colour;
     colourGroup.open(drawing.colour);
     picker.value = hex(drawing.main);
+    monoBox.checked = drawing.mono;
+    paperPicker.value = hex(drawing.paper);
+    shadowPicker.value = hex(drawing.shadowColour);
     paintSwatches();
     for (const [field, { box, group }] of boxes) {
       box.checked = drawing[field] as boolean;
@@ -1160,22 +1441,6 @@ overlay.addCheckbox("Cloth sim", clothSim, (on) => {
 // own framing, the whole site, wherever the camera had gone, and turning
 // it off keeps the view.
 const BUILD = new URLSearchParams(location.search).has("build");
-const buildBox = overlay.addCheckbox("Build", BUILD, (on) => {
-  const q = new URLSearchParams(location.search);
-  if (on) {
-    q.set("build", "");
-    // The walk is not reopened under build (see ROTATE, WALK AND BUILD).
-    for (const k of ["walk", "walkAt", "walkNear"]) q.delete(k);
-    q.delete("cam");
-  } else {
-    q.delete("build");
-    const p = camera.position;
-    const t = controls.target;
-    q.set("cam", [p.x, p.y, p.z, t.x, t.y, t.z].map((v) => v.toFixed(2)).join(","));
-  }
-  location.search = q.toString().replace(/build=(&|$)/, "build$1");
-});
-buildGroup.take(buildBox.parentElement as HTMLElement);
 buildGroup.open(BUILD);
 /** Under the toggle in the View box; filled once the cook is drawn. */
 const buildSlot = buildGroup.sub;
@@ -1270,7 +1535,15 @@ depthWarning.style.cssText =
   "margin:8px 0 0;padding:6px 8px;background:var(--ed-alert-bg);border-left:2px solid var(--ed-edge-warn);" +
   "color:var(--ed-ink);font-size:12px";
 applyButton.style.marginTop = "4px";
-depthSection.append(applyButton, depthWarning);
+/** Beside Apply while the detail picked is not the one the page was opened at. */
+const depthPending = document.createElement("span");
+depthPending.setAttribute("role", "status");
+depthPending.textContent = "Apply to reload at this detail";
+depthPending.style.cssText = "margin:4px 0 0 8px;font-size:12px;color:var(--ed-ink-mid)";
+const applyRow = document.createElement("div");
+applyRow.style.cssText = "display:flex;align-items:center";
+applyRow.append(applyButton, depthPending);
+depthSection.append(applyRow, depthWarning);
 
 function stageDepth(ax: "laced" | "rivets", d: Depth): void {
   staged[ax] = d;
@@ -1287,6 +1560,7 @@ function paintDepth(): void {
   }
   const changed = staged.laced !== DEPTH.laced || staged.rivets !== DEPTH.rivets;
   applyButton.disabled = !changed;
+  depthPending.hidden = !changed;
   applyButton.style.opacity = changed ? "1" : "0.35";
   applyButton.style.cursor = changed ? "pointer" : "default";
   applyButton.title = changed
@@ -1323,9 +1597,9 @@ function applyDepth(): void {
   location.href = `?${query.join("&")}`;
 }
 
-// THE HIGHLIGHTS (see `HIGHLIGHTS`), a row of their own: each
-// checkbox tinted its paint. Cooked meshes that arrive later take the
-// paint as they are drawn, so the row works before the cook is done.
+// THE HIGHLIGHTS (see `HIGHLIGHTS`), a row of their own, a checkbox
+// each. Cooked meshes that arrive later answer to theirs as they are
+// drawn, so the row works before the cook is done.
 const highlightSlot = overlay.addSlot("controls");
 const highlightRow = document.createElement("div");
 highlightRow.style.cssText = "display:flex;gap:0.9em;align-items:baseline;flex-wrap:wrap";
@@ -1339,14 +1613,19 @@ for (const h of HIGHLIGHTS) {
   const box = document.createElement("input");
   box.type = "checkbox";
   box.checked = lit[h];
-  box.disabled = FLAT_PROBLEM !== undefined;
-  box.style.accentColor = `#${HIGHLIGHT_PAINT[h].toString(16).padStart(6, "0")}`;
+  box.disabled = KEEP_PROBLEM !== undefined;
   box.addEventListener("change", () => setHighlight(scene, h, box.checked));
   label.append(box, capital(h));
   highlightRow.append(label);
 }
-if (FLAT_PROBLEM !== undefined) highlightRow.title = FLAT_PROBLEM;
+if (KEEP_PROBLEM !== undefined) highlightRow.title = KEEP_PROBLEM;
 highlightSlot.append(highlightRow);
+// How much of the rest of the tower shows while a highlight is on (`ghostOpacity`).
+highlightSlot.append(
+  overlay.addSlider("Ghost", { min: 0, max: 1, step: 0.01, value: ghostOpacity, format: (v) => v.toFixed(2) }, (v) => {
+    ghostOpacity = v;
+  }),
+);
 
 // COPY VIEW: everything it takes to open this page on the frame it shows
 // now, as one line of URL and one of JSON, for pasting into an issue or a
@@ -1417,10 +1696,8 @@ function copyableView(): string {
   if (!clothSim) query.push("wave");
   const highlighted = HIGHLIGHTS.filter((h) => lit[h]);
   if (highlighted.length > 0) query.push(`hl=${highlighted.join(",")}`);
-  if (inked) {
-    const weight = new URLSearchParams(location.search).get("ink");
-    query.push(weight !== null && weight !== "" ? `ink=${encodeURIComponent(weight)}` : "ink");
-  }
+  const weight = params.get("ink");
+  if (weight !== null && weight !== "") query.push(`ink=${encodeURIComponent(weight)}`);
   // The day the scrubber shows; before the cook has staged it, the day asked for.
   const day = BUILD ? isoOf(scrubber?.day ?? buildDayParam(params.get("build"))) : null;
   if (day !== null) query.push(`build=${day}`);
@@ -1531,22 +1808,58 @@ const walk = attachWalk({
   nearShadow: new URLSearchParams(location.search).has("walkNear"),
 });
 const WALK = BUILD ? null : new URLSearchParams(location.search).get("walk");
-const walkBox = overlay.addCheckbox("Walk", WALK !== null, (on) => {
-  if (on && controls.autoRotate) {
+
+function viewMode(): ViewMode {
+  return BUILD ? "build" : walk.active ? "walk" : "look";
+}
+/**
+ * Change mode. Build is cooked and staged at load, so going into it or out
+ * of it is a reload: into it on the page's own framing, the whole site,
+ * wherever the camera had gone; out of it keeping the view, or onto the
+ * walk's first step. The walk is not reopened under build.
+ */
+function setMode(mode: ViewMode): void {
+  if (mode === viewMode()) return;
+  if (BUILD || mode === "build") {
+    const q = new URLSearchParams(location.search);
+    for (const k of ["walk", "walkAt", "walkNear"]) q.delete(k);
+    if (mode === "build") {
+      q.set("build", "");
+      q.delete("cam");
+    } else {
+      q.delete("build");
+      if (mode === "walk") q.set("walk", "0");
+      else {
+        const p = camera.position;
+        const t = controls.target;
+        q.set("cam", [p.x, p.y, p.z, t.x, t.y, t.z].map((v) => v.toFixed(2)).join(","));
+      }
+    }
+    location.search = q.toString().replace(/build=(&|$)/, "build$1");
+    return;
+  }
+  if (mode === "walk" && controls.autoRotate) {
     controls.autoRotate = false;
     rotateBox.checked = false;
-    rotateGroup.open(false);
   }
-  walk.set(on);
-});
-walkGroup.take(walkBox.parentElement as HTMLElement);
-if (BUILD) {
-  for (const box of [rotateBox, walkBox]) {
-    box.disabled = true;
-    const row = box.parentElement as HTMLElement;
-    row.style.opacity = "0.4";
-    row.title = "Not with build: turn build off first";
+  walk.set(mode === "walk");
+  paintMode();
+}
+let paintedMode: ViewMode | undefined;
+/** Light the current mode's button and show what only it offers. Every frame: a script may move the walk. */
+function paintMode(): void {
+  const mode = viewMode();
+  if (mode === paintedMode) return;
+  paintedMode = mode;
+  for (const [m, button] of modeButtons) {
+    const on = m === mode;
+    button.setAttribute("aria-pressed", String(on));
+    button.style.background = on ? "var(--ed-ink-hi)" : "none";
+    button.style.color = on ? "var(--ed-panel)" : "inherit";
+    button.style.opacity = on ? "1" : "0.75";
   }
+  (rotateBox.parentElement as HTMLElement).hidden = mode !== "look";
+  rotateGroup.open(mode === "look" && controls.autoRotate);
 }
 // `?walk=` is a step; `?walkAt=<m>,<yaw>,<pitch>` is the exact pose "copy
 // view" writes — metres along the path and the look's turn off it, in
@@ -1555,6 +1868,7 @@ const WALK_AT = new URLSearchParams(location.search).get("walkAt")?.split(",").m
 if (!BUILD && WALK_AT !== undefined && WALK_AT.length === 3 && WALK_AT.every(Number.isFinite)) {
   walk.goDist(WALK_AT[0]!, WALK_AT[1], WALK_AT[2]);
 } else if (WALK !== null) walk.go(Number(WALK) || 0);
+paintMode();
 
 // W/A/S/D and Q/E move the orbit, camera and target together (keyMove.ts);
 // the walk has keys of its own, and a driven camera is not the orbit's.
@@ -1696,7 +2010,10 @@ async function main(): Promise<void> {
   /** Drawn outputs with a "show" checkbox of their own (rivets have one between them). */
   const present: string[] = [];
   const keep = (name: string, drawn: Drawn): void => {
-    for (const mesh of drawn.meshes) scene.add(mesh);
+    for (const mesh of drawn.meshes) {
+      mesh.userData[TOWER_MESH] = true;
+      scene.add(mesh);
+    }
     meshes.set(name, drawn.meshes);
     total += drawn.triangles;
     instancedTotal += drawn.instancedTriangles;
@@ -1756,8 +2073,8 @@ async function main(): Promise<void> {
       : isMachine(name)
         ? MATERIALS.machinery
         : isCarGlass(name)
-          ? MATERIALS.glass
-          : MATERIALS.platforms;
+          ? CAR_GLASS
+          : CAR_SHELL;
     const drawn = isRivets(name) ? drawRivets(name, collection, problems) : draw(name, collection, material, box, problems);
     if (!named) {
       overlay.addStat(`${name} (unclassed)`)(
@@ -1899,6 +2216,7 @@ async function main(): Promise<void> {
     const s = box.getSize(new Vector3());
     statSize(`${s.x.toFixed(1)} × ${s.z.toFixed(1)} × ${s.y.toFixed(1)} m`);
     rig.fitShadow(box);
+    towerBox.copy(box);
   }
 
   // SHOW: which classes are drawn, a checkbox each, folded until wanted.
@@ -2034,11 +2352,12 @@ async function main(): Promise<void> {
           transforms,
           ...(drive === undefined ? {} : { attributes: { [HEAD_DRIVE_ATTR]: drive } }),
         };
-        const drawn = toInstancedMeshes([batch], ASSETS);
+        // The shared rivet material, as the cooked rivets wear it.
+        const site = rivetClass(name).share > 0;
+        const drawn = toInstancedMeshes([batch], ASSETS, { materialFor: () => (site ? RIVET_SITE : RIVET_SHOP) });
         for (const mesh of drawn) {
           mesh.castShadow = false;
           mesh.receiveShadow = true;
-          if (rivetClass(name).share > 0) mesh.material = RIVET_SITE;
         }
         driveHeads(drawn);
         return drawn;
@@ -2448,14 +2767,14 @@ renderer.setAnimationLoop(() => {
   // Every frame, walking or not: it is also what drops a key held while
   // the orbit was not the camera's.
   keyMove.tick(frameSeconds);
+  paintMode();
   if (walk.active) walk.tick();
   else if (!driven) orbit();
   bands?.tick(camera);
   sectionTick?.();
-  // The drawing pales what lies behind what the view is looking at: the
-  // orbit's target (which a scripted pose sets too), or a near storey's
-  // depth on the walk, which leaves the orbit's target behind.
-  rig.ink.focus(walk.active ? 60 : camera.position.distanceTo(controls.target));
+  // The drawing's depth fade runs over the tower's own depth from here.
+  rig.ink.hazeRange(...towerDepths());
+  ghostTower();
   if (plates?.active === true) plates.render();
   else rig.render();
   tickFps();
