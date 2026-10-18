@@ -40,6 +40,12 @@ export interface DrawingSpec {
    */
   readonly undersideShade: number;
   /**
+   * The temporary works' tone: the erection's timber scaffolds, pylons and
+   * decks (the `timber` role, wash.ts `washColor`) as a lightness, 0 black
+   * to 1 the paper's white.
+   */
+  readonly timberShade: number;
+  /**
    * The names' tone: the gilded names on the frieze (the `gilt` role, wash.ts
    * `washColor`) as a lightness, 0 black to 1 the paper's white; past 1,
    * brighter than white, so its shaded faces stay light too.
@@ -165,6 +171,7 @@ export const DRAWING_DEFAULT: DrawingSpec = {
   mono: true,
   platformShade: 1,
   undersideShade: 0.4,
+  timberShade: 0.97,
   namesShade: 3,
   paper: 0xffffff,
   cel: false,

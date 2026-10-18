@@ -62,7 +62,7 @@ export interface WashShading {
  * `userData.washRole` by the host. Unset is paint: it keeps its relation to
  * the reference.
  */
-export type WashRole = "paint" | "stone" | "glass" | "warm" | "under" | "gilt" | "own";
+export type WashRole = "paint" | "stone" | "glass" | "warm" | "under" | "timber" | "gilt" | "own";
 
 export interface Wash {
   /** Teach and colour every painted material in the scene. Every frame, before the wash renders. */
@@ -72,10 +72,11 @@ export interface Wash {
   shade(spec: WashShading): void;
   /**
    * The colour the palette is generated from, whether it is all at that
-   * colour's hue, and the floors', the names' and the floors' undersides'
-   * lightness (`washColor`'s `warm`, `gilt` and `under`).
+   * colour's hue, and the floors', the names', the floors' undersides' and
+   * the temporary works' timber's lightness (`washColor`'s `warm`, `gilt`,
+   * `under` and `timber`).
    */
-  paint(main: number, mono?: boolean, warm?: number, gilt?: number, under?: number): void;
+  paint(main: number, mono?: boolean, warm?: number, gilt?: number, under?: number, timber?: number): void;
   /**
    * How far a material that keeps its own paint (role `own`: the flag) is
    * washed: 0 its own colours, untouched by the light's tints; 1 the paper,
@@ -152,13 +153,14 @@ export function washColor(
   warm = WARM_LIGHTNESS,
   gilt = GILT_LIGHTNESS,
   under = UNDER_LIGHTNESS,
+  timber = TIMBER_LIGHTNESS,
 ): Color {
   // In sRGB, where the palette was chosen and where a step reads as one.
   const b = base.getHSL({ h: 0, s: 0, l: 0 }, SRGBColorSpace);
   const m = main.getHSL({ h: 0, s: 0, l: 0 }, SRGBColorSpace);
   const r = reference.getHSL({ h: 0, s: 0, l: 0 }, SRGBColorSpace);
   if (role === "gilt" && gilt > 1) {
-    return washColor(base, main, reference, out, role, mono, warm, 1, under).multiplyScalar(gilt);
+    return washColor(base, main, reference, out, role, mono, warm, 1, under, timber).multiplyScalar(gilt);
   }
   if (mono && role !== "own") {
     const l =
@@ -168,9 +170,11 @@ export function washColor(
           ? warm
           : role === "under"
             ? under
-            : role === "gilt"
-              ? gilt
-              : reanchor(b.l, r.l, m.l);
+            : role === "timber"
+              ? timber
+              : role === "gilt"
+                ? gilt
+                : reanchor(b.l, r.l, m.l);
     return out.setHSL(m.h, m.s, l, SRGBColorSpace);
   }
   const turn = (d: number): number => (((m.h + d) % 1) + 1) % 1;
@@ -179,6 +183,8 @@ export function washColor(
   if (role === "glass") return out.setHSL(0.56, 0.2, 0.78, SRGBColorSpace);
   if (role === "warm") return out.setHSL(turn(0.045), 0.5, warm, SRGBColorSpace);
   if (role === "under") return out.setHSL(turn(0.045), 0.15, under, SRGBColorSpace);
+  // The wood keeps its own hue's turn from the iron, faintly.
+  if (role === "timber") return out.setHSL(turn(b.h - r.h), 0.25, timber, SRGBColorSpace);
   const h = turn(b.h - r.h);
   const l = role === "gilt" ? gilt : reanchor(b.l, r.l, m.l);
   return out.setHSL(h, reanchor(b.s, r.s, m.s), l, SRGBColorSpace);
@@ -199,6 +205,14 @@ export const WARM_LIGHTNESS = 0xc6 / 0xff; // #c6c6c6 under a grey main colour
  * `under`, which the drawing's Underside shade sets.
  */
 export const UNDER_LIGHTNESS = 0.15;
+
+/**
+ * The `timber` role's lightness (sRGB HSL): the erection's temporary works,
+ * pale, a step under the paper, so the scaffolds and pylons read as
+ * something round the tower rather than as more of its iron. The default
+ * of `washColor`'s `timber`, which the drawing's Timber shade sets.
+ */
+export const TIMBER_LIGHTNESS = 0.97;
 
 /** The `gilt` role's lightness (sRGB HSL; past 1, brighter than white): the gilded names. The default of `washColor`'s `gilt`, which the drawing's Names shade sets. */
 export const GILT_LIGHTNESS = 0.92;
@@ -343,9 +357,19 @@ export function createWash(): Wash {
   let warm = WARM_LIGHTNESS;
   let gilt = GILT_LIGHTNESS;
   let under = UNDER_LIGHTNESS;
+  let timber = TIMBER_LIGHTNESS;
   const seen = new Map<
     Material,
-    { base: number; main: number; role: WashRole; mono: boolean; warm: number; gilt: number; under: number }
+    {
+      base: number;
+      main: number;
+      role: WashRole;
+      mono: boolean;
+      warm: number;
+      gilt: number;
+      under: number;
+      timber: number;
+    }
   >();
 
   function colour(m: MeshStandardMaterial, state: Taught): void {
@@ -360,12 +384,13 @@ export function createWash(): Wash {
       was.mono === mono &&
       was.warm === warm &&
       was.gilt === gilt &&
-      was.under === under
+      was.under === under &&
+      was.timber === timber
     )
       return;
-    seen.set(m, { base, main: main.getHex(), role, mono, warm, gilt, under });
+    seen.set(m, { base, main: main.getHex(), role, mono, warm, gilt, under, timber });
     // A Color holds linear, which is what the shader wants.
-    washColor(m.color, main, reference, state.albedo.value, role, mono, warm, gilt, under);
+    washColor(m.color, main, reference, state.albedo.value, role, mono, warm, gilt, under, timber);
     // A pane at the lit look's fifth is a pane the wash cannot show; the
     // drawing tints its glass plainly.
     state.opacity.value = role === "glass" ? GLASS_OPACITY : -1;
@@ -406,12 +431,20 @@ export function createWash(): Wash {
       // A Color set from a hex holds linear, which is what the shader wants.
       uniforms.washPaper.value.setHex(paper);
     },
-    paint(hex, all = false, floors = WARM_LIGHTNESS, names = GILT_LIGHTNESS, undersides = UNDER_LIGHTNESS) {
+    paint(
+      hex,
+      all = false,
+      floors = WARM_LIGHTNESS,
+      names = GILT_LIGHTNESS,
+      undersides = UNDER_LIGHTNESS,
+      works = TIMBER_LIGHTNESS,
+    ) {
       main.setHex(hex);
       mono = all;
       warm = floors;
       gilt = names;
       under = undersides;
+      timber = works;
     },
   };
 }

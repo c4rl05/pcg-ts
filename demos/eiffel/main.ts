@@ -376,6 +376,8 @@ type Highlight = (typeof HIGHLIGHTS)[number];
  */
 const CAR_SHELL = new MeshStandardMaterial({ ...PALETTE.platforms, side: DoubleSide });
 CAR_SHELL.userData.washRole = MATERIALS.platforms.userData.washRole;
+// The erection's timber is not iron, so it does not keep the iron's relation.
+TIMBER.userData.washRole = "timber" satisfies WashRole;
 const CAR_GLASS = MATERIALS.glass.clone();
 function syncCars(): void {
   for (const [car, from] of [
@@ -1117,7 +1119,14 @@ function applyDrawing(): void {
   rig.ink.composite(drawingComposite(drawing));
   rig.ink.haze(drawingHaze(drawing));
   rig.wash.shade(drawingShading(drawing));
-  rig.wash.paint(drawing.main, drawing.mono, drawing.platformShade, drawing.namesShade, drawing.undersideShade);
+  rig.wash.paint(
+    drawing.main,
+    drawing.mono,
+    drawing.platformShade,
+    drawing.namesShade,
+    drawing.undersideShade,
+    drawing.timberShade,
+  );
   rig.wash.ownWash(drawing.washed ? drawing.flagWash : 0, drawing.paper);
   const colour = drawing.colour;
   rig.setInk(true, colour);
@@ -1300,6 +1309,8 @@ if (lookBox !== undefined) {
   slider(palette, ["Platform shade", "platformShade", 0, 1, 0.01, f2]);
   slider(palette, ["Underside shade", "undersideShade", 0, 1, 0.01, f2]);
   slider(palette, ["Names shade", "namesShade", 0, 3, 0.01, f2]);
+  // The erection's timber, which `?build` draws round the tower.
+  slider(palette, ["Timber shade", "timberShade", 0, 1, 0.01, f2]);
   for (const field of ["platformShade", "undersideShade", "namesShade"] as const)
     sliders.get(field)?.input.addEventListener("input", paintSwatches);
 
