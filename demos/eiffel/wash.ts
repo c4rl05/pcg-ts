@@ -62,7 +62,7 @@ export interface WashShading {
  * `userData.washRole` by the host. Unset is paint: it keeps its relation to
  * the reference.
  */
-export type WashRole = "paint" | "stone" | "glass" | "warm" | "gilt" | "own";
+export type WashRole = "paint" | "stone" | "glass" | "warm" | "under" | "gilt" | "own";
 
 export interface Wash {
   /** Teach and colour every painted material in the scene. Every frame, before the wash renders. */
@@ -72,10 +72,10 @@ export interface Wash {
   shade(spec: WashShading): void;
   /**
    * The colour the palette is generated from, whether it is all at that
-   * colour's hue, and the floors' and the names' lightness (`washColor`'s
-   * `warm` and `gilt`).
+   * colour's hue, and the floors', the names' and the floors' undersides'
+   * lightness (`washColor`'s `warm`, `gilt` and `under`).
    */
-  paint(main: number, mono?: boolean, warm?: number, gilt?: number): void;
+  paint(main: number, mono?: boolean, warm?: number, gilt?: number, under?: number): void;
   /**
    * How far a material that keeps its own paint (role `own`: the flag) is
    * washed: 0 its own colours, untouched by the light's tints; 1 the paper,
@@ -125,7 +125,9 @@ const GLASS_OPACITY = 0.55;
  * stone is a near-grey of the main colour, never its red; glass a pale
  * cool grey-blue whatever the main is; `warm` a pale cream-yellow a little
  * (16 degrees) round from it, the lit interior's colour of the illustrated
- * cutaway; `gilt` keeps the paint's relation in hue and saturation but
+ * cutaway; `under` the same hue as `warm` at a low saturation and its own
+ * lightness, the floors' undersides, dark where the fit-out above is
+ * light; `gilt` keeps the paint's relation in hue and saturation but
  * is set near the paper in lightness, so the gilded lettering reads as a
  * light band on the iron rather than another step of it;
  * `own` keeps the material's own paint and map (a flag's colours are its
@@ -149,13 +151,14 @@ export function washColor(
   mono = false,
   warm = WARM_LIGHTNESS,
   gilt = GILT_LIGHTNESS,
+  under = UNDER_LIGHTNESS,
 ): Color {
   // In sRGB, where the palette was chosen and where a step reads as one.
   const b = base.getHSL({ h: 0, s: 0, l: 0 }, SRGBColorSpace);
   const m = main.getHSL({ h: 0, s: 0, l: 0 }, SRGBColorSpace);
   const r = reference.getHSL({ h: 0, s: 0, l: 0 }, SRGBColorSpace);
   if (role === "gilt" && gilt > 1) {
-    return washColor(base, main, reference, out, role, mono, warm, 1).multiplyScalar(gilt);
+    return washColor(base, main, reference, out, role, mono, warm, 1, under).multiplyScalar(gilt);
   }
   if (mono && role !== "own") {
     const l =
@@ -163,9 +166,11 @@ export function washColor(
         ? 0.78
         : role === "warm"
           ? warm
-          : role === "gilt"
-            ? gilt
-            : reanchor(b.l, r.l, m.l);
+          : role === "under"
+            ? under
+            : role === "gilt"
+              ? gilt
+              : reanchor(b.l, r.l, m.l);
     return out.setHSL(m.h, m.s, l, SRGBColorSpace);
   }
   const turn = (d: number): number => (((m.h + d) % 1) + 1) % 1;
@@ -173,6 +178,7 @@ export function washColor(
   if (role === "own") return out.copy(base);
   if (role === "glass") return out.setHSL(0.56, 0.2, 0.78, SRGBColorSpace);
   if (role === "warm") return out.setHSL(turn(0.045), 0.5, warm, SRGBColorSpace);
+  if (role === "under") return out.setHSL(turn(0.045), 0.15, under, SRGBColorSpace);
   const h = turn(b.h - r.h);
   const l = role === "gilt" ? gilt : reanchor(b.l, r.l, m.l);
   return out.setHSL(h, reanchor(b.s, r.s, m.s), l, SRGBColorSpace);
@@ -185,6 +191,14 @@ export function washColor(
  * which the drawing's Platform shade sets.
  */
 export const WARM_LIGHTNESS = 0xc6 / 0xff; // #c6c6c6 under a grey main colour
+
+/**
+ * The `under` role's lightness (sRGB HSL): the 1st and 2nd floors'
+ * undersides, near black, so a floor seen from under the tower reads as
+ * the dark mass it is and not as the paper. The default of `washColor`'s
+ * `under`, which the drawing's Underside shade sets.
+ */
+export const UNDER_LIGHTNESS = 0.15;
 
 /** The `gilt` role's lightness (sRGB HSL; past 1, brighter than white): the gilded names. The default of `washColor`'s `gilt`, which the drawing's Names shade sets. */
 export const GILT_LIGHTNESS = 0.92;
@@ -328,9 +342,10 @@ export function createWash(): Wash {
   let mono = false;
   let warm = WARM_LIGHTNESS;
   let gilt = GILT_LIGHTNESS;
+  let under = UNDER_LIGHTNESS;
   const seen = new Map<
     Material,
-    { base: number; main: number; role: WashRole; mono: boolean; warm: number; gilt: number }
+    { base: number; main: number; role: WashRole; mono: boolean; warm: number; gilt: number; under: number }
   >();
 
   function colour(m: MeshStandardMaterial, state: Taught): void {
@@ -344,12 +359,13 @@ export function createWash(): Wash {
       was.role === role &&
       was.mono === mono &&
       was.warm === warm &&
-      was.gilt === gilt
+      was.gilt === gilt &&
+      was.under === under
     )
       return;
-    seen.set(m, { base, main: main.getHex(), role, mono, warm, gilt });
+    seen.set(m, { base, main: main.getHex(), role, mono, warm, gilt, under });
     // A Color holds linear, which is what the shader wants.
-    washColor(m.color, main, reference, state.albedo.value, role, mono, warm, gilt);
+    washColor(m.color, main, reference, state.albedo.value, role, mono, warm, gilt, under);
     // A pane at the lit look's fifth is a pane the wash cannot show; the
     // drawing tints its glass plainly.
     state.opacity.value = role === "glass" ? GLASS_OPACITY : -1;
@@ -390,11 +406,12 @@ export function createWash(): Wash {
       // A Color set from a hex holds linear, which is what the shader wants.
       uniforms.washPaper.value.setHex(paper);
     },
-    paint(hex, all = false, floors = WARM_LIGHTNESS, names = GILT_LIGHTNESS) {
+    paint(hex, all = false, floors = WARM_LIGHTNESS, names = GILT_LIGHTNESS, undersides = UNDER_LIGHTNESS) {
       main.setHex(hex);
       mono = all;
       warm = floors;
       gilt = names;
+      under = undersides;
     },
   };
 }

@@ -206,6 +206,7 @@ import {
   promoteAttribute,
   removeAttribute,
   spawnInstances,
+  sub,
   transformPoints,
   vec,
 } from "pcg-ts";
@@ -1671,6 +1672,23 @@ function placedMesh(site: Site, id: string, lots: ReadonlyArray<Lot<Piece>>, bui
     g.connect(out, "out", all, "in");
   }
   return smoothed(g, id, all);
+}
+
+/**
+ * `mesh` parted at a deck's underside, height `y`: `under` is every face
+ * lying in that plane (within 0.01) and facing down, read off its points'
+ * normals, and `rest` everything else. Meant for boxes, whose corners are
+ * split per face (each face its own points and normal), so a triangle's
+ * points are all of one face and no triangle is cut by the filter.
+ */
+function soffitParted(g: Graph, id: string, mesh: NodeHandle, y: number): { under: NodeHandle; rest: NodeHandle } {
+  const flush = mul(lt(component(attribute("normal"), 1), -0.99), lt(abs(sub(component(position(), 1), y)), 0.01));
+  const kept = (predicate: FieldLike, name: string): NodeHandle => {
+    const out = g.add(filterByExpression, { predicate, topology: "keep" }, `${id}${name}`);
+    g.connect(mesh, "out", out, "in");
+    return out;
+  };
+  return { under: kept(flush, "Soffit"), rest: kept(eq(flush, 0), "Clear") };
 }
 
 /** `source` copied onto every point of `targets`, its primitives kept and its `normal` turned with each copy. */
@@ -4085,6 +4103,12 @@ interface Deck {
   readonly y0: number;
   readonly depth: number;
   readonly wells: ReadonlyArray<ReadonlyArray<readonly [number, number]>>;
+  /**
+   * Its underside, the face it shows the ground, comes out as a mesh of
+   * its own (`decks`' `undersides`, the "deckUndersides" class) rather
+   * than with the rest of the deck.
+   */
+  readonly underside?: boolean;
 }
 
 /**
@@ -4101,6 +4125,10 @@ interface Deck {
  * - the 3rd floor's octagon, less its wells, drawn 0.01 deeper than the
  *   edge beams, so its underside does not lie in the plane of panel 29's
  *   plate girders, which `summit.ts` hangs to the same 0.85.
+ *
+ * The 1st and 2nd floors' undersides are their own class, the broad
+ * ceilings seen from under the tower; the landing's and the 3rd floor's
+ * stay with their decks.
  */
 function deckPlans(): Deck[] {
   const onPlan = (f: number, a: number, r: number): [number, number] => {
@@ -4119,6 +4147,7 @@ function deckPlans(): Deck[] {
       plan: square(TERRACE_EDGE),
       y0: FLOORS.first - DECK,
       depth: DECK,
+      underside: true,
       wells: [
         ALL.flatMap((f) => voidOutline(0).slice(1).map(([a, r]) => onPlan(f, a, r))),
         ...TERRACE_RAIL.entrance.flatMap((f) =>
@@ -4132,6 +4161,7 @@ function deckPlans(): Deck[] {
       plan: square(PLATFORMS.second.side / 2),
       y0: FLOORS.second - DECK,
       depth: DECK,
+      underside: true,
       wells: [
         ...ALL.map((k) => wellPlan(turnWell(STAIR_OPENINGS.e1, k))),
         ...[1, 3].flatMap((k) => LIFT_OPENINGS.second.map((w) => wellPlan(turnWell(w, k)))),
@@ -4153,11 +4183,20 @@ function deckPlans(): Deck[] {
 }
 
 /**
- * The decks as one mesh named `id`: each deck's plan at its underside,
- * less its wells (`polygonBoolean`, one group a deck, so a deck's wells
- * cut only that deck), extruded up by its depth, its holes walled.
+ * The decks as two meshes: each deck's plan at its underside, less its
+ * wells (`polygonBoolean`, one group a deck, so a deck's wells cut only
+ * that deck), extruded up by its depth, its holes walled. `caps` is one
+ * value per node, so the cut is extruded twice, once open below (`Body`)
+ * and once as its bottom caps alone (`Bottoms`): the same outlines,
+ * so the same triangulation and the same edge points the one closed
+ * extrusion had. The bottoms are then parted by deck, on their points'
+ * `deck` with the triangles kept whole (they are the input's outlines
+ * after the cut, renumbered, so a filter before the extrusion would
+ * break `holeOf`): `undersides` is the bottoms of the `underside` decks,
+ * and `closed`, named `id`, the body with every other deck's bottom.
+ * Together they are the closed decks, every face once.
  */
-function decks(g: Graph, id: string, list: readonly Deck[]): NodeHandle {
+function decks(g: Graph, id: string, list: readonly Deck[]): { closed: NodeHandle; undersides: NodeHandle } {
   const at = (plan: Deck["plan"], y: number) => plan.map(([x, z]): Vec3 => [x, y, z]);
   const promoted = (node: NodeHandle, name: string, from: "point" | "primitive", to: "point" | "primitive") => {
     const out = g.add(promoteAttribute, { name: "deck", from, to, mode: "first" }, `${id}${name}`);
@@ -4170,9 +4209,26 @@ function decks(g: Graph, id: string, list: readonly Deck[]): NodeHandle {
   const cut = g.add(polygonBoolean, { operation: "difference", groupAttr: "deck" }, `${id}Cut`);
   g.connect(promoted(plans, "PlanKeys", "point", "primitive"), "out", cut, "in");
   g.connect(promoted(wells, "WellKeys", "point", "primitive"), "out", cut, "clip");
-  const solid = g.add(extrudePolygon, { distance: lookup(attribute("deck"), list.map((d) => d.depth)) }, id);
-  g.connect(promoted(cut, "Keys", "primitive", "point"), "out", solid, "in");
-  return solid;
+  const keyed = promoted(cut, "Keys", "primitive", "point");
+  const depth = lookup(attribute("deck"), list.map((d) => d.depth));
+  const extruded = (caps: "top" | "bottom", sides: boolean, name: string): NodeHandle => {
+    const out = g.add(extrudePolygon, { distance: depth, caps, sides }, `${id}${name}`);
+    g.connect(keyed, "out", out, "in");
+    return out;
+  };
+  const bottoms = extruded("bottom", false, "Bottoms");
+  // Every bottom triangle's points are of one deck, so `keep` keeps a
+  // deck's caps whole or drops them whole.
+  const parted = (apart: boolean, name: string): NodeHandle => {
+    const flags = list.map((d) => ((d.underside === true) === apart ? 1 : 0));
+    const out = g.add(filterByExpression, { predicate: lookup(attribute("deck"), flags), topology: "keep" }, name);
+    g.connect(bottoms, "out", out, "in");
+    return out;
+  };
+  const closed = g.add(mergePrimitives, {}, id);
+  g.connect(extruded("top", true, "Body"), "out", closed, "in");
+  g.connect(parted(false, `${id}ClosedBottoms`), "out", closed, "in");
+  return { closed, undersides: parted(true, `${id}Undersides`) };
 }
 
 /**
@@ -5630,9 +5686,20 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
     ["pavilionDress", "pavilionDressCurved", ["pavilion", "francais", "russe", "anglo", "flamand"]],
     ["arcadeDress", "arcadeDressCurved", ["arcade"]],
   ];
+  // The entrance landing's slab carries the 1st floor's deck on past the
+  // terrace's edge between the newels (`entranceFace`), its bottom flush
+  // with the deck's: that bottom is the floor's underside too, and is
+  // parted out of the entrance's boxes into the deck's undersides.
+  const undersides: NodeHandle[] = [];
   const fitParts = meshes.flatMap(([boxes, curved, prefixes]) => {
     const of = prefixes.map((p) => parts[p] ?? {});
-    return [placedMesh(site, boxes, gathered(of, blocksOnly)), placedMesh(site, curved, gathered(of, prismsOnly))];
+    let box = placedMesh(site, boxes, gathered(of, blocksOnly));
+    if (prefixes.includes("entrance")) {
+      const parted = soffitParted(g, boxes, box, FLOORS.first - DECK);
+      box = parted.rest;
+      undersides.push(parted.under);
+    }
+    return [box, placedMesh(site, curved, gathered(of, prismsOnly))];
   });
   const arcade = arcadeDressFace();
   const fittings = [
@@ -5653,12 +5720,14 @@ export function buildPlatforms(g: Graph, quads: NodeHandle): Parts {
   put(curved, all, { prisms: [skirt, ...secondSkirtFace(), ...second.roof] });
   put(curved, roofed, { prisms: roof.prisms });
   for (const lot of [...ornament, ...panelling]) put(curved, lot.place, { prisms: lot.drawn.prisms });
-  const fitPrisms = placedMesh(site, "fitOutCurved", curved.filter((l) => l.drawn.prisms.length > 0), [
-    decks(g, "decks", deckPlans()),
-  ]);
+  const deck = decks(g, "decks", deckPlans());
+  const fitPrisms = placedMesh(site, "fitOutCurved", curved.filter((l) => l.drawn.prisms.length > 0), [deck.closed]);
 
   return {
     platforms: [grilles, fitBlocks, fitPrisms, ...fitParts],
+    // Flat caps facing straight down, every normal already the cap's own:
+    // nothing for `smoothed` to do.
+    deckUndersides: [deck.undersides, ...undersides],
     glass: [placedMesh(site, "restaurantGlass", glazed.glass)],
     silvered: [placedMesh(site, "crescentGlass", glazed.silvered)],
     fittings,

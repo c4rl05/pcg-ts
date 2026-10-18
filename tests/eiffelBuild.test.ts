@@ -250,6 +250,15 @@ describe("the erection's dates", () => {
         if (y > 58.2 && y < 69) expect(c.staged.triDays[t]!, cls).toBeGreaterThanOrEqual(MILESTONES.firstPlatform);
       }
     }
+    // The 1st and 2nd floors' undersides go up with their decks, never
+    // before them.
+    const under = at("deckUndersides")!;
+    expect(under.index.length).toBeGreaterThan(0);
+    for (let t = 0; t < under.index.length / 3; t++) {
+      const y = under.position[3 * under.index[3 * t]! + 1]!;
+      const deck = y < 90 ? MILESTONES.firstPlatform : MILESTONES.secondPlatform;
+      expect(under.staged.triDays[t]!, `deckUndersides at ${y.toFixed(2)}`).toBeGreaterThanOrEqual(deck);
+    }
     // The names, the glass: the spring of 1889 or the autumn before, never with the iron.
     for (const cls of ["names", "glass"]) {
       const c = at(cls);

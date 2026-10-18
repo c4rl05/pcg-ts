@@ -192,7 +192,11 @@ const MINE = [
   "secondFitOutCurved",
 ] as const;
 
-/** The deck's (fitOutCurved) and the rest of the platforms' own (fitOut) meshes. */
+/**
+ * The deck's (fitOutCurved) and the rest of the platforms' own (fitOut)
+ * meshes. The 1st and 2nd floors' undersides are not in fitOutCurved but
+ * in their own class, "deckUndersides", which `foreign` reads with the rest.
+ */
 const DECKS = ["fitOut", "fitOutCurved"] as const;
 
 let geo: Record<string, Geometry>;

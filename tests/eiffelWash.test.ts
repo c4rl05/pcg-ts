@@ -55,7 +55,7 @@ describe("washColor", () => {
   it("mono gives every generated colour the main colour's hue and saturation, keeping its lightness", () => {
     const main = new Color(0xb87a66);
     const m = hsl(main);
-    const roles = ["paint", "stone", "glass", "warm", "gilt"] as const;
+    const roles = ["paint", "stone", "glass", "warm", "under", "gilt"] as const;
     for (const hex of [0x6b4d3b, 0xcdc3ae, 0xb9ccc8, 0xc9a14a, 0x4f3a2e]) {
       for (const role of roles) {
         const plain = hsl(washColor(new Color(hex), main, ref, new Color(), role));

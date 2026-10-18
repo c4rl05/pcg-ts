@@ -30,6 +30,18 @@ export const PART_CLASSES = [
    * are the pavilions' dress, not the climb, and stay in "platforms".
    */
   "stairs",
+  /**
+   * The undersides of the 1st and 2nd floors' decks: the broad ceilings
+   * seen from under the tower, each deck's bottom face less its wells
+   * (`platforms.ts` `decks`), and the bottoms of the two entrance
+   * landings' slabs, which carry the 1st floor's deck on past its edge
+   * (`soffitParted`). The rest of each deck stays in "platforms",
+   * and so do the landing's and the 3rd floor's undersides. A class of its
+   * own so it can take a dark paint while the floors' fit-out reads light;
+   * jittered with the platforms (`JITTERED_WITH`), so its edges stay
+   * welded to the decks' walls.
+   */
+  "deckUndersides",
   /** The masonry pedestals. */
   "masonry",
   /**
@@ -302,8 +314,18 @@ export type Parts = Partial<Record<PartClass, NodeHandle[]>> & {
  * is the one the jitter exists to avoid, kept as it was: a stair face that
  * coincides with a platform's (a newel's foot on its deck) is not parted
  * from it, which is a tie between two faces of one paint.
+ *
+ * The 1st and 2nd floors' deck undersides ride the platforms for the
+ * other half of that reason: each was a deck's bottom cap, its edge
+ * points coincident with the deck's walls and of the same seed, so
+ * jittered together they stay welded where a jitter of their own would
+ * open a millimetre's crack round every deck and well.
  */
-export const JITTERED_WITH: Partial<Record<PartClass, PartClass>> = { stairs: "platforms", groundIron: "machinery" };
+export const JITTERED_WITH: Partial<Record<PartClass, PartClass>> = {
+  stairs: "platforms",
+  deckUndersides: "platforms",
+  groundIron: "machinery",
+};
 
 /** The primitive tag a class jittered with another is taken back out by: its place in `PART_CLASSES`, plus one. */
 const PARTED = "partedClass";

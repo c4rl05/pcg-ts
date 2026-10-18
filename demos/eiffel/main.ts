@@ -199,6 +199,10 @@ const PALETTE: Record<PartClass, { color: number; roughness: number; metalness: 
   // (parts.ts), and keep its paint: the class is there so a stair can be
   // judged and highlighted apart, not so it reads differently.
   stairs: { color: 0x7d5e48, roughness: 0.7, metalness: 0.1 },
+  // The 1st and 2nd floors' undersides: the same paint in the deck's own
+  // shadow, a step under the machinery's, so the floors read as dark
+  // masses from below rather than as the fit-out's light end.
+  deckUndersides: { color: 0x3a2a20, roughness: 0.75, metalness: 0.1 },
   masonry: { color: 0xcdc3ae, roughness: 0.93, metalness: 0 },
   // What is under the ground: rubble, concrete and brick, a darker and
   // warmer stone than the pedestals' cast facing.
@@ -269,14 +273,16 @@ Object.assign(MATERIALS.glass, {
  * to the iron would carry the wrong thing (wash.ts `WashRole`): the stone
  * is a near-grey, never the iron's red; the glass a pale cool grey-blue;
  * and the floors' fit-out the warm cream of a lit interior, which is what
- * sets the floors apart from the lattice in an illustrated cutaway; the
- * gilded names a pale band on the iron.
+ * sets the floors apart from the lattice in an illustrated cutaway, and
+ * their undersides near black under it, so a floor seen from below reads
+ * as the mass it is; the gilded names a pale band on the iron.
  */
 const WASH_ROLES: Partial<Record<PartClass, WashRole>> = {
   masonry: "stone",
   foundations: "stone",
   glass: "glass",
   platforms: "warm",
+  deckUndersides: "under",
   names: "gilt",
 };
 for (const [cls, role] of Object.entries(WASH_ROLES)) MATERIALS[cls as PartClass].userData.washRole = role;
@@ -1111,7 +1117,7 @@ function applyDrawing(): void {
   rig.ink.composite(drawingComposite(drawing));
   rig.ink.haze(drawingHaze(drawing));
   rig.wash.shade(drawingShading(drawing));
-  rig.wash.paint(drawing.main, drawing.mono, drawing.platformShade, drawing.namesShade);
+  rig.wash.paint(drawing.main, drawing.mono, drawing.platformShade, drawing.namesShade, drawing.undersideShade);
   rig.wash.ownWash(drawing.washed ? drawing.flagWash : 0, drawing.paper);
   const colour = drawing.colour;
   rig.setInk(true, colour);
@@ -1248,6 +1254,7 @@ if (lookBox !== undefined) {
     "bracing",
     "arches",
     "platforms",
+    "deckUndersides",
     "machinery",
     "masonry",
     "foundations",
@@ -1274,6 +1281,7 @@ if (lookBox !== undefined) {
         drawing.mono,
         drawing.platformShade,
         drawing.namesShade,
+        drawing.undersideShade,
       );
       (chips[i] as HTMLElement).style.background = `#${c.getHexString()}`;
     });
@@ -1287,10 +1295,12 @@ if (lookBox !== undefined) {
   });
   monoBox.title = "Every generated colour at the main colour's hue and saturation: a grey main makes a grey drawing";
   palette.append(monoBox.parentElement as HTMLElement);
-  // The floors' fit-out, which the palette otherwise sets a step under the paper.
+  // The floors' fit-out, which the palette otherwise sets a step under the
+  // paper, and the 1st and 2nd floors' undersides under it.
   slider(palette, ["Platform shade", "platformShade", 0, 1, 0.01, f2]);
+  slider(palette, ["Underside shade", "undersideShade", 0, 1, 0.01, f2]);
   slider(palette, ["Names shade", "namesShade", 0, 3, 0.01, f2]);
-  for (const field of ["platformShade", "namesShade"] as const)
+  for (const field of ["platformShade", "undersideShade", "namesShade"] as const)
     sliders.get(field)?.input.addEventListener("input", paintSwatches);
 
   const shading = section(colourGroup.sub, "Shading");

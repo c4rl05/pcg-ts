@@ -436,7 +436,7 @@ describe("Eiffel walk: the climb on foot", () => {
     }, 600_000);
 
     it("reads the classes a walker could meet", () => {
-      for (const cls of ["uprights", "bracing", "horizontals", "girders", "platforms", "stairs", "summit", "machinery", "glass"]) {
+      for (const cls of ["uprights", "bracing", "horizontals", "girders", "platforms", "deckUndersides", "stairs", "summit", "machinery", "glass"]) {
         expect(tower.classes, cls).toContain(cls);
       }
       expect(tower.tris.length).toBeGreaterThan(10_000);

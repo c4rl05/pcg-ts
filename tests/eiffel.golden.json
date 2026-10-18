@@ -452,6 +452,15 @@
         "instances": 0,
         "hash": "d368fec4b4ccc492"
       },
+      "deckUndersides": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 260,
+        "vertices": 735,
+        "primitives": 245,
+        "instances": 0,
+        "hash": "7ee30e20341fb834"
+      },
       "fittings.balusters": {
         "kind": "instances",
         "items": 1,
@@ -554,11 +563,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 407892,
-        "vertices": 672018,
-        "primitives": 224006,
+        "points": 407632,
+        "vertices": 671283,
+        "primitives": 223761,
         "instances": 0,
-        "hash": "a691e42adbf217f7"
+        "hash": "c7ef84a697f14efe"
       },
       "silvered": {
         "kind": "geometry",
@@ -1138,6 +1147,15 @@
         "instances": 0,
         "hash": "d368fec4b4ccc492"
       },
+      "deckUndersides": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 260,
+        "vertices": 735,
+        "primitives": 245,
+        "instances": 0,
+        "hash": "7ee30e20341fb834"
+      },
       "fittings.balusters": {
         "kind": "instances",
         "items": 1,
@@ -1249,11 +1267,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 407892,
-        "vertices": 672018,
-        "primitives": 224006,
+        "points": 407632,
+        "vertices": 671283,
+        "primitives": 223761,
         "instances": 0,
-        "hash": "a691e42adbf217f7"
+        "hash": "c7ef84a697f14efe"
       },
       "silvered": {
         "kind": "geometry",
@@ -1743,6 +1761,15 @@
         "instances": 0,
         "hash": "d368fec4b4ccc492"
       },
+      "deckUndersides": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 260,
+        "vertices": 735,
+        "primitives": 245,
+        "instances": 0,
+        "hash": "7ee30e20341fb834"
+      },
       "fittings.balusters": {
         "kind": "instances",
         "items": 1,
@@ -1854,11 +1881,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 407892,
-        "vertices": 672018,
-        "primitives": 224006,
+        "points": 407632,
+        "vertices": 671283,
+        "primitives": 223761,
         "instances": 0,
-        "hash": "a691e42adbf217f7"
+        "hash": "c7ef84a697f14efe"
       },
       "rivets.ff.arches.chords": {
         "kind": "instances",
@@ -2870,6 +2897,15 @@
         "instances": 0,
         "hash": "d368fec4b4ccc492"
       },
+      "deckUndersides": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 260,
+        "vertices": 735,
+        "primitives": 245,
+        "instances": 0,
+        "hash": "7ee30e20341fb834"
+      },
       "fittings.balusters": {
         "kind": "instances",
         "items": 1,
@@ -2981,11 +3017,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 407892,
-        "vertices": 672018,
-        "primitives": 224006,
+        "points": 407632,
+        "vertices": 671283,
+        "primitives": 223761,
         "instances": 0,
-        "hash": "a691e42adbf217f7"
+        "hash": "c7ef84a697f14efe"
       },
       "rivets.ff.arches.chords": {
         "kind": "instances",
@@ -4006,6 +4042,15 @@
         "instances": 0,
         "hash": "d368fec4b4ccc492"
       },
+      "deckUndersides": {
+        "kind": "geometry",
+        "items": 1,
+        "points": 260,
+        "vertices": 735,
+        "primitives": 245,
+        "instances": 0,
+        "hash": "7ee30e20341fb834"
+      },
       "fittings.balusters": {
         "kind": "instances",
         "items": 1,
@@ -4108,11 +4153,11 @@
       "platforms": {
         "kind": "geometry",
         "items": 1,
-        "points": 407892,
-        "vertices": 672018,
-        "primitives": 224006,
+        "points": 407632,
+        "vertices": 671283,
+        "primitives": 223761,
         "instances": 0,
-        "hash": "a691e42adbf217f7"
+        "hash": "c7ef84a697f14efe"
       },
       "silvered": {
         "kind": "geometry",

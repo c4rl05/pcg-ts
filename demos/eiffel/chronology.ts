@@ -496,12 +496,14 @@ export function pieceDay(cls: string, b: Box6): number {
       // (parts.ts), and dated as that class still is.
       return Math.max(s, machineryDay(b));
     case "platforms":
+    case "deckUndersides":
     case "stairs":
     case "glass":
     case "silvered": {
-      // The stairs were the floors' until they became a class of their own
-      // (parts.ts), and are dated as the floors' iron still is.
-      const iron = cls === "platforms" || cls === "stairs";
+      // The stairs and the decks' undersides were the floors' until they
+      // became classes of their own (parts.ts), and are dated as the
+      // floors' iron still is.
+      const iron = cls === "platforms" || cls === "deckUndersides" || cls === "stairs";
       const floor = floorOf(b);
       if (floor < 0) {
         // Round the legs' feet, in the plinths' ring: their dress (the

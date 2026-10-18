@@ -34,6 +34,12 @@ export interface DrawingSpec {
    */
   readonly platformShade: number;
   /**
+   * The floors' undersides' tone: the 1st and 2nd floors' decks seen from
+   * below (the `under` role, wash.ts `washColor`) as a lightness, 0 black
+   * to 1 the paper's white.
+   */
+  readonly undersideShade: number;
+  /**
    * The names' tone: the gilded names on the frieze (the `gilt` role, wash.ts
    * `washColor`) as a lightness, 0 black to 1 the paper's white; past 1,
    * brighter than white, so its shaded faces stay light too.
@@ -158,6 +164,7 @@ export const DRAWING_DEFAULT: DrawingSpec = {
   main: 0xcccccc,
   mono: true,
   platformShade: 1,
+  undersideShade: 0.4,
   namesShade: 3,
   paper: 0xffffff,
   cel: false,
