@@ -135,12 +135,13 @@ const GUIDES = {
       // (-0.25, 0.15, 0.96): a little toward the sun and a little above, so
       // the whole panel width — the X of the diagonals, the laced mid-panel
       // horizontal, the gusset plates where it lands on both uprights —
-      // is in frame, and a 19 mm rivet head is still several pixels. One
-      // quality for all three, so their compression compares too; 0.78
-      // keeps the laced and riveted frames under 350 KB.
+      // is in frame, and a 19 mm rivet head is still several pixels. Each
+      // quality is the highest that keeps its frame under 350 KB: the laced
+      // and riveted lattices are the densest detail in the guide, and at
+      // 0.78 they came to about 412 and 420 KB (2026-10-18).
       { id: "panel-skeleton", query: "cam=37.7,24.55,58.5,40.45,22.9,47.95", out: [1720, 968], quality: 0.78 },
-      { id: "panel-laced", query: "laced&cam=37.7,24.55,58.5,40.45,22.9,47.95", out: [1720, 968], quality: 0.78 },
-      { id: "panel-rivets", query: "rivets&cam=37.7,24.55,58.5,40.45,22.9,47.95", out: [1720, 968], quality: 0.78 },
+      { id: "panel-laced", query: "laced&cam=37.7,24.55,58.5,40.45,22.9,47.95", out: [1720, 968], quality: 0.69 },
+      { id: "panel-rivets", query: "rivets&cam=37.7,24.55,58.5,40.45,22.9,47.95", out: [1720, 968], quality: 0.68 },
 
       // A node of the same face close up at the riveted depth: where the
       // node XXVII horizontal and the web bars land on the outer corner

@@ -475,7 +475,7 @@ const DEMOS = [
     // caught: a thumbnail shot of a running page would put each car
     // wherever the machine's boot time left it. Parked is also the page's
     // own sourced arrangement, which is what the thumbnail should show.
-    path: "demos/eiffel/?still&cam=360,140,470,0,110,0",
+    path: "demos/eiffel/?still&cam=360,167.3,470,0,137.3,0",
     // One cook, no streaming, and — under `?still` — no clock: the page
     // sets `data-ready` on the body two frames after the scene is complete
     // (the first of the two draws the shadow map, which is only redrawn
