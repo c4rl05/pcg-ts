@@ -113,12 +113,12 @@
     <p>It is built to be driven by AI agents as much as by humans: nodes carry machine-readable schemas, graphs serialize to stable JSON, and every error names the node, pin, or param at fault and states the fix.</p>
 
     <div class="stats">
-      <div class="stat"><b>6,122</b><span>tests, all green</span></div>
+      <div class="stat"><b>8,318</b><span>tests, all green</span></div>
       <div class="stat"><b>68</b><span>registered node types</span></div>
       <div class="stat"><b>37</b><span>named primitives</span></div>
       <div class="stat"><b>64</b><span>field-grammar functions</span></div>
       <div class="stat"><b>0</b><span>required dependencies</span></div>
-      <div class="stat"><b><!--pcg:version-minor-->v0.17<!--/pcg:version-minor--></b><span>MIT · ESM · strict TS</span></div>
+      <div class="stat"><b><!--pcg:version-minor-->v0.18<!--/pcg:version-minor--></b><span>MIT · ESM · strict TS</span></div>
     </div>
   </section>
 
@@ -195,7 +195,7 @@
       <a class="example" href="./demos/road/"><img src="./thumbs/road.jpg" width="640" height="345" loading="lazy" decoding="async" alt="The road demo, shown small: the same circuit as the racetrack card, drawn as a pale ribbon from above with the driven view beneath it — but the verges carry one evenly spaced row of identical small boxes per side instead of varied art. A controls-and-readout panel fills the left edge, too small at this size to read."><span class="meta"><b>road</b><span>the same page with none of the placement rules in it — one spline, one sweep, one evenly spaced row per side, shot at the same station so the difference between the two pictures is exactly what the rules add</span></span></a>
       <a class="example" href="./demos/cave/"><img src="./thumbs/cave.jpg" width="640" height="345" loading="lazy" decoding="async" alt="The cave demo, shown small: a warm-lit rock interior of smooth bulging walls and dark openings receding into shadow, lit from the camera. A controls-and-readout panel fills the left edge, too small at this size to read."><span class="meta"><b>cave</b><span>one node with no inputs makes the whole world: meshFromField contours a noise into triangles, and the level cuts space into CUBE cells rather than the flat ones every other world here uses — each cube is contoured knowing nothing of its neighbours, and the seam you cannot find between any two of them is the claim being demonstrated</span></span></a>
       <a class="example" href="./demos/lanterns/"><img src="./thumbs/lanterns.jpg" width="640" height="345" loading="lazy" decoding="async" alt="The lanterns demo, shown small: a few thousand small glowing octahedra of many different hues hanging in a drifting sheet over a dark ground grid, thinning toward the horizon. A controls-and-readout panel fills the left edge, too small at this size to read."><span class="meta"><b>lanterns</b><span>one u32 per instance is the whole interface between a graph and a shader — the graph settles where each lantern hangs and the seed it carries, the page derives colour, pulse and bob from that integer and a clock the graph never sees; switch the id source to the f32 copy and watch the colour wheel collapse</span></span></a>
-      <a class="example" href="./demos/eiffel/"><img src="./thumbs/eiffel.jpg" width="640" height="345" loading="lazy" decoding="async" alt="The eiffel demo, shown small: a brown iron lattice tower on four pale stone pedestals under a pale grey-blue sky, seen three-quarters on so all four legs and both platforms show, its shadow thrown back and to the right across sand-coloured ground. A controls-and-readout panel fills the left edge, too small at this size to read."><span class="meta"><b>eiffel</b><span>the tower as built in 1889, its large structure Eiffel’s own plates — the 29 panels of Plate XXXI, node by node — and everything smaller placed by rule, a bracing and a lacing per region; cooked once, one output per part class, and lit by a low sun because a lattice reads by its shadows. Three depths, each a different graph: the skeleton, the web laced into struts, and the rivets on top as instances, by the million</span></span></a>
+      <a class="example" href="./demos/eiffel/"><img src="./thumbs/eiffel.jpg" width="640" height="345" loading="lazy" decoding="async" alt="The eiffel demo, shown small: the lattice tower drawn in grey lines and wash on white paper, seen three-quarters on so all four legs and both platforms show, its shadow a pale grey on the paper behind it and to the right. A controls-and-readout panel fills the left edge, too small at this size to read."><span class="meta"><b>eiffel</b><span>the tower as built in 1889, its large structure Eiffel’s own plates — the 29 panels of Plate XXXI, node by node — and everything smaller placed by rule, a bracing and a lacing per region; cooked once, one output per part class, and lit by one sun because a lattice reads by its shadows. Three depths, each a different graph: the skeleton, the web laced into struts, and the rivets on top as instances, by the million</span></span></a>
     </div>
     <p><a class="more-link" href="./guides/racetrack.html">How the racetrack decides what stands beside the road, and where →</a></p>
     <p><a class="more-link" href="./guides/lanterns.html">How one integer per lantern becomes a colour, a flicker and a bob →</a></p>
@@ -221,7 +221,7 @@
 
 <footer>
   <div class="wrap" style="display:flex; flex-wrap:wrap; gap:8px 28px;">
-    <span>PCG-TS <!--pcg:version-->v0.17.0<!--/pcg:version--></span>
+    <span>PCG-TS <!--pcg:version-->v0.18.0<!--/pcg:version--></span>
     <span>MIT license</span>
     <a href="./manual.html">user manual</a>
     <a href="./architecture.html">architecture</a>

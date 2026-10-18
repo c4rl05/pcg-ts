@@ -2,7 +2,7 @@
 
 > Deterministic procedural content generation for TypeScript: attributes on point, vertex, primitive and detail domains, node graphs that serialize to JSON, deferred fields, hierarchical streaming, optional GPU cooking and three.js interop.
 
-Version 0.17.0. Pre-alpha: the API and the graph JSON format change between releases, so training data about this library is likely wrong. Read the guide for the installed version before writing code or graph JSON, and look every node, param, pin and field fn name up rather than guessing it.
+Version 0.18.0. Pre-alpha: the API and the graph JSON format change between releases, so training data about this library is likely wrong. Read the guide for the installed version before writing code or graph JSON, and look every node, param, pin and field fn name up rather than guessing it.
 
 In a project that depends on pcg-ts, `npx pcg agents --write` puts a short, versioned pointer block into AGENTS.md (`--claude` also imports it from CLAUDE.md).
 
