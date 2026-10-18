@@ -149,6 +149,19 @@ export interface InkSpec {
    * Only over a colour.
    */
   readonly farFill: number;
+  /**
+   * LEVELS over the finished drawing, on its sRGB values, in this order:
+   * `blackPoint` and `whitePoint` stretch that range to the whole, all
+   * below the one ink-black and all above the other paper-white; `gamma`
+   * then lifts the middle tones past 1 and sinks them under it; `contrast`
+   * last, an S-curve about the middle grey, past 1 steeper and under 1
+   * flatter. None moves black, white or (contrast) the middle grey, so the
+   * paper stays the paper. 0, 1, 1 and 1 are no change.
+   */
+  readonly blackPoint: number;
+  readonly whitePoint: number;
+  readonly gamma: number;
+  readonly contrast: number;
 }
 
 /**
@@ -192,6 +205,10 @@ export const INK_DEFAULT: InkSpec = {
   gap: 0,
   farTint: 0,
   farFill: 0,
+  blackPoint: 0,
+  whitePoint: 1,
+  gamma: 1,
+  contrast: 1,
 };
 
 /**
@@ -377,6 +394,9 @@ const RESOLVE = /* glsl */ `
   uniform float shadowOn;
   uniform vec3 shadowColour;
   uniform float ghost;
+  uniform vec2 levels;
+  uniform float gamma;
+  uniform float contrast;
   uniform vec2 texel;
   uniform float sigma;
   uniform float strength;
@@ -387,6 +407,15 @@ const RESOLVE = /* glsl */ `
   vec3 toSRGB(vec3 c) {
     c = clamp(c, 0.0, 1.0);
     return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
+  }
+
+  // The levels (\`InkSpec.blackPoint\` to \`contrast\`), last of all.
+  vec3 post(vec3 c) {
+    c = clamp((c - levels.x) / max(levels.y - levels.x, 1e-3), 0.0, 1.0);
+    c = pow(c, vec3(1.0 / gamma));
+    vec3 lo = 0.5 * pow(2.0 * c, vec3(contrast));
+    vec3 hi = 1.0 - 0.5 * pow(2.0 * (1.0 - c), vec3(contrast));
+    return mix(lo, hi, step(0.5, c));
   }
 
   void main() {
@@ -437,7 +466,8 @@ const RESOLVE = /* glsl */ `
     // rest of the drawing fades whole. With no ghost (1) all are no change.
     coverage *= mix(1.0, ghost, flatPaint - keptPaint);
     vec3 drawn = mix(mix(base, pen, coverage), paper, hazed);
-    gl_FragColor = vec4(mix(mix(paper, drawn, ghost), drawn, flatPaint), 1.0);
+    vec3 finished = mix(mix(paper, drawn, ghost), drawn, flatPaint);
+    gl_FragColor = vec4(post(finished), 1.0);
   }
 `;
 
@@ -540,6 +570,9 @@ export function createInk(
       shadowOn: { value: 0 },
       shadowColour: { value: new Color() },
       ghost: { value: 1 },
+      levels: { value: new Vector2(0, 1) },
+      gamma: { value: 1 },
+      contrast: { value: 1 },
       texel: { value: new Vector2(1 / width, 1 / height) },
       sigma: { value: 0 },
       strength: { value: 1 },
@@ -596,6 +629,9 @@ export function createInk(
     resolveMaterial.uniforms.farFill.value = spec.farFill * (1 - spec.fadeFloor);
     const r = resolveMaterial.uniforms;
     r.strength.value = spec.strength;
+    (r.levels.value as Vector2).set(spec.blackPoint, spec.whitePoint);
+    r.gamma.value = spec.gamma;
+    r.contrast.value = spec.contrast;
     (r.ink.value as Color).copy(srgb(spec.ink));
     (r.paper.value as Color).copy(srgb(spec.paper));
     fit();

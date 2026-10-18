@@ -438,7 +438,7 @@ function setHighlight(root: Object3D, h: Highlight, on: boolean): void {
  * pen has no colour to carry the mark: its highlights draw over the
  * tower's lines, which do not fade.
  */
-let ghostOpacity = 0.3;
+let ghostOpacity = 0.5;
 
 /**
  * THE DEPTH CLEAR: an object that draws nothing, ordered after the tower
@@ -1313,6 +1313,12 @@ if (lookBox !== undefined) {
   toggle(lighting, "Second light", "light2", [
     ["Strength", "light2Strength", 0, 1.5, 0.01, f2],
   ]);
+  toggle(lighting, "Third light", "light3", [
+    ["Strength", "light3Strength", 0, 1.5, 0.01, f2],
+  ]);
+  toggle(lighting, "Fourth light", "light4", [
+    ["Strength", "light4Strength", 0, 1.5, 0.01, f2],
+  ]);
   slider(lighting, ["Shade", "shade", 0, 1.5, 0.01, f2]);
   toggle(lighting, "Shadows", "shadows");
   toggle(lighting, "Ground", "groundShadow");
@@ -1349,6 +1355,12 @@ if (lookBox !== undefined) {
   const depth = section(drawingGroup.sub, "Depth");
   slider(depth, ["Depth fade", "depth", 0, 1, 0.01, f2]);
   slider(depth, ["Fade falloff", "depthFalloff", 0, 10, 0.1, (v) => v.toFixed(1)]);
+
+  const post = section(drawingGroup.sub, "Post");
+  slider(post, ["Black point", "blackPoint", 0, 0.5, 0.01, f2]);
+  slider(post, ["White point", "whitePoint", 0.5, 1, 0.01, f2]);
+  slider(post, ["Gamma", "gamma", 0.5, 2.5, 0.01, f2]);
+  slider(post, ["Contrast", "contrast", 0.5, 3, 0.01, f2]);
   // The whole spec as the console line that sets it again, colours in hex.
   const COLOURS: readonly Field[] = ["main", "paper", "shadowColour"];
   const drawingText = (): string => {

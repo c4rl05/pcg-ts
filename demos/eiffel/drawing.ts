@@ -85,6 +85,15 @@ export interface DrawingSpec {
   readonly depth: number;
   /** How the fade gathers toward the far end (ink.ts `Haze.falloff`): 0 even, higher keeps more of the near untouched. */
   readonly depthFalloff: number;
+  /**
+   * Levels over the finished drawing (ink.ts `blackPoint` .. `contrast`):
+   * the black and white points, a gamma past 1 lighter in the middle, a
+   * contrast past 1 steeper about the middle grey. 0, 1, 1, 1 is none.
+   */
+  readonly blackPoint: number;
+  readonly whitePoint: number;
+  readonly gamma: number;
+  readonly contrast: number;
   readonly ao: boolean;
   /** 0 to 1, how much of the occlusion is laid over the colour. */
   readonly aoStrength: number;
@@ -107,6 +116,20 @@ export interface DrawingSpec {
    */
   readonly light2: boolean;
   readonly light2Strength: number;
+  /**
+   * A third light, level and a quarter turn round from the sun, so square
+   * to it, its own strength (rig.ts's rim: it casts no shadow), stepped and
+   * tinted as the second light is.
+   */
+  readonly light3: boolean;
+  readonly light3Strength: number;
+  /**
+   * A fourth light, straight against the sun (rig.ts's bounce: it casts no
+   * shadow), its own strength: what the sun leaves in shade, lit from the
+   * other side. Stepped and tinted as the second light is.
+   */
+  readonly light4: boolean;
+  readonly light4Strength: number;
   /** The light every face gets, the shade's floor, as a fraction of its paint. */
   readonly shade: number;
   readonly shadows: boolean;
@@ -132,12 +155,12 @@ export function lightPaper(paper: number): boolean {
 
 export const DRAWING_DEFAULT: DrawingSpec = {
   colour: true,
-  main: 0xc0c0c0,
+  main: 0xcccccc,
   mono: true,
   platformShade: 1,
   namesShade: 3,
   paper: 0xffffff,
-  cel: true,
+  cel: false,
   bands: 4,
   bandSoftness: 0.3,
   washed: false,
@@ -146,7 +169,7 @@ export const DRAWING_DEFAULT: DrawingSpec = {
   litTint: 0.67,
   shadeTint: 0,
   saturation: 0.85,
-  softEdges: true,
+  softEdges: false,
   farLines: 0,
   lineFadeNear: 50,
   lineFadeFar: 200,
@@ -157,6 +180,10 @@ export const DRAWING_DEFAULT: DrawingSpec = {
   lineStrength: 0.5,
   depth: 1,
   depthFalloff: 4,
+  blackPoint: 0.1,
+  whitePoint: 0.9,
+  gamma: 0.8,
+  contrast: 1,
   ao: true,
   aoStrength: 1,
   aoRadius: 3,
@@ -166,9 +193,13 @@ export const DRAWING_DEFAULT: DrawingSpec = {
   sunElevation: 57,
   sunAzimuth: -15,
   sun: 1,
-  light2: true,
-  light2Strength: 0.2,
-  shade: 0.1,
+  light2: false,
+  light2Strength: 0.05,
+  light3: false,
+  light3Strength: 0.05,
+  light4: true,
+  light4Strength: 0.25,
+  shade: 0.15,
   shadows: true,
   groundShadow: true,
   shadowColour: SHADOW_ON_LIGHT,
@@ -190,6 +221,10 @@ export function drawingInk(spec: DrawingSpec, base: InkSpec = INK_DEFAULT): InkS
     gap: 6,
     inner: spec.innerLines,
     crease: 0.75 * spec.innerLines,
+    blackPoint: spec.blackPoint,
+    whitePoint: Math.max(spec.whitePoint, spec.blackPoint + 0.01),
+    gamma: spec.gamma,
+    contrast: spec.contrast,
   };
   if (!spec.softEdges) return { ...base, ...lines };
   // A grey-brown pencil rather than a chocolate pen.
@@ -229,8 +264,8 @@ export function drawingShading(spec: DrawingSpec): WashShading {
 
 /**
  * The lights for a coloured drawing, over `look` (the lit look's, so the
- * shadow and occlusion settings it does not name carry over). One sun, an
- * optional shadowless second light and a white hemisphere, both stated as a fraction of the paint they light
+ * shadow and occlusion settings it does not name carry over). One sun,
+ * optional shadowless second, third and fourth lights and a white hemisphere, all stated as a fraction of the paint they light
  * (three's lambert is paint x light / pi), no environment in the paint, no
  * fog, no ground and no vignette: the drawing stands on the paper.
  */
@@ -256,8 +291,20 @@ export function drawingLook(look: Look, spec: DrawingSpec): Look {
       intensity: spec.light2Strength * Math.PI,
       angle: LIGHT2_ANGLE,
     },
-    rim: { ...look.rim, on: false },
-    bounce: { ...look.bounce, on: false },
+    rim: {
+      on: spec.light3,
+      color: 0xffffff,
+      intensity: spec.light3Strength * Math.PI,
+      // Level, a quarter turn round: square to the sun at any height.
+      angle: { elevation: 0, azimuth: spec.sunAzimuth + 90 },
+    },
+    bounce: {
+      on: spec.light4,
+      color: 0xffffff,
+      intensity: spec.light4Strength * Math.PI,
+      // Straight against the sun: as far below the horizon, half a turn round.
+      angle: { elevation: -spec.sunElevation, azimuth: spec.sunAzimuth + 180 },
+    },
     ambient: { intensity: spec.shade * Math.PI, sky: 0xffffff, ground: 0xffffff },
     envIntensity: 0,
     vignette: { on: false, amount: 0, start: 0.4 },
