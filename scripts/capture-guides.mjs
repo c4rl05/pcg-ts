@@ -183,7 +183,7 @@ const GUIDES = {
       // choices (laced and rivets: off / streamed / whole), its controls,
       // the folded stats and the graph thumbnail. The opening pose, named so a change to it does not
       // reframe this figure.
-      { id: "page-ui", query: "cam=360,140,470,0,110,0", out: [1720, 968], ui: true },
+      { id: "page-ui", query: "cam=360,167.3,470,0,137.3,0", out: [1720, 968], ui: true },
     ],
   },
 };

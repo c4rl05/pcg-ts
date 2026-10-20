@@ -117,6 +117,15 @@
     letter-spacing: -0.01em; max-width: 40ch; text-wrap: balance;
   }
   .note { font-size: 14.5px; color: var(--muted); }
+  /* Prose lists and subheads inside a section body: an enumeration that
+     would otherwise be one sentence of semicolons. */
+  .list { max-width: var(--measure); margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .list li { padding-left: 20px; position: relative; }
+  .list li::before { content: "▸"; position: absolute; left: 0; color: var(--faint); }
+  ol.list { counter-reset: li; }
+  ol.list li::before { counter-increment: li; content: counter(li); font-family: var(--mono); font-size: 13px; }
+  .list li b { color: var(--ink); font-weight: 600; }
+  h3.sub { margin: 10px 0 -6px; }
   .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
   code { font-family: var(--mono); font-size: 0.9em; color: var(--accent-ink); }
 
@@ -252,10 +261,10 @@
 <main id="main">
   <h1 class="page-title">The 1889 tower, from Eiffel's plates</h1>
   <p class="lead">The <a href="../demos/eiffel/">eiffel demo</a> builds the tower as it stood in 1889.
-  Its large structure is Eiffel's own: every panel node where Plate XXXI of his 1900 album puts it.
-  Everything below the panel scale — lattice struts, gusset plates, rivets — is placed by rule, and
-  the parts the album draws whole — the uprights' sections, the stairs, the lifts, the ground, the
-  rooms of the first floor and the summit — are built from their own figures. This guide covers the
+  Its large structure is Eiffel's own: every panel node sits where Plate XXXI of his 1900 album puts it.
+  Everything below the panel scale — lattice struts, gusset plates, rivets — is placed by rule. The
+  parts the album draws whole are built from their own figures: the uprights' sections, the stairs,
+  the lifts, the ground, and the rooms of the first floor and the summit. This guide covers the
   sources, the rules, how the model was audited against the plates, and what it costs to cook.</p>
 
   <figure class="shot">
@@ -279,24 +288,46 @@
       <h2 id="scope" data-toc="Scope">Plates for the large structure, rules for everything smaller.</h2>
     </div>
     <div class="sec-body">
-      <p>The tower's geometry divides at the panel. Above that scale the demo copies numbers: the node table of Plate XXXI, the floor levels of Plate I, the arch radii of Plates VII and XI, the
-      member sections printed in Plate XXXI's tables. Below it, the demo states rules — which bracing
-      pattern a panel carries, how a web member is laced, where a strut stops short of the upright it
-      meets, where a rivet goes — and applies them to every member the table implies. The web members
-      are not traced from a drawing. What is placed from figures of its own is a list that grew with
-      the model: the summit's diagonal girders and its rooms, the leg entretoises, one plan girder, the
-      uprights plate by plate from Plate XXXI's sections, their splices, the arches' ironwork, the
-      plinths, supports and foundations, the lift cabins, the stairs, and the erection's timber
-      pylons and scaffolds.</p>
-      <p>Each depth is a different graph, not a different view of one.
-      <strong>Skeleton</strong> draws every web member as a solid bar of its outer section — all but the
-      plan bracing's lattice girders, open chords with a Warren web at every depth — and the
-      built-up uprights as their web plates alone.
-      <strong>Laced</strong> replaces each of those solid bars with four corner angles and their lacing; in the legs and the shaft each is also trimmed at its joints and given gusset plates. It also adds what stands out of the uprights' webs — the cover strips over their butts, and in panels 1–5 the fins and channels — the arches' volutes and macarons, and the plates where two bars cross. <strong>Rivets</strong> adds the rivets as instances. Lacing and rivets are each set to off, streamed or full: full cooks the depth once, streamed cooks it a cell at a time round the camera (see <a href="#detail">Detail</a>). Two more graphs sit beside these: <span class="mono">?rivets=full</span> adds the rows along the built-up uprights as Plate IX draws them (panels 6–11's taken as in panels 1–5 [estimated]), and <span class="mono">?build</span> is the erection (see <a href="#erection">Erection</a>).</p>
+      <p>The tower's geometry divides at the panel. Above that scale the demo copies numbers: the
+      node table of Plate XXXI, the floor levels of Plate I, the arch radii of Plates VII and XI, and
+      the member sections printed in Plate XXXI's tables.</p>
+      <p>Below it, the demo states rules and applies them to every member the table implies. The rules
+      say which bracing pattern a panel carries, how a web member is laced, where a strut stops short
+      of the upright it meets, and where a rivet goes. The web members are not traced from a
+      drawing.</p>
+      <p>Some parts are placed from figures of their own. The list grew with the model:</p>
+      <ul class="list">
+        <li>the summit's diagonal girders and its rooms;</li>
+        <li>the leg entretoises and one plan girder;</li>
+        <li>the uprights, plate by plate from Plate XXXI's sections, and their splices;</li>
+        <li>the arches' ironwork;</li>
+        <li>the plinths, supports and foundations;</li>
+        <li>the lift cabins and the stairs;</li>
+        <li>the erection's timber pylons and scaffolds.</li>
+      </ul>
+      <p>Each depth is a different graph, not a different view of one.</p>
+      <ul class="list">
+        <li><b>Skeleton</b> draws every web member as a solid bar of its outer section, and the
+        built-up uprights as their web plates alone. The plan bracing's lattice girders are the
+        exception: they are open chords with a Warren web at every depth.</li>
+        <li><b>Laced</b> replaces each of those solid bars with four corner angles and their lacing.
+        In the legs and the shaft, each is also trimmed at its joints and given gusset plates. Laced
+        also adds three more things: what stands out of the uprights' webs (the cover strips
+        over their butts, and in panels 1–5 the fins and channels), the arches' volutes and macarons,
+        and the plates where two bars cross.</li>
+        <li><b>Rivets</b> adds the rivets as instances.</li>
+      </ul>
+      <p>Lacing and rivets are each set to off, streamed or full. Full cooks the depth once, for the
+      whole tower. Streamed cooks it a cell at a time round the camera (see
+      <a href="#detail">Detail</a>).</p>
+      <p>Two more graphs sit beside these. <span class="mono">?rivets=full</span> is the rivets depth
+      cooked full, plus the rows along the built-up uprights as Plate IX draws them (panels 6–11's
+      taken as in panels 1–5 [estimated]); those rows have no streamed form.
+      <span class="mono">?build</span> is the erection (see <a href="#erection">Erection</a>).</p>
       <p>The host page supplies materials, a light rig, a ground plane and unit assets for the
-      instances: the rivet head, and the cabochon, gas globe, baluster and Roux chain pieces the
-      fittings and the chains resolve against. It generates no other geometry and repairs none. It
-      does act on what the graph hands it, at load or over time: it applies each rivet head's
+      instances: the rivet head, and the cabochon, gas globe, baluster and Roux chain pieces that the
+      fittings and the chains resolve against. It generates no other geometry and repairs none.</p>
+      <p>It does act on what the graph hands it, at load or over time. It applies each rivet head's
       hand-drive, moves the lift cars, their machinery and their chains every frame, runs the flag as
       a cloth, reveals the erection day by day, and clips the tower in section (see
       <a href="#rendering">Rendering</a>).</p>
@@ -307,8 +338,8 @@
         <figure><img src="eiffel/panel-rivets.jpg" width="1720" height="968" loading="lazy" alt="The same pose at the rivets depth: rivet heads at every lacing crossing and along the uprights' seams." /><p class="tag">rivets</p></figure>
       </div>
       <p class="note">One camera pose at the three depths: panel 2 of a leg, on its lit face. The rivet
-      heads in the third frame are about 19 mm in radius — that is the nominal head; each is driven a
-      little differently (see <a href="#rivets">Rivets</a>) — and resolve only at full size.</p>
+      heads in the third frame are about 19 mm in radius, the nominal head (each is driven a little
+      differently; see <a href="#rivets">Rivets</a>), and resolve only at full size.</p>
     </div>
   </section>
 
@@ -319,15 +350,20 @@
       <h2 id="sources" data-toc="Sources">The primary source is Eiffel's 1900 plate album.</h2>
     </div>
     <div class="sec-body">
-      <p>G. Eiffel, <em>La Tour de trois cents mètres</em> (Lemercier, 1900), is on Gallica as full-resolution
-      scans, each plate in two halves of about 6000 × 8800 px. Every number read from a source is recorded in
-      <code>demos/eiffel/SOURCES.md</code> with its source key and a tag: <strong>sourced</strong>
-      (printed on a drawing or stated by a source), <strong>derived</strong> (computed from sourced
-      numbers, arithmetic shown), <strong>estimated</strong> (read off a drawing by eye, or a printed
-      digit that is ambiguous) or, from §10 on, <strong>measured</strong> (a pixel reading calibrated on a
-      printed dimension). Where sources disagree, every value is listed. The constants the demo sets
-      itself — the 50 mm joint clearance, the gusset reach, the 100 mm joint pitch, the 19 mm rivet
-      head — are marked [estimated] in the code.</p>
+      <p>G. Eiffel, <em>La Tour de trois cents mètres</em> (Lemercier, 1900), is on Gallica as
+      full-resolution scans, each plate in two halves of about 6000 × 8800 px.</p>
+      <p>Every number read from a source is recorded in <code>demos/eiffel/SOURCES.md</code> with its
+      source key and one of four tags:</p>
+      <ul class="list">
+        <li><b>sourced</b>: printed on a drawing or stated by a source.</li>
+        <li><b>derived</b>: computed from sourced numbers, with the arithmetic shown.</li>
+        <li><b>estimated</b>: read off a drawing by eye, or a printed digit that is ambiguous.</li>
+        <li><b>measured</b>: a pixel reading calibrated on a printed dimension. This tag is used from
+        §10 of SOURCES.md on.</li>
+      </ul>
+      <p>Where sources disagree, every value is listed. The constants the demo sets itself are marked
+      [estimated] in the code: the 50 mm joint clearance, the gusset reach, the 100 mm joint pitch and
+      the 19 mm rivet head.</p>
 
       <div class="stats">
         <div class="stat"><b>814</b><span>[sourced]</span></div>
@@ -353,23 +389,28 @@
         </table>
       </div>
 
-      <p>The conflict rules are applied the same way throughout. A plate beats a rounded official figure
-      (57.63 m over the official 57 m). A plate at a larger scale beats one at a smaller scale. A printed
-      number beats a pixel height, and a height is read on its plate's own vertical scale, never the
-      horizontal one — near its foot Plate I is drawn at 15.27 px/m vertically against 16.14 px/m across
-      (above the first floor at about 16.1), and a reading
-      of Plate XI taken with its horizontal scale put the arch foot 0.5 m low. Where the album shows a
-      post-1889 state, the 1889 state is taken from the text volume or from a figure titled for the 1889
-      Exposition. A later reading does not overwrite an earlier one: the later section of
-      SOURCES.md names what it supersedes, so a value is quoted from the last section that gives it.</p>
+      <p>The conflict rules are applied the same way throughout:</p>
+      <ul class="list">
+        <li>A plate beats a rounded official figure (57.63 m over the official 57 m).</li>
+        <li>A plate at a larger scale beats one at a smaller scale.</li>
+        <li>A printed number beats a pixel height.</li>
+        <li>A height is read on its plate's own vertical scale, never the horizontal one. Near its
+        foot, Plate I is drawn at 15.27 px/m vertically against 16.14 px/m across (above the first floor, about
+        16.1 px/m). A reading of Plate XI taken with its horizontal scale put the arch foot
+        0.5 m low.</li>
+        <li>Where the album shows a post-1889 state, the 1889 state is taken from the text volume or
+        from a figure titled for the 1889 Exposition.</li>
+      </ul>
+      <p>A later reading does not overwrite an earlier one. The later section of SOURCES.md names what
+      it supersedes, so a value is quoted from the last section that gives it.</p>
 
-      <p>Secondary sources are cross-checks, not inputs. Rounded to two decimals, C. Chouard's 2001
-      transcription of Eiffel's documents agrees with the plate's full widths at 26 of 28 nodes; at
-      IX (16.47 against the plate's 16.46244) and XXII (55.293 against the 55.300 the plate's 27.10 and 14.10 give [derived]) the two
-      differ. A 2020
-      thesis that modelled the tower from the same drawings is cited where it is right and flagged where
-      it is not: it reads the 36.00 m datum as 36 m of masonry, and gives panel 5 the slope of panels
-      1–4.</p>
+      <p>Secondary sources are cross-checks, not inputs. C. Chouard's 2001 transcription of Eiffel's
+      documents agrees with the plate's full widths, compared at two decimals, at 26 of 28 nodes. It
+      differs at two: at IX it gives 16.47 against the plate's 16.46244, and at XXII 55.293 against
+      55.300, the value the plate's 27.10 and 14.10 give [derived].</p>
+      <p>A 2020 thesis that modelled the tower from the same drawings is cited where it is right and
+      flagged where it is not. It reads the 36.00 m datum as 36 m of masonry, and gives panel 5 the
+      slope of panels 1–4.</p>
     </div>
   </section>
 
@@ -380,15 +421,21 @@
       <h2 id="node-table" data-toc="Node table">Every upright is straight within a panel and turns only at a plate node.</h2>
     </div>
     <div class="sec-body">
-      <p>Plate XXXI prints, for each panel, its height and its full widths at its bottom node — the inner
-      width and the leg's side below the second floor, all three from there to the merge at XI, one
-      total above — which the model halves into half-widths.
-      The nodes are named by the plate's own Roman numerals, counting down from XXVIII at the bottom of
-      panel 1 to I at the bottom of panel 28. <code>spec.ts</code> carries the table as 30 rows —
-      the supports (panel 1's line extended to the support centres), XXVIII to I, and the top of
-      panel 28 — and nothing between two rows is stored: a
-      height between nodes is linear interpolation, exact because the uprights are straight. The curve
-      of the tower's profile is a 29-sided polyline.</p>
+      <p>Plate XXXI prints, for each panel, its height and its full widths at its bottom node. Which
+      widths it prints depends on the height:</p>
+      <ul class="list">
+        <li><b>Below the second floor:</b> the inner width and the leg's side.</li>
+        <li><b>From there to the merge at XI:</b> all three, the outer and inner widths and the leg's
+        side.</li>
+        <li><b>Above XI:</b> one total width.</li>
+      </ul>
+      <p>The model halves these into half-widths (defined below). The nodes are named by the plate's
+      own Roman numerals, counting down from XXVIII at the bottom of panel 1 to I at the bottom of
+      panel 28.</p>
+      <p><code>spec.ts</code> carries the table as 30 rows: the supports (panel 1's line extended to
+      the support centres), the 28 nodes XXVIII to I, and the top of panel 28. Nothing between two
+      rows is stored. A height between nodes is linear interpolation, which is exact because the
+      uprights are straight. The curve of the tower's profile is a 29-sided polyline.</p>
 
       <figure>
         <div class="plate"><svg viewBox="0 0 1000 700" role="img" aria-label="Face-on elevation of the tower drawn from the 30 rows of the Plate XXXI node table: outer and inner silhouettes, a horizontal at every node, the floor levels, and the regions where 16, 12 and 8 uprights run"><line x1="100" y1="668" x2="470" y2="668" stroke="var(--rule)" stroke-width="1"/>
@@ -427,11 +474,16 @@
         metre.</figcaption>
       </figure>
 
-      <p>Heights use two datums. <span class="mono">y</span> is height above the ground at the tower's
-      centre, the datum of the official floor heights; <span class="mono">h</span> is height above the
-      support centres, the datum Plate XXXI is drawn on; <span class="mono">y = h + 2.50</span>. A
-      half-width is the horizontal distance from the tower's axis to a member's axis, measured
-      perpendicular to a face, as a face-on elevation shows it.</p>
+      <p>Heights use two datums:</p>
+      <ul class="list">
+        <li><span class="mono">y</span> is height above the ground at the tower's centre, the datum of
+        the official floor heights.</li>
+        <li><span class="mono">h</span> is height above the support centres, the datum Plate XXXI is
+        drawn on.</li>
+      </ul>
+      <p>The two differ by a constant: <span class="mono">y = h + 2.50</span>. A half-width is the
+      horizontal distance from the tower's axis to a member's axis, measured perpendicular to a face,
+      as a face-on elevation shows it.</p>
 
       <figure>
         <div class="plate"><svg viewBox="0 0 1000 600" role="img" aria-label="Plan of the four legs at node XXVIII, y 6.4 m, with the built +x+z leg enlarged: corner uprights c, b, a, d in ring order 0 to 3, a 15.00 m square, outer half-width 56.2435 and inner half-width 41.2435 measured square to the faces from the tower axis, and the axis-to-c diagonal 79.5403"><defs><marker id="legplan-ar" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1L10,5L0,9z" fill="var(--muted)"/></marker><marker id="legplan-arg" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1L10,5L0,9z" fill="var(--g)"/></marker><marker id="legplan-arf" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1L10,5L0,9z" fill="var(--faint)"/></marker></defs>
@@ -538,7 +590,7 @@
 <path d="M588,583h95M588,579v8M683,579v8" stroke="var(--muted)" stroke-width="1" fill="none"/>
 <text class="s-lbl-s" x="690" y="586.5">5 m</text>
 </svg></div>
-        <figcaption><b>Plan at node XXVIII</b>, y 6.4, to scale. The +x+z leg as built, its uprights c, b, a, d in ring order s = 0 to 3: faces 0 and 3 are outer, faces 1 and 2 touch a. The other three legs are its quadrant copies. The piles follow one compass, the plates': 1 Nord, 2 Est, 3 Sud, 4 Ouest, clockwise from above, and the built leg is pile 4; <code>spec.ts</code> carries it as data (<code>PILES</code>, <code>FACES</code>). Each lower upright is the text volume's 0.877 m square in plan [sourced, text], from which Plate XXXI's web widths follow, its faces in the tower's face planes (see <a href="#uprights">Uprights</a>). The plate prints full widths, which the model halves into half-widths measured from the tower axis square to a face — 56.2435 outer (the outer width at XXVIII is the inner + 30 [derived]), 41.2435 inner; the distance to c along the diagonal, 79.5403, is not one of them. <code>spec.ts</code> (Plate XXXI), <code>legs.ts</code>, <code>lattice.ts</code>.</figcaption>
+        <figcaption><b>Plan at node XXVIII</b>, y 6.4, to scale. The +x+z leg as built, its uprights c, b, a, d in ring order s = 0 to 3: faces 0 and 3 are outer, faces 1 and 2 touch a. The other three legs are its quadrant copies. The piles follow one compass, the plates': 1 Nord, 2 Est, 3 Sud, 4 Ouest, clockwise from above. The built leg is pile 4, and <code>spec.ts</code> carries the compass as data (<code>PILES</code>, <code>FACES</code>). Each lower upright is the text volume's 0.877 m square in plan [sourced, text], from which Plate XXXI's web widths follow. Its faces lie in the tower's face planes (see <a href="#uprights">Uprights</a>). The half-widths here, halved from the plate's full widths and measured from the tower axis square to a face, are 41.2435 inner and 56.2435 outer, the outer width at XXVIII being the inner + 30 [derived]. The distance to c along the diagonal, 79.5403, is not a half-width. <code>spec.ts</code> (Plate XXXI), <code>legs.ts</code>, <code>lattice.ts</code>.</figcaption>
       </figure>
 
       <p>The table closes. Summing Plate XXXI's printed panel heights from the supports gives the top
@@ -558,19 +610,28 @@
       <h2 id="architecture" data-toc="Architecture">TypeScript computes the plate data. The graph does the repeating, with library nodes only.</h2>
     </div>
     <div class="sec-body">
-      <p>Eight modules — legs, shaft, first floor, summit, platforms, lifts, the flag and the ground — build the tower (under <code>?build</code>, the erection's works and cranes join them). Each runs at
-      graph-build time: it reads <code>spec.ts</code>, computes what its parts need in TypeScript — station
-      positions, masks, face normals, end angles, outlines — and embeds the results in standard PCG-TS nodes:
-      each table as the literal rows of one <code>pointList</code>, and what a point list cannot hold —
-      per-primitive columns, masks — as field parameters. Some outline work is the graph's too: a
-      floor's deck is its outline less its wells, cut by <code>polygonBoolean</code>, and so is a
-      summit slab with a well in it.
-      The TypeScript also draws the pieces that occur once, or differ each time they occur. What repeats, it draws once:
-      a platform's fit-out in the frame of one face, copied onto its faces; a bay, copied onto the bay stations;
-      the boxes, one extruded unit box copied onto a point per block; the ground's supports and massifs and the lifts'
-      machinery and wheels, one template each, copied onto their seats. The copies are graph nodes, not vertex tables. The
-      graph uses 22 node types at the skeleton depth, 24 laced and 27 with rivets, none of them custom, so it serializes to JSON, and a test
-      asserts that the skeleton graph's round trip cooks to the same positions.</p>
+      <p>Eight modules build the tower: legs, shaft, first floor, summit, platforms, lifts, the flag
+      and the ground. Under <code>?build</code>, the erection's works and cranes join them. Each module
+      runs at graph-build time. It reads <code>spec.ts</code> and computes what its parts need in
+      TypeScript: station positions, masks, face normals, end angles, outlines. It then embeds the
+      results in standard PCG-TS nodes. Each table becomes the literal rows of one
+      <code>pointList</code>. What a point list cannot hold, per-primitive columns and masks,
+      becomes field parameters.</p>
+      <p>Some outline work is the graph's too. A floor's deck is its outline less its wells, cut by
+      <code>polygonBoolean</code>, and so is a summit slab with a well in it.</p>
+      <p>The TypeScript also draws the pieces that occur once, or differ each time they occur. What
+      repeats, it draws once, and the graph copies it:</p>
+      <ul class="list">
+        <li>a platform's fit-out, in the frame of one face, copied onto its faces;</li>
+        <li>a bay, copied onto the bay stations;</li>
+        <li>the boxes: one extruded unit box, copied onto a point per block;</li>
+        <li>the ground's supports and massifs, and the lifts' machinery and wheels: one template
+        each, copied onto their seats.</li>
+      </ul>
+      <p>The copies are graph nodes, not vertex tables. The graph uses 22 node types at the skeleton
+      depth, 24 laced and 27 with rivets, none of them custom, so it serializes to JSON. A test
+      (<code>tests/eiffelSkeleton.test.ts</code>) asserts that the skeleton graph's round trip cooks
+      to byte-identical positions.</p>
 
       <figure>
         <div class="plate"><svg viewBox="0 0 1000 584" role="img" aria-label="Pipeline of the eiffel demo: spec.ts tables feed eight TypeScript rule modules, which build a graph of standard library nodes, each computed table entering as one pointList; one CPU cook yields one output per part class plus rivet batches; the three.js page turns them into meshes and packed, instanced rivet heads. A table shows the three depths.">
@@ -759,39 +820,53 @@
 <text class="s-lbl" x="738" y="542">class meshes +</text>
 <text class="s-lbl-s" x="738" y="555">instanced rivet heads</text>
 </svg></div>
-        <figcaption><b>Build time to draw.</b> <code>spec.ts</code> holds the tables read off the plates. Eight rule modules and their helpers compute stations, masks, <code>faceN</code> and end sines in TypeScript and embed them in standard library nodes, the tables as <code>pointList</code> rows and the rest as field parameters; what repeats they draw once and copy in the graph. The graph serializes to JSON and cooks the skeleton depth back to byte-identical positions (<code>tests/eiffelSkeleton.test.ts</code>). At a whole depth the page cooks it once on the CPU; a streamed depth is cooked a cell at a time in a worker (see <a href="#detail">Detail</a>). It draws one mesh per class output, and one mesh per rivet batch, each head packed and rebuilt in the vertex shader. The depth reaches every module but platforms, the flag and the ground as a <code>Detail</code> flag, and the lifts discard theirs: for web members it is applied in <code>webMembers</code>; the legs and the shaft also use it to choose what stands out of the uprights and which crossings get plates, and the first floor to add the arches' ironwork. The columns name a selection of the graph's 27 node types and of its 16 part classes. Not to scale.</figcaption>
+        <figcaption><b>Build time to draw.</b> <code>spec.ts</code> holds the tables read off the plates. Eight rule modules and their helpers compute stations, masks, <code>faceN</code> and end sines in TypeScript and embed them in standard library nodes, the tables as <code>pointList</code> rows and the rest as field parameters; what repeats they draw once and copy in the graph. The graph serializes to JSON and cooks the skeleton depth back to byte-identical positions (<code>tests/eiffelSkeleton.test.ts</code>). At a whole depth the page cooks the graph once on the CPU; a streamed depth is cooked a cell at a time in a worker (see <a href="#detail">Detail</a>). The page draws one mesh per class output, and one mesh per rivet batch, each head packed and rebuilt in the vertex shader. The depth reaches the modules as a <code>Detail</code> flag. Platforms, the flag and the ground do not take it, and the lifts take it and discard it. <code>webMembers</code> applies it to the web members. The legs and the shaft also use it to choose what stands out of the uprights and which crossings get plates, and the first floor uses it to add the arches' ironwork. The columns name a selection of the graph's 27 node types and of its 17 part classes. Not to scale.</figcaption>
       </figure>
 
-      <p>A table the TypeScript computes enters the graph through one helper, <code>pointTable</code>, as
-      a single <code>pointList</code> node: a point per row, a column per attribute, the values written
-      out. Until 6e77795e each column was a field instead, <code>ramp(index(), stops)</code>, through
-      <code>indexTable</code>, on a grid of points; moving the tables to point lists took the skeleton
-      graph from 2,363 nodes to 1,662 and its ramp stops from 161,856 to 16,073. <code>indexTable</code>
-      remains for what a point list cannot carry: primitive-domain columns such as <code>faceN</code>
-      and the end sines, the edge rules' masks, and the chains' spawn. A run collapses to its two ends
-      whenever the ramp, interpolating between them, stores every entry of the run bit for bit — a run
-      of equal values, or a straight flight's treads, affine in the tread index — so the largest ramp
-      left has 344 stops at the skeleton depth and 3,432 laced. The ramp was not exact at every stop
-      until fd41338d: an input landing exactly on an interior stop was answered as
-      <span class="mono">v0 + (v1 − v0)·1</span>, which can round off the stop's own value. The
-      byte-identity test that moved the tables to point lists found it, and the library's ramp now
-      returns the stop's value there. A ramp of more than 16 stops finds
-      each point's segment by bisection, so a table with a stop per point costs n log n, not n². It
-      used to scan its stops from the first, which is why the platforms module once cooked its prism lists
-      in runs of at most 1,024 points: splitting took its cook from 0.80 s to 0.31 s then. The runs
-      are gone with the lists they split: the platforms' boxes are copies of one unit box, and the few
-      prism lists left are one table each.</p>
+      <h3 class="sub">Point lists and ramps</h3>
+      <p>A table the TypeScript computes enters the graph through one helper, <code>pointTable</code>,
+      as a single <code>pointList</code> node: a point per row, a column per attribute, the values
+      written out.</p>
+      <p>Each column used to be a field instead, <code>ramp(index(), stops)</code> through
+      <code>indexTable</code>, on a grid of points. Moving the tables to point lists took the skeleton
+      graph from 2,363 nodes to 1,662 and its ramp stops from 161,856 to 16,073 (6e77795e). Those are
+      the counts at that commit; the table below, recounted since, gives the skeleton 1,704 nodes.
+      <code>indexTable</code> remains for what a point list cannot carry: primitive-domain
+      columns such as <code>faceN</code> and the end sines, the edge rules' masks, and the chains'
+      spawn.</p>
+      <p>The ramps that remain are compressed where they can be. A run collapses to its two ends whenever the ramp,
+      interpolating between them, stores every entry of the run bit for bit. That holds for a run of
+      equal values, and for a straight flight's treads, which are affine in the tread index. The
+      largest ramp left has 344 stops at the skeleton depth and 3,432 laced.</p>
+      <p>The library's ramp was not always exact at a stop. An input landing exactly on an interior
+      stop was answered as <span class="mono">v0 + (v1 − v0)·1</span>, which can round off the stop's
+      own value. The byte-identity test that moved the tables to point lists found it, and the ramp
+      now returns the stop's value there (fd41338d).</p>
+      <p class="note">A ramp of more than 16 stops finds each point's segment by bisection, so a table
+      with a stop per point costs n log n, not n². It used to scan its stops from the first. That is
+      why the platforms module once cooked its prism lists in runs of at most 1,024 points: splitting
+      took its cook from 0.80 s to 0.31 s then. The runs are gone with the lists they split. The
+      platforms' boxes are copies of one unit box, and the few prism lists left are one table
+      each.</p>
 
+      <h3 class="sub">Outputs and cost</h3>
       <p>Each module returns meshes grouped by <strong>part class</strong>, and the graph declares one
-      output per class, seventeen in all: uprights, bracing, horizontals, girders, arches, platforms,
-      deckUndersides (the 1st and 2nd floors' bottom faces, split out of the platforms' decks), stairs,
-      masonry, foundations, summit, gussets (laced and rivets only), names, machinery, groundIron, glass
-      and silvered. Fifty-one more are the pieces the page moves or instances at every
-      depth: the lifts' cars, cabin glass, cables, pulleys, wheels, pistons, carriages and trucks (43),
-      their four chains, three batches of fittings and the flag. Under <code>?build</code> ten
-      <code>works.*</code> outputs carry the erection's temporary works. At the rivets depth each rivet
-      set is its own spawn and its own output: 58 of them, 1,205,292 heads in all; at
-      <span class="mono">?rivets=full</span>, 59 and 1,326,388.</p>
+      output per class. The page also gets an output for each piece it moves or instances; under
+      <code>?build</code>, one for each of the erection's works; and, at
+      the rivets depth, one for each rivet set, which is its own spawn:</p>
+      <div class="tbl stack">
+        <table class="data">
+          <thead><tr><th>Outputs</th><th class="n">Count</th><th>What they are</th><th>Depths</th></tr></thead>
+          <tbody>
+            <tr><td class="k">Part classes</td><td class="n" data-label="count">17</td><td>uprights, bracing, horizontals, girders, arches, platforms, deckUndersides (the 1st and 2nd floors' bottom faces, split out of the platforms' decks), stairs, masonry, foundations, summit, gussets, names, machinery, groundIron, glass and silvered</td><td data-label="depths">every depth; gussets laced and rivets only</td></tr>
+            <tr><td class="k">Moved or instanced</td><td class="n" data-label="count">51</td><td>the lifts' cars, cabin glass, cables, pulleys, wheels, pistons, carriages and trucks (43), their four chains, three batches of fittings and the flag</td><td data-label="depths">every depth</td></tr>
+            <tr><td class="k"><code>works.*</code></td><td class="n" data-label="count">10</td><td>the erection's temporary works</td><td data-label="depths"><code>?build</code> only</td></tr>
+            <tr><td class="k">Rivet sets</td><td class="n" data-label="count">58</td><td>1,205,292 heads in all; at <span class="mono">?rivets=full</span>, 59 sets and 1,326,388 heads</td><td data-label="depths">rivets, <span class="mono">?rivets=full</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>So the skeleton has 67 outputs (no gussets), laced 68, rivets 126 and
+      <span class="mono">?rivets=full</span> 127, as the next table shows.</p>
 
       <div class="tbl">
         <table class="data">
@@ -804,21 +879,48 @@
           </tbody>
         </table>
       </div>
-      <p class="note">Graph nodes, Outputs and Instances are recounted at 71193103 (2026-10-18), from the page's depth queries, after <code>deckUndersides</code> became a class of its own, and Instances match <code>tests/eiffel.golden.json</code>; the other columns are the measurement below. Measured 2026-10-02, at 109f23f9, on an Intel i9-13900KF under Node 22.20, headless: a CPU cook of a freshly built graph through the page's own depth queries, median of seven after a warmup, the depths interleaved, the process pinned to the performance cores (on the efficiency cores the same cooks took 1.7 to 1.8 times as long when last compared); the Cook column is the median of three such processes. The machine was shared and busier than at the previous measurement: other processes held a median of 3.6 to 11.4 logical CPUs. Three control processes cooking the graph of the previous measurement (f2d5bc8) ran alternately in the same session and came out within a few percent of these, so the cook time has not moved beyond noise; the node count and the JSON fell by about a third, the node count mostly from the move to point lists. <span class="mono">?rivets=full</span> was not timed under this protocol (one cold, unpinned cook took 12.4 s). Instances counts every batch: the 2,648 at every depth are the fittings and the lift chains. Mesh triangles are the cooked geometry alone; the instances draw their assets' triangles on top, 580,800 for the fittings and chains at every depth and 80 for each rivet head, so the page's total is 1,346,224 for the skeleton, 4,529,024 laced, 101,179,584 at rivets and 110,809,024 at <span class="mono">?rivets=full</span>. Graph JSON is the compact serialized form, MB = 10⁶ bytes. The cooked outputs at all four depths hash identically to the committed golden file, <code>tests/eiffel.golden.json</code>.</p>
+      <p class="note">The columns come from two dates. Graph nodes, Outputs and Instances were
+      recounted on 2026-10-18 from the page's depth queries, after <code>deckUndersides</code> became a
+      class of its own (71193103). Mesh triangles, Cook and Graph JSON are from the measurement of
+      2026-10-02 (109f23f9).</p>
+      <ul class="list note">
+        <li><b>Instances</b> match <code>tests/eiffel.golden.json</code> and count every batch. The
+        2,648 at every depth are the fittings and the lift chains.</li>
+        <li><b>Mesh triangles</b> are the cooked geometry alone. The instances draw their assets'
+        triangles on top: 580,800 for the fittings and chains at every depth, and 80 for each rivet
+        head. The page's total is 1,346,224 for the skeleton, 4,529,024 laced, 101,179,584 at rivets
+        and 110,809,024 at <span class="mono">?rivets=full</span>.</li>
+        <li><b>Cook</b>: the measurement ran on an Intel i9-13900KF under Node 22.20, headless: a CPU cook of
+        a freshly built graph through the page's own depth queries, median of seven after a warmup,
+        the depths interleaved, the process pinned to the performance cores. The column is the median
+        of three such processes. On the efficiency cores the same cooks took 1.7 to 1.8 times as long
+        when last compared. <span class="mono">?rivets=full</span> was not timed under this protocol;
+        one cold, unpinned cook took 12.4 s.</li>
+        <li><b>Graph JSON</b> is the compact serialized form, MB = 10⁶ bytes.</li>
+      </ul>
+      <p class="note">The machine was shared and busier than at the previous measurement: other
+      processes held a median of 3.6 to 11.4 logical CPUs. Three control processes cooking the graph
+      of the previous measurement (f2d5bc8) ran alternately in the same session. They came out within
+      a few percent of these, so the cook time has not moved beyond noise. The node count and the
+      JSON fell by about a third, the node count mostly from the move to point lists. The cooked
+      outputs at all four depths hash identically to the committed golden file,
+      <code>tests/eiffel.golden.json</code>.</p>
 
       <figure>
         <div class="plate"><svg viewBox="0 0 1000 676" role="img" aria-label="Horizontal bar chart of triangles per part class at the skeleton and laced depths: girders and bracing grow from about 86 thousand and 12 thousand to 1.33 and 1.10 million when laced; horizontals, uprights and arches grow too, gussets appear only when laced, and the other classes do not change."><line x1="150.0" y1="48" x2="150.0" y2="630" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="150.0" y="646" text-anchor="middle">0.0M</text><line x1="227.1" y1="48" x2="227.1" y2="630" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="227.1" y="646" text-anchor="middle">0.2M</text><line x1="304.3" y1="48" x2="304.3" y2="630" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="304.3" y="646" text-anchor="middle">0.4M</text><line x1="381.4" y1="48" x2="381.4" y2="630" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="381.4" y="646" text-anchor="middle">0.6M</text><line x1="458.6" y1="48" x2="458.6" y2="630" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="458.6" y="646" text-anchor="middle">0.8M</text><line x1="535.7" y1="48" x2="535.7" y2="630" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="535.7" y="646" text-anchor="middle">1.0M</text><line x1="612.9" y1="48" x2="612.9" y2="630" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="612.9" y="646" text-anchor="middle">1.2M</text><line x1="690.0" y1="48" x2="690.0" y2="630" stroke="var(--rule-2)" stroke-width="1"/><text class="s-lbl-s" x="690.0" y="646" text-anchor="middle">1.4M</text><rect x="150" y="14" width="12" height="8" fill="var(--faint)"/><text class="s-lbl" x="168" y="22">skeleton</text><rect x="250" y="14" width="12" height="8" fill="var(--ink)"/><text class="s-lbl" x="268" y="22">laced and rivets</text><text class="s-lbl-s" x="980" y="22" text-anchor="end">triangles per output</text><text class="s-name" x="138" y="71" text-anchor="end">girders</text><rect x="150" y="58" width="513.7" height="9" fill="var(--ink)"/><rect x="150" y="69" width="33.1" height="6" fill="var(--faint)"/><text class="s-lbl" x="671.7" y="71">1,331,784  ·  85,896 skeleton</text><text class="s-name" x="138" y="105" text-anchor="end">bracing</text><rect x="150" y="92" width="424.9" height="9" fill="var(--ink)"/><rect x="150" y="103" width="4.5" height="6" fill="var(--faint)"/><text class="s-lbl" x="582.9" y="105">1,101,504  ·  11,792 skeleton</text><text class="s-name" x="138" y="139" text-anchor="end">horizontals</text><rect x="150" y="126" width="161.7" height="9" fill="var(--ink)"/><rect x="150" y="137" width="1.9" height="6" fill="var(--faint)"/><text class="s-lbl" x="319.7" y="139">419,136  ·  4,920 skeleton</text><text class="s-name" x="138" y="173" text-anchor="end">arches</text><rect x="150" y="160" width="118.6" height="9" fill="var(--ink)"/><rect x="150" y="171" width="43.5" height="6" fill="var(--faint)"/><text class="s-lbl" x="276.6" y="173">307,392  ·  112,704 skeleton</text><text class="s-name" x="138" y="207" text-anchor="end">platforms</text><rect x="150" y="194" width="86.3" height="9" fill="var(--ink)"/><rect x="150" y="205" width="86.3" height="6" fill="var(--faint)"/><text class="s-lbl" x="244.3" y="207">223,761</text><text class="s-name" x="138" y="241" text-anchor="end">uprights</text><rect x="150" y="228" width="73.6" height="9" fill="var(--ink)"/><rect x="150" y="239" width="6.5" height="6" fill="var(--faint)"/><text class="s-lbl" x="231.6" y="241">190,736  ·  16,880 skeleton</text><text class="s-name" x="138" y="275" text-anchor="end">stairs</text><rect x="150" y="262" width="35.1" height="9" fill="var(--ink)"/><rect x="150" y="273" width="35.1" height="6" fill="var(--faint)"/><text class="s-lbl" x="193.1" y="275">90,984</text><text class="s-name" x="138" y="309" text-anchor="end">gussets</text><rect x="150" y="296" width="24.9" height="9" fill="var(--ink)"/><rect x="150" y="307" width="0.0" height="6" fill="var(--faint)"/><text class="s-lbl" x="182.9" y="309">64,440  ·  absent at skeleton</text><text class="s-name" x="138" y="343" text-anchor="end">names</text><rect x="150" y="330" width="20.6" height="9" fill="var(--ink)"/><rect x="150" y="341" width="20.6" height="6" fill="var(--faint)"/><text class="s-lbl" x="178.6" y="343">53,532</text><text class="s-name" x="138" y="377" text-anchor="end">masonry</text><rect x="150" y="364" width="10.9" height="9" fill="var(--ink)"/><rect x="150" y="375" width="10.9" height="6" fill="var(--faint)"/><text class="s-lbl" x="168.9" y="377">28,352</text><text class="s-name" x="138" y="411" text-anchor="end">silvered</text><rect x="150" y="398" width="10.9" height="9" fill="var(--ink)"/><rect x="150" y="409" width="10.9" height="6" fill="var(--faint)"/><text class="s-lbl" x="168.9" y="411">28,352</text><text class="s-name" x="138" y="445" text-anchor="end">summit</text><rect x="150" y="432" width="8.1" height="9" fill="var(--ink)"/><rect x="150" y="443" width="8.1" height="6" fill="var(--faint)"/><text class="s-lbl" x="166.1" y="445">20,970</text><text class="s-name" x="138" y="479" text-anchor="end">machinery</text><rect x="150" y="466" width="6.7" height="9" fill="var(--ink)"/><rect x="150" y="477" width="6.7" height="6" fill="var(--faint)"/><text class="s-lbl" x="164.7" y="479">17,280</text><text class="s-name" x="138" y="513" text-anchor="end">groundIron</text><rect x="150" y="500" width="5.8" height="9" fill="var(--ink)"/><rect x="150" y="511" width="5.8" height="6" fill="var(--faint)"/><text class="s-lbl" x="163.8" y="513">14,968</text><text class="s-name" x="138" y="547" text-anchor="end">glass</text><rect x="150" y="534" width="5.7" height="9" fill="var(--ink)"/><rect x="150" y="545" width="5.7" height="6" fill="var(--faint)"/><text class="s-lbl" x="163.7" y="547">14,880</text><text class="s-name" x="138" y="581" text-anchor="end">foundations</text><rect x="150" y="568" width="3.7" height="9" fill="var(--ink)"/><rect x="150" y="579" width="3.7" height="6" fill="var(--faint)"/><text class="s-lbl" x="161.7" y="581">9,644</text><text class="s-name" x="138" y="615" text-anchor="end">deckUndersides</text><rect x="150" y="602" width="0.1" height="9" fill="var(--ink)"/><rect x="150" y="613" width="0.1" height="6" fill="var(--faint)"/><text class="s-lbl" x="158.1" y="615">245</text></svg></div>
         <figcaption><b>Where the triangles are.</b> Triangles per part-class output, as the committed
-        golden file (<code>tests/eiffel.golden.json</code>) records them at 71193103. Lacing multiplies the classes that hold web members — girders 85,896 to
-        1,331,784, bracing 11,792 to 1,101,504, horizontals 4,920 to 419,136 — and adds the gusset plates
-        (64,440). It also changes two classes without web members: the uprights, 16,880 to 190,736, as
-        their cover strips, fins and channels appear, and the arches, 112,704 to 307,392, with their
-        volutes and macarons. Platforms (223,761), stairs (90,984), names (53,532), masonry and silvered
-        (28,352 each), summit (20,970), machinery (17,280), groundIron (14,968), glass (14,880),
-        foundations (9,644) and deckUndersides (245, the decks' bottom faces, which were platforms'
-        until 53f551f0: the two sum to the platforms' old 224,006) do not change with depth. The rivets depth adds no triangles: its 1,205,292
-        heads are instances of one 80-triangle head, which the page packs in 24 bytes and rebuilds in the
-        vertex shader (64 bytes a matrix on the fallback path).</figcaption>
+        golden file (<code>tests/eiffel.golden.json</code>) records them at 71193103. Lacing
+        multiplies the classes that hold web members: girders 85,896 to 1,331,784, bracing 11,792 to
+        1,101,504, horizontals 4,920 to 419,136. It adds the gusset plates (64,440). It also changes
+        two classes without web members: the uprights, 16,880 to 190,736, as their cover strips, fins
+        and channels appear, and the arches, 112,704 to 307,392, with their volutes and macarons. The
+        other eleven classes do not change with depth: platforms (223,761), stairs (90,984), names
+        (53,532), masonry and silvered (28,352 each), summit (20,970), machinery (17,280), groundIron
+        (14,968), glass (14,880), foundations (9,644) and deckUndersides (245). The deckUndersides
+        class holds the decks' bottom faces, split out of platforms (53f551f0); the two sum to the
+        platforms' old 224,006. The rivets depth adds no triangles. Its 1,205,292 heads are instances
+        of one 80-triangle head, which the page packs in 24 bytes and rebuilds in the vertex shader
+        (64 bytes a matrix on the fallback path).</figcaption>
       </figure>
     </div>
   </section>
@@ -1024,18 +1126,27 @@
         <figcaption><b>One leg's 92 stations, unrolled</b> (schematic, not to scale): 23 levels, c, b, a, d on each, station index k·4 + s, with c repeated at the right because the ring is closed. Every rule is <code>edges(lat, id, ds, dk, keep)</code>, whose <code>connectByIndex</code> target is (k + dk)·R + ((s + ds) mod R), or −1 where the mask drops the station. Horizontals, CrossA and CrossB differ in ds, dk and their masks; the span is 2 in panels 1–4, 1 in panels 6–9 and 12–17, and 0 elsewhere.</figcaption>
       </figure>
 
-      <p>Where one station grid describes a region, its parts differ only by which masks are set. In
-      panels 1–4 each face carries two diagonals that run node to node and cross on a mid-panel
-      horizontal; panels 6–9 carry one cross per face; in both, a laced central post runs through the
-      crossing, parallel to the uprights. Panels 12–17 carry one X per panel. Panel 10 has two X's per face,
-      either side of a post, over a band of flats. Panels 5 and 11 are lattice belts. Above node XVII the
-      inner upright a has ended, and between adjacent legs a gap X braces b of one leg to d of the next
-      in panels 12–16. Above XI the four legs are one shaft whose every face is two X-braced bays. From XVI
-      up, every node except IX carries a horizontal truss across the tower, its pattern chosen by the
-      node's name. Panel 10, the central posts, the gap X's and the base ties have station grids of
-      their own, and the belts, the Masque screen, panel 10's band and the entretoises are explicit
-      member lists. A central post lands on its horizontals rather than stopping clear of them: its end
-      is placed where its far corner clears the horizontal, so the near corner buries in the member
+      <p>Where one station grid describes a region, its parts differ only by which masks are set. The
+      bracing, region by region:</p>
+      <div class="tbl stack">
+        <table class="data">
+          <thead><tr><th>Where</th><th>Bracing</th></tr></thead>
+          <tbody>
+            <tr><td class="k">Panels 1–4</td><td>Two diagonals per face that run node to node and cross on a mid-panel horizontal. A laced central post runs through the crossing, parallel to the uprights.</td></tr>
+            <tr><td class="k">Panel 5</td><td>A lattice belt.</td></tr>
+            <tr><td class="k">Panels 6–9</td><td>One cross per face, with a laced central post through the crossing as in panels 1–4.</td></tr>
+            <tr><td class="k">Panel 10</td><td>Two X's per face, either side of a post, over a band of flats.</td></tr>
+            <tr><td class="k">Panel 11</td><td>A lattice belt.</td></tr>
+            <tr><td class="k">Panels 12–17</td><td>One X per panel. Above node XVII the inner upright a has ended, and in panels 12–16 a gap X between adjacent legs braces b of one leg to d of the next.</td></tr>
+            <tr><td class="k">Above XI</td><td>The four legs are one shaft, and every face is two X-braced bays.</td></tr>
+            <tr><td class="k">Nodes from XVI up</td><td>Every node except IX carries a horizontal truss across the tower, its pattern chosen by the node's name.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Panel 10, the central posts, the gap X's and the base ties have station grids of their own.
+      The belts, the Masque screen, panel 10's band and the entretoises are explicit member lists.</p>
+      <p>A central post lands on its horizontals rather than stopping clear of them. Its end is placed
+      where its far corner clears the horizontal, so the near corner buries in the member
       (6687913e).</p>
 
       <figure>
@@ -1125,11 +1236,12 @@
       </figure>
 
       <p>The upright lattice adds a vertex 0.01 m either side of every node where the slope changes,
-      except XVII, where the upright is split instead; the kinked nodes are computed from the table,
-      not listed. Those vertices date from when an upright was a square section swept along its chain,
-      which puts one ring per vertex in the bisecting plane, so that the skin between two kinks would
-      not twist. The leg and shaft uprights are no longer swept: their chains are the axes the
-      built-up plates are set from, and the extra vertices stay because tests read them.</p>
+      except XVII, where the upright is split instead. The kinked nodes are computed from the table,
+      not listed. The extra vertices date from when an upright was a square section swept along its
+      chain. A sweep puts one ring per vertex in the bisecting plane, and the extra vertices kept the
+      skin between two kinks from twisting. The leg and shaft uprights are no longer swept. Their
+      chains are the axes the built-up plates are set from, and the extra vertices stay because tests
+      read them.</p>
     </div>
   </section>
 
@@ -1141,63 +1253,97 @@
     </div>
     <div class="sec-body">
       <p>A leg's four uprights, the <em>arbalétriers</em>, are box columns riveted up from plates and
-      angles, and Plate XXXI's tables print the makeup of each one, panel by panel. The model builds
+      angles. Plate XXXI's tables print the makeup of each one, panel by panel, and the model builds
       them from those tables (<code>builtup.ts</code>, <code>UPRIGHT_SECTIONS</code> and
-      <code>UPPER_SECTIONS</code> in <code>spec.ts</code>). Below XVII the box is a constant 0.877 m
-      square <em>in plan</em>, its faces in the tower's face planes and its plates growing inward as
-      they thicken [sourced, text]. Square to the leaning axis that is a lozenge, not a square: 101° 38′
-      in panels 1–4, the angle Plate IX fig. 28 prints, which the node table reproduces as 101.64°
-      [derived]. No square section swept along the axis can be that, so each panel's upright is four
-      web plates, each a flat box in its own face, straight within the panel. Their widths come out
-      within 2 mm of every web width Plate XXXI prints from XXVIII to XIX — 800 in panels 1–4, 822 in
-      5, 832 to 866 in 6–10 [derived]. Panel 11's miss by up to 7 mm: the plate prints XIX's widths
-      for XVIII. Rebuilt from their parts, the plate's member areas and its
-      Ω, the four arbalétriers' total per panel, close exactly except at XX b, where the plate's own
-      arithmetic is 2 mm² out. The swept skin this replaced was 0.82 m square below the first floor
-      and rolled 11.6° off the x-facing faces.</p>
+      <code>UPPER_SECTIONS</code> in <code>spec.ts</code>).</p>
+
+      <p>Below XVII the box is a constant 0.877 m square <em>in plan</em>. Its faces lie in the tower's
+      face planes, and its plates grow inward as they thicken [sourced, text]. Cut square to the leaning
+      axis, that section is a lozenge, not a square: 101° 38′ in panels 1–4, the angle Plate IX fig. 28
+      prints, which the node table reproduces as 101.64° [derived]. No square section swept along the
+      axis can take that shape. So each panel's upright is four web plates, each a flat box in its own
+      face, straight within the panel. The swept skin this replaced was 0.82 m square below the first
+      floor and rolled 11.6° off the x-facing faces.</p>
+
+      <p>The built plates check against Plate XXXI. Their widths come within 2 mm of every web width it prints
+      from XXVIII to XIX: 800 in panels 1–4, 822 in 5, 832 to 866 in 6–10 [derived]. Panel 11's widths
+      miss by up to 7 mm, because the plate prints XIX's for XVIII. Rebuilt from their parts, the
+      plate's member areas and its Ω (the four arbalétriers' total per panel) close exactly, except at
+      XX b, where the plate's own arithmetic is 2 mm² out.</p>
+
+      <h3 class="sub">At the turns</h3>
 
       <p>Where the column turns, at XXIV to XVIII, the two panels' faces meet on the node's horizontal
-      line, which crosses a plate's square end at up to 24°; a box cannot mitre on it. Each plate
-      therefore ends where its centre line crosses the node's horizontal plane and runs on a little to
-      close the sliver. Measured on the cooked plates, no point of the true faces round a turn is left
-      uncovered, and what shows is at worst a plate 21 mm proud of, or 14 mm short of, the face; a notch
-      under 10 mm wide stays open at the corners just above each turn, deepest at XXIV and XXIII, up
-      to 7.3 mm. The
-      thickness steps at the node, inside the box, where it cannot be seen.</p>
+      line. That line crosses a plate's square end at up to 24°, and a box cannot mitre on it. So each
+      plate ends where its centre line crosses the node's horizontal plane, and runs on a little to
+      close the sliver.</p>
+
+      <p>Measured on the cooked plates, no point of the true faces round a turn is left uncovered. At
+      worst a plate stands 21 mm proud of the face or 14 mm short of it. A notch under 10 mm wide stays
+      open at the corners just above each turn, deepest at XXIV and XXIII, up to 7.3 mm. The thickness
+      steps at the node, inside the box, where it cannot be seen.</p>
+
+      <h3 class="sub">What stands out of the box</h3>
 
       <p>The skeleton depth draws the webs alone. From the laced depth up, what stands out of them is
-      drawn too, so the envelope anything else is fitted to is the same at every depth: on every face a
-      cover strip, the C.J., over the butt of the two half plates (205 × 12 or 200 × 12 in panels 1–5);
-      on the exterior faces of panels 1–5 two angles back to back on it, their outstanding legs a fin
-      24 mm thick standing 100 mm proud [sourced, Plate IX figs. 23–24]; on the interior faces a
-      channel of two angles, heels 385 mm apart, the seat of the montants' gussets [sourced, Plate IX
-      fig. 21]. Nothing inside the box is drawn. Above XVII the legs' b, c and d and the shaft are 0.50 m
-      boxes, the 500 taken as a plan square [derived]; at the merge at XI the axes of b and d of neighbouring legs stand 0.50 m apart, so the boxes touch, and
-      from panel 18 up b and d are one T, 1,000 wide in panel 18 and 500 × 500 from panel 19 [sourced]. The shaft's corner c is a closed box
-      through panel 18 and an open L in panels 19–28, closed by 8 mm plates 1.05 m either side of each
-      node [estimated, measured off the joint plates] (6cc56d70, 247084e0).</p>
+      drawn too, so the envelope anything else is fitted to is the same at every depth. Nothing inside
+      the box is drawn. Below XVII three things stand out:</p>
 
-      <p>A web member's joint now meets that box. Below XVII its <code>r</code> in the joint rule is the
-      box's in-plane half-width plus what stands out of the face it lands on (the channel in panels
-      1–5, the C.J. in 6–11), and its gusset plates stand 8 mm off the webs they lap (see
-      <a href="#joints">Joints</a>). The first floor's members land on the webs of b, d and a, never on the tip of
-      a fin, as Plate XI figs. 3, 5 and 11 draw them on b's.</p>
+      <ul class="list">
+        <li><b>On every face,</b> a cover strip, the C.J., over the butt of the two half plates (205 ×
+        12 or 200 × 12 in panels 1–5).</li>
+        <li><b>On the exterior faces of panels 1–5,</b> two angles back to back on it, their outstanding
+        legs a fin 24 mm thick standing 100 mm proud [sourced, Plate IX figs. 23–24].</li>
+        <li><b>On the interior faces of panels 1–5,</b> a channel of two angles, heels 385 mm apart, the seat of the
+        montants' gussets [sourced, Plate IX fig. 21].</li>
+      </ul>
 
-      <p><strong>Splices.</strong> A column was erected in tronçons and spliced under cover plates. In
-      panels 1–4 a panel breaks at L/6, L/2 and 5L/6 into three tronçons of « 4,50 m », thirds of a length
-      « en nombre rond de 13,50 m » [sourced, text p. 75]; panel 5 breaks at both its bends and at the 4.01335 m that Plate X fig. 19
-      prints [sourced]; panels 6–11 follow panels 1–4's rule [derived]; above XVII the joints fall at
-      round(L/6) [rule], the 6 m the middle of the text's « 5 à 7 mètres » [estimated]. Every ply of a
-      joint ends in the one plane the text names, « même plan normal » [sourced], except at panel 5's
-      bends, which Plate X fig. 19 draws level: there the plies end on the node's horizontal plane. The covers are Plate IX's at their printed sizes on
-      panels 1–5 — a 290 × 15 web cover on an exterior face, a 380 × 12 centre cover on an interior one
-      — and Plate X's on panels 6–11, with lengths taken as panels 1–4's [estimated]; above XVII one
-      12 mm cover over each outer plate [estimated] (<code>SPLICE</code>, a58ec0e9). Their rivet fields
-      are measured on Plate IX: every 0.076 m in staggered columns on a web cover (fig. 23), every
-      0.064 m in a grid on an interior one (fig. 21) [measured]. They add 271,144 heads at the rivets
-      depth, 22.5% of the total. That commit records what it left: 98 splice heads within a head's width
-      of the first floor's rows, and 1,104 covers 1–10 mm into joint plates (up to 41 mm for the fin angles'
-      covers).</p>
+      <p>Above XVII the legs' b, c and d and the shaft are 0.50 m boxes, the 500 taken as a plan square
+      [derived]. At the merge at XI the axes of b and d of neighbouring legs stand 0.50 m apart, so the
+      boxes touch. From panel 18 up, b and d are one T, 1,000 wide in panel 18 and 500 × 500 from panel
+      19 [sourced]. The shaft's corner c is a closed box through panel 18 and an open L in panels 19–28,
+      closed by 8 mm plates 1.05 m either side of each node [estimated, measured off the joint plates]
+      (6cc56d70, 247084e0).</p>
+
+      <h3 class="sub">Where the webs land</h3>
+
+      <p>A web member's joint meets that box. Below XVII its <code>r</code> in the joint rule is the
+      box's in-plane half-width plus what stands out of the face it lands on: the channel in panels 1–5,
+      the C.J. in 6–11. Its gusset plates stand 8 mm off the webs they lap (see
+      <a href="#joints">Joints</a>). Where the first floor lands on the uprights is in
+      <a href="#regions">Regions</a>.</p>
+
+      <h3 class="sub">Splices</h3>
+
+      <p>A column was erected in tronçons and spliced under cover plates. Where the joints fall depends
+      on the panel:</p>
+
+      <div class="tbl stack">
+        <table class="data">
+          <thead><tr><th>Panels</th><th>Joints at</th><th>Source</th></tr></thead>
+          <tbody>
+            <tr><td class="k">1–4</td><td>L/6, L/2 and 5L/6: three tronçons of « 4,50 m », thirds of a length « en nombre rond de 13,50 m »</td><td data-label="source">[sourced, text p. 75]</td></tr>
+            <tr><td class="k">5</td><td>Both its bends, and the 4.01335 m that Plate X fig. 19 prints</td><td data-label="source">[sourced]</td></tr>
+            <tr><td class="k">6–11</td><td>As in panels 1–4</td><td data-label="source">[derived]</td></tr>
+            <tr><td class="k">above XVII</td><td>round(L/6); the 6 m is the middle of the text's « 5 à 7 mètres »</td><td data-label="source">[rule]; the 6 m [estimated]</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Every ply of a joint ends in the one plane the text names, « même plan normal » [sourced]. The
+      exception is panel 5's bends, which Plate X fig. 19 draws level: there the plies end on the node's
+      horizontal plane.</p>
+
+      <p>The covers on panels 1–5 are Plate IX's, at their printed sizes: a 290 × 15 web cover on an
+      exterior face and a 380 × 12 centre cover on an interior one. Panels 6–11 take Plate X's, with
+      lengths taken as panels 1–4's [estimated]. Above XVII there is one 12 mm cover over each outer
+      plate [estimated] (<code>SPLICE</code>, a58ec0e9).</p>
+
+      <p>Their rivet fields are measured on Plate IX: every 0.076 m in staggered columns on a web cover
+      (fig. 23), every 0.064 m in a grid on an interior one (fig. 21) [measured]. They add 271,144 heads
+      at the rivets depth, 22.5% of the total. Commit a58ec0e9 records what it left: 98 splice heads
+      within a head's width of the first floor's rows, and 1,104 covers 1–10 mm into joint plates (up to
+      41 mm for the fin angles' covers).</p>
     </div>
   </section>
 
@@ -1209,13 +1355,13 @@
     </div>
     <div class="sec-body">
       <p>Every edge rule also writes the unit normal of the lattice face its member lies in, as a
-      primitive attribute <code>faceN</code>: the cross product of the ring segment and the line joining
-      that segment's midpoints on the two levels, exact for the trapezoid faces of a tapering section. A
-      member's section axes follow from it — <span class="mono">N = normalize(F − T(F·T))</span>,
-      <span class="mono">B = N × T</span> — so its section sits flat in its face. With the default
-      <span class="mono">+y</span> up hint the section would be squared to the vertical instead, and in
-      panel 1, where the faces lean 26.7°, that rolls one diagonal's section 30.4° off the face its
-      rivets sit on and the other diagonal's 39.5°.</p>
+      primitive attribute <code>faceN</code>. It is the cross product of the ring segment and the line
+      joining that segment's midpoints on the two levels, which is exact for the trapezoid faces of a
+      tapering section. A member's section axes follow from it, as <span class="mono">N = normalize(F −
+      T(F·T))</span> and <span class="mono">B = N × T</span>, so its section sits flat in its face. With
+      the default <span class="mono">+y</span> up hint the section would be squared to the vertical
+      instead. In panel 1, where the faces lean 26.7°, that rolls one diagonal's section 30.4° off the
+      face its rivets sit on, and the other diagonal's 39.5°.</p>
 
       <figure>
         <div class="plate"><svg viewBox="0 0 1000 560" role="img" aria-label="Squaring a web member's section to its face: panel 1's face leans 26.69 degrees; for the diagonal from c at XXVIII to b at XXVII, N is the face normal made square to the member tangent T and B = N × T, so the section's sides lie in the face; with a +y up hint the same square section rolls 30.4 degrees off the face."><defs><marker id="squaring-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1L10,5L0,9Z" fill="var(--muted)"/></marker><marker id="squaring-arg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1L10,5L0,9Z" fill="var(--g)"/></marker><marker id="squaring-ara" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1L10,5L0,9Z" fill="var(--amber)"/></marker><marker id="squaring-ari" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1L10,5L0,9Z" fill="var(--ink)"/></marker></defs>
@@ -1286,12 +1432,12 @@
         <figcaption><b>Squaring a section to its face.</b> Left, an orthographic view of panel 1's face c–b (not to one scale): the diagonal c(XXVIII) → b(XXVII), its tangent T, and faceN = along × rise = (0, −0.449, −0.893), leaning 26.69° from vertical; N = normalize(F − T(F·T)), B = N × T, and for a member lying in its face N = F. Right, the member's 0.80 m section seen along T, to one scale: (a) squared to faceN, two faces in the face plane; (b) squared to a +y up hint, rolled 30.4° off the face. The other panel-1 diagonal rolls 39.5°.</figcaption>
       </figure>
 
-      <p>One detail makes this work in a graph: edge-rule members share their end points, and a sweep
+      <p>One detail makes this work in a graph. Edge-rule members share their end points, and a sweep
       resolves its up hint per point, so a shared point cannot carry two faces' normals. Each member is
-      first resampled onto two points of its own with <code>pathResample</code>, which carries the
-      member's primitive <code>faceN</code> down onto them. The few uprights that are still swept —
-      panel 29's and the summit girders' — take a constant +x hint instead, which keeps a near-vertical
-      member square to the tower's faces; the leg and shaft uprights are built from plates (see
+      therefore first resampled onto two points of its own with <code>pathResample</code>, which carries
+      the member's primitive <code>faceN</code> down onto them. The few uprights that are still swept,
+      panel 29's and the summit girders', take a constant +x hint instead, which keeps a near-vertical
+      member square to the tower's faces. The leg and shaft uprights are built from plates (see
       <a href="#uprights">Uprights</a>).</p>
     </div>
   </section>
@@ -1304,10 +1450,10 @@
     </div>
     <div class="sec-body">
       <p>At the laced depth a web member's path becomes four chord paths, offset to the corners of its
-      section, and eight lacing paths — two per face, in opposite phase, which puts one X in every
-      lacing bay. The chords are swept as 90 mm squares and the lacing as 45 mm squares, both squared to
-      <code>faceN</code>. The member types are the plates': in the web the "800" strut to 100.6 m, the "600" to
-      110.6 m, the "500" above; the horizontals are 800 to 115.5 m and 600 above.</p>
+      section, and eight lacing paths: two per face, in opposite phase, which puts one X in every lacing
+      bay. The chords are swept as 90 mm squares and the lacing as 45 mm squares, both squared to
+      <code>faceN</code>. The member types are the plates'. In the web the "800" strut runs to 100.6 m,
+      the "600" to 110.6 m and the "500" above; the horizontals are 800 to 115.5 m and 600 above.</p>
 
       <figure>
         <div class="plate"><svg viewBox="0 0 1000 515" role="img" aria-label="Two end views to one scale: the laced 800 strut, four 90 mm chord angles at ±0.355 joined by 45 mm lacing bars, with eight rivet heads on the chords' outer faces and one on each face where its lacing crosses; the lower upright c in panel 1, Plate XXXI's 0.877 m plan square, which square to its axis is a lozenge of 0.800 m webs, with its C.J.s, fins and channels and eight seam-rivet rows 55 mm in from its corners; and the unit rivet head profile, a spherical cap of base radius 1 and rise 0.7."><defs><marker id="strut-section-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1L10,5L0,9Z" fill="var(--muted)"/></marker></defs>
@@ -1608,23 +1754,24 @@
       <h2 id="joints" data-toc="Joints">A strut stops where its joint starts. The gusset plates cover the rest.</h2>
     </div>
     <div class="sec-body">
-      <p>A web member run from upright axis to upright axis puts its lacing inside the upright's box — up
-      to 15% of the lacing in the shaft, when the first version did exactly that. So each member end that
-      meets an upright is trimmed to its <strong>joint start</strong>: the distance along the member at which its section
-      clears the upright by 50 mm. A point <span class="mono">a</span> along the member and
-      <span class="mono">w</span> off its axis lies <span class="mono">a·sin t − w·cos t</span> from the
-      upright's axis, where <span class="mono">t</span> is the angle between member and column, which
-      gives</p>
+      <p>A web member run from upright axis to upright axis puts its lacing inside the upright's box.
+      The first version did exactly that, with up to 15% of the shaft's lacing inside an upright. So each
+      member end that meets an upright is trimmed to its <strong>joint start</strong>: the distance
+      along the member at which its section clears the upright by 50 mm. A point
+      <span class="mono">a</span> along the member and <span class="mono">w</span> off its axis lies
+      <span class="mono">a·sin t − w·cos t</span> from the upright's axis, where
+      <span class="mono">t</span> is the angle between member and column, which gives</p>
       <p class="eq">jointStart = (r + 0.05 + w·cos t) / sin t</p>
-      <p>with <span class="mono">r</span> the upright's half-width at that height — below XVII the
-      built-up box's greatest in-plane half-width plus whatever stands out of the face the member lands
-      on, the channel in panels 1–5 or the C.J. in 6–11 (0.5021 m at XXVIII), and above XVII the 0.50 m
-      box's 0.25 — and
-      <span class="mono">w</span> the member's in-plane half-width. The angle is recorded
-      per member end by the edge rule, as the sine against the column's bisector at the station; at a
-      kinked node the smallest of the sines against the bisector and the segments below and above is
-      used, because at XXIII the bisector would place a horizontal's bottom chord 20 mm farther from
-      the upright than it is.</p>
+      <p>with <span class="mono">r</span> the upright's half-width at that height and
+      <span class="mono">w</span> the member's in-plane half-width. Below XVII,
+      <span class="mono">r</span> is the built-up box's greatest in-plane half-width plus whatever
+      stands out of the face the member lands on: the channel in panels 1–5 or the C.J. in 6–11 (0.5021
+      m at XXVIII). Above XVII it is the 0.50 m box's 0.25.</p>
+
+      <p>The edge rule records the angle per member end, as the sine against the column's bisector at
+      the station. At a kinked node it uses the smallest of the sines against the bisector and the
+      segments below and above, because at XXIII the bisector would place a horizontal's bottom chord 20
+      mm farther from the upright than it is.</p>
 
       <figure>
         <div class="plate"><svg viewBox="0 0 1000 640" role="img" aria-label="A panel-1 diagonal meeting upright c at node XXVIII, in the face plane: the strut starts 1.540 m along the member, where its near chord's edge is 0.05 m clear of the channel standing 0.102 m out of the upright's web, 0.400 m off its axis; a gusset plate from 0.011 to 2.073 m, 0.96 m wide, carries 5 rows of joint rivets at 1.6 to 2.0 m; below, the untrimmed strut with its lacing and rivets inside the upright's box marked in red."><defs><clipPath id="joint-vpA"><rect x="40" y="58" width="585" height="295.5"/></clipPath><clipPath id="joint-inA"><path d="M-310,600.2L674.6,-85.7L606,-184.2L-378.6,501.7Z"/></clipPath><clipPath id="joint-outA"><path d="M40,58H625V353.5H40ZM-310,600.2L674.6,-85.7L606,-184.2L-378.6,501.7Z" clip-rule="evenodd"/></clipPath><clipPath id="joint-vpB"><rect x="40" y="432" width="585" height="198"/></clipPath><clipPath id="joint-inB"><path d="M-310,932.2L674.6,246.3L606,147.8L-378.6,833.7Z"/></clipPath><clipPath id="joint-outB"><path d="M40,432H625V630H40ZM-310,932.2L674.6,246.3L606,147.8L-378.6,833.7Z" clip-rule="evenodd"/></clipPath></defs>
@@ -1719,31 +1866,35 @@
 <text class="s-sig" x="655" y="562">and at the first crossing</text>
 <text class="s-lbl-s" x="655" y="584">gusset plates not drawn</text>
 </svg></div>
-        <figcaption><b>The panel-1 diagonal leaving upright c at node XXVIII</b>, in its face plane, to scale. The strut starts about 1.540 m from the node, where its near chord's outer edge clears the built-up upright and the channel standing out of its face by <code>CLEAR</code> 0.05 m; the pair of 8 mm gusset plates, 0.96 m wide, runs from about 0.011 m to 2.073 m, with joint rivets every 0.1 m from 1.6 to 2.0, four heads per sample, 20 an end. Below, in red, the same strut untrimmed — the code as it ran before 610092b, drawn with today's lacing step: its first bay of lacing, the chord ends and the rivets at the first two samples lie inside the upright's box. Values checked against a cook of <code>buildLegs</code>.</figcaption>
+        <figcaption><b>The panel-1 diagonal leaving upright c at node XXVIII</b>, in its face plane, to scale. The strut starts about 1.540 m from the node, where its near chord's outer edge clears the built-up upright and the channel standing out of its face by <code>CLEAR</code> 0.05 m; the pair of 8 mm gusset plates, 0.96 m wide, runs from about 0.011 m to 2.073 m, with joint rivets every 0.1 m from 1.6 to 2.0, four heads per sample, 20 an end. Below, in red, the same strut untrimmed, as the code ran before 610092b (drawn with today's lacing step). Its first bay of lacing, the chord ends and the rivets at the first two samples lie inside the upright's box. Values checked against a cook of <code>buildLegs</code>.</figcaption>
       </figure>
 
-      <p>Each end then receives a pair of gusset plates, one either side of the member's face plane, from
-      the upright's face to <span class="mono">jointStart + reach</span>. The plates of the members
-      meeting at a node overlap to form the node's gusset; no rule needs to know which members meet
-      there, because each member places its own plates. While the joints were built (b0d0f01), an
-      independent check found 496 joint rivets (1.7%) up to 127 mm inside an upright: the clearance had
-      been a fixed distance along the member. Solved from the meeting angle, as above, it left none
-      inside, with a minimum clearance of 173 mm. Below XVII the plates now meet the built-up uprights
+      <p>Each end then receives a pair of gusset plates, one either side of the member's face plane,
+      from the upright's face to <span class="mono">jointStart + reach</span>. The plates of the members
+      meeting at a node overlap to form the node's gusset. No rule needs to know which members meet
+      there, because each member places its own plates. Below XVII the plates meet the built-up uprights
       through a table of their own, <code>jointFace</code>, and stand 8 mm off the webs they lap.</p>
 
+      <p>While the joints were built (b0d0f01), an independent check found 496 joint rivets (1.7%) up to
+      127 mm inside an upright: the clearance had been a fixed distance along the member. Solved from
+      the meeting angle, as above, it left none inside, with a minimum clearance of 173 mm.</p>
+
       <p>The second kind of plate is over a <strong>crossing</strong>. Wherever two laced struts cross
-      in a lattice face — a panel's two diagonals bisecting each other, a post landing on a horizontal,
-      both at once — the tower rivets a plate over them, one either side. The sources name two: Plate
-      VII fig. 2 the plate at the gap X's centre, and Plate XIV fig. 5 bis the « 2 Goussets 1.130 × 10 »
-      where the summit's diagonal girders cross [sourced]. The model treats every crossing in a lattice
-      face as the same joint [rule] and builds them in one place (<code>crossing.ts</code>): 444
-      crossings and 888 plates in the legs and the shaft, 240 crossings and 480 plates on the first
-      floor (641c6174, 7fa7b878, 37f318ed). A plate is 10 mm thick, lies in the members' shared face
-      plane, and sits under the corner angles' outer face, so the angles run over its edges while it
-      covers the lacing between them. How far under, and how wide across an 800, are set by eye rather than
-      read off a plate [estimated], like many smaller values in the model; they are the two
-      the page lets a URL override (<span class="mono">?plateSet</span>, <span class="mono">?plateEdge</span>).
-      No lacing rivet is placed under a plate or on its rows (63de7af1).</p>
+      in a lattice face, the tower rivets a plate over them, one either side. That happens where a panel's two
+      diagonals bisect each other, where a post lands on a horizontal, or both at once. The sources name
+      two. Plate VII fig. 2 draws the plate at the gap X's centre, and Plate XIV fig. 5 bis the « 2
+      Goussets 1.130 × 10 » where the summit's diagonal girders cross [sourced].</p>
+
+      <p>The model treats every crossing in a lattice face as the same joint [rule] and builds them all
+      in one place, <code>crossing.ts</code>: 444 crossings and 888 plates in the legs and the shaft,
+      and 240 crossings and 480 plates on the first floor (641c6174, 7fa7b878, 37f318ed).</p>
+
+      <p>A plate is 10 mm thick and lies in the members' shared face plane. It sits under the corner
+      angles' outer face, so the angles run over its edges while it covers the lacing between them. How
+      far under, and how wide across an 800, are set by eye rather than read off a plate [estimated].
+      They are the two values the page lets a URL override (<span class="mono">?plateSet</span>,
+      <span class="mono">?plateEdge</span>). No lacing rivet is placed under a plate or on its rows
+      (63de7af1).</p>
 
       <figure class="shot">
         <img src="eiffel/gusset-joint.jpg" width="1720" height="968" loading="lazy" alt="A gusset plate where a horizontal and a diagonal meet a corner upright, with rows of rivet heads on the plate and along the upright." />
@@ -1761,19 +1912,25 @@
     </div>
     <div class="sec-body">
       <p>Three rules place most of the rivets: 878,108 of the 1,205,292 heads at the rivets depth,
-      72.9%. A <strong>lacing rivet</strong> is where a lacing bar meets a chord: eight per strut
-      section at every lacing sample, on the chords' outer faces, and one at every crossing of a face's
-      two zigzags. Plate X figs. 12–13 draw those crossing rivets on the 800s of panels 6–9; riveting
-      every laced strut's crossings so is inferred from them (d01814e1). A <strong>seam
-      rivet</strong> fastens a box member's corner angle to the plates it joins: on an upright, rows
-      55 mm in from each corner, every 125 mm, now laid on the built-up box's true faces and centred on
-      the stretches between nodes, plate ends and splice covers; the first floor's chords and posts
-      carry the same rule. A <strong>joint rivet</strong> fastens a strut's two chords
-      to each gusset plate, every 100 mm over the plate's reach and never nearer the upright than the
-      joint start. No lacing head is placed under a joint or crossing plate, nor on its rows. No source
-      prints a seam pitch; 125 mm is measured on Plate IX's gusset detail. Where a pitch is printed or
-      measurable elsewhere, that figure's own is used: the splice covers' fields, and the spacings Plate
-      X prints along the base ties' bars.</p>
+      72.9%.</p>
+
+      <ul class="list">
+        <li><b>Lacing rivets</b> are where a lacing bar meets a chord: eight per strut section at every
+        lacing sample, on the chords' outer faces, and one at every crossing of a face's two zigzags.
+        Plate X figs. 12–13 draw those crossing rivets on the 800s of panels 6–9; riveting every laced
+        strut's crossings that way is inferred from them (d01814e1).</li>
+        <li><b>Seam rivets</b> fasten a box member's corner angle to the plates it joins. On an upright
+        they run in rows 55 mm in from each corner, every 125 mm, laid on the built-up box's true faces
+        and centred on the stretches between nodes, plate ends and splice covers. The first floor's
+        chords and posts carry the same rule.</li>
+        <li><b>Joint rivets</b> fasten a strut's two chords to each gusset plate, every 100 mm over the
+        plate's reach, and never nearer the upright than the joint start.</li>
+      </ul>
+
+      <p>No lacing head is placed under a joint or crossing plate, nor on its rows. No source prints a
+      seam pitch; 125 mm is measured on Plate IX's gusset detail. Where a pitch is printed or measurable
+      elsewhere, that figure's own is used: the splice covers' fields, and the spacings Plate X prints
+      along the base ties' bars.</p>
 
       <div class="tbl stack">
         <table class="data">
@@ -1795,25 +1952,28 @@
       taken as in panels 1–5 [estimated].</p>
 
       <p><strong>Against the book.</strong> The rules are not stretched to reach a total. Eiffel's text
-      prints one count, 1,050,846 rivets driven on site, on the Champ de Mars [sourced, text p. 113];
-      the 2.5 million often quoted for the whole tower is not printed in it, and the model keeps it
-      only as a flagged secondary figure. Each rivet output is classed shop or site by one rule — site
-      where the pieces it fastens arrived separately [rule, from the text pp. 75 and 100]
-      (<code>rivetClass</code>, 352b0c47). Counting a rivet drawn with both heads once, the model
-      drives 334,659 site rivets, 32% of the book's (<code>tests/eiffelRivetCount.test.ts</code>). SOURCES.md §27.4 sets out where the rest is — site riveting the model does not draw,
-      such as the platforms' floors, the stairs and the lifts' girders, and some it draws but classes
-      shop, such as the first floor's joints — and the test holds the model under the book's count, never over it, rather than
-      tuning toward it. The page draws site heads a
-      step lighter and rougher than shop heads [estimated], and the "Site rivets" checkbox or
-      <span class="mono">?site</span> picks them out.</p>
+      prints one count: 1,050,846 rivets driven on site, on the Champ de Mars [sourced, text p. 113].
+      The 2.5 million often quoted for the whole tower is not printed in it, and the model keeps it only
+      as a flagged secondary figure.</p>
 
-      <p><strong>Hand-driven heads.</strong> A head closed with a hammer is never quite the drawn
-      one. Every rivet output carries a per-head <code>headDrive</code> value, drawn by
+      <p>Each rivet output is classed shop or site by one rule: site where the pieces it fastens arrived
+      separately [rule, from the text pp. 75 and 100] (<code>rivetClass</code>, 352b0c47). Counting a
+      rivet drawn with both heads once, the model drives 334,659 site rivets, 32% of the book's
+      (<code>tests/eiffelRivetCount.test.ts</code>). SOURCES.md §27.4 sets out where the rest is. Some
+      is site riveting the model does not draw, such as the platforms' floors, the stairs and the lifts'
+      girders. Some the model draws but classes shop, such as the first floor's joints. The test holds
+      the model under the book's count, never over it, rather than tuning toward it.</p>
+
+      <p>The page draws site heads a step lighter and rougher than shop heads [estimated], and the "Site
+      rivets" checkbox or <span class="mono">?site</span> picks them out.</p>
+
+      <p><strong>Hand-driven heads.</strong> A head closed with a hammer is never quite the drawn one.
+      Every rivet output carries a per-head <code>headDrive</code> value, drawn by
       <code>randomField</code> from the head's position and seed, so it is the same on every cook. The
       page turns it, once, at load, into a head up to 4% wider or narrower, up to 12% higher or lower,
       leaning up to 3°, turned, and set up to 1.2 mm off centre, with its rim kept on the plate
-      (<code>heads.ts</code>, 84e32257). The four amounts (the turn has none) are [estimated]: no
-      source measures a head.</p>
+      (<code>heads.ts</code>, 84e32257). The four amounts are [estimated]: no source measures a head.
+      The turn has no amount, because it can take any angle about the head's axis.</p>
 
       <figure class="shot">
         <img src="eiffel/rivets-close.jpg" width="1720" height="968" loading="lazy" alt="Close view of a gusset plate on a corner upright: the upright's two seam rows at 125 mm pitch, the plate's rivet rows, and a rivet at each lacing crossing on the struts." />
@@ -1821,38 +1981,44 @@
         The nominal head is 19 mm in radius and 13.3 mm high; each is driven a little differently.</figcaption>
       </figure>
 
-      <p>Each rule ends in a <code>spawnInstances</code> node that emits a batch of transforms against the
-      asset id <code>"rivet"</code>. The batch carries the true size in its matrices, so a host resolves
-      it against a unit head — a spherical cap of base radius 1 and rise 0.7, 80 triangles. This page
-      does not draw the matrices: it packs each head into 24 bytes — its seat, a rotation, a width and
-      a rise — folds the drive in, and rebuilds the head in the vertex shader
-      (<code>rivetPack.ts</code>, 13532b4c); <span class="mono">?cpuRivets</span> restores the matrix
-      path. Rivets receive shadows but do not cast them: a head 13 mm high throws nothing a 4096² map
-      over the whole tower — about 9 to 10 cm a texel on its longer side under this light — could resolve, and casting
-      would put every instance into the shadow pass.</p>
+      <p>Each rule ends in a <code>spawnInstances</code> node that emits a batch of transforms against
+      the asset id <code>"rivet"</code>. The batch carries the true size in its matrices, so a host
+      resolves it against a unit head: a spherical cap of base radius 1 and rise 0.7, 80 triangles.</p>
+
+      <p>This page does not draw the matrices. It packs each head into 24 bytes (its seat, a rotation, a
+      width and a rise), folds the drive in, and rebuilds the head in the vertex shader
+      (<code>rivetPack.ts</code>, 13532b4c). <span class="mono">?cpuRivets</span> restores the matrix
+      path.</p>
+
+      <p>Rivets receive shadows but do not cast them. A 4096² map over the whole tower gets about 9 to
+      10 cm a texel on its longer side under this light, so a head 13 mm high throws nothing it could
+      resolve, and casting would put every instance into the shadow pass.</p>
       <p>Before the first rivet commit landed, an independent check found rivets up to 19 cm inside a
-      plate — a size table stepped 1 cm past a node, and the skin read that as an 11 m taper — and the
-      commit fixed it. After the first audit round every rivet the three rules then placed sat within
-      0.04 mm of its steel. The later rules record their own residuals in their commits — the splices'
-      are above — and a known residual at full depth, first-floor heads crowding the rows as built, is
-      pinned by <code>tests/eiffelRivetCount.test.ts</code>.</p>
-      <p>Neither is what a ruler laid on the built model reads.
-      Every mesh class, the lift parts, the fittings and the rivet batches — everything the graph
-      outputs except the chains, the flag and the erection's works — is
-      moved off its plane by up to 1 mm per axis at the end, because the tower is drawn from one set of
-      dimensions and its parts therefore meet EXACTLY: a member's end face on the horizontal it lands
-      on, a rivet's rim on the plate it fastens. Coplanar
-      is the one thing a depth buffer cannot resolve. The page's buffer is logarithmic, so its
-      resolution is set by <code>far</code> alone — the depth written is log2(1&nbsp;+&nbsp;w) /
-      log2(1&nbsp;+&nbsp;far), and one step of a 24-bit buffer is 0.27 mm at the 608 m the page opens
-      on — and those faces flickered against each other as the camera turned. The offset is keyed on
-      point identity rather than on an array slot, so it is a property of the built tower and not of a
-      cook order. Measured at the laced depth when the offset went in (1c11fcd5), of the 13,716 gusset
-      points that then lay exactly in an upright's face plane none still did, and about three quarters
-      cleared a depth step at the opening pose. The cost is that two coincident points carrying different seeds part company, opening
-      cracks of about a millimetre where one member lands on another: a fifth of a pixel here, a pixel
-      in the closest figure on this page, and visible only if the camera is driven to its 0.2 m
-      limit.</p>
+      plate. A size table stepped 1 cm past a node, and the skin read that as an 11 m taper; the commit
+      fixed it. After the first audit round, every rivet the three rules then placed sat within 0.04 mm
+      of its steel. The later rules record their own residuals in their commits; the splices' are above.
+      One known residual at full depth, first-floor heads crowding the rows as built, is pinned by
+      <code>tests/eiffelRivetCount.test.ts</code>.</p>
+      <p><strong>Nothing exactly coplanar.</strong> The tower is drawn from one set of dimensions, so
+      its parts meet EXACTLY: a member's end face on the horizontal it lands on, a rivet's rim on the
+      plate it fastens. Coplanar is the one thing a depth buffer cannot resolve. The page's buffer is
+      logarithmic, so its resolution is set by <code>far</code> alone. The depth written is</p>
+      <p class="eq">log2(1&nbsp;+&nbsp;w) / log2(1&nbsp;+&nbsp;far)</p>
+      <p>and one step of a 24-bit buffer is 0.27 mm at the 608 m the page opens on. Faces that meet
+      exactly flickered against each other as the camera turned.</p>
+
+      <p>So at the end, everything the graph outputs except the chains, the flag and the erection's
+      works is moved off its plane by up to 1 mm per axis: every mesh class, the lift parts, the
+      fittings and the rivet batches. A ruler laid on the built model therefore reads neither the residuals above nor the exact
+      dimensions. The offset is keyed on point identity rather than on an array slot, so it is a
+      property of the built tower and not of a cook order.</p>
+
+      <p>It was measured at the laced depth when it went in (1c11fcd5). Of the 13,716 gusset points that
+      then lay exactly in an upright's face plane, none still did, and about three quarters cleared a
+      depth step at the opening pose. The cost is that two coincident points carrying different seeds
+      part company. That opens cracks of about a millimetre where one member lands on another: a fifth
+      of a pixel here, a pixel in the closest figure on this page, and visible only if the camera is
+      driven to its 0.2 m limit.</p>
     </div>
   </section>
 
@@ -1863,14 +2029,16 @@
       <h2 id="copies" data-toc="Copies">One leg is built, and copied to four quadrants with its directions turned.</h2>
     </div>
     <div class="sec-body">
-      <p>Every leg member is built once, in the +x+z quadrant, and copied onto four targets rotated 0, 90,
-      180 and 270° about the vertical. (The entretoises are the exception: they are built twice, as the
-      Roux and Otis variants, each copied onto two legs.) <code>copyToPoints</code> composed each copy's position and
-      rotation, but every other column rode along unturned: copied as-is, three of the four legs would
-      carry a <code>faceN</code> pointing the source quadrant's way, and a box copied onto a turned target
-      would be lit as if it had not turned. From its second commit the demo corrected
-      <code>faceN</code> after the quadrant copy with a chain of three nodes and a quaternion written in the field grammar. That was recorded as
-      a gap in the library, and fixed there.</p>
+      <p>Every leg member is built once, in the +x+z quadrant, and copied onto four targets rotated 0,
+      90, 180 and 270° about the vertical. The entretoises are the exception: they are built twice, as
+      the Roux and Otis variants, and each is copied onto two legs.</p>
+
+      <p><code>copyToPoints</code> composed each copy's position and rotation, but every other column
+      rode along unturned. Copied as-is, three of the four legs would carry a <code>faceN</code>
+      pointing the source quadrant's way, and a box copied onto a turned target would be lit as if it
+      had not turned. From its second commit the demo corrected <code>faceN</code> after the quadrant
+      copy, with a chain of three nodes and a quaternion written in the field grammar. That was recorded
+      as a gap in the library, and fixed there.</p>
 
       <figure>
         <div class="plate"><svg viewBox="0 0 1000 536" role="img" aria-label="Plan view of the four quadrant copies of one leg. Without rotateAttrs every copy's faceN points the source's way; with rotateAttrs faceN turns 0, 90, 180 and 270 degrees with its copy. A side panel shows a unit box's face normals turning with the box.">
@@ -2017,17 +2185,23 @@
         <figcaption><b>One leg, four copies.</b> The leg is built in the +x+z quadrant and copied onto four targets turned index·90° about +y. Without <code>rotateAttrs</code>, every copy keeps the source's <code>faceN</code> (0, −0.449, −0.893): its horizontal part then runs along the face on the 90° and 270° copies and is reversed on the 180° copy. With <code>rotateAttrs: ["faceN"]</code> it turns with its copy. The plan is to scale, with leg outlines at XXVIII and XXVII; arrow lengths, and the turn and scale in the box panel, are illustrative.</figcaption>
       </figure>
 
-      <p><code>copyToPoints</code> now takes <code>rotateAttrs</code>: a list of f32 tuple-3 columns turned
-      by each copy's target rotation, on the point, vertex and primitive domains. It applies the rotation
-      and, under <code>mirrorAware</code> (on by default), the signs of the target's scale, so a
-      mirrored copy's normals stay outward and its faces' winding is reversed; it never applies the
-      scale's magnitude. No eiffel target is mirrored, so for the tower it is rotation only. It refuses <code>P</code>, <code>rot</code>, <code>scale</code>,
-      <code>seed</code> and the bounds by name, with a message listing the valid columns. The default is
-      an empty list and byte-identical to the old behaviour, so the corpus golden file did not move.
-      Switching the leg members to it (12f0ec8) changed no output count; the turned normals agreed
-      with the workaround to one f32 ulp and positions moved by at most 7.6 µm. Switching the box
-      normals (09c2f9a) left 17.18 million position values bit-identical, with normals within
-      2.1 × 10⁻⁷.</p>
+      <p><code>copyToPoints</code> now takes <code>rotateAttrs</code>: a list of f32 tuple-3 columns
+      turned by each copy's target rotation, on the point, vertex and primitive domains. It applies the
+      rotation and, under <code>mirrorAware</code> (on by default), the signs of the target's scale, so
+      a mirrored copy's normals stay outward and its faces' winding is reversed. It never applies the
+      scale's magnitude. No eiffel target is mirrored, so for the tower it is rotation only.</p>
+
+      <p>It refuses <code>P</code>, <code>rot</code>, <code>scale</code>, <code>seed</code> and the
+      bounds by name, with a message listing the valid columns. The default is an empty list and
+      byte-identical to the old behaviour, so the corpus golden file did not move. The demo switched
+      over in two steps:</p>
+
+      <ul class="list">
+        <li><b>The leg members</b> (12f0ec8): no output count changed. The turned normals agreed with
+        the workaround to one f32 ulp, and positions moved by at most 7.6 µm.</li>
+        <li><b>The box normals</b> (09c2f9a): 17.18 million position values stayed bit-identical, with
+        normals within 2.1 × 10⁻⁷.</li>
+      </ul>
     </div>
   </section>
 
@@ -2087,54 +2261,76 @@
       carry up to the higher ground is cut off just under the model's.</p>
 
       <p><strong>The supports.</strong> Each of the sixteen uprights ends on a stack built along its own
-      axis and square to it (6ce08cbb): two courses of Château-Landon stone, each 0.50 m thick [sourced: the
-      plates, and p. 87 read on its image, where the OCR prints 0,30], irregular octagons of 4.10 × 4.00
-      and 3.00 × 3.15 m [sourced, Plate IV fig. 8]; a cast-iron shoe, the <em>sabot</em>, 1.800 m across its flats and
-      0.915 m high [sourced, Plate VI]; 50 mm of shims [sourced]; and the cast-steel <em>contre-sabot</em>,
-      whose ledge is printed 1.200 × 1.375 m and drawn 1.5% larger so the whole of the built-up upright's
-      end, fins included, lies on it [estimated]. Two anchor bolts an upright, 32 in all, 0.10 m across
-      and 7.80 m long, 1.47 m apart, run 6.20 m down the axis to their anchor shoes [sourced, p. 87,
-      Plate VI fig. 1]. The two 800 t jacks that set the tower moved from support to support and
-      were not left in place [derived from pp. 102 and 117], so none is built. One departure carries through the whole ground: the model's uprights run down to the
-      sommiers' centre, Plate XXXI's support node, where the iron really ended 1.10 m higher up the axis
-      (Plate VI fig. 8's chain, 200 + 715 + 50 + 125 + 10 mm). The stack is therefore built under the
-      model's upright, and the supports and the massifs under them stand 1.10 m down the axis from
-      their printed cotes [derived] (<code>SUPPORT.stack</code>).</p>
+      axis and square to it (6ce08cbb). From the bottom up, with the bolts that hold it down:</p>
+
+      <div class="tbl stack">
+        <table class="data">
+          <thead><tr><th>Part</th><th>What it is</th><th>Source</th></tr></thead>
+          <tbody>
+            <tr><td class="k">stone</td><td>Two courses of Château-Landon stone, each 0.50 m thick, irregular octagons of 4.10 × 4.00 and 3.00 × 3.15 m</td><td data-label="source">the thickness [sourced: the plates, and p. 87 read on its image, where the OCR prints 0,30]; the octagons [sourced, Plate IV fig. 8]</td></tr>
+            <tr><td class="k">sabot</td><td>A cast-iron shoe, 1.800 m across its flats and 0.915 m high</td><td data-label="source">[sourced, Plate VI]</td></tr>
+            <tr><td class="k">shims</td><td>50 mm of iron shims</td><td data-label="source">[sourced]</td></tr>
+            <tr><td class="k">contre-sabot</td><td>Cast steel; its ledge is printed 1.200 × 1.375 m and drawn 1.5% larger, so the whole of the built-up upright's end, fins included, lies on it</td><td data-label="source">[estimated]</td></tr>
+            <tr><td class="k">anchor bolts</td><td>Two an upright, 32 in all, 0.10 m across and 7.80 m long, 1.47 m apart, running 6.20 m down the axis to their anchor shoes</td><td data-label="source">[sourced, p. 87, Plate VI fig. 1]</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The two 800 t jacks that set the tower moved from support to support and were not left in place
+      [derived from pp. 102 and 117], so none is built.</p>
+
+      <p>One departure carries through the whole ground. The model's uprights run down to the sommiers'
+      centre, Plate XXXI's support node, where the iron really ended 1.10 m higher up the axis (Plate VI
+      fig. 8's chain, 200 + 715 + 50 + 125 + 10 mm). The stack is therefore built under the model's
+      upright, and the supports and the massifs under them stand 1.10 m down the axis from their printed
+      cotes [derived] (<code>SUPPORT.stack</code>).</p>
 
       <p><strong>The foundations.</strong> Sixteen massifs, one under each upright's stones, are
       truncated pyramids of rubble in cement on the tower's diagonal: a vertical front, a top square to
       the upright, a rear face parallel to the leg [sourced, pp. 86–93, Plates III and IV; the lengths
       derived from the printed profile]. Piles 2 and 3 stand on 10 × 6 m concrete footings on the gravel
-      [sourced, p. 86]. Piles 1 and 4, on the Seine side, stand on eight compressed-air caissons, one
-      under each massif, 15.24 × 6.00 m with rounded corners — the first one sunk, pile 4's N° 1,
-      14.24 m — filled solid with concrete in their iron shells [sourced, pp. 88–93, Plates II and IV];
-      the corner radius, 1.0 m, is derived from the printed area, « 90,60 m q ». Between them stand the
-      walls of piles 1, 2 and 4, as the 18 piers of a printed run whose arches spring above the model's
-      ground [sourced run; which end it starts from estimated], and under piles 2 and 3 two cast-iron
-      earthing pipes each, 0.30 m across and 18.00 m long [sourced, p. 86, Plate II; their depth
-      derived] (c3ae6979). Not built: the caissons' shafts and airlocks, and the lift massif's pit and
-      cage, where the massif takes the same rule as the other three [estimated]. All of it is under
-      the ground plane; the page's section view opens it on the plane Plate XX's diagonal section is
-      drawn on, x + z = 0, keeping pile 4's half and taking away the ground over pile 2's [the plane
-      sourced; keeping pile 4 rather than pile 2 the model's choice] (see
+      [sourced, p. 86].</p>
+
+      <p>Piles 1 and 4, on the Seine side, stand on eight compressed-air caissons, one under each
+      massif. Each is 15.24 × 6.00 m (the first one sunk, pile 4's N° 1, 14.24 m long) with rounded corners, filled solid with concrete in its iron shell
+      [sourced, pp. 88–93, Plates II and IV]. The
+      corner radius, 1.0 m, is derived from the printed area, « 90,60 m q ».</p>
+
+      <p>Between them stand the walls of piles 1, 2 and 4, as the 18 piers of a printed run whose arches
+      spring above the model's ground [sourced run; which end it starts from estimated]. Under piles 2
+      and 3 are two cast-iron earthing pipes each, 0.30 m across and 18.00 m long [sourced, p. 86, Plate
+      II; their depth derived] (c3ae6979). Not built: the caissons' shafts and airlocks, and the lift
+      massif's pit and cage; that massif takes the same rule as the other three [estimated].</p>
+
+      <p>All of it is under the ground plane. The page's section view opens it on the plane Plate XX's
+      diagonal section is drawn on, x + z = 0, keeping pile 4's half and taking away the ground over
+      pile 2's [the plane sourced; keeping pile 4 rather than pile 2 the model's choice] (see
       <a href="#rendering">Rendering</a>).</p>
 
-      <p><strong>The machine room</strong> under pile 3 (18827652) has its floor at 30.50, y −3.00
-      [sourced, p. 88 and Plate III fig. 4]: the boilers, the pump-engines and the coal store as massing
-      where Plate III fig. 4 draws them at 1:200 [measured: positions read at 1:200, ±0.3–0.5 m; unprinted sizes estimated]; the Otis
-      lift's motor girders run through it. A vaulted flue, 1.30 × 1.70 m, runs « 116m23 » to the chimney
-      [sourced, Plate IV fig. 15]. The chimney, 17.23 m over its footing [sourced], is still modelled, as
-      a solid the clearance checks read, but no longer drawn.</p>
+      <p><strong>The machine room</strong> under pile 3 has its floor at 30.50, y −3.00 [sourced, p. 88
+      and Plate III fig. 4] (18827652). It holds the boilers, the pump-engines and the coal store, as
+      massing where Plate III fig. 4 draws them at 1:200 [measured: positions read at 1:200, ±0.3–0.5 m;
+      unprinted sizes estimated], and the Otis lift's motor girders run through it. A vaulted flue, 1.30
+      × 1.70 m, runs « 116m23 » to the chimney [sourced, Plate IV fig. 15]. The chimney, 17.23 m over
+      its footing [sourced], is still modelled, as a solid the clearance checks read, but no longer
+      drawn.</p>
 
-      <p><strong>The plinths</strong> (b78ce979) are Plate V's: a gorge traced in 11 tiers on fig. 17
-      [measured, scaled to the model's height], the inner corner swept on an arc of 3.29 m with a bench
-      along it, the sill 0.70 × 0.10 and the seat 0.48 m [the arc measured on fig. 12; the bench's
-      existence p. 95; its sill and seat sourced, fig. 19], rusticated courses of blocks 1.53 × 0.50 m,
-      staggered, 88 to a plinth [measured, fig. 15], and a door 2.58 m wide on each inner face [sourced,
-      fig. 16]. The open point is the height: Plate V puts the plinth's foot on the piles' floor, 1.58 m
-      above the model's ground, and the model keeps its plinth on its flat ground, so it stands 1.58 m
-      low. Raising it means raising the ground round the piles, and moving the arch's piers with it;
-      SOURCES.md §31.2 leaves it for a decision.</p>
+      <p><strong>The plinths</strong> (b78ce979) are Plate V's:</p>
+
+      <ul class="list">
+        <li>a gorge traced in 11 tiers on fig. 17 [measured, scaled to the model's height];</li>
+        <li>the inner corner swept on an arc of 3.29 m, with a bench along it, its sill 0.70 × 0.10 and
+        its seat 0.48 m [the arc measured on fig. 12; the bench's existence p. 95; its sill and seat
+        sourced, fig. 19];</li>
+        <li>rusticated courses of blocks 1.53 × 0.50 m, staggered, 88 to a plinth [measured, fig.
+        15];</li>
+        <li>a door 2.58 m wide on each inner face [sourced, fig. 16].</li>
+      </ul>
+
+      <p>The open point is the height. Plate V puts the plinth's foot on the piles' floor, 1.58 m above
+      the model's ground. The model keeps its plinth on its flat ground, so it stands 1.58 m low.
+      Raising it means raising the ground round the piles and moving the arch's piers with it, and
+      SOURCES.md §31.2 leaves that for a decision.</p>
 
       <p class="note">The piles are numbered as on the plates: 1 Nord, 2 Est, 3 Sud, 4 Ouest, clockwise
       from above; pile 4 is the +x+z leg the model builds and copies. The supports and massifs are copied in
@@ -2150,12 +2346,12 @@
       <h2 id="regions" data-toc="Regions">The first floor and the summit: the arch is solved, the rooms are read off their figures.</h2>
     </div>
     <div class="sec-body">
-      <p>The <strong>first floor</strong> is built on one face in two planes — the face plane and a plane
-      15.00 m inboard, at the legs' inner uprights — and copied to the four faces. Its arch is two
-      concentric circles, radii 36.4064 and 40.32373 m, turning to a lower arc of 44.5258 m where it meets
-      the upright; 14 montants per half stand at a 4.011° pitch, and the arcade's heads are each the
-      incircle of three lines, solved by Cramer's rule. The builder throws, naming the montant and the plate's
-      rule, if the montants and the upright disagree.</p>
+      <p>The <strong>first floor</strong> is built on one face, in two planes, and copied to the four
+      faces. The two planes are the face plane and a plane 15.00 m inboard, at the legs' inner uprights.
+      Its arch is two concentric circles, radii 36.4064 and 40.32373 m, turning to a lower arc of
+      44.5258 m where it meets the upright. There are 14 montants per half, at a 4.011° pitch, and each
+      of the arcade's heads is the incircle of three lines, solved by Cramer's rule. If the montants and
+      the upright disagree, the builder throws, naming the montant and the plate's rule.</p>
 
       <figure>
         <div class="plate"><svg viewBox="0 0 1000 690" role="img" aria-label="True front elevation of the right half of the first-floor decorative arch on the +z face: intrados R 36.4064 and extrados R 40.32373 in the leaning face plane, the lower arc R 44.5258 where the arch meets upright b, crown 39.40 above the ground, 14 montants at 4.011 degree pitch, 7 arcade openings whose heads are each the circle tangent to three lines, and the pier and pedestal at the foot; two openings enlarged at right"><defs><marker id="arch-ar" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1L10,5L0,9z" fill="var(--muted)"/></marker><clipPath id="arch-main"><rect x="24" y="60.4" width="660" height="564.6"/></clipPath><clipPath id="arch-in6"><rect x="712" y="92" width="264.6" height="198.4"/></clipPath><clipPath id="arch-in9"><rect x="712" y="372" width="264.6" height="235.2"/></clipPath></defs>
@@ -2252,31 +2448,45 @@
         names are lettered in gilt capitals (see <a href="#names">Names</a>).</figcaption>
       </figure>
 
-      <p>The arch lands on the uprights as they were built: the first floor's landing ends meet b's web,
-      never the tip of a fin, as Plate XI figs. 3, 5 and 11 draw them (0d114215). Its <strong>ironwork</strong>
-      is Plate XI fig. 14's decorated panel (d40142a9): in each panel a round-headed frame « Ame 160×7 »,
-      three bars « Corn 100×45 », four cast volutes « Volute en fonte 80×45 » and macarons
-      [sourced, Plate XI fig. 14 and p. 80], 125 mm across [measured on its 1:10 detail]. The text puts the motif on the arch's inner and outer faces and
-      leaves the other two plain; on every tower face the model dresses the decorated side of both
-      arches, the one in the face plane and the one 15 m inboard, 26 panels each, 208 in all, and keeps
-      a volute
-      only where half its width clears every panel edge and the frame and bars [rule], which leaves 752.
-      The frame and the bars are built at every depth; the volutes and macarons from the laced depth up.</p>
+      <p>The arch lands on the uprights as they were built. The first floor's landing ends meet b's web,
+      and its members land on the webs of b, d and a, never on the tip of a fin, as Plate XI figs. 3, 5
+      and 11 draw them on b's (0d114215).</p>
 
-      <p>The first floor is <strong>dressed as in 1889</strong> (cdf757b9, ff08b7bc; SOURCES.md §10). One
-      rule builds the four pavilions — cornice, posts, balustrade, pinnacles, timber screens — and each
-      face then takes its own dressing from Plates XXIX and XXX: the Russe on the north-east face, the
-      Français south-east, the Anglo-Américain south-west and the Flamand north-west. The gallery has
-      36 arcades [sourced: nine a face, and the ledger's « 36 arcades »], each dressed once and placed on
-      all 36: a stamped-zinc crest measured on Plate XIX fig. 1, and yellow glass cabochons in the
-      crescent's twelve cells [the cabochons sourced, text; twelve counted on the figure], 432 in all
-      [derived]. The balustrade has 720 balusters, the number the ledger records set (p. 217), not the
-      560 that p. 213 gives. The inner arcade is Plate XIII's; the gas globes'
-      placing is assumed. Glass is its own class (3b5a9668): the pavilions' doors, screens and tympana,
-      and the summit's croisées; the arcade's crescents are « verres coulés étamés », silvered glass, a
-      class of their own, <code>silvered</code>. The Français and the Russe have entrance flights at their
-      fronts as Plate XVIII draws them; the Bar and the Flamand have none [sourced; the Flamand read from the plate's Théâtre, estimated]. The second floor
-      is built in its 1889 state from Plate XIX fig. 7, its unprinted heights assumed.</p>
+      <h3 class="sub">Ironwork</h3>
+
+      <p>The arch's ironwork is Plate XI fig. 14's decorated panel (d40142a9). Each panel has a
+      round-headed frame « Ame 160×7 », three bars « Corn 100×45 », four cast volutes « Volute en fonte
+      80×45 » and macarons [sourced, Plate XI fig. 14 and p. 80], 125 mm across [measured on its 1:10
+      detail].</p>
+
+      <p>The text puts the motif on the arch's inner and outer faces and leaves the other two plain. On
+      every tower face the model dresses the decorated side of both arches, the one in the face plane
+      and the one 15 m inboard: 26 panels each, 208 in all. It keeps a volute only where half its width
+      clears every panel edge and the frame and bars [rule], which leaves 752. The frame and the bars
+      are built at every depth, the volutes and macarons from the laced depth up.</p>
+
+      <h3 class="sub">The 1889 dressing</h3>
+
+      <p>The first floor is dressed as in 1889 (cdf757b9, ff08b7bc; SOURCES.md §10). One rule builds the
+      four pavilions: cornice, posts, balustrade, pinnacles, timber screens. Each face then takes its
+      own dressing from Plates XXIX and XXX: the Russe on the north-east face, the Français south-east,
+      the Anglo-Américain south-west and the Flamand north-west. The Français and the Russe have
+      entrance flights at their fronts as Plate XVIII draws them; the Bar Anglo-Américain and the
+      Flamand have none [sourced; the Flamand read from the plate's Théâtre, estimated].</p>
+
+      <p>The gallery has 36 arcades [sourced: nine a face, and the ledger's « 36 arcades »]. Each is
+      dressed once and placed on all 36: a stamped-zinc crest measured on Plate XIX fig. 1, and yellow
+      glass cabochons in the crescent's twelve cells [the cabochons sourced, text; twelve counted on the
+      figure], 432 in all [derived]. The balustrade has 720 balusters, the number the ledger records set
+      (p. 217), not the 560 that p. 213 gives. The inner arcade is Plate XIII's; the gas globes' placing
+      is assumed.</p>
+
+      <p>Glass is its own class (3b5a9668): the pavilions' doors, screens and tympana, and the summit's
+      croisées. The arcade's crescents are « verres coulés étamés », silvered glass, and have a class of
+      their own, <code>silvered</code>. The second floor is built in its 1889 state from Plate XIX fig.
+      7, its unprinted heights assumed.</p>
+
+      <h3 class="sub">The summit</h3>
 
       <div class="two">
         <figure class="shot">
@@ -2289,23 +2499,30 @@
         </figure>
       </div>
 
-      <p>The <strong>summit</strong> was read wrong twice. Face-on, the structure above the third floor
-      shows two 0.80 m columns at its corners, and two readings took them for a box. The third audit's
-      blind reader established that they are two diagonal lattice girders, 14.870 m by 1.130 m, crossing
-      over the axis — the north-south one continuous, the east-west one butting against its webs. Above
-      them stand a dome of four half-arches, the lantern and the rod to 312.275 m. A plate of
-      « 2 Goussets 1.130 × 10 » covers the girders' crossing (see <a href="#joints">Joints</a>).</p>
+      <p>The summit was read wrong twice. Face-on, the structure above the third floor shows two 0.80 m
+      columns at its corners, and two readings took them for a box. The third audit's blind reader
+      established that they are two diagonal lattice girders, 14.870 m by 1.130 m, crossing over the
+      axis: the north-south one continuous, the east-west one butting against its webs. Above them stand
+      a dome of four half-arches, the lantern and the rod to 312.275 m. A plate of « 2 Goussets 1.130 ×
+      10 » covers the girders' crossing (see <a href="#joints">Joints</a>).</p>
 
-      <p>The top is built <strong>room by room</strong> (44c1d6cd; SOURCES.md §29): the glazed gallery
-      with its 24 croisées [sourced, the cost table]; Eiffel's pavilion, 10.50 m square, with the rooms
-      Plate XIX fig. 6 draws [sourced; the two unnamed laboratories read as electricity and meteorology,
-      assumed]; four contrefiches, 600 × 762 mm [sourced, Plate VII fig. 4]; the lantern, a decagon of
-      0.80 m sides [sourced, p. 79], its posts bearing on the cupola as built (26b76dc4); and the rod,
-      the lightning conductor that carried the flag, 10.790 m long [sourced, Plates XV and XIX] with its
-      tip at 312.275 [sourced, Plates VII and I]. Its slabs are outlines with their wells cut out in the graph, and the
-      last ladder bears on its manhole (c0255f8e). On the rod flies the tricolour at Plate XIX fig. 4's
-      5.50 × 3.00 m — the text gives 7.50 × 4.50, and the model carries both and uses the plate's
-      (b6fbc49d). The graph builds it flat; the page flies it (see <a href="#rendering">Rendering</a>).</p>
+      <p>The top is built <strong>room by room</strong> (44c1d6cd; SOURCES.md §29):</p>
+
+      <ul class="list">
+        <li><b>The glazed gallery,</b> with its 24 croisées [sourced, the cost table].</li>
+        <li><b>Eiffel's pavilion,</b> 10.50 m square, with the rooms Plate XIX fig. 6 draws [sourced;
+        the two unnamed laboratories read as electricity and meteorology, assumed].</li>
+        <li><b>Four contrefiches,</b> 600 × 762 mm [sourced, Plate VII fig. 4].</li>
+        <li><b>The lantern,</b> a decagon of 0.80 m sides [sourced, p. 79], its posts bearing on the
+        cupola as built (26b76dc4).</li>
+        <li><b>The rod,</b> the lightning conductor that carried the flag, 10.790 m long [sourced,
+        Plates XV and XIX], with its tip at 312.275 [sourced, Plates VII and I].</li>
+      </ul>
+
+      <p>The top's slabs are outlines with their wells cut out in the graph, and the last ladder bears on its
+      manhole (c0255f8e). On the rod flies the tricolour at Plate XIX fig. 4's 5.50 × 3.00 m. The text
+      gives 7.50 × 4.50; the model carries both and uses the plate's (b6fbc49d). The graph builds the
+      flag flat, and the page flies it (see <a href="#rendering">Rendering</a>).</p>
     </div>
   </section>
 
@@ -2317,21 +2534,24 @@
     </div>
     <div class="sec-body">
       <p>Seventy-two names of French scientists and engineers run round the first floor's skirt, 18 a
-      face, on a band 0.80 m high [sourced, Plate XIX fig. 1], 4.02 to 4.82 m below the gallery floor [the top measured]. Which names
-      are on which face comes from Plate XIX's headers and from Barral's 1892 account; their order left
-      to right is observed on photographs, because Plate XIX's elevation shows only the south-east face
-      (<code>savants.ts</code>; 411724c2). They are spelled as cast, without accents, as the photographs
-      show them, and the list's « Couchy » is corrected to CAUCHY.</p>
+      face, on a band 0.80 m high [sourced, Plate XIX fig. 1], 4.02 to 4.82 m below the gallery floor
+      [the top measured]. Which names are on which face comes from Plate XIX's headers and from Barral's
+      1892 account. Their order left to right is observed on photographs, because Plate XIX's elevation
+      shows only the south-east face (<code>savants.ts</code>; 411724c2). They are spelled as cast,
+      without accents, as the photographs show them, and the list's « Couchy » is corrected to CAUCHY.
+      The plaques are painted iron with the skirt; only the letters are gilt.</p>
 
-      <p>The letters are geometry, not a texture or a font. <code>letters.ts</code> draws 27 glyphs — A
-      to Z and the hyphen of GAY-LUSSAC — each from stem, bar and ring pieces [rule], with stroke weights
-      fitted to a photograph and proportions that are the module's own estimates [estimated]. No 1889
-      photograph is sharp enough to read the letterform, so the forms follow the 1986–87 restoration
-      [observed]. The cap height is about 0.60 m, from Barral (p. 19, a secondary source) and a measure on
-      a photograph; Eiffel's book gives none. The layout is computed in TypeScript; in the graph the glyphs'
-      pieces enter as one <code>pointList</code> of outlines, become closed paths, are extruded together
-      by one <code>extrudePolygon</code>, and are copied by <code>copyToPoints</code> onto 491 places —
-      490 letters and one hyphen. The plaques are painted iron with the skirt; only the letters are gilt.</p>
+      <p>The letters are geometry, not a texture or a font. <code>letters.ts</code> draws 27 glyphs, A
+      to Z and the hyphen of GAY-LUSSAC, each from stem, bar and ring pieces [rule]. Their stroke
+      weights are fitted to a photograph, and their proportions are the module's own estimates
+      [estimated]. No 1889 photograph is sharp enough to read the letterform, so the forms follow the
+      1986–87 restoration [observed]. The cap height is about 0.60 m, from Barral (p. 19, a secondary
+      source) and a measure on a photograph; Eiffel's book gives none.</p>
+
+      <p>The layout is computed in TypeScript. In the graph, the glyphs' pieces enter as one
+      <code>pointList</code> of outlines, become closed paths, are extruded together by one
+      <code>extrudePolygon</code>, and are copied by <code>copyToPoints</code> onto 491 places: 490
+      letters and one hyphen.</p>
     </div>
   </section>
 
@@ -2364,21 +2584,22 @@
       where a slab or a landing takes a tread's place. Counted from <code>stairRuns()</code> at
       109f23f9, 2026-10-02.</p>
 
-      <p>Two numbers depart from a source, and are recorded as such. The plates give the ground run
-      351 steps against the book's 347; the model keeps 347, an open decision in
-      <code>stairs.ts</code>. The e1 helices are printed at 0.178 m risers and the model runs them at
-      0.1710 to 0.1745, 0.1728 on average, to land on its floors. Not built: e2's foot of « 11 marches », and the ground stair's
-      arrival turns; and e1's last flight clashes with the Otis car, a bounded exemption recorded in
+      <p>Two numbers depart from a source, and are recorded as such. The plates give the ground run 351
+      steps against the book's 347; the model keeps 347, an open decision in <code>stairs.ts</code>. The
+      e1 helices are printed at 0.178 m risers, and the model runs them at 0.1710 to 0.1745, 0.1728 on
+      average, to land on its floors. Not built: e2's foot of « 11 marches », and the ground stair's
+      arrival turns. Separately, e1's last flight clashes with the Otis car, a bounded exemption recorded in
       SOURCES.md.</p>
 
       <p>The stairs are drawn for eye level as well as for a distance (bdf4a963): landings as sectors,
-      headroom over the turns, the core's door, the manhole at the top; tests hold the clearance and the
+      headroom over the turns, the core's door, the manhole at the top. Tests hold the clearance and the
       headroom (<code>eiffelStairsClearance</code>, <code>eiffelStairsHeadroom</code>). Treads run into
       their newels, posts reach their rails, and newels and stringers stand on floors (023d40f8; see
-      <a href="#on-air">Nothing on air</a>). The geometry is TypeScript producing boxes and lines;
-      <code>lifts.ts</code> turns them into graph nodes — <code>meshPrimitive</code>,
-      <code>copyToPoints</code>, the quadrant copy and <code>pointsToPath</code> for the rails — and the
-      page's walk, <span class="mono">?walk</span>, climbs all 1,710 steps on the stairs' own lines.</p>
+      <a href="#on-air">Nothing on air</a>). The geometry is TypeScript producing boxes and lines.
+      <code>lifts.ts</code> turns them into graph nodes (<code>meshPrimitive</code>,
+      <code>copyToPoints</code>, the quadrant copy, and <code>pointsToPath</code> for the rails), and
+      the page's walk, <span class="mono">?walk</span>, climbs all 1,710 steps on the stairs' own
+      lines.</p>
     </div>
   </section>
 
@@ -2389,47 +2610,65 @@
       <h2 id="lifts" data-toc="Lifts">Three makers' lifts: the graph builds the parts the page moves, the page runs the clock.</h2>
     </div>
     <div class="sec-body">
-      <p>The 1889 tower had lifts by three makers, and the model builds all six cars
-      (<code>lifts.ts</code>; SOURCES.md §11, §34). <strong>Otis</strong> in piles 1 and 3, ground to the
-      second floor; <strong>Roux, Combaluzier et Lepape</strong> in piles 2 and 4, ground to the first;
-      <strong>Edoux</strong>'s vertical lift on the axis, second floor to third, in two stages of 80.20 m
-      through the intermediate landing at 195.93 m [sourced, Plates XX and XXI and the text]. The cars
-      are the book's: the Otis and the Roux double-deck, for 50 and 100 people, the Edoux for 65 at
-      3.570 × 3.900 m [sourced, Plate XXIII ter fig. 20]; the Roux car's dimensions are measured on a
-      figure, not printed. The leg cars are cabins, with frames, doors, glass and benches
-      (61d4df05).</p>
+      <p><strong>The cars.</strong> The 1889 tower had lifts by three makers, and the model builds all
+      six cars (<code>lifts.ts</code>; SOURCES.md §11, §34). Their routes are as the plates and the text give them [sourced, Plates XX and
+      XXI and the text], and the cars are the book's:</p>
 
-      <p>The inclined tracks follow the legs' curve because each rail station is anchored to the inner
-      corner a at every Plate XXXI node, so a track kinks where its leg kinks. The Otis track follows
-      the pile's diagonal from 54° 35′ at the bottom to 77° 30′ at the top [sourced, text pp. 144, 344];
-      the model's rail is a polyline that holds 54.6° to node XXIV, steepens to 77.05° in panel 10 and
-      runs at 74.11° in panel 11. The Roux track's top angle, about 72°, follows from its printed length alone [derived]. The tracks run
-      on below the ground into their pits. The third audit round found
-      tracks passing through solid decks — 90 intersecting triangle pairs — and the decks have their
-      openings from Plate XVI.</p>
+      <div class="tbl stack">
+        <table class="data">
+          <thead><tr><th>Maker</th><th>Where</th><th>Route</th><th>Car</th></tr></thead>
+          <tbody>
+            <tr><td class="k">Otis</td><td data-label="where">Piles 1 and 3</td><td data-label="route">Ground to the second floor</td><td data-label="car">Double-deck, for 50 people</td></tr>
+            <tr><td class="k">Roux, Combaluzier et Lepape</td><td data-label="where">Piles 2 and 4</td><td data-label="route">Ground to the first floor</td><td data-label="car">Double-deck, for 100; its dimensions measured on a figure, not printed</td></tr>
+            <tr><td class="k">Edoux</td><td data-label="where">On the axis; a vertical lift</td><td data-label="route">Second floor to third, in two stages of 80.20 m through the intermediate landing at 195.93 m</td><td data-label="car">For 65, at 3.570 × 3.900 m [sourced, Plate XXIII ter fig. 20]</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The leg cars are cabins, with frames, doors, glass and benches (61d4df05).</p>
+
+      <p><strong>The tracks.</strong> The inclined tracks follow the legs' curve, because each rail
+      station is anchored to the inner corner a at every Plate XXXI node; a track kinks where its leg
+      kinks. The Otis track follows the pile's diagonal from 54° 35′ at the bottom to 77° 30′ at the top
+      [sourced, text pp. 144, 344]. The model's rail is a polyline that holds 54.6° to node XXIV,
+      steepens to 77.05° in panel 10 and runs at 74.11° in panel 11. The Roux track's top angle, about
+      72°, follows from its printed length alone [derived]. The tracks run on below the ground into
+      their pits.</p>
+
+      <p>The third audit round found tracks passing through solid decks (90 intersecting triangle pairs);
+      the decks now have their openings from Plate XVI.</p>
 
       <p><strong>What balances what.</strong> Each maker solved the counterweight differently, and the
-      model builds each mechanism as drawn. In the Edoux lift the lower car is the counterweight of the
-      upper, hung on four cables over pulleys at the top [sourced], so the two cars move in opposition
-      [derived]; its piston, 0.32 m across and 80.96 m long, is derived — the 80.20 m stroke and an 81.06 m
-      cylinder are printed (the cylinder in the text, p. 172). In the Otis, water drives a piston in a cylinder 1.065 m across
-      and 12.674 m long, reeved through a twelve-fold tackle, « palan à 12 brins », so its carriage
-      travels a twelfth of the car's run; the counterweight truck travels a third, 129.96 / 3 = 43.32 m,
-      on its own track [sourced, Plate XXI]. The Roux car is pushed up by an articulated chain of
-      mostly one-metre pieces round a 3.864 m driving wheel, balanced by lead counterweight pistons
-      of about 143 kg — eleven in the text, ten in its fig. 144 [sourced]. The machinery hangs on steel
-      that carries it: shafts in bearings, hangers, wheels (17c1647e).</p>
+      model builds each mechanism as drawn.</p>
+
+      <ul class="list">
+        <li><b>Edoux.</b> The lower car is the counterweight of the upper, hung on four cables over
+        pulleys at the top [sourced], so the two cars move in opposition [derived]. Its piston, 0.32 m
+        across and 80.96 m long, is derived; the 80.20 m stroke and an 81.06 m cylinder are printed (the
+        cylinder in the text, p. 172).</li>
+        <li><b>Otis.</b> Water drives a piston in a cylinder 1.065 m across and 12.674 m long, reeved
+        through a twelve-fold tackle, « palan à 12 brins », so its carriage travels a twelfth of the
+        car's run. The counterweight truck travels a third, 129.96 / 3 = 43.32 m, on its own track
+        [sourced, Plate XXI].</li>
+        <li><b>Roux.</b> The car is pushed up by an articulated chain of mostly one-metre pieces round a
+        3.864 m driving wheel. It is balanced by lead counterweight pistons of about 143 kg: eleven in
+        the text, ten in its fig. 144 [sourced].</li>
+      </ul>
+
+      <p>The machinery hangs on steel that carries it: shafts in bearings, hangers, wheels
+      (17c1647e).</p>
 
       <p><strong>Graph and page.</strong> The graph builds the geometry, and each part the page moves is
-      its own output: 43 <code>car.*</code> meshes — cars, cabin glass, cables, pulleys, wheels,
-      pistons, carriages, trucks — and the Roux chains as four <code>chain.*</code> outputs of
-      instances.
+      its own output: 43 <code>car.*</code> meshes (cars, cabin glass, cables, pulleys, wheels, pistons,
+      carriages, trucks) and the Roux chains as four <code>chain.*</code> outputs of instances. The cars
+      are placed per leg, not copied, because each is its own mesh the page moves on its own.
       <code>lifts.ts</code> also publishes each car's motion law; the page owns the clock and moves the
-      parts every frame. The cars are placed per leg, not copied, because each is its own mesh the page
-      moves on its own. By default all six run station to station at about 1 m/s, a speed chosen for
-      the page — the real Roux car took about a minute to the first floor — and the Otis car tips as
-      its rail bends. <span class="mono">?still</span> parks them where the graph built them, each leg's
-      car at a different height.</p>
+      parts every frame.</p>
+
+      <p>By default all six run station to station at about 1 m/s, a speed chosen for the page; the real
+      Roux car took about a minute to the first floor. The Otis car tips as its rail bends.
+      <span class="mono">?still</span> parks them where the graph built them, each leg's car at a
+      different height.</p>
 
       <p class="note">Departures, each recorded in SOURCES.md: the rail stands 4.35 m off its corner
       where 3.3 is measured off Plate XX; the Roux car arrives at the first floor tipped 11.7°, where the book
@@ -2448,40 +2687,65 @@
     <div class="sec-body">
       <p><span class="mono">?build</span> opens a different graph: the tower's modules plus the
       erection's temporary works and cranes (<code>erection.ts</code>, <code>cranes.ts</code>,
-      <code>chronology.ts</code>; f15598c0; SOURCES.md §32). The graph carries no time. At load the page
-      dates every triangle and then reveals the tower day by day, under a date scrubber with a play
-      button: from the foundations begun on 26 January 1887 [sourced, p. 86] to the last lift into
-      service on 19 June 1889 [sourced, p. 118], about 29 months, in about 40 s of play. The flag went up
-      on 31 March 1889.</p>
+      <code>chronology.ts</code>; SOURCES.md §32; f15598c0). The graph carries no time. At load the
+      page dates every triangle, then reveals the tower day by day under a date scrubber with a play
+      button. The span runs from the foundations begun on 26 January 1887 [sourced, p. 86] to the last lift into service
+      on 19 June 1889 [sourced, p. 118]: about 29 months, in about 40 s of play.</p>
 
-      <p>The pace is mainly the book's: the iron begun on 1 July 1887 (p. 102), 28 m reached on 10
-      October (p. 103), and from its table of the erection's periods, pp. 112–113, the four first panels
-      on 4 December, the girders from 18 December to 1 March 1888, the arrival at the top on 31 March
-      1889 — the flag hoisted the same day (p. 311) — and the end of riveting on 1 June 1889 [sourced]. A few dates are estimated or read off photographs — the scaffolds struck,
-      the legs reaching the first floor — and the cranes' days are estimated; 18 July 1887 is the
-      book's date for a photograph of pile 4's first tronçons, already past mid-panel 1 [sourced,
-      p. 103], not the day they were begun. Between milestones a rule takes over: an erection front of height against date, read
-      off the book's fig. 123 and photographs [sourced stops], interpolated linearly [estimated], shared by
-      all four legs [rule]; each piece is dated by the height of its top, an upright by its tronçon
-      [rule]; the girders' order is assumed. Site rivets appear at the book's counts for each period
-      [sourced counts; the mapping a rule].</p>
+      <p>The pace is mainly the book's. Its milestones, all but the first two from its table of the
+      erection's periods, are these:</p>
 
-      <p><strong>Temporary works</strong> (6670c21f) are Plate XXV's: four timber pylons a leg on bases
-      8.50 m across, 27.41 m tall on the figures where the text says 27.40 [sourced, Plate XXV figs. 1–3,
-      13–14, pp. 103–104]; the sand boxes, 0.40 × 0.50 m, and temporary shoes [sourced, Plate XXV
-      figs. 3–12]; and four scaffolds « de 41 m de hauteur » [sourced, pp. 107–108, Plate XXV
-      figs. 15–18], their plan positions measured off
-      fig. 1. When each went up and came down is mostly assumed. <strong>Cranes</strong> (c3a0ba32):
-      creeper cranes of Plate XXIV's design, rated at 3,000 kg [sourced, text p. 105; the geometry Plate XXIV figs. 2–4], in
-      six runs, never all at once — four leg cranes on the lift girders, and two upper cranes on the
-      central guide post. How far a crane steps each time is a rule of the model's [assumed]. The
-      works are the graph's ten <code>works.*</code> outputs, built only under
-      <span class="mono">?build</span>; the page moves the cranes.</p>
+      <div class="tbl stack">
+        <table class="data">
+          <thead><tr><th>Date</th><th>Milestone</th><th>Source</th></tr></thead>
+          <tbody>
+            <tr><td class="k">1 July 1887</td><td data-label="milestone">the iron begun</td><td data-label="source">[sourced, p. 102]</td></tr>
+            <tr><td class="k">10 October 1887</td><td data-label="milestone">28 m reached</td><td data-label="source">[sourced, p. 103]</td></tr>
+            <tr><td class="k">4 December 1887</td><td data-label="milestone">the four first panels</td><td data-label="source">[sourced, pp. 112–113]</td></tr>
+            <tr><td class="k">18 December 1887 – 1 March 1888</td><td data-label="milestone">the girders</td><td data-label="source">[sourced, pp. 112–113]</td></tr>
+            <tr><td class="k">31 March 1889</td><td data-label="milestone">the arrival at the top, and the flag hoisted the same day</td><td data-label="source">[sourced, pp. 112–113; p. 311]</td></tr>
+            <tr><td class="k">1 June 1889</td><td data-label="milestone">the end of riveting</td><td data-label="source">[sourced, pp. 112–113]</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>A few dates are estimated or read off photographs: the scaffolds struck, the legs reaching
+      the first floor. The cranes' days are estimated. 18 July 1887 is the book's date for a photograph
+      of pile 4's first tronçons, not the day they were begun: they are already past mid-panel 1 in it
+      [sourced, p. 103].</p>
+
+      <p>Between milestones, rules take over:</p>
+      <ul class="list">
+        <li>An erection front of height against date, shared by all four legs [rule]. Its stops are
+        read off the book's fig. 123 and photographs [sourced stops], and it is interpolated linearly
+        between them [estimated].</li>
+        <li>Each piece is dated by the height of its top, and an upright by its tronçon [rule].</li>
+        <li>The girders' order is assumed.</li>
+        <li>Site rivets appear at the book's counts for each period [sourced counts; the mapping a
+        rule].</li>
+      </ul>
+
+      <p><strong>Temporary works</strong> are Plate XXV's (6670c21f):</p>
+      <ul class="list">
+        <li>four timber pylons a leg, on bases 8.50 m across, 27.41 m tall on the figures where the
+        text says 27.40 [sourced, Plate XXV figs. 1–3, 13–14, pp. 103–104];</li>
+        <li>the sand boxes, 0.40 × 0.50 m, and temporary shoes [sourced, Plate XXV figs. 3–12];</li>
+        <li>four scaffolds « de 41 m de hauteur » [sourced, pp. 107–108, Plate XXV figs. 15–18],
+        their plan positions measured off fig. 1.</li>
+      </ul>
+      <p>When each went up and came down is mostly assumed.</p>
+
+      <p><strong>Cranes</strong> are creeper cranes of Plate XXIV's design, rated at 3,000 kg
+      [sourced, text p. 105; the geometry Plate XXIV figs. 2–4] (c3a0ba32). They work in six runs,
+      never all at once: four leg cranes on the lift girders, and two upper cranes on the central
+      guide post. How far a crane steps each time is a rule of the model's [assumed]. The works are the
+      graph's ten <code>works.*</code> outputs, built only under <span class="mono">?build</span>, and
+      the page moves the cranes.</p>
 
       <p class="note">Not built: the hydraulic jacks, the shear legs, the steam hoists, the working
-      floors and the piles. The cranes intersect panels 12–13, and the post cranes' jibs cross panel 29's
-      uprights and bracing, the stair's flights and the summit's rooms: known departures. Build, rotate and walk
-      are exclusive, and turning build on reopens the page on the whole site.</p>
+      floors and the piles. Known departures: the cranes intersect panels 12–13, and the post cranes'
+      jibs cross panel 29's uprights and bracing, the stair's flights and the summit's rooms. Build,
+      rotate and walk are exclusive, and turning build on reopens the page on the whole site.</p>
     </div>
   </section>
 
@@ -2492,46 +2756,75 @@
       <h2 id="rendering" data-toc="Rendering">The page draws what the graph settled, under a sun fitted to it.</h2>
     </div>
     <div class="sec-body">
-      <p>At a whole depth the page cooks the graph once on the CPU (a streamed depth is cooked by cells:
-      see <a href="#detail">Detail</a>). It converts each class output to a buffer geometry, packs each
-      rivet batch for the vertex shader (see <a href="#rivets">Rivets</a>), and instances the fittings
-      and the chains against its unit assets. The page draws the result as an ink-and-wash elevation
-      (<code>ink.ts</code>, <code>wash.ts</code>, <code>drawing.ts</code>; 5017ed2c). A prepass draws
-      every visible surface's normal and depth, and a full-screen pass inks a contour where the depth
-      jumps and a crease where the normal turns. Under the lines lies a wash: the scene lit by the
-      page's lights and shadow, with every material's paint replaced by a palette generated from one
-      main colour, nothing shining, and by default mono, so the tower is one grey in steps of value on
-      white paper. Each class still has its own material, and what a class is to the palette is its
-      role. The iron classes keep the steps of value their materials hold against one another, so the
-      classes stay apart only enough to tell them apart up close. The masonry and the foundations are
-      stone; <code>platforms</code>, the floors and their fit-out, is set at the paper's lightness by
-      default; <code>deckUndersides</code>, the 1st and 2nd floors' bottom faces,
-      takes a role of its own and a dark grey (lightness 0.4 by default), so a floor seen from under the
-      tower reads as the mass it is and not as the paper (53f551f0); the names' letters are set brighter
-      than the paper, a light band on the skirt; <code>glass</code> is a pale grey at an opacity of 0.55,
-      takes no line and casts no shadow. Shop and site rivets have a material each. The highlight
-      switches (<span class="mono">?hl=</span>) draw the stairs, the lift cars or the rivets over the
-      rest of the tower, which is laid on the paper at the Ghost slider's opacity.</p>
-      <p>A braced panel under flat light is a hatched silhouette. Lit from one side by a directional sun,
-      it casts its web onto the members behind it and onto the ground, and the depth of the lattice
-      becomes legible; the wash keeps that light under the lines. The lights are the page's rig
-      (<code>rig.ts</code>), set by the drawing (<code>drawingLook</code> in <code>drawing.ts</code>;
-      f94841e9): a white key 57° up at an azimuth of −15°, the one light that casts a shadow; a
-      shadowless light straight against it at a quarter of its strength, which lights from the other
-      side what the sun leaves in shade; a white hemisphere ambient at 0.15 of the paint; and ambient
-      occlusion. Two more shadowless lights, one shining straight up from under the tower and one level
-      and square to the sun, are off by default. The drawing has no sky, no fog and no vignette, and
-      draws no ground: the tower's shadow on the ground is caught by a plane and laid on the paper in a
-      light grey. The key's orthographic shadow camera is fitted by <code>fitShadow</code> to the bounds of
-      what is drawn, the buried foundations left out, with each corner's ground hit added so the thrown
-      shadow falls inside the depth range, a margin of 2% of the box's diagonal, and the reach capped.
-      The shadow map is 4096² and is not redrawn as the camera orbits, so orbiting costs no shadow
-      pass; it is redrawn when the visible classes change, when the section moves, at each day of the
-      erection, when a streamed cell arrives, and on the walk's near-shadow refits. What moves every
-      frame — the lift cars and their machinery, and the flag — casts no shadow, which is what keeps
-      that scheme sound; the rivets cast none either, for cost (see <a href="#rivets">Rivets</a>). The
-      erection's cranes, which move only from day to day, do cast shadows, and the map is redrawn each
-      day.</p>
+      <h3 class="sub">Cook and draw</h3>
+      <p>At a whole depth the page cooks the graph once on the CPU; a streamed depth is cooked by cells
+      (see <a href="#detail">Detail</a>). The page converts each class output to a buffer geometry,
+      packs each rivet batch for the vertex shader (see <a href="#rivets">Rivets</a>), and instances
+      the fittings and the chains against its unit assets. The depth buffer is logarithmic, because the
+      camera may orbit to within 0.2 m of a rivet head and draw back to 1.5 km for the whole tower.</p>
+
+      <p>The page draws the result as an ink-and-wash elevation (<code>ink.ts</code>,
+      <code>wash.ts</code>, <code>drawing.ts</code>; 5017ed2c). A prepass draws every visible
+      surface's normal and depth. A full-screen pass then inks a contour where the depth jumps and a
+      crease where the normal turns. Under the lines lies a wash: the scene lit by the page's lights and
+      shadow, with every material's paint replaced by a palette generated from one main colour.
+      Nothing shines. By default the palette is mono, so the tower is one grey in steps of value on
+      white paper.</p>
+
+      <h3 class="sub">The palette</h3>
+      <p>Each class still has its own material, and what a class is to the palette is its role:</p>
+
+      <div class="tbl stack">
+        <table class="data">
+          <thead><tr><th>Class</th><th>Drawn as</th></tr></thead>
+          <tbody>
+            <tr><td class="k">the iron classes</td><td data-label="drawn as">the steps of value their materials hold against one another, so the classes stay apart only enough to tell them apart up close</td></tr>
+            <tr><td class="k">the masonry and the foundations</td><td data-label="drawn as">stone</td></tr>
+            <tr><td class="k"><code>platforms</code>, the floors and their fit-out</td><td data-label="drawn as">the paper's lightness, by default</td></tr>
+            <tr><td class="k"><code>deckUndersides</code>, the 1st and 2nd floors' bottom faces</td><td data-label="drawn as">a role of its own: a dark grey, lightness 0.4 by default, so a floor seen from under the tower reads as the mass it is, not as the paper (53f551f0)</td></tr>
+            <tr><td class="k">the names' letters</td><td data-label="drawn as">brighter than the paper: a light band on the skirt</td></tr>
+            <tr><td class="k">the erection's timber, the temporary works</td><td data-label="drawn as">a role of its own, drawn pale: lightness 0.97 by default, so the scaffolding reads as something the iron was put up inside, not as part of it (71419e98)</td></tr>
+            <tr><td class="k"><code>glass</code></td><td data-label="drawn as">a pale grey at an opacity of 0.55; it takes no line and casts no shadow</td></tr>
+            <tr><td class="k">shop rivets, site rivets</td><td data-label="drawn as">a material each</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub">Light and shadow</h3>
+      <p>A braced panel under flat light is a hatched silhouette. Lit from one side by a directional
+      sun, it casts its web onto the members behind it and onto the ground, and the depth of the
+      lattice becomes legible. The wash keeps that light under the lines.</p>
+
+      <p>The lights are the page's rig (<code>rig.ts</code>), set by the drawing
+      (<code>drawingLook</code> in <code>drawing.ts</code>; f94841e9):</p>
+
+      <div class="tbl stack">
+        <table class="data">
+          <thead><tr><th>Light</th><th>Setting</th><th>By default</th></tr></thead>
+          <tbody>
+            <tr><td class="k">key</td><td data-label="setting">white, 57° up at an azimuth of −15°; the one light that casts a shadow</td><td data-label="by default">on</td></tr>
+            <tr><td class="k">against the key</td><td data-label="setting">straight against it at a quarter of its strength, shadowless; it lights from the other side what the sun leaves in shade</td><td data-label="by default">on</td></tr>
+            <tr><td class="k">hemisphere ambient</td><td data-label="setting">white, at 0.15 of the paint</td><td data-label="by default">on</td></tr>
+            <tr><td class="k">ambient occlusion</td><td data-label="setting">—</td><td data-label="by default">on</td></tr>
+            <tr><td class="k">from under the tower</td><td data-label="setting">shining straight up, shadowless</td><td data-label="by default">off</td></tr>
+            <tr><td class="k">square to the sun</td><td data-label="setting">level and square to the sun, shadowless</td><td data-label="by default">off</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The drawing has no sky, no fog and no vignette, and it draws no ground. A plane catches the
+      tower's shadow on the ground, and the page lays it on the paper in a light grey.</p>
+
+      <p>The key's orthographic shadow camera is fitted by <code>fitShadow</code> to the bounds of what
+      is drawn, the buried foundations left out; the figure below shows the fit. The shadow map is
+      4096². It is not redrawn as the camera orbits, so orbiting costs no shadow pass. It is redrawn
+      when the visible classes change, when the section moves, at each day of the erection, when a
+      streamed cell arrives, and on the walk's near-shadow refits.</p>
+
+      <p>That scheme holds because nothing that moves every frame casts a shadow: not the lift cars and
+      their machinery, and not the flag. The rivets cast none either, for cost (see
+      <a href="#rivets">Rivets</a>). The erection's cranes move only from day to day, so they do cast
+      shadows.</p>
 
       <figure>
         <div class="plate"><svg viewBox="0 0 1000 660" role="img" aria-label="To-scale elevation in the sun's vertical plane: the tower's bounding box, its eight corners, the four top corners' rays to the ground, and the orthographic shadow frustum fitted around them, with the far plane pushed out only by the ground hits. A plan inset shows the same points inside the frustum's left and right bounds.">
@@ -2652,30 +2945,45 @@
 <line x1="880" y1="649" x2="880" y2="655" stroke="var(--muted)" stroke-width="1.1"/>
 <text class="s-lbl-s" x="885" y="655.5">50 m</text>
 </svg></div>
-        <figcaption><b><code>fitShadow</code> applied to the box the page fits after the cook</b>: the bounds of every drawn class but the foundations, from below the ground, where the lift tracks end in their pits, to 312.278 at the rod's tip. Each ground hit lies on its corner's ray along the light's direction, the light's z axis, so it keeps its corner's light-space x and y and moves only <code>far</code>. The figure is drawn for the key of the lit look the drawing replaced (<code>look.ts</code>), 49° up at an azimuth of −42°, which throws 0.869 m of shadow per metre of height: about 271.5 m from the rod's tip [computed from the angle]. The drawing's key, 57° up, throws 0.649 m per metre, about 202.8 m [computed from the angle]. The box gains a margin of 2% of its diagonal on every side, and a ground hit's reach is capped at 1.5 diagonals. Under the lit look's light a texel of the 4096² map is about 9 to 10 cm on its longer side, as <code>walkView.ts</code> records it. Elevation and plan are each to scale, at different scales.</figcaption>
+        <figcaption><b><code>fitShadow</code> applied to the box the page fits after the cook.</b> The figure is drawn for the key of the lit look the drawing replaced (<code>look.ts</code>): 49° up at an azimuth of −42°, which throws 0.869 m of shadow per metre of height, about 271.5 m from the rod's tip [computed from the angle]. The box holds every drawn class but the foundations, from below the ground, where the lift tracks end in their pits, to 312.278 at the rod's tip. Each corner's ground hit is added so the thrown shadow falls inside the depth range. A ground hit lies on its corner's ray along the light's direction, the light's z axis, so it keeps its corner's light-space x and y and moves only <code>far</code>. The box gains a margin of 2% of its diagonal on every side, and a ground hit's reach is capped at 1.5 diagonals. Elevation and plan are each to scale, at different scales.</figcaption>
       </figure>
+      <p class="note">The drawing's own key, 57° up, throws 0.649 m of shadow per metre, about 202.8 m
+      from the rod's tip [computed from the angle]. Under the lit look's light, a texel of the 4096² map
+      is about 9 to 10 cm on its longer side, as <code>walkView.ts</code> records it.</p>
 
+      <h3 class="sub">Normals</h3>
       <p>The page repairs no geometry. <code>meshPrimitive</code> writes no normals by default, and
-      <code>mergePrimitives</code> fills a column missing on one input with its default, (0, 0, 0), which
-      a lit material shades black; several modules fell into this. They were fixed at source,
+      <code>mergePrimitives</code> fills a column missing on one input with its default, (0, 0, 0),
+      which a lit material shades black. Several modules fell into this. They were fixed at source:
       <code>meshPrimitive</code> gained an opt-in <code>normals: true</code>, and the page's
-      zero-normal repair was deleted (3aa4f14d); the <code>mergePrimitives</code> half of the trap is
-      still open in the library's backlog. Round parts — the reservoir, the crescents — shade round
-      through <code>smoothNormals</code> (9cb09d6e). The depth buffer is logarithmic, because the camera
-      may orbit to within 0.2 m of a rivet head and draw back to 1.5 km for the whole tower.</p>
+      zero-normal repair was deleted (3aa4f14d). The <code>mergePrimitives</code> half of the trap is
+      still open in the library's backlog. Round parts, the reservoir and the crescents, shade round
+      through <code>smoothNormals</code> (9cb09d6e).</p>
 
-      <p>The page also runs things in time, without recooking the graph. The lift cars
-      and their machinery move every frame by the motion laws <code>lifts.ts</code> publishes (see
-      <a href="#lifts">Lifts</a>). The flag is a simulated cloth (<code>flag.ts</code>, ceeb65f6): wool
-      bunting on its cord in a gusting wind drawn from the seed 1889, solved in small XPBD steps, and
+      <h3 class="sub">Motion and controls</h3>
+      <p>The page also runs things in time, without recooking the graph. The lift cars and their
+      machinery move every frame by the motion laws <code>lifts.ts</code> publishes (see
+      <a href="#lifts">Lifts</a>). The flag is a simulated cloth: wool bunting on its cord in a gusting
+      wind drawn from the seed 1889, solved in small XPBD steps (<code>flag.ts</code>, ceeb65f6). It is
       defined as a run from rest in fixed 1/60 s steps, so the frame at a time t is the same bytes
-      however the page reached it; <span class="mono">?wave</span> swaps it for the earlier wave, and
-      <span class="mono">?still</span> parks the cars and holds the wind. The section box cuts the whole
-      tower on a vertical plane parallel to Plate XX's diagonal section, moved in metre steps by a
-      slider (<span class="mono">?section=&lt;m&gt;</span>; fcd79a0e), and opens the ground under the cut
-      (see <a href="#ground">Ground</a>). The walk (<span class="mono">?walk</span>, 4dc794b2) climbs
-      the 1,710 steps in first person on the stairs' own path. WASD and Q/E move the orbiting camera, and
-      "Copy view" copies a URL that reopens the exact frame, with its state as JSON.</p>
+      however the page reached it. <span class="mono">?wave</span> swaps it for the earlier wave, and
+      <span class="mono">?still</span> parks the cars and holds the wind.</p>
+
+      <p>The page's controls:</p>
+      <ul class="list">
+        <li><b>Section.</b> The section box cuts the whole tower on a vertical plane parallel to
+        Plate XX's diagonal section, and opens the ground under the cut (see
+        <a href="#ground">Ground</a>). A slider moves it in metre steps
+        (<span class="mono">?section=&lt;m&gt;</span>; fcd79a0e).</li>
+        <li><b>Walk.</b> <span class="mono">?walk</span> climbs the 1,710 steps in first person on the
+        stairs' own path (4dc794b2).</li>
+        <li><b>Orbit.</b> WASD and Q/E move the orbiting camera.</li>
+        <li><b>Highlights.</b> The highlight switches (<span class="mono">?hl=</span>) draw the stairs,
+        the lift cars or the rivets over the rest of the tower, which is laid on the paper at the Ghost
+        slider's opacity.</li>
+        <li><b>Copy view.</b> "Copy view" copies a URL that reopens the exact frame, with its state as
+        JSON.</li>
+      </ul>
     </div>
   </section>
 
@@ -2687,29 +2995,43 @@
     </div>
     <div class="sec-body">
       <p>The page's Detail section sets lacing and rivets each to <em>off</em>, <em>streamed</em> or
-      <em>full</em>, and applies the choice with a reload (b7ce7138; <code>depth.ts</code>). Full is a
-      depth's graph cooked once, as in the table in <a href="#architecture">Architecture</a> (the URL keeps it as <span class="mono">whole</span>; it is not <span class="mono">?rivets=full</span>). Streamed
-      is the one place the demo uses the library's runtime — grid levels and partitioned cooking
-      (<code>bands.ts</code>, 866fd282). The page still cooks the whole tower, at the depth that is set
-      full; above it stands a
-      <code>World</code> of up to two levels of cube cells: laced cells 32 m on a side, cooked where
-      a cell's centre is within 120 m of the camera, and rivet cells 16 m on a side within 40 m. Those
-      defaults come from what a pixel holds on the page's camera at 1,080 rows: a 45 mm lacing bar is
-      a pixel wide at 63 m, a 19 mm head at 27 m [derived]. When both levels stream, a rivet cell cooks only once the laced cell
-      holding it has, so heads never stand on a solid bar, and a level's <code>cellFilter</code> skips
-      the cubes that are only sky.</p>
+      <em>full</em>, and applies the choice with a reload (<code>depth.ts</code>; b7ce7138). Full is a
+      depth's graph cooked once, as in the table in <a href="#architecture">Architecture</a>. In the
+      URL, Full is <span class="mono">whole</span>. It is not <span class="mono">?rivets=full</span>,
+      which is whole rivets plus the built-up uprights' rows (see <a href="#reproduce">Commands</a>).</p>
+
+      <p>Streamed is the one place the demo uses the library's runtime: grid levels and partitioned
+      cooking (<code>bands.ts</code>, 866fd282). The page still cooks the whole tower, at the depth
+      that is set full. Above it stands a <code>World</code> of up to two levels of cube cells:</p>
+
+      <div class="tbl stack">
+        <table class="data">
+          <thead><tr><th>Level</th><th class="n">Cell side</th><th>Cooked when its centre is within</th><th>A pixel wide at</th></tr></thead>
+          <tbody>
+            <tr><td class="k">laced</td><td class="n" data-label="cell side">32 m</td><td data-label="cooked within">120 m of the camera</td><td data-label="a pixel wide at">a 45 mm lacing bar at 63 m</td></tr>
+            <tr><td class="k">rivets</td><td class="n" data-label="cell side">16 m</td><td data-label="cooked within">40 m of the camera</td><td data-label="a pixel wide at">a 19 mm head at 27 m</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Those defaults come from what a pixel holds on the page's camera at 1,080 rows [derived]. When
+      both levels stream, a rivet cell cooks only once the laced cell holding it has, so heads never
+      stand on a solid bar. A level's <code>cellFilter</code> skips the cubes that are only sky.</p>
 
       <p>Each level cooks <em>one</em> regional graph (<code>region.ts</code>): the whole tower's graph
-      at that depth, node for node and seed for seed, built with gates that each cell moves onto
-      itself — 2,251 nodes laced, 3,926 with rivets. A laced cell puts out the classes the laced depth
-      changes, each as the primitives whose bounding box meets the cell, so a member crossing a seam
-      comes out of both cells whole and the page clips it at the seam; the gate is one
-      <code>filterPrimitivesByBounds</code> (c51c5777). A rivet cell puts out every head whose seat is
-      in it, each head in exactly one cell. So a cell is exactly the whole cook inside it, and
-      <code>tests/eiffelBands.test.ts</code> holds every cell of both levels to that, byte for byte.
-      The cooking runs in one Web Worker (<code>bandsWorker.ts</code>), at most four cell cooks an
-      update in a 50 ms budget, and a cook in flight is dropped when the camera moves more than the
-      finest streamed cell: a rivet cell, or a laced one when only the lacing streams.</p>
+      at that depth, node for node and seed for seed, plus box filters, the gates, that each cell moves onto
+      its own bounds, each widened by its halo. The regional graph has 2,251 nodes laced and 3,926 with rivets.</p>
+
+      <p>A laced cell puts out the classes the laced depth changes. Each comes out as the primitives
+      whose bounding box meets the cell, so a member crossing a seam comes out of both cells whole, and
+      the page clips it at the seam. The gate is one <code>filterPrimitivesByBounds</code> (c51c5777).
+      A rivet cell puts out every head whose seat is in it, so each head is in exactly one cell. A cell
+      is therefore exactly the whole cook inside it, and <code>tests/eiffelBands.test.ts</code> holds
+      every cell of both levels to that, byte for byte.</p>
+
+      <p>The cooking runs in one Web Worker (<code>bandsWorker.ts</code>), at most four cell cooks an
+      update in a 50 ms budget. A cook in flight is dropped when the camera moves more than the finest
+      streamed cell: a rivet cell, or a laced one when only the lacing streams.</p>
 
       <div class="tbl">
         <table class="data">
@@ -2721,11 +3043,11 @@
           </tbody>
         </table>
       </div>
-      <p class="note">Measured 2026-10-02 at 109f23f9, headless in Node, not in the page's worker, on
-      the same Intel i9-13900KF as the table in Architecture: medians of seven. Cold is a level's first
-      cell, which also does the tower-wide work above the gates; that work is cached, so later cells
-      cost their own members (warm). Against the whole laced cook, 2.87 s, a streamed view pays for the
-      cells near the camera.</p>
+      <p class="note">Measured 2026-10-02, headless in Node rather than in the page's worker, on the
+      same Intel i9-13900KF as the table in Architecture; medians of seven (109f23f9). Cold is a
+      level's first cell, which also does the tower-wide work above the gates. That work is cached, so
+      later cells cost their own members (warm). The whole laced cook takes 2.87 s; a streamed view
+      pays for the cells near the camera.</p>
     </div>
   </section>
 
@@ -2737,11 +3059,13 @@
     </div>
     <div class="sec-body">
       <p>The demo was built in one Claude Code session, from the first request at 18:09 on 2026-09-18
-      to the last commit at 14:17 the next day, in 18 commits; that is the first build, and about 89
-      later commits have touched <code>demos/eiffel</code> since. The main thread launched 45 agents, and those launched their own readers and
-      verifiers: 107 agent transcripts in all. The choice at the start was between tracing members
-      and stating rules; rules were chosen, with the plates as the first authority for anything a
-      rule takes as input and an [estimated] tag where no source gives a number.</p>
+      to the last commit at 14:17 the next day, in 18 commits. That was the first build; about 89 later
+      commits have touched <code>demos/eiffel</code> since. The main thread launched 45 agents, and
+      those launched their own readers and verifiers: 107 agent transcripts in all.</p>
+
+      <p>The choice at the start was between tracing members and stating rules. Rules were chosen,
+      with the plates as the first authority for anything a rule takes as input, and an [estimated] tag
+      where no source gives a number.</p>
 
       <figure>
         <div class="plate"><svg viewBox="0 0 1000 484" role="img" aria-label="Timeline of the eiffel build, 18:33 on 18 September to 14:17 on 19 September 2026: research, an arithmetic verifier, eight build commits, three audit and fix rounds ending in commits 57ac013, 0fe8ba0 and c39ee48, then the site and the rotateAttrs library change.">
@@ -2887,18 +3211,18 @@
       <div class="spine">
         <div class="step"><span class="n">01</span><span class="t">Research</span><span class="d">One agent compiled the first sections of SOURCES.md (§0–§9) from the plates: it fetched the Gallica IIIF manifest, identified the plates from contact sheets, downloaded the full-resolution views, and read printed figures off cropped, magnified regions. Two web agents gathered the official figures and the profile mathematics.</span></div>
         <div class="step"><span class="n">02</span><span class="t">Arithmetic check</span><span class="d">A separate agent re-derived every [derived] value of the first spec in its own code, told not to read the research agent's script: 254 sub-checks at 2 mm, 0.02° and 0.5% tolerances, all passing.</span></div>
-        <div class="step"><span class="n">03</span><span class="t">Build, verified</span><span class="d">Build commits were re-derived by agents that were not given the answer; three build commit messages record such a check (e906699, 0aca149, 1a806f0), as do two later ones, the library change 1a40d99 and the refactor 12f0ec8 that uses it. The first found web members squared to the vertical, up to 30° off in panel 1 (30–40° by the fixing commit's measure), fixed in the next commit; later ones found rivets up to 19 cm inside plates and girder plaques cutting 21 mm into the uprights, each fixed in the same commit.</span></div>
+        <div class="step"><span class="n">03</span><span class="t">Build, verified</span><span class="d">Agents that were not given the answer re-derived build commits. Three build commit messages record such a check (e906699, 0aca149, 1a806f0), as do two later ones: the library change 1a40d99 and the refactor 12f0ec8 that uses it. The first check, e906699's, found web members squared to the vertical, up to 30° off in panel 1 (30–40° by the fixing commit's measure), and the next commit fixed them. Later checks found rivets up to 19 cm inside plates and girder plaques cutting 21 mm into the uprights, each fixed in the same commit.</span></div>
         <div class="step"><span class="n">04</span><span class="t">Audit</span><span class="d">Four auditors — legs and shaft, first floor, summit, whole silhouette — each wrote down the expected value with its tag, measured the plate where the spec was silent or estimated, cooked the model and measured it, and tabulated ratio and verdict. They fixed nothing.</span></div>
         <div class="step"><span class="n">05</span><span class="t">Fix</span><span class="d">One fixer per module, each required to confirm every finding on the plate before changing a number, and to keep the better-supported value where it disagreed with the audit. Fixes were written up in SOURCES.md, most with a was/now table.</span></div>
         <div class="step"><span class="n">06</span><span class="t">Re-audit, blind</span><span class="d">Round two used fresh auditors that had not seen the fixes, told to trust neither the fixers' claims nor the code comments, and plate readers with no access to the model, the code, the spec or any report. Round three's auditors re-derived each expected value themselves with blind helpers, and listed the fixers' claims they could not reproduce.</span></div>
       </div>
 
-      <p>Every pixel reading is calibrated on a
-      dimension printed on the same figure. The silhouette audit deskewed the Plate I scan by 0.87°,
-      rendered the model orthographically face-on at 4096² (9.30909 px/m), took each row's full ink
-      extent as the median over ±0.4 m, and counted a row as off only if it was off by more than 3%
-      under two calibrations — one isotropic, one mapped piecewise through the printed levels. Member
-      sections were measured on the cooked meshes, sliced perpendicular to each member.</p>
+      <p>Every pixel reading is calibrated on a dimension printed on the same figure. The silhouette
+      audit deskewed the Plate I scan by 0.87° and rendered the model orthographically face-on at
+      4096² (9.30909 px/m). It took each row's full ink extent as the median over ±0.4 m. A row
+      counted as off only if it was off by more than 3% under two calibrations: one isotropic, one
+      mapped piecewise through the printed levels. Member sections were measured on the cooked meshes,
+      sliced perpendicular to each member.</p>
 
       <div class="trip">
         <figure><img src="eiffel/audit-plate-i.jpg" width="600" height="1340" loading="lazy" alt="Plate I, figure 1, of Eiffel's 1900 album: the tower in elevation, rows mapped through its printed levels." /><p class="tag">Plate I, 1900</p></figure>
@@ -3129,26 +3453,28 @@
 
       <div class="tbl stack">
         <table class="data">
-          <thead><tr><th>Found by the first round</th><th class="n">Model</th><th class="n">Plate</th><th>Cause, and the fix</th></tr></thead>
+          <thead><tr><th>Found by the first round</th><th class="n">Model</th><th class="n">Plate</th><th class="n">Round two</th><th>Cause, and the fix</th></tr></thead>
           <tbody>
-            <tr><td class="k">Window between floors</td><td class="n" data-label="model">43.7 m</td><td class="n" data-label="plate">33.0 m</td><td>The second floor's band was 9.4 m deep against 23.0 m; rebuilt from Plates VII and XIX, checked on Plate I. 33.62 m in round two.</td></tr>
-            <tr><td class="k">Opening at the arch feet</td><td class="n" data-label="model">80.7 m</td><td class="n" data-label="plate">74.6 m (A)</td><td>The arch was one circle in the inclined face plane; it is two concentric circles turning to R 44.5258. 73.48 m in round two. The plate's 74.6 is calibration A's reading; SOURCES.md §1 gives 74.2.</td></tr>
-            <tr><td class="k">Arch band</td><td class="n" data-label="model">2.5488 m</td><td class="n" data-label="plate">3.9173 m</td><td>The montant pitch had been read as the band depth.</td></tr>
-            <tr><td class="k">Gusset plates</td><td class="n" data-label="model">15 mm</td><td class="n" data-label="plate">8 mm</td><td>Plate IX's detail; <code>PLATE = 0.008</code>.</td></tr>
-            <tr><td class="k">Horizontals</td><td class="n" data-label="model">0.60 m</td><td class="n" data-label="plate">0.80 m</td><td>Plates IX and VII: the "800" horizontal runs to the second floor.</td></tr>
-            <tr><td class="k">Summit</td><td class="n" data-label="model">24.7 m</td><td class="n" data-label="plate">27.4 m</td><td>The lantern ended at its terrace, about 3 m short; it was rebuilt with its finial cage, and the third-floor room re-read as a glazed octagon under a 10.68 m apartment. 27.43 m after the fix, by 57ac013's own measure; 27.7 m in round two.</td></tr>
+            <tr><td class="k">Window between floors</td><td class="n" data-label="model">43.7 m</td><td class="n" data-label="plate">33.0 m</td><td class="n" data-label="round two">33.62 m</td><td>The second floor's band was 9.4 m deep against 23.0 m. It was rebuilt from Plates VII and XIX and checked on Plate I.</td></tr>
+            <tr><td class="k">Opening at the arch feet</td><td class="n" data-label="model">80.7 m</td><td class="n" data-label="plate">74.6 m (A)</td><td class="n" data-label="round two">73.48 m</td><td>The arch was one circle in the inclined face plane; it is now two concentric circles turning to R 44.5258. The plate's 74.6 is calibration A's reading; SOURCES.md §1 gives 74.2.</td></tr>
+            <tr><td class="k">Arch band</td><td class="n" data-label="model">2.5488 m</td><td class="n" data-label="plate">3.9173 m</td><td class="n" data-label="round two">—</td><td>The montant pitch had been read as the band depth.</td></tr>
+            <tr><td class="k">Gusset plates</td><td class="n" data-label="model">15 mm</td><td class="n" data-label="plate">8 mm</td><td class="n" data-label="round two">—</td><td>Plate IX's detail; <code>PLATE = 0.008</code>.</td></tr>
+            <tr><td class="k">Horizontals</td><td class="n" data-label="model">0.60 m</td><td class="n" data-label="plate">0.80 m</td><td class="n" data-label="round two">—</td><td>Plates IX and VII: the "800" horizontal runs to the second floor.</td></tr>
+            <tr><td class="k">Summit</td><td class="n" data-label="model">24.7 m</td><td class="n" data-label="plate">27.4 m</td><td class="n" data-label="round two">27.7 m</td><td>The lantern ended at its terrace, about 3 m short. It was rebuilt with its finial cage, and the third-floor room re-read as a glazed octagon under a 10.68 m apartment. The summit measured 27.43 m after the fix, by 57ac013's own measure.</td></tr>
           </tbody>
         </table>
       </div>
 
-      <p>Round three found the silhouette within 1–3% of Plate I from the ground to the third floor, and
-      about 25 element rows still off — the summit's plan, lift tracks through solid decks, the pedestal
-      and arch-foot heights among them. Its commit, c39ee48, settled each on the plates: the pedestal
-      now stands 5.55 m, between Plate I's 5.45–5.53 m and Plate VII's 5.65–5.74 m, where the French
-      Wikipedia's 4 m is drawn on no plate. No fourth round audited that commit. Round three's open points
-      are listed under "Disagreements and open points" in SOURCES.md §21–§24; the sections written
-      since, through §34, carry their own — among them §27.4 on the rivet count and §31.2 on the
-      plinth's height.</p>
+      <p>Round three found the silhouette within 1–3% of Plate I from the ground to the third floor. It
+      still found about 25 element rows off, among them the summit's plan, lift tracks through solid
+      decks, and the pedestal and arch-foot heights. Its commit settled each on the plates (c39ee48).
+      The pedestal, for one, now stands 5.55 m, between Plate I's 5.45–5.53 m and Plate VII's
+      5.65–5.74 m; the French Wikipedia's 4 m is drawn on no plate. No fourth round audited that
+      commit.</p>
+
+      <p>Round three's open points are listed under "Disagreements and open points" in SOURCES.md
+      §21–§24. The sections written since, through §34, carry their own, among them §27.4 on the
+      rivet count and §31.2 on the plinth's height.</p>
     </div>
   </section>
 
@@ -3160,28 +3486,42 @@
     </div>
     <div class="sec-body">
       <p>The plate audits compare the model with the drawings. A fourth kind of check asks a question no
-      drawing answers directly: does each piece stand on something? <code>tests/eiffelFloating.test.ts</code>
-      (47dd3c91) cooks the tower at the plain depth — no lacing, gussets or rivets — reads none of its instanced outputs, and runs a
-      detector (<code>tests/support/eiffelFloating.ts</code>) over the faces. A piece is
-      <strong>floating</strong> when the cluster of faces it touches, within 8 mm, never reaches the
-      ground. A piece is <strong>loose</strong> when it is a linear solid — at least 0.3 m long and four
-      times as long as its section — with an end that rests on nothing: a lying or raking piece needs
-      both ends held, a standing one, plumb within 20°, only its foot. An end buried inside a closed
-      member counts as held, decided by a vote of three rays counting crossings. Before it reads the
-      tower, the test runs the detector on a synthetic scene and requires it to report both kinds, so
-      a detector that has stopped seeing cannot pass.</p>
+      drawing answers directly: does each piece stand on something?</p>
 
-      <p>The first sweep found 1,445 floating clusters — about 1,100 of them in the stairs — and 1,992
-      loose ends. The fixes went into the modules, not into the test: treads into their newels and
-      posts to their rails (023d40f8), the lift machinery's shafts, bearings, hangers and wheels
-      (17c1647e, which also closed the legs' entretoises and seated pieces of the shaft and the summit), the trellis laths, lantern roofs and knee struts and the arches' ironwork reaching
-      what carries them (2cf89f71), and posts at the entrance flights' rails [estimated] (47dd3c91).
-      The test first measured the mesh with its 1 mm offset on and welded corners within 4 mm;
-      ed3070ad switched the offset off and tightened the weld to 0.5 mm, and later commits measure so. What remains, 8
-      floating clusters and 386 loose ends, is in an allow list of 35 entries, each with its box, its
-      exact count and its reason, so an entry that no longer matches fails as surely as a new floating
-      piece. One is an open decision rather than a known departure: the entretoise at XXI in the Otis
-      legs.</p>
+      <p><code>tests/eiffelFloating.test.ts</code> cooks the tower at the plain depth, with no lacing,
+      gussets or rivets (47dd3c91). It reads none of the tower's instanced outputs, and runs a detector
+      (<code>tests/support/eiffelFloating.ts</code>) over the faces. The detector reports two kinds of
+      piece:</p>
+      <ul class="list">
+        <li><b>Floating.</b> The cluster of faces the piece touches, within 8 mm, never reaches the
+        ground.</li>
+        <li><b>Loose.</b> The piece is a linear solid with an end that rests on nothing. A linear solid
+        is at least 0.3 m long and four times as long as its section. A lying or raking piece needs both
+        ends held; a standing one (plumb within 20°) needs only its foot.</li>
+      </ul>
+      <p>An end buried inside a closed member counts as held, decided by a vote of three rays counting
+      crossings. Before it reads the tower, the test runs the detector on a synthetic scene and
+      requires it to report both kinds, so a detector that has stopped seeing cannot pass.</p>
+
+      <p>The first sweep found 1,445 floating clusters, about 1,100 of them in the stairs, and 1,992
+      loose ends. The fixes went into the modules, not into the test:</p>
+      <ul class="list">
+        <li>treads into their newels, and posts to their rails (023d40f8);</li>
+        <li>the lift machinery's shafts, bearings, hangers and wheels; the same commit also closed the
+        legs' entretoises and seated pieces of the shaft and the summit (17c1647e);</li>
+        <li>the trellis laths, lantern roofs and knee struts and the arches' ironwork, reaching what
+        carries them (2cf89f71);</li>
+        <li>posts at the entrance flights' rails [estimated] (47dd3c91).</li>
+      </ul>
+
+      <p>The test first measured the mesh with its 1 mm offset on, and welded corners within 4 mm. A
+      later commit, ed3070ad, switched the offset off and tightened the weld to 0.5 mm, and the commits since
+      measure that way.</p>
+
+      <p>What remains, 8 floating clusters and 386 loose ends, is in an allow list of 35 entries. Each
+      entry has its box, its exact count and its reason, so an entry that no longer matches fails as
+      surely as a new floating piece. One entry is an open decision rather than a known departure: the
+      entretoise at XXI in the Otis legs.</p>
 
       <p class="note">Siblings of the same kind: <code>eiffelRivetClash</code> (no lacing head inside a
       joint or crossing plate), <code>eiffelStairsClearance</code> and <code>eiffelStairsHeadroom</code>,
@@ -3196,26 +3536,42 @@
       <h2 id="limits" data-toc="Limits">What the model does not claim.</h2>
     </div>
     <div class="sec-body">
-      <p>The large structure is the plates' to the precision the plates print. Below the panel scale the
-      model is a set of rules whose parameters are plate readings — often [estimated] or [measured] —
-      so most members are where their rule puts them, not where the drawing shows that particular member. The
-      rivet pitches are measurements of a few details, each applied by rule wherever its kind of joint
-      recurs: the seams' 125 mm from one gusset on Plate IX, the splice fields from two of its figures.
-      The model draws 1,205,292 rivet heads. The only count the book prints is of site rivets,
-      1,050,846, and of those the model draws 334,659, about a third; the 2.5 million often quoted for
-      the whole tower is not printed there. The names' letterforms follow the 1986–87 restoration,
-      because no 1889 photograph is sharp enough to read them. The 1900 album occasionally draws a
-      post-1889 state, and where the text or an 1889 figure does not settle it, SOURCES.md says so.</p>
-      <p>Some departures are deliberate and named where they occur: the ground is one flat plane where
-      the Champ de Mars stood higher round the piles, so the plinths stand 1.58 m low; the supports and
-      massifs sit 1.10 m down their uprights' axes because the model's uprights run to Plate XXXI's
-      support node; the lifts run at a speed chosen for the page; the erection's cranes pass through
-      panels 12–13, and the post cranes' jibs through the iron and rooms above them. Each is recorded beside the code that makes it, or in SOURCES.md.</p>
-      <p>The build draws two seeded values and no others: the 1 mm offset (<code>jitterPoints</code>) and
-      each rivet's <code>headDrive</code> (<code>randomField</code>), both hashed from the graph's seed,
-      1889, and each point's identity — its position and its <code>seed</code> column. The page's flag draws its wind from the same number.
-      Nothing reads an unseeded source, so the same source cooks to the same bytes on every run —
-      <code>tests/eiffel.golden.json</code> holds the hashes — which the demo's commits use as their
+      <ul class="list">
+        <li><b>Structure.</b> The large structure is the plates' to the precision the plates print.
+        Below the panel scale the model is a set of rules whose parameters are plate readings, often
+        [estimated] or [measured]. Most members are where their rule puts them, not where the drawing
+        shows that particular member.</li>
+        <li><b>Rivet pitches.</b> They are measurements of a few details, each applied by rule wherever
+        its kind of joint recurs: the seams' 125 mm from one gusset on Plate IX, the splice fields from
+        two of its figures.</li>
+        <li><b>Rivet counts.</b> The model draws 1,205,292 rivet heads. The only count the book prints
+        is of site rivets: 1,050,846, of which the model draws 334,659, about a third. The 2.5 million
+        often quoted for the whole tower is not printed there.</li>
+        <li><b>Letterforms.</b> The names' letterforms follow the 1986–87 restoration, because no
+        1889 photograph is sharp enough to read them.</li>
+        <li><b>Later states.</b> The 1900 album occasionally draws a post-1889 state. Where the text
+        or an 1889 figure does not settle it, SOURCES.md says so.</li>
+      </ul>
+
+      <p>Some departures are deliberate. Each is named where it occurs, and recorded beside the code
+      that makes it or in SOURCES.md:</p>
+      <ul class="list">
+        <li>The ground is one flat plane, where the Champ de Mars stood higher round the piles, so the
+        plinths stand 1.58 m low.</li>
+        <li>The supports and massifs sit 1.10 m down their uprights' axes, because the model's
+        uprights run to Plate XXXI's support node.</li>
+        <li>The lifts run at a speed chosen for the page.</li>
+        <li>The erection's cranes pass through panels 12–13, and the post cranes' jibs through the
+        iron and rooms above them.</li>
+      </ul>
+
+      <p>The build draws two seeded values and no others: the 1 mm offset (<code>jitterPoints</code>)
+      and each rivet's <code>headDrive</code> (<code>randomField</code>). Both are hashed from two
+      inputs: the graph's seed, 1889, and each point's identity, which is its position and its
+      <code>seed</code> column. Outside the graph, the page's flag draws its wind from the same
+      number.</p>
+      <p>Nothing reads an unseeded source, so the same source cooks to the same bytes on every run.
+      <code>tests/eiffel.golden.json</code> holds the hashes, and the demo's commits use them as their
       control when a refactor claims to change nothing.</p>
     </div>
   </section>
@@ -3230,8 +3586,8 @@
       <div class="tbl stack">
         <table class="data">
           <tbody>
-            <tr><td class="k">npm run examples</td><td>Serve the demo at <span class="mono">/demos/eiffel/</span>. Depth: <span class="mono">?laced</span> or <span class="mono">?rivets</span> for a whole depth, <span class="mono">=streamed</span> or <span class="mono">=off</span> on either, <span class="mono">?rivets=full</span> for the rows as built, <span class="mono">?bands</span> to stream both. View: <span class="mono">?cam=px,py,pz,tx,ty,tz</span> for a pose, <span class="mono">?fov=</span>, <span class="mono">?still</span>, <span class="mono">?hl=</span>, <span class="mono">?site</span>, <span class="mono">?section=&lt;m&gt;</span>, <span class="mono">?walk</span> with <span class="mono">?walkAt</span> and <span class="mono">?walkNear</span>, <span class="mono">?build[=yyyy-mm-dd]</span>, <span class="mono">?wave</span>, <span class="mono">?cpuRivets</span>. "Copy view" in the panel writes the URL for the current frame.</td></tr>
-            <tr><td class="k">npx vitest run tests/eiffel</td><td>The demo's tests, one file per subject; among them the skeleton (every upright vertex on the plate's profile, the 16/12/8 upright progression, members squared to their faces, the JSON round trip), the golden hashes, the built-up uprights, splices, rivet counts and heads, stairs, lifts, names, the ground, the erection, streaming cells, and the floating-piece check.</td></tr>
+            <tr><td class="k">npm run examples</td><td>Serve the demo at <span class="mono">/demos/eiffel/</span>. Depth: <span class="mono">?laced</span> or <span class="mono">?rivets</span> for a whole depth; <span class="mono">=streamed</span> or <span class="mono">=off</span> on either; <span class="mono">?rivets=full</span> for whole rivets plus the built-up uprights' rows as built; <span class="mono">?bands</span> to stream both. View: <span class="mono">?cam=px,py,pz,tx,ty,tz</span> for a pose, <span class="mono">?fov=</span>, <span class="mono">?still</span>, <span class="mono">?hl=</span>, <span class="mono">?site</span>, <span class="mono">?section=&lt;m&gt;</span>, <span class="mono">?walk</span> with <span class="mono">?walkAt</span> and <span class="mono">?walkNear</span>, <span class="mono">?build[=yyyy-mm-dd]</span>, <span class="mono">?wave</span>, <span class="mono">?cpuRivets</span>. "Copy view" in the panel writes the URL for the current frame.</td></tr>
+            <tr><td class="k">npx vitest run tests/eiffel</td><td>The demo's tests, one file per subject. Among them: the skeleton, which checks every upright vertex on the plate's profile, the 16/12/8 upright progression, members squared to their faces and the JSON round trip; the golden hashes; the built-up uprights, splices, rivet counts and heads; stairs, lifts, names, the ground and the erection; the streaming cells; and the floating-piece check.</td></tr>
             <tr><td class="k">npm run capture:guides -- --only=eiffel</td><td>Regenerate the demo renders on this page from the shot list in <span class="mono">scripts/capture-guides.mjs</span>; run it after a lighting or material change. The audit overlays are records and are not in the shot list.</td></tr>
           </tbody>
         </table>
