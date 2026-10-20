@@ -1,0 +1,8485 @@
+var e=`{
+  "formatVersion": 1,
+  "seed": 1889,
+  "meta": {
+    "title": "A brick house split on a stud lattice",
+    "description": "A SHORT TERRACE OF HOUSES DERIVED BY A SPLIT GRAMMAR ON AN INTEGER LATTICE, and the input a brick packer will read: every terminal is an axis-aligned box whose corners are WHOLE NUMBERS -- x and z in studs, y in plates, a plate 0.4 of a stud -- carrying a string \`kind\` (wall, glass, door, roof, floor, ground) and a palette colour. THE GRAMMAR IS STAGED, NOT RECURSIVE, and that is the finding that matters for whether \`examples-facade\` and \`examples-floorplan\` are ever extracted into a split primitive. The derivation is lot -> blocks -> storeys -> a floor slab and four walls -> bays -> sill, head, two jambs and the opening, with a second branch from each block to the layers of a stepped gable roof. Every one of those rules has the SAME shape: fan the cell out to M slots against a rule cloud of M coincident points (\`copyToPoints\`, the slot riding on the source so it survives later filters), keep the slots a predicate allows, and rewrite the box piecewise by slot as sums of \`eq(slot, i) * value_i\`. The kind IS the stage, so there is no dispatch on a string anywhere. Depth is bounded -- two rounds of block splitting, at most three storeys, eight bays, fourteen roof layers -- so the rounds are written out and \`repeatUntil\` would buy nothing. This graph therefore does NOT agree in form with the two split graphs, and is not the third consumer that would justify extracting their recipe; the recurring thing here is the fan-out-keep-rewrite rule, and that is what to watch for a second time. THE CUT IS SNAPPED, AND DECIDED ON THE PARENT: \`floor(span * f + 0.5)\` clamped so neither half falls under six studs, carried to both children in \`targetNames\` exactly as the facade does, so the two halves of a block meet at one integer coordinate. THE WORKING BOX IS \`lo\`/\`hi\`, NOT \`boundsMin\`/\`boundsMax\`, because \`copyToPoints\` refuses to carry a standard column, and bounds are written once at the end in world units. One trap came with it: the two corners are rewritten by TWO nodes, so the second reads the first's output. The walls and openings are ordered so the second never reads a component the first changed; the roof rewrites both corners from every component, so it carries the block's original box (\`blo\`/\`bhi\`) and reads only that. A WINDOW GOES ONLY WHERE A WALL IS EXPOSED, and exposure is computed rather than assumed. Blocks share party walls, and a tall block beside a low one has a wall that is covered at the bottom and open above. Each candidate opening places a probe half a stud outside its wall at the BOTTOM of where it would be, and \`transferAttribute\` casts a ray straight up from it against a mesh of every block and roof layer, with \`hitAttr\` as the answer. That is an exact inside-test here and not a heuristic, for a reason worth stating: blocks and roof layers are prisms standing on the ground with nothing overhanging, so a point is inside one exactly when a ray going up from it hits a face, and if the bottom of the opening is free everything above it in that column is free too. ACROSS the opening it takes one probe PER STUD -- the first draft probed the centre only, and a neighbour ending mid-window or a roof layer stepping in left a window looking straight into a wall in three seeds of ten -- because a box on the lattice that overlaps the opening at all contains one of its studs; openings are at most two studs wide, so two probes. Doors go on the ground floor of the first lot-edge wall, south then north, in the middle bay; a z split happens at most once, so every block has one. TWO THINGS A PACKER READING THIS MUST KNOW: neighbouring blocks each build their own wall, so a party wall is TWO studs thick, and the stud at each gable end of a roof layer has kind \`wall\` (it is the gable, drawn in the wall's colour), so a count of \`wall\` pieces includes roof-height ones. The colours are a palette indexed by kind and per-block draws through \`lookup\`; the editor multiplies vertex colours by the output's hue, so they read cooler there than in \`pcg render\`.",
+    "tags": [
+      "examples",
+      "structure",
+      "topology"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "lotPt",
+      "type": "pointLine",
+      "params": {
+        "mode": "endpoints",
+        "count": 1,
+        "start": [
+          0,
+          0,
+          0
+        ],
+        "end": [
+          0,
+          0,
+          0
+        ],
+        "includeEnd": true,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "lotSize",
+      "type": "setAttribute",
+      "params": {
+        "name": "lot",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "add",
+              "args": [
+                14,
+                {
+                  "fn": "mul",
+                  "args": [
+                    2,
+                    {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "randomField",
+                              "key": "w"
+                            },
+                            6.999
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            0,
+            {
+              "fn": "add",
+              "args": [
+                10,
+                {
+                  "fn": "mul",
+                  "args": [
+                    2,
+                    {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "randomField",
+                              "key": "d"
+                            },
+                            4.999
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "lotLo",
+      "type": "setAttribute",
+      "params": {
+        "name": "lo",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            0,
+            1,
+            0
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "lotHi",
+      "type": "setAttribute",
+      "params": {
+        "name": "hi",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "lot",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 0
+            },
+            1,
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "lot",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 2
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "b1Ax",
+      "type": "setAttribute",
+      "params": {
+        "name": "ax",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "ge",
+          "args": [
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                }
+              ]
+            },
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "b1Can",
+      "type": "setAttribute",
+      "params": {
+        "name": "can",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "ge",
+          "args": [
+            {
+              "fn": "max",
+              "args": [
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "hi",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 0
+                    },
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lo",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 0
+                    }
+                  ]
+                },
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "hi",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 2
+                    },
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lo",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 2
+                    }
+                  ]
+                }
+              ]
+            },
+            12
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "b1Cut",
+      "type": "setAttribute",
+      "params": {
+        "name": "cutAt",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "add",
+          "args": [
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "ax"
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                }
+              ]
+            },
+            {
+              "fn": "clamp",
+              "args": [
+                {
+                  "fn": "floor",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "max",
+                              "args": [
+                                {
+                                  "fn": "sub",
+                                  "args": [
+                                    {
+                                      "fn": "component",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "hi",
+                                          "tupleSize": 3
+                                        }
+                                      ],
+                                      "index": 0
+                                    },
+                                    {
+                                      "fn": "component",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "lo",
+                                          "tupleSize": 3
+                                        }
+                                      ],
+                                      "index": 0
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "sub",
+                                  "args": [
+                                    {
+                                      "fn": "component",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "hi",
+                                          "tupleSize": 3
+                                        }
+                                      ],
+                                      "index": 2
+                                    },
+                                    {
+                                      "fn": "component",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "lo",
+                                          "tupleSize": 3
+                                        }
+                                      ],
+                                      "index": 2
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "add",
+                              "args": [
+                                0.35,
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    0.3,
+                                    {
+                                      "fn": "randomField",
+                                      "key": "cut1"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        0.5
+                      ]
+                    }
+                  ]
+                },
+                6,
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "max",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "hi",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
+                            },
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lo",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "hi",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 2
+                            },
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lo",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 2
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    6
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "b1Fan",
+      "type": "copyToPoints",
+      "params": {
+        "targetNames": [
+          "lo",
+          "hi",
+          "lot",
+          "ax",
+          "can",
+          "cutAt"
+        ],
+        "targetIndexAttr": "",
+        "rotateAttrs": [],
+        "sourceGroupAttr": "",
+        "targetGroupAttr": "",
+        "mirrorAware": true,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "rules2Pts",
+      "type": "pointLine",
+      "params": {
+        "mode": "endpoints",
+        "count": 2,
+        "start": [
+          0,
+          0,
+          0
+        ],
+        "end": [
+          0,
+          0,
+          0
+        ],
+        "includeEnd": true,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "rules2Seed",
+      "type": "setAttribute",
+      "params": {
+        "name": "seed",
+        "domain": "point",
+        "type": "u32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "add",
+          "args": [
+            31,
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "index"
+                },
+                5119
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "rules2",
+      "type": "setAttribute",
+      "params": {
+        "name": "slot",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "index"
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "b1Keep",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "max",
+          "args": [
+            {
+              "fn": "sub",
+              "args": [
+                1,
+                {
+                  "fn": "attribute",
+                  "name": "slot"
+                }
+              ]
+            },
+            {
+              "fn": "attribute",
+              "name": "can"
+            }
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "b1Lo",
+      "type": "setAttribute",
+      "params": {
+        "name": "lo",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "ax"
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "can"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "attribute",
+                      "name": "slot"
+                    }
+                  ]
+                },
+                {
+                  "fn": "attribute",
+                  "name": "cutAt"
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                }
+              ]
+            },
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "lo",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 1
+            },
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            1,
+                            {
+                              "fn": "attribute",
+                              "name": "ax"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "can"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "attribute",
+                      "name": "slot"
+                    }
+                  ]
+                },
+                {
+                  "fn": "attribute",
+                  "name": "cutAt"
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "b1Hi",
+      "type": "setAttribute",
+      "params": {
+        "name": "hi",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "ax"
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "can"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "sub",
+                      "args": [
+                        1,
+                        {
+                          "fn": "attribute",
+                          "name": "slot"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "attribute",
+                  "name": "cutAt"
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                }
+              ]
+            },
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "hi",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 1
+            },
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            1,
+                            {
+                              "fn": "attribute",
+                              "name": "ax"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "can"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "sub",
+                      "args": [
+                        1,
+                        {
+                          "fn": "attribute",
+                          "name": "slot"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "attribute",
+                  "name": "cutAt"
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "b2Ax",
+      "type": "setAttribute",
+      "params": {
+        "name": "ax",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "ge",
+          "args": [
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                }
+              ]
+            },
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "b2Can",
+      "type": "setAttribute",
+      "params": {
+        "name": "can",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "ge",
+          "args": [
+            {
+              "fn": "max",
+              "args": [
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "hi",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 0
+                    },
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lo",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 0
+                    }
+                  ]
+                },
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "hi",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 2
+                    },
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lo",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 2
+                    }
+                  ]
+                }
+              ]
+            },
+            12
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "b2Cut",
+      "type": "setAttribute",
+      "params": {
+        "name": "cutAt",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "add",
+          "args": [
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "ax"
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                }
+              ]
+            },
+            {
+              "fn": "clamp",
+              "args": [
+                {
+                  "fn": "floor",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "max",
+                              "args": [
+                                {
+                                  "fn": "sub",
+                                  "args": [
+                                    {
+                                      "fn": "component",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "hi",
+                                          "tupleSize": 3
+                                        }
+                                      ],
+                                      "index": 0
+                                    },
+                                    {
+                                      "fn": "component",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "lo",
+                                          "tupleSize": 3
+                                        }
+                                      ],
+                                      "index": 0
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "sub",
+                                  "args": [
+                                    {
+                                      "fn": "component",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "hi",
+                                          "tupleSize": 3
+                                        }
+                                      ],
+                                      "index": 2
+                                    },
+                                    {
+                                      "fn": "component",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "lo",
+                                          "tupleSize": 3
+                                        }
+                                      ],
+                                      "index": 2
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "add",
+                              "args": [
+                                0.35,
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    0.3,
+                                    {
+                                      "fn": "randomField",
+                                      "key": "cut2"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        0.5
+                      ]
+                    }
+                  ]
+                },
+                6,
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "max",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "hi",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
+                            },
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lo",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "hi",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 2
+                            },
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lo",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 2
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    6
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "b2Fan",
+      "type": "copyToPoints",
+      "params": {
+        "targetNames": [
+          "lo",
+          "hi",
+          "lot",
+          "ax",
+          "can",
+          "cutAt"
+        ],
+        "targetIndexAttr": "",
+        "rotateAttrs": [],
+        "sourceGroupAttr": "",
+        "targetGroupAttr": "",
+        "mirrorAware": true,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "b2Keep",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "max",
+          "args": [
+            {
+              "fn": "sub",
+              "args": [
+                1,
+                {
+                  "fn": "attribute",
+                  "name": "slot"
+                }
+              ]
+            },
+            {
+              "fn": "attribute",
+              "name": "can"
+            }
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "b2Lo",
+      "type": "setAttribute",
+      "params": {
+        "name": "lo",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "ax"
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "can"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "attribute",
+                      "name": "slot"
+                    }
+                  ]
+                },
+                {
+                  "fn": "attribute",
+                  "name": "cutAt"
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                }
+              ]
+            },
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "lo",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 1
+            },
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            1,
+                            {
+                              "fn": "attribute",
+                              "name": "ax"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "can"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "attribute",
+                      "name": "slot"
+                    }
+                  ]
+                },
+                {
+                  "fn": "attribute",
+                  "name": "cutAt"
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "b2Hi",
+      "type": "setAttribute",
+      "params": {
+        "name": "hi",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "ax"
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "can"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "sub",
+                      "args": [
+                        1,
+                        {
+                          "fn": "attribute",
+                          "name": "slot"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "attribute",
+                  "name": "cutAt"
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                }
+              ]
+            },
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "hi",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 1
+            },
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            1,
+                            {
+                              "fn": "attribute",
+                              "name": "ax"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "can"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "sub",
+                      "args": [
+                        1,
+                        {
+                          "fn": "attribute",
+                          "name": "slot"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "attribute",
+                  "name": "cutAt"
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "blkStoreys",
+      "type": "setAttribute",
+      "params": {
+        "name": "storeys",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "add",
+          "args": [
+            1,
+            {
+              "fn": "floor",
+              "args": [
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "randomField",
+                      "key": "storeys"
+                    },
+                    2.999
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "blkWall",
+      "type": "setAttribute",
+      "params": {
+        "name": "wallTint",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "floor",
+          "args": [
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "randomField",
+                  "key": "wallTint"
+                },
+                4.999
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "blkRoof",
+      "type": "setAttribute",
+      "params": {
+        "name": "roofTint",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "floor",
+          "args": [
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "randomField",
+                  "key": "roofTint"
+                },
+                2.999
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "blkHi",
+      "type": "setAttribute",
+      "params": {
+        "name": "hi",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "hi",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 0
+            },
+            {
+              "fn": "add",
+              "args": [
+                1,
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "storeys"
+                    },
+                    16
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "hi",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 2
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "blkExt",
+      "type": "setAttribute",
+      "params": {
+        "name": "ext",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "eq",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                0
+              ]
+            },
+            {
+              "fn": "eq",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lot",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                }
+              ]
+            },
+            0
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "stFan",
+      "type": "copyToPoints",
+      "params": {
+        "targetNames": [
+          "lo",
+          "hi",
+          "lot",
+          "wallTint",
+          "roofTint",
+          "storeys",
+          "ext"
+        ],
+        "targetIndexAttr": "",
+        "rotateAttrs": [],
+        "sourceGroupAttr": "",
+        "targetGroupAttr": "",
+        "mirrorAware": true,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "rules3Pts",
+      "type": "pointLine",
+      "params": {
+        "mode": "endpoints",
+        "count": 3,
+        "start": [
+          0,
+          0,
+          0
+        ],
+        "end": [
+          0,
+          0,
+          0
+        ],
+        "includeEnd": true,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "rules3Seed",
+      "type": "setAttribute",
+      "params": {
+        "name": "seed",
+        "domain": "point",
+        "type": "u32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "add",
+          "args": [
+            38,
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "index"
+                },
+                5119
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "rules3",
+      "type": "setAttribute",
+      "params": {
+        "name": "slot",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "index"
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "stKeep",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "lt",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "slot"
+            },
+            {
+              "fn": "attribute",
+              "name": "storeys"
+            }
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "stLevel",
+      "type": "setAttribute",
+      "params": {
+        "name": "level",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "attribute",
+          "name": "slot"
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "stLo",
+      "type": "setAttribute",
+      "params": {
+        "name": "lo",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "lo",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 0
+            },
+            {
+              "fn": "add",
+              "args": [
+                1,
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "slot"
+                    },
+                    16
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "lo",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 2
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "stHi",
+      "type": "setAttribute",
+      "params": {
+        "name": "hi",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "hi",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 0
+            },
+            {
+              "fn": "add",
+              "args": [
+                1,
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "slot"
+                        },
+                        1
+                      ]
+                    },
+                    16
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "hi",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 2
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "ptFan",
+      "type": "copyToPoints",
+      "params": {
+        "targetNames": [
+          "lo",
+          "hi",
+          "lot",
+          "wallTint",
+          "roofTint",
+          "level",
+          "ext"
+        ],
+        "targetIndexAttr": "",
+        "rotateAttrs": [],
+        "sourceGroupAttr": "",
+        "targetGroupAttr": "",
+        "mirrorAware": true,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "rules5Pts",
+      "type": "pointLine",
+      "params": {
+        "mode": "endpoints",
+        "count": 5,
+        "start": [
+          0,
+          0,
+          0
+        ],
+        "end": [
+          0,
+          0,
+          0
+        ],
+        "includeEnd": true,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "rules5Seed",
+      "type": "setAttribute",
+      "params": {
+        "name": "seed",
+        "domain": "point",
+        "type": "u32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "add",
+          "args": [
+            45,
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "index"
+                },
+                5119
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "rules5",
+      "type": "setAttribute",
+      "params": {
+        "name": "slot",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "index"
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "ptLo",
+      "type": "setAttribute",
+      "params": {
+        "name": "lo",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                },
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "slot"
+                        },
+                        4
+                      ]
+                    },
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "hi",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
+                            },
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lo",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
+                            }
+                          ]
+                        },
+                        1
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 1
+                },
+                {
+                  "fn": "ge",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "slot"
+                    },
+                    1
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lo",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 2
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "slot"
+                            },
+                            2
+                          ]
+                        },
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "hi",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 2
+                                },
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "lo",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 2
+                                }
+                              ]
+                            },
+                            1
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "slot"
+                        },
+                        3
+                      ]
+                    },
+                    {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "slot"
+                        },
+                        4
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "ptHi",
+      "type": "setAttribute",
+      "params": {
+        "name": "hi",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                },
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "slot"
+                        },
+                        3
+                      ]
+                    },
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "hi",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
+                            },
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lo",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
+                            }
+                          ]
+                        },
+                        1
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "eq",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "slot"
+                    },
+                    0
+                  ]
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lo",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 1
+                    },
+                    1
+                  ]
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 1
+                }
+              ]
+            },
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "hi",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 2
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "slot"
+                            },
+                            1
+                          ]
+                        },
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "hi",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 2
+                                },
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "lo",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 2
+                                }
+                              ]
+                            },
+                            1
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "slot"
+                        },
+                        3
+                      ]
+                    },
+                    {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "slot"
+                        },
+                        4
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "ptWall",
+      "type": "setAttribute",
+      "params": {
+        "name": "wall",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "attribute",
+          "name": "slot"
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "ptDoorWall",
+      "type": "setAttribute",
+      "params": {
+        "name": "doorWall",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "select",
+          "args": [
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "ext",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 0
+            },
+            1,
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "ext",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 1
+                },
+                2,
+                0
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "slabKind",
+      "type": "setAttribute",
+      "params": {
+        "name": "k",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": 4,
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "slabs",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "eq",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "wall"
+            },
+            0
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "walls",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "ge",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "wall"
+            },
+            1
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "wAlong",
+      "type": "setAttribute",
+      "params": {
+        "name": "alongX",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "le",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "wall"
+            },
+            2
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "wLen",
+      "type": "setAttribute",
+      "params": {
+        "name": "len",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "select",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "alongX"
+            },
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                }
+              ]
+            },
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "wBays",
+      "type": "setAttribute",
+      "params": {
+        "name": "nb",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "max",
+          "args": [
+            1,
+            {
+              "fn": "floor",
+              "args": [
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "len"
+                    },
+                    4
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "wStart",
+      "type": "setAttribute",
+      "params": {
+        "name": "u0",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "select",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "alongX"
+            },
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "lo",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 0
+            },
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "lo",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 2
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "bayFan",
+      "type": "copyToPoints",
+      "params": {
+        "targetNames": [
+          "lo",
+          "hi",
+          "lot",
+          "wallTint",
+          "roofTint",
+          "level",
+          "wall",
+          "doorWall",
+          "alongX",
+          "len",
+          "nb",
+          "u0"
+        ],
+        "targetIndexAttr": "",
+        "rotateAttrs": [],
+        "sourceGroupAttr": "",
+        "targetGroupAttr": "",
+        "mirrorAware": true,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "rules8Pts",
+      "type": "pointLine",
+      "params": {
+        "mode": "endpoints",
+        "count": 8,
+        "start": [
+          0,
+          0,
+          0
+        ],
+        "end": [
+          0,
+          0,
+          0
+        ],
+        "includeEnd": true,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "rules8Seed",
+      "type": "setAttribute",
+      "params": {
+        "name": "seed",
+        "domain": "point",
+        "type": "u32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "add",
+          "args": [
+            52,
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "index"
+                },
+                5119
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "rules8",
+      "type": "setAttribute",
+      "params": {
+        "name": "slot",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "index"
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "bayKeep",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "lt",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "slot"
+            },
+            {
+              "fn": "attribute",
+              "name": "nb"
+            }
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "bayA",
+      "type": "setAttribute",
+      "params": {
+        "name": "ua",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "add",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "u0"
+            },
+            {
+              "fn": "floor",
+              "args": [
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "slot"
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "len"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "attribute",
+                      "name": "nb"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "bayB",
+      "type": "setAttribute",
+      "params": {
+        "name": "ub",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "add",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "u0"
+            },
+            {
+              "fn": "floor",
+              "args": [
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "slot"
+                            },
+                            1
+                          ]
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "len"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "attribute",
+                      "name": "nb"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "bayHi",
+      "type": "setAttribute",
+      "params": {
+        "name": "hi",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "alongX"
+                },
+                {
+                  "fn": "attribute",
+                  "name": "ub"
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                }
+              ]
+            },
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "hi",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 1
+            },
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "alongX"
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                {
+                  "fn": "attribute",
+                  "name": "ub"
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "bayLo",
+      "type": "setAttribute",
+      "params": {
+        "name": "lo",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "alongX"
+                },
+                {
+                  "fn": "attribute",
+                  "name": "ua"
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                }
+              ]
+            },
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "lo",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 1
+            },
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "alongX"
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                {
+                  "fn": "attribute",
+                  "name": "ua"
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "bayDoor",
+      "type": "setAttribute",
+      "params": {
+        "name": "door",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "mul",
+          "args": [
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "eq",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "level"
+                    },
+                    0
+                  ]
+                },
+                {
+                  "fn": "eq",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "wall"
+                    },
+                    {
+                      "fn": "attribute",
+                      "name": "doorWall"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "eq",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "slot"
+                },
+                {
+                  "fn": "floor",
+                  "args": [
+                    {
+                      "fn": "div",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "nb"
+                        },
+                        2
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "opW",
+      "type": "setAttribute",
+      "params": {
+        "name": "ow",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "min",
+          "args": [
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "ub"
+                    },
+                    {
+                      "fn": "attribute",
+                      "name": "ua"
+                    }
+                  ]
+                },
+                2
+              ]
+            },
+            2
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "opA",
+      "type": "setAttribute",
+      "params": {
+        "name": "oa",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "add",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "ua"
+            },
+            {
+              "fn": "floor",
+              "args": [
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "ub"
+                            },
+                            {
+                              "fn": "attribute",
+                              "name": "ua"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "ow"
+                        }
+                      ]
+                    },
+                    2
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "opB",
+      "type": "setAttribute",
+      "params": {
+        "name": "ob",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "add",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "oa"
+            },
+            {
+              "fn": "attribute",
+              "name": "ow"
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "probeA",
+      "type": "setAttribute",
+      "params": {
+        "name": "P",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "alongX"
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "oa"
+                    },
+                    0.25
+                  ]
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "wall"
+                            },
+                            3
+                          ]
+                        },
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lo",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "wall"
+                            },
+                            4
+                          ]
+                        },
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "hi",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lo",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 1
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            1,
+                            {
+                              "fn": "attribute",
+                              "name": "door"
+                            }
+                          ]
+                        },
+                        6
+                      ]
+                    }
+                  ]
+                },
+                0.5
+              ]
+            },
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "alongX"
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "wall"
+                            },
+                            1
+                          ]
+                        },
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lo",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 2
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "wall"
+                            },
+                            2
+                          ]
+                        },
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "hi",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 2
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "oa"
+                    },
+                    0.25
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "coveredA",
+      "type": "transferAttribute",
+      "params": {
+        "name": "occ",
+        "mapping": "raycast",
+        "attrDomain": "point",
+        "uvAttr": "uv",
+        "direction": [
+          0,
+          1,
+          0
+        ],
+        "directionAttr": "",
+        "maxDistance": 0,
+        "missCountAttr": "",
+        "hitAttr": "coveredA"
+      }
+    },
+    {
+      "id": "probeB",
+      "type": "setAttribute",
+      "params": {
+        "name": "P",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "alongX"
+                },
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "ob"
+                    },
+                    0.25
+                  ]
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "wall"
+                            },
+                            3
+                          ]
+                        },
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lo",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "wall"
+                            },
+                            4
+                          ]
+                        },
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "hi",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lo",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 1
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            1,
+                            {
+                              "fn": "attribute",
+                              "name": "door"
+                            }
+                          ]
+                        },
+                        6
+                      ]
+                    }
+                  ]
+                },
+                0.5
+              ]
+            },
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "alongX"
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "wall"
+                            },
+                            1
+                          ]
+                        },
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lo",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 2
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "wall"
+                            },
+                            2
+                          ]
+                        },
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "hi",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 2
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "ob"
+                    },
+                    0.25
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "coveredB",
+      "type": "transferAttribute",
+      "params": {
+        "name": "occ",
+        "mapping": "raycast",
+        "attrDomain": "point",
+        "uvAttr": "uv",
+        "direction": [
+          0,
+          1,
+          0
+        ],
+        "directionAttr": "",
+        "maxDistance": 0,
+        "missCountAttr": "",
+        "hitAttr": "coveredB"
+      }
+    },
+    {
+      "id": "covered",
+      "type": "setAttribute",
+      "params": {
+        "name": "covered",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "max",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "coveredA"
+            },
+            {
+              "fn": "attribute",
+              "name": "coveredB"
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "bayKind",
+      "type": "setAttribute",
+      "params": {
+        "name": "bk",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "mul",
+          "args": [
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "ge",
+                  "args": [
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "ub"
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "ua"
+                        }
+                      ]
+                    },
+                    3
+                  ]
+                },
+                {
+                  "fn": "sub",
+                  "args": [
+                    1,
+                    {
+                      "fn": "attribute",
+                      "name": "covered"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "door"
+                },
+                2,
+                {
+                  "fn": "lt",
+                  "args": [
+                    {
+                      "fn": "randomField",
+                      "key": "win"
+                    },
+                    0.8
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "solidKind",
+      "type": "setAttribute",
+      "params": {
+        "name": "k",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": 0,
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "solidBays",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "eq",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "bk"
+            },
+            0
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "openBays",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "ge",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "bk"
+            },
+            1
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "opFan",
+      "type": "copyToPoints",
+      "params": {
+        "targetNames": [
+          "lo",
+          "hi",
+          "lot",
+          "wallTint",
+          "roofTint",
+          "alongX",
+          "ua",
+          "ub",
+          "oa",
+          "ob",
+          "bk"
+        ],
+        "targetIndexAttr": "",
+        "rotateAttrs": [],
+        "sourceGroupAttr": "",
+        "targetGroupAttr": "",
+        "mirrorAware": true,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "opHi",
+      "type": "setAttribute",
+      "params": {
+        "name": "hi",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "alongX"
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "eq",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "slot"
+                                        },
+                                        0
+                                      ]
+                                    },
+                                    {
+                                      "fn": "attribute",
+                                      "name": "ub"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "eq",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "slot"
+                                        },
+                                        1
+                                      ]
+                                    },
+                                    {
+                                      "fn": "attribute",
+                                      "name": "ub"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "eq",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "slot"
+                                    },
+                                    2
+                                  ]
+                                },
+                                {
+                                  "fn": "attribute",
+                                  "name": "oa"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "slot"
+                                },
+                                3
+                              ]
+                            },
+                            {
+                              "fn": "attribute",
+                              "name": "ub"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "slot"
+                            },
+                            4
+                          ]
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "ob"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                }
+              ]
+            },
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "eq",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "slot"
+                                    },
+                                    0
+                                  ]
+                                },
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "component",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "lo",
+                                          "tupleSize": 3
+                                        }
+                                      ],
+                                      "index": 1
+                                    },
+                                    {
+                                      "fn": "select",
+                                      "args": [
+                                        {
+                                          "fn": "eq",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "bk"
+                                            },
+                                            2
+                                          ]
+                                        },
+                                        0,
+                                        6
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "eq",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "slot"
+                                    },
+                                    1
+                                  ]
+                                },
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "hi",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 1
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "slot"
+                                },
+                                2
+                              ]
+                            },
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "lo",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 1
+                                },
+                                12
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "slot"
+                            },
+                            3
+                          ]
+                        },
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lo",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 1
+                            },
+                            12
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "slot"
+                        },
+                        4
+                      ]
+                    },
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "lo",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 1
+                        },
+                        12
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "alongX"
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "eq",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "slot"
+                                        },
+                                        0
+                                      ]
+                                    },
+                                    {
+                                      "fn": "attribute",
+                                      "name": "ub"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "eq",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "slot"
+                                        },
+                                        1
+                                      ]
+                                    },
+                                    {
+                                      "fn": "attribute",
+                                      "name": "ub"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "eq",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "slot"
+                                    },
+                                    2
+                                  ]
+                                },
+                                {
+                                  "fn": "attribute",
+                                  "name": "oa"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "slot"
+                                },
+                                3
+                              ]
+                            },
+                            {
+                              "fn": "attribute",
+                              "name": "ub"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "slot"
+                            },
+                            4
+                          ]
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "ob"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "opLo",
+      "type": "setAttribute",
+      "params": {
+        "name": "lo",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "alongX"
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "eq",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "slot"
+                                        },
+                                        0
+                                      ]
+                                    },
+                                    {
+                                      "fn": "attribute",
+                                      "name": "ua"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "eq",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "slot"
+                                        },
+                                        1
+                                      ]
+                                    },
+                                    {
+                                      "fn": "attribute",
+                                      "name": "ua"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "eq",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "slot"
+                                    },
+                                    2
+                                  ]
+                                },
+                                {
+                                  "fn": "attribute",
+                                  "name": "ua"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "slot"
+                                },
+                                3
+                              ]
+                            },
+                            {
+                              "fn": "attribute",
+                              "name": "ob"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "slot"
+                            },
+                            4
+                          ]
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "oa"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                }
+              ]
+            },
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "eq",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "slot"
+                                    },
+                                    0
+                                  ]
+                                },
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "lo",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 1
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "eq",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "slot"
+                                    },
+                                    1
+                                  ]
+                                },
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "component",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "lo",
+                                          "tupleSize": 3
+                                        }
+                                      ],
+                                      "index": 1
+                                    },
+                                    12
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "slot"
+                                },
+                                2
+                              ]
+                            },
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "lo",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 1
+                                },
+                                {
+                                  "fn": "select",
+                                  "args": [
+                                    {
+                                      "fn": "eq",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "bk"
+                                        },
+                                        2
+                                      ]
+                                    },
+                                    0,
+                                    6
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "slot"
+                            },
+                            3
+                          ]
+                        },
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lo",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 1
+                            },
+                            {
+                              "fn": "select",
+                              "args": [
+                                {
+                                  "fn": "eq",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "bk"
+                                    },
+                                    2
+                                  ]
+                                },
+                                0,
+                                6
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "slot"
+                        },
+                        4
+                      ]
+                    },
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "lo",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 1
+                        },
+                        {
+                          "fn": "select",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "bk"
+                                },
+                                2
+                              ]
+                            },
+                            0,
+                            6
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "alongX"
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "eq",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "slot"
+                                        },
+                                        0
+                                      ]
+                                    },
+                                    {
+                                      "fn": "attribute",
+                                      "name": "ua"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "eq",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "slot"
+                                        },
+                                        1
+                                      ]
+                                    },
+                                    {
+                                      "fn": "attribute",
+                                      "name": "ua"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "eq",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "slot"
+                                    },
+                                    2
+                                  ]
+                                },
+                                {
+                                  "fn": "attribute",
+                                  "name": "ua"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "slot"
+                                },
+                                3
+                              ]
+                            },
+                            {
+                              "fn": "attribute",
+                              "name": "ob"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "slot"
+                            },
+                            4
+                          ]
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "oa"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "opKind",
+      "type": "setAttribute",
+      "params": {
+        "name": "k",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "select",
+          "args": [
+            {
+              "fn": "eq",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "slot"
+                },
+                4
+              ]
+            },
+            {
+              "fn": "attribute",
+              "name": "bk"
+            },
+            0
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "opKeep",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "gt",
+          "args": [
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 1
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 1
+                }
+              ]
+            },
+            0
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "rfRidgeX",
+      "type": "setAttribute",
+      "params": {
+        "name": "ridgeX",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "ge",
+          "args": [
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                }
+              ]
+            },
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "rfShort",
+      "type": "setAttribute",
+      "params": {
+        "name": "short",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "min",
+          "args": [
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                }
+              ]
+            },
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "rfBlo",
+      "type": "setAttribute",
+      "params": {
+        "name": "blo",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "attribute",
+          "name": "lo",
+          "tupleSize": 3
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "rfBhi",
+      "type": "setAttribute",
+      "params": {
+        "name": "bhi",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "attribute",
+          "name": "hi",
+          "tupleSize": 3
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "rfFan",
+      "type": "copyToPoints",
+      "params": {
+        "targetNames": [
+          "lo",
+          "hi",
+          "lot",
+          "wallTint",
+          "roofTint",
+          "ridgeX",
+          "short",
+          "blo",
+          "bhi"
+        ],
+        "targetIndexAttr": "",
+        "rotateAttrs": [],
+        "sourceGroupAttr": "",
+        "targetGroupAttr": "",
+        "mirrorAware": true,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "rules42Pts",
+      "type": "pointLine",
+      "params": {
+        "mode": "endpoints",
+        "count": 42,
+        "start": [
+          0,
+          0,
+          0
+        ],
+        "end": [
+          0,
+          0,
+          0
+        ],
+        "includeEnd": true,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "rules42Seed",
+      "type": "setAttribute",
+      "params": {
+        "name": "seed",
+        "domain": "point",
+        "type": "u32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "add",
+          "args": [
+            59,
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "index"
+                },
+                5119
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "rules42",
+      "type": "setAttribute",
+      "params": {
+        "name": "slot",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "index"
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "rfLayer",
+      "type": "setAttribute",
+      "params": {
+        "name": "layer",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "floor",
+          "args": [
+            {
+              "fn": "div",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "slot"
+                },
+                3
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "rfPart",
+      "type": "setAttribute",
+      "params": {
+        "name": "part",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "mod",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "slot"
+            },
+            3
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "rfKeep",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "gt",
+          "args": [
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "short"
+                },
+                {
+                  "fn": "mul",
+                  "args": [
+                    2,
+                    {
+                      "fn": "attribute",
+                      "name": "layer"
+                    }
+                  ]
+                }
+              ]
+            },
+            0
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "rfLo",
+      "type": "setAttribute",
+      "params": {
+        "name": "lo",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "ridgeX"
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "part"
+                                },
+                                0
+                              ]
+                            },
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "blo",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "part"
+                                },
+                                1
+                              ]
+                            },
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "blo",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 0
+                                },
+                                1
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "part"
+                            },
+                            2
+                          ]
+                        },
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "bhi",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
+                            },
+                            1
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "blo",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 0
+                    },
+                    {
+                      "fn": "attribute",
+                      "name": "layer"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "bhi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 1
+                },
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "layer"
+                    },
+                    2
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "ridgeX"
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "blo",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 2
+                    },
+                    {
+                      "fn": "attribute",
+                      "name": "layer"
+                    }
+                  ]
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "part"
+                                },
+                                0
+                              ]
+                            },
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "blo",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 2
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "part"
+                                },
+                                1
+                              ]
+                            },
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "blo",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 2
+                                },
+                                1
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "part"
+                            },
+                            2
+                          ]
+                        },
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "bhi",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 2
+                            },
+                            1
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "rfHi",
+      "type": "setAttribute",
+      "params": {
+        "name": "hi",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "ridgeX"
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "part"
+                                },
+                                0
+                              ]
+                            },
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "blo",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 0
+                                },
+                                1
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "part"
+                                },
+                                1
+                              ]
+                            },
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "bhi",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 0
+                                },
+                                1
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "part"
+                            },
+                            2
+                          ]
+                        },
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "bhi",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 0
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "bhi",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 0
+                    },
+                    {
+                      "fn": "attribute",
+                      "name": "layer"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "bhi",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 1
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "layer"
+                        },
+                        2
+                      ]
+                    }
+                  ]
+                },
+                2
+              ]
+            },
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "ridgeX"
+                },
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "bhi",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 2
+                    },
+                    {
+                      "fn": "attribute",
+                      "name": "layer"
+                    }
+                  ]
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "part"
+                                },
+                                0
+                              ]
+                            },
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "blo",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 2
+                                },
+                                1
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "part"
+                                },
+                                1
+                              ]
+                            },
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "bhi",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 2
+                                },
+                                1
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "part"
+                            },
+                            2
+                          ]
+                        },
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "bhi",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 2
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "rfKind",
+      "type": "setAttribute",
+      "params": {
+        "name": "k",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "select",
+          "args": [
+            {
+              "fn": "eq",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "part"
+                },
+                1
+              ]
+            },
+            3,
+            0
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "unitBox",
+      "type": "meshPrimitive",
+      "params": {
+        "shape": "box",
+        "size": [
+          1,
+          1,
+          1
+        ],
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "orientation": "xz",
+        "subdivisions": [
+          1,
+          1,
+          1
+        ],
+        "flip": false,
+        "normals": false
+      }
+    },
+    {
+      "id": "occPieces",
+      "type": "mergePoints",
+      "params": {}
+    },
+    {
+      "id": "occP",
+      "type": "setAttribute",
+      "params": {
+        "name": "P",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "mul",
+          "args": [
+            0.5,
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "lo",
+                  "tupleSize": 3
+                },
+                {
+                  "fn": "attribute",
+                  "name": "hi",
+                  "tupleSize": 3
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "occS",
+      "type": "setAttribute",
+      "params": {
+        "name": "scale",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "sub",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "hi",
+              "tupleSize": 3
+            },
+            {
+              "fn": "attribute",
+              "name": "lo",
+              "tupleSize": 3
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "occBoxes",
+      "type": "copyToPoints",
+      "params": {
+        "targetNames": [],
+        "targetIndexAttr": "",
+        "rotateAttrs": [],
+        "sourceGroupAttr": "",
+        "targetGroupAttr": "",
+        "mirrorAware": true,
+        "topology": "keep"
+      }
+    },
+    {
+      "id": "occluder",
+      "type": "setAttribute",
+      "params": {
+        "name": "occ",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": 1,
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "gLo",
+      "type": "setAttribute",
+      "params": {
+        "name": "lo",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            -2,
+            0,
+            -2
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "gHi",
+      "type": "setAttribute",
+      "params": {
+        "name": "hi",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lot",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                },
+                2
+              ]
+            },
+            1,
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lot",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                2
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "gWall",
+      "type": "setAttribute",
+      "params": {
+        "name": "wallTint",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": 0,
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "gRoof",
+      "type": "setAttribute",
+      "params": {
+        "name": "roofTint",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": 0,
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "gKind",
+      "type": "setAttribute",
+      "params": {
+        "name": "k",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": 5,
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "pieces",
+      "type": "mergePoints",
+      "params": {}
+    },
+    {
+      "id": "kind",
+      "type": "setAttribute",
+      "params": {
+        "name": "kind",
+        "domain": "point",
+        "type": "string",
+        "tupleSize": 1,
+        "value": {
+          "fn": "attribute",
+          "name": "k"
+        },
+        "select": 0,
+        "values": [
+          "wall",
+          "glass",
+          "door",
+          "roof",
+          "floor",
+          "ground"
+        ],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "tint",
+      "type": "setAttribute",
+      "params": {
+        "name": "tint",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "lookup",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "eq",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "k"
+                                            },
+                                            0
+                                          ]
+                                        },
+                                        {
+                                          "fn": "attribute",
+                                          "name": "wallTint"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "eq",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "k"
+                                            },
+                                            3
+                                          ]
+                                        },
+                                        {
+                                          "fn": "add",
+                                          "args": [
+                                            5,
+                                            {
+                                              "fn": "attribute",
+                                              "name": "roofTint"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "eq",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "k"
+                                        },
+                                        1
+                                      ]
+                                    },
+                                    8
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "eq",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "k"
+                                    },
+                                    2
+                                  ]
+                                },
+                                9
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "k"
+                                },
+                                4
+                              ]
+                            },
+                            10
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "k"
+                            },
+                            5
+                          ]
+                        },
+                        11
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "table": [
+                0.93,
+                0.85,
+                0.7,
+                0.95,
+                0.6,
+                0.42,
+                0.3,
+                0.2,
+                0.55,
+                0.42,
+                0.62,
+                0.3
+              ]
+            },
+            {
+              "fn": "lookup",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "eq",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "k"
+                                            },
+                                            0
+                                          ]
+                                        },
+                                        {
+                                          "fn": "attribute",
+                                          "name": "wallTint"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "eq",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "k"
+                                            },
+                                            3
+                                          ]
+                                        },
+                                        {
+                                          "fn": "add",
+                                          "args": [
+                                            5,
+                                            {
+                                              "fn": "attribute",
+                                              "name": "roofTint"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "eq",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "k"
+                                        },
+                                        1
+                                      ]
+                                    },
+                                    8
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "eq",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "k"
+                                    },
+                                    2
+                                  ]
+                                },
+                                9
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "k"
+                                },
+                                4
+                              ]
+                            },
+                            10
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "k"
+                            },
+                            5
+                          ]
+                        },
+                        11
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "table": [
+                0.92,
+                0.75,
+                0.16,
+                0.76,
+                0.63,
+                0.1,
+                0.33,
+                0.32,
+                0.8,
+                0.25,
+                0.62,
+                0.6
+              ]
+            },
+            {
+              "fn": "lookup",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "eq",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "k"
+                                            },
+                                            0
+                                          ]
+                                        },
+                                        {
+                                          "fn": "attribute",
+                                          "name": "wallTint"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "eq",
+                                          "args": [
+                                            {
+                                              "fn": "attribute",
+                                              "name": "k"
+                                            },
+                                            3
+                                          ]
+                                        },
+                                        {
+                                          "fn": "add",
+                                          "args": [
+                                            5,
+                                            {
+                                              "fn": "attribute",
+                                              "name": "roofTint"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "eq",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "k"
+                                        },
+                                        1
+                                      ]
+                                    },
+                                    8
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "eq",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "k"
+                                    },
+                                    2
+                                  ]
+                                },
+                                9
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "k"
+                                },
+                                4
+                              ]
+                            },
+                            10
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "k"
+                            },
+                            5
+                          ]
+                        },
+                        11
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "table": [
+                0.88,
+                0.55,
+                0.12,
+                0.16,
+                0.64,
+                0.08,
+                0.36,
+                0.18,
+                0.95,
+                0.12,
+                0.6,
+                0.25
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "bounds",
+      "type": "setBounds",
+      "params": {
+        "boundsMin": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                },
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lot",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 0
+                    },
+                    2
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 1
+                },
+                0.4
+              ]
+            },
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "lo",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lot",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 2
+                    },
+                    2
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "boundsMax": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 0
+                },
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lot",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 0
+                    },
+                    2
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 1
+                },
+                0.4
+              ]
+            },
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "hi",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lot",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 2
+                    },
+                    2
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "centre",
+      "type": "setAttribute",
+      "params": {
+        "name": "P",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "mul",
+          "args": [
+            0.5,
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "boundsMin",
+                  "tupleSize": 3
+                },
+                {
+                  "fn": "attribute",
+                  "name": "boundsMax",
+                  "tupleSize": 3
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "size",
+      "type": "setAttribute",
+      "params": {
+        "name": "scale",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "sub",
+          "args": [
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "boundsMax",
+                  "tupleSize": 3
+                },
+                {
+                  "fn": "attribute",
+                  "name": "boundsMin",
+                  "tupleSize": 3
+                }
+              ]
+            },
+            0.04
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "boxes",
+      "type": "copyToPoints",
+      "params": {
+        "targetNames": [
+          "tint"
+        ],
+        "targetIndexAttr": "",
+        "rotateAttrs": [],
+        "sourceGroupAttr": "",
+        "targetGroupAttr": "",
+        "mirrorAware": true,
+        "topology": "keep"
+      }
+    },
+    {
+      "id": "paint",
+      "type": "setAttribute",
+      "params": {
+        "name": "color",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 4,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "tint",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 0
+            },
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "tint",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 1
+            },
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "tint",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 2
+            },
+            1
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": [
+        "lotPt",
+        "out"
+      ],
+      "to": [
+        "lotSize",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "lotSize",
+        "out"
+      ],
+      "to": [
+        "lotLo",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "lotLo",
+        "out"
+      ],
+      "to": [
+        "lotHi",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "lotHi",
+        "out"
+      ],
+      "to": [
+        "b1Ax",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "b1Ax",
+        "out"
+      ],
+      "to": [
+        "b1Can",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "b1Can",
+        "out"
+      ],
+      "to": [
+        "b1Cut",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rules2Pts",
+        "out"
+      ],
+      "to": [
+        "rules2Seed",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rules2Seed",
+        "out"
+      ],
+      "to": [
+        "rules2",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rules2",
+        "out"
+      ],
+      "to": [
+        "b1Fan",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "b1Cut",
+        "out"
+      ],
+      "to": [
+        "b1Fan",
+        "target"
+      ]
+    },
+    {
+      "from": [
+        "b1Fan",
+        "out"
+      ],
+      "to": [
+        "b1Keep",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "b1Keep",
+        "out"
+      ],
+      "to": [
+        "b1Lo",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "b1Lo",
+        "out"
+      ],
+      "to": [
+        "b1Hi",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "b1Hi",
+        "out"
+      ],
+      "to": [
+        "b2Ax",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "b2Ax",
+        "out"
+      ],
+      "to": [
+        "b2Can",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "b2Can",
+        "out"
+      ],
+      "to": [
+        "b2Cut",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rules2",
+        "out"
+      ],
+      "to": [
+        "b2Fan",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "b2Cut",
+        "out"
+      ],
+      "to": [
+        "b2Fan",
+        "target"
+      ]
+    },
+    {
+      "from": [
+        "b2Fan",
+        "out"
+      ],
+      "to": [
+        "b2Keep",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "b2Keep",
+        "out"
+      ],
+      "to": [
+        "b2Lo",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "b2Lo",
+        "out"
+      ],
+      "to": [
+        "b2Hi",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "b2Hi",
+        "out"
+      ],
+      "to": [
+        "blkStoreys",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "blkStoreys",
+        "out"
+      ],
+      "to": [
+        "blkWall",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "blkWall",
+        "out"
+      ],
+      "to": [
+        "blkRoof",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "blkRoof",
+        "out"
+      ],
+      "to": [
+        "blkHi",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "blkHi",
+        "out"
+      ],
+      "to": [
+        "blkExt",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rules3Pts",
+        "out"
+      ],
+      "to": [
+        "rules3Seed",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rules3Seed",
+        "out"
+      ],
+      "to": [
+        "rules3",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rules3",
+        "out"
+      ],
+      "to": [
+        "stFan",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "blkExt",
+        "out"
+      ],
+      "to": [
+        "stFan",
+        "target"
+      ]
+    },
+    {
+      "from": [
+        "stFan",
+        "out"
+      ],
+      "to": [
+        "stKeep",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "stKeep",
+        "out"
+      ],
+      "to": [
+        "stLevel",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "stLevel",
+        "out"
+      ],
+      "to": [
+        "stLo",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "stLo",
+        "out"
+      ],
+      "to": [
+        "stHi",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rules5Pts",
+        "out"
+      ],
+      "to": [
+        "rules5Seed",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rules5Seed",
+        "out"
+      ],
+      "to": [
+        "rules5",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rules5",
+        "out"
+      ],
+      "to": [
+        "ptFan",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "stHi",
+        "out"
+      ],
+      "to": [
+        "ptFan",
+        "target"
+      ]
+    },
+    {
+      "from": [
+        "ptFan",
+        "out"
+      ],
+      "to": [
+        "ptHi",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "ptHi",
+        "out"
+      ],
+      "to": [
+        "ptLo",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "ptLo",
+        "out"
+      ],
+      "to": [
+        "ptWall",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "ptWall",
+        "out"
+      ],
+      "to": [
+        "ptDoorWall",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "ptDoorWall",
+        "out"
+      ],
+      "to": [
+        "slabs",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "slabs",
+        "out"
+      ],
+      "to": [
+        "slabKind",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "ptDoorWall",
+        "out"
+      ],
+      "to": [
+        "walls",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "walls",
+        "out"
+      ],
+      "to": [
+        "wAlong",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "wAlong",
+        "out"
+      ],
+      "to": [
+        "wLen",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "wLen",
+        "out"
+      ],
+      "to": [
+        "wBays",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "wBays",
+        "out"
+      ],
+      "to": [
+        "wStart",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rules8Pts",
+        "out"
+      ],
+      "to": [
+        "rules8Seed",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rules8Seed",
+        "out"
+      ],
+      "to": [
+        "rules8",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rules8",
+        "out"
+      ],
+      "to": [
+        "bayFan",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "wStart",
+        "out"
+      ],
+      "to": [
+        "bayFan",
+        "target"
+      ]
+    },
+    {
+      "from": [
+        "bayFan",
+        "out"
+      ],
+      "to": [
+        "bayKeep",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "probeA",
+        "out"
+      ],
+      "to": [
+        "coveredA",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "occluder",
+        "out"
+      ],
+      "to": [
+        "coveredA",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "probeB",
+        "out"
+      ],
+      "to": [
+        "coveredB",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "occluder",
+        "out"
+      ],
+      "to": [
+        "coveredB",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "coveredA",
+        "out"
+      ],
+      "to": [
+        "probeB",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "coveredB",
+        "out"
+      ],
+      "to": [
+        "covered",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "bayKeep",
+        "out"
+      ],
+      "to": [
+        "bayA",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "bayA",
+        "out"
+      ],
+      "to": [
+        "bayB",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "bayB",
+        "out"
+      ],
+      "to": [
+        "bayHi",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "bayHi",
+        "out"
+      ],
+      "to": [
+        "bayLo",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "bayLo",
+        "out"
+      ],
+      "to": [
+        "bayDoor",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "bayDoor",
+        "out"
+      ],
+      "to": [
+        "opW",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "opW",
+        "out"
+      ],
+      "to": [
+        "opA",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "opA",
+        "out"
+      ],
+      "to": [
+        "opB",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "opB",
+        "out"
+      ],
+      "to": [
+        "probeA",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "covered",
+        "out"
+      ],
+      "to": [
+        "bayKind",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "bayKind",
+        "out"
+      ],
+      "to": [
+        "solidBays",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "solidBays",
+        "out"
+      ],
+      "to": [
+        "solidKind",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "bayKind",
+        "out"
+      ],
+      "to": [
+        "openBays",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rules5",
+        "out"
+      ],
+      "to": [
+        "opFan",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "openBays",
+        "out"
+      ],
+      "to": [
+        "opFan",
+        "target"
+      ]
+    },
+    {
+      "from": [
+        "opFan",
+        "out"
+      ],
+      "to": [
+        "opHi",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "opHi",
+        "out"
+      ],
+      "to": [
+        "opLo",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "opLo",
+        "out"
+      ],
+      "to": [
+        "opKind",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "opKind",
+        "out"
+      ],
+      "to": [
+        "opKeep",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "blkExt",
+        "out"
+      ],
+      "to": [
+        "rfRidgeX",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rfRidgeX",
+        "out"
+      ],
+      "to": [
+        "rfShort",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rfShort",
+        "out"
+      ],
+      "to": [
+        "rfBlo",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rfBlo",
+        "out"
+      ],
+      "to": [
+        "rfBhi",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rules42Pts",
+        "out"
+      ],
+      "to": [
+        "rules42Seed",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rules42Seed",
+        "out"
+      ],
+      "to": [
+        "rules42",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rules42",
+        "out"
+      ],
+      "to": [
+        "rfFan",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "rfBhi",
+        "out"
+      ],
+      "to": [
+        "rfFan",
+        "target"
+      ]
+    },
+    {
+      "from": [
+        "rfFan",
+        "out"
+      ],
+      "to": [
+        "rfLayer",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rfLayer",
+        "out"
+      ],
+      "to": [
+        "rfPart",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rfPart",
+        "out"
+      ],
+      "to": [
+        "rfKeep",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rfKeep",
+        "out"
+      ],
+      "to": [
+        "rfLo",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rfLo",
+        "out"
+      ],
+      "to": [
+        "rfHi",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rfHi",
+        "out"
+      ],
+      "to": [
+        "rfKind",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "blkExt",
+        "out"
+      ],
+      "to": [
+        "occPieces",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rfKind",
+        "out"
+      ],
+      "to": [
+        "occPieces",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "occPieces",
+        "out"
+      ],
+      "to": [
+        "occP",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "occP",
+        "out"
+      ],
+      "to": [
+        "occS",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "unitBox",
+        "out"
+      ],
+      "to": [
+        "occBoxes",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "occS",
+        "out"
+      ],
+      "to": [
+        "occBoxes",
+        "target"
+      ]
+    },
+    {
+      "from": [
+        "occBoxes",
+        "out"
+      ],
+      "to": [
+        "occluder",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "lotHi",
+        "out"
+      ],
+      "to": [
+        "gLo",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "gLo",
+        "out"
+      ],
+      "to": [
+        "gHi",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "gHi",
+        "out"
+      ],
+      "to": [
+        "gWall",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "gWall",
+        "out"
+      ],
+      "to": [
+        "gRoof",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "gRoof",
+        "out"
+      ],
+      "to": [
+        "gKind",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "gKind",
+        "out"
+      ],
+      "to": [
+        "pieces",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "slabKind",
+        "out"
+      ],
+      "to": [
+        "pieces",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "solidKind",
+        "out"
+      ],
+      "to": [
+        "pieces",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "opKeep",
+        "out"
+      ],
+      "to": [
+        "pieces",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rfKind",
+        "out"
+      ],
+      "to": [
+        "pieces",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "pieces",
+        "out"
+      ],
+      "to": [
+        "kind",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "kind",
+        "out"
+      ],
+      "to": [
+        "tint",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "tint",
+        "out"
+      ],
+      "to": [
+        "bounds",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "bounds",
+        "out"
+      ],
+      "to": [
+        "centre",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "centre",
+        "out"
+      ],
+      "to": [
+        "size",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "unitBox",
+        "out"
+      ],
+      "to": [
+        "boxes",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "size",
+        "out"
+      ],
+      "to": [
+        "boxes",
+        "target"
+      ]
+    },
+    {
+      "from": [
+        "boxes",
+        "out"
+      ],
+      "to": [
+        "paint",
+        "in"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "id": "paint",
+      "pin": "out",
+      "name": "house"
+    }
+  ]
+}
+`;export{e as default};
