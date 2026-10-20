@@ -250,7 +250,7 @@ Copies the source point cloud onto every target point (output count = source poi
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-copy-to-points.json](../graphs/basics-copy-to-points.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 17 total (`pcg graphs --node copyToPoints`)
+**Examples:** [basics-copy-to-points.json](../graphs/basics-copy-to-points.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 18 total (`pcg graphs --node copyToPoints`)
 
 **Params:**
 
@@ -379,7 +379,7 @@ Keeps points where a field-capable `predicate` evaluates to a non-zero number. T
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-filter-by-expression.json](../graphs/basics-filter-by-expression.json), [basics-worley-cells.json](../graphs/basics-worley-cells.json), [basics-suspension-bridge.json](../graphs/basics-suspension-bridge.json) — 16 total (`pcg graphs --node filterByExpression`)
+**Examples:** [basics-filter-by-expression.json](../graphs/basics-filter-by-expression.json), [basics-worley-cells.json](../graphs/basics-worley-cells.json), [basics-suspension-bridge.json](../graphs/basics-suspension-bridge.json) — 17 total (`pcg graphs --node filterByExpression`)
 
 **Params:**
 
@@ -479,7 +479,7 @@ Concatenates the points of every connected geometry, in connection order, into o
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-merge-points.json](../graphs/basics-merge-points.json), [basics-curve-shaping.json](../graphs/basics-curve-shaping.json), [basics-field-shaping.json](../graphs/basics-field-shaping.json) — 17 total (`pcg graphs --node mergePoints`)
+**Examples:** [basics-merge-points.json](../graphs/basics-merge-points.json), [basics-curve-shaping.json](../graphs/basics-curve-shaping.json), [basics-field-shaping.json](../graphs/basics-field-shaping.json) — 18 total (`pcg graphs --node mergePoints`)
 
 **Params:** *(none)*
 
@@ -530,7 +530,7 @@ Builds a parametric triangle mesh with no input: shape 'plane' is one axis-align
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-mesh-primitive.json](../graphs/basics-mesh-primitive.json), [basics-surface-sample.json](../graphs/basics-surface-sample.json), [basics-promote-attribute.json](../graphs/basics-promote-attribute.json) — 18 total (`pcg graphs --node meshPrimitive`)
+**Examples:** [basics-mesh-primitive.json](../graphs/basics-mesh-primitive.json), [basics-surface-sample.json](../graphs/basics-surface-sample.json), [basics-promote-attribute.json](../graphs/basics-promote-attribute.json) — 19 total (`pcg graphs --node meshPrimitive`)
 
 **Params:**
 
@@ -823,7 +823,7 @@ Creates `count` evenly spaced points on a straight line. mode 'endpoints' (the d
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-phyllotaxis.json](../graphs/basics-phyllotaxis.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 19 total (`pcg graphs --node pointLine`)
+**Examples:** [basics-phyllotaxis.json](../graphs/basics-phyllotaxis.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 20 total (`pcg graphs --node pointLine`)
 
 **Params:**
 
@@ -1201,7 +1201,7 @@ Creates or overwrites an attribute on the chosen domain. Numeric types fill from
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-attribute-from-noise.json](../graphs/basics-attribute-from-noise.json), [basics-mask-by-species.json](../graphs/basics-mask-by-species.json), [basics-attribute-remap.json](../graphs/basics-attribute-remap.json) — 66 total (`pcg graphs --node setAttribute`)
+**Examples:** [basics-attribute-from-noise.json](../graphs/basics-attribute-from-noise.json), [basics-mask-by-species.json](../graphs/basics-mask-by-species.json), [basics-attribute-remap.json](../graphs/basics-attribute-remap.json) — 67 total (`pcg graphs --node setAttribute`)
 
 **Params:**
 
@@ -1228,7 +1228,7 @@ Sets the standard per-point bounds attributes: writes boundsMin and boundsMax (f
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-two-kinds-of-bounds.json](../graphs/basics-two-kinds-of-bounds.json), [examples-facade.json](../graphs/examples-facade.json), [examples-floorplan.json](../graphs/examples-floorplan.json) — 3 total (`pcg graphs --node setBounds`)
+**Examples:** [basics-two-kinds-of-bounds.json](../graphs/basics-two-kinds-of-bounds.json), [examples-brick-house.json](../graphs/examples-brick-house.json), [examples-facade.json](../graphs/examples-facade.json) — 4 total (`pcg graphs --node setBounds`)
 
 **Params:**
 
@@ -1417,7 +1417,7 @@ Transfers an attribute from the `source` geometry onto the main input's points, 
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-transfer-attribute.json](../graphs/basics-transfer-attribute.json), [examples-archipelago.json](../graphs/examples-archipelago.json), [examples-rig.json](../graphs/examples-rig.json) — 3 total (`pcg graphs --node transferAttribute`)
+**Examples:** [basics-transfer-attribute.json](../graphs/basics-transfer-attribute.json), [examples-brick-house.json](../graphs/examples-brick-house.json), [examples-archipelago.json](../graphs/examples-archipelago.json) — 4 total (`pcg graphs --node transferAttribute`)
 
 **Params:**
 

@@ -4,7 +4,7 @@ Generated from the graphs in [`graphs`](../graphs) by `node scripts/gen-graphs.m
 
 Each file teaches ONE thing and cooks from JSON alone — no runtime-injected data, so `pcg cook <file>` on a clean install reproduces exactly what the corpus test asserts.
 
-103 examples, alphabetical by file:
+104 examples, alphabetical by file:
 
 - [basics-a-draw-that-survives-a-move.json](#basics-a-draw-that-survives-a-movejson) — Keep a random draw when the point moves
 - [basics-a-table-of-points.json](#basics-a-table-of-pointsjson) — Write a table of points into the graph
@@ -91,6 +91,7 @@ Each file teaches ONE thing and cooks from JSON alone — no runtime-injected da
 - [basics-worley-cells.json](#basics-worley-cellsjson) — Colour and lift a Voronoi cell
 - [basics-worley-feature.json](#basics-worley-featurejson) — Draw the answer: every point reaches for its own cell
 - [examples-archipelago.json](#examples-archipelagojson) — An archipelago with forests, towns and roads
+- [examples-brick-house.json](#examples-brick-housejson) — A brick house split on a stud lattice
 - [examples-coral.json](#examples-coraljson) — A dendrite grown by aggregation
 - [examples-facade.json](#examples-facadejson) — Split a box until the pieces are small enough
 - [examples-floorplan.json](#examples-floorplanjson) — Rooms from a split footprint, with a circulation net
@@ -1807,6 +1808,24 @@ Islands, forests, towns and the roads between them, from two noises and one idea
 **Outputs:** `terrain` (from `terrain`.`out`), `trees` (from `trees`.`instances`), `towns` (from `buildings`.`instances`), `roads` (from `roadPaving`.`instances`)
 
 Cook it: `pcg cook graphs/examples-archipelago.json --stats`
+
+## examples-brick-house.json
+
+**A brick house split on a stud lattice**
+
+A SHORT TERRACE OF HOUSES DERIVED BY A SPLIT GRAMMAR ON AN INTEGER LATTICE, and the input a brick packer will read: every terminal is an axis-aligned box whose corners are WHOLE NUMBERS -- x and z in studs, y in plates, a plate 0.4 of a stud -- carrying a string `kind` (wall, glass, door, roof, floor, ground) and a palette colour. THE GRAMMAR IS STAGED, NOT RECURSIVE, and that is the finding that matters for whether `examples-facade` and `examples-floorplan` are ever extracted into a split primitive. The derivation is lot -> blocks -> storeys -> a floor slab and four walls -> bays -> sill, head, two jambs and the opening, with a second branch from each block to the layers of a stepped gable roof. Every one of those rules has the SAME shape: fan the cell out to M slots against a rule cloud of M coincident points (`copyToPoints`, the slot riding on the source so it survives later filters), keep the slots a predicate allows, and rewrite the box piecewise by slot as sums of `eq(slot, i) * value_i`. The kind IS the stage, so there is no dispatch on a string anywhere. Depth is bounded -- two rounds of block splitting, at most three storeys, eight bays, fourteen roof layers -- so the rounds are written out and `repeatUntil` would buy nothing. This graph therefore does NOT agree in form with the two split graphs, and is not the third consumer that would justify extracting their recipe; the recurring thing here is the fan-out-keep-rewrite rule, and that is what to watch for a second time. THE CUT IS SNAPPED, AND DECIDED ON THE PARENT: `floor(span * f + 0.5)` clamped so neither half falls under six studs, carried to both children in `targetNames` exactly as the facade does, so the two halves of a block meet at one integer coordinate. THE WORKING BOX IS `lo`/`hi`, NOT `boundsMin`/`boundsMax`, because `copyToPoints` refuses to carry a standard column, and bounds are written once at the end in world units. One trap came with it: the two corners are rewritten by TWO nodes, so the second reads the first's output. The walls and openings are ordered so the second never reads a component the first changed; the roof rewrites both corners from every component, so it carries the block's original box (`blo`/`bhi`) and reads only that. A WINDOW GOES ONLY WHERE A WALL IS EXPOSED, and exposure is computed rather than assumed. Blocks share party walls, and a tall block beside a low one has a wall that is covered at the bottom and open above. Each candidate opening places a probe half a stud outside its wall at the BOTTOM of where it would be, and `transferAttribute` casts a ray straight up from it against a mesh of every block and roof layer, with `hitAttr` as the answer. That is an exact inside-test here and not a heuristic, for a reason worth stating: blocks and roof layers are prisms standing on the ground with nothing overhanging, so a point is inside one exactly when a ray going up from it hits a face, and if the bottom of the opening is free everything above it in that column is free too. ACROSS the opening it takes one probe PER STUD -- the first draft probed the centre only, and a neighbour ending mid-window or a roof layer stepping in left a window looking straight into a wall in three seeds of ten -- because a box on the lattice that overlaps the opening at all contains one of its studs; openings are at most two studs wide, so two probes. Doors go on the ground floor of the first lot-edge wall, south then north, in the middle bay; a z split happens at most once, so every block has one. TWO THINGS A PACKER READING THIS MUST KNOW: neighbouring blocks each build their own wall, so a party wall is TWO studs thick, and the stud at each gable end of a roof layer has kind `wall` (it is the gable, drawn in the wall's colour), so a count of `wall` pieces includes roof-height ones. The colours are a palette indexed by kind and per-block draws through `lookup`; the editor multiplies vertex colours by the output's hue, so they read cooler there than in `pcg render`.
+
+**Tags:** `examples`, `structure`, `topology`
+
+**Seed:** 1889
+
+**Node types:** `copyToPoints`, `filterByExpression`, `mergePoints`, `meshPrimitive`, `pointLine`, `setAttribute`, `setBounds`, `transferAttribute`
+
+**Primitives:** *(none)*
+
+**Outputs:** `house` (from `paint`.`out`)
+
+Cook it: `pcg cook graphs/examples-brick-house.json --stats`
 
 ## examples-coral.json
 

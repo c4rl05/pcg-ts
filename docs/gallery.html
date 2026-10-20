@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="dark" />
 <title>PCG-TS — the graph corpus</title>
-<meta name="description" content="Every graph in the PCG-TS corpus, cooked in the editor: 103 files, 84 basics, 11 examples, 8 pipeline." />
+<meta name="description" content="Every graph in the PCG-TS corpus, cooked in the editor: 104 files, 84 basics, 12 examples, 8 pipeline." />
 <link rel="icon" href="./icon.svg" type="image/svg+xml" />
 </head>
 <body>
@@ -516,8 +516,8 @@ body:has(.shell) .grid-guide .wrap { max-width: 1180px; }
 <header class="page-head">
   <div class="wrap">
     <p class="eyebrow">Corpus</p>
-    <h1>103 graphs, every one a file you can cook</h1>
-    <p class="lead">Every graph in <code>graphs/</code>, cooked in the editor and shot from the frame it draws into. <strong>84 basics, 11 examples, 8 pipeline.</strong> Each file teaches one thing and cooks from JSON alone — <code>pcg cook graphs/&lt;name&gt;.json</code> reproduces what you see here from the seed the file carries, on any machine and in any cook order.</p>
+    <h1>104 graphs, every one a file you can cook</h1>
+    <p class="lead">Every graph in <code>graphs/</code>, cooked in the editor and shot from the frame it draws into. <strong>84 basics, 12 examples, 8 pipeline.</strong> Each file teaches one thing and cooks from JSON alone — <code>pcg cook graphs/&lt;name&gt;.json</code> reproduces what you see here from the seed the file carries, on any machine and in any cook order.</p>
     <p class="sub">Hover a card for the node graph behind the frame. Click to open it in the <a href="./editor/">editor</a> and change it live. The files themselves are in <a href="https://github.com/C4RL05/pcg-ts/tree/main/graphs">graphs/</a>; the same index in prose is <a href="./graphs.md">graphs.md</a>.</p>
   </div>
 </header>
@@ -533,7 +533,7 @@ body:has(.shell) .grid-guide .wrap { max-width: 1180px; }
         <button type="button" data-family="pipeline" aria-pressed="false">pipeline</button>
       </div>
       <label class="switch"><input type="checkbox" id="graphs-on"> node graphs</label>
-      <span class="count" id="count" aria-live="polite">103 graphs</span>
+      <span class="count" id="count" aria-live="polite">104 graphs</span>
     </div>
   </div>
 </div>
@@ -630,10 +630,11 @@ body:has(.shell) .grid-guide .wrap { max-width: 1180px; }
     </div>
   </section>
   <section class="family" id="family-examples">
-    <p class="eyebrow">examples · 11 graphs</p>
+    <p class="eyebrow">examples · 12 graphs</p>
     <p class="blurb">Whole scenes rather than single ideas — each one exists because something in the library only shows up at that size.</p>
     <div class="grid">
       <a class="tile" id="examples-archipelago" href="./editor/?graph=examples-archipelago" data-family="examples" data-find="examples-archipelago an archipelago with forests, towns and roads examples terrain island scatter network spawner"><span class="frame"><img class="scene" src="./gallery/examples-archipelago.webp" width="720" height="480" loading="lazy" decoding="async" alt="examples-archipelago cooked in the editor: An archipelago with forests, towns and roads — 40,401 points, 2,915 instances"><img class="graph" src="./gallery/examples-archipelago.graph.webp" width="720" height="480" loading="lazy" decoding="async" alt=""></span><span class="meta"><b>examples-archipelago</b><span class="what">An archipelago with forests, towns and roads</span><span class="facts">34 nodes · 40,401 pts · 2,915 inst</span></span></a>
+      <a class="tile" id="examples-brick-house" href="./editor/?graph=examples-brick-house" data-family="examples" data-find="examples-brick-house a brick house split on a stud lattice examples structure topology"><span class="frame"><img class="scene" src="./gallery/examples-brick-house.webp" width="720" height="480" loading="lazy" decoding="async" alt="examples-brick-house cooked in the editor: A brick house split on a stud lattice — 5,304 points"><img class="graph" src="./gallery/examples-brick-house.graph.webp" width="720" height="480" loading="lazy" decoding="async" alt=""></span><span class="meta"><b>examples-brick-house</b><span class="what">A brick house split on a stud lattice</span><span class="facts">109 nodes · 5,304 pts · 2,652 prims</span></span></a>
       <a class="tile" id="examples-coral" href="./editor/?graph=examples-coral" data-family="examples" data-find="examples-coral a dendrite grown by aggregation examples growth topology repeat"><span class="frame"><img class="scene" src="./gallery/examples-coral.webp" width="720" height="480" loading="lazy" decoding="async" alt="examples-coral cooked in the editor: A dendrite grown by aggregation — 2,484 points"><img class="graph" src="./gallery/examples-coral.graph.webp" width="720" height="480" loading="lazy" decoding="async" alt=""></span><span class="meta"><b>examples-coral</b><span class="what">A dendrite grown by aggregation</span><span class="facts">5 nodes · 2,484 pts · 2,483 prims</span></span></a>
       <a class="tile" id="examples-facade" href="./editor/?graph=examples-facade" data-family="examples" data-find="examples-facade split a box until the pieces are small enough examples structure repeat bounds"><span class="frame"><img class="scene" src="./gallery/examples-facade.webp" width="720" height="480" loading="lazy" decoding="async" alt="examples-facade cooked in the editor: Split a box until the pieces are small enough — 6,336 points"><img class="graph" src="./gallery/examples-facade.graph.webp" width="720" height="480" loading="lazy" decoding="async" alt=""></span><span class="meta"><b>examples-facade</b><span class="what">Split a box until the pieces are small enough</span><span class="facts">12 nodes · 6,336 pts · 3,168 prims</span></span></a>
       <a class="tile" id="examples-floorplan" href="./editor/?graph=examples-floorplan" data-family="examples" data-find="examples-floorplan rooms from a split footprint, with a circulation net examples structure repeat topology"><span class="frame"><img class="scene" src="./gallery/examples-floorplan.webp" width="720" height="480" loading="lazy" decoding="async" alt="examples-floorplan cooked in the editor: Rooms from a split footprint, with a circulation net — 800 points"><img class="graph" src="./gallery/examples-floorplan.graph.webp" width="720" height="480" loading="lazy" decoding="async" alt=""></span><span class="meta"><b>examples-floorplan</b><span class="what">Rooms from a split footprint, with a circulation net</span><span class="facts">16 nodes · 800 pts · 430 prims</span></span></a>
@@ -666,7 +667,7 @@ body:has(.shell) .grid-guide .wrap { max-width: 1180px; }
 <footer>
   <div class="wrap">
     <span>PCG-TS v0.18.0</span>
-    <span>103 graphs</span>
+    <span>104 graphs</span>
     <a href="./index.html">home</a>
     <a href="./manual.html">user manual</a>
     <a href="https://github.com/C4RL05/pcg-ts">github.com/C4RL05/pcg-ts</a>

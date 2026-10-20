@@ -6114,6 +6114,48 @@
         ]
       }
     },
+    "examples-brick-house.json": {
+      "outputs": {
+        "house": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 5304,
+              "vertex": 7956,
+              "primitive": 2652,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "uv:f32x2",
+                "rot:f32x4",
+                "scale:f32x3",
+                "seed:u32",
+                "tint:f32x3",
+                "color:f32x4"
+              ],
+              "primitive": [
+                "primtype:string"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -14.98,
+                0.02,
+                -8.98
+              ],
+              "max": [
+                14.98,
+                16.38,
+                8.98
+              ]
+            }
+          }
+        ]
+      }
+    },
     "examples-coral.json": {
       "outputs": {
         "coral": [
