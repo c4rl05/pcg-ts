@@ -6459,7 +6459,7 @@
             "kind": "geometry",
             "tags": [],
             "counts": {
-              "point": 60,
+              "point": 38,
               "vertex": 102,
               "primitive": 34,
               "detail": 1
@@ -6467,15 +6467,8 @@
             "attrs": {
               "point": [
                 "P:f32x3",
-                "rot:f32x4",
-                "scale:f32x3",
-                "density:f32",
-                "boundsMin:f32x3",
-                "boundsMax:f32x3",
-                "color:f32x4",
-                "seed:u32",
-                "normal:f32x3",
-                "uv:f32x2"
+                "uv:f32x2",
+                "normal:f32x3"
               ],
               "primitive": [
                 "primtype:string"

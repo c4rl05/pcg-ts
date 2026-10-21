@@ -623,7 +623,7 @@ Builds a CLOSED PATH — polyline topology, not a loose point cloud — around a
 | `rotate` | vec3 | `[0,0,0]` |  |  | yes | ring.rotate | Rotation in degrees per world axis, applied about the origin before the loop is moved into place. |
 | `size` | vec3 | `[8,8,8]` |  |  | yes | ring.size | Radius of the loop in world units. A bare number is not accepted here: pass three numbers [8,8,8], or {"fn":"constant","value":8} for a uniform one. Unequal components give an ellipse. |
 
-**Examples:** [basics-extrude-polygon.json](../graphs/basics-extrude-polygon.json), [basics-clip-a-path.json](../graphs/basics-clip-a-path.json), [basics-merge-primitives.json](../graphs/basics-merge-primitives.json) — 13 total (`pcg graphs --primitive shape/path-loop`)
+**Examples:** [basics-extrude-polygon.json](../graphs/basics-extrude-polygon.json), [basics-clip-a-path.json](../graphs/basics-clip-a-path.json), [basics-merge-primitives.json](../graphs/basics-merge-primitives.json) — 12 total (`pcg graphs --primitive shape/path-loop`)
 
 Run it: `pcg run shape/path-loop`
 

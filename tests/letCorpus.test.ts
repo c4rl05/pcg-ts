@@ -100,11 +100,22 @@ function sizeOf(v: unknown): number {
  * sequential scope is exercised whenever two repeats nest. Undefined for a
  * single-node expression, which has nothing to bind.
  */
+function readsScope(spec: FieldSpec): boolean {
+  let found = false;
+  eachNode(spec, (node) => {
+    if (node.fn === "var" || node.fn === "let") found = true;
+  });
+  return found;
+}
+
 function letify(spec: FieldSpec): FieldSpec | undefined {
   const counts = new Map<string, number>();
   const root = JSON.stringify(spec);
   eachNode(spec, (node) => {
     if (node.fn === "param") return; // a knob, not a subexpression
+    // A subtree that reads or binds a name of the expression's own let
+    // cannot move to an outer let: the name would be out of scope there.
+    if (readsScope(node)) return;
     const k = JSON.stringify(node);
     if (k !== root && sizeOf(node) >= 2) counts.set(k, (counts.get(k) ?? 0) + 1);
   });

@@ -321,7 +321,7 @@ Treats every CLOSED polyline primitive as a polygon boundary and sweeps it along
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-extrude-polygon.json](../graphs/basics-extrude-polygon.json), [basics-voronoi-plots.json](../graphs/basics-voronoi-plots.json), [basics-cut-a-courtyard.json](../graphs/basics-cut-a-courtyard.json) — 6 total (`pcg graphs --node extrudePolygon`)
+**Examples:** [basics-extrude-polygon.json](../graphs/basics-extrude-polygon.json), [basics-voronoi-plots.json](../graphs/basics-voronoi-plots.json), [basics-cut-a-courtyard.json](../graphs/basics-cut-a-courtyard.json) — 5 total (`pcg graphs --node extrudePolygon`)
 
 **Params:**
 
@@ -1142,7 +1142,7 @@ Emits every input point `count` times — a PER-POINT number of times when `coun
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-repeat-points.json](../graphs/basics-repeat-points.json), [examples-facade.json](../graphs/examples-facade.json), [examples-floorplan.json](../graphs/examples-floorplan.json) — 4 total (`pcg graphs --node repeatPoints`)
+**Examples:** [basics-repeat-points.json](../graphs/basics-repeat-points.json), [examples-facade.json](../graphs/examples-facade.json), [examples-brick-house.json](../graphs/examples-brick-house.json) — 4 total (`pcg graphs --node repeatPoints`)
 
 **Params:**
 
@@ -1307,7 +1307,7 @@ Sets the standard per-point bounds attributes: writes boundsMin and boundsMax (f
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-two-kinds-of-bounds.json](../graphs/basics-two-kinds-of-bounds.json), [examples-facade.json](../graphs/examples-facade.json), [examples-floorplan.json](../graphs/examples-floorplan.json) — 4 total (`pcg graphs --node setBounds`)
+**Examples:** [basics-two-kinds-of-bounds.json](../graphs/basics-two-kinds-of-bounds.json), [examples-facade.json](../graphs/examples-facade.json), [examples-brick-house.json](../graphs/examples-brick-house.json) — 4 total (`pcg graphs --node setBounds`)
 
 **Params:**
 
@@ -1411,7 +1411,7 @@ Composite node wrapping an inner graph as a single node. Pins and params are per
 
 **Outputs:** *(none)*
 
-**Examples:** [basics-subgraph-exposed-params.json](../graphs/basics-subgraph-exposed-params.json), [basics-primitive-ref.json](../graphs/basics-primitive-ref.json), [basics-gather-on-path.json](../graphs/basics-gather-on-path.json) — 39 total (`pcg graphs --node subgraph`)
+**Examples:** [basics-subgraph-exposed-params.json](../graphs/basics-subgraph-exposed-params.json), [basics-primitive-ref.json](../graphs/basics-primitive-ref.json), [basics-gather-on-path.json](../graphs/basics-gather-on-path.json) — 38 total (`pcg graphs --node subgraph`)
 
 **Params:** *(none)*
 
