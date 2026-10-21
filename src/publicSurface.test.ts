@@ -165,7 +165,7 @@ const ROOT_SURFACE = [
   // A uniform keyed on a VALUE the graph computes rather than on where
   // the element is, so a draw survives the element being moved.
   "randomFrom",
-  "registerSubgraph", "rem", "remap", "removeAttribute",
+  "registerSubgraph", "rem", "remap", "removeAttribute", "repeatPoints",
   // Wraps an inner graph and re-cooks it, feeding its "carry" output back
   // into its own input, until a detail-domain scalar reads zero — the
   // bounded fixed point a DAG cannot wire as a cycle.

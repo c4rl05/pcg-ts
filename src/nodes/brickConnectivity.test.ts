@@ -17,6 +17,7 @@
 import { describe, expect, it } from "vitest";
 import { createPointCloud, type Geometry } from "../data/index.js";
 import { canonicalPointRanks } from "../data/identity.js";
+import { attribute } from "../fields/index.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { hashCombine } from "../random/index.js";
 import {
@@ -31,6 +32,7 @@ import {
   shuffledOrder,
   snapshotGeometry,
 } from "./nodes.testsupport.js";
+import { transferByIndex } from "./transferByIndex.js";
 
 type V3 = [number, number, number];
 
@@ -273,7 +275,9 @@ describe("brickConnectivity: islands", () => {
     const detail = out.attrs.detail.require("pieces");
     expect(detail.type).toBe("u32");
     expect(detail.get(0)).toBe(6);
-    expect((await connect(geo)).attrs.detail.names()).toEqual([]);
+    // The default writes the step count and nothing else; emptied, nothing.
+    expect((await connect(geo)).attrs.detail.names()).toEqual(["stepCount"]);
+    expect((await connect(geo, { stepCountAttr: "" })).attrs.detail.names()).toEqual([]);
   });
 });
 
@@ -594,5 +598,371 @@ describe("brickConnectivity: cancellation", () => {
       },
     });
     expect(calls).toBeGreaterThanOrEqual(40);
+  });
+});
+
+/** A deterministic LCG box set; no Math.random in this library, tests included. */
+function randomBoxes(seed: number, count: number): BoxSpec[] {
+  let s = (seed >>> 0) || 1;
+  const next = (n: number): number => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s % n;
+  };
+  return Array.from({ length: count }, () => {
+    const lo: V3 = [next(12), next(10), next(10)];
+    return { lo, hi: [lo[0] + 1 + next(6), lo[1] + 1 + next(6), lo[2] + 1 + next(5)] as V3 };
+  });
+}
+
+const ORIGIN: V3 = [0.5, -1.2, 3];
+const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
+const identity = (g: Geometry): number[] => Array.from({ length: g.pointCount }, (_, i) => i);
+
+/** packBricks over a random set with every stud, as the brick house asks. */
+async function packAll(seed: number): Promise<{ bricks: Geometry; studs: Geometry }> {
+  const r = await runNode(
+    packBricks,
+    { pitch: PLATE, origin: ORIGIN, studMode: "all", islandsAttr: "islands" },
+    { in: [makeGeometryItem(boxCloud(randomBoxes(seed, 10), PLATE, ORIGIN))] },
+  );
+  return { bricks: firstGeo(r.out), studs: firstGeo(r.studs) };
+}
+
+async function connectStuds(
+  bricks: Geometry,
+  studs: Geometry | undefined,
+  params: Partial<BrickConnectivityParams> = {},
+): Promise<{ out: Geometry; studs: Geometry | undefined; studItems: number }> {
+  const r = await runNode(
+    brickConnectivity,
+    { pitch: PLATE, origin: ORIGIN, ...params },
+    { in: [makeGeometryItem(bricks)], ...(studs === undefined ? {} : { studs: [makeGeometryItem(studs)] }) },
+  );
+  const items = r.studs ?? [];
+  return { out: firstGeo(r.out), studs: items.length > 0 ? firstGeo(items) : undefined, studItems: items.length };
+}
+
+async function studRefusal(
+  bricks: Geometry,
+  studs: Geometry | undefined,
+  params: Partial<BrickConnectivityParams> = {},
+): Promise<string> {
+  try {
+    await connectStuds(bricks, studs, params);
+  } catch (e) {
+    return (e as Error).message;
+  }
+  throw new Error("expected brickConnectivity to refuse this input, but it cooked");
+}
+
+describe("brickConnectivity: stepCount", () => {
+  it("is the highest step plus one, as a DETAIL u32 on out", async () => {
+    for (const seed of SEEDS) {
+      const { bricks } = await packAll(seed);
+      const { out } = await connectStuds(bricks, undefined);
+      const count = out.attrs.detail.require("stepCount");
+      expect(count.type).toBe("u32");
+      expect(count.tupleSize).toBe(1);
+      const step = column(out, "step");
+      expect(count.get(0)).toBe(Math.max(...step) + 1);
+      // Every step below it places something: the slider never lands on
+      // an empty step.
+      for (let t = 0; t < count.get(0); t++) expect(step).toContain(t);
+    }
+  });
+
+  it("counts the steps of a build with a hung plate and a floating piece", async () => {
+    // Steps: base (0), the bridge course with the hung plate (1); the
+    // floating plate gets -1 and adds no step.
+    const geo = boxCloud([
+      { lo: [0, 0, 0], hi: [1, 3, 1] },
+      { lo: [3, 0, 0], hi: [4, 3, 1] },
+      { lo: [1, 2, 0], hi: [3, 3, 1] }, // hangs under the bridge
+      { lo: [0, 3, 0], hi: [4, 4, 1] }, // the bridge
+      { lo: [9, 5, 9], hi: [10, 6, 10] }, // floating
+    ]);
+    const out = await connect(geo);
+    expect(column(out, "step")).toEqual([0, 0, 1, 1, -1]);
+    expect(out.attrs.detail.require("stepCount").get(0)).toBe(2);
+  });
+
+  it("is 0 on an empty input and on zero-volume boxes only", async () => {
+    expect((await connect(createPointCloud(0))).attrs.detail.require("stepCount").get(0)).toBe(0);
+    const flat = boxCloud([{ lo: [0, 0, 0], hi: [3, 0, 2] }]);
+    expect((await connect(flat)).attrs.detail.require("stepCount").get(0)).toBe(0);
+    // THE CONTROL: one real brick is one step.
+    const one = boxCloud([{ lo: [0, 0, 0], hi: [1, 1, 1] }]);
+    expect((await connect(one)).attrs.detail.require("stepCount").get(0)).toBe(1);
+  });
+
+  it("goes under another name, or nowhere, and keeps out's point domain unchanged", async () => {
+    const geo = boxCloud([
+      { lo: [0, 0, 0], hi: [2, 3, 2] },
+      { lo: [0, 3, 0], hi: [2, 4, 2] },
+    ]);
+    const named = await connect(geo, { stepCountAttr: "steps" });
+    expect(named.attrs.detail.names()).toEqual(["steps"]);
+    expect(named.attrs.detail.require("steps").get(0)).toBe(2);
+    const none = await connect(geo, { stepCountAttr: "" });
+    expect(none.attrs.detail.names()).toEqual([]);
+    expect(snapshotGeometry(none).point).toEqual(snapshotGeometry(named).point);
+    // Both detail counts, in a fixed order.
+    const both = await connect(geo, { islandsAttr: "islands" });
+    expect(both.attrs.detail.names()).toEqual(["islands", "stepCount"]);
+  });
+
+  it("refuses a name shared with islandsAttr, or a detail column of another shape", async () => {
+    const geo = boxCloud([{ lo: [0, 0, 0], hi: [1, 1, 1] }]);
+    const same = await refusal(geo, { islandsAttr: "count", stepCountAttr: "count" });
+    expect(same).toContain('"stepCountAttr"');
+    expect(same).toContain('"islandsAttr"');
+    expect(same).toContain('"count"');
+    const taken = boxCloud([{ lo: [0, 0, 0], hi: [1, 1, 1] }]);
+    taken.attrs.detail.add("stepCount", "f32", 1, 0);
+    const shape = await refusal(taken);
+    expect(shape).toContain("stepCountAttr");
+    expect(shape).toContain('"stepCount"');
+    expect(shape).toContain("detail");
+  });
+});
+
+describe("brickConnectivity: the studs pin", () => {
+  it("unwired, emits an empty studs collection and the same out as wired", async () => {
+    const { bricks, studs } = await packAll(3);
+    const unwired = await connectStuds(bricks, undefined);
+    expect(unwired.studItems).toBe(0);
+    const wired = await connectStuds(bricks, studs);
+    expect(wired.studItems).toBe(1);
+    expect(snapshotGeometry(wired.out)).toEqual(snapshotGeometry(unwired.out));
+    // Unwired, stepAboveAttr is never read: even a bad one cooks.
+    await expect(connectStuds(bricks, undefined, { stepAboveAttr: "" })).resolves.toBeDefined();
+    await expect(connectStuds(bricks, undefined, { stepAboveAttr: "step" })).resolves.toBeDefined();
+  });
+
+  for (const seed of SEEDS) {
+    it(`writes each stud's step and the step of the brick on it, read through its indices (seed ${seed})`, async () => {
+      const { bricks, studs } = await packAll(seed);
+      const r = await connectStuds(bricks, studs);
+      const step = column(r.out, "step");
+      const got = r.studs as Geometry;
+      expect(got.pointCount).toBe(studs.pointCount);
+      const on = column(got, "brickId");
+      const above = column(got, "brickAbove");
+      const own = column(got, "step");
+      const cover = column(got, "stepAbove");
+      for (let k = 0; k < got.pointCount; k++) {
+        expect(own[k]).toBe(step[on[k] as number]);
+        const a = above[k] as number;
+        expect(cover[k]).toBe(a < 0 ? -1 : step[a]);
+        // A stud is never covered before the brick it stands on is placed.
+        if ((cover[k] as number) >= 0) expect(cover[k] as number).toBeGreaterThanOrEqual(own[k] as number);
+      }
+      const want = r.out.attrs.detail.require("stepCount").get(0);
+      expect(got.attrs.detail.require("stepCount").get(0)).toBe(want);
+    });
+  }
+
+  it("is exercised: covered studs, showing studs, and studs of unattachable bricks all occur", async () => {
+    let covered = 0;
+    let open = 0;
+    let unattached = 0;
+    let coveredLater = 0;
+    for (const seed of SEEDS) {
+      const { bricks, studs } = await packAll(seed);
+      const got = (await connectStuds(bricks, studs)).studs as Geometry;
+      const above = column(got, "brickAbove");
+      const own = column(got, "step");
+      const cover = column(got, "stepAbove");
+      above.forEach((a, k) => {
+        if (a >= 0) covered++;
+        else open++;
+        if ((own[k] as number) < 0) unattached++;
+        if ((own[k] as number) >= 0 && (cover[k] as number) > (own[k] as number)) coveredLater++;
+      });
+    }
+    expect(covered).toBeGreaterThan(0);
+    expect(open).toBeGreaterThan(0);
+    expect(unattached).toBeGreaterThan(0);
+    expect(coveredLater).toBeGreaterThan(0);
+  });
+
+  it("leaves every stud, in order, with every input column untouched", async () => {
+    const { bricks, studs } = await packAll(5);
+    const got = (await connectStuds(bricks, studs)).studs as Geometry;
+    const strip = (g: Geometry) => {
+      const copy = permutePoints(g, identity(g));
+      copy.attrs.point.remove("step");
+      copy.attrs.point.remove("stepAbove");
+      return snapshotGeometry(copy).point;
+    };
+    expect(strip(got)).toEqual(snapshotGeometry(studs).point);
+    expect(studs.attrs.point.has("step")).toBe(false);
+    // The detail domain keeps what it had and gains the step count.
+    expect(got.attrs.detail.names()).toEqual([...studs.attrs.detail.names(), "stepCount"]);
+    // THE CONTROL: the comparison sees one moved value.
+    const moved = permutePoints(got, identity(got));
+    moved.attrs.point.require("brickId").set(0, 99);
+    expect(strip(moved)).not.toEqual(snapshotGeometry(studs).point);
+  });
+
+  it("writes under stepAttr and stepAboveAttr, whatever they are called", async () => {
+    const { bricks, studs } = await packAll(2);
+    const a = await connectStuds(bricks, studs);
+    const b = await connectStuds(bricks, studs, { stepAttr: "t", stepAboveAttr: "tCover" });
+    expect(column(b.studs as Geometry, "t")).toEqual(column(a.studs as Geometry, "step"));
+    expect(column(b.studs as Geometry, "tCover")).toEqual(column(a.studs as Geometry, "stepAbove"));
+    expect(column(b.out, "t")).toEqual(column(a.out, "step"));
+  });
+
+  it("replaces the brick house's two transferByIndex joins, value for value", async () => {
+    // The graph, as graphs/examples-brick-house.json builds it before this
+    // pin: `shownAt` is the step with -1 drawn at 60 (the whole build);
+    // `noneAbove` prefills `stepAbove` with 1e6; `stepOn` gathers shownAt
+    // through brickId (clamp) and `stepAbove` through brickAbove (miss, so
+    // the prefill stays where there is none). The two transferByIndex
+    // nodes are the library's own, run with the graph's params.
+    const join = async (
+      dst: Geometry,
+      src: Geometry,
+      index: string,
+      attr: string,
+      outName: string,
+      mode: "clamp" | "miss",
+    ): Promise<Geometry> => {
+      const r = await runNode(
+        transferByIndex,
+        { index: attribute(index), attributes: [attr], outNames: [outName], outOfRange: mode },
+        { in: [makeGeometryItem(dst)], source: [makeGeometryItem(src)] },
+      );
+      return firstGeo(r.out);
+    };
+    let compared = 0;
+    for (const seed of SEEDS) {
+      const { bricks, studs } = await packAll(seed);
+      const r = await connectStuds(bricks, studs);
+      const step = column(r.out, "step");
+      const stepCount = r.out.attrs.detail.require("stepCount").get(0);
+      const got = r.studs as Geometry;
+      const own = column(got, "step");
+      const cover = column(got, "stepAbove");
+      const above = column(got, "brickAbove");
+
+      // (1) The graph's joins, on the graph's own f32 shownAt.
+      const shown = permutePoints(r.out, identity(r.out));
+      const shownAt = shown.attrs.point.add("shownAt", "f32", 1, 0);
+      step.forEach((v, i) => shownAt.set(i, v < 0 ? 60 : v));
+      const prefilled = permutePoints(studs, identity(studs));
+      prefilled.attrs.point.add("stepAbove", "f32", 1, 1e6);
+      const stepOn = await join(prefilled, shown, "brickId", "shownAt", "stepOn", "clamp");
+      const viaGraph = await join(stepOn, shown, "brickAbove", "shownAt", "stepAbove", "miss");
+      const gOn = viaGraph.attrs.point.require("stepOn");
+      const gAbove = viaGraph.attrs.point.require("stepAbove");
+      for (let k = 0; k < got.pointCount; k++) {
+        // The same values, through the graph's two sentinels.
+        const o = own[k] as number;
+        const c = cover[k] as number;
+        expect(gOn.get(k)).toBe(o < 0 ? 60 : o);
+        expect(gAbove.get(k)).toBe((above[k] as number) < 0 ? 1e6 : c < 0 ? 60 : c);
+      }
+      // And the graph's `showing` predicate agrees, at every step a slider
+      // can reach, with the recipe on the new columns: step >= 0, step <= t,
+      // and (stepAbove < 0 or stepAbove > t). (The graph's whole-build
+      // setting, t = 60, also draws the studs of unattachable bricks; that
+      // is the graph's own choice, read off step < 0.)
+      for (let t = 0; t < stepCount; t++) {
+        for (let k = 0; k < got.pointCount; k++) {
+          const graphShows = gOn.get(k) <= t && ((above[k] as number) < 0 || gAbove.get(k) > t);
+          const o = own[k] as number;
+          const c = cover[k] as number;
+          expect(o >= 0 && o <= t && (c < 0 || c > t)).toBe(graphShows);
+          compared++;
+        }
+      }
+
+      // (2) The same two joins gathering the i32 `step` itself, with -1
+      // prefilled: the new pin's output exactly, column types and all.
+      const prefilledI = permutePoints(studs, identity(studs));
+      prefilledI.attrs.point.add("stepAbove", "i32", 1, -1);
+      const ownJoin = await join(prefilledI, r.out, "brickId", "step", "step", "clamp");
+      const viaJoin = await join(ownJoin, r.out, "brickAbove", "step", "stepAbove", "miss");
+      // Column by column: the joins add `stepAbove` before `step`.
+      const byName = (g: Geometry) => {
+        const point = snapshotGeometry(g).point as { attrs: { name: string }[] };
+        return [...point.attrs].sort((x, y) => (x.name < y.name ? -1 : 1));
+      };
+      expect(byName(got)).toEqual(byName(viaJoin));
+      expect(got.pointCount).toBe(viaJoin.pointCount);
+    }
+    expect(compared).toBeGreaterThan(1000);
+  });
+
+  it("refuses a stud index past the bricks on in, naming the stud and the fix", async () => {
+    const { bricks, studs } = await packAll(4);
+    // The bricks filtered after packing: the studs' indices no longer fit.
+    const fewer = permutePoints(bricks, [0, 1, 2]);
+    const m = await studRefusal(fewer, studs);
+    expect(m).toMatch(/^brickConnectivity: stud \d+ on pin "studs" has brick(Id|Above) \d+, but pin "in" carries 3 bricks/);
+    expect(m).toContain("indices 0 to 2");
+    expect(m).toContain("the SAME packBricks");
+    // THE CONTROL: unfiltered it cooks.
+    await expect(connectStuds(bricks, studs)).resolves.toBeDefined();
+  });
+
+  it("refuses studs without the index columns, or with them as another shape", async () => {
+    const { bricks, studs } = await packAll(1);
+    const missing = await studRefusal(bricks, createPointCloud(2));
+    expect(missing).toContain("brickConnectivity: ");
+    expect(missing).toContain('"brickId"');
+    expect(missing).toContain(`packBricks' "studs" output`);
+    const f32 = permutePoints(studs, identity(studs));
+    f32.attrs.point.remove("brickAbove");
+    f32.attrs.point.add("brickAbove", "f32", 1, -1);
+    const shape = await studRefusal(bricks, f32);
+    expect(shape).toContain('"brickAbove" as f32 with tuple size 1');
+    expect(shape).toContain("i32 with tuple size 1");
+  });
+
+  it("refuses stud names that clash, are empty, or overwrite an index column", async () => {
+    const { bricks, studs } = await packAll(1);
+    const empty = await studRefusal(bricks, studs, { stepAboveAttr: "" });
+    expect(empty).toContain('"stepAboveAttr" is empty');
+    expect(empty).toContain('"stepAbove"');
+    const same = await studRefusal(bricks, studs, { stepAttr: "s", stepAboveAttr: "s" });
+    expect(same).toContain('"stepAttr" and "stepAboveAttr" are both "s"');
+    const index = await studRefusal(bricks, studs, { stepAboveAttr: "brickAbove" });
+    expect(index).toContain('param "stepAboveAttr" is "brickAbove"');
+    const index2 = await studRefusal(bricks, studs, { stepAttr: "brickId" });
+    expect(index2).toContain('param "stepAttr" is "brickId"');
+    // A stud column of another shape under the written name is refused,
+    // naming the param, as on the bricks.
+    const taken = permutePoints(studs, identity(studs));
+    taken.attrs.point.add("stepAbove", "f32", 1, 0);
+    const slot = await studRefusal(bricks, taken);
+    expect(slot).toContain("stepAboveAttr");
+    expect(slot).toContain('"stepAbove"');
+  });
+
+  it("cooks empty studs, and studs of a build of zero-volume boxes, to -1", async () => {
+    const { bricks, studs } = await packAll(1);
+    const r = await connectStuds(bricks, permutePoints(studs, []));
+    expect((r.studs as Geometry).pointCount).toBe(0);
+    expect((r.studs as Geometry).attrs.point.require("stepAbove").type).toBe("i32");
+    // Two zero-volume "bricks" and studs pointing at them: no step for any.
+    const flat = boxCloud([
+      { lo: [0, 0, 0], hi: [3, 0, 2] },
+      { lo: [5, 1, 1], hi: [5, 4, 4] },
+    ]);
+    const fake = createPointCloud(2);
+    fake.attrs.point.add("brickId", "i32", 1, 0).set(1, 1);
+    fake.attrs.point.add("brickAbove", "i32", 1, -1).set(0, 1);
+    const z = await runNode(
+      brickConnectivity,
+      { pitch: UNIT },
+      { in: [makeGeometryItem(flat)], studs: [makeGeometryItem(fake)] },
+    );
+    const zs = firstGeo(z.studs);
+    expect(column(zs, "step")).toEqual([-1, -1]);
+    expect(column(zs, "stepAbove")).toEqual([-1, -1]);
+    expect(zs.attrs.detail.require("stepCount").get(0)).toBe(0);
   });
 });

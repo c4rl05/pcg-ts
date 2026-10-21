@@ -1044,3 +1044,107 @@ describe("packBricks: the longer default plates", () => {
     });
   }
 });
+
+describe("packBricks: extraBricks", () => {
+  /** The default catalogue's 27 entries, read from the schema rather than restated. */
+  const DEFAULT = packBricks.defaultParams.bricks;
+  const one = (): Geometry => boxCloud([{ lo: [0, 0, 0], hi: [2, 3, 2] }]);
+
+  it("defaults to empty, and the default catalogue is 27 entries", () => {
+    expect(packBricks.defaultParams.extraBricks).toEqual([]);
+    expect(DEFAULT).toHaveLength(81);
+  });
+
+  it("appends a baseplate to the default list without restating it", async () => {
+    // A 32 x 32 one-plate slab: the default catalogue's longest plate is
+    // 2x16, so without the extra entry it takes many bricks.
+    const slab = boxCloud([{ lo: [0, 0, 0], hi: [32, 1, 32] }]);
+    const plain = readBricks((await pack(slab)).out);
+    expect(plain.length).toBeGreaterThan(1);
+    const withPlate = readBricks((await pack(slab, { extraBricks: [32, 32, 1] })).out);
+    expect(withPlate).toHaveLength(1);
+    expect(withPlate[0]?.label).toBe("32x32x1");
+    // Its index continues the count after the 27 default entries.
+    expect(withPlate[0]?.index).toBe(27);
+    expect(withPlate[0]?.ext).toEqual([32, 1, 32]);
+  });
+
+  it("is exactly the concatenated list, given as bricks", async () => {
+    // The slab is its own material, so full-height bricks cannot root in it
+    // and the baseplate has a course to itself.
+    const specs: BoxSpec[] = [
+      { lo: [0, 0, 0], hi: [32, 1, 32], tag: 1, kind: "ground" },
+      { lo: [0, 1, 0], hi: [12, 7, 2], tag: 2, kind: "wall" },
+      { lo: [3, 1, 5], hi: [9, 5, 11], tag: 3, kind: "wall" },
+    ];
+    const geo = boxCloud(specs, PLATE);
+    const groupBy = ["kind"];
+    for (const [bricks, extra] of [
+      [DEFAULT, [32, 32, 1]],
+      [DEFAULT, [32, 32, 1, 3, 5, 3]],
+      [[2, 4, 3, 1, 1, 3], [1, 1, 1, 2, 2, 1]],
+    ] as const) {
+      const appended = await pack(geo, { pitch: PLATE, groupBy, bricks: [...bricks], extraBricks: [...extra] });
+      const joined = await pack(geo, { pitch: PLATE, groupBy, bricks: [...bricks, ...extra] });
+      expect(snapshotGeometry(appended.out)).toEqual(snapshotGeometry(joined.out));
+      expect(snapshotGeometry(appended.studs)).toEqual(snapshotGeometry(joined.studs));
+    }
+    // THE CONTROL: the extra entry changes the packing here, so the
+    // comparison above is not two default cooks agreeing.
+    const without = await pack(geo, { pitch: PLATE, groupBy });
+    const withPlate = await pack(geo, { pitch: PLATE, groupBy, extraBricks: [32, 32, 1] });
+    expect(readBricks(withPlate.out, PLATE).filter((b) => b.label === "32x32x1")).toHaveLength(1);
+    expect(snapshotGeometry(withPlate.out)).not.toEqual(snapshotGeometry(without.out));
+  });
+
+  it("covers what bricks alone cannot, and names the cell when neither list can", async () => {
+    // Four plates tall against full-height bricks only: [1, 1, 1] from
+    // extraBricks closes the gap, at entry index 2.
+    const geo = boxCloud([{ lo: [0, 0, 0], hi: [1, 4, 1] }]);
+    const m = await refusal(geo, { bricks: [1, 1, 3, 1, 2, 3] });
+    expect(m).toContain('"extraBricks"');
+    expect(m).toContain("lattice cell (0, 3, 0)");
+    const bricks = readBricks((await pack(geo, { bricks: [1, 1, 3, 1, 2, 3], extraBricks: [1, 1, 1] })).out);
+    expect(bricks.map((b) => [b.label, b.index])).toEqual([
+      ["1x1x3", 0],
+      ["1x1x1", 2],
+    ]);
+  });
+
+  it("refuses an entry the default list already has, either way round, naming both entries", async () => {
+    // [1, 1, 1] is the default list's last entry, 26; [16, 2, 1] is its
+    // 2x16 plate, entry 11, turned.
+    const plate = await refusal(one(), { extraBricks: [32, 32, 1, 1, 1, 1] });
+    expect(plate).toContain('param "extraBricks" entry 1');
+    expect(plate).toContain('"bricks" entry 26 (the default catalogue)');
+    expect(plate).toContain("1x1x1");
+    const turned = await refusal(one(), { extraBricks: [16, 2, 1] });
+    expect(turned).toContain('param "extraBricks" entry 0');
+    expect(turned).toContain('"bricks" entry 11 (the default catalogue)');
+    expect(turned).toContain('remove it from "extraBricks"');
+    // A given list is named as itself, not as the default.
+    const given = await refusal(one(), { bricks: [2, 4, 3, 1, 1, 1], extraBricks: [4, 2, 3] });
+    expect(given).toContain('"bricks" entry 0');
+    expect(given).not.toContain("default catalogue");
+  });
+
+  it("refuses an entry listed twice within extraBricks", async () => {
+    const twice = await refusal(one(), { extraBricks: [32, 32, 1, 3, 5, 3, 5, 3, 3] });
+    expect(twice).toContain('param "extraBricks" entries 1 and 2');
+    expect(twice).toContain("3x5x3");
+  });
+
+  it("refuses a list that is not whole triples, and a non-integer or zero entry, naming the entry", async () => {
+    const short = await refusal(one(), { extraBricks: [32, 32] });
+    expect(short).toContain('param "extraBricks" has 2 numbers');
+    expect(short).toContain("multiple of 3");
+    const zero = await refusal(one(), { extraBricks: [0, 1, 1] });
+    expect(zero).toContain('param "extraBricks" entry 0');
+    expect(zero).toContain("whole numbers of at least 1");
+    const frac = await refusal(one(), { bricks: [2, 2, 3, 1, 1, 1], extraBricks: [3, 3, 3, 2.5, 1, 1] });
+    expect(frac).toContain('param "extraBricks" entry 1 is [2.5, 1, 1]');
+    // `bricks` keeps its own words, and is still checked first.
+    const both = await refusal(one(), { bricks: [1, 1], extraBricks: [1, 1] });
+    expect(both).toContain('param "bricks" has 2 numbers');
+  });
+});

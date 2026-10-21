@@ -105,7 +105,7 @@ const ROOT_TYPE_SURFACE = [
   "PrimType",
   "ProjectToPlaneParams", "PromoteAttributeParams", "PromoteMode", "QuotaRebalanceParams",
   "RegisteredNodeType", "RegisteredSubgraph", "RegistrationNodeRef", "RegistrationParam",
-  "RegistrationPin", "RemoveAttributeParams", "RepeatUntilParams",
+  "RegistrationPin", "RemoveAttributeParams", "RepeatPointsParams", "RepeatUntilParams",
   // A column's storage AS A READER SEES IT: the type of `Attribute.data`,
   // which is no longer the typed array itself. It has to be published
   // because a consumer reading a column has to be able to NAME what it

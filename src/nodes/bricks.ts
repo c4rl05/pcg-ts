@@ -35,7 +35,7 @@ import { canonicalPointRanks } from "../data/identity.js";
 import { deriveGeometry } from "../data/derive.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { standardNode } from "./registry.js";
-import { CANCEL_STRIDE, gatherPoints, requireGeometry, requireReportSlot } from "./util.js";
+import { CANCEL_STRIDE, gatherPoints, optionalGeometry, requireGeometry, requireReportSlot } from "./util.js";
 import type {
   BrickConnectivityInputs,
   BrickConnectivityOutputs,
@@ -111,7 +111,7 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
   type: NODE,
   category: "point op",
   description:
-    "Reads axis-aligned BOXES on a stud lattice — one per point, its corners in two point attributes — and writes the BRICKS that build them: one point per brick, from a stated catalogue of footprints, that together fill exactly the lattice cells the boxes cover. The lattice is `pitch` in world units per cell (a stud is 1 across, a plate 0.4 tall, by default), anchored at `origin`; x and z count studs and y counts plates. Every corner must land on the lattice, and one that does not is refused naming the point and the corner, because a box half a stud off is a box the graph upstream built on a different lattice. Boxes may overlap: their cells are unioned, and a cell two boxes claim belongs to the one with the lower point IDENTITY (stored position bits plus `seed`), never the lower array index, so shuffling the input changes nothing — unless two overlapping boxes share both P and `seed`, which identity cannot tell apart, and then the earlier one in the input wins. WHAT A BRICK MAY NOT CROSS is `groupBy`: cells whose boxes differ in any listed attribute are different material and never share a brick, so a wall's colour changes exactly where its boxes' colour does. Each brick carries every point attribute of the box that owns its anchor cell. THE PACKING IS A SCANLINE GREEDY, course by course from the bottom and within a course in z then x. The first unfilled cell of a scan is always the minimum corner of the brick that covers it, so the scan never needs to backtrack; the choice there is WHICH catalogue entry, either way round. HEIGHT COMES FIRST: the tallest entry that fits is the course, so a wall is laid in full bricks and plates appear only where the space is shorter than a brick. Among footprints of that height the score is the footprint in studs less `stagger` for every stud of joint in the brick's bottom course that sits directly on a seam in the course below, counted only on the joints the placement decides — where the cell across is the same material and not yet filled — a running bond, the reason real walls hold together, charged only where a different brick could have avoided it — PLUS `bond` for every two separate pieces the placement joins into one, which is what keeps a floor or a roof laid over an empty room from coming out as loose plates (pieces as stud clutch holds them; see `islandsAttr`). Ties go to the larger footprint, then the earlier catalogue entry, then the entry as listed rather than turned. If nothing fits — a catalogue with no 1x1 plate meeting a one-plate gap — the cell is refused by name rather than left empty, so the output always covers the input exactly. OUTPUT `out`: one point per brick in scan order. P is the brick's centre, `rot` a quarter turn about y when the entry was placed turned (identity otherwise), and `scale` its full extents in its OWN frame — w and d studs and h plates as listed, in world units — so a unit box copied onto these points draws every brick in place. `boundsMin`/`boundsMax` are its world corners, the same convention it reads. `brick` (string) is the entry as `WxDxH`, ready to be spawnInstances' `assetAttr`, and `brickIndex` (i32) is its position in the catalogue. OUTPUT `studs`: one point per stud left SHOWING — on a brick's top where the lattice cell above is empty — at the stud's base centre on the brick's top face, carrying the brick's attributes and its `brick`/`brickIndex`, plus `brickId` and `brickAbove` (the indices in `out` of the brick it stands on and the brick resting on it, -1 for none; see `studMode`, which can ask for every stud instead), with identity `rot` and unit `scale`, so a stud mesh modelled at world size with its base at the origin spawns straight onto it; the bounds columns are reset to zero. `islandsAttr` optionally writes a DETAIL u32 on `out` counting the pieces the build falls into when only stud CLUTCH holds it — a brick is joined to the bricks sitting on its top face where their footprints overlap, and side contact does not count, so a value above 1 is a build that comes apart when lifted. HALO: none. A brick spans cells, so cooked over part of the boxes it cuts bricks at the part's edge; this belongs on an unbounded level or before a split. Not GPU-eligible: the packing is sequential by construction. The occupancy grid is dense over the boxes' joint extent and refused past 16.7 million cells.",
+    "Reads axis-aligned BOXES on a stud lattice — one per point, its corners in two point attributes — and writes the BRICKS that build them: one point per brick, from a stated catalogue of footprints, that together fill exactly the lattice cells the boxes cover. The lattice is `pitch` in world units per cell (a stud is 1 across, a plate 0.4 tall, by default), anchored at `origin`; x and z count studs and y counts plates. Every corner must land on the lattice, and one that does not is refused naming the point and the corner, because a box half a stud off is a box the graph upstream built on a different lattice. Boxes may overlap: their cells are unioned, and a cell two boxes claim belongs to the one with the lower point IDENTITY (stored position bits plus `seed`), never the lower array index, so shuffling the input changes nothing — unless two overlapping boxes share both P and `seed`, which identity cannot tell apart, and then the earlier one in the input wins. WHAT A BRICK MAY NOT CROSS is `groupBy`: cells whose boxes differ in any listed attribute are different material and never share a brick, so a wall's colour changes exactly where its boxes' colour does. Each brick carries every point attribute of the box that owns its anchor cell. THE PACKING IS A SCANLINE GREEDY, course by course from the bottom and within a course in z then x. The first unfilled cell of a scan is always the minimum corner of the brick that covers it, so the scan never needs to backtrack; the choice there is WHICH catalogue entry, either way round. HEIGHT COMES FIRST: the tallest entry that fits is the course, so a wall is laid in full bricks and plates appear only where the space is shorter than a brick. Among footprints of that height the score is the footprint in studs less `stagger` for every stud of joint in the brick's bottom course that sits directly on a seam in the course below, counted only on the joints the placement decides — where the cell across is the same material and not yet filled — a running bond, the reason real walls hold together, charged only where a different brick could have avoided it — PLUS `bond` for every two separate pieces the placement joins into one, which is what keeps a floor or a roof laid over an empty room from coming out as loose plates (pieces as stud clutch holds them; see `islandsAttr`). Ties go to the larger footprint, then the earlier catalogue entry, then the entry as listed rather than turned. If nothing fits — a catalogue with no 1x1 plate meeting a one-plate gap — the cell is refused by name rather than left empty, so the output always covers the input exactly. OUTPUT `out`: one point per brick in scan order. P is the brick's centre, `rot` a quarter turn about y when the entry was placed turned (identity otherwise), and `scale` its full extents in its OWN frame — w and d studs and h plates as listed, in world units — so a unit box copied onto these points draws every brick in place. `boundsMin`/`boundsMax` are its world corners, the same convention it reads. `brick` (string) is the entry as `WxDxH`, ready to be spawnInstances' `assetAttr`, and `brickIndex` (i32) is its position in the catalogue — `bricks` followed by `extraBricks`. OUTPUT `studs`: one point per stud left SHOWING — on a brick's top where the lattice cell above is empty — at the stud's base centre on the brick's top face, carrying the brick's attributes and its `brick`/`brickIndex`, plus `brickId` and `brickAbove` (the indices in `out` of the brick it stands on and the brick resting on it, -1 for none; see `studMode`, which can ask for every stud instead), with identity `rot` and unit `scale`, so a stud mesh modelled at world size with its base at the origin spawns straight onto it; the bounds columns are reset to zero. `islandsAttr` optionally writes a DETAIL u32 on `out` counting the pieces the build falls into when only stud CLUTCH holds it — a brick is joined to the bricks sitting on its top face where their footprints overlap, and side contact does not count, so a value above 1 is a build that comes apart when lifted. HALO: none. A brick spans cells, so cooked over part of the boxes it cuts bricks at the part's edge; this belongs on an unbounded level or before a split. Not GPU-eligible: the packing is sequential by construction. The occupancy grid is dense over the boxes' joint extent and refused past 16.7 million cells.",
   inputs: [{ name: "in", kind: "geometry" }],
   outputs: [
     { name: "out", kind: "geometry" },
@@ -146,7 +146,13 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
       type: "numberList",
       default: DEFAULT_BRICKS,
       description:
-        "The CATALOGUE, as a flat list of [w, d, h] triples: w studs along x, d studs along z, h plates tall, all whole numbers of at least 1, in the brick's own frame. Each entry may also be placed a quarter turn about y (d along x, w along z), so [1, 4, 3] and [4, 1, 3] are the same brick and listing both is refused. The ORDER is the last tie-break: two entries of equal height, footprint and seam cost go to the earlier one. The default holds the common full-height bricks (h 3) from 1x1 to 2x8, and plates (h 1) from 1x1 to 2x16. Without [1, 1, 1] some occupancies cannot be covered at all — a gap one plate tall and one stud wide — and the cook is refused at the first such cell rather than leaving it empty.",
+        "The CATALOGUE, as a flat list of [w, d, h] triples: w studs along x, d studs along z, h plates tall, all whole numbers of at least 1, in the brick's own frame. Each entry may also be placed a quarter turn about y (d along x, w along z), so [1, 4, 3] and [4, 1, 3] are the same brick and listing both is refused. The ORDER is the last tie-break: two entries of equal height, footprint and seam cost go to the earlier one. The default holds the common full-height bricks (h 3) from 1x1 to 2x8, and plates (h 1) from 1x1 to 2x16. Without [1, 1, 1] some occupancies cannot be covered at all — a gap one plate tall and one stud wide — and the cook is refused at the first such cell rather than leaving it empty. To ADD to this list rather than replace it, leave it alone and use `extraBricks`.",
+    },
+    extraBricks: {
+      type: "numberList",
+      default: [],
+      description:
+        "More catalogue entries, APPENDED to `bricks` — the default list or a given one — in the same flat [w, d, h] form and on the same terms: whole numbers of at least 1, either way round. This is how a graph asks for the default catalogue plus one baseplate, [32, 32, 1], without copying the 81 numbers of the default. Appended entries come AFTER every `bricks` entry, so they lose the last tie-break to it, and their `brickIndex` continues the count: the first is entry bricks.length / 3. AN ENTRY ALREADY IN THE CATALOGUE IS REFUSED, not skipped — one in `bricks` (either way round) or earlier in `extraBricks` — naming both entries, because a brick listed twice is a list that did not say what its author thought it said, and skipping it would move every later `brickIndex` silently. Empty (the default) adds nothing.",
     },
     groupBy: {
       type: "stringList",
@@ -173,7 +179,7 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
       enum: ["exposed", "all"],
       default: "exposed",
       description:
-        "Which studs the `studs` output carries. 'exposed' (the default) is the finished build: only studs with nothing resting on them. 'all' is every stud of every brick's top face, whether or not a brick sits on it — what a PARTIAL build shows, since a stud is covered only once the brick above it is placed. Either way each stud carries `brickId`, the index in `out` of the brick it stands on, and `brickAbove`, the index of the brick resting on it or -1; with brickConnectivity's `step` read through those two indices (transferByIndex), 'stud is showing after step t' is `step(brickId) <= t` and (`brickAbove` < 0 or `step(brickAbove) > t`).",
+        "Which studs the `studs` output carries. 'exposed' (the default) is the finished build: only studs with nothing resting on them. 'all' is every stud of every brick's top face, whether or not a brick sits on it — what a PARTIAL build shows, since a stud is covered only once the brick above it is placed. Either way each stud carries `brickId`, the index in `out` of the brick it stands on, and `brickAbove`, the index of the brick resting on it or -1; wire this pin into brickConnectivity's `studs` input and it writes both steps onto each stud — `step`, of the brick it stands on, and `stepAbove`, of the brick resting on it (-1 for none or for one never attached) — so 'stud is showing after step t' is `step` >= 0 and `step` <= t and (`stepAbove` < 0 or `stepAbove` > t).",
     },
     islandsAttr: {
       type: "string",
@@ -197,7 +203,7 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
     if (!Number.isFinite(bond) || bond < 0) {
       throw new Error(`${NODE}: param "bond" is ${bond}; it is a reward and must be finite and at least 0 (0 ignores what holds together)`);
     }
-    const catalogue = readCatalogue(params.bricks);
+    const catalogue = readCatalogue(params.bricks, params.extraBricks);
     const seenGroup = new Set<string>();
     for (const name of groupBy) {
       if (name === "") {
@@ -457,7 +463,7 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
           }
           if (best === undefined) {
             throw new Error(
-              `${NODE}: no entry in "bricks" fits at lattice cell (${x + x0}, ${y + y0}, ${z + z0}) — world (${origin[0] + (x + x0) * pitch[0]}, ${origin[1] + (y + y0) * pitch[1]}, ${origin[2] + (z + z0) * pitch[2]}), in the box of point ${o}. The space left there is narrower or shorter than every brick in the catalogue; add [1, 1, 1] (a 1x1 plate) to "bricks" so any occupancy can be covered`,
+              `${NODE}: no entry in the catalogue ("bricks" plus "extraBricks") fits at lattice cell (${x + x0}, ${y + y0}, ${z + z0}) — world (${origin[0] + (x + x0) * pitch[0]}, ${origin[1] + (y + y0) * pitch[1]}, ${origin[2] + (z + z0) * pitch[2]}), in the box of point ${o}. The space left there is narrower or shorter than every brick in the catalogue; add [1, 1, 1] (a 1x1 plate) to "bricks" or "extraBricks" so any occupancy can be covered`,
             );
           }
           const id = bCand.length;
@@ -604,7 +610,11 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
 /** Named once for the second node; its messages lead with it. */
 const CONNECT = "brickConnectivity";
 
-/** What `step` and `island` hold for a brick that can never be attached. */
+/**
+ * What `step` and `island` hold for a brick that can never be attached, and
+ * what a stud's `stepAbove` holds when no brick will ever cover it: none
+ * rests on it, or the one that does is itself never attached.
+ */
 const NEVER = -1;
 
 /**
@@ -619,9 +629,15 @@ export const brickConnectivity = standardNode<
   type: CONNECT,
   category: "attribute",
   description:
-    "Reads BRICKS on a stud lattice — one per point, its world corners in two point attributes, as packBricks writes them — and says how they hold together: which clutch-connected piece each brick belongs to, and the build STEP at which it can be placed. Two bricks are joined when one sits directly on the other's top face with overlapping footprints, which is what a stud gripping the brick above does; side-by-side contact joins nothing. `island` numbers the pieces 0, 1, 2…, ordered by their lowest point IDENTITY (stored position bits plus `seed`), so it does not move when the input is shuffled. `step` is an ORDER YOU COULD BUILD IN, bottom up: the steps are the distinct bottom courses of the build in rising order, and at each one a brick is placed if it stands on the build's lowest course (the table) or clutches a brick already placed. A brick that hangs UNDER something — a plate held only by the floor laid on top of it — cannot be placed in its own course, because nothing is there to grip yet; it is placed in the step of the first brick above it that is, along with anything hanging under it in turn. So every brick, when it is placed, is attached to something already standing. A brick no order can attach — in a piece with no brick on the lowest course, which is a piece held by nothing — gets `step` -1, and its `island` is still numbered: the count of -1 steps is how many bricks a build would drop. Bricks must not overlap (two bricks claiming one cell are refused, naming both points) and every corner must land on the lattice, exactly as packBricks requires; a zero-volume box is not a brick and gets -1 for both. OUTPUT is the input with two i32 point attributes added, `islandAttr` and `stepAttr`, and optionally the island count as a DETAIL u32; no point is moved, added or reordered, so a filterByExpression on `step` downstream shows the build as it stood after any step. HALO: none — a piece is a fact about the whole build. Not GPU-eligible.",
-  inputs: [{ name: "in", kind: "geometry" }],
-  outputs: [{ name: "out", kind: "geometry" }],
+    "Reads BRICKS on a stud lattice — one per point, its world corners in two point attributes, as packBricks writes them — and says how they hold together: which clutch-connected piece each brick belongs to, and the build STEP at which it can be placed. Two bricks are joined when one sits directly on the other's top face with overlapping footprints, which is what a stud gripping the brick above does; side-by-side contact joins nothing. `island` numbers the pieces 0, 1, 2…, ordered by their lowest point IDENTITY (stored position bits plus `seed`), so it does not move when the input is shuffled. `step` is an ORDER YOU COULD BUILD IN, bottom up: the steps are the distinct bottom courses of the build in rising order, and at each one a brick is placed if it stands on the build's lowest course (the table) or clutches a brick already placed. A brick that hangs UNDER something — a plate held only by the floor laid on top of it — cannot be placed in its own course, because nothing is there to grip yet; it is placed in the step of the first brick above it that is, along with anything hanging under it in turn. So every brick, when it is placed, is attached to something already standing. A brick no order can attach — in a piece with no brick on the lowest course, which is a piece held by nothing — gets `step` -1, and its `island` is still numbered: the count of -1 steps is how many bricks a build would drop. Bricks must not overlap (two bricks claiming one cell are refused, naming both points) and every corner must land on the lattice, exactly as packBricks requires; a zero-volume box is not a brick and gets -1 for both. OUTPUT `out` is the input with two i32 point attributes added, `islandAttr` and `stepAttr`, the number of steps as a DETAIL u32 (`stepCountAttr`, the range a build-step slider runs over: steps 0 to stepCount - 1), and optionally the island count as a DETAIL u32; no point is moved, added or reordered, so a filterByExpression on `step` downstream shows the build as it stood after any step. INPUT `studs` (optional) takes packBricks' `studs` output — best with `studMode: 'all'` — whose `brickId` and `brickAbove` columns are indices into the bricks on `in`, so `in` must be that same packBricks' `out` with nothing dropped or reordered (an index past the end is refused, naming the stud). Wired, OUTPUT `studs` is those studs with two i32 point attributes added: `stepAttr`, the step of the brick the stud stands on (-1 when that brick is never attached), and `stepAboveAttr`, the step of the brick resting on it — -1 when there is none OR when that brick is never attached, both of which mean no partial build ever covers the stud — plus the same `stepCountAttr`. So 'stud is showing after step t' is `step` >= 0 and `step` <= t and (`stepAbove` < 0 or `stepAbove` > t), with no join downstream. Unwired, `studs` is an empty collection and `out` is unaffected. HALO: none — a piece is a fact about the whole build. Not GPU-eligible.",
+  inputs: [
+    { name: "in", kind: "geometry" },
+    { name: "studs", kind: "geometry", optional: true },
+  ],
+  outputs: [
+    { name: "out", kind: "geometry" },
+    { name: "studs", kind: "geometry" },
+  ],
   params: {
     minAttr: {
       type: "string",
@@ -656,7 +672,19 @@ export const brickConnectivity = standardNode<
       type: "string",
       default: "step",
       description:
-        "POINT attribute (i32) receiving each brick's build step: the index of the bottom course at which it is placed, counting only courses at which some brick is placed, so steps run 0, 1, 2… with no gaps. -1 for a brick no order can attach (its piece never reaches the lowest course) and for a zero-volume box. May not be empty, and may not equal `islandAttr`.",
+        "POINT attribute (i32) receiving each brick's build step: the index of the bottom course at which it is placed, counting only courses at which some brick is placed, so steps run 0, 1, 2… with no gaps. -1 for a brick no order can attach (its piece never reaches the lowest course) and for a zero-volume box. May not be empty, and may not equal `islandAttr`. With `studs` wired, the same name is written on each stud: the step of the brick it stands on.",
+    },
+    stepAboveAttr: {
+      type: "string",
+      default: "stepAbove",
+      description:
+        "With `studs` wired, the POINT attribute (i32) receiving each stud's COVER step: the step of the brick resting on it (its `brickAbove`), so the stud stops showing once that step is built. -1 when no brick rests on it (`brickAbove` below 0) and when the one that does is never attached (step -1) — either way no partial build ever covers the stud, so `stepAbove` < 0 reads as 'never covered'. Must not be empty, equal `stepAttr`, or name `brickId` or `brickAbove`, the index columns it is read through. Ignored when `studs` is not wired.",
+    },
+    stepCountAttr: {
+      type: "string",
+      default: "stepCount",
+      description:
+        "DETAIL attribute (u32) receiving the number of build steps — the highest step plus 1, or 0 when there are no bricks (an empty input, or only zero-volume boxes; a brick on the lowest course is always placed, at step 0) — on `out`, and on `studs` when it is wired. It is the range a host's build-step slider runs over: every step from 0 to stepCount - 1 places at least one brick. Empty writes nothing; may not equal `islandsAttr`.",
     },
     islandsAttr: {
       type: "string",
@@ -666,7 +694,7 @@ export const brickConnectivity = standardNode<
     },
   },
   execute({ inputs, params, checkCancelled }) {
-    const { minAttr, maxAttr, islandAttr, stepAttr, islandsAttr } = params;
+    const { minAttr, maxAttr, islandAttr, stepAttr, islandsAttr, stepAboveAttr, stepCountAttr } = params;
     const { pitch, origin } = readLattice(CONNECT, params);
     if (islandAttr === "" || stepAttr === "") {
       throw new Error(
@@ -677,6 +705,37 @@ export const brickConnectivity = standardNode<
       throw new Error(
         `${CONNECT}: params "islandAttr" and "stepAttr" are both "${islandAttr}"; a brick's piece and its step are two facts and need two names`,
       );
+    }
+    if (stepCountAttr !== "" && stepCountAttr === islandsAttr) {
+      throw new Error(
+        `${CONNECT}: params "stepCountAttr" and "islandsAttr" are both "${stepCountAttr}"; the number of steps and the number of pieces are two counts and need two detail names (the default for "stepCountAttr" is "stepCount")`,
+      );
+    }
+    // Whether the studs pin is wired decides which params matter: unwired,
+    // `stepAboveAttr` is never read, and the node cooks exactly as it did
+    // before the pin existed.
+    const studSrc = optionalGeometry(inputs, "studs", CONNECT);
+    if (studSrc !== undefined) {
+      if (stepAboveAttr === "") {
+        throw new Error(
+          `${CONNECT}: param "stepAboveAttr" is empty, but pin "studs" is wired; name the stud column that receives the step of the brick resting on each stud (the default is "stepAbove"), or disconnect "studs"`,
+        );
+      }
+      if (stepAboveAttr === stepAttr) {
+        throw new Error(
+          `${CONNECT}: params "stepAttr" and "stepAboveAttr" are both "${stepAttr}"; on a stud they are two facts — the step of the brick it stands on and of the brick resting on it — and need two names`,
+        );
+      }
+      for (const [param, name] of [
+        ["stepAttr", stepAttr],
+        ["stepAboveAttr", stepAboveAttr],
+      ] as const) {
+        if (name === STUD_ON_ATTR || name === STUD_UNDER_ATTR) {
+          throw new Error(
+            `${CONNECT}: param "${param}" is "${name}", one of the two index columns ("${STUD_ON_ATTR}", "${STUD_UNDER_ATTR}") the studs are read through; writing a step over it would lose the index — pick another name, e.g. "${param === "stepAttr" ? "step" : "stepAbove"}"`,
+          );
+        }
+      }
     }
     const src = requireGeometry(inputs, "in", CONNECT);
     requireReportSlot({
@@ -711,9 +770,23 @@ export const brickConnectivity = standardNode<
         suggestion: "islands",
       });
     }
+    if (stepCountAttr !== "") {
+      requireReportSlot({
+        attrs: src.attrs.detail,
+        nodeType: CONNECT,
+        param: "stepCountAttr",
+        name: stepCountAttr,
+        type: "u32",
+        tupleSize: 1,
+        domain: "detail",
+        suggestion: "stepCount",
+      });
+    }
     const loCol = cornerColumn(CONNECT, src, minAttr, "minAttr");
     const hiCol = cornerColumn(CONNECT, src, maxAttr, "maxAttr");
     const n = src.attrs.point.count;
+    const studs =
+      studSrc === undefined ? undefined : readStudIndices(studSrc, n, { stepAttr, stepAboveAttr, stepCountAttr });
 
     // ---- bricks to lattice cells --------------------------------------
     const lo = new Int32Array(n * 3);
@@ -748,10 +821,31 @@ export const brickConnectivity = standardNode<
     const step = geo.attrs.point.replace(stepAttr, "i32", 1, NEVER).writable();
     const solids: number[] = [];
     for (let i = 0; i < n; i++) if (solid[i] === 1) solids.push(i);
-    if (solids.length === 0) {
-      if (islandsAttr !== "") geo.attrs.detail.replace(islandsAttr, "u32", 1, 0).set(0, 0);
-      return { out: [makeGeometryItem(geo)] };
-    }
+    let work = 0;
+    // Decided here, once: the closure below carries booleans, not names.
+    const writeIslands = islandsAttr !== "";
+    const writeStepCount = stepCountAttr !== "";
+    // Both pins, once every brick's step is known. The detail counts go on
+    // `out` in a fixed order — islands, then steps — and the studs read
+    // their two steps straight out of the column just written.
+    const finish = (steps: number, islands: number) => {
+      if (writeIslands) geo.attrs.detail.replace(islandsAttr, "u32", 1, 0).set(0, islands);
+      if (writeStepCount) geo.attrs.detail.replace(stepCountAttr, "u32", 1, 0).set(0, steps);
+      if (studSrc === undefined || studs === undefined) return { out: [makeGeometryItem(geo)], studs: [] };
+      const studGeo = deriveGeometry(studSrc);
+      const sp = studGeo.attrs.point;
+      const own = sp.replace(stepAttr, "i32", 1, NEVER).writable();
+      const over = sp.replace(stepAboveAttr, "i32", 1, NEVER).writable();
+      for (let k = 0; k < studs.on.length; k++) {
+        if ((++work & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
+        own[k] = step[studs.on[k] as number] as number;
+        const a = studs.above[k] as number;
+        over[k] = a < 0 ? NEVER : (step[a] as number);
+      }
+      if (writeStepCount) studGeo.attrs.detail.replace(stepCountAttr, "u32", 1, 0).set(0, steps);
+      return { out: [makeGeometryItem(geo)], studs: [makeGeometryItem(studGeo)] };
+    };
+    if (solids.length === 0) return finish(0, 0);
     const x0 = gMin[0] as number;
     const y0 = gMin[1] as number;
     const z0 = gMin[2] as number;
@@ -769,7 +863,6 @@ export const brickConnectivity = standardNode<
 
     // ---- occupancy: one brick per cell --------------------------------
     const brickAt = new Int32Array(total).fill(-1);
-    let work = 0;
     for (const i of solids) {
       if ((++work & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
       for (let y = lo[i * 3 + 1] as number; y < (hi[i * 3 + 1] as number); y++) {
@@ -872,10 +965,80 @@ export const brickConnectivity = standardNode<
       if (queue.length > 0) s++;
     }
 
-    if (islandsAttr !== "") geo.attrs.detail.replace(islandsAttr, "u32", 1, 0).set(0, firstRank.length);
-    return { out: [makeGeometryItem(geo)] };
+    // `s` is the number of steps that placed something, which is the
+    // highest step plus one: the lowest course always places something,
+    // so with any solid brick it is at least 1.
+    return finish(s, firstRank.length);
   },
 });
+
+/**
+ * The two index columns of packBricks' `studs`, checked against the bricks
+ * on `in`, plus the report slots brickConnectivity writes on the studs.
+ * Every index is checked HERE, before the cook, so the write loop reads
+ * them unguarded.
+ */
+function readStudIndices(
+  studSrc: Geometry,
+  brickCount: number,
+  names: { readonly stepAttr: string; readonly stepAboveAttr: string; readonly stepCountAttr: string },
+): { on: Int32Array; above: Int32Array } {
+  const sp = studSrc.attrs.point;
+  for (const [param, name, suggestion] of [
+    ["stepAttr", names.stepAttr, "step"],
+    ["stepAboveAttr", names.stepAboveAttr, "stepAbove"],
+  ] as const) {
+    requireReportSlot({ attrs: sp, nodeType: CONNECT, param, name, type: "i32", tupleSize: 1, domain: "point", suggestion });
+  }
+  if (names.stepCountAttr !== "") {
+    requireReportSlot({
+      attrs: studSrc.attrs.detail,
+      nodeType: CONNECT,
+      param: "stepCountAttr",
+      name: names.stepCountAttr,
+      type: "u32",
+      tupleSize: 1,
+      domain: "detail",
+      suggestion: "stepCount",
+    });
+  }
+  const read = (name: string): Int32Array => {
+    const col = sp.get(name);
+    if (col === undefined) {
+      throw attributeNotFound(studSrc, "point", name, {
+        prefix: `${CONNECT}: `,
+        pin: "studs",
+        on: 'the geometry on pin "studs"',
+        suffix: ` — pin "studs" takes packBricks' "studs" output, which carries "${STUD_ON_ATTR}" and "${STUD_UNDER_ATTR}"`,
+      });
+    }
+    if (col.type !== "i32" || col.tupleSize !== 1) {
+      throw new Error(
+        `${CONNECT}: pin "studs" carries "${name}" as ${col.type} with tuple size ${col.tupleSize}; it is an index into the bricks on pin "in", i32 with tuple size 1, as packBricks writes it — connect packBricks' "studs" output unchanged`,
+      );
+    }
+    const out = new Int32Array(sp.count);
+    for (let k = 0; k < sp.count; k++) out[k] = col.get(k);
+    return out;
+  };
+  const on = read(STUD_ON_ATTR);
+  const above = read(STUD_UNDER_ATTR);
+  const range = `pin "in" carries ${brickCount} brick${brickCount === 1 ? "" : "s"}${brickCount > 0 ? ` (indices 0 to ${brickCount - 1})` : ""}`;
+  const fix = `"studs" must be the studs output of the SAME packBricks whose "out" feeds "in", with nothing between them that drops or reorders bricks`;
+  for (let k = 0; k < on.length; k++) {
+    const b = on[k] as number;
+    const a = above[k] as number;
+    if (b < 0 || b >= brickCount) {
+      throw new Error(`${CONNECT}: stud ${k} on pin "studs" has ${STUD_ON_ATTR} ${b}, but ${range}; ${fix}`);
+    }
+    if (a >= brickCount) {
+      throw new Error(
+        `${CONNECT}: stud ${k} on pin "studs" has ${STUD_UNDER_ATTR} ${a}, but ${range}, and below 0 means none; ${fix}`,
+      );
+    }
+  }
+  return { on, above };
+}
 
 /** The lattice params both nodes share, checked in the same words. */
 interface LatticeParams {
@@ -921,31 +1084,59 @@ function readLattice(
   return { pitch, origin };
 }
 
-/** Validates the flat catalogue and expands it into sorted placements. */
-function readCatalogue(flat: readonly number[]): Candidate[] {
+/**
+ * Validates the flat catalogue — `bricks`, then `extraBricks` appended — and
+ * expands it into sorted placements. An entry's index runs on across the
+ * two lists, so an appended entry's `brickIndex` follows the last of
+ * `bricks`.
+ */
+function readCatalogue(flat: readonly number[], extra: readonly number[]): Candidate[] {
   if (flat.length === 0 || flat.length % 3 !== 0) {
     throw new Error(
       `${NODE}: param "bricks" has ${flat.length} numbers; it is a flat list of [w, d, h] triples, so its length must be a positive multiple of 3, e.g. [2, 4, 3, 1, 1, 1]`,
     );
   }
+  if (extra.length % 3 !== 0) {
+    throw new Error(
+      `${NODE}: param "extraBricks" has ${extra.length} numbers; it is a flat list of [w, d, h] triples appended to "bricks", so its length must be a multiple of 3 (empty, the default, adds nothing), e.g. [32, 32, 1] for a baseplate`,
+    );
+  }
+  const base = flat.length / 3;
+  const isDefault = flat.length === DEFAULT_BRICKS.length && flat.every((v, i) => v === DEFAULT_BRICKS[i]);
+  /** "bricks" entry 4 / "extraBricks" entry 0, for messages. */
+  const where = (e: number): string =>
+    e < base ? `"bricks" entry ${e}${isDefault ? " (the default catalogue)" : ""}` : `"extraBricks" entry ${e - base}`;
   const out: Candidate[] = [];
   const seen = new Map<string, number>();
-  for (let e = 0; e < flat.length / 3; e++) {
-    const w = flat[e * 3] as number;
-    const d = flat[e * 3 + 1] as number;
-    const h = flat[e * 3 + 2] as number;
+  for (let e = 0; e < base + extra.length / 3; e++) {
+    const list = e < base ? flat : extra;
+    const param = e < base ? "bricks" : "extraBricks";
+    const local = e < base ? e : e - base;
+    const w = list[local * 3] as number;
+    const d = list[local * 3 + 1] as number;
+    const h = list[local * 3 + 2] as number;
     for (const v of [w, d, h]) {
       if (!Number.isInteger(v) || v < 1) {
         throw new Error(
-          `${NODE}: param "bricks" entry ${e} is [${w}, ${d}, ${h}]; studs and plates are whole numbers of at least 1`,
+          `${NODE}: param "${param}" entry ${local} is [${w}, ${d}, ${h}]; studs and plates are whole numbers of at least 1`,
         );
       }
     }
     const key = `${Math.min(w, d)}x${Math.max(w, d)}x${h}`;
     const prior = seen.get(key);
     if (prior !== undefined) {
+      if (e < base) {
+        throw new Error(
+          `${NODE}: param "bricks" entries ${prior} and ${e} are the same brick (${key}) — every entry is also tried a quarter turn round, so list it once`,
+        );
+      }
+      if (prior >= base) {
+        throw new Error(
+          `${NODE}: param "extraBricks" entries ${prior - base} and ${local} are the same brick (${key}) — every entry is also tried a quarter turn round, so list it once`,
+        );
+      }
       throw new Error(
-        `${NODE}: param "bricks" entries ${prior} and ${e} are the same brick (${key}) — every entry is also tried a quarter turn round, so list it once`,
+        `${NODE}: param "extraBricks" entry ${local} is [${w}, ${d}, ${h}], the same brick (${key}) as ${where(prior)} — "extraBricks" is APPENDED to "bricks", so the catalogue already has it (either way round); remove it from "extraBricks"`,
       );
     }
     seen.set(key, e);

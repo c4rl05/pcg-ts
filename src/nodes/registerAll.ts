@@ -30,6 +30,7 @@ import { meshPrimitive } from "./meshes.js";
 import { pointNeighborhood } from "./neighborhood.js";
 import { pointsToPath } from "./paths.js";
 import { transformPoints } from "./pointOps.js";
+import { repeatPoints } from "./repeatPoints.js";
 import { hasNodeType } from "./registry.js";
 import { surfaceSample } from "./samplers.js";
 import { pointGrid } from "./sources.js";
@@ -61,6 +62,7 @@ const MODULE_WITNESSES: readonly { readonly type: string }[] = [
   meshFromField, // isosurface.ts
   pointNeighborhood, // neighborhood.ts
   transformPoints, // pointOps.ts
+  repeatPoints, // repeatPoints.ts
   filterByDensity, // filtering.ts
   setAttribute, // attributes.ts
   valueConstant, // mathNodes.ts

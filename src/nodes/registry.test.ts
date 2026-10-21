@@ -464,6 +464,7 @@ describe("category metadata", () => {
       transformPoints: "point op",
       jitterPoints: "point op",
       copyToPoints: "point op",
+      repeatPoints: "point op",
       mergePoints: "point op",
       mergePrimitives: "point op",
       orientAlongVector: "point op",

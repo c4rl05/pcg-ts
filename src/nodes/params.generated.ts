@@ -431,11 +431,34 @@ export interface BrickConnectivityParams {
    * at which it is placed, counting only courses at which some brick is placed, so steps run
    * 0, 1, 2… with no gaps. -1 for a brick no order can attach (its piece never reaches the
    * lowest course) and for a zero-volume box. May not be empty, and may not equal
-   * `islandAttr`.
+   * `islandAttr`. With `studs` wired, the same name is written on each stud: the step of the
+   * brick it stands on.
    *
    * @defaultValue `"step"`
    */
   stepAttr: string;
+  /**
+   * With `studs` wired, the POINT attribute (i32) receiving each stud's COVER step: the step
+   * of the brick resting on it (its `brickAbove`), so the stud stops showing once that step
+   * is built. -1 when no brick rests on it (`brickAbove` below 0) and when the one that does
+   * is never attached (step -1) — either way no partial build ever covers the stud, so
+   * `stepAbove` < 0 reads as 'never covered'. Must not be empty, equal `stepAttr`, or name
+   * `brickId` or `brickAbove`, the index columns it is read through. Ignored when `studs` is
+   * not wired.
+   *
+   * @defaultValue `"stepAbove"`
+   */
+  stepAboveAttr: string;
+  /**
+   * DETAIL attribute (u32) receiving the number of build steps — the highest step plus 1, or
+   * 0 when there are no bricks (an empty input, or only zero-volume boxes; a brick on the
+   * lowest course is always placed, at step 0) — on `out`, and on `studs` when it is wired.
+   * It is the range a host's build-step slider runs over: every step from 0 to stepCount - 1
+   * places at least one brick. Empty writes nothing; may not equal `islandsAttr`.
+   *
+   * @defaultValue `"stepCount"`
+   */
+  stepCountAttr: string;
   /**
    * Optional DETAIL attribute (u32) receiving the number of pieces; 1 is a build that lifts
    * as one. Empty (the default) writes nothing. The same count packBricks' own `islandsAttr`
@@ -449,12 +472,12 @@ export interface BrickConnectivityParams {
 /**
  * The input pin names of the `brickConnectivity` node type.
  */
-export type BrickConnectivityInputs = "in";
+export type BrickConnectivityInputs = "in" | "studs";
 
 /**
  * The output pin names of the `brickConnectivity` node type.
  */
-export type BrickConnectivityOutputs = "out";
+export type BrickConnectivityOutputs = "out" | "studs";
 
 /**
  * Params of the `bridgePaths` node type.
@@ -2199,11 +2222,27 @@ export interface PackBricksParams {
    * holds the common full-height bricks (h 3) from 1x1 to 2x8, and plates (h 1) from 1x1 to
    * 2x16. Without [1, 1, 1] some occupancies cannot be covered at all — a gap one plate tall
    * and one stud wide — and the cook is refused at the first such cell rather than leaving
-   * it empty.
+   * it empty. To ADD to this list rather than replace it, leave it alone and use
+   * `extraBricks`.
    *
    * @defaultValue `[2,8,3,2,6,3,2,4,3,2,3,3,2,2,3,1,8,3,1,6,3,1,4,3,1,3,3,1,2,3,1,1,3,2,16,1,2,12,1,2,10,1,2,8,1,2,6,1,2,4,1,2,3,1,2,2,1,1,12,1,1,10,1,1,8,1,1,6,1,1,4,1,1,3,1,1,2,1,1,1,1]`
    */
   bricks: readonly number[];
+  /**
+   * More catalogue entries, APPENDED to `bricks` — the default list or a given one — in the
+   * same flat [w, d, h] form and on the same terms: whole numbers of at least 1, either way
+   * round. This is how a graph asks for the default catalogue plus one baseplate, [32, 32,
+   * 1], without copying the 81 numbers of the default. Appended entries come AFTER every
+   * `bricks` entry, so they lose the last tie-break to it, and their `brickIndex` continues
+   * the count: the first is entry bricks.length / 3. AN ENTRY ALREADY IN THE CATALOGUE IS
+   * REFUSED, not skipped — one in `bricks` (either way round) or earlier in `extraBricks` —
+   * naming both entries, because a brick listed twice is a list that did not say what its
+   * author thought it said, and skipping it would move every later `brickIndex` silently.
+   * Empty (the default) adds nothing.
+   *
+   * @defaultValue `[]`
+   */
+  extraBricks: readonly number[];
   /**
    * POINT attributes whose values a brick may not cross: two cells whose owning boxes differ
    * in ANY listed attribute (any type, every component compared exactly; strings by value)
@@ -2256,9 +2295,10 @@ export interface PackBricksParams {
    * whether or not a brick sits on it — what a PARTIAL build shows, since a stud is covered
    * only once the brick above it is placed. Either way each stud carries `brickId`, the
    * index in `out` of the brick it stands on, and `brickAbove`, the index of the brick
-   * resting on it or -1; with brickConnectivity's `step` read through those two indices
-   * (transferByIndex), 'stud is showing after step t' is `step(brickId) <= t` and
-   * (`brickAbove` < 0 or `step(brickAbove) > t`).
+   * resting on it or -1; wire this pin into brickConnectivity's `studs` input and it writes
+   * both steps onto each stud — `step`, of the brick it stands on, and `stepAbove`, of the
+   * brick resting on it (-1 for none or for one never attached) — so 'stud is showing after
+   * step t' is `step` >= 0 and `step` <= t and (`stepAbove` < 0 or `stepAbove` > t).
    *
    * - Enum: `"exposed"` | `"all"`
    *
@@ -4367,6 +4407,75 @@ export type RemoveAttributeInputs = "in";
  * The output pin names of the `removeAttribute` node type.
  */
 export type RemoveAttributeOutputs = "out";
+
+/**
+ * Params of the `repeatPoints` node type.
+ */
+export interface RepeatPointsParams {
+  /**
+   * How many times to emit each point. AS A FIELD IT IS ONE COUNT PER INPUT POINT, resolved
+   * on the input's point domain, so it reads what the point carries: attribute("storeys")
+   * stacks each block its own number of storeys, floor(div(attribute("length"), 1.2)) gives
+   * each wall as many bays as fit, and randomField() varies it per point. THE RESOLVED VALUE
+   * IS ROUNDED TO NEAREST with Math.round, which rounds a half UP (toward +Infinity), and
+   * then CLAMPED AT 0 — the rule pointScatterOnPath's `count` states, so a count field means
+   * the same thing on both nodes: 2.5 emits 3 copies, 2.4 emits 2, and a negative emits none
+   * rather than erroring, since "fewer than none" has exactly one reading. To get a FLOOR
+   * (as many whole copies as fit), say so: floor(<expr>). COUNT 0 DROPS THE POINT. A
+   * NON-FINITE resolved value is REFUSED, naming this param and the point: a field is not
+   * range-checked the way a plain number is, so a division by zero arrives here as NaN and
+   * has no reading as a population — bound the expression, e.g. max(<expr>, 0) or a guard
+   * under the div. THE CAP IS ON THE TOTAL: the rounded counts are summed over every input
+   * point and the cook is refused past 4194304 output points, naming the point the total ran
+   * out on — bound the expression with min(<expr>, <the most copies you meant>).
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `2`
+   */
+  count: FieldParam;
+  /**
+   * Name of the i32 POINT attribute (tuple 1) receiving each copy's index within its own
+   * point's copies: 0 for the first copy of every point, up to count - 1. This is the number
+   * a downstream field places the copies by — add(attribute("lo"), mul(attribute("copy"),
+   * 3)) stacks them 3 apart — and the one copyToPoints' rule-cloud pattern used to recover
+   * from a `slot` attribute. The column's default is -1, the value no copy gets, so an
+   * element appended later reads as no copy at all. It is a REPORTING SLOT: an input point
+   * attribute of the same shape (i32, tuple 1) under this name is overwritten, which is what
+   * re-running the node over its own output does — so give a SECOND repeatPoints in a chain
+   * a different name, or the outer copy index replaces the inner one — and one of any other
+   * shape is refused rather than destroyed. The standard point attributes ("P", "seed",
+   * "color" and the rest) are refused by name whatever the input holds. Empty writes no
+   * index column.
+   *
+   * @defaultValue `"copy"`
+   */
+  indexAttr: string;
+  /**
+   * OPT-IN: name of an i32 POINT attribute (tuple 1) receiving, on every copy, how many
+   * copies its point was emitted — the rounded, clamped count, so a copy can ask where it
+   * stands in its run (sub(attribute("n"), attribute("copy")) counts down to 1 on the last
+   * copy; div(attribute("copy"), attribute("n")) is a 0-based fraction). Empty (the default)
+   * writes none. A reporting slot under the same rule as `indexAttr`: a same-shape input
+   * column is overwritten, any other shape refused, and a standard point attribute refused
+   * by name. Naming the same attribute as `indexAttr` is refused — the two are different
+   * numbers and one would silently overwrite the other.
+   *
+   * @defaultValue `""`
+   */
+  countAttr: string;
+}
+
+/**
+ * The input pin names of the `repeatPoints` node type.
+ */
+export type RepeatPointsInputs = "in";
+
+/**
+ * The output pin names of the `repeatPoints` node type.
+ */
+export type RepeatPointsOutputs = "out";
 
 /**
  * Params of the `repeatUntil` node type.

@@ -449,18 +449,18 @@ also accepted and wraps into `constant`. Specs nest arbitrarily (up to
 
 ### Which params accept one
 
-44 of the standard library's 180 params do, across 25 node types, and one
-rule separates them from the other 136: **a param can be a field exactly
+73 of the standard library's 347 params do, across 38 node types, and one
+rule separates them from the other 274: **a param can be a field exactly
 when its value is read PER ELEMENT.** Everything settled before the
 elements are walked cannot be one, and there are five ways to be settled
 early.
 
-Those 44 are what the rule produced when it was swept over every numeric
+Those 73 are what the rule gives when it is swept over every numeric
 param in the library rather than applied case by case. It started at 20,
-and only FOUR were refused — `splineSample.spacing` and `volumeSample`'s
+and the first sweep refused only FOUR — `splineSample.spacing` and `volumeSample`'s
 `cellSize` and bounds — every one of them on the allocation clause.
 
-**The column is f32.** All 44 are `f32` (27) or `vec3` (17). No `i32`,
+**The column is f32.** All 73 are `f32` (52) or `vec3` (21). No `i32`,
 `u32`, `enum`, `bool`, `string` or list param is ever field-capable,
 because a field resolves per element into a column and only f32 and its
 tuples read one. Part of that is executable rather than editorial: a
@@ -471,14 +471,15 @@ also the reason a noise's `opts.seed` admits no arbitrary expression
 and one ULP in a seed is not a rounding error but `hashCombine`
 avalanching to an unrelated u32.
 
-**There must already be elements to evaluate against.** The 9 source
-nodes — `meshPrimitive`, `pointGrid`, `pointLine`,
-`pointScatterInBounds`, `pointScatterInWorld`, `valueConstant` and the
-rest — hold 16 `f32`/`vec3` params between them and not one is
+**There must already be elements to evaluate against.** The 7 source
+nodes — `meshPrimitive`, `pointGrid`, `pointLine`, `pointList`,
+`pointScatterInBounds`, `pointScatterInWorld` and `valueConstant`, the
+nodes that declare no inputs outside the `io` and `composite`
+categories — hold 16 `f32`/`vec3` params between them and not one is
 field-capable, because a source builds its elements FROM those params.
 There is no domain to resolve against yet.
 
-**Anything read before the walk stays eager.** All 8 `seed` params: a
+**Anything read before the walk stays eager.** All 9 `seed` params: a
 seed is hash-combined into the node's derived seed at cook start, when
 there is no element in hand.
 
@@ -502,6 +503,9 @@ element it is indexed by. **The question
 is never what the param decides. It is whether an element exists to read
 it per.** Where a fielded allocation param has a global cap, the cap
 becomes a post-resolution check rather than a reason to refuse.
+`repeatPoints.count` is the per-POINT case: one count per input point,
+each point's copies sized by its own value, and the cap of 4,194,304
+applies to the summed total once the field has resolved.
 
 `volumeSample` shows both halves inside ONE node: its `jitter` is
 field-capable because it is read per output centre, and its `cellSize`
@@ -3199,8 +3203,8 @@ group id (whole numbers, typically written with `setAttribute` at type
 
 This is the one that bites first. Every filter node that can remove
 points routes through `gatherPoints`, which rebuilds the point domain
-from the survivors and drops primitive topology with it. `mergePoints`
-and `partitionByAttribute` drop it the same way — combine two geometries
+from the survivors and drops primitive topology with it. `mergePoints`,
+`partitionByAttribute` and `repeatPoints` drop it too — combine two geometries
 with `mergePrimitives` instead, which concatenates points, vertices *and*
 primitives and renumbers each input's references, so an authored network
 joined to a generated one stays one network. Three filter-category
@@ -3283,7 +3287,7 @@ any node that can REMOVE points rebuilds the point domain from the
 survivors and the primitives go with it — filterByDensity,
 filterByBounds, filterByAttribute, filterByExpression, selfPrune,
 partitionByAttribute — and mergePoints does the same when it
-concatenates clouds. Category is not the rule: projectToPlane is
+concatenates clouds, as does repeatPoints when it repeats them. Category is not the rule: projectToPlane is
 categorised "filter" but preserves topology, and filterByAttribute drops
 it even when its predicate keeps every point. The primitive filters,
 filterPrimitivesByBounds and filterPrimitivesByAttribute, are never the

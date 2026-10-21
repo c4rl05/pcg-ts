@@ -115,6 +115,7 @@ describe("PinDef.optional, measured against the cook", () => {
     expect(wrong).toEqual([]);
     expect(pins).toBeGreaterThan(50);
     expect(optional.sort()).toEqual([
+      "brickConnectivity.studs",
       "mergePoints.in",
       "mergePrimitives.in",
       "meshFromField.in",

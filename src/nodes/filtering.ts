@@ -938,7 +938,7 @@ function requireFilterAttribute(
     // empty domain and would otherwise be told only that a name is missing.
     const gone =
       domain === "primitive" && geo.primitiveCount === 0 && set.names().length === 0
-        ? ` — and this geometry has no primitives at all, so either none was ever built (pointsToPath, connectPoints, meshPrimitive) or a node between the builder and here removed points and the topology went with them (filterByDensity, filterByBounds, filterByAttribute, filterByExpression and selfPrune all take topology "keep", which preserves the primitives that lose no point; partitionByAttribute and mergePoints do not, and need the network rebuilt after them)`
+        ? ` — and this geometry has no primitives at all, so either none was ever built (pointsToPath, connectPoints, meshPrimitive) or a node between the builder and here removed points and the topology went with them (filterByDensity, filterByBounds, filterByAttribute, filterByExpression and selfPrune all take topology "keep", which preserves the primitives that lose no point; partitionByAttribute, mergePoints and repeatPoints do not, and need the network rebuilt after them)`
         : "";
     // The generic other-domain clause is off: this node's own hint names the
     // twin filter as well as the promote, which is the likelier fix here.
