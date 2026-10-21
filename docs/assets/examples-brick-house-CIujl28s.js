@@ -3,13 +3,22 @@ var e=`{
   "seed": 1889,
   "meta": {
     "title": "A brick house split on a stud lattice and built in bricks",
-    "description": "A SHORT TERRACE OF HOUSES DERIVED BY A SPLIT GRAMMAR ON AN INTEGER LATTICE, THEN BUILT IN BRICKS. Every terminal of the grammar is an axis-aligned box whose corners are WHOLE NUMBERS -- x and z in studs, y in plates, a plate 0.4 of a stud -- carrying a string \`kind\` (wall, glass, door, roof, floor, ground) and a palette colour; \`packBricks\` turns those boxes into catalogue bricks, and the house is drawn as two instance batches, bricks and the studs left showing. THE GRAMMAR IS STAGED, NOT RECURSIVE, and that is the finding that matters for whether \`examples-facade\` and \`examples-floorplan\` are ever extracted into a split primitive. The derivation is lot -> blocks -> storeys -> a floor slab and four walls -> bays -> sill, head, two jambs and the opening, with a second branch from each block to the layers of a stepped gable roof. Every one of those rules has the SAME shape: fan the cell out to M slots against a rule cloud of M coincident points (\`copyToPoints\`, the slot riding on the source so it survives later filters), keep the slots a predicate allows, and rewrite the box piecewise by slot as sums of \`eq(slot, i) * value_i\`. The kind IS the stage, so there is no dispatch on a string anywhere. Depth is bounded -- two rounds of block splitting, at most three storeys, eight bays, fourteen roof layers -- so the rounds are written out and \`repeatUntil\` would buy nothing. This graph therefore does NOT agree in form with the two split graphs, and is not the third consumer that would justify extracting their recipe; the recurring thing here is the fan-out-keep-rewrite rule, and that is what to watch for a second time. THE CUT IS SNAPPED, AND DECIDED ON THE PARENT: \`floor(span * f + 0.5)\` clamped so neither half falls under six studs, carried to both children in \`targetNames\` exactly as the facade does, so the two halves of a block meet at one integer coordinate. THE WORKING BOX IS \`lo\`/\`hi\`, NOT \`boundsMin\`/\`boundsMax\`, because \`copyToPoints\` refuses to carry a standard column, and bounds are written once at the end in world units. One trap came with it: the two corners are rewritten by TWO nodes, so the second reads the first's output. The walls and openings are ordered so the second never reads a component the first changed; the roof rewrites both corners from every component, so it carries the block's original box (\`blo\`/\`bhi\`) and reads only that. A WINDOW GOES ONLY WHERE A WALL IS EXPOSED, and exposure is computed rather than assumed. Blocks share party walls, and a tall block beside a low one has a wall that is covered at the bottom and open above. Each candidate opening places a probe half a stud outside its wall at the BOTTOM of where it would be, and \`transferAttribute\` casts a ray straight up from it against a mesh of every block and roof layer, with \`hitAttr\` as the answer. That is an exact inside-test here and not a heuristic, for a reason worth stating: blocks and roof layers are prisms standing on the ground with nothing overhanging, so a point is inside one exactly when a ray going up from it hits a face, and if the bottom of the opening is free everything above it in that column is free too. ACROSS the opening it takes one probe PER STUD -- the first draft probed the centre only, and a neighbour ending mid-window or a roof layer stepping in left a window looking straight into a wall in three seeds of ten -- because a box on the lattice that overlaps the opening at all contains one of its studs; openings are at most two studs wide, so two probes. Doors go on the ground floor of the first lot-edge wall, south then north, in the middle bay; a z split happens at most once, so every block has one. THE BUILD. \`packBricks\` reads the pieces' world corners, keeps \`kind\` and colour apart with \`groupBy\`, and lays every wall in full bricks with the joints staggered course to course; the catalogue is the default one plus a 32 x 32 BASEPLATE, which the ground is exactly -- one piece under the whole lot, not a margin of loose plates. Neighbouring blocks each build their own wall, so a party wall is two studs thick, and the stud at each gable end of a roof layer has kind \`wall\` (it is the gable, in the wall's colour). THE MESHES ARE THE GRAPH'S OWN: two outputs carry \`role: \\"asset\\"\`, so \`brick\` (a unit box centred on its point) and \`stud\` (a twelve-sided stud standing on its point) are the meshes the two spawners' asset ids resolve to, in the editor and in \`pcg render\`, rather than placeholders. One box serves every brick because a brick point's \`scale\` is its own-frame size and its \`rot\` the quarter turn of a brick laid sideways; the 0.04 taken off \`scale\` before spawning is the hairline that makes the joints read. \`islands\` on the packer's output counts the pieces stud clutch alone holds together -- usually more than one, because an upper floor or the first course of a roof is laid as plates over the hollow inside: the plates at its edges sit on the walls, and the ones in the middle are held only by whatever stands on them, which over an empty room is often nothing.",
+    "description": "A SHORT TERRACE OF HOUSES DERIVED BY A SPLIT GRAMMAR ON AN INTEGER LATTICE, THEN BUILT IN BRICKS. Every terminal of the grammar is an axis-aligned box whose corners are WHOLE NUMBERS -- x and z in studs, y in plates, a plate 0.4 of a stud -- carrying a string \`kind\` (wall, glass, door, roof, floor, ground) and a palette colour; \`packBricks\` turns those boxes into catalogue bricks, and the house is drawn as two instance batches, bricks and the studs left showing. THE GRAMMAR IS STAGED, NOT RECURSIVE, and that is the finding that matters for whether \`examples-facade\` and \`examples-floorplan\` are ever extracted into a split primitive. The derivation is lot -> blocks -> storeys -> a floor slab and four walls -> bays -> sill, head, two jambs and the opening, with a second branch from each block to the layers of a stepped gable roof. Every one of those rules has the SAME shape: fan the cell out to M slots against a rule cloud of M coincident points (\`copyToPoints\`, the slot riding on the source so it survives later filters), keep the slots a predicate allows, and rewrite the box piecewise by slot as sums of \`eq(slot, i) * value_i\`. The kind IS the stage, so there is no dispatch on a string anywhere. Depth is bounded -- two rounds of block splitting, at most three storeys, eight bays, fourteen roof layers -- so the rounds are written out and \`repeatUntil\` would buy nothing. This graph therefore does NOT agree in form with the two split graphs, and is not the third consumer that would justify extracting their recipe; the recurring thing here is the fan-out-keep-rewrite rule, and that is what to watch for a second time. THE CUT IS SNAPPED, AND DECIDED ON THE PARENT: \`floor(span * f + 0.5)\` clamped so neither half falls under six studs, carried to both children in \`targetNames\` exactly as the facade does, so the two halves of a block meet at one integer coordinate. THE WORKING BOX IS \`lo\`/\`hi\`, NOT \`boundsMin\`/\`boundsMax\`, because \`copyToPoints\` refuses to carry a standard column, and bounds are written once at the end in world units. One trap came with it: the two corners are rewritten by TWO nodes, so the second reads the first's output. The walls and openings are ordered so the second never reads a component the first changed; the roof rewrites both corners from every component, so it carries the block's original box (\`blo\`/\`bhi\`) and reads only that. A WINDOW GOES ONLY WHERE A WALL IS EXPOSED, and exposure is computed rather than assumed. Blocks share party walls, and a tall block beside a low one has a wall that is covered at the bottom and open above. Each candidate opening places a probe half a stud outside its wall at the BOTTOM of where it would be, and \`transferAttribute\` casts a ray straight up from it against a mesh of every block and roof layer, with \`hitAttr\` as the answer. That is an exact inside-test here and not a heuristic, for a reason worth stating: blocks and roof layers are prisms standing on the ground with nothing overhanging, so a point is inside one exactly when a ray going up from it hits a face, and if the bottom of the opening is free everything above it in that column is free too. ACROSS the opening it takes one probe PER STUD -- the first draft probed the centre only, and a neighbour ending mid-window or a roof layer stepping in left a window looking straight into a wall in three seeds of ten -- because a box on the lattice that overlaps the opening at all contains one of its studs; openings are at most two studs wide, so two probes. Doors go on the ground floor of the first lot-edge wall, south then north, in the middle bay; a z split happens at most once, so every block has one. THE BUILD. \`packBricks\` reads the pieces' world corners, keeps \`kind\` and colour apart with \`groupBy\`, and lays every wall in full bricks with the joints staggered course to course; the catalogue is the default one plus a 32 x 32 BASEPLATE, which the ground is exactly -- one piece under the whole lot, not a margin of loose plates. Neighbouring blocks each build their own wall, so a party wall is two studs thick, and the stud at each gable end of a roof layer has kind \`wall\` (it is the gable, in the wall's colour). THE MESHES ARE THE GRAPH'S OWN: two outputs carry \`role: \\"asset\\"\`, so \`brick\` (a unit box centred on its point) and \`stud\` (a twelve-sided stud standing on its point) are the meshes the two spawners' asset ids resolve to, in the editor and in \`pcg render\`, rather than placeholders. One box serves every brick because a brick point's \`scale\` is its own-frame size and its \`rot\` the quarter turn of a brick laid sideways; the 0.04 taken off \`scale\` before spawning is the hairline that makes the joints read. WHAT HOLDS TOGETHER is measured, not assumed. \`brickConnectivity\` numbers the pieces stud clutch alone holds together and gives every brick a build STEP: courses bottom up, a brick placed when it stands on the baseplate or grips one already placed, a plate hung under a floor placed with the floor. A floor or a roof's first course laid over an empty room is the hard case -- its plates touch nothing below, and the ones that reach no wall are held only by what is laid on them. Two things in the packer answer it, both found by counting over forty seeds: plates up to 2x16 in the catalogue, so a floor's plates reach a wall (378 bricks no order could attach became 220), and \`bond\`, which rewards a placement for every two pieces it joins, so the course above bridges the loose ones (24 left, in the stepped roofs of six houses; 34 of the 40 are one piece, against 5 before). Those few keep step -1: the whole build draws them, and every partial build leaves them out rather than show them hanging in air. THE \`buildStep\` PARAM shows the build as it stands after that step: bricks are kept while their step is at most it, and a stud shows once its brick is placed and until the brick resting on it is -- which is why the packer is asked for EVERY stud (\`studMode: all\`) with the index of the brick on it, and the step of each is read across by index.",
     "tags": [
       "examples",
       "structure",
       "topology"
     ]
   },
+  "params": [
+    {
+      "name": "buildStep",
+      "value": 60,
+      "min": 0,
+      "max": 60,
+      "description": "Show the build as it stands after this many steps, counting from 0. A step is one course of the build placed bottom up, with anything hanging under a brick placed alongside it; the default and maximum, 60, is past every house's last step and shows the whole build -- including the few bricks no order can attach (step -1), which every smaller value hides rather than draw hanging in air."
+    }
+  ],
   "nodes": [
     {
       "id": "lotPt",
@@ -7257,6 +7266,15 @@ var e=`{
           1,
           3,
           2,
+          16,
+          1,
+          2,
+          12,
+          1,
+          2,
+          10,
+          1,
+          2,
           8,
           1,
           2,
@@ -7270,6 +7288,12 @@ var e=`{
           1,
           2,
           2,
+          1,
+          1,
+          12,
+          1,
+          1,
+          10,
           1,
           1,
           8,
@@ -7298,7 +7322,86 @@ var e=`{
           "tint"
         ],
         "stagger": 3,
+        "bond": 16,
+        "studMode": "all",
         "islandsAttr": "islands"
+      }
+    },
+    {
+      "id": "connect",
+      "type": "brickConnectivity",
+      "params": {
+        "minAttr": "boundsMin",
+        "maxAttr": "boundsMax",
+        "pitch": [
+          1,
+          0.4,
+          1
+        ],
+        "origin": [
+          0,
+          0,
+          0
+        ],
+        "islandAttr": "island",
+        "stepAttr": "step",
+        "islandsAttr": "islands"
+      }
+    },
+    {
+      "id": "shownAt",
+      "type": "setAttribute",
+      "params": {
+        "name": "shownAt",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "select",
+          "args": [
+            {
+              "fn": "lt",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "step"
+                },
+                0
+              ]
+            },
+            60,
+            {
+              "fn": "attribute",
+              "name": "step"
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "built",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "le",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "shownAt"
+            },
+            {
+              "fn": "param",
+              "name": "buildStep"
+            }
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
       }
     },
     {
@@ -7335,6 +7438,114 @@ var e=`{
         "assetAttr": "",
         "colorAttr": "tint",
         "instanceAttrs": []
+      }
+    },
+    {
+      "id": "noneAbove",
+      "type": "setAttribute",
+      "params": {
+        "name": "stepAbove",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": 1000000,
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "stepOn",
+      "type": "transferByIndex",
+      "params": {
+        "index": {
+          "fn": "attribute",
+          "name": "brickId"
+        },
+        "attributes": [
+          "shownAt"
+        ],
+        "outNames": [
+          "stepOn"
+        ],
+        "outOfRange": "clamp",
+        "hitAttr": "",
+        "missCountAttr": ""
+      }
+    },
+    {
+      "id": "stepAbove",
+      "type": "transferByIndex",
+      "params": {
+        "index": {
+          "fn": "attribute",
+          "name": "brickAbove"
+        },
+        "attributes": [
+          "shownAt"
+        ],
+        "outNames": [
+          "stepAbove"
+        ],
+        "outOfRange": "miss",
+        "hitAttr": "",
+        "missCountAttr": ""
+      }
+    },
+    {
+      "id": "showing",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "mul",
+          "args": [
+            {
+              "fn": "le",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "stepOn"
+                },
+                {
+                  "fn": "param",
+                  "name": "buildStep"
+                }
+              ]
+            },
+            {
+              "fn": "max",
+              "args": [
+                {
+                  "fn": "lt",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "brickAbove"
+                    },
+                    0
+                  ]
+                },
+                {
+                  "fn": "gt",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "stepAbove"
+                    },
+                    {
+                      "fn": "param",
+                      "name": "buildStep"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
       }
     },
     {
@@ -8592,6 +8803,36 @@ var e=`{
         "out"
       ],
       "to": [
+        "connect",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "connect",
+        "out"
+      ],
+      "to": [
+        "shownAt",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "shownAt",
+        "out"
+      ],
+      "to": [
+        "built",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "built",
+        "out"
+      ],
+      "to": [
         "gap",
         "in"
       ]
@@ -8610,6 +8851,66 @@ var e=`{
       "from": [
         "pack",
         "studs"
+      ],
+      "to": [
+        "noneAbove",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "noneAbove",
+        "out"
+      ],
+      "to": [
+        "stepOn",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "shownAt",
+        "out"
+      ],
+      "to": [
+        "stepOn",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "stepOn",
+        "out"
+      ],
+      "to": [
+        "stepAbove",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "shownAt",
+        "out"
+      ],
+      "to": [
+        "stepAbove",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "stepAbove",
+        "out"
+      ],
+      "to": [
+        "showing",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "showing",
+        "out"
       ],
       "to": [
         "studs",

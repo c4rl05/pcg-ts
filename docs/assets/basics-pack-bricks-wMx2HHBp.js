@@ -3,7 +3,7 @@ var e=`{
   "seed": 1,
   "meta": {
     "title": "Pack boxes into bricks",
-    "description": "Nine boxes on a stud lattice — x and z in studs, y in plates, a plate 0.4 of a stud — become the bricks that build them. \`packBricks\` fills exactly the cells the boxes cover from a catalogue of full-height bricks and plates, laying each course in the tallest piece that fits and choosing among footprints so a joint does not sit on a seam in the course below: the red wall is in running bond, not a stack. \`groupBy\` on \`color\` keeps the window its own glass bricks, and the buttress, which OVERLAPS the wall it leans on, is unioned into it rather than packed twice. Each brick is a point whose \`scale\` is its own-frame size and whose \`rot\` turns it a quarter when the entry was placed sideways, so a unit box copied onto the points draws every brick; the second output is one point per stud left showing, here a small box. \`islands\` reads 9, and that is the lesson rather than a fault: the base and the roof are laid in 2x8 plates, and the ones no wall stands on are not held by anything — counting what clutch alone joins is how a build that would come apart in the hand is found.",
+    "description": "Nine boxes on a stud lattice — x and z in studs, y in plates, a plate 0.4 of a stud — become the bricks that build them. \`packBricks\` fills exactly the cells the boxes cover from a catalogue of full-height bricks and plates, laying each course in the tallest piece that fits and choosing among footprints so a joint does not sit on a seam in the course below: the red wall is in running bond, not a stack. \`groupBy\` on \`color\` keeps the window its own glass bricks, and the buttress, which OVERLAPS the wall it leans on, is unioned into it rather than packed twice. Each brick is a point whose \`scale\` is its own-frame size and whose \`rot\` turns it a quarter when the entry was placed sideways, so a unit box copied onto the points draws every brick; the second output is one point per stud left showing, here a small box. \`islands\` reads 2, and the second piece is the lesson: the base is laid in long plates, and the one along the near edge has nothing standing on it, so it lies on the table without being part of the build. The roof is NOT loose, although half of it is over open ground — the plates are long enough to reach a wall, and \`bond\` rewards whatever placement joins two pieces into one, which is what a plate laid over an empty room needs.",
     "tags": [
       "basics",
       "structure",
@@ -199,6 +199,15 @@ var e=`{
           1,
           3,
           2,
+          16,
+          1,
+          2,
+          12,
+          1,
+          2,
+          10,
+          1,
+          2,
           8,
           1,
           2,
@@ -212,6 +221,12 @@ var e=`{
           1,
           2,
           2,
+          1,
+          1,
+          12,
+          1,
+          1,
+          10,
           1,
           1,
           8,
@@ -236,6 +251,8 @@ var e=`{
           "color"
         ],
         "stagger": 3,
+        "bond": 16,
+        "studMode": "exposed",
         "islandsAttr": "islands"
       }
     },
