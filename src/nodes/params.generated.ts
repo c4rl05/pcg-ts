@@ -1840,16 +1840,25 @@ export type MeshFromFieldOutputs = "out";
 export interface MeshPrimitiveParams {
   /**
    * 'plane' builds one rectangle in the world plane named by `orientation`; 'box' builds a
-   * closed six-sided box of the full `size` extents (and ignores `orientation`).
+   * closed six-sided box of the full `size` extents (and ignores `orientation`); 'cylinder'
+   * builds a `sides`-sided cylinder standing on the y axis, `size.y` tall, closed at the
+   * ends `caps` names (it ignores `orientation` — rotate it downstream to lay it down);
+   * 'disc' builds one flat `sides`-sided disc in the plane named by `orientation`, the round
+   * counterpart of 'plane'. A disc is its own shape rather than a zero-height cylinder
+   * because a flat cylinder is the wrong mesh for it: its wall would be a ring of `2 *
+   * sides` zero-area triangles per band, and with both caps on it would be two coincident
+   * discs facing opposite ways.
    *
-   * - Enum: `"plane"` | `"box"`
+   * - Enum: `"plane"` | `"box"` | `"cylinder"` | `"disc"`
    *
    * @defaultValue `"plane"`
    */
-  shape: "plane" | "box";
+  shape: "plane" | "box" | "cylinder" | "disc";
   /**
-   * Full extents along world x, y, z, in world units (not half-extents). For 'plane', the
-   * component along the plane's normal axis is ignored.
+   * Full extents along world x, y, z, in world units (not half-extents). For 'plane' and
+   * 'disc', the component along the normal axis is ignored. For 'cylinder' and 'disc' the
+   * two in-plane components are DIAMETERS — x and z for a cylinder, whose height is y — so
+   * unequal ones make an elliptic section; a stud of radius 0.3 is size [0.6, height, 0.6].
    *
    * - Range: `>= 0`
    *
@@ -1863,8 +1872,9 @@ export interface MeshPrimitiveParams {
    */
   center: readonly number[];
   /**
-   * Which world plane a 'plane' lies in, and so which axis is its normal: 'xz' is the ground
-   * plane (normal +y), 'xy' faces +z, 'yz' faces +x. Ignored for 'box'.
+   * Which world plane a 'plane' or a 'disc' lies in, and so which axis is its normal: 'xz'
+   * is the ground plane (normal +y), 'xy' faces +z, 'yz' faces +x. Ignored for 'box' and
+   * 'cylinder'.
    *
    * - Enum: `"xz"` | `"xy"` | `"yz"`
    *
@@ -1874,8 +1884,9 @@ export interface MeshPrimitiveParams {
   /**
    * Quads along world x, y, z — whole numbers, minimum 1. A plane uses the two components of
    * its own axes ([1,1,1] is a single quad, two triangles); a box uses all three, each face
-   * taking the two that span it. More subdivisions give finer sampling and a finer
-   * uv/raycast target.
+   * taking the two that span it; a cylinder uses only y, the number of bands its wall is cut
+   * into up its height (round it, `sides` counts instead); a disc uses none. More
+   * subdivisions give finer sampling and a finer uv/raycast target.
    *
    * - Range: `>= 1`
    *
@@ -1883,19 +1894,55 @@ export interface MeshPrimitiveParams {
    */
   subdivisions: readonly number[];
   /**
+   * Corners round a 'cylinder' or a 'disc' — whole number, 3..256; ignored by 'plane' and
+   * 'box'. The section is the regular polygon INSCRIBED in the ellipse (its corners lie on
+   * it), the first corner on +z, so 3 is a triangular prism, 4 a diamond, and a multiple of
+   * 4 reaches the full `size` extents exactly. Cost is linear: each wall ring is `sides + 1`
+   * points (the extra one duplicates the seam for the uv), each band `2 * sides` triangles,
+   * and each cap `sides` points and `sides - 2` triangles. The same name and range as
+   * sweepProfile's circle `sides`; the default is 16 rather than its 8 because that one
+   * matches a shipped tube asset and this one is meant to read round on its own.
+   *
+   * - Range: `3..256`
+   *
+   * @defaultValue `16`
+   */
+  sides: number;
+  /**
+   * Which ends of a 'cylinder' are closed, in extrudePolygon's spelling: 'both' is a closed
+   * solid (every edge shared by exactly two triangles once the coincident rim and seam
+   * points are welded), 'bottom' alone is a cup, 'top' alone a tube with a lid, 'none' is an
+   * open tube. Ignored by every other shape. A cap faces out of the cylinder (+y on top, -y
+   * below) and shares no points with the wall, so the rim stays a hard crease and the cap's
+   * planar uv is independent of the wall's.
+   *
+   * - Enum: `"none"` | `"top"` | `"bottom"` | `"both"`
+   *
+   * @defaultValue `"both"`
+   */
+  caps: "none" | "top" | "bottom" | "both";
+  /**
    * Reverse every triangle's winding (and the written `normal` with it, under `normals`),
-   * which flips the surface — a plane becomes a ceiling, a box becomes an inward-facing
-   * room.
+   * which flips the surface — a plane or a disc becomes a ceiling, a box an inward-facing
+   * room, a cylinder an inward-facing shaft.
    *
    * @defaultValue `false`
    */
   flip: boolean;
   /**
-   * Write a `normal` point attribute (f32 tuple 3): FLAT, one face's unit axis on each of
-   * that face's points, derived from the same winding the triangles use (so `flip` turns
-   * both) — the split-corner shading sweepProfile's 'square' and extrudePolygon give their
-   * hard edges, which a box's unshared face points make exact. TURN IT ON when this mesh is
-   * merged with one that carries a normal (sweepProfile, extrudePolygon, meshFromField):
+   * Write a `normal` point attribute (f32 tuple 3): FLAT on every flat face — one face's
+   * unit axis on each of that face's points, derived from the same winding the triangles use
+   * (so `flip` turns both) — the split-corner shading sweepProfile's 'square' and
+   * extrudePolygon give their hard edges, which a box's unshared face points make exact; a
+   * cylinder's caps and a disc are flat the same way. A cylinder's WALL is the one curved
+   * face, and gets its SMOOTH analytic normal instead (radial on a circle, the ellipse's own
+   * normal on an elliptic section), so it shades round with no smoothNormals pass while its
+   * rim, whose cap points are separate, stays a hard edge. That holds however few `sides` it
+   * has: a 3- or 6-sided prism with `normals` on shades ROUND, not faceted, and so does the
+   * renderer's own computed normal with `normals` off, because the wall's points are shared
+   * round the ring. A faceted prism needs split corners, which this node does not build:
+   * extrudePolygon over a polygon outline gives one. TURN IT ON when this mesh is merged
+   * with one that carries a normal (sweepProfile, extrudePolygon, meshFromField):
    * mergePrimitives fills a column missing on one input with its default, (0, 0, 0), and a
    * lit material renders those points black. OFF BY DEFAULT because a stored normal is only
    * right until something moves P, and the renderer computes one from the triangles when

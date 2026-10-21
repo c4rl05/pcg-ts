@@ -445,7 +445,7 @@ Field-capable params (marked "Field" in [nodes.md](./nodes.md), or
 of a constant: `{ "fn": <name>, ... }`. Wherever a spec takes arguments
 (`args` entries, noise `position`), a finite number or number array is
 also accepted and wraps into `constant`. Specs nest arbitrarily (up to
-256 levels). `listFieldFns()` returns all 64 names at runtime.
+256 levels). `listFieldFns()` returns all 67 names at runtime.
 
 ### Which params accept one
 
@@ -598,6 +598,8 @@ both spellings:
 | `component` | `component(expr, 0)` |
 | `ramp` | `ramp(expr, [[4.5, 0.02], [14, 0.3]])` |
 | `lookup` | `lookup(expr, [0, 0.5, 1])` |
+| `choose` | `choose(slot, a, b, c)` — the index, then one position per case |
+| `let` / `var` | `let({ lo: attribute("lo", 3), x: component(lo, 0) }, x * 2)` — inside a let a bare name is a reference; `var("x")` parses anywhere |
 | a noise | `perlinNoise({ frequency: 0.05, seed: { from: "node", variant: 0 } })` |
 | everything else | `name(arg, …)` |
 
@@ -1447,6 +1449,8 @@ a single square root.
 | `component` | `{ fn, args: [tupleField], index: 0 }` | Extracts one component as a scalar; `index` is a non-negative integer < tuple size |
 | `ramp` | `{ fn, args: [scalarField], stops: [[0, 0], [1, 1]] }` | Piecewise-linear curve through `[position, value]` stops; positions strictly ascending; input clamps to the end values |
 | `lookup` | `{ fn, args: [indexField], table: [0.4, 1, -2] }` | The table entry at that index, rounded to nearest and clamped into the table; literal finite numbers only, at most 32 of them. `mod(i, n)` in front of it wraps an INTEGER index exactly; for a FRACTIONAL index it is not a wrap, because the round happens after the mod — the top half-step `[n - 0.5, n)` rounds to `n` and clamps back to the LAST entry instead of reaching the first (at n = 5, an index in `[4.5, 5)` reads entry 4, not entry 0). Floor the index before the mod if that seam matters. The table is baked into the kernel as literals, so distinct table VALUES specialize as surely as distinct lengths: `[1, 2, 3]` and `[1, 2, 4]` emit two helpers |
+| `let` | `{ fn, bind: { lo: <spec>, x: <spec> }, args: [body] }` | Names subexpressions so each is written once; `{ fn: "var", name: "lo" }` reads one. SEQUENTIAL: a binding sees the earlier ones, the body sees all. Pure notation — the field is the inline expression with each `var` replaced by its binding, same `Field.key`, same columns, same WGSL kernel and kernel key, and a binding read many times is evaluated once per element. A name is an identifier, not a fn name, `true`, `false` or `__proto__`, and may not re-bind a name in scope; `bind` must not be empty and every binding must be read. Scope is the authored tree: a field spliced in through a `param` binding cannot see it. The inline expansion is held to the 256-level nesting cap, and the key characters references repeat to 16M per expression, so a chain of bindings each read twice is refused rather than allowed to blow up |
+| `choose` | `{ fn, args: [index, a, b, …] }` | The case `index` names, out of whole EXPRESSIONS: `lookup` with fields where its literals were. The index is read exactly as `lookup` reads it — rounded to nearest (halves up), clamped into the case list, NaN taking the first case — and must be a scalar; the cases broadcast against each other (a scalar case spreads across any width) and the index takes no part in that. Index plus one or more cases. EVERY case is evaluated on every element, as with `select`. It is the one-node spelling of the piecewise-by-slot sum `eq(slot, 0) * v0 + eq(slot, 1) * v1 + …`, and unlike that sum it is exact: the chosen value is copied through, where `0 * Inf` in a case that did not fire turns every element NaN. On the GPU it lowers to a `select` chain on lookup's `t >= k - 0.5` boundaries: the choice of case is bit-exact with the CPU for the same index, and the value is the case's own, so a case or index built from a fn with a tolerance (noise, trig) carries that tolerance, and an index within it of a boundary can pick the neighbouring case |
 
 ### Noise
 
@@ -5389,7 +5393,7 @@ re-measured at more than one count on every test run.
 | family | rangeUlp, 10k → 1M | budget | mean \|cpu−gpu\| budget |
 |---|---|---|---|
 | arith add/sub/mul | 0 | bit-exact | — |
-| clamp/min/max, floor, trunc, select/compare, step, lookup | 0 | bit-exact | — |
+| clamp/min/max, floor, trunc, select/compare, step, lookup, choose | 0 | bit-exact | — |
 | fract, mod, rem, sign, smoothstep | 0 | bit-exact | — |
 | div | 0.76 → 0.75 | 1 | 2.0e-8 |
 | lerp | 0.50 → 0.50 | 1 | 7.3e-8 |
@@ -5487,8 +5491,18 @@ before quoting a row at a different frequency.
 
 asin/acos absolute error is ≈ 6.8e-5 — the WGSL-specified
 absolute-error class for those builtins. Branchy ops (select,
-compares, ramp segments, worley cell walks) may flip at knife-edge
-inputs whose operands differ within tolerance.
+compares, ramp segments, worley cell walks, lookup and choose indices)
+may flip at knife-edge inputs whose operands differ within tolerance.
+
+Signed zero is the one place an exact row can differ. A zero computed
+from constants alone — `mul(-1, 0)`, or a `-0` built in TypeScript —
+comes out +0 on the GPU where the CPU keeps -0: the driver folds the
+constant expression and drops the sign (measured on the RTX 5090 /
+D3D12 adapter, for every fn that can carry one, `select`, `lookup` and
+`choose` included). A -0 read from a column, or computed from one,
+keeps its sign on both paths. The authored grammar cannot write a `-0`
+literal (see above), so this reaches a graph only through arithmetic on
+constants.
 
 The field-driven point ops carry their own measured budgets (same
 adapter, 10k/8k points, perlin-normalized params):

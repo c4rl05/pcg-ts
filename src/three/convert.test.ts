@@ -8,6 +8,8 @@ import {
   createTriangleMesh,
   primitiveTypeCounts,
 } from "../data/index.js";
+import { meshPrimitive } from "../nodes/index.js";
+import { firstGeo, runNode } from "../nodes/nodes.testsupport.js";
 import { fromBufferGeometry, fromCurve, toBufferGeometry, toLineGeometry } from "./convert.js";
 
 describe("fromBufferGeometry", () => {
@@ -427,3 +429,43 @@ describe("toLineGeometry", () => {
     expect(() => toBufferGeometry(geo)).toThrow(/2 untagged primitive\(s\)/);
   });
 });
+
+describe("toBufferGeometry of a meshPrimitive cylinder", () => {
+  it("carries every triangle, the uv and the written normal, and computes an outward one without it", async () => {
+    const params = { shape: "cylinder", sides: 12, size: [2, 3, 2], subdivisions: [1, 2, 1] } as const;
+    const lit = firstGeo((await runNode(meshPrimitive, { ...params, normals: true })).out);
+    const out = toBufferGeometry(lit);
+    // Wall 3 x 13 points, caps 2 x 12; every point is referenced, so
+    // compaction is the identity.
+    expect(out.getAttribute("position").count).toBe(lit.pointCount);
+    expect(out.getIndex()!.count).toBe(3 * lit.primitiveCount);
+    expect(Array.from(out.getIndex()!.array)).toEqual(Array.from(lit.vertexToPoint));
+    expect(Array.from(out.getAttribute("normal").array)).toEqual(flat(lit, "normal"));
+    expect(out.getAttribute("uv").count).toBe(lit.pointCount);
+    out.dispose();
+
+    // No stored normal: three computes one from the winding, and it must
+    // point out of the solid on every wall point and along +-y on the caps.
+    const plain = firstGeo((await runNode(meshPrimitive, params)).out);
+    const computed = toBufferGeometry(plain);
+    const N = computed.getAttribute("normal");
+    const P = computed.getAttribute("position");
+    const wallPoints = 3 * 13;
+    for (let i = 0; i < P.count; i++) {
+      if (i < wallPoints) {
+        expect(N.getX(i) * P.getX(i) + N.getZ(i) * P.getZ(i), `wall point ${i}`).toBeGreaterThan(0);
+      } else {
+        expect(Math.sign(N.getY(i)), `cap point ${i}`).toBe(Math.sign(P.getY(i)));
+      }
+    }
+    computed.dispose();
+  });
+});
+
+/** A point column, flattened in point order. */
+function flat(geo: Geometry, name: string): number[] {
+  const a = geo.attrs.point.require(name);
+  const out: number[] = [];
+  for (let i = 0; i < geo.pointCount; i++) out.push(...a.getTuple(i));
+  return out;
+}

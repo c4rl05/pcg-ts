@@ -335,6 +335,27 @@
       ],
       "type": "object"
     },
+    "fieldFn.choose": {
+      "additionalProperties": false,
+      "description": "{ fn: \"choose\", args: [index, caseA, caseB, caseC] } — The case an index names, out of a list of whole EXPRESSIONS: where `index` is 0 the result is the first case, where it is 1 the second, and so on — `lookup` with field expressions where its literals were, and the one-node spelling of the piecewise-by-slot sum `eq(slot, 0) * v0 + eq(slot, 1) * v1 + …`. The index is read exactly as `lookup` reads it: ROUNDED to the nearest integer (halves round up) and CLAMPED into the case list, so an index below 0 takes the first case, one past the end the last, and NaN the first; `mod` in front of it wraps, with `lookup`'s caveat for a fractional index. Unlike the sum it replaces it is exact — the chosen case's value is copied through untouched, where `eq(i, k) * v` turns an infinite or NaN `v` in a case that did NOT fire into NaN everywhere. EVERY case is evaluated on every element — there is no short-circuit, as with `select`. The index must be tuple size 1 and takes no part in broadcasting; the cases broadcast against each other (a scalar case spreads across any tuple width, two non-scalar widths must match), so the result's width never depends on which case fired. Takes the index and at least one case.",
+      "properties": {
+        "args": {
+          "items": {
+            "$ref": "#/$defs/fieldArg"
+          },
+          "minItems": 2,
+          "type": "array"
+        },
+        "fn": {
+          "const": "choose"
+        }
+      },
+      "required": [
+        "fn",
+        "args"
+      ],
+      "type": "object"
+    },
     "fieldFn.clamp": {
       "additionalProperties": false,
       "description": "{ fn: \"clamp\", args: [x, lo, hi] } — Elementwise `min(max(x, lo), hi)`. The bounds are not checked against each other: with `lo` above `hi` every element comes out as `hi`. A NaN `x` stays NaN — clamping does not rescue one. Arguments broadcast: a scalar spreads across any tuple width, and two non-scalar widths must match.",
@@ -891,6 +912,39 @@
       },
       "required": [
         "fn",
+        "args"
+      ],
+      "type": "object"
+    },
+    "fieldFn.let": {
+      "additionalProperties": false,
+      "description": "{ fn: \"let\", bind: { name: <spec>, … }, args: [body] } — NAMES subexpressions so each is written once: `bind` maps names to field expressions and the one argument is the body, where `{fn: \"var\", name}` reads a binding. Bindings are SEQUENTIAL — each sees the ones written before it, and the body sees them all. Purely notational: the field is exactly the inline expression with every reference replaced by its binding — same key, same columns, same GPU kernel — and a binding read several times is evaluated once per element, as a repeated inline subexpression already is. A name is an identifier (letters, digits, `_`), not a field fn's name, `true`, `false` or `__proto__`, and may not re-bind a name already in scope. `bind` must not be empty and every binding must be read, so what an expression reads is exactly what it computes. Scope is the authored tree: a field spliced in through a `param` binding cannot see the names around it. In the text form, `let({ lo: attribute(\"lo\", 3), x: component(lo, 0) }, x * 2)` — inside a let a bare name is a reference.",
+      "properties": {
+        "args": {
+          "items": {
+            "$ref": "#/$defs/fieldArg"
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "type": "array"
+        },
+        "bind": {
+          "additionalProperties": {
+            "$ref": "#/$defs/fieldArg"
+          },
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "type": "object"
+        },
+        "fn": {
+          "const": "let"
+        }
+      },
+      "required": [
+        "fn",
+        "bind",
         "args"
       ],
       "type": "object"
@@ -1873,6 +1927,24 @@
       ],
       "type": "object"
     },
+    "fieldFn.var": {
+      "additionalProperties": false,
+      "description": "{ fn: \"var\", name: \"lo\" } — Reads the value an enclosing `let` bound to `name` — the same field, so reading it twice evaluates it once per element. Valid only inside a `let`: in its body, or in a binding written after the one it reads. In the text form, a bare name inside a let is this reference; `var(\"x\")` is the spelling that parses anywhere.",
+      "properties": {
+        "fn": {
+          "const": "var"
+        },
+        "name": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "fn",
+        "name"
+      ],
+      "type": "object"
+    },
     "fieldFn.vec": {
       "additionalProperties": false,
       "description": "{ fn: \"vec\", args: [x, y, z] } — Concatenates its arguments into ONE tuple per element, so `vec(x, y, z)` builds a vec3 out of three scalars. That is how a field-valued position or colour is assembled. A TUPLE argument contributes all of its components, so the result's width is the sum of the inputs' widths and not the number of arguments — `vec(someVec3, 1)` is a vec4. Takes one argument or more; there is no broadcasting here, because nothing is being combined.",
@@ -2262,6 +2334,21 @@
           "if": {
             "properties": {
               "fn": {
+                "const": "choose"
+              }
+            },
+            "required": [
+              "fn"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/fieldFn.choose"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "fn": {
                 "const": "clamp"
               }
             },
@@ -2571,6 +2658,21 @@
           },
           "then": {
             "$ref": "#/$defs/fieldFn.lerp"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "fn": {
+                "const": "let"
+              }
+            },
+            "required": [
+              "fn"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/fieldFn.let"
           }
         },
         {
@@ -3042,6 +3144,21 @@
           "if": {
             "properties": {
               "fn": {
+                "const": "var"
+              }
+            },
+            "required": [
+              "fn"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/fieldFn.var"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "fn": {
                 "const": "vec"
               }
             },
@@ -3097,6 +3214,7 @@
             "attribute",
             "attributeIs",
             "byAttribute",
+            "choose",
             "clamp",
             "component",
             "constant",
@@ -3118,6 +3236,7 @@
             "le",
             "length",
             "lerp",
+            "let",
             "log",
             "log2",
             "lookup",
@@ -3149,6 +3268,7 @@
             "tan",
             "trunc",
             "valueNoise",
+            "var",
             "vec",
             "worleyFeature",
             "worleyNoise"
@@ -4772,11 +4892,22 @@
             ]
           },
           "then": {
-            "description": "Builds a parametric triangle mesh with no input: shape 'plane' is one axis-aligned rectangle, shape 'box' is six of them around a volume. Output carries P (f32 tuple 3), a uv point attribute (f32 tuple 2) running 0..1 across each face, one 3-vertex 'poly' primitive per triangle — everything surfaceSample, transferAttribute's 'uv' and 'raycast' mappings, and promoteAttribute need — and, with `normals` on, a flat per-face `normal` point attribute (f32 tuple 3). This is the only mesh source that survives serialization: dataInput's items are injected at runtime and a saved graph carries none, so a graph that must cook from JSON alone gets its surface from here. Plane normals point along the positive third axis (+y for orientation 'xz', +z for 'xy', +x for 'yz'); box normals point outward. Point order is u fastest then v, one block per face in the order +x, -x, +y, -y, +z, -z; a box's faces do not share points, so uv seams are exact. A zero size component makes degenerate (zero-area) triangles, which area-weighted sampling and the raycast mapping skip.",
+            "description": "Builds a parametric triangle mesh with no input: shape 'plane' is one axis-aligned rectangle, shape 'box' is six of them around a volume, shape 'cylinder' is an upright (y-axis) cylinder with optional caps, and shape 'disc' is one flat polygonal disc lying like a plane. Output carries P (f32 tuple 3), a uv point attribute (f32 tuple 2) running 0..1 across each face, one 3-vertex 'poly' primitive per triangle — everything surfaceSample, transferAttribute's 'uv' and 'raycast' mappings, and promoteAttribute need — and, with `normals` on, a `normal` point attribute (f32 tuple 3). This is the only mesh source that survives serialization: dataInput's items are injected at runtime and a saved graph carries none, so a graph that must cook from JSON alone gets its surface from here. Plane and disc normals point along the positive third axis (+y for orientation 'xz', +z for 'xy', +x for 'yz'); box and cylinder normals point outward. A plane or box face's point order is u fastest then v, a box one block per face in the order +x, -x, +y, -y, +z, -z; a box's faces do not share points, so uv seams are exact. A cylinder is its wall block — `subdivisions.y + 1` rings of `sides + 1` points, round the ring fastest, bottom ring first, the seam column duplicated so u runs 0..1 — then the top cap's `sides` corners, then the bottom cap's; caps share no points with the wall, so the rim is a real crease, and each cap (like a disc) is a fan of `sides - 2` triangles from its first corner with no centre point. Ring corners lie ON the ellipse whose diameters are the size's components, starting on +z and turning toward +x, so a `sides` that is a multiple of 4 reaches the full `size` extents exactly. A zero size component makes degenerate (zero-area) triangles, which area-weighted sampling and the raycast mapping skip.",
             "properties": {
               "params": {
                 "additionalProperties": false,
                 "properties": {
+                  "caps": {
+                    "default": "both",
+                    "description": "Which ends of a 'cylinder' are closed, in extrudePolygon's spelling: 'both' is a closed solid (every edge shared by exactly two triangles once the coincident rim and seam points are welded), 'bottom' alone is a cup, 'top' alone a tube with a lid, 'none' is an open tube. Ignored by every other shape. A cap faces out of the cylinder (+y on top, -y below) and shares no points with the wall, so the rim stays a hard crease and the cap's planar uv is independent of the wall's.",
+                    "enum": [
+                      "none",
+                      "top",
+                      "bottom",
+                      "both"
+                    ],
+                    "type": "string"
+                  },
                   "center": {
                     "default": [
                       0,
@@ -4793,17 +4924,17 @@
                   },
                   "flip": {
                     "default": false,
-                    "description": "Reverse every triangle's winding (and the written `normal` with it, under `normals`), which flips the surface — a plane becomes a ceiling, a box becomes an inward-facing room.",
+                    "description": "Reverse every triangle's winding (and the written `normal` with it, under `normals`), which flips the surface — a plane or a disc becomes a ceiling, a box an inward-facing room, a cylinder an inward-facing shaft.",
                     "type": "boolean"
                   },
                   "normals": {
                     "default": false,
-                    "description": "Write a `normal` point attribute (f32 tuple 3): FLAT, one face's unit axis on each of that face's points, derived from the same winding the triangles use (so `flip` turns both) — the split-corner shading sweepProfile's 'square' and extrudePolygon give their hard edges, which a box's unshared face points make exact. TURN IT ON when this mesh is merged with one that carries a normal (sweepProfile, extrudePolygon, meshFromField): mergePrimitives fills a column missing on one input with its default, (0, 0, 0), and a lit material renders those points black. OFF BY DEFAULT because a stored normal is only right until something moves P, and the renderer computes one from the triangles when none is stored: the commonest use of a plane is displacement into terrain, which would then shade flat on rolling ground, and a box copied onto ROTATED targets keeps its unturned normal unless copyToPoints' `rotateAttrs` names `normal`. A graph that displaces the mesh and still wants a stored normal recomputes it afterwards with smoothNormals.",
+                    "description": "Write a `normal` point attribute (f32 tuple 3): FLAT on every flat face — one face's unit axis on each of that face's points, derived from the same winding the triangles use (so `flip` turns both) — the split-corner shading sweepProfile's 'square' and extrudePolygon give their hard edges, which a box's unshared face points make exact; a cylinder's caps and a disc are flat the same way. A cylinder's WALL is the one curved face, and gets its SMOOTH analytic normal instead (radial on a circle, the ellipse's own normal on an elliptic section), so it shades round with no smoothNormals pass while its rim, whose cap points are separate, stays a hard edge. That holds however few `sides` it has: a 3- or 6-sided prism with `normals` on shades ROUND, not faceted, and so does the renderer's own computed normal with `normals` off, because the wall's points are shared round the ring. A faceted prism needs split corners, which this node does not build: extrudePolygon over a polygon outline gives one. TURN IT ON when this mesh is merged with one that carries a normal (sweepProfile, extrudePolygon, meshFromField): mergePrimitives fills a column missing on one input with its default, (0, 0, 0), and a lit material renders those points black. OFF BY DEFAULT because a stored normal is only right until something moves P, and the renderer computes one from the triangles when none is stored: the commonest use of a plane is displacement into terrain, which would then shade flat on rolling ground, and a box copied onto ROTATED targets keeps its unturned normal unless copyToPoints' `rotateAttrs` names `normal`. A graph that displaces the mesh and still wants a stored normal recomputes it afterwards with smoothNormals.",
                     "type": "boolean"
                   },
                   "orientation": {
                     "default": "xz",
-                    "description": "Which world plane a 'plane' lies in, and so which axis is its normal: 'xz' is the ground plane (normal +y), 'xy' faces +z, 'yz' faces +x. Ignored for 'box'.",
+                    "description": "Which world plane a 'plane' or a 'disc' lies in, and so which axis is its normal: 'xz' is the ground plane (normal +y), 'xy' faces +z, 'yz' faces +x. Ignored for 'box' and 'cylinder'.",
                     "enum": [
                       "xz",
                       "xy",
@@ -4813,12 +4944,21 @@
                   },
                   "shape": {
                     "default": "plane",
-                    "description": "'plane' builds one rectangle in the world plane named by `orientation`; 'box' builds a closed six-sided box of the full `size` extents (and ignores `orientation`).",
+                    "description": "'plane' builds one rectangle in the world plane named by `orientation`; 'box' builds a closed six-sided box of the full `size` extents (and ignores `orientation`); 'cylinder' builds a `sides`-sided cylinder standing on the y axis, `size.y` tall, closed at the ends `caps` names (it ignores `orientation` — rotate it downstream to lay it down); 'disc' builds one flat `sides`-sided disc in the plane named by `orientation`, the round counterpart of 'plane'. A disc is its own shape rather than a zero-height cylinder because a flat cylinder is the wrong mesh for it: its wall would be a ring of `2 * sides` zero-area triangles per band, and with both caps on it would be two coincident discs facing opposite ways.",
                     "enum": [
                       "plane",
-                      "box"
+                      "box",
+                      "cylinder",
+                      "disc"
                     ],
                     "type": "string"
+                  },
+                  "sides": {
+                    "default": 16,
+                    "description": "Corners round a 'cylinder' or a 'disc' — whole number, 3..256; ignored by 'plane' and 'box'. The section is the regular polygon INSCRIBED in the ellipse (its corners lie on it), the first corner on +z, so 3 is a triangular prism, 4 a diamond, and a multiple of 4 reaches the full `size` extents exactly. Cost is linear: each wall ring is `sides + 1` points (the extra one duplicates the seam for the uv), each band `2 * sides` triangles, and each cap `sides` points and `sides - 2` triangles. The same name and range as sweepProfile's circle `sides`; the default is 16 rather than its 8 because that one matches a shipped tube asset and this one is meant to read round on its own.",
+                    "maximum": 256,
+                    "minimum": 3,
+                    "type": "integer"
                   },
                   "size": {
                     "default": [
@@ -4826,7 +4966,7 @@
                       10,
                       10
                     ],
-                    "description": "Full extents along world x, y, z, in world units (not half-extents). For 'plane', the component along the plane's normal axis is ignored.",
+                    "description": "Full extents along world x, y, z, in world units (not half-extents). For 'plane' and 'disc', the component along the normal axis is ignored. For 'cylinder' and 'disc' the two in-plane components are DIAMETERS — x and z for a cylinder, whose height is y — so unequal ones make an elliptic section; a stud of radius 0.3 is size [0.6, height, 0.6].",
                     "items": {
                       "minimum": 0,
                       "type": "number"
@@ -4841,7 +4981,7 @@
                       1,
                       1
                     ],
-                    "description": "Quads along world x, y, z — whole numbers, minimum 1. A plane uses the two components of its own axes ([1,1,1] is a single quad, two triangles); a box uses all three, each face taking the two that span it. More subdivisions give finer sampling and a finer uv/raycast target.",
+                    "description": "Quads along world x, y, z — whole numbers, minimum 1. A plane uses the two components of its own axes ([1,1,1] is a single quad, two triangles); a box uses all three, each face taking the two that span it; a cylinder uses only y, the number of bands its wall is cut into up its height (round it, `sides` counts instead); a disc uses none. More subdivisions give finer sampling and a finer uv/raycast target.",
                     "items": {
                       "minimum": 1,
                       "type": "number"
@@ -5090,7 +5230,7 @@
             ]
           },
           "then": {
-            "description": "Reads axis-aligned BOXES on a stud lattice — one per point, its corners in two point attributes — and writes the BRICKS that build them: one point per brick, from a stated catalogue of footprints, that together fill exactly the lattice cells the boxes cover. The lattice is `pitch` in world units per cell (a stud is 1 across, a plate 0.4 tall, by default), anchored at `origin`; x and z count studs and y counts plates. Every corner must land on the lattice, and one that does not is refused naming the point and the corner, because a box half a stud off is a box the graph upstream built on a different lattice. Boxes may overlap: their cells are unioned, and a cell two boxes claim belongs to the one with the lower point IDENTITY (stored position bits plus `seed`), never the lower array index, so shuffling the input changes nothing — unless two overlapping boxes share both P and `seed`, which identity cannot tell apart, and then the earlier one in the input wins. WHAT A BRICK MAY NOT CROSS is `groupBy`: cells whose boxes differ in any listed attribute are different material and never share a brick, so a wall's colour changes exactly where its boxes' colour does. Each brick carries every point attribute of the box that owns its anchor cell. THE PACKING IS A SCANLINE GREEDY, course by course from the bottom and within a course in z then x. The first unfilled cell of a scan is always the minimum corner of the brick that covers it, so the scan never needs to backtrack; the choice there is WHICH catalogue entry, either way round. HEIGHT COMES FIRST: the tallest entry that fits is the course, so a wall is laid in full bricks and plates appear only where the space is shorter than a brick. Among footprints of that height the score is the footprint in studs less `stagger` for every stud of joint in the brick's bottom course that sits directly on a seam in the course below, counted only on the joints the placement decides — where the cell across is the same material and not yet filled — a running bond, the reason real walls hold together, charged only where a different brick could have avoided it — PLUS `bond` for every two separate pieces the placement joins into one, which is what keeps a floor or a roof laid over an empty room from coming out as loose plates (pieces as stud clutch holds them; see `islandsAttr`). Ties go to the larger footprint, then the earlier catalogue entry, then the entry as listed rather than turned. If nothing fits — a catalogue with no 1x1 plate meeting a one-plate gap — the cell is refused by name rather than left empty, so the output always covers the input exactly. OUTPUT `out`: one point per brick in scan order. P is the brick's centre, `rot` a quarter turn about y when the entry was placed turned (identity otherwise), and `scale` its full extents in its OWN frame — w and d studs and h plates as listed, in world units — so a unit box copied onto these points draws every brick in place. `boundsMin`/`boundsMax` are its world corners, the same convention it reads. `brick` (string) is the entry as `WxDxH`, ready to be spawnInstances' `assetAttr`, and `brickIndex` (i32) is its position in the catalogue — `bricks` followed by `extraBricks`. OUTPUT `studs`: one point per stud left SHOWING — on a brick's top where the lattice cell above is empty — at the stud's base centre on the brick's top face, carrying the brick's attributes and its `brick`/`brickIndex`, plus `brickId` and `brickAbove` (the indices in `out` of the brick it stands on and the brick resting on it, -1 for none; see `studMode`, which can ask for every stud instead), with identity `rot` and unit `scale`, so a stud mesh modelled at world size with its base at the origin spawns straight onto it; the bounds columns are reset to zero. `islandsAttr` optionally writes a DETAIL u32 on `out` counting the pieces the build falls into when only stud CLUTCH holds it — a brick is joined to the bricks sitting on its top face where their footprints overlap, and side contact does not count, so a value above 1 is a build that comes apart when lifted. HALO: none. A brick spans cells, so cooked over part of the boxes it cuts bricks at the part's edge; this belongs on an unbounded level or before a split. Not GPU-eligible: the packing is sequential by construction. The occupancy grid is dense over the boxes' joint extent and refused past 16.7 million cells.",
+            "description": "Reads axis-aligned BOXES on a stud lattice — one per point, its corners in two point attributes — and writes the BRICKS that build them: one point per brick, from a stated catalogue of footprints, that together fill exactly the lattice cells the boxes cover. The lattice is `pitch` in world units per cell (a stud is 1 across, a plate 0.4 tall, by default), anchored at `origin`; x and z count studs and y counts plates. Every corner must land on the lattice, and one that does not is refused naming the point and the corner, because a box half a stud off is a box the graph upstream built on a different lattice. Boxes may overlap: their cells are unioned, and a cell two boxes claim belongs to the one with the lower point IDENTITY (stored position bits plus `seed`), never the lower array index, so shuffling the input changes nothing — unless two overlapping boxes share both P and `seed`, which identity cannot tell apart, and then the earlier one in the input wins. WHAT A BRICK MAY NOT CROSS is `groupBy`: cells whose boxes differ in any listed attribute are different material and never share a brick, so a wall's colour changes exactly where its boxes' colour does. Each brick carries every point attribute of the box that owns its anchor cell. THE PACKING IS A SCANLINE GREEDY, course by course from the bottom and within a course in z then x. The first unfilled cell of a scan is always the minimum corner of the brick that covers it, so the scan never needs to backtrack; the choice there is WHICH catalogue entry, either way round. HEIGHT COMES FIRST: the tallest entry that fits is the course, so a wall is laid in full bricks and plates appear only where the space is shorter than a brick. Among footprints of that height the score is the footprint in studs less `stagger` for every stud of joint in the brick's bottom course that sits directly on a seam in the course below, counted only on the joints the placement decides — where the cell across is the same material and not yet filled — a running bond, the reason real walls hold together, charged only where a different brick could have avoided it — PLUS `bond` for every two separate pieces the placement joins into one, which is what keeps a floor or a roof laid over an empty room from coming out as loose plates (pieces as stud clutch holds them; see `islandsAttr`). AHEAD OF THAT SCORE, WITHIN THE HEIGHT, COMES WHAT HOLDS. A brick is gripped only through its top and bottom faces, so a placement with no brick under its footprint and no cell to be filled over it — a plate in the middle of a one-plate floor, over an empty room and under another — is loose in every build order. A placement that would leave a cell beside it with no HELD placement left to cover it STRANDS the cell: whatever brick covered it would be loose too. So each placement is charged the loose bricks it commits the build to — one if it is held by nothing, plus one for every cell it strands — and the fewest wins, then a held placement over one held by nothing, then the score. Both charges only ever decide where a course has cells with nothing under or over them; a wall, or anything standing on what is below it, packs by the score alone. Ties go to the larger footprint, then the earlier catalogue entry, then the entry as listed rather than turned. If nothing fits — a catalogue with no 1x1 plate meeting a one-plate gap — the cell is refused by name rather than left empty, so the output always covers the input exactly. OUTPUT `out`: one point per brick in scan order. P is the brick's centre, `rot` a quarter turn about y when the entry was placed turned (identity otherwise), and `scale` its full extents in its OWN frame — w and d studs and h plates as listed, in world units — so a unit box copied onto these points draws every brick in place. `boundsMin`/`boundsMax` are its world corners, the same convention it reads. `brick` (string) is the entry as `WxDxH`, ready to be spawnInstances' `assetAttr`, and `brickIndex` (i32) is its position in the catalogue — `bricks` followed by `extraBricks`. OUTPUT `studs`: one point per stud left SHOWING — on a brick's top where the lattice cell above is empty — at the stud's base centre on the brick's top face, carrying the brick's attributes and its `brick`/`brickIndex`, plus `brickId` and `brickAbove` (the indices in `out` of the brick it stands on and the brick resting on it, -1 for none; see `studMode`, which can ask for every stud instead), with identity `rot` and unit `scale`, so a stud mesh modelled at world size with its base at the origin spawns straight onto it; the bounds columns are reset to zero. `islandsAttr` optionally writes a DETAIL u32 on `out` counting the pieces the build falls into when only stud CLUTCH holds it — a brick is joined to the bricks sitting on its top face where their footprints overlap, and side contact does not count, so a value above 1 is a build that comes apart when lifted. HALO: none. A brick spans cells, so cooked over part of the boxes it cuts bricks at the part's edge; this belongs on an unbounded level or before a split. Not GPU-eligible: the packing is sequential by construction. The occupancy grid is dense over the boxes' joint extent and refused past 16.7 million cells.",
             "properties": {
               "params": {
                 "additionalProperties": false,

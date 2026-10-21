@@ -871,6 +871,116 @@ describe("packBricks: bond", () => {
   });
 });
 
+describe("packBricks: what holds", () => {
+  // Every case is a ONE-plate floor (tag 1) over walls of another material,
+  // with nothing over the floor: a floor plate is gripped only where a wall
+  // brick is under it, so each plate has to reach a wall on its own — no
+  // course above can bridge it, which is the case `bond` cannot answer.
+  const floorPlates = (out: Geometry): Brick[] => readBricks(out).filter((b) => b.tag === 1);
+
+  it("lays a floor plate that reaches a wall over a bigger one that reaches nothing", async () => {
+    // An 8 x 8 floor whose only wall runs under its far edge, z = 7, in two
+    // materials, so the wall is two bricks with a seam under x = 1 | 2.
+    // By the score alone the first plate is an 8x2 across x (16, touching
+    // no wall), not a 2x8 down z (16 less 3 for the stud of joint on the
+    // seam): three of the four strips would be loose. Held first, every
+    // strip runs down to the wall.
+    const specs: BoxSpec[] = [
+      { lo: [0, 0, 7], hi: [2, 3, 8], tag: 2 },
+      { lo: [2, 0, 7], hi: [8, 3, 8], tag: 3 },
+      { lo: [0, 3, 0], hi: [8, 4, 8], tag: 1 },
+    ];
+    const { out } = await pack(boxCloud(specs), { groupBy: ["tag"] });
+    // Non-vacuity: the wall really is two bricks, so the seam is there.
+    expect(readBricks(out).filter((b) => b.tag !== 1)).toHaveLength(2);
+    const plates = floorPlates(out);
+    expect(plates.map((b) => b.ext)).toEqual([
+      [2, 1, 8],
+      [2, 1, 8],
+      [2, 1, 8],
+      [2, 1, 8],
+    ]);
+    // Two pieces, each standing on the table: the plates over either wall
+    // brick, which nothing joins to the other's.
+    expect(await holding(out)).toEqual({ islands: 2, never: 0 });
+  });
+
+  it("does not lay a plate that cuts the cell beside it off from every wall", async () => {
+    // A 4 x 7 floor over walls at x = 0 and z = 6. By the score alone the
+    // corner takes a 2x6 down z (12 less 3 for its seam, against 8 for a
+    // 4x2 across x); that leaves the cell beside its first stud seven studs
+    // from the wall at z = 6 with x = 0 taken, no plate is seven long, and
+    // the plate that covers it is loose. Charged for the cell it strands,
+    // the 2x6 loses to plates that each reach a wall.
+    const specs: BoxSpec[] = [
+      { lo: [0, 0, 0], hi: [1, 3, 6], tag: 2 },
+      { lo: [0, 0, 6], hi: [4, 3, 7], tag: 3 },
+      { lo: [0, 3, 0], hi: [4, 4, 7], tag: 1 },
+    ];
+    const { out } = await pack(boxCloud(specs), { groupBy: ["tag"] });
+    const plates = floorPlates(out);
+    expect(plates.some((b) => b.lo[0] === 0 && b.lo[2] === 0 && b.ext[0] === 2 && b.ext[2] === 6)).toBe(false);
+    expect(await holding(out)).toEqual({ islands: 1, never: 0 });
+    const { cells, doubled } = rasterize(readBricks(out));
+    expect(doubled).toBe(0);
+    expect([...cells.keys()].sort()).toEqual([...unionCells(specs).keys()].sort());
+  });
+
+  it("does not trade one loose brick for two", async () => {
+    // An 8 x 4 floor gripped at ONE cell, (0, 3). Only one plate can cover
+    // that cell, so one loose plate is the least there can be. A held plate
+    // at the corner runs down z to it and strands the cells beside it;
+    // preferring it there would leave the rest in two loose plates.
+    const specs: BoxSpec[] = [
+      { lo: [0, 0, 3], hi: [1, 3, 4], tag: 2 },
+      { lo: [0, 3, 0], hi: [8, 4, 4], tag: 1 },
+    ];
+    const { out } = await pack(boxCloud(specs), { groupBy: ["tag"] });
+    expect(floorPlates(out)).toHaveLength(2);
+    expect((await holding(out)).never).toBe(1);
+  });
+
+  it("leaves next to nothing loose in a floor between two empty storeys over two rooms", async () => {
+    // Two rooms side by side, W1 x D1 and W2 x D2, each walled one brick
+    // tall, under a one-plate floor and a second storey of walls: the shape
+    // a terrace of houses has at every upper floor. Measured over these 224
+    // layouts, the score alone left 55 loose bricks in 46 of them; with
+    // what holds first, 3 in 3. Those three are a trap two placements back
+    // — every placement at the anchor strands a cell, because an earlier
+    // one used the plate that would have held it — which a one-step look
+    // at the cells beside a placement cannot see.
+    const ring = (x0: number, z0: number, x1: number, z1: number, y0: number, y1: number): BoxSpec[] => [
+      { lo: [x0, y0, z0], hi: [x1, y1, z0 + 1], tag: 0 },
+      { lo: [x0, y0, z1 - 1], hi: [x1, y1, z1], tag: 0 },
+      { lo: [x0, y0, z0 + 1], hi: [x0 + 1, y1, z1 - 1], tag: 0 },
+      { lo: [x1 - 1, y0, z0 + 1], hi: [x1, y1, z1 - 1], tag: 0 },
+    ];
+    let loose = 0;
+    let layouts = 0;
+    for (const W1 of [5, 7, 9, 11]) {
+      for (const W2 of [5, 9]) {
+        for (let D1 = 5; D1 <= 11; D1++) {
+          for (const D2 of [5, 7, 9, 11]) {
+            const specs: BoxSpec[] = [
+              ...ring(0, 0, W1, D1, 0, 3),
+              ...ring(W1, 0, W1 + W2, D2, 0, 3),
+              { lo: [0, 3, 0], hi: [W1, 4, D1], tag: 1 },
+              { lo: [W1, 3, 0], hi: [W1 + W2, 4, D2], tag: 1 },
+              ...ring(0, 0, W1, D1, 4, 7),
+              ...ring(W1, 0, W1 + W2, D2, 4, 7),
+            ];
+            const { out } = await pack(boxCloud(specs), { groupBy: ["tag"] });
+            loose += (await holding(out)).never;
+            layouts++;
+          }
+        }
+      }
+    }
+    expect(layouts).toBe(224);
+    expect(loose).toBeLessThanOrEqual(3);
+  });
+});
+
 describe("packBricks: studMode and the stud index columns", () => {
   // A base, a plate on part of it, a brick overhanging the base's edge, a
   // separate low block, and a column reaching the top of the grid.

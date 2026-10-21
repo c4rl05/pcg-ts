@@ -18,7 +18,13 @@
  * fits is the course — and then footprint, less a cost for every stud of
  * joint that would sit on a seam in the course below where a bigger brick
  * could have bridged it. A placement that joins separate pieces of
- * the build (as clutch holds them) into one is rewarded on top. A brick that does not fit anywhere is refused
+ * the build (as clutch holds them) into one is rewarded on top. Ahead of
+ * the score, within the height, comes what holds: each placement is
+ * charged the loose bricks it commits the build to — one if it has nothing
+ * under it and nothing over it (it is loose whatever else is laid), plus
+ * one for every cell beside it that it strands, leaving no held placement
+ * to cover it — and the fewest wins, then a held placement over one held
+ * by nothing, then the score. A brick that does not fit anywhere is refused
  * naming the cell, which is the case of a catalogue with no 1x1 plate.
  *
  * It is whole-input for the reason every packing is: a brick spans cells,
@@ -111,7 +117,7 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
   type: NODE,
   category: "point op",
   description:
-    "Reads axis-aligned BOXES on a stud lattice — one per point, its corners in two point attributes — and writes the BRICKS that build them: one point per brick, from a stated catalogue of footprints, that together fill exactly the lattice cells the boxes cover. The lattice is `pitch` in world units per cell (a stud is 1 across, a plate 0.4 tall, by default), anchored at `origin`; x and z count studs and y counts plates. Every corner must land on the lattice, and one that does not is refused naming the point and the corner, because a box half a stud off is a box the graph upstream built on a different lattice. Boxes may overlap: their cells are unioned, and a cell two boxes claim belongs to the one with the lower point IDENTITY (stored position bits plus `seed`), never the lower array index, so shuffling the input changes nothing — unless two overlapping boxes share both P and `seed`, which identity cannot tell apart, and then the earlier one in the input wins. WHAT A BRICK MAY NOT CROSS is `groupBy`: cells whose boxes differ in any listed attribute are different material and never share a brick, so a wall's colour changes exactly where its boxes' colour does. Each brick carries every point attribute of the box that owns its anchor cell. THE PACKING IS A SCANLINE GREEDY, course by course from the bottom and within a course in z then x. The first unfilled cell of a scan is always the minimum corner of the brick that covers it, so the scan never needs to backtrack; the choice there is WHICH catalogue entry, either way round. HEIGHT COMES FIRST: the tallest entry that fits is the course, so a wall is laid in full bricks and plates appear only where the space is shorter than a brick. Among footprints of that height the score is the footprint in studs less `stagger` for every stud of joint in the brick's bottom course that sits directly on a seam in the course below, counted only on the joints the placement decides — where the cell across is the same material and not yet filled — a running bond, the reason real walls hold together, charged only where a different brick could have avoided it — PLUS `bond` for every two separate pieces the placement joins into one, which is what keeps a floor or a roof laid over an empty room from coming out as loose plates (pieces as stud clutch holds them; see `islandsAttr`). Ties go to the larger footprint, then the earlier catalogue entry, then the entry as listed rather than turned. If nothing fits — a catalogue with no 1x1 plate meeting a one-plate gap — the cell is refused by name rather than left empty, so the output always covers the input exactly. OUTPUT `out`: one point per brick in scan order. P is the brick's centre, `rot` a quarter turn about y when the entry was placed turned (identity otherwise), and `scale` its full extents in its OWN frame — w and d studs and h plates as listed, in world units — so a unit box copied onto these points draws every brick in place. `boundsMin`/`boundsMax` are its world corners, the same convention it reads. `brick` (string) is the entry as `WxDxH`, ready to be spawnInstances' `assetAttr`, and `brickIndex` (i32) is its position in the catalogue — `bricks` followed by `extraBricks`. OUTPUT `studs`: one point per stud left SHOWING — on a brick's top where the lattice cell above is empty — at the stud's base centre on the brick's top face, carrying the brick's attributes and its `brick`/`brickIndex`, plus `brickId` and `brickAbove` (the indices in `out` of the brick it stands on and the brick resting on it, -1 for none; see `studMode`, which can ask for every stud instead), with identity `rot` and unit `scale`, so a stud mesh modelled at world size with its base at the origin spawns straight onto it; the bounds columns are reset to zero. `islandsAttr` optionally writes a DETAIL u32 on `out` counting the pieces the build falls into when only stud CLUTCH holds it — a brick is joined to the bricks sitting on its top face where their footprints overlap, and side contact does not count, so a value above 1 is a build that comes apart when lifted. HALO: none. A brick spans cells, so cooked over part of the boxes it cuts bricks at the part's edge; this belongs on an unbounded level or before a split. Not GPU-eligible: the packing is sequential by construction. The occupancy grid is dense over the boxes' joint extent and refused past 16.7 million cells.",
+    "Reads axis-aligned BOXES on a stud lattice — one per point, its corners in two point attributes — and writes the BRICKS that build them: one point per brick, from a stated catalogue of footprints, that together fill exactly the lattice cells the boxes cover. The lattice is `pitch` in world units per cell (a stud is 1 across, a plate 0.4 tall, by default), anchored at `origin`; x and z count studs and y counts plates. Every corner must land on the lattice, and one that does not is refused naming the point and the corner, because a box half a stud off is a box the graph upstream built on a different lattice. Boxes may overlap: their cells are unioned, and a cell two boxes claim belongs to the one with the lower point IDENTITY (stored position bits plus `seed`), never the lower array index, so shuffling the input changes nothing — unless two overlapping boxes share both P and `seed`, which identity cannot tell apart, and then the earlier one in the input wins. WHAT A BRICK MAY NOT CROSS is `groupBy`: cells whose boxes differ in any listed attribute are different material and never share a brick, so a wall's colour changes exactly where its boxes' colour does. Each brick carries every point attribute of the box that owns its anchor cell. THE PACKING IS A SCANLINE GREEDY, course by course from the bottom and within a course in z then x. The first unfilled cell of a scan is always the minimum corner of the brick that covers it, so the scan never needs to backtrack; the choice there is WHICH catalogue entry, either way round. HEIGHT COMES FIRST: the tallest entry that fits is the course, so a wall is laid in full bricks and plates appear only where the space is shorter than a brick. Among footprints of that height the score is the footprint in studs less `stagger` for every stud of joint in the brick's bottom course that sits directly on a seam in the course below, counted only on the joints the placement decides — where the cell across is the same material and not yet filled — a running bond, the reason real walls hold together, charged only where a different brick could have avoided it — PLUS `bond` for every two separate pieces the placement joins into one, which is what keeps a floor or a roof laid over an empty room from coming out as loose plates (pieces as stud clutch holds them; see `islandsAttr`). AHEAD OF THAT SCORE, WITHIN THE HEIGHT, COMES WHAT HOLDS. A brick is gripped only through its top and bottom faces, so a placement with no brick under its footprint and no cell to be filled over it — a plate in the middle of a one-plate floor, over an empty room and under another — is loose in every build order. A placement that would leave a cell beside it with no HELD placement left to cover it STRANDS the cell: whatever brick covered it would be loose too. So each placement is charged the loose bricks it commits the build to — one if it is held by nothing, plus one for every cell it strands — and the fewest wins, then a held placement over one held by nothing, then the score. Both charges only ever decide where a course has cells with nothing under or over them; a wall, or anything standing on what is below it, packs by the score alone. Ties go to the larger footprint, then the earlier catalogue entry, then the entry as listed rather than turned. If nothing fits — a catalogue with no 1x1 plate meeting a one-plate gap — the cell is refused by name rather than left empty, so the output always covers the input exactly. OUTPUT `out`: one point per brick in scan order. P is the brick's centre, `rot` a quarter turn about y when the entry was placed turned (identity otherwise), and `scale` its full extents in its OWN frame — w and d studs and h plates as listed, in world units — so a unit box copied onto these points draws every brick in place. `boundsMin`/`boundsMax` are its world corners, the same convention it reads. `brick` (string) is the entry as `WxDxH`, ready to be spawnInstances' `assetAttr`, and `brickIndex` (i32) is its position in the catalogue — `bricks` followed by `extraBricks`. OUTPUT `studs`: one point per stud left SHOWING — on a brick's top where the lattice cell above is empty — at the stud's base centre on the brick's top face, carrying the brick's attributes and its `brick`/`brickIndex`, plus `brickId` and `brickAbove` (the indices in `out` of the brick it stands on and the brick resting on it, -1 for none; see `studMode`, which can ask for every stud instead), with identity `rot` and unit `scale`, so a stud mesh modelled at world size with its base at the origin spawns straight onto it; the bounds columns are reset to zero. `islandsAttr` optionally writes a DETAIL u32 on `out` counting the pieces the build falls into when only stud CLUTCH holds it — a brick is joined to the bricks sitting on its top face where their footprints overlap, and side contact does not count, so a value above 1 is a build that comes apart when lifted. HALO: none. A brick spans cells, so cooked over part of the boxes it cuts bricks at the part's edge; this belongs on an unbounded level or before a split. Not GPU-eligible: the packing is sequential by construction. The occupancy grid is dense over the boxes' joint extent and refused past 16.7 million cells.",
   inputs: [{ name: "in", kind: "geometry" }],
   outputs: [
     { name: "out", kind: "geometry" },
@@ -413,6 +419,134 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
     // shortest brick always won, and charging the scan's already-filled
     // side cost 9% more bricks over forty houses for a WORSE bond (22% of
     // head joints running straight against 15%).
+    // HELD: whether a placement can ever be gripped by anything. Clutch is
+    // vertical only, so a brick with no brick under its footprint and no
+    // cell to be filled over it is a piece of its own whatever else is
+    // laid, and no build order can attach it. A floor over an empty room
+    // is where that bites: the room below is empty, the room above is
+    // empty, and a plate in the middle reaches neither wall.
+    const held = (x: number, y: number, z: number, cand: Candidate): boolean => {
+      if (y === 0) return true;
+      const top = y + cand.h;
+      for (let zz = z; zz < z + cand.fz; zz++) {
+        for (let xx = x; xx < x + cand.fx; xx++) {
+          if ((brickOf[at(xx, y - 1, zz)] as number) >= 0) return true;
+          if (top < ny && (owner[at(xx, top, zz)] as number) >= 0) return true;
+        }
+      }
+      return false;
+    };
+    // A cell of this course that only a brick reaching past it can hold:
+    // unfilled, of the material g, nothing standing under it and nothing
+    // to come over it at height h.
+    const needy = (xx: number, y: number, zz: number, h: number, g: number): boolean => {
+      if (y === 0 || xx < 0 || zz < 0 || xx >= nx || zz >= nz) return false;
+      const k = at(xx, y, zz);
+      if (cellGroup[k] !== g || (brickOf[k] as number) >= 0) return false;
+      if ((brickOf[at(xx, y - 1, zz)] as number) >= 0) return false;
+      return !(y + h < ny && (owner[at(xx, y + h, zz)] as number) >= 0);
+    };
+    // Where course y's bricks of height h can be gripped — a brick under
+    // the cell or a cell to be filled over it — as a prefix sum over x and
+    // z, so a window is asked "any grip in here?" at once. Built when a
+    // course first asks, and only then.
+    const gripSum = new Int32Array((nx + 1) * (nz + 1));
+    let gripY = -1;
+    let gripH = -1;
+    const grips = (y: number, h: number): void => {
+      if (gripY === y && gripH === h) return;
+      gripY = y;
+      gripH = h;
+      for (let zz = 0; zz < nz; zz++) {
+        let run = 0;
+        for (let xx = 0; xx < nx; xx++) {
+          if ((brickOf[at(xx, y - 1, zz)] as number) >= 0 || (y + h < ny && (owner[at(xx, y + h, zz)] as number) >= 0)) run++;
+          gripSum[(zz + 1) * (nx + 1) + xx + 1] = (gripSum[zz * (nx + 1) + xx + 1] as number) + run;
+        }
+      }
+    };
+    const anyGrip = (ax: number, az: number, bx: number, bz: number): boolean => {
+      const a = Math.max(0, ax);
+      const c = Math.max(0, az);
+      const b = Math.min(nx, bx);
+      const d = Math.min(nz, bz);
+      if (b <= a || d <= c) return false;
+      const w = nx + 1;
+      return (gripSum[d * w + b] as number) - (gripSum[c * w + b] as number) - (gripSum[d * w + a] as number) + (gripSum[c * w + a] as number) > 0;
+    };
+    // Whether some HELD placement of height h still fits over the cell.
+    // If none does, whatever brick covers it will be held by nothing.
+    const holdable = (cx: number, y: number, cz: number, h: number, g: number): boolean => {
+      grips(y, h);
+      for (const cc of catalogue) {
+        if (cc.h !== h) continue;
+        // Every placement of this entry over the cell lies in this window;
+        // with no grip anywhere in it, none of them is held.
+        if (!anyGrip(cx - cc.fx + 1, cz - cc.fz + 1, cx + cc.fx, cz + cc.fz)) continue;
+        for (let oz = 0; oz < cc.fz && cz - oz >= 0; oz++) {
+          for (let ox = 0; ox < cc.fx && cx - ox >= 0; ox++) {
+            if (fits(cx - ox, y, cz - oz, cc, g) && held(cx - ox, y, cz - oz, cc)) return true;
+          }
+        }
+      }
+      return false;
+    };
+    // Per anchor: whether each needy cell was holdable before any candidate,
+    // keyed by height and cell. Per course: the cells found NOT holdable,
+    // which stay that way — filling cells only ever takes placements away,
+    // and nothing below the course or over it changes while it is laid.
+    const holdableBefore = new Map<number, boolean>();
+    const deadCourse = new Int32Array(sxz).fill(-1);
+    const deadHeight = new Int32Array(sxz);
+    const fill = (x: number, y: number, z: number, cand: Candidate, id: number): void => {
+      for (let yy = y; yy < y + cand.h; yy++) {
+        for (let zz = z; zz < z + cand.fz; zz++) {
+          for (let xx = x; xx < x + cand.fx; xx++) brickOf[at(xx, yy, zz)] = id;
+        }
+      }
+    };
+    const watch: number[] = [];
+    // STRANDS: how many needy cells just outside the placement it would
+    // leave with no held placement to cover them, counting only cells that
+    // had one before it. A stranded cell is a brick held by nothing, laid
+    // later: the scan only fills cells, so its options never come back.
+    const strands = (x: number, y: number, z: number, cand: Candidate, g: number): number => {
+      if (y === 0) return 0;
+      watch.length = 0;
+      const consider = (cx: number, cz: number): void => {
+        if (!needy(cx, y, cz, cand.h, g)) return;
+        const c = cz * nx + cx;
+        if (deadCourse[c] === y && deadHeight[c] === cand.h) return;
+        const key = cand.h * sxz + c;
+        let was = holdableBefore.get(key);
+        if (was === undefined) {
+          was = holdable(cx, y, cz, cand.h, g);
+          holdableBefore.set(key, was);
+          if (!was) {
+            deadCourse[c] = y;
+            deadHeight[c] = cand.h;
+          }
+        }
+        if (was) watch.push(cx, cz);
+      };
+      for (let zz = z; zz < z + cand.fz; zz++) {
+        consider(x - 1, zz);
+        consider(x + cand.fx, zz);
+      }
+      for (let xx = x; xx < x + cand.fx; xx++) {
+        consider(xx, z - 1);
+        consider(xx, z + cand.fz);
+      }
+      if (watch.length === 0) return 0;
+      // Laid for the question only, under the id it would take, and lifted.
+      fill(x, y, z, cand, bCand.length);
+      let count = 0;
+      for (let i = 0; i < watch.length; i += 2) {
+        if (!holdable(watch[i] as number, y, watch[i + 1] as number, cand.h, g)) count++;
+      }
+      fill(x, y, z, cand, -1);
+      return count;
+    };
     const open = (k: number, g: number): boolean => cellGroup[k] === g && (brickOf[k] as number) < 0;
     const alignedSeams = (x: number, y: number, z: number, cand: Candidate, g: number): number => {
       if (y === 0) return 0;
@@ -448,17 +582,41 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
           // plate beat any full brick whose end met a seam, and the plate
           // then knocked every course above it off the brick rhythm — a
           // house's walls came out three quarters plates.
+          //
+          // Within that height, WHAT HOLDS comes before the score. Each
+          // placement is charged the loose bricks it commits the build to:
+          // one if it is held by nothing (see `held`), plus one for every
+          // cell beside it that it strands (see `strands`). The fewest wins,
+          // then a held placement over one held by nothing, and only then
+          // the score — no score buys back a brick that is loose in every
+          // build order. Charging a stranded cell like a loose brick is what
+          // keeps the rule from trading one loose brick for two: a held
+          // placement that strands two cells loses to the loose one that
+          // strands none. Both charges are zero wherever every cell of the
+          // course has something under or over it, so a wall, a solid block
+          // or anything standing on what is below packs by the score alone.
+          let bestLoose = Infinity;
+          let bestHeld = false;
+          holdableBefore.clear();
           for (const cand of catalogue) {
-            // No placement scores above its footprint plus a join for
-            // every stud but one, so once that bound is beaten nothing
-            // smaller can win.
-            if (best !== undefined && (cand.h < best.h || cand.area + bond * (cand.area - 1) <= bestScore)) break;
+            // Once a held placement stranding nothing is the best, only the
+            // score can be beaten, and no placement scores above its
+            // footprint plus a join for every stud but one: past that bound
+            // nothing smaller can win.
+            const settled = bestLoose === 0;
+            if (best !== undefined && (cand.h < best.h || (settled && cand.area + bond * (cand.area - 1) <= bestScore))) break;
             if (!fits(x, y, z, cand, g)) continue;
+            const isHeld = held(x, y, z, cand);
             let score = cand.area - stagger * alignedSeams(x, y, z, cand, g);
             if (bond > 0) score += bond * joins(x, y, z, cand);
-            if (score > bestScore) {
+            if (settled && (!isHeld || score <= bestScore)) continue;
+            const loose = (isHeld ? 0 : 1) + strands(x, y, z, cand, g);
+            if (loose > bestLoose) continue;
+            if (loose < bestLoose || (isHeld && !bestHeld) || (isHeld === bestHeld && score > bestScore)) {
               bestScore = score;
               best = cand;
+              bestLoose = loose;
+              bestHeld = isHeld;
             }
           }
           if (best === undefined) {
@@ -467,11 +625,7 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
             );
           }
           const id = bCand.length;
-          for (let yy = y; yy < y + best.h; yy++) {
-            for (let zz = z; zz < z + best.fz; zz++) {
-              for (let xx = x; xx < x + best.fx; xx++) brickOf[at(xx, yy, zz)] = id;
-            }
-          }
+          fill(x, y, z, best, id);
           bx.push(x);
           by.push(y);
           bz.push(z);
