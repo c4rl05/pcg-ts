@@ -295,6 +295,12 @@ describe("domain-constant folding, differentially", () => {
     // case reads the last entry — which is the point: a table read is
     // uniform because its INDEX is, not because the table is short.
     lookup: { fn: "lookup", args: [{ fn: "nodeSeed" }], table: [0.25, -3, 7] },
+    // A seed-shifted index that lands on a middle case, and a tuple case
+    // so the folded constant has to carry the cases' broadcast width.
+    choose: {
+      fn: "choose",
+      args: [{ fn: "mul", args: [{ fn: "nodeSeed" }, INV_2_32 * 3] }, 0.25, [-3, 1, 2], 7],
+    },
     dot: { fn: "dot", args: [{ fn: "vec", args: [1, 2, 3] }, { fn: "vec", args: [{ fn: "nodeSeed" }, 5, 6] }] },
     // `cross` is the one fn the loops below cannot reach: both operands
     // must be width 3, so a bare `nodeSeed` is a width error rather than a
@@ -507,6 +513,40 @@ describe("domain-constant folding, differentially", () => {
     );
     expect(render(buriedFolded, ctx)).toBe(reference(buried, ctx));
     expect(new Set(Array.from(evaluateField(buriedFolded, ctx).data)).size).toBeGreaterThan(1);
+  });
+
+  it("folds a choose only when its index AND every case are domain-constant", () => {
+    // `choose` is classified uniform like `lookup`, but its cases are
+    // EXPRESSIONS, so the per-element case can hide in any argument, not
+    // only the index: a constant index that names a per-element case must
+    // keep the result per-element.
+    const CASES = [0.25, -3, 7, 1600];
+    const ctx = variedCtx(5, "point", SEED);
+    const constAll: FieldSpec = {
+      fn: "choose",
+      args: [{ fn: "mul", args: [{ fn: "nodeSeed" }, INV_2_32 * 3] }, ...CASES],
+    };
+    const constField = fieldFromJson(structuredClone(constAll) as FieldSpec);
+    expect(foldDomainConstants(constField, SEED, FOLD_ANY_SIZE)).not.toBe(constField);
+    expect(subject(constAll, ctx)).toBe(reference(constAll, ctx));
+
+    const perIndex: FieldSpec = { fn: "choose", args: [{ fn: "index" }, ...CASES] };
+    const perIndexField = fieldFromJson(structuredClone(perIndex) as FieldSpec);
+    expect(foldDomainConstants(perIndexField, SEED, FOLD_ANY_SIZE)).toBe(perIndexField);
+    expect(Array.from(evaluateField(perIndexField, ctx).data)).toEqual([0.25, -3, 7, 1600, 1600]);
+
+    // Index constant (always 1), the case it names per-element.
+    const perCase: FieldSpec = {
+      fn: "choose",
+      args: [{ fn: "add", args: [{ fn: "mul", args: [{ fn: "nodeSeed" }, 0] }, 1] }, 5, { fn: "index" }],
+    };
+    const perCaseFolded = foldDomainConstants(
+      fieldFromJson(structuredClone(perCase) as FieldSpec),
+      SEED,
+      FOLD_ANY_SIZE,
+    );
+    expect(render(perCaseFolded, ctx)).toBe(reference(perCase, ctx));
+    expect(Array.from(evaluateField(perCaseFolded, ctx).data)).toEqual([0, 1, 2, 3, 4]);
   });
 
   it("agrees on every domain and at every degenerate count", () => {

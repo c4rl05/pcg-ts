@@ -23,7 +23,7 @@
  * inside float arithmetic (f32 mantissa); as the kernel root it is
  * written as raw u32 and exact everywhere.
  */
-import { opaqueParam, paramSpecOf, paramValue, specChildren } from "../fields/spec.js";
+import { MAX_SPEC_DEPTH, opaqueParam, paramSpecOf, paramValue, specChildren } from "../fields/spec.js";
 import type { FieldSpec, FieldSpecArg } from "../fields/fieldJson.js";
 import { fieldFromJson, fieldFromJsonValueFree } from "../fields/fieldJson.js";
 import { hashCombine, hashSeed, hashString } from "../random/hash.js";
@@ -98,6 +98,20 @@ interface Val {
   readonly size: number;
 }
 
+/**
+ * One name a `let` binds, as the compiler holds it: the spec, compiled on
+ * its FIRST reference and the value reused by every later one. `depth` is
+ * how many frames were in scope where it was written, so it compiles
+ * against exactly the names visible there.
+ */
+interface LetSlot {
+  readonly name: string;
+  readonly spec: unknown;
+  readonly path: string;
+  readonly depth: number;
+  val?: Val;
+}
+
 interface BoundAttr {
   readonly name: string;
   readonly varName: string;
@@ -111,6 +125,13 @@ class CompileCtx {
   readonly lines: string[] = [];
   readonly libRoots = new Set<string>();
   usesSeed = false;
+  /**
+   * The `let` names in scope where the compiler is, innermost last. Reset
+   * to empty where a spliced `param` field is compiled: that expression
+   * was written elsewhere and cannot see these names (the CPU parser
+   * resets its scope at the same seam).
+   */
+  letScope: LetSlot[] = [];
 
   private readonly valueNumbers = new Map<string, Val>();
   private readonly bindings = new Map<string, BoundAttr>();
@@ -528,12 +549,71 @@ HANDLERS.set("param", (spec, path, ctx) => {
   const name = spec.name as string;
   const bound = paramSpecOf(spec as unknown as FieldSpec);
   if (bound !== undefined) {
-    return compileNode(bound as unknown as Record<string, unknown>, `${path}<${name}>`, ctx);
+    const scope = ctx.letScope;
+    ctx.letScope = [];
+    try {
+      return compileNode(bound as unknown as Record<string, unknown>, `${path}<${name}>`, ctx);
+    } finally {
+      ctx.letScope = scope;
+    }
   }
   const { slot, arity } = ctx.paramSlot(name);
   const read = (k: number): string => `params.consts[${slot}].${XYZW[k]}`;
   if (arity === 1) return ctx.emit(read(0), 1);
   return ctx.emit(`vec${arity}<f32>(${Array.from({ length: arity }, (_v, k) => read(k)).join(", ")})`, arity);
+});
+
+/**
+ * `let` and `var`: a lexical scope on the context, each binding compiled
+ * at its FIRST reference and that value handed to every later one.
+ *
+ * Why the kernel is the inline expression's, character for character.
+ * Inline, a repeated subexpression is compiled at each occurrence and
+ * every line of the second compile is a value-numbering hit in `emit`,
+ * so it emits nothing and returns the first compile's value. Here the
+ * second reference returns that value directly. The first reference
+ * compiles the binding at the same point in the walk the inline form
+ * meets its first occurrence, so the lines come out in the same order
+ * with the same numbers — and compiling at the DEFINITION instead would
+ * move them ahead of whatever the body emits before its first reference.
+ * Every other side effect of a compile (`helper`, `libRoots`, `usesSeed`)
+ * is idempotent, so skipping the repeat changes nothing else.
+ */
+HANDLERS.set("let", (spec, path, ctx) => {
+  const bind = spec.bind;
+  if (!isPlainObject(bind)) throw new GpuCompileError(`${path}: let: needs a "bind" object`);
+  const args = specArgs(spec);
+  if (args.length !== 1) throw new GpuCompileError(`${path}: let: needs exactly one body arg, got ${args.length}`);
+  const outer = ctx.letScope.length;
+  try {
+    for (const [name, value] of Object.entries(bind)) {
+      ctx.letScope.push({ name, spec: value, path: `${path}.bind.${name}`, depth: ctx.letScope.length });
+    }
+    return compileArg(args[0], `${path}.args[0]`, ctx);
+  } finally {
+    ctx.letScope.length = outer;
+  }
+});
+
+HANDLERS.set("var", (spec, path, ctx) => {
+  const name = spec.name;
+  let slot: LetSlot | undefined;
+  for (let i = ctx.letScope.length - 1; i >= 0 && slot === undefined; i--) {
+    if (ctx.letScope[i].name === name) slot = ctx.letScope[i];
+  }
+  if (slot === undefined) {
+    throw new GpuCompileError(`${path}: var ${JSON.stringify(name)}: no let binding of that name is in scope`);
+  }
+  if (slot.val === undefined) {
+    const scope = ctx.letScope;
+    ctx.letScope = scope.slice(0, slot.depth);
+    try {
+      slot.val = compileArg(slot.spec, slot.path, ctx);
+    } finally {
+      ctx.letScope = scope;
+    }
+  }
+  return slot.val;
 });
 
 HANDLERS.set("index", (_spec, _path, ctx) => ctx.emit("f32(i)", 1));
@@ -916,6 +996,52 @@ HANDLERS.set("ramp", (spec, path, ctx) => {
   const stops = spec.stops as Array<[number, number]>;
   const name = ctx.helper("ramp", rampHelperBody(stops, `${path}.stops`));
   return ctx.emit(`${name}(${a.ref})`, 1);
+});
+
+/**
+ * `choose(index, ...cases)`: `lookup`'s boundary rule with the literal
+ * entries replaced by compiled case values. The cases are SSA values, not
+ * constants, so there is no helper fn: the chain is a run of `select`s,
+ * case 0 first and each later case replacing it where `t >= k - 0.5`.
+ *
+ * Why this is the CPU's answer bit for bit. `Math.round(t) >= k` is
+ * exactly `t >= k - 0.5` (round half up IS `floor(t + 0.5)`, computed
+ * exactly), and `k - 0.5` is exact in f32 for any case count a spec can
+ * hold, so the boundaries are the same numbers on both paths. The
+ * boundaries ascend, so the last select whose test passes — the LARGEST
+ * such k — wins, which is the CPU's clamp from above (+Inf and anything
+ * past the end take the last case). An index that passes no test is below
+ * 0.5 or NaN, and both keep case 0, as the CPU's `!(k > 0)` does: the same
+ * NaN-for-free argument as `lookupHelperBody`. `select` copies bits, so a
+ * case's runtime -0, Inf or NaN reaches the output untouched, as the CPU's
+ * copy from its column does. A -0 the case computes from constants alone
+ * (`mul(-1, 0)`) is another matter: the driver may fold it to +0, for
+ * every fn and not only this one (see the parity notes in authoring.md).
+ *
+ * The index takes no part in the broadcast (it is a slot number, not a
+ * value): only the cases are widened, by `splat`, to their common width,
+ * and the scalar bool selects whole vectors — the form `byAttribute`
+ * already emits.
+ */
+HANDLERS.set("choose", (spec, path, ctx) => {
+  const args = specArgs(spec);
+  if (args.length < 2) {
+    throw new GpuCompileError(`${path}: choose: needs an index and at least one case, got ${args.length} arg(s)`);
+  }
+  const idx = compileArg(args[0], `${path}.args[0]`, ctx);
+  if (idx.size !== 1) {
+    throw new GpuCompileError(`${path}: choose: the index must be scalar, got tupleSize ${idx.size}`);
+  }
+  const cases: Val[] = [];
+  for (let i = 1; i < args.length; i++) cases.push(compileArg(args[i], `${path}.args[${i}]`, ctx));
+  const size = broadcastSizes("choose", path, cases.map((v) => v.size));
+  let acc = cases[0].size === size ? cases[0] : ctx.emit(splat(cases[0], size), size);
+  for (let k = 1; k < cases.length; k++) {
+    // One `let` per step, so a long case list stays a flat run of short
+    // lines instead of one expression nested as deep as the list is long.
+    acc = ctx.emit(`select(${acc.ref}, ${splat(cases[k], size)}, ${idx.ref} >= ${wgslF32(k - 0.5, path)})`, size);
+  }
+  return acc;
 });
 
 HANDLERS.set("lookup", (spec, path, ctx) => {
@@ -1407,10 +1533,9 @@ function collectAttrNames(v: unknown, out: Set<string>): void {
     }
     return;
   }
-  const args = v.args;
-  if (Array.isArray(args)) {
-    for (const a of args) collectAttrNames(a, out);
-  }
+  // Every other child position — `args`, and a `let`'s `bind` values,
+  // which hold reads exactly as an argument does.
+  for (const child of specChildren(v)) collectAttrNames(child, out);
 }
 
 // ---------------------------------------------------------------------------
@@ -1925,6 +2050,30 @@ function bufferType(attr: FieldKernelAttr): GpuScalarType {
  * {@link GpuCompileError} for GPU-specific constraints (unknown fn,
  * missing/string attribute, tuple sizes above 4).
  */
+/**
+ * The spec a root `let` chain evaluates to — through each body, and
+ * through a body that is a bare `var` to the binding it names — or the
+ * root itself. For the root special cases only, which turn on the fn the
+ * expression IS rather than how it was spelled. The spec has been
+ * validated by the time this runs, so a name always resolves.
+ */
+function rootThroughLets(root: FieldSpec): FieldSpec {
+  const scope = new Map<string, unknown>();
+  let cur: unknown = root;
+  for (let guard = 0; guard <= MAX_SPEC_DEPTH; guard++) {
+    if (!isPlainObject(cur)) return root;
+    if (cur.fn === "let" && isPlainObject(cur.bind) && Array.isArray(cur.args)) {
+      for (const [name, value] of Object.entries(cur.bind)) scope.set(name, value);
+      cur = cur.args[0];
+    } else if (cur.fn === "var" && typeof cur.name === "string" && scope.has(cur.name)) {
+      cur = scope.get(cur.name);
+    } else {
+      return cur as unknown as FieldSpec;
+    }
+  }
+  return root;
+}
+
 export function compileFieldSpec(spec: FieldSpecArg, layout: FieldKernelLayout): CompiledFieldKernel {
   validateLayout(layout);
   const rootSpec = normalizeRootSpec(spec);
@@ -1969,15 +2118,18 @@ export function compileFieldSpec(spec: FieldSpecArg, layout: FieldKernelLayout):
       }
     }
   };
+  // What a root `let` stands for, so `let({ i: index() }, i)` stores the
+  // same column type as the bare `index()` it is.
+  const rootLeaf = rootThroughLets(rootSpec);
   const rootAttrName =
-    rootSpec.fn === "attribute" ? (rootSpec.name as string) : rootSpec.fn === "position" ? "P" : undefined;
-  if (rootSpec.fn === "index") {
+    rootLeaf.fn === "attribute" ? (rootLeaf.name as string) : rootLeaf.fn === "position" ? "P" : undefined;
+  if (rootLeaf.fn === "index") {
     outType = "u32";
     outTupleSize = 1;
     storeLines.push("  outBuf[i] = i;");
   } else if (rootAttrName !== undefined) {
-    const expect = rootSpec.fn === "position" ? 3 : (rootSpec.tupleSize as number | undefined);
-    const origin = rootSpec.fn === "position" ? "position reads " : "";
+    const expect = rootLeaf.fn === "position" ? 3 : (rootLeaf.tupleSize as number | undefined);
+    const origin = rootLeaf.fn === "position" ? "position reads " : "";
     const attr = resolveLayoutAttr(ctx, "$", rootAttrName, expect, origin);
     if (attr.type === "i32" || attr.type === "u32") {
       // Raw integer copy, preserving the CPU zero-copy column type.

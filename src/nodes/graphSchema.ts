@@ -205,6 +205,20 @@ export const FIELD_SPEC_KEY_RULES: Readonly<Record<string, FieldKeyEntry>> = {
   base: {
     rule: { schema: { type: "string", enum: Object.keys(NOISE_BASES).sort() }, required: true },
   },
+  // A `let`'s bindings: at least one, each an identifier. The schema says
+  // the SHAPE; scope (no shadowing, every binding read, a `var` names one
+  // in scope) is lexical and is the parser's to check.
+  bind: {
+    rule: {
+      schema: {
+        type: "object",
+        minProperties: 1,
+        propertyNames: { pattern: "^[A-Za-z_][A-Za-z0-9_]*$" },
+        additionalProperties: { $ref: FIELD_ARG_REF },
+      },
+      required: true,
+    },
+  },
   cases: {
     rule: {
       schema: { type: "object", minProperties: 1, additionalProperties: { $ref: FIELD_ARG_REF } },
@@ -219,7 +233,10 @@ export const FIELD_SPEC_KEY_RULES: Readonly<Record<string, FieldKeyEntry>> = {
   min: { byFn: { param: { schema: NUMBER, required: false } } },
   name: {
     rule: { schema: NON_EMPTY_STRING, required: true },
-    byFn: { param: { schema: FIELD_PARAM_NAME, required: true } },
+    byFn: {
+      param: { schema: FIELD_PARAM_NAME, required: true },
+      var: { schema: { type: "string", pattern: "^[A-Za-z_][A-Za-z0-9_]*$" }, required: true },
+    },
   },
   opts: {
     byFn: {

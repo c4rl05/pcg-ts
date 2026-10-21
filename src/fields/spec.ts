@@ -492,8 +492,13 @@ export function isDerivedSpec(spec: FieldSpec): boolean {
  * across `fieldJson.ts`, `fold.ts`, `src/gpu/compile.ts` and
  * `src/gpu/run.ts` cannot each know a different set.
  *
- * There are five such positions:
+ * There are six such positions:
  *
+ * - `bind` VALUES — a `let`'s named subexpressions, in insertion order.
+ *   The names are literals, not specs, and are not returned. A walker
+ *   that visits every node meets each binding ONCE here, however many
+ *   `var`s read it — which is the count evaluation has too, since a let
+ *   evaluates a binding once.
  * - `args` entries — every combinator.
  * - `opts.position` — the noise samplers' sample position, an argument
  *   position that happens to be spelled inside an options bag.
@@ -537,6 +542,7 @@ export type SpecChild =
   | { readonly kind: "arg"; readonly path: string; readonly index: number; readonly value: unknown }
   | { readonly kind: "position"; readonly path: string; readonly value: unknown }
   | { readonly kind: "variant"; readonly path: string; readonly value: unknown }
+  | { readonly kind: "bind"; readonly path: string; readonly key: string; readonly value: unknown }
   | { readonly kind: "case"; readonly path: string; readonly key: string; readonly value: unknown }
   | { readonly kind: "default"; readonly path: string; readonly value: unknown };
 
@@ -546,13 +552,17 @@ export type SpecChild =
  * editor. `sub(a, b)` is unreadable as two anonymous children, and
  * `byAttribute`'s case keys are the whole content of its branches.
  *
- * This is the function that knows the five positions; `specChildren` is
+ * This is the function that knows the six positions; `specChildren` is
  * its values. Keeping it that way around is the point — the doc above
  * promises ONE answer to "what hangs off this spec", and two functions
  * each enumerating the positions would be two answers waiting to differ.
  *
- * The ORDER is the same, and is part of the contract: args in order, then
- * position, then variant, then cases in insertion order, then default.
+ * The ORDER is the same, and is part of the contract: a `let`'s `bind`
+ * values in insertion order (the order they are in scope), then args in
+ * order, then position, then variant, then cases in insertion order, then
+ * default. `bind` leads because a let's body reads what its bindings
+ * define, so a walk that reports what it meets in order meets a binding
+ * before its first reference.
  *
  * Names come from structure alone, because this module sits below the
  * grammar and must not reach the registry: an argument is `args[0]`, not
@@ -561,6 +571,13 @@ export type SpecChild =
  */
 export function specChildEntries(node: Record<string, unknown>): readonly SpecChild[] {
   const out: SpecChild[] = [];
+  const bind = node.bind;
+  if (typeof bind === "object" && bind !== null && !Array.isArray(bind)) {
+    for (const [key, value] of Object.entries(bind as Record<string, unknown>)) {
+      const path = /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) ? `bind.${key}` : `bind[${JSON.stringify(key)}]`;
+      out.push({ kind: "bind", path, key, value });
+    }
+  }
   const args = node.args;
   if (Array.isArray(args)) {
     args.forEach((value, index) => out.push({ kind: "arg", path: `args[${index}]`, index, value }));

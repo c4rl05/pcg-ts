@@ -5,6 +5,7 @@ import {
   add,
   atan2,
   attribute,
+  choose,
   component,
   constant,
   cos,
@@ -1481,6 +1482,75 @@ describe("param binding immutability", () => {
  * whose refusals nothing asserts is a message that can rot into
  * uselessness without a test noticing.
  */
+describe("choose", () => {
+  const SPEC: FieldSpec = {
+    fn: "choose",
+    args: [{ fn: "index" }, 10, [1, 2, 3], { fn: "position" }],
+  };
+
+  it("round-trips, keys like the combinator, and picks the case the index names", () => {
+    const field = fieldFromJson(SPEC);
+    expect(field.key).toBe(choose(index(), 10, [1, 2, 3], position()).key);
+    expect(fieldFromJson(fieldToJson(field)).key).toBe(field.key);
+    const viaJson = fieldFromJson(JSON.parse(JSON.stringify(SPEC)) as FieldSpec);
+    expect(viaJson.key).toBe(field.key);
+    const ctx = testCloud(4);
+    const col = evaluateField(field, ctx);
+    expect(col.tupleSize).toBe(3);
+    const P = Array.from(evaluateField(position(), ctx).data);
+    expect(Array.from(col.data)).toEqual([
+      10, 10, 10, // index 0: the scalar case, spread across the width
+      1, 2, 3, // index 1
+      ...P.slice(6, 9), // index 2: the position
+      ...P.slice(9, 12), // index 3 is past the end: clamps to the last case
+    ]);
+  });
+
+  it("rounds half UP, clamps low, and answers NaN with the first case, as lookup does", () => {
+    const idx = { fn: "sub", args: [{ fn: "mul", args: [{ fn: "index" }, 0.5] }, 1] };
+    const spec: FieldSpec = { fn: "choose", args: [idx, 10, 20, 30, 40] };
+    const ctx = testCloud(6);
+    expect(Array.from(evaluateField(fieldFromJson(spec), ctx).data)).toEqual(
+      Array.from(evaluateField(fieldFromJson({ fn: "lookup", args: [idx], table: [10, 20, 30, 40] }), ctx).data),
+    );
+    const nan: FieldSpec = { fn: "choose", args: [{ fn: "div", args: [0, 0] }, 10, 20] };
+    expect(Array.from(evaluateField(fieldFromJson(nan), testCloud(3)).data)).toEqual([10, 10, 10]);
+  });
+
+  it("accepts one case, and refuses fewer with the arity code", () => {
+    expect(Array.from(evaluateField(fieldFromJson({ fn: "choose", args: [{ fn: "index" }, 7] }), testCloud(3)).data))
+      .toEqual([7, 7, 7]);
+    for (const args of [[], [{ fn: "index" }]]) {
+      let err: unknown;
+      try {
+        fieldFromJson({ fn: "choose", args } as FieldSpec);
+      } catch (e) {
+        err = e;
+      }
+      expect(err).toBeInstanceOf(FieldJsonError);
+      expect((err as Error).message).toMatch(
+        new RegExp(`fn "choose" requires at least 2 args, got ${args.length}`),
+      );
+      expect((err as FieldJsonError).diagnostics[0]).toMatchObject({
+        code: "field-arity",
+        got: args.length,
+        expected: "at least 2 args",
+      });
+    }
+    // vec's minimum is unchanged by the generalization.
+    expect(() => fieldFromJson({ fn: "vec", args: [] })).toThrow(/requires at least 1 arg, got 0/);
+  });
+
+  it("refuses a tuple index and mismatched case widths", () => {
+    expect(() => fieldFromJson({ fn: "choose", args: [{ fn: "position" }, 1, 2] })).toThrow(
+      /the index must be scalar/,
+    );
+    expect(() => fieldFromJson({ fn: "choose", args: [{ fn: "index" }, [1, 2], [1, 2, 3]] })).toThrow(
+      /incompatible tuple sizes 2 and 3/,
+    );
+  });
+});
+
 describe("lookup", () => {
   const SPEC: FieldSpec = { fn: "lookup", args: [{ fn: "index" }], table: [10, 20, 30, 40] };
 
@@ -1589,8 +1659,8 @@ describe("variation classification", () => {
    * should see, so it fails here until someone writes it down.
    */
   const PER_ELEMENT = [
-    "attribute", "attributeIs", "byAttribute", "fbm", "fraction", "index", "param", "perlinNoise",
-    "position", "randomField", "simplexNoise", "valueNoise", "worleyFeature", "worleyNoise",
+    "attribute", "attributeIs", "byAttribute", "fbm", "fraction", "index", "let", "param", "perlinNoise",
+    "position", "randomField", "simplexNoise", "valueNoise", "var", "worleyFeature", "worleyNoise",
   ];
 
   it("every registered fn carries an explicit answer", () => {

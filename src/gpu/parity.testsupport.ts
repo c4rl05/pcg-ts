@@ -22,6 +22,7 @@ import {
   atan,
   atan2,
   attribute,
+  choose,
   clamp,
   component,
   cos,
@@ -35,6 +36,7 @@ import {
   fract,
   fraction,
   ge,
+  gt,
   length,
   lerp,
   log,
@@ -197,6 +199,14 @@ export const MINIMAL_SPECS: Record<string, FieldSpecArg> = {
   component: { fn: "component", args: [[1, 2, 3]], index: 1 },
   ramp: { fn: "ramp", args: [1], stops: [[0, 0], [1, 1]] },
   lookup: { fn: "lookup", args: [1], table: [4, 5, 6] },
+  choose: { fn: "choose", args: [1, 4, [5, 6, 7]] },
+  let: {
+    fn: "let",
+    bind: { a: 2, b: { fn: "mul", args: [{ fn: "var", name: "a" }, [1, 2, 3]] } },
+    args: [{ fn: "add", args: [{ fn: "var", name: "b" }, { fn: "var", name: "a" }] }],
+  },
+  // A var means nothing outside its let: the smallest let that reads one.
+  var: { fn: "let", bind: { a: 1.5 }, args: [{ fn: "var", name: "a" }] },
   valueNoise: { fn: "valueNoise" },
   perlinNoise: { fn: "perlinNoise" },
   simplexNoise: { fn: "simplexNoise" },
@@ -628,6 +638,73 @@ export const PARITY_CASES: ParityCase[] = [
   // signed zeros and the half-step boundaries; substituting an ascending
   // chain fails that probe on its NaN row and nowhere else.
   { name: "lookup", spec: { fn: "lookup", args: [PX], table: [-2, 0.5, 3, 8, -1] }, exact: true, budget: 0, meanAbs: 0 },
+  // Exact BY CONSTRUCTION, for `lookup`'s reason and `select`'s: the index
+  // is decided by the same comparisons against the same exactly
+  // representable halves, and the chosen case is COPIED (WGSL `select`
+  // moves bits), so what reaches the output is the case's own value —
+  // and every case here is elementwise + and x over bit-identical
+  // attribute reads, itself exact. x spans [-8, 8] with five cases, so
+  // lanes clamp low, land on every interior case and clamp high; the
+  // cases mix a vec3 with scalars, so the scalar splat is exercised too.
+  // Like lookup's row this domain holds no NaN, so the fall-through to
+  // case 0 for a NaN index is bound by the `choose` edge probe in
+  // `parity.device.test.ts`, not here. Measured 2026-10-21 at
+  // PARITY_COUNT (65 536), authored and derived: rangeUlp 0, maxUlp 0.
+  {
+    name: "choose",
+    spec: {
+      fn: "choose",
+      args: [
+        PX,
+        { fn: "mul", args: [P, 2] },
+        -1.5,
+        { fn: "add", args: [P, { fn: "vec", args: [1, 2, 3] }] },
+        PY,
+        { fn: "attribute", name: "density" },
+      ],
+    },
+    exact: true,
+    budget: 0,
+    meanAbs: 0,
+  },
+  // `let` is notation: its kernel is the inline expression's, character
+  // for character, which the twin pin in parity.test.ts asserts outright
+  // (the code-authored twin below IS the inline form, so "derived kernel
+  // = authored kernel" is "let kernel = inline kernel"). Exact because
+  // what it computes is elementwise + and x over bit-identical reads. The
+  // bindings are read several times each, one through a later binding,
+  // and one inside a noise-free `select` so a var reaches a branch too.
+  // Measured 2026-10-21 at PARITY_COUNT (65 536), authored and derived:
+  // rangeUlp 0, maxUlp 0.
+  {
+    name: "let",
+    spec: {
+      fn: "let",
+      bind: {
+        q: { fn: "mul", args: [P, 2.5] },
+        s: { fn: "add", args: [{ fn: "component", args: [{ fn: "var", name: "q" }], index: 0 }, PY] },
+      },
+      args: [
+        {
+          fn: "add",
+          args: [
+            { fn: "mul", args: [{ fn: "var", name: "q" }, { fn: "var", name: "s" }] },
+            {
+              fn: "select",
+              args: [
+                { fn: "gt", args: [{ fn: "var", name: "s" }, 0] },
+                { fn: "sub", args: [{ fn: "var", name: "q" }, { fn: "var", name: "s" }] },
+                { fn: "attribute", name: "density" },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    exact: true,
+    budget: 0,
+    meanAbs: 0,
+  },
   // rangeUlp 0 and maxUlp 0 at every count, away from knife edges.
   { name: "select/compare", spec: EXTENDED_SPECS.selectAway, exact: true, budget: 0, meanAbs: 0 },
   // rangeUlp 0 and maxUlp 0 at every count, and exact BY CONSTRUCTION
@@ -976,6 +1053,14 @@ export const DERIVED_FIELDS: Record<string, () => Field> = {
       [6, 0],
     ]),
   lookup: () => lookup(px(), [-2, 0.5, 3, 8, -1]),
+  choose: () => choose(px(), mul(position(), 2), -1.5, add(position(), vec(1, 2, 3)), py(), density()),
+  // The INLINE expression the authored `let` row names: no constructor
+  // spells a let (TypeScript has variables), so the twin is what it means.
+  let: () => {
+    const q = mul(position(), 2.5);
+    const s = add(component(q, 0), py());
+    return add(mul(q, s), select(gt(s, 0), sub(q, s), density()));
+  },
   "select/compare": () => select(ge(density(), 0.25), position(), vec(1, 2, 3)),
   step: () => step(py(), px()),
   fract: () => fract(px()),

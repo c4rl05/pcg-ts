@@ -189,8 +189,8 @@ describe("graphJsonSchema: the field grammar's key table", () => {
       }
     }
     // The count the table was written against; a new key is a new row.
-    expect(keys.size).toBe(14);
-    expect(infos.length).toBe(64);
+    expect(keys.size).toBe(15);
+    expect(infos.length).toBe(67);
   });
 
   it("holds no rule that no fn uses", () => {
@@ -490,13 +490,22 @@ describe("graphJsonSchema: agreement with deserializeGraph", () => {
           throw new Error(`no sample for ${fn}.${key}`);
       }
     };
+    // `let` and `var` are LEXICAL: a var alone is refused (nothing binds
+    // it) and a let must read what it binds, so neither can be assembled
+    // key by key. Each is sampled as the smallest let that reads a var.
+    const lexical = (argValue: unknown): Json => ({
+      fn: "let",
+      bind: { a: argValue },
+      args: [{ fn: "add", args: [{ fn: "var", name: "a" }, 1] }],
+    });
     const unaccepted: string[] = [];
     const disagreements: string[] = [];
     for (const info of listFieldFnInfos()) {
       let accepted = 0;
       for (const argValue of [1, [1, 2, 3]]) {
-        const spec: Json = { fn: info.fn };
-        for (const key of info.keys) {
+        let spec: Json = { fn: info.fn };
+        if (info.fn === "let" || info.fn === "var") spec = lexical(argValue);
+        else for (const key of info.keys) {
           spec[key] = key === "args" ? info.args!.map(() => argValue) : sample(info.fn, key);
         }
         const doc = withField(spec);

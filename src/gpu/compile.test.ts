@@ -266,6 +266,44 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   });
 });
 
+describe("choose lowering", () => {
+  it("is a select chain on lookup's boundaries, with only the cases broadcast", () => {
+    const k = compileFieldSpec(
+      {
+        fn: "choose",
+        args: [{ fn: "attribute", name: "density" }, 4, [1, 2, 3], { fn: "position" }],
+      },
+      LAYOUT,
+    );
+    // Case 0 first, each later case replacing it where `t >= k - 0.5`:
+    // the largest passing k wins, and NaN or anything below 0.5 keeps case
+    // 0 — lookup's rule, so the index decision is the CPU's bit for bit.
+    // The scalar CASE is splatted; the index is compared as a bare f32.
+    expect(k.wgsl).toContain(`  let v0 = in1[i];
+  let v1 = 4f;
+  let v2 = vec3<f32>(1f, 2f, 3f);
+  let v3 = vec3<f32>(in0[i * 3u], in0[i * 3u + 1u], in0[i * 3u + 2u]);
+  let v4 = vec3<f32>(v1);
+  let v5 = select(v4, v2, v0 >= 0.5f);
+  let v6 = select(v5, v3, v0 >= 1.5f);
+  outBuf[i * 3u] = v6.x;`);
+    expect(k.outTupleSize).toBe(3);
+    // No helper fn: the cases are values, not literals.
+    expect(k.wgsl).not.toContain("pcg_choose");
+  });
+
+  it("passes a single case through, and refuses what the CPU refuses", () => {
+    const one = compileFieldSpec({ fn: "choose", args: [{ fn: "attribute", name: "density" }, 7] }, LAYOUT);
+    expect(one.wgsl).not.toContain("select(");
+    expect(() =>
+      compileFieldSpec({ fn: "choose", args: [{ fn: "position" }, 1, 2] }, LAYOUT),
+    ).toThrow(/choose/);
+    expect(() =>
+      compileFieldSpec({ fn: "choose", args: [{ fn: "attribute", name: "density" }, [1, 2], [1, 2, 3]] }, LAYOUT),
+    ).toThrow(/incompatible tuple sizes/);
+  });
+});
+
 describe("grammar coverage", () => {
   it("the compiler supports the complete field JSON grammar", () => {
     expect(supportedGpuFieldFns()).toEqual(listFieldFns());
@@ -328,6 +366,7 @@ describe("grammar coverage", () => {
     component: { fn: "component", args: [[1, 2, 3]], index: 1 },
     ramp: { fn: "ramp", args: [1], stops: [[0, 0], [1, 1]] },
     lookup: { fn: "lookup", args: [1], table: [4, 5, 6] },
+    choose: { fn: "choose", args: [1, 4, [5, 6, 7]] },
     valueNoise: { fn: "valueNoise" },
     perlinNoise: { fn: "perlinNoise" },
     simplexNoise: { fn: "simplexNoise" },
@@ -356,6 +395,15 @@ describe("grammar coverage", () => {
     log2: { fn: "log2", args: [3] },
     smoothstep: { fn: "smoothstep", args: [0, 1, 0.25] },
     distance: { fn: "distance", args: [[1, 2, 3], [4, 5, 6]] },
+    // A binding read twice and one read by a later binding, so the case
+    // exercises the first-reference compile and the reuse.
+    let: {
+      fn: "let",
+      bind: { a: 1.5, b: { fn: "mul", args: [{ fn: "var", name: "a" }, 3] } },
+      args: [{ fn: "add", args: [{ fn: "var", name: "b" }, { fn: "var", name: "a" }] }],
+    },
+    // A var means nothing outside its let; the smallest let that reads one.
+    var: { fn: "let", bind: { a: [1, 2, 3] }, args: [{ fn: "var", name: "a" }] },
   };
 
   it("has a minimal compile case for every grammar fn", () => {

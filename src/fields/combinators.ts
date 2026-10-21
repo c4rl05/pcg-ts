@@ -1006,7 +1006,7 @@ export function lookup(input: FieldLike, table: readonly number[]): Field<1> {
         `lookup: table[${i}] is ${describeEntry(v)}, ` +
           "but the table holds LITERAL numbers only; a table entry cannot be a field expression — " +
           "put the expression in the index argument and let it choose between literals, or use " +
-          "`select` to pick between whole expressions",
+          "`choose` to pick between whole expressions",
       );
     }
     if (!Number.isFinite(v)) {
@@ -1066,4 +1066,71 @@ export function lookup(input: FieldLike, table: readonly number[]): Field<1> {
   // A copy again, so the spec and the closure cannot be made to disagree
   // by mutating what a caller can reach through `getFieldSpec`.
   return attachArgsSpec(field, "lookup", [fa], { table: entries.slice() });
+}
+
+/**
+ * The case an index names, out of a list of whole EXPRESSIONS: where
+ * `index` is 0 the result is `cases[0]`, where it is 1 `cases[1]`, and so
+ * on — {@link lookup} with fields where the literals were, and the one-node
+ * spelling of the piecewise-by-slot sum `eq(i, 0) * v0 + eq(i, 1) * v1 + …`.
+ *
+ * The index is read exactly as {@link lookup} reads it, so the two fns
+ * never disagree about which slot an index names: ROUNDED to the nearest
+ * integer (halves round up, `Math.round`'s rule) and CLAMPED into
+ * `[0, cases.length - 1]`. An index below 0 takes the first case, one past
+ * the end the last, and NaN the first. Wrapping is `mod` in front of it,
+ * with lookup's caveat for a fractional index.
+ *
+ * Unlike the sum it replaces, it is exact: the chosen case's value is
+ * copied through untouched, where `eq(i, k) * v` turns an infinite or NaN
+ * `v` in a case that did NOT fire into NaN for every element (0 * Inf is
+ * NaN), and rounds nothing only because every product but one is zero.
+ *
+ * Every case is evaluated on every element — there is no short-circuit,
+ * exactly as {@link select} and `byAttribute` — and sub-expressions shared
+ * between cases are evaluated once, because `evaluateField` memoizes per
+ * context on `Field.key`. Cases broadcast against each other by the usual
+ * rule (a scalar case spreads across any tuple width, two non-scalar
+ * widths must match), so the result's width is a property of the
+ * expression and never of which case fired. The index must be a scalar.
+ *
+ * Throws with no cases: a choice between nothing has no value to give.
+ */
+export function choose(index: FieldLike, ...cases: FieldLike[]): Field {
+  if (cases.length === 0) {
+    throw new Error(
+      "choose: needs at least one case after the index, as in choose(i, a, b); " +
+        "a choice between nothing has no value to give",
+    );
+  }
+  const fi = resolveField(index);
+  if (fi.tupleSize !== undefined && fi.tupleSize !== 1) {
+    throw new Error(
+      `choose: the index must be scalar, got tupleSize ${fi.tupleSize}; reduce it first, e.g. component(<expr>, 0)`,
+    );
+  }
+  const branches = cases.map(resolveField);
+  const staticTs = broadcastTupleSize("choose", branches.map((b) => b.tupleSize));
+  const last = branches.length - 1;
+  const key = `choose(${keyRef(fi.key)};${branches.map((b) => keyRef(b.key)).join(",")})`;
+  const field = makeField(key, staticTs, (ctx) => {
+    const ci = evaluateField(fi, ctx);
+    if (ci.tupleSize !== 1) {
+      throw new Error(`choose: the index must be scalar, got tupleSize ${ci.tupleSize}`);
+    }
+    const cols = branches.map((b) => evaluateField(b, ctx));
+    const ts = broadcastTupleSize("choose", cols.map((c) => c.tupleSize)) ?? 1;
+    const n = elementCount(ctx);
+    const out = new Float32Array(n * ts);
+    for (let i = 0; i < n; i++) {
+      const k = Math.round(ci.data[i]);
+      // `!(k > 0)` for lookup's reason: NaN takes the first case too, which
+      // is what a descending comparison chain on the device answers for
+      // free, so neither path has to spell an is-NaN test.
+      const col = cols[!(k > 0) ? 0 : k > last ? last : k];
+      for (let c = 0; c < ts; c++) out[i * ts + c] = readAt(col, i, c);
+    }
+    return { data: out, tupleSize: ts };
+  });
+  return attachArgsSpec(field, "choose", [fi, ...branches]);
 }

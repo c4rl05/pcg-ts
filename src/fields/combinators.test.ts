@@ -7,6 +7,7 @@ import {
   asin,
   atan,
   atan2,
+  choose,
   clamp,
   component,
   cos,
@@ -915,5 +916,79 @@ describe("distance", () => {
     const a = position();
     const b = vec(1.5, -2.25, 8);
     expect(asArray(ctx, distance(a, b))).toEqual(asArray(ctx, distance(b, a)));
+  });
+});
+
+describe("choose", () => {
+  // Every side of every boundary the rule has: below the list, -0.5 (which
+  // Math.round sends to -0), the f32 just under 0.5, 0.5 itself, the f32
+  // just under 1.5, 1.5, an exact hit, a half that rounds UP, past the end,
+  // both infinities and NaN.
+  const below05 = Math.fround(0.49999997);
+  const below15 = Math.fround(1.4999999);
+  const IDX = [-4, -0.5, below05, 0.5, below15, 1.5, 2, 2.5, 900, Infinity, -Infinity, NaN];
+  const ctx = cloudCtx(IDX.flatMap((x) => [x, 0, 0]));
+  const x = component(position(), 0);
+  const table = [10, 20, 30, 40];
+
+  it("reads its index exactly as lookup does: rounded half up, clamped, NaN takes the first", () => {
+    expect(asArray(ctx, choose(x, ...table))).toEqual([10, 10, 10, 20, 20, 30, 30, 40, 40, 40, 10, 10]);
+    // The same answer as lookup on every row, so the two fns can never
+    // disagree about which slot an index names.
+    expect(asArray(ctx, choose(x, ...table))).toEqual(asArray(ctx, lookup(x, table)));
+  });
+
+  it("a single case is that case for every index, NaN included", () => {
+    expect(asArray(ctx, choose(x, 7))).toEqual(IDX.map(() => 7));
+  });
+
+  it("picks between whole expressions, per element", () => {
+    // Case 0 is the index itself, case 1 its negation: which one fired is
+    // visible in the sign.
+    const c = cloudCtx([0, 0, 0, 1, 0, 0, 0.4, 0, 0, 3, 0, 0]);
+    expect(asArray(c, choose(x, add(x, 100), mul(x, -1)))).toEqual([100, -1, Math.fround(100.4), -3]);
+  });
+
+  it("broadcasts a scalar case across a tuple case, and refuses mismatched widths", () => {
+    const c = cloudCtx([0, 5, 6, 1, 7, 8, 2, 9, 10]);
+    const f = choose(x, [1, 2, 3], 5, position());
+    expect(f.tupleSize).toBe(3);
+    const col = evaluateField(f, c);
+    expect(col.tupleSize).toBe(3);
+    expect(Array.from(col.data)).toEqual([1, 2, 3, 5, 5, 5, 2, 9, 10]);
+    expect(() => choose(x, [1, 2], [1, 2, 3])).toThrow(/choose: incompatible tuple sizes 2 and 3/);
+    // The index is NOT part of the broadcast: a scalar index over vec3
+    // cases is the whole point, and the width is the cases' own.
+    expect(choose(x, 1, 2).tupleSize).toBe(1);
+  });
+
+  it("copies the chosen case through exactly, where the eq-sum turns an unfired Inf into NaN", () => {
+    const c = cloudCtx([1, 0, 0]);
+    const inf = div(1, 0);
+    expect(asArray(c, choose(x, inf, 3))).toEqual([3]);
+    expect(asArray(c, add(mul(eq(x, 0), inf), mul(eq(x, 1), 3)))).toEqual([NaN]);
+    // -0, Inf and NaN cases reach the output bit for bit when they fire.
+    const z = cloudCtx([0, 0, 0, 1, 0, 0, 2, 0, 0]);
+    const out = asArray(z, choose(x, constant(-0), inf, div(0, 0)));
+    expect(Object.is(out[0], -0)).toBe(true);
+    expect(out[1]).toBe(Infinity);
+    expect(out[2]).toBeNaN();
+  });
+
+  it("refuses no cases and a non-scalar index", () => {
+    expect(() => choose(x)).toThrow(/needs at least one case after the index/);
+    expect(() => choose(position(), 1, 2)).toThrow(/the index must be scalar, got tupleSize 3/);
+    // An index of unknown static width is checked when it evaluates.
+    expect(() => evaluateField(choose(attribute("P"), 1, 2), ctx)).toThrow(/the index must be scalar/);
+  });
+
+  it("keys and specs every argument, the index first", () => {
+    const f = choose(x, 1, position());
+    expect(f.key).toBe(choose(x, 1, position()).key);
+    expect(f.key).not.toBe(choose(x, position(), 1).key);
+    expect(f.key).not.toBe(select(x, 1, position()).key);
+    const spec = getFieldSpec(f);
+    expect(spec).toMatchObject({ fn: "choose" });
+    expect((spec as unknown as { args: unknown[] }).args).toHaveLength(3);
   });
 });

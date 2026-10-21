@@ -1022,6 +1022,113 @@ describe.skipIf(testDevice === null)(deviceSuiteName("device parity"), () => {
     expect(strays, "every lane must hold a table entry, never NaN").toEqual([]);
   }, DEVICE_MEASUREMENT_TIMEOUT_MS);
 
+  it("choose decides its index as lookup does, and copies the chosen case's bits", () => {
+    // `choose` is the `lookup` chain with compiled VALUES where the f32
+    // literals were, so the probe that row needed this one needs too: the
+    // parity row's domain holds no NaN, no infinity and no signed zero.
+    // Three probes: the index decision against the hand-derived slot at
+    // every edge, the same decision over vec3 cases with a scalar case
+    // splatted among them, and a case column holding NaN, both infinities
+    // and -0, which must reach the output untouched when it fires.
+    const geo = makeParityGeometry(64);
+    const P = geo.attrs.point.require("P");
+    const ROWS: readonly number[] = [
+      NaN, Infinity, -Infinity, 0, -0, -1, -0.5, -0.4, 0.4, 0.5, 1, 1.5, 2.5, 3.5, 4, 4.5, 4.9, 900,
+      -900,
+    ];
+    // Hand-derived from the rule (round half UP, clamp into [0, 4], NaN
+    // takes 0), row for row with lookup's EXPECTED above.
+    const SLOT: readonly number[] = [0, 4, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 3, 4, 4, 4, 4, 4, 0];
+    // Non-finite and signed-zero values for the case column, cycled.
+    const BITS: readonly number[] = [NaN, Infinity, -Infinity, -0];
+    const Pd = P.writable();
+    ROWS.forEach((x, i) => {
+      Pd[i * 3] = x;
+      Pd[i * 3 + 1] = BITS[i % BITS.length];
+    });
+
+    const PXP = { fn: "component", args: [{ fn: "position" }], index: 0 } as const;
+    const PYP = { fn: "component", args: [{ fn: "position" }], index: 1 } as const;
+    const TABLE = [-2, 0.5, 3, 8, -1];
+    // Case 1 is a SCALAR among vec3 cases, so it must come out splatted.
+    const VEC_CASES = [[-2, 0, 0], 0.5, [3, 2, -2], [8, 3, -3], [-1, 4, -4]] as const;
+    const vecOf = (slot: number): number[] => {
+      const c = VEC_CASES[slot];
+      return typeof c === "number" ? [c, c, c] : [...c];
+    };
+    const probes: Record<string, FieldSpecArg> = {
+      chooseEdges: { fn: "choose", args: [PXP, ...TABLE] },
+      chooseVec: { fn: "choose", args: [PXP, ...VEC_CASES.map((c) => (typeof c === "number" ? c : [...c]))] },
+      // Even slots take the special-valued column, odd slots a plain 0.
+      chooseBits: { fn: "choose", args: [PXP, PYP, 0, PYP, 0, PYP] },
+    };
+
+    const kernels = Object.fromEntries(
+      Object.entries(probes).map(([name, spec]) => [name, compileFieldSpec(spec, PARITY_LAYOUT)]),
+    );
+    const results = runDeviceTasks(
+      Object.entries(kernels).map(([name, kernel]) => dispatchTask(name, kernel, geo, 64, 1)),
+    );
+    const gpuCols: Record<string, Column> = {};
+    for (const result of results) {
+      expect(result.errors, result.name).toEqual([]);
+      gpuCols[result.name] = decodeRun(kernels[result.name], result.runs![0]);
+    }
+    const cpuCols = Object.fromEntries(
+      Object.entries(probes).map(([name, spec]) => [
+        name,
+        evaluateField(fieldFromJson(spec as FieldSpec), { geo, domain: "point", seed: 1 }),
+      ]),
+    );
+    expect(gpuCols.chooseVec.tupleSize).toBe(3);
+    expect(cpuCols.chooseVec.tupleSize).toBe(3);
+
+    // 1. Both paths against the RULE, lane by lane.
+    const wrong: string[] = [];
+    const fmt = (v: number): string => (Object.is(v, -0) ? "-0" : String(v));
+    for (let i = 0; i < ROWS.length; i++) {
+      const label = `row ${i} (index=${fmt(ROWS[i])})`;
+      const slot = SLOT[i];
+      const want: Record<string, number[]> = {
+        chooseEdges: [TABLE[slot]],
+        chooseVec: vecOf(slot),
+        chooseBits: [slot % 2 === 0 ? BITS[i % BITS.length] : 0],
+      };
+      for (const [name, w] of Object.entries(want)) {
+        for (const [side, cols] of [
+          ["cpu", cpuCols],
+          ["gpu", gpuCols],
+        ] as const) {
+          const got = Array.from(cols[name].data.slice(i * w.length, (i + 1) * w.length));
+          if (!got.every((g, c) => Object.is(g, w[c]))) {
+            wrong.push(`${side} ${name} ${label}: want ${w.map(fmt).join(",")}, got ${got.map(fmt).join(",")}`);
+          }
+        }
+      }
+    }
+
+    // 2. And the two paths against each other on EVERY lane and component.
+    const divergent: string[] = [];
+    for (const name of Object.keys(probes)) {
+      const c = cpuCols[name].data;
+      const g = gpuCols[name].data;
+      expect(g.length, name).toBe(c.length);
+      for (let i = 0; i < c.length; i++) {
+        if (!Object.is(c[i], g[i])) divergent.push(`${name} [${i}]: cpu=${fmt(c[i])} gpu=${fmt(g[i])}`);
+      }
+    }
+
+    console.log(
+      `[choose edge probe ${testDevice!.label}]
+` +
+        `cpu ${Array.from(cpuCols.chooseEdges.data.slice(0, ROWS.length)).join(", ")}
+` +
+        `gpu ${Array.from(gpuCols.chooseEdges.data.slice(0, ROWS.length)).join(", ")}`,
+    );
+    expect(wrong, "choose must answer the case the rounded, clamped index names").toEqual([]);
+    expect(divergent, "CPU and GPU must agree on every lane").toEqual([]);
+  }, DEVICE_MEASUREMENT_TIMEOUT_MS);
+
   it("ramp answers a stop's own value ON the stop, on both paths", () => {
     // THE PROBE THE `ramp` PARITY ROW CANNOT BE: that row reads a length
     // over a hashed cloud, which lands on a stop position on no lane. An

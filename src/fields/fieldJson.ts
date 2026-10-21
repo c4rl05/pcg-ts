@@ -51,6 +51,14 @@
  *   sqrt, pow, mod and nine others until an author read it, concluded
  *   `exp` did not exist, and wrote around it. `pcg fields` prints the
  *   REGISTRY, which is the only description of it that cannot disagree
+ * - `{ fn: "choose", args: [i, a, b, …] }` — the case `i` names, read as
+ *   `lookup` reads its index (rounded, clamped, NaN takes the first);
+ *   whole expressions where lookup's table holds literals. Index + 1 or more
+ * - `{ fn: "let", bind: { lo: <spec>, x: <spec> }, args: [body] }` with
+ *   `{ fn: "var", name: "lo" }` references — NAMES a subexpression so it
+ *   is written once. Sequential (a binding sees the earlier ones, the body
+ *   sees all) and purely notational: the result is the field the inline
+ *   expression builds, key included (see the `let` registration)
  * - `{ fn: "component", args: [a], index: 0 }`
  * - `{ fn: "ramp", args: [a], stops: [[0, 0], [1, 1]] }`
  * - `{ fn: "lookup", args: [a], table: [0.4, 1, -2] }` — the table entry
@@ -97,6 +105,7 @@ import {
   attribute,
   attributeIs,
   byAttribute,
+  choose,
   clamp,
   component,
   constant,
@@ -515,18 +524,28 @@ function checkKeys(spec: Record<string, unknown>, def: FnDef, path: string): voi
   }
 }
 
-function requireArgs(spec: Record<string, unknown>, path: string, arity: number | "variadic"): unknown[] {
+/**
+ * `"variadic"` is `{ atLeast: 1 }`, the spelling `vec` was written with
+ * before `choose` needed a minimum of two (the index and one case).
+ */
+function requireArgs(
+  spec: Record<string, unknown>,
+  path: string,
+  arity: number | "variadic" | { readonly atLeast: number },
+): unknown[] {
   const args = spec.args;
   if (!Array.isArray(args)) {
     fail(path, `fn "${String(spec.fn)}" requires an "args" array`);
   }
-  if (arity === "variadic") {
-    if (args.length < 1) {
-      fail(path, `fn "${String(spec.fn)}" requires at least 1 arg, got 0`, {
+  if (typeof arity !== "number") {
+    const min = arity === "variadic" ? 1 : arity.atLeast;
+    if (args.length < min) {
+      const expected = `at least ${min} arg${min === 1 ? "" : "s"}`;
+      fail(path, `fn "${String(spec.fn)}" requires ${expected}, got ${args.length}`, {
         code: "field-arity",
         at: "/args",
-        got: 0,
-        expected: "at least 1 arg",
+        got: args.length,
+        expected,
       });
     }
   } else if (args.length !== arity) {
@@ -562,6 +581,11 @@ function buildSpec(spec: Record<string, unknown>, path: string): Field {
   }
   if (level > deepestLevel) deepestLevel = level;
   inProgress.add(spec);
+  // The inline-expansion bookkeeping `let` and `var` adjust; see
+  // {@link inlineLevel}.
+  const parentInline = inlineLevel;
+  inlineLevel = parentInline + 1;
+  if (inlineLevel > inlineDeepest) inlineDeepest = inlineLevel;
   try {
     const fn = spec.fn;
     if (typeof fn !== "string") {
@@ -584,6 +608,7 @@ function buildSpec(spec: Record<string, unknown>, path: string): Field {
     return def.build(spec, path);
   } finally {
     inProgress.delete(spec);
+    inlineLevel = parentInline;
   }
 }
 
@@ -1178,7 +1203,20 @@ register(
       // a spliced field decides the emitted WGSL, so it must be rebuilt,
       // where a spliced literal must not.
       const bound = paramSpecOf(spec as unknown as FieldSpec);
-      if (bound !== undefined) return buildSpec(bound as Record<string, unknown>, `${path}<${name}>`);
+      if (bound !== undefined) {
+        // A spliced field was written somewhere else, so it sees none of
+        // the `let` names around this reference: its own scope starts empty.
+        const outerScope = letScope;
+        const outerDeclared = letDeclared;
+        letScope = [];
+        letDeclared = [];
+        try {
+          return buildSpec(bound as Record<string, unknown>, `${path}<${name}>`);
+        } finally {
+          letScope = outerScope;
+          letDeclared = outerDeclared;
+        }
+      }
       // The spec's own value, and last of the three: an outer binding wins
       // over it, and so does a field an outer binding already spliced
       // here. Substituted exactly as a binding is — `constant` and not a
@@ -1785,6 +1823,317 @@ register(
 );
 
 register(
+  "choose",
+  // Uniform for `lookup`'s and `select`'s reason: choosing adds no
+  // variation of its own. A domain-constant index over domain-constant
+  // cases is one value for the whole domain, and the fold — which recurses
+  // into EVERY entry of `args`, the cases included — decides the
+  // per-element case at the call site.
+  "uniform",
+  ["args"],
+  `{ fn: "choose", args: [index, caseA, caseB, caseC] }`,
+  {
+    description:
+      "The case an index names, out of a list of whole EXPRESSIONS: where `index` is 0 the result " +
+      "is the first case, where it is 1 the second, and so on — `lookup` with field expressions " +
+      "where its literals were, and the one-node spelling of the piecewise-by-slot sum " +
+      "`eq(slot, 0) * v0 + eq(slot, 1) * v1 + …`. The index is read exactly as `lookup` reads it: " +
+      "ROUNDED to the nearest integer (halves round up) and CLAMPED into the case list, so an index " +
+      "below 0 takes the first case, one past the end the last, and NaN the first; `mod` in front " +
+      "of it wraps, with `lookup`'s caveat for a fractional index. Unlike the sum it replaces it is " +
+      "exact — the chosen case's value is copied through untouched, where `eq(i, k) * v` turns an " +
+      "infinite or NaN `v` in a case that did NOT fire into NaN everywhere. EVERY case is evaluated " +
+      "on every element — there is no short-circuit, as with `select`. The index must be tuple size " +
+      "1 and takes no part in broadcasting; the cases broadcast against each other (a scalar case " +
+      "spreads across any tuple width, two non-scalar widths must match), so the result's width " +
+      "never depends on which case fired. Takes the index and at least one case.",
+    args: [
+      arg(
+        "index",
+        "Which case to take, counting from 0. Must be tuple size 1; rounded to the nearest integer " +
+          "(halves up) and clamped into the case list, NaN taking the first case.",
+      ),
+      arg(
+        "cases…",
+        "One or more fields, numbers or tuples, in slot order. At least one. They broadcast against " +
+          "each other; the result has their common width.",
+      ),
+    ],
+  },
+  (spec, path) => {
+    const args = requireArgs(spec, path, { atLeast: 2 });
+    return choose(
+      buildArg(args[0], `${path}.args[0]`),
+      ...args.slice(1).map((a, i) => buildArg(a, `${path}.args[${i + 1}]`)),
+    );
+  },
+);
+
+// -- let bindings ----------------------------------------------------------
+
+/**
+ * Key characters the `var` references of one `fieldFromJson` call may
+ * repeat between them: each reference adds its binding's `Field.key`
+ * length, which is exactly what the reference contributes to the keys
+ * composed above it. Here because `let` is the one construct in the
+ * grammar whose meaning is larger than its text. A chain of n bindings,
+ * each reading the previous one twice, is n lines of JSON and a 2^n-node
+ * expression, and `Field.key` composes its children's keys by
+ * concatenation — so without a bound that spec allocates a string the size
+ * of the expansion before anything could refuse it. Counted in KEY
+ * characters rather than nodes because a node's share of the key is not
+ * bounded (an attribute name is any length), and checked at each reference,
+ * before the parent that would concatenate it is built, so the largest
+ * string a refused spec allocates is about this size.
+ *
+ * One residue, stated rather than hidden: the cap is per call, so a field
+ * composed IN CODE from several let-built fields, each under it, can carry
+ * a derived spec whose reparse exceeds it. At 16M key characters per call
+ * that is a field whose inline JSON would be tens of megabytes.
+ */
+const MAX_LET_EXPANSION = 1 << 24;
+
+/** A name a `let` binds, and what the build learned about its value. */
+interface LetFrame {
+  readonly name: string;
+  readonly field: Field;
+  /** Levels the value occupies wherever it is inlined (0 for a raw number). */
+  readonly height: number;
+  used: boolean;
+}
+
+/**
+ * The names in scope for the build in flight, innermost last. Module
+ * state for {@link currentBindings}' reason, and RESET to empty wherever a
+ * spliced field is rebuilt (the `param` handler) and at every
+ * `fieldFromJson` entry: a name is lexical to the authored tree that wrote
+ * it, so an expression spliced in from somewhere else can never read it.
+ */
+let letScope: LetFrame[] = [];
+
+/**
+ * Every name the enclosing lets DECLARE, in scope yet or not — only so a
+ * `var` reading a binding written later (or itself) is told that, rather
+ * than that no let is in scope. Reset wherever {@link letScope} is.
+ */
+let letDeclared: string[] = [];
+
+/**
+ * The INLINE level of the node being built — where it would sit in the
+ * expression with every `let` expanded — the deepest such level reached,
+ * and the key characters `var` references have repeated so far (see
+ * {@link MAX_LET_EXPANSION}). `buildSpec` advances the level per node;
+ * `let` and `var` move it to where their inline form puts things (see the
+ * `let` handler).
+ */
+let inlineLevel = 0;
+let inlineDeepest = 0;
+let inlineKeyChars = 0;
+
+const LET_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function inScope(name: string): LetFrame | undefined {
+  for (let i = letScope.length - 1; i >= 0; i--) {
+    const frame = letScope[i] as LetFrame;
+    if (frame.name === name) return frame;
+  }
+  return undefined;
+}
+
+function checkLetName(name: string, path: string): void {
+  const at = `${path}.bind${LET_NAME.test(name) ? `.${name}` : `[${JSON.stringify(name)}]`}`;
+  if (!LET_NAME.test(name)) {
+    fail(
+      at,
+      `let binding name ${JSON.stringify(name)} is not an identifier; a name is letters, digits and ` +
+        "underscores, not starting with a digit, so the text form can write a reference to it bare",
+      { key: name },
+    );
+  }
+  if (name === "true" || name === "false" || name === "__proto__" || FNS.has(name)) {
+    fail(
+      at,
+      `let binding name "${name}" is reserved — ${
+        FNS.has(name) ? `"${name}" is a field fn, and a bare reference to it would read as one` : "it is a literal or an object key with a meaning of its own"
+      }; rename the binding`,
+      { key: name },
+    );
+  }
+  if (inScope(name) !== undefined) {
+    fail(
+      at,
+      `let binding "${name}" shadows an enclosing binding of the same name; inside one expression a ` +
+        "name means one thing — rename one of them",
+      { key: name },
+    );
+  }
+}
+
+/**
+ * Build one binding's value at inline level 1, as if it stood alone: the
+ * height it reaches is what every reference to it adds where the
+ * reference stands, so it is measured here and charged at each `var`
+ * rather than at the definition (which the inline form does not have).
+ * The key characters its own references repeat are NOT given back: those
+ * strings were really built.
+ */
+function buildBinding(v: unknown, path: string): { field: Field; height: number } {
+  const level = inlineLevel;
+  const deepest = inlineDeepest;
+  inlineLevel = 0;
+  inlineDeepest = 0;
+  try {
+    const field = buildArg(v, path);
+    return { field, height: inlineDeepest };
+  } finally {
+    inlineLevel = level;
+    inlineDeepest = deepest;
+  }
+}
+
+register(
+  "let",
+  // Never folded as a whole (`fold.ts` refuses `let` and `var` by name):
+  // what a `let` computes is its body's, which the fold reaches by
+  // recursing into `args` and `bind`. Classified per-element for
+  // `param`'s reason — the classification is per FN, and the body may be
+  // anything.
+  "per-element",
+  ["bind", "args"],
+  `{ fn: "let", bind: { name: <spec>, … }, args: [body] }`,
+  {
+    description:
+      "NAMES subexpressions so each is written once: `bind` maps names to field expressions and the " +
+      "one argument is the body, where `{fn: \"var\", name}` reads a binding. Bindings are " +
+      "SEQUENTIAL — each sees the ones written before it, and the body sees them all. Purely " +
+      "notational: the field is exactly the inline expression with every reference replaced by its " +
+      "binding — same key, same columns, same GPU kernel — and a binding read several times is " +
+      "evaluated once per element, as a repeated inline subexpression already is. A name is an " +
+      "identifier (letters, digits, `_`), not a field fn's name, `true`, `false` or `__proto__`, and " +
+      "may not re-bind a name already in scope. `bind` must not be empty and every binding must be " +
+      "read, so what an expression reads is exactly what it computes. Scope is the authored tree: " +
+      "a field spliced in through a `param` binding cannot see the names around it. In the text " +
+      "form, `let({ lo: attribute(\"lo\", 3), x: component(lo, 0) }, x * 2)` — inside a let a bare " +
+      "name is a reference.",
+    args: [arg("body", "The expression the let evaluates to; every bound name is in scope here.")],
+  },
+  (spec, path) => {
+    const bind = spec.bind;
+    if (!isPlainObject(bind)) {
+      fail(`${path}.bind`, `let requires a "bind" object mapping names to field expressions, got ${describeValue(bind)}`);
+    }
+    const names = Object.keys(bind);
+    if (names.length === 0) {
+      fail(
+        `${path}.bind`,
+        "let binds nothing; a let needs at least one name in \"bind\" — or drop the let and write its body",
+      );
+    }
+    const args = requireArgs(spec, path, 1);
+    // The let itself is not a node of the inline form: its body takes its
+    // place, one level up from where `buildSpec` put this node.
+    const level = inlineLevel;
+    const outer = letScope.length;
+    const declared = letDeclared.length;
+    letDeclared.push(...names);
+    const frames: LetFrame[] = [];
+    try {
+      for (const name of names) {
+        checkLetName(name, path);
+        const built = buildBinding(bind[name], `${path}.bind.${name}`);
+        const frame: LetFrame = { name, ...built, used: false };
+        frames.push(frame);
+        letScope.push(frame);
+      }
+      inlineLevel = level - 1;
+      const body = buildArg(args[0], `${path}.args[0]`);
+      for (const frame of frames) {
+        if (!frame.used) {
+          fail(
+            `${path}.bind.${frame.name}`,
+            `let binding "${frame.name}" is never read; read it with {"fn": "var", "name": "${frame.name}"} ` +
+              "in the body or a later binding, or remove it",
+            { key: frame.name },
+          );
+        }
+      }
+      return body;
+    } finally {
+      inlineLevel = level;
+      letScope.length = outer;
+      letDeclared.length = declared;
+    }
+  },
+);
+
+register(
+  "var",
+  // What it stands for may vary per element; see `let`.
+  "per-element",
+  ["name"],
+  `{ fn: "var", name: "lo" }`,
+  {
+    description:
+      "Reads the value an enclosing `let` bound to `name` — the same field, so reading it twice " +
+      "evaluates it once per element. Valid only inside a `let`: in its body, or in a binding " +
+      "written after the one it reads. In the text form, a bare name inside a let is this reference; " +
+      "`var(\"x\")` is the spelling that parses anywhere.",
+  },
+  (spec, path) => {
+    const name = spec.name;
+    if (typeof name !== "string" || name === "") {
+      fail(`${path}.name`, "var requires a non-empty string name");
+    }
+    const frame = inScope(name);
+    if (frame === undefined) {
+      const visible = letScope.map((f) => f.name);
+      const near = suggestNames(name, visible);
+      const inScopeList = visible.length === 0 ? "no name is in scope here" : `names in scope: ${visible.join(", ")}`;
+      fail(
+        `${path}.name`,
+        letDeclared.includes(name)
+          ? `var "${name}": the binding "${name}" is not in scope here — a binding sees only the ` +
+              `bindings written BEFORE it, never itself or a later one; ${near.clause}${inScopeList}`
+          : letDeclared.length === 0
+            ? `var "${name}": no let is in scope here; a var reads a name an enclosing let binds, in its ` +
+                "body or a later binding of the same let"
+            : `var "${name}": no binding of that name is in scope here; ${near.clause}${inScopeList} — a ` +
+                "binding is visible in the let's body and in the bindings written after it",
+        {
+          got: name,
+          valid: visible,
+          didYouMean: near.names,
+          ...(near.only !== undefined ? { fix: `replace "${name}" with "${near.only}"` } : {}),
+        },
+      );
+    }
+    frame.used = true;
+    // The reference is replaced by the whole binding in the inline form,
+    // and its key by the binding's whole key in every key composed above.
+    inlineKeyChars += frame.field.key.length;
+    const reached = inlineLevel - 1 + frame.height;
+    if (reached > inlineDeepest) inlineDeepest = reached;
+    if (reached > MAX_SPEC_DEPTH) {
+      fail(
+        path,
+        `with every let reference expanded, this expression nests deeper than ${MAX_SPEC_DEPTH} levels; ` +
+          "a let is the inline expression it stands for, so flatten the chain of bindings",
+      );
+    }
+    if (inlineKeyChars > MAX_LET_EXPANSION) {
+      fail(
+        path,
+        `with every let reference expanded, the key text the references repeat exceeds the budget of ` +
+          `${MAX_LET_EXPANSION} characters (a bound on what expanding them builds, counted at each ` +
+          "reference); a let is the inline expression it stands for, and a binding read several times by " +
+          "each of a chain of bindings doubles it per link — read fewer times, or split the work across nodes",
+      );
+    }
+    return frame.field;
+  },
+);
+
+register(
   "randomFrom",
   "uniform",
   ["args", "key"],
@@ -1965,7 +2314,7 @@ register(
           `${path}.table[${i}]`,
           `lookup's table holds LITERAL numbers only, got ${describeValue(v)}; a table entry cannot ` +
             "be a field expression — put the expression in args[0] and let the index choose between " +
-            "literals, or use `select` to pick between whole expressions",
+            "literals, or use `choose` to pick between whole expressions",
         );
       }
       if (!Number.isFinite(v)) {
@@ -2936,14 +3285,30 @@ export function fieldFromJson(spec: FieldSpec, bindings?: FieldBindings): Field 
   deepestLevel = 0;
   const outer = currentBindings;
   currentBindings = bindings;
+  // Saved and reset, not merely reset: a build is not reentrant today, but
+  // the scope is lexical to ONE authored tree, so a nested call must start
+  // from nothing and hand the outer one back exactly what it had.
+  const outerScope = letScope;
+  const outerDeclared = letDeclared;
+  const outerInline = [inlineLevel, inlineDeepest, inlineKeyChars] as const;
+  letScope = [];
+  letDeclared = [];
+  inlineLevel = 0;
+  inlineDeepest = 0;
+  inlineKeyChars = 0;
   let field: Field;
+  let expandedDepth = 0;
   try {
     field = buildSpec(spec, "$");
+    expandedDepth = inlineDeepest;
   } catch (err) {
     const located = err instanceof FieldJsonError ? locatedInSpec(err, spec) : err;
     throw bindings === undefined ? located : withBindingContext(located, spec, bindings);
   } finally {
     currentBindings = outer;
+    letScope = outerScope;
+    letDeclared = outerDeclared;
+    [inlineLevel, inlineDeepest, inlineKeyChars] = outerInline;
   }
   // Stamped LAST, over whatever spec the constructors derived while
   // building the tree, so `fieldToJson` returns the author's exact JSON
@@ -3067,7 +3432,11 @@ export function fieldFromJson(spec: FieldSpec, bindings?: FieldBindings): Field 
     }
     if (spliced !== undefined) recordSplicedProvenance(authored, spliced);
   }
-  attachAuthoredSpec(field, authored, deepestLevel);
+  // The depth the PARSER will count when this spec comes back: the
+  // authored nesting, or — through a `let` — the inline expansion when it
+  // is deeper, so a constructor composing on top refuses to derive a spec
+  // that would no longer parse, exactly as it does over the inline form.
+  attachAuthoredSpec(field, authored, Math.max(deepestLevel, expandedDepth));
   return field;
 }
 

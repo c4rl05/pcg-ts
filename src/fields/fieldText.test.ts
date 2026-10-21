@@ -125,6 +125,17 @@ const EXAMPLES: Readonly<Record<string, FieldSpec>> = {
   // fabricates `args` and nothing else, so a fn with a table key is
   // enumerated by the registry loop and then has no table to print.
   lookup: { fn: "lookup", args: [{ fn: "attribute", name: "lane" }], table: [0, 0.5, 1] },
+  let: {
+    fn: "let",
+    bind: {
+      lo: { fn: "attribute", name: "lo", tupleSize: 3 },
+      x: { fn: "component", args: [{ fn: "var", name: "lo" }], index: 0 },
+    },
+    args: [{ fn: "mul", args: [{ fn: "var", name: "x" }, 2] }],
+  },
+  // A `var` means nothing outside the let that binds it, so its example
+  // is the smallest let that reads one.
+  var: { fn: "let", bind: { a: 2 }, args: [{ fn: "var", name: "a" }] },
   randomField: { fn: "randomField", key: "thin" },
   // Width 3 only, so the generated `cross(1, 2)` would not build.
   cross: {
@@ -197,6 +208,14 @@ describe("field text: every registered fn", () => {
       printFieldSpec({ fn: "perlinNoise", opts: { frequency: 0.05, seed: { from: "node", variant: 0 } } }),
     ).toBe('perlinNoise({ frequency: 0.05, seed: { from: "node", variant: 0 } })');
     expect(printFieldSpec({ fn: "vec", args: [1, 2, { fn: "index" }] })).toBe("vec(1, 2, index())");
+    // The second variadic fn: the index, then one position per case.
+    const chooseSpec: FieldSpec = {
+      fn: "choose",
+      args: [{ fn: "attribute", name: "slot" }, 0, [1, 2, 3], { fn: "position" }],
+    };
+    expect(printFieldSpec(chooseSpec)).toBe('choose(attribute("slot"), 0, [1, 2, 3], position())');
+    expect(parseFieldText(printFieldSpec(chooseSpec))).toStrictEqual(chooseSpec);
+    expect(parseFieldText("choose(index(), 7)")).toStrictEqual({ fn: "choose", args: [{ fn: "index" }, 7] });
   });
 
   it("keeps a raw literal and an explicit constant apart", () => {
@@ -216,6 +235,14 @@ describe("field text: every registered fn", () => {
     // printer emits that the parser refuses is a round trip that reports
     // success on one end and failure on the other.
     expect(() => printFieldSpec({ fn: "vec", args: [] })).toThrowError(/at least 1 arg/);
+    // `choose` needs its index AND a case, on both ends.
+    expect(() => printFieldSpec({ fn: "choose", args: [{ fn: "index" }] })).toThrowError(
+      /fn "choose" requires at least 2 args, got 1/,
+    );
+    expect(() => parseFieldText("choose(index())")).toThrowError(
+      /fn "choose" needs at least 2 arguments, got 1 argument.*usage: choose\(arg0, arg…\)/,
+    );
+    expect(() => parseFieldText("vec()")).toThrowError(/needs at least one argument, got 0/);
     expect(() => printFieldSpec({ fn: "byAttribute", name: "part", cases: { rod: 1 } })).toThrowError(
       /requires a "default"/,
     );

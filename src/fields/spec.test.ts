@@ -51,6 +51,7 @@ import {
   log,
   log2,
   lookup,
+  choose,
   lt,
   max,
   min,
@@ -378,6 +379,11 @@ const CASES: Case[] = [
   // derived table has to carry verbatim.
   { name: "lookup clamping index", make: () => lookup(mul(RND(), 8), [-1, 0, 3.5, 12]) },
   { name: "lookup single entry", make: () => lookup(S(), [42]) },
+  { name: "choose scalar cases", make: () => choose(mul(RND(), 4), S(), DEN(), -2.5, IDX()) },
+  // A scalar index over tuple cases with a scalar spread among them: the
+  // static width is the cases' 3, never the index's 1.
+  { name: "choose tuple cases", make: () => choose(DEN(), T3(), P(), S(), N3()) },
+  { name: "choose single case", make: () => choose(NSE(), NEST()) },
 
   // -- noise ----------------------------------------------------------
   { name: "valueNoise defaults", make: () => valueNoise() },
@@ -432,7 +438,10 @@ describe("derived spec round-trip", () => {
    * added later that no constructor derives must justify itself the same
    * way, not simply appear in a filter.
    */
-  const JSON_ONLY = new Set(["param"]);
+  // `let` and `var` are notation: TypeScript has variables of its own, so
+  // no constructor spells one, and what a let BUILDS derives the inline
+  // expression (asserted below).
+  const JSON_ONLY = new Set(["let", "param", "var"]);
 
   it("the matrix reaches every grammar fn a constructor can derive", () => {
     const reached = new Set<string>();
@@ -454,6 +463,18 @@ describe("derived spec round-trip", () => {
     // ...while the same value written as a literal derives `constant`,
     // which is the whole reason no constructor needs `param`.
     expect(getFieldSpec(constant(2))?.fn).toBe("constant");
+    // A let keeps its authored spelling at the root it was written at, and
+    // what it built derives the inline expression wherever it is composed
+    // from its parts.
+    const letSpec = {
+      fn: "let",
+      bind: { a: { fn: "attribute", name: "w" } },
+      args: [{ fn: "add", args: [{ fn: "var", name: "a" }, { fn: "var", name: "a" }] }],
+    };
+    const built = fieldFromJson(letSpec);
+    expect(getFieldSpec(built)).toEqual(letSpec);
+    expect(getFieldSpec(mul(built, 2))?.args).toEqual([letSpec, { fn: "constant", value: 2 }]);
+    expect(built.key).toBe(add(attribute("w"), attribute("w")).key);
   });
 
   for (const c of CASES) {
@@ -526,6 +547,10 @@ describe("derived spec shapes", () => {
       fn: "lookup",
       args: [{ fn: "attribute", name: "lane" }],
       table: [0, 0.5, 1],
+    });
+    expect(getFieldSpec(choose(attribute("slot"), 1, position()))).toEqual({
+      fn: "choose",
+      args: [{ fn: "attribute", name: "slot" }, { fn: "constant", value: 1 }, { fn: "position" }],
     });
     expect(getFieldSpec(vec(constant(1), constant(2)))).toEqual({
       fn: "vec",

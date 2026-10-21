@@ -225,6 +225,12 @@ function caseEntries(spec: FieldSpec): [string, unknown][] | undefined {
  */
 function isDomainConstant(spec: FieldSpec): boolean {
   if (spec.fn === "param") return paramValue(spec) !== undefined;
+  // A `var` means nothing outside the `let` that binds it, so no subtree
+  // holding one can be built — and folded — on its own; and a `let` is
+  // left whole so the spec keeps the names its author wrote. Both are
+  // reached THROUGH instead: `rewrite` folds inside each binding and the
+  // body.
+  if (spec.fn === "var" || spec.fn === "let") return false;
   if (fnVariation(spec.fn) !== "uniform") return false;
   const args = spec.args;
   if (args === undefined) return true;
@@ -331,12 +337,22 @@ function rewrite(spec: FieldSpec, ctx: EvalContext, bindings: FieldBindings | un
   const nextFallback = isSpec(fallback) ? rewrite(fallback, ctx, bindings) : fallback;
   const fallbackChanged = nextFallback !== fallback;
 
-  if (!argsChanged && !positionChanged && !casesChanged && !fallbackChanged) return spec;
+  // A `let`'s bindings, rebuilt keyed for the reason the cases are: the
+  // names and their order are what the author wrote. A binding folds only
+  // when it reads no other binding (a `var` is never domain-constant), so
+  // every literal written here is one the subtree computes standing alone.
+  const binds = isPlainObject(spec.bind) ? Object.entries(spec.bind as Record<string, unknown>) : undefined;
+  const nextBinds = binds?.map(([k, v]) => [k, isSpec(v) ? rewrite(v, ctx, bindings) : v] as [string, unknown]);
+  const bindsChanged =
+    binds !== undefined && nextBinds !== undefined && nextBinds.some((e, i) => e[1] !== binds[i][1]);
+
+  if (!argsChanged && !positionChanged && !casesChanged && !fallbackChanged && !bindsChanged) return spec;
   const out: Record<string, unknown> = { ...spec };
   if (argsChanged) out.args = nextArgs;
   if (positionChanged) out.opts = { ...(spec.opts as Record<string, unknown>), position: nextPosition };
   if (casesChanged) out.cases = Object.fromEntries(nextCases as [string, unknown][]);
   if (fallbackChanged) out.default = nextFallback;
+  if (bindsChanged) out.bind = Object.fromEntries(nextBinds as [string, unknown][]);
   return out as unknown as FieldSpec;
 }
 

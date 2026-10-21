@@ -144,14 +144,16 @@ const PRINT_OPS = new Map<string, { readonly text: string; readonly prec: number
  * One positional slot of a fn's text form.
  *
  * - `args` — the `args` array, spread across `arity` positions (or all the
- *   remaining ones when the registered argument list is variadic).
+ *   remaining ones when the registered argument list is variadic, of which
+ *   there must be at least `min`: 1 for `vec`, 2 for `choose`'s index and
+ *   first case — the registered argument count, the `…` one included).
  * - `key` — one spec key, written positionally: `attribute("t", 3)`.
  * - `bag` — several INDEPENDENTLY OPTIONAL keys collapsed into one object
  *   literal. Only `param` needs it: written positionally, `min` without
  *   `value` would leave a hole nothing can spell.
  */
 type Slot =
-  | { readonly kind: "args"; readonly arity: number | "variadic" }
+  | { readonly kind: "args"; readonly arity: number | "variadic"; readonly min?: number }
   | { readonly kind: "key"; readonly key: string; readonly optional: boolean }
   | { readonly kind: "bag"; readonly keys: readonly string[] };
 
@@ -186,6 +188,12 @@ const SPECIAL_SHAPES: Readonly<Record<string, readonly Slot[]>> = {
   // one position where an identifier is a value rather than a call.
   fbm: [req("base"), opt("opts")],
   param: [req("name"), { kind: "bag", keys: ["value", "min", "max", "description"] }],
+  // `let({ lo: …, x: component(lo, 0) }, x * 2)`: the bindings first, as
+  // they are in scope, then the body. Printed and parsed by hand (see
+  // `printLet` and `Parser.parseLet`), because the names it binds change
+  // what a bare word means; the shape is what the registry check and the
+  // usage sketch read.
+  let: [req("bind"), { kind: "args", arity: 1 }],
   valueNoise: NOISE_SHAPE,
   perlinNoise: NOISE_SHAPE,
   simplexNoise: NOISE_SHAPE,
@@ -217,9 +225,15 @@ function defaultShape(info: FieldFnInfo): readonly Slot[] {
   if (info.keys.includes("args")) {
     const args = info.args ?? [];
     // A trailing `…` in an argument NAME is how the registry marks a
-    // repeated position (`vec`'s components); see `FieldFnInfo.args`.
+    // repeated position (`vec`'s components, `choose`'s cases); see
+    // `FieldFnInfo.args`. Every registered name is one position the call
+    // must fill at least once, so the count of names is the minimum.
     const variadic = args.some((a) => a.name.endsWith("…"));
-    slots.push({ kind: "args", arity: variadic ? "variadic" : args.length });
+    slots.push(
+      variadic
+        ? { kind: "args", arity: "variadic", min: Math.max(1, args.length) }
+        : { kind: "args", arity: args.length },
+    );
   }
   for (const key of info.keys) {
     if (key !== "args") slots.push(req(key));
@@ -253,8 +267,8 @@ function shapes(): Map<string, Shape> {
       );
     }
     // A variadic `args` slot swallows every remaining position, so nothing
-    // can follow it. Checked rather than assumed: `vec` is the only
-    // variadic fn today, and it has no other keys.
+    // can follow it. Checked rather than assumed: `vec` and `choose` are
+    // the variadic fns today, and neither has another key.
     const variadicAt = slots.findIndex((s) => s.kind === "args" && s.arity === "variadic");
     if (variadicAt >= 0 && variadicAt !== slots.length - 1) {
       throw new FieldJsonError(
@@ -443,11 +457,12 @@ function printCall(node: FieldSpec, shape: Shape, specPos: Map<object, string>):
           `fn "${node.fn}" expects exactly ${slot.arity} arg${slot.arity === 1 ? "" : "s"}, got ${args.length}`,
         );
       }
-      // Refused rather than printed: `vec()` is text nothing can parse
-      // back, and a printer that emits it makes the round trip a lie for
-      // one spec the grammar rejects anyway.
-      if (slot.arity === "variadic" && args.length < 1) {
-        printFail(`fn "${node.fn}" requires at least 1 arg, got 0`);
+      // Refused rather than printed: `vec()` or `choose(i)` is text nothing
+      // can parse back, and a printer that emits it makes the round trip a
+      // lie for one spec the grammar rejects anyway.
+      const min = slot.min ?? 1;
+      if (slot.arity === "variadic" && args.length < min) {
+        printFail(`fn "${node.fn}" requires at least ${min} arg${min === 1 ? "" : "s"}, got ${args.length}`);
       }
       for (const a of args) out.push({ text: printValue(a, specPos), present: true });
     } else if (slot.kind === "key") {
@@ -494,6 +509,57 @@ function printCall(node: FieldSpec, shape: Shape, specPos: Map<object, string>):
 /** Nesting level {@link printExpr} is currently at; see {@link TOO_DEEP}. */
 let printDepth = 0;
 
+/**
+ * The `let` names in scope where the printer is, innermost last — the
+ * same scope the parser keeps, so a reference printed bare is read back
+ * as the reference it was. Reset by {@link printFieldSpec}.
+ */
+let printScope: string[] = [];
+
+/**
+ * A `var` prints BARE exactly where the parser would read the bare word
+ * back as that reference: in scope, an identifier, and neither a literal
+ * keyword nor a fn name, which the parser takes first. Anywhere else — a reference outside
+ * every let, or a name no bare word can spell — it prints as `var("x")`,
+ * which parses to the same node wherever it stands.
+ */
+function printVar(node: FieldSpec): string | undefined {
+  const name = node.name;
+  if (typeof name !== "string" || !IDENTIFIER.test(name) || name === "true" || name === "false") return undefined;
+  if (shapes().has(name)) return undefined; // the parser reads a bare fn name as the fn, never a reference
+  return printScope.includes(name) ? name : undefined;
+}
+
+/**
+ * `let({ a: …, b: … }, body)`, each binding's value printed with the names
+ * before it in scope and the body with all of them — the parser's order,
+ * so a value that reads an earlier name prints it bare, and one that reads
+ * a later name (a spec the grammar refuses) prints `var("…")` and still
+ * round-trips.
+ */
+function printLet(node: FieldSpec, specPos: Map<object, string>): string {
+  const bind = node.bind;
+  const args = node.args;
+  if (!isPlainObject(bind)) printFail(`fn "let" needs a "bind" object, got ${describeForPrint(bind)}`);
+  if (!Array.isArray(args) || args.length !== 1) {
+    printFail(
+      `fn "let" expects exactly 1 arg (its body), got ${Array.isArray(args) ? args.length : describeForPrint(args)}`,
+    );
+  }
+  const outer = printScope.length;
+  try {
+    const parts: string[] = [];
+    for (const [key, value] of Object.entries(bind)) {
+      parts.push(`${printKey(key)}: ${printValue(value, specPos)}`);
+      printScope.push(key);
+    }
+    const body = printValue(args[0], specPos);
+    return `let(${parts.length === 0 ? "{}" : `{ ${parts.join(", ")} }`}, ${body})`;
+  } finally {
+    printScope.length = outer;
+  }
+}
+
 function printExpr(node: FieldSpec, minPrec: number): string {
   // Counted in the levels `MAX_SPEC_DEPTH` counts (a leaf is 1), so a spec
   // `fieldFromJson` accepts always prints.
@@ -502,6 +568,11 @@ function printExpr(node: FieldSpec, minPrec: number): string {
     if (printDepth > MAX_SPEC_DEPTH) printFail(TOO_DEEP);
     const shape = shapeOf(node);
     const specPos = specPositions(node as Record<string, unknown>);
+    if (node.fn === "let") return printLet(node, specPos);
+    if (node.fn === "var") {
+      const bare = printVar(node);
+      if (bare !== undefined) return bare;
+    }
     const op = PRINT_OPS.get(node.fn);
     const args = node.args;
     if (op !== undefined && Array.isArray(args) && args.length === 2) {
@@ -535,7 +606,13 @@ export function printFieldSpec(spec: FieldSpec): string {
   if (!isPlainObject(spec)) {
     printFail(`expected a field spec object, got ${describeForPrint(spec)}`);
   }
-  return printExpr(spec, 0);
+  const outer = printScope;
+  printScope = [];
+  try {
+    return printExpr(spec, 0);
+  } finally {
+    printScope = outer;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -735,6 +812,15 @@ class Parser {
 
   private readonly toks: Token[];
 
+  /**
+   * The names the enclosing `let`s bind, innermost last. Inside one, a
+   * bare word in this list IS a reference — `{fn: "var", name}` — which is
+   * unambiguous because a binding may not take a fn's name or a literal
+   * keyword (the grammar refuses both), so no bare word that meant
+   * something before can mean a reference now.
+   */
+  private readonly scope: string[] = [];
+
   // NOT a parameter property. This file is loaded as SOURCE by a child
   // process in `src/cli/render.test.ts`, which strips types rather than
   // compiling them, and a parameter property EMITS code instead of only
@@ -793,6 +879,17 @@ class Parser {
 
   private failBareWord(w: Word): never {
     const known = shapes().has(w.word);
+    if (!known && this.scope.length > 0) {
+      // Inside a let a bare word is most likely a misspelled binding, so
+      // the names in scope are the alternatives worth naming first.
+      const near = closestNames(w.word, this.scope, 3);
+      parseFail(
+        w.tok,
+        `"${w.word}" is not a name in scope here${near.length > 0 ? `; did you mean ${near.join(", ")}?` : ""} — ` +
+          `the enclosing let binds ${this.scope.join(", ")}, and a binding is visible in the body and in ` +
+          `the bindings written after it; as a fn, ${unknownFnMessage(w.word)}`,
+      );
+    }
     parseFail(
       w.tok,
       known
@@ -868,7 +965,10 @@ class Parser {
     if (t.kind === "name") {
       if (t.text === "true") return true;
       if (t.text === "false") return false;
-      if (this.eat("punct", "(")) return this.parseCall(t);
+      if (this.eat("punct", "(")) return t.text === "let" ? this.parseLet(t) : this.parseCall(t);
+      // A fn's name is never a reference: no binding may take one, and a
+      // bare fn name already means something (`fbm(perlinNoise)`).
+      if (this.scope.includes(t.text) && !shapes().has(t.text)) return { fn: "var", name: t.text };
       return makeWord(t.text, t);
     }
     parseFail(
@@ -923,6 +1023,64 @@ class Parser {
     }
   }
 
+  /**
+   * `let(` already consumed: the bindings object, each value parsed with
+   * the names before it in scope, then the body with all of them. By hand
+   * rather than through {@link parseCall} because the scope has to grow
+   * BETWEEN the object's entries, which a generic object literal cannot
+   * do. The names are not validated here — `fieldFromJson` refuses a bad
+   * one, with the spec path — only parsed.
+   */
+  private parseLet(nameTok: Token): Record<string, unknown> {
+    const usage = "let({ name: expr, … }, body)";
+    const open = this.peek();
+    if (!(open.kind === "punct" && open.text === "{")) {
+      parseFail(
+        open,
+        `let takes its bindings as an object literal first, got ${describeToken(open)} — usage: ${usage}`,
+      );
+    }
+    this.next();
+    const outer = this.scope.length;
+    try {
+      const bind: Record<string, unknown> = {};
+      if (!this.eat("punct", "}")) {
+        for (;;) {
+          const keyTok = this.next();
+          let key: string;
+          if (keyTok.kind === "name") key = keyTok.text;
+          else if (keyTok.kind === "string") key = keyTok.str as string;
+          else {
+            parseFail(
+              keyTok,
+              `expected a binding name, got ${describeToken(keyTok)}; a let binds names, as in let({ lo: attribute("lo", 3) }, lo * 2)`,
+            );
+          }
+          if (Object.hasOwn(bind, key)) parseFail(keyTok, `duplicate binding "${key}" in this let`);
+          this.expect("punct", ":", `after the binding name "${key}"`);
+          const value = this.parseExpr(0);
+          if (isWord(value)) this.failBareWord(value);
+          setKey(bind, key, value);
+          this.scope.push(key);
+          if (this.eat("punct", ",")) {
+            if (this.eat("punct", "}")) break;
+            continue;
+          }
+          this.expect("punct", "}", `to close the bindings of the let opened at ${nameTok.line}:${nameTok.col}`);
+          break;
+        }
+      }
+      this.expect("punct", ",", `between the let's bindings and its body — usage: ${usage}`);
+      const body = this.parseExpr(0);
+      if (isWord(body)) this.failBareWord(body);
+      this.eat("punct", ",");
+      this.expect("punct", ")", `to close the let opened at ${nameTok.line}:${nameTok.col} — usage: ${usage}`);
+      return { fn: "let", bind, args: [body] };
+    } finally {
+      this.scope.length = outer;
+    }
+  }
+
   /** `name(` already consumed; read the arguments and map them to keys. */
   private parseCall(nameTok: Token): Record<string, unknown> {
     const shape = shapes().get(nameTok.text);
@@ -969,8 +1127,9 @@ class Parser {
     for (const slot of shape.slots) {
       if (slot.kind === "args") {
         const take = slot.arity === "variadic" ? values.length - i : slot.arity;
-        if (slot.arity === "variadic" && take < 1) {
-          shortfall("at least one argument");
+        const min = slot.min ?? 1;
+        if (slot.arity === "variadic" && take < min) {
+          shortfall(min === 1 ? "at least one argument" : `at least ${min} arguments`);
         }
         if (i + take > values.length) {
           shortfall(`${String(slot.arity)} argument${slot.arity === 1 ? "" : "s"}`);
@@ -1026,8 +1185,10 @@ class Parser {
 function usageOf(shape: Shape): string {
   const parts = shape.slots.flatMap((slot) => {
     if (slot.kind === "args") {
+      // A variadic slot spells its fixed leading positions (`choose`'s
+      // index) before the repeated one, so the sketch shows the minimum.
       return slot.arity === "variadic"
-        ? ["arg…"]
+        ? [...Array.from({ length: (slot.min ?? 1) - 1 }, (_v, n) => `arg${n}`), "arg…"]
         : Array.from({ length: slot.arity }, (_v, n) => `arg${n}`);
     }
     if (slot.kind === "key") return [slot.optional ? `${slot.key}?` : slot.key];

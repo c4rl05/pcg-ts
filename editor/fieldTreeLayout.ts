@@ -201,7 +201,7 @@ function argName(fn: string, child: SpecChild & { kind: "arg" }): string {
 
 function rowLabel(fn: string, child: SpecChild): string {
   if (child.kind === "arg") return argName(fn, child);
-  if (child.kind === "case") return child.key;
+  if (child.kind === "case" || child.kind === "bind") return child.key;
   // `position`, `variant` and `default` label themselves: the kind IS the
   // name of the position, and spelling each one out a second time only
   // creates somewhere for the two spellings to disagree.
@@ -209,7 +209,7 @@ function rowLabel(fn: string, child: SpecChild): string {
 }
 
 /** Spec keys that are structure, not content — the child positions. */
-const STRUCTURAL_KEYS = new Set(["fn", "args", "opts", "cases", "default"]);
+const STRUCTURAL_KEYS = new Set(["fn", "args", "opts", "bind", "cases", "default"]);
 
 interface Built {
   readonly id: string;
