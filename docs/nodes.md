@@ -2,7 +2,7 @@
 
 Generated from the node registry metadata (`listNodeTypes()`) by `node scripts/gen-node-reference.mjs` — do not edit by hand. The same metadata, machine-readable, is in [nodes.json](./nodes.json). For the graph JSON format and field-expression grammar see [authoring.md](./authoring.md).
 
-68 node types, grouped by `category` (node sections below are alphabetical):
+69 node types, grouped by `category` (node sections below are alphabetical):
 
 **attribute**
 
@@ -58,6 +58,7 @@ Generated from the node registry metadata (`listNodeTypes()`) by `node scripts/g
 - [mergePoints](#mergepoints) — Concatenates the points of every connected geometry, in connection order, into one point cloud.
 - [mergePrimitives](#mergeprimitives) — Concatenates every connected geometry, in connection order, KEEPING TOPOLOGY: points, vertices and primitives are appended and each input's vertex and primitive references are renumbered onto its place in the result, so an authored network merged with a generated one comes out a single network.
 - [orientAlongVector](#orientalongvector) — Sets the standard rot point attribute (f32 tuple 4 quaternion, [x, y, z, w]) so the chosen local axis points along `direction`, with `up` fixing the roll.
+- [packBricks](#packbricks) — Reads axis-aligned BOXES on a stud lattice — one per point, its corners in two point attributes — and writes the BRICKS that build them: one point per brick, from a stated catalogue of footprints, that together fill exactly the lattice cells the boxes cover.
 - [pathPointAt](#pathpointat) — Moves every point of every polyline to the position at a given parameter ALONG ITS OWN polyline, and writes the unit `tangent` and `curveU` it finds there.
 - [pointsToPath](#pointstopath) — Turns a point cloud into one or more paths by building `polyline` primitives over the SAME points, so every point attribute survives — this is the only way to produce a path from a serialized graph.
 - [setBounds](#setbounds) — Sets the standard per-point bounds attributes: writes boundsMin and boundsMax (f32 tuple 3, world units) on every point, creating the attributes when missing.
@@ -250,7 +251,7 @@ Copies the source point cloud onto every target point (output count = source poi
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-copy-to-points.json](../graphs/basics-copy-to-points.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 18 total (`pcg graphs --node copyToPoints`)
+**Examples:** [basics-copy-to-points.json](../graphs/basics-copy-to-points.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 19 total (`pcg graphs --node copyToPoints`)
 
 **Params:**
 
@@ -493,7 +494,7 @@ Concatenates every connected geometry, in connection order, KEEPING TOPOLOGY: po
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-merge-primitives.json](../graphs/basics-merge-primitives.json), [basics-cut-a-courtyard.json](../graphs/basics-cut-a-courtyard.json), [basics-gabriel-cells.json](../graphs/basics-gabriel-cells.json) — 13 total (`pcg graphs --node mergePrimitives`)
+**Examples:** [basics-merge-primitives.json](../graphs/basics-merge-primitives.json), [basics-cut-a-courtyard.json](../graphs/basics-cut-a-courtyard.json), [basics-gabriel-cells.json](../graphs/basics-gabriel-cells.json) — 14 total (`pcg graphs --node mergePrimitives`)
 
 **Params:** *(none)*
 
@@ -530,7 +531,7 @@ Builds a parametric triangle mesh with no input: shape 'plane' is one axis-align
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-mesh-primitive.json](../graphs/basics-mesh-primitive.json), [basics-surface-sample.json](../graphs/basics-surface-sample.json), [basics-promote-attribute.json](../graphs/basics-promote-attribute.json) — 19 total (`pcg graphs --node meshPrimitive`)
+**Examples:** [basics-mesh-primitive.json](../graphs/basics-mesh-primitive.json), [basics-surface-sample.json](../graphs/basics-surface-sample.json), [basics-promote-attribute.json](../graphs/basics-promote-attribute.json) — 20 total (`pcg graphs --node meshPrimitive`)
 
 **Params:**
 
@@ -588,6 +589,31 @@ Sets the standard rot point attribute (f32 tuple 4 quaternion, [x, y, z, w]) so 
 | `direction` | vec3 | `[0,0,1]` |  |  | yes | World-space direction the chosen local axis should point along; need not be unit length. Field-capable (resolved per point on the input, e.g. a tangent attribute; tuple 1 broadcasts). Zero-length directions leave that point's rot unchanged (identity when the rot attribute did not exist before). |
 | `up` | vec3 | `[0,1,0]` |  |  | yes | Up hint fixing the roll around the direction; need not be unit length. When parallel/antiparallel to the direction (or zero), deterministically falls back to [0, 0, 1], then [1, 0, 0]. Field-capable (resolved per point on the input; tuple 1 broadcasts). A per-point up is what a curve that turns over needs: a CONSTANT up flips the roll a half turn as the direction passes through it, and everything placed along the curve snaps round with it — feed writeCurveFrame's `curveNormal` here instead and the roll varies smoothly. A field `up` keeps this node OFF the device-resident path, because the apply kernel bakes the normalized up in as a constant; the cook reports that by name in its fallbacks rather than silently producing different bytes. |
 | `axis` | enum | `"+z"` |  | `+x`, `-x`, `+y`, `-y`, `+z`, `-z` |  | Which local axis maps onto the direction. Default '+z' — the forward axis assets face in the examples (a spline-fence style tangent yaw). For ±x/±z the local +Y follows the up hint; for ±y the local +Z follows it. |
+
+## packBricks
+
+Reads axis-aligned BOXES on a stud lattice — one per point, its corners in two point attributes — and writes the BRICKS that build them: one point per brick, from a stated catalogue of footprints, that together fill exactly the lattice cells the boxes cover. The lattice is `pitch` in world units per cell (a stud is 1 across, a plate 0.4 tall, by default), anchored at `origin`; x and z count studs and y counts plates. Every corner must land on the lattice, and one that does not is refused naming the point and the corner, because a box half a stud off is a box the graph upstream built on a different lattice. Boxes may overlap: their cells are unioned, and a cell two boxes claim belongs to the one with the lower point IDENTITY (stored position bits plus `seed`), never the lower array index, so shuffling the input changes nothing — unless two overlapping boxes share both P and `seed`, which identity cannot tell apart, and then the earlier one in the input wins. WHAT A BRICK MAY NOT CROSS is `groupBy`: cells whose boxes differ in any listed attribute are different material and never share a brick, so a wall's colour changes exactly where its boxes' colour does. Each brick carries every point attribute of the box that owns its anchor cell. THE PACKING IS A SCANLINE GREEDY, course by course from the bottom and within a course in z then x. The first unfilled cell of a scan is always the minimum corner of the brick that covers it, so the scan never needs to backtrack; the choice there is WHICH catalogue entry, either way round. HEIGHT COMES FIRST: the tallest entry that fits is the course, so a wall is laid in full bricks and plates appear only where the space is shorter than a brick. Among footprints of that height the score is the footprint in studs less `stagger` for every stud of joint in the brick's bottom course that sits directly on a seam in the course below, counted only on the joints the placement decides — where the cell across is the same material and not yet filled — a running bond, the reason real walls hold together, charged only where a different brick could have avoided it. Ties go to the larger footprint, then the earlier catalogue entry, then the entry as listed rather than turned. If nothing fits — a catalogue with no 1x1 plate meeting a one-plate gap — the cell is refused by name rather than left empty, so the output always covers the input exactly. OUTPUT `out`: one point per brick in scan order. P is the brick's centre, `rot` a quarter turn about y when the entry was placed turned (identity otherwise), and `scale` its full extents in its OWN frame — w and d studs and h plates as listed, in world units — so a unit box copied onto these points draws every brick in place. `boundsMin`/`boundsMax` are its world corners, the same convention it reads. `brick` (string) is the entry as `WxDxH`, ready to be spawnInstances' `assetAttr`, and `brickIndex` (i32) is its position in the catalogue. OUTPUT `studs`: one point per stud left SHOWING — on a brick's top where the lattice cell above is empty — at the stud's base centre on the brick's top face, carrying the brick's attributes and its `brick`/`brickIndex`, with identity `rot` and unit `scale`, so a stud mesh modelled at world size with its base at the origin spawns straight onto it; the bounds columns are reset to zero. `islandsAttr` optionally writes a DETAIL u32 on `out` counting the pieces the build falls into when only stud CLUTCH holds it — a brick is joined to the bricks sitting on its top face where their footprints overlap, and side contact does not count, so a value above 1 is a build that comes apart when lifted. HALO: none. A brick spans cells, so cooked over part of the boxes it cuts bricks at the part's edge; this belongs on an unbounded level or before a split. Not GPU-eligible: the packing is sequential by construction. The occupancy grid is dense over the boxes' joint extent and refused past 16.7 million cells.
+
+**Category:** point op
+
+**Inputs:** `in` (geometry)
+
+**Outputs:** `out` (geometry), `studs` (geometry)
+
+**Examples:** [basics-pack-bricks.json](../graphs/basics-pack-bricks.json) — 1 total (`pcg graphs --node packBricks`)
+
+**Params:**
+
+| Param | Type | Default | Range | Enum | Field | Description |
+| --- | --- | --- | --- | --- | --- | --- |
+| `minAttr` | string | `"boundsMin"` |  |  |  | POINT attribute (f32 or i32, tuple size 3) holding each box's minimum corner in WORLD units — the absolute corner, not an offset from P, which is what setBounds writes. Converted to lattice cells through `pitch` and `origin` and refused, naming the point, unless every component lands on a lattice plane. |
+| `maxAttr` | string | `"boundsMax"` |  |  |  | POINT attribute (f32 or i32, tuple size 3) holding each box's maximum corner in world units, on the same terms as `minAttr`. A box with a maximum below its minimum on any axis is refused; one with zero extent on an axis covers no cells and is skipped. |
+| `pitch` | vec3 | `[1,0.4,1]` |  |  |  | World size of one lattice cell: [stud, plate, stud]. The default is the proportion of the familiar toy brick, a plate being 0.4 of a stud's width and a full brick three plates. x and z must be EQUAL, because a stud is square and a brick turned a quarter turn has to land on the same lattice it left; every component must be positive. |
+| `origin` | vec3 | `[0,0,0]` |  |  |  | World position of a lattice corner. Corners are read as origin + k * pitch for whole k on each axis, so a set of boxes built on integer studs but shifted by half a stud is packed by moving this, not the boxes. |
+| `bricks` | numberList | `[2,8,3,2,6,3,2,4,3,2,3,3,2,2,3,1,8,3,1,6,3,1,4,3,1,3,3,1,2,3,1,1,3,2,8,1,2,6,1,2,4,1,2,3,1,2,2,1,1,8,1,1,6,1,1,4,1,1,3,1,1,2,1,1,1,1]` |  |  |  | The CATALOGUE, as a flat list of [w, d, h] triples: w studs along x, d studs along z, h plates tall, all whole numbers of at least 1, in the brick's own frame. Each entry may also be placed a quarter turn about y (d along x, w along z), so [1, 4, 3] and [4, 1, 3] are the same brick and listing both is refused. The ORDER is the last tie-break: two entries of equal height, footprint and seam cost go to the earlier one. The default holds the common full-height bricks (h 3) and plates (h 1) from 1x1 to 2x8. Without [1, 1, 1] some occupancies cannot be covered at all — a gap one plate tall and one stud wide — and the cook is refused at the first such cell rather than leaving it empty. |
+| `groupBy` | stringList | `[]` |  |  |  | POINT attributes whose values a brick may not cross: two cells whose owning boxes differ in ANY listed attribute (any type, every component compared exactly; strings by value) never share a brick. Typically the colour and the kind — a window's glass is not one brick with the wall around it. Empty (the default) packs every cell as one material. A name the input does not carry is refused, listing what it does carry. |
+| `stagger` | f32 | `3` | >= 0 |  |  | The cost, in studs of footprint, of one stud of JOINT in a placement's bottom course that sits directly on a seam in the course below — a joint edge where the two cells beneath it belong to different bricks. Only the joints the placement DECIDES count — where the cell across is the SAME material and not yet filled, so a different brick could still have bridged it: a joint against another colour, empty space or a brick already standing is one every candidate shares, and charging for it would only favour short bricks. Height is not traded against it — the tallest entry that fits is chosen first — so this decides among footprints of one height. At the default of 3 a 1x8 whose end continues a seam scores 8 - 3 = 5 and loses to an unbroken 1x6 at 6, and a 2x8 with both studs of its end on a seam scores 10 against a 2x6's 12; a 1x2 on a seam (-1) loses to a 1x1 (1). 0 packs largest-first and lets seams run straight up a wall. |
+| `islandsAttr` | string | `""` |  |  |  | Optional DETAIL attribute (u32) on `out` receiving how many separate pieces the bricks form when only stud clutch holds them together: a brick joins every brick sitting directly on its top face with an overlapping footprint, and side-by-side contact does not join. 1 is a build that lifts as one piece. Empty (the default) writes nothing. |
 
 ## partitionByAttribute
 
@@ -846,7 +872,7 @@ Creates one point per [x, y, z] triple in `positions`, in list order, and writes
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-a-table-of-points.json](../graphs/basics-a-table-of-points.json) — 1 total (`pcg graphs --node pointList`)
+**Examples:** [basics-a-table-of-points.json](../graphs/basics-a-table-of-points.json), [basics-pack-bricks.json](../graphs/basics-pack-bricks.json) — 2 total (`pcg graphs --node pointList`)
 
 **Params:**
 
@@ -1201,7 +1227,7 @@ Creates or overwrites an attribute on the chosen domain. Numeric types fill from
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-attribute-from-noise.json](../graphs/basics-attribute-from-noise.json), [basics-mask-by-species.json](../graphs/basics-mask-by-species.json), [basics-attribute-remap.json](../graphs/basics-attribute-remap.json) — 67 total (`pcg graphs --node setAttribute`)
+**Examples:** [basics-attribute-from-noise.json](../graphs/basics-attribute-from-noise.json), [basics-mask-by-species.json](../graphs/basics-mask-by-species.json), [basics-attribute-remap.json](../graphs/basics-attribute-remap.json) — 68 total (`pcg graphs --node setAttribute`)
 
 **Params:**
 

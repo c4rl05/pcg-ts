@@ -39,6 +39,7 @@ import { occlusionCull } from "./visibility.js";
 import { pathCoverage } from "./coverage.js";
 import { runFit } from "./runs.js";
 import { quotaRebalance } from "./quotas.js";
+import { packBricks } from "./bricks.js";
 import { polygonBoolean } from "./polygons.js";
 import { segmentCrossings } from "./crossings.js";
 
@@ -67,6 +68,7 @@ const MODULE_WITNESSES: readonly { readonly type: string }[] = [
   pathCoverage, // coverage.ts
   runFit, // runs.ts
   quotaRebalance, // quotas.ts
+  packBricks, // bricks.ts
   polygonBoolean, // polygons.ts
   segmentCrossings, // crossings.ts
 ];

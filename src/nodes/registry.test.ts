@@ -499,6 +499,7 @@ describe("category metadata", () => {
       pathCoverage: "attribute",
       runFit: "attribute",
       quotaRebalance: "attribute",
+      packBricks: "point op",
       attributeRemap: "attribute",
       removeAttribute: "attribute",
       pointNeighborhood: "attribute",

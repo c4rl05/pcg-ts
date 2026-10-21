@@ -2083,6 +2083,106 @@ export type OrientAlongVectorInputs = "in";
 export type OrientAlongVectorOutputs = "out";
 
 /**
+ * Params of the `packBricks` node type.
+ */
+export interface PackBricksParams {
+  /**
+   * POINT attribute (f32 or i32, tuple size 3) holding each box's minimum corner in WORLD
+   * units — the absolute corner, not an offset from P, which is what setBounds writes.
+   * Converted to lattice cells through `pitch` and `origin` and refused, naming the point,
+   * unless every component lands on a lattice plane.
+   *
+   * @defaultValue `"boundsMin"`
+   */
+  minAttr: string;
+  /**
+   * POINT attribute (f32 or i32, tuple size 3) holding each box's maximum corner in world
+   * units, on the same terms as `minAttr`. A box with a maximum below its minimum on any
+   * axis is refused; one with zero extent on an axis covers no cells and is skipped.
+   *
+   * @defaultValue `"boundsMax"`
+   */
+  maxAttr: string;
+  /**
+   * World size of one lattice cell: [stud, plate, stud]. The default is the proportion of
+   * the familiar toy brick, a plate being 0.4 of a stud's width and a full brick three
+   * plates. x and z must be EQUAL, because a stud is square and a brick turned a quarter
+   * turn has to land on the same lattice it left; every component must be positive.
+   *
+   * @defaultValue `[1,0.4,1]`
+   */
+  pitch: readonly number[];
+  /**
+   * World position of a lattice corner. Corners are read as origin + k * pitch for whole k
+   * on each axis, so a set of boxes built on integer studs but shifted by half a stud is
+   * packed by moving this, not the boxes.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  origin: readonly number[];
+  /**
+   * The CATALOGUE, as a flat list of [w, d, h] triples: w studs along x, d studs along z, h
+   * plates tall, all whole numbers of at least 1, in the brick's own frame. Each entry may
+   * also be placed a quarter turn about y (d along x, w along z), so [1, 4, 3] and [4, 1, 3]
+   * are the same brick and listing both is refused. The ORDER is the last tie-break: two
+   * entries of equal height, footprint and seam cost go to the earlier one. The default
+   * holds the common full-height bricks (h 3) and plates (h 1) from 1x1 to 2x8. Without [1,
+   * 1, 1] some occupancies cannot be covered at all — a gap one plate tall and one stud wide
+   * — and the cook is refused at the first such cell rather than leaving it empty.
+   *
+   * @defaultValue `[2,8,3,2,6,3,2,4,3,2,3,3,2,2,3,1,8,3,1,6,3,1,4,3,1,3,3,1,2,3,1,1,3,2,8,1,2,6,1,2,4,1,2,3,1,2,2,1,1,8,1,1,6,1,1,4,1,1,3,1,1,2,1,1,1,1]`
+   */
+  bricks: readonly number[];
+  /**
+   * POINT attributes whose values a brick may not cross: two cells whose owning boxes differ
+   * in ANY listed attribute (any type, every component compared exactly; strings by value)
+   * never share a brick. Typically the colour and the kind — a window's glass is not one
+   * brick with the wall around it. Empty (the default) packs every cell as one material. A
+   * name the input does not carry is refused, listing what it does carry.
+   *
+   * @defaultValue `[]`
+   */
+  groupBy: readonly string[];
+  /**
+   * The cost, in studs of footprint, of one stud of JOINT in a placement's bottom course
+   * that sits directly on a seam in the course below — a joint edge where the two cells
+   * beneath it belong to different bricks. Only the joints the placement DECIDES count —
+   * where the cell across is the SAME material and not yet filled, so a different brick
+   * could still have bridged it: a joint against another colour, empty space or a brick
+   * already standing is one every candidate shares, and charging for it would only favour
+   * short bricks. Height is not traded against it — the tallest entry that fits is chosen
+   * first — so this decides among footprints of one height. At the default of 3 a 1x8 whose
+   * end continues a seam scores 8 - 3 = 5 and loses to an unbroken 1x6 at 6, and a 2x8 with
+   * both studs of its end on a seam scores 10 against a 2x6's 12; a 1x2 on a seam (-1) loses
+   * to a 1x1 (1). 0 packs largest-first and lets seams run straight up a wall.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `3`
+   */
+  stagger: number;
+  /**
+   * Optional DETAIL attribute (u32) on `out` receiving how many separate pieces the bricks
+   * form when only stud clutch holds them together: a brick joins every brick sitting
+   * directly on its top face with an overlapping footprint, and side-by-side contact does
+   * not join. 1 is a build that lifts as one piece. Empty (the default) writes nothing.
+   *
+   * @defaultValue `""`
+   */
+  islandsAttr: string;
+}
+
+/**
+ * The input pin names of the `packBricks` node type.
+ */
+export type PackBricksInputs = "in";
+
+/**
+ * The output pin names of the `packBricks` node type.
+ */
+export type PackBricksOutputs = "out" | "studs";
+
+/**
  * Params of the `partitionByAttribute` node type.
  */
 export interface PartitionByAttributeParams {

@@ -140,6 +140,9 @@ const ROOT_SURFACE = [
   // Names the minimum set of points that must change category for every
   // category's share of the population to land inside a stated band.
   "quotaRebalance",
+  // Packs boxes on a stud lattice into catalogue bricks, plus the studs
+  // left showing.
+  "packBricks",
   "orientAlongVector", "paramNamesOf", "parseFieldText",
   "partitionByAttribute",
   // Writes, per path point, whether a fan of rays cast from it is blocked

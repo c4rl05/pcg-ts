@@ -4,7 +4,7 @@ Generated from the graphs in [`graphs`](../graphs) by `node scripts/gen-graphs.m
 
 Each file teaches ONE thing and cooks from JSON alone — no runtime-injected data, so `pcg cook <file>` on a clean install reproduces exactly what the corpus test asserts.
 
-104 examples, alphabetical by file:
+105 examples, alphabetical by file:
 
 - [basics-a-draw-that-survives-a-move.json](#basics-a-draw-that-survives-a-movejson) — Keep a random draw when the point moves
 - [basics-a-table-of-points.json](#basics-a-table-of-pointsjson) — Write a table of points into the graph
@@ -45,6 +45,7 @@ Each file teaches ONE thing and cooks from JSON alone — no runtime-injected da
 - [basics-neighborhood-varying-radius.json](#basics-neighborhood-varying-radiusjson) — Measure a neighbourhood at each point's own scale
 - [basics-orient-along-path.json](#basics-orient-along-pathjson) — Turn a path's own points to follow it
 - [basics-orient-along-vector.json](#basics-orient-along-vectorjson) — Turn each point to face a direction
+- [basics-pack-bricks.json](#basics-pack-bricksjson) — Pack boxes into bricks
 - [basics-partition-by-attribute.json](#basics-partition-by-attributejson) — Split one cloud into labelled groups
 - [basics-path-resample.json](#basics-path-resamplejson) — Even out the spacing along a path
 - [basics-path-segments.json](#basics-path-segmentsjson) — Draw a curve as solid geometry
@@ -860,6 +861,24 @@ Cook it: `pcg cook graphs/basics-orient-along-path.json --stats`
 **Outputs:** `points` (from `face`.`out`)
 
 Cook it: `pcg cook graphs/basics-orient-along-vector.json --stats`
+
+## basics-pack-bricks.json
+
+**Pack boxes into bricks**
+
+Nine boxes on a stud lattice — x and z in studs, y in plates, a plate 0.4 of a stud — become the bricks that build them. `packBricks` fills exactly the cells the boxes cover from a catalogue of full-height bricks and plates, laying each course in the tallest piece that fits and choosing among footprints so a joint does not sit on a seam in the course below: the red wall is in running bond, not a stack. `groupBy` on `color` keeps the window its own glass bricks, and the buttress, which OVERLAPS the wall it leans on, is unioned into it rather than packed twice. Each brick is a point whose `scale` is its own-frame size and whose `rot` turns it a quarter when the entry was placed sideways, so a unit box copied onto the points draws every brick; the second output is one point per stud left showing, here a small box. `islands` reads 9, and that is the lesson rather than a fault: the base and the roof are laid in 2x8 plates, and the ones no wall stands on are not held by anything — counting what clutch alone joins is how a build that would come apart in the hand is found.
+
+**Tags:** `basics`, `structure`, `mesh`
+
+**Seed:** 1
+
+**Node types:** `copyToPoints`, `mergePrimitives`, `meshPrimitive`, `packBricks`, `pointList`, `setAttribute`
+
+**Primitives:** *(none)*
+
+**Outputs:** `build` (from `build`.`out`)
+
+Cook it: `pcg cook graphs/basics-pack-bricks.json --stats`
 
 ## basics-partition-by-attribute.json
 

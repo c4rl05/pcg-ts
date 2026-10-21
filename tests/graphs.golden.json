@@ -2505,6 +2505,47 @@
         ]
       }
     },
+    "basics-pack-bricks.json": {
+      "outputs": {
+        "build": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 7584,
+              "vertex": 11376,
+              "primitive": 3792,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "uv:f32x2",
+                "rot:f32x4",
+                "scale:f32x3",
+                "seed:u32",
+                "color:f32x4"
+              ],
+              "primitive": [
+                "primtype:string"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -1.98,
+                0.02,
+                -1.98
+              ],
+              "max": [
+                13.98,
+                6.97,
+                9.98
+              ]
+            }
+          }
+        ]
+      }
+    },
     "basics-partition-by-attribute.json": {
       "outputs": {
         "groups": [
