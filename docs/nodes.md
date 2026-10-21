@@ -279,7 +279,7 @@ Copies the source point cloud onto every target point (output count = source poi
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-copy-to-points.json](../graphs/basics-copy-to-points.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 19 total (`pcg graphs --node copyToPoints`)
+**Examples:** [basics-copy-to-points.json](../graphs/basics-copy-to-points.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 18 total (`pcg graphs --node copyToPoints`)
 
 **Params:**
 
@@ -1140,7 +1140,7 @@ Emits every input point `count` times — a PER-POINT number of times when `coun
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-repeat-points.json](../graphs/basics-repeat-points.json) — 1 total (`pcg graphs --node repeatPoints`)
+**Examples:** [basics-repeat-points.json](../graphs/basics-repeat-points.json), [examples-facade.json](../graphs/examples-facade.json), [examples-floorplan.json](../graphs/examples-floorplan.json) — 4 total (`pcg graphs --node repeatPoints`)
 
 **Params:**
 
@@ -1162,7 +1162,7 @@ Composite node that cooks an inner graph REPEATEDLY, feeding each round's output
 
 **Outputs:** *(none)*
 
-**Examples:** [basics-repeat-until-settled.json](../graphs/basics-repeat-until-settled.json), [examples-coral.json](../graphs/examples-coral.json), [examples-facade.json](../graphs/examples-facade.json) — 5 total (`pcg graphs --node repeatUntil`)
+**Examples:** [basics-repeat-until-settled.json](../graphs/basics-repeat-until-settled.json), [examples-coral.json](../graphs/examples-coral.json), [examples-tree.json](../graphs/examples-tree.json) — 5 total (`pcg graphs --node repeatUntil`)
 
 **Params:**
 
@@ -1520,7 +1520,7 @@ Reads the `source` geometry's point attributes AT A PER-POINT COMPUTED INDEX and
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-gather-by-index.json](../graphs/basics-gather-by-index.json), [examples-brick-house.json](../graphs/examples-brick-house.json) — 2 total (`pcg graphs --node transferByIndex`)
+**Examples:** [basics-gather-by-index.json](../graphs/basics-gather-by-index.json) — 1 total (`pcg graphs --node transferByIndex`)
 
 **Params:**
 
