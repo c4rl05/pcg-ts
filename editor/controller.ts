@@ -117,6 +117,18 @@ export interface EdgeRef {
   readonly toPin: string;
 }
 
+/**
+ * One output declaration as the controller keeps it: the pin, plus the
+ * role when the file gave one. Only `"asset"` exists, and there is no UI
+ * to set it — a role arrives with an imported file and survives every
+ * structural edit and the export.
+ */
+interface DeclaredOutput {
+  readonly id: string;
+  readonly pin: string;
+  readonly role?: "asset";
+}
+
 /** What produced the cook being rendered. */
 export interface RenderInfo {
   /**
@@ -136,6 +148,27 @@ export interface RenderInfo {
    * sixteen), so the name repeats rather than indexing outputs.
    */
   readonly outputs: readonly string[];
+  /**
+   * The outputs declared `role: "asset"`, by name. Each one's item IS the
+   * mesh for the asset id equal to its name, so a host draws it as that
+   * id's instances (`collectGraphAssets`) and NOT as scene content. The
+   * items still arrive in `items` like any other output's: which ones are
+   * meshes is the host's question, and this is the whole answer to it.
+   */
+  readonly assetOutputs: ReadonlySet<string>;
+  /**
+   * The same outputs as full declarations, so a refusal can name the node
+   * and pin that feed the asset rather than only its name.
+   */
+  readonly assetDecls: readonly AssetDecl[];
+}
+
+/** One `role: "asset"` output as the file declares it. */
+export interface AssetDecl {
+  readonly name: string;
+  readonly id: string;
+  readonly pin: string;
+  readonly role: "asset";
 }
 
 /** Host callbacks: scene rendering and stats display. */
@@ -235,9 +268,12 @@ export class EditorController {
    * auto policy cannot re-derive them: it declares unconnected pins, and
    * a file is free to declare a pin that feeds something.
    */
-  private imported = new Map<string, { id: string; pin: string }>();
+  private imported = new Map<string, DeclaredOutput>();
   /** Declared output names in canonical (node insertion) order. */
   private outputNames: string[] = [];
+  /** The declared outputs that carry `role: "asset"`, by name. */
+  private assetOutputs = new Set<string>();
+  private assetDecls: AssetDecl[] = [];
   /** Bumped on every structural edit, so a stale cook pass abandons itself. */
   private structureRev = 0;
   /**
@@ -794,8 +830,19 @@ export class EditorController {
     for (const [id, view] of pins) this.pins.set(id, view);
     this.subgraphs.clear();
     for (const [id, view] of subgraphs) this.subgraphs.set(id, view);
+    // `role` rides along: the mirror is rebuilt by hand above rather than
+    // by `deserializeGraph`, so its outputs come from `reconcileOutputs`
+    // alone, and a role dropped here is a role the export loses.
     this.imported = new Map(
-      (json.outputs ?? []).map((o) => [o.name, { id: o.id, pin: o.pin }] as const),
+      (json.outputs ?? []).map(
+        (o) =>
+          [
+            o.name,
+            o.role === "asset"
+              ? { id: o.id, pin: o.pin, role: "asset" as const }
+              : { id: o.id, pin: o.pin },
+          ] as const,
+      ),
     );
     this.freshGraph = true;
     this.afterStructuralEdit();
@@ -940,34 +987,50 @@ export class EditorController {
     const connected = (id: string, pin: string): boolean =>
       d.connections.some((c) => c.from[0] === id && c.from[1] === pin);
     /**
-     * Keyed by PIN, not by output name. The file may call `spawn`'s
+     * The auto policy is checked by PIN, not by output name. The file may call `spawn`'s
      * instances pin "instances" while the auto policy would call it
      * "spawn.instances" — two names for one pin, and declaring both
      * cooks and draws it twice. The file's name wins, so an export
      * round-trips to the names its author chose.
      */
-    const desired = new Map<string, { id: string; pin: string; name: string }>();
-    for (const [name, { id, pin }] of this.imported) {
+    // The file's declarations keyed by NAME, so a file that declares one
+    // pin twice — a mesh as an asset and as scene content — keeps both;
+    // `covered` is the pin-keyed half the auto policy is checked against.
+    const names = new Map<string, DeclaredOutput & { name: string }>();
+    const covered = new Set<string>();
+    for (const [name, declared] of this.imported) {
+      const { id, pin } = declared;
       if (this.pins.get(id)?.outputs.some((p) => p.name === pin) !== true) continue;
-      desired.set(`${id}.${pin}`, { id, pin, name });
+      names.set(name, { ...declared, name });
+      covered.add(`${id}.${pin}`);
     }
     for (const n of d.nodes) {
       for (const p of this.pins.get(n.id)?.outputs ?? []) {
         const key = `${n.id}.${p.name}`;
-        if (connected(n.id, p.name) || desired.has(key)) continue;
-        desired.set(key, { id: n.id, pin: p.name, name: key });
+        // `names.has(key)`: the file already uses this auto name for some
+        // OTHER pin, and the file's declaration wins — overwriting it would
+        // silently drop that pin's output, and its role with it.
+        if (connected(n.id, p.name) || covered.has(key) || names.has(key)) continue;
+        names.set(key, { id: n.id, pin: p.name, name: key });
       }
     }
-    const names = new Map([...desired.values()].map((o) => [o.name, o] as const));
     const have = new Set<string>();
     for (const o of d.outputs) {
-      if (names.has(o.name)) have.add(o.name);
+      // A role that disagrees is a different declaration under the same
+      // name, so it is replaced rather than kept.
+      if (names.has(o.name) && names.get(o.name)?.role === o.role) have.add(o.name);
       else this.mirror.removeOutput(o.name);
     }
-    for (const [name, { id, pin }] of names) {
-      if (!have.has(name)) this.mirror.output({ id }, pin, name);
+    for (const [name, { id, pin, role }] of names) {
+      if (have.has(name)) continue;
+      if (role === undefined) this.mirror.output({ id }, pin, name);
+      else this.mirror.output({ id }, pin, name, { role });
     }
     this.outputNames = [...names.keys()];
+    this.assetDecls = [...names.entries()]
+      .filter(([, o]) => o.role === "asset")
+      .map(([name, o]) => ({ name, id: o.id, pin: o.pin, role: "asset" as const }));
+    this.assetOutputs = new Set(this.assetDecls.map((o) => o.name));
   }
 
   private scheduleCook(): void {
@@ -987,6 +1050,8 @@ export class EditorController {
     const graph = this.mirror;
     const rev = this.structureRev;
     const names = [...this.outputNames];
+    const assetOutputs = new Set(this.assetOutputs);
+    const assetDecls = [...this.assetDecls];
     const stale = (): boolean => graph !== this.mirror || rev !== this.structureRev;
     const errors: string[] = [];
     const items: DataItem[] = [];
@@ -1092,7 +1157,7 @@ export class EditorController {
     if (!stale()) {
       const fresh = this.freshGraph;
       this.freshGraph = false;
-      this.hooks.render(items, { fresh, outputs: owners });
+      this.hooks.render(items, { fresh, outputs: owners, assetOutputs, assetDecls });
     }
     this.hooks.status(status);
     this.listener?.(status);

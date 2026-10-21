@@ -42,9 +42,25 @@
  * exists so a corpus graph that spawns `tube` gets a tube: an invented
  * stand-in keeps a graph visible, but it cannot keep it recognisable, and
  * a truss drawn out of spheres reads as something the graph never made.
+ *
+ * **A graph can supply its own mesh, and then none of the above applies
+ * to that id.** A top-level output declared `role: "asset"` IS the mesh
+ * for the asset id equal to its name, so a placeholder for it would be
+ * the viewer overruling the graph. {@link resolveAssets} therefore asks
+ * the graph first, this vocabulary second and the invented stand-in last.
+ * The graph's meshes come through {@link createGraphAssetCache}, which
+ * owns their buffers across cooks: they belong to neither the placeholder
+ * set nor a single draw, which is why `disposeDrawn` never frees them.
  */
-import { hashString, type InstanceBatch } from "pcg-ts";
-import type { AssetMap, InstancedAsset } from "pcg-ts/three";
+import {
+  collectGraphAssets,
+  hashString,
+  isAssetOutput,
+  type DataCollection,
+  type Geometry,
+  type InstanceBatch,
+} from "pcg-ts";
+import { toBufferGeometry, type AssetMap, type InstancedAsset } from "pcg-ts/three";
 import {
   BoxGeometry,
   BufferGeometry,
@@ -440,16 +456,169 @@ export function createPlaceholderAssets(opts: PlaceholderOptions = {}): Placehol
 }
 
 /**
- * Asset map for one render pass: every batch's assetId resolves — known
- * ids to their placeholder, unknown ids to their own invented stand-in.
+ * Asset map for one render pass: every batch's assetId resolves — an id
+ * the GRAPH supplies to its own mesh, known ids to their placeholder,
+ * unknown ids to their own invented stand-in. In that order: the graph's
+ * own declaration is the most specific answer there is.
  */
 export function resolveAssets(
   batches: readonly InstanceBatch[],
   assets: PlaceholderAssets,
+  graphAssets?: AssetMap,
 ): AssetMap {
   const map: AssetMap = {};
   for (const b of batches) {
-    map[b.assetId] = assets.known[b.assetId] ?? assets.fallbackFor(b.assetId);
+    map[b.assetId] =
+      graphAssets?.[b.assetId] ?? assets.known[b.assetId] ?? assets.fallbackFor(b.assetId);
   }
   return map;
+}
+
+// -- graph-supplied meshes --------------------------------------------------
+
+/** One asset output's mesh as a cook produced it, ready to convert. */
+export interface SuppliedMesh {
+  /** The asset id, which is the output's name. */
+  readonly id: string;
+  /**
+   * What identifies THIS mesh across cooks: `${output}#${rev}`. A rev is
+   * assigned when a node produces a new or modified item and kept while
+   * the item is unchanged, so an unchanged key is an unchanged mesh — and
+   * a re-cook after a knob turn elsewhere re-uploads nothing.
+   */
+  readonly key: string;
+  readonly geo: Geometry;
+}
+
+/** What {@link collectSuppliedMeshes} found, and what it refused. */
+export interface SuppliedMeshes {
+  readonly meshes: readonly SuppliedMesh[];
+  /** One message per asset output that could not supply a mesh, verbatim. */
+  readonly problems: readonly string[];
+}
+
+/**
+ * The meshes a cook's asset outputs supply, in declaration order.
+ *
+ * One `collectGraphAssets` call PER OUTPUT rather than one for the lot:
+ * that function refuses the whole map on the first bad output, and a
+ * viewer that dropped every graph mesh because one was malformed would be
+ * hiding the good ones behind the bad one. A refused output's id falls
+ * back to its placeholder, and its message is the caller's to show.
+ *
+ * An asset output absent from `cooked` — its own cook failed, which the
+ * caller already reports — is skipped, as `collectGraphAssets` skips it.
+ */
+export function collectSuppliedMeshes(
+  declared: readonly { readonly name: string; readonly role?: string }[],
+  cooked: Readonly<Record<string, DataCollection>>,
+): SuppliedMeshes {
+  const meshes: SuppliedMesh[] = [];
+  const problems: string[] = [];
+  for (const output of declared) {
+    if (!isAssetOutput(output)) continue;
+    try {
+      const geo = collectGraphAssets([output], cooked).get(output.name);
+      if (geo === undefined) continue;
+      // `collectGraphAssets` has just checked there is exactly one item.
+      const rev = cooked[output.name][0].rev;
+      meshes.push({ id: output.name, key: `${output.name}#${rev}`, geo });
+    } catch (err) {
+      problems.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+  return { meshes, problems };
+}
+
+/** How one graph-supplied asset is shaded this pass. */
+export interface SuppliedLook {
+  readonly color: number;
+  readonly roughness?: number;
+  readonly metalness?: number;
+}
+
+/**
+ * Converted graph meshes, kept across cooks.
+ *
+ * GEOMETRY is memoized by {@link SuppliedMesh.key}: a viewer re-cooks on
+ * every edit, and converting and uploading the same mesh each time is the
+ * cost the placeholder memo above exists to avoid. An entry a pass does
+ * not ask for is disposed BY that pass — its mesh changed or its output
+ * went away, and nothing else holds it. So call `resolve` only after the
+ * previous pass's meshes are torn down: they may still reference a
+ * geometry it frees.
+ *
+ * MATERIALS are memoized by asset id for the cache's life and restyled in
+ * place rather than re-minted: an asset's colour can change between cooks
+ * (a batch gained per-instance colour, an output was added before this
+ * one), and a new material per change is a new GPU program. Disposed only
+ * when the id itself vanishes. `toInstancedMeshes` clones what it is
+ * handed per mesh, so restyling never reaches a mesh already drawn.
+ */
+export interface GraphAssetCache {
+  resolve(meshes: readonly SuppliedMesh[], look: (id: string) => SuppliedLook): AssetMap;
+  /** Free everything the cache holds. */
+  dispose(): void;
+}
+
+export function createGraphAssetCache(): GraphAssetCache {
+  let geometries = new Map<string, BufferGeometry>();
+  const materials = new Map<string, MeshStandardMaterial>();
+  return {
+    resolve(meshes, look) {
+      const next = new Map<string, BufferGeometry>();
+      const map: AssetMap = {};
+      for (const mesh of meshes) {
+        const geometry =
+          next.get(mesh.key) ?? geometries.get(mesh.key) ?? toBufferGeometry(mesh.geo);
+        next.set(mesh.key, geometry);
+        const style = look(mesh.id);
+        // A colour buffer only when the exporter actually emitted one — the
+        // rule `DrawMaterials` documents: `vertexColors` with no buffer
+        // behind it renders solid black.
+        const vertexColors = geometry.hasAttribute("color");
+        let material = materials.get(mesh.id);
+        if (material === undefined) {
+          material = new MeshStandardMaterial();
+          materials.set(mesh.id, material);
+        }
+        material.color.setHex(style.color);
+        material.roughness = style.roughness ?? 0.85;
+        material.metalness = style.metalness ?? 0;
+        if (material.vertexColors !== vertexColors) {
+          material.vertexColors = vertexColors;
+          material.needsUpdate = true;
+        }
+        map[mesh.id] = { geometry, material };
+      }
+      for (const [key, geometry] of geometries) if (!next.has(key)) geometry.dispose();
+      geometries = next;
+      for (const [id, material] of materials) {
+        if (map[id] === undefined) {
+          material.dispose();
+          materials.delete(id);
+        }
+      }
+      return map;
+    },
+    dispose() {
+      for (const geometry of geometries.values()) geometry.dispose();
+      geometries = new Map();
+      for (const material of materials.values()) material.dispose();
+      materials.clear();
+    },
+  };
+}
+
+/**
+ * The asset ids whose batches carry per-instance colour. Such an asset's
+ * material wants to be WHITE: three multiplies `instanceColor` by the
+ * material colour, so any hue there would tint every authored colour.
+ */
+export function idsWithInstanceColour(batches: Iterable<InstanceBatch>): Set<string> {
+  const out = new Set<string>();
+  for (const b of batches) {
+    if (b.colors !== undefined || b.attributes?.color !== undefined) out.add(b.assetId);
+  }
+  return out;
 }

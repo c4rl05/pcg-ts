@@ -24,6 +24,7 @@ import { describe, expect, it } from "vitest";
 import { makeInstancesItem, type InstanceBatch } from "pcg-ts";
 import { ownsGeometry, toInstancedMeshes } from "pcg-ts/three";
 import {
+  BoxGeometry,
   InstancedMesh,
   LineBasicMaterial,
   MeshNormalMaterial,
@@ -207,6 +208,57 @@ describe("disposeDrawn, on an instanced mesh", () => {
 
     expect(cloneFreed()).toBe(true);
     expect(overrideFreed()).toBe(false);
+  });
+});
+
+describe("disposeDrawn, on a mesh the graph supplied", () => {
+  /**
+   * A graph-supplied asset (`DrawOptions.graphAssets`) is owned by the
+   * page's `createGraphAssetCache`, which reuses it across cooks while the
+   * mesh is unchanged. Freeing it at teardown would hand the next cook a
+   * disposed geometry — and, since three re-uploads on next use, it would
+   * not even look broken, only cost an upload per knob turn.
+   */
+  for (const coloured of [false, true]) {
+    it(`leaves the graph's geometry and material alone${coloured ? " for a coloured batch" : ""}`, () => {
+      const geometry = new BoxGeometry(1, 1, 1);
+      const material = new MeshStandardMaterial();
+      const batch: InstanceBatch = {
+        assetId: "brick",
+        count: 2,
+        transforms: identities(2),
+        ...(coloured ? { attributes: { color: new Float32Array([1, 0, 0, 0, 1, 0]) } } : {}),
+      };
+      const { objects, report } = drawItem(makeInstancesItem([batch]), {
+        assets: createPlaceholderAssets(),
+        graphAssets: { brick: { geometry, material } },
+        materials,
+      });
+      const mesh = objects[0] as InstancedMesh;
+      // Drawn WITH the graph's mesh, not an invented stand-in for "brick".
+      expect(mesh.geometry).toBe(geometry);
+      expect(report.supplied).toEqual(["brick"]);
+
+      const geometryFreed = watchDispose(geometry);
+      const materialFreed = watchDispose(material);
+      const cloneFreed = watchDispose(mesh.material as Material);
+      disposeDrawn(objects as never);
+      expect(geometryFreed()).toBe(false);
+      expect(materialFreed()).toBe(false);
+      expect(cloneFreed()).toBe(true);
+    });
+  }
+
+  it("does not report a placeholder id as supplied", () => {
+    const { report } = drawItem(
+      makeInstancesItem([{ assetId: "box", count: 1, transforms: identities(1) }]),
+      {
+        assets: createPlaceholderAssets(),
+        graphAssets: { brick: { geometry: new BoxGeometry(), material: new MeshStandardMaterial() } },
+        materials,
+      },
+    );
+    expect(report.supplied).toBeUndefined();
   });
 });
 

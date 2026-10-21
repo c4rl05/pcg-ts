@@ -22,7 +22,15 @@
  * committed demo screenshots.
  */
 import "pcg-ts/primitives";
-import { cook, deserializeGraph, type DataItem } from "pcg-ts";
+import {
+  cook,
+  deserializeGraph,
+  isAssetOutput,
+  isDeviceResidentInstances,
+  type DataItem,
+  type InstanceBatch,
+} from "pcg-ts";
+import type { AssetMap } from "pcg-ts/three";
 
 import {
   ACESFilmicToneMapping,
@@ -47,7 +55,12 @@ import {
   WebGLRenderer,
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { createPlaceholderAssets } from "../shared/assets.js";
+import {
+  collectSuppliedMeshes,
+  createGraphAssetCache,
+  createPlaceholderAssets,
+  idsWithInstanceColour,
+} from "../shared/assets.js";
 import { drawItem, type DrawMaterials } from "../shared/draw.js";
 import { loadPresetText } from "../shared/presets.js";
 import { quantizeExtent, snapToExtent, viewsFor } from "./poses.js";
@@ -109,6 +122,8 @@ interface ItemReport {
   readonly instances?: number;
   /** Per-batch instance counts, keyed by assetId. */
   readonly batches?: Record<string, number>;
+  /** The ids among `batches` drawn with a mesh the graph supplied. */
+  readonly supplied?: string[];
   /** The topology carried no `primtype`, so its kind was inferred. */
   readonly untagged?: boolean;
   readonly hint?: string;
@@ -213,9 +228,16 @@ function groundCoverage(meshes: readonly Mesh[], box: Box3): number {
 }
 
 /** Turn one cooked item into scene objects, and say what it drew. */
-function addItem(group: Group, output: string, item: DataItem, job: PreviewJob): ItemReport {
+function addItem(
+  group: Group,
+  output: string,
+  item: DataItem,
+  job: PreviewJob,
+  graphAssets: AssetMap,
+): ItemReport {
   const { objects, report } = drawItem(item, {
     assets,
+    graphAssets,
     materials: PREVIEW_MATERIALS,
     points: job.points,
     pointSize: 0.1,
@@ -269,9 +291,36 @@ async function main(): Promise<void> {
     if (job.seed !== undefined) graph.setSeed(job.seed);
     const cooked = await cook(graph);
     stats = cooked.stats;
+    /**
+     * Asset outputs are meshes for instances, not scene content: drawn
+     * where their id's instances stand, never as a box at the origin —
+     * which would also pull the framing and the stand-in ground towards
+     * something the graph never placed. The same split as the editor's.
+     */
+    const declared = graph.describe().outputs;
+    const assetNames = new Set(declared.filter(isAssetOutput).map((o) => o.name));
+    const supplied = collectSuppliedMeshes(declared, cooked.outputs);
+    const batches: InstanceBatch[] = [];
+    for (const [name, collection] of Object.entries(cooked.outputs)) {
+      if (assetNames.has(name)) continue;
+      for (const item of collection) {
+        if (item.kind === "instances" && !isDeviceResidentInstances(item)) {
+          batches.push(...item.batches);
+        }
+      }
+    }
+    const coloured = idsWithInstanceColour(batches);
+    // White under per-instance colour, which three multiplies by the
+    // material; otherwise this page's one mesh colour. Cooked once, so the
+    // cache is only the conversion here, never a memo.
+    const graphAssets = createGraphAssetCache().resolve(supplied.meshes, (id) => ({
+      color: coloured.has(id) ? 0xffffff : 0x9aa792,
+      roughness: 0.95,
+    }));
     const items: ItemReport[] = [];
     for (const [name, collection] of Object.entries(cooked.outputs)) {
-      for (const item of collection) items.push(addItem(group, name, item, job));
+      if (assetNames.has(name)) continue;
+      for (const item of collection) items.push(addItem(group, name, item, job, graphAssets));
     }
     if (group.children.length === 0) {
       fail(
@@ -285,6 +334,18 @@ async function main(): Promise<void> {
       meta: graph.meta ?? {},
       cook: { cooked: stats.cooked, cached: stats.cached, elapsedMs: stats.elapsedMs },
       items,
+      // Present only for a graph that declares asset outputs, so every
+      // other graph's sidecar is unchanged. `skipped` carries each asset
+      // output that could not supply a mesh; its id drew as a placeholder.
+      ...(assetNames.size > 0
+        ? {
+            assets: {
+              outputs: [...assetNames],
+              supplied: supplied.meshes.map((m) => m.id),
+              ...(supplied.problems.length > 0 ? { skipped: supplied.problems } : {}),
+            },
+          }
+        : {}),
     };
   } catch (err) {
     if (probe.state === "error") throw err;

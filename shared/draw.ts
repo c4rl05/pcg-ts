@@ -24,6 +24,7 @@ import {
   toInstancedMeshes,
   toLineGeometry,
   toPointsObject,
+  type AssetMap,
   type InstancedAsset,
 } from "pcg-ts/three";
 import { InstancedMesh, LineSegments, Mesh, Points, type Material, type Object3D } from "three";
@@ -44,6 +45,14 @@ export interface DrawMaterials {
 
 export interface DrawOptions {
   assets: PlaceholderAssets;
+  /**
+   * Meshes the GRAPH supplies, by asset id — its `role: "asset"` outputs,
+   * converted. They win over the placeholders for every id they name (see
+   * `resolveAssets`). Shared by reference like a placeholder asset, so
+   * `disposeDrawn` never frees them: their owner is whoever built the map
+   * (`createGraphAssetCache` on the pages).
+   */
+  graphAssets?: AssetMap;
   materials: DrawMaterials;
   /**
    * Draw every instance batch with THIS material instead of the one its
@@ -80,6 +89,8 @@ export interface DrawReport {
   primitives?: Record<string, number>;
   /** Instances per asset id: a species mix is what a spawn graph is about. */
   batches?: Record<string, number>;
+  /** The ids among `batches` drawn with a mesh the graph supplied. */
+  supplied?: string[];
   /** The geometry has primitives but none carry a type tag. */
   untagged?: boolean;
   /**
@@ -111,7 +122,7 @@ export function drawItem(item: DataItem, opts: DrawOptions): Drawn {
         report: { kind: "instances", drew: [], skipped: "device-resident batches" },
       };
     }
-    let resolved = resolveAssets(item.batches, opts.assets);
+    let resolved = resolveAssets(item.batches, opts.assets, opts.graphAssets);
     if (opts.instanceMaterial !== undefined) {
       const override = opts.instanceMaterial;
       const swapped: Record<string, InstancedAsset> = {};
@@ -127,9 +138,18 @@ export function drawItem(item: DataItem, opts: DrawOptions): Drawn {
       instances += mesh.count;
       batches[mesh.name] = (batches[mesh.name] ?? 0) + mesh.count;
     }
+    const graphAssets = opts.graphAssets;
+    const supplied =
+      graphAssets === undefined ? [] : Object.keys(batches).filter((id) => id in graphAssets);
     return {
       objects: meshes,
-      report: { kind: "instances", drew: ["instances"], instances, batches },
+      report: {
+        kind: "instances",
+        drew: ["instances"],
+        instances,
+        batches,
+        ...(supplied.length > 0 ? { supplied } : {}),
+      },
     };
   }
 
@@ -216,7 +236,10 @@ export function drawItem(item: DataItem, opts: DrawOptions): Drawn {
  *   reference and memoized across cooks in `assets.ts` precisely so a
  *   viewer that re-cooks on every edit does not leak a GPU program each
  *   time; disposing it would pull the buffers out from under every other
- *   mesh drawing that asset. The exception is a batch carrying NAMED
+ *   mesh drawing that asset. A GRAPH-SUPPLIED asset
+ *   (`DrawOptions.graphAssets`) is shared the same way and owned by the
+ *   page's cache, which frees it when the mesh changes — so the same
+ *   branch spares it. The exception is a batch carrying NAMED
  *   per-instance channels: those bind as `InstancedBufferAttribute`s on
  *   the geometry, so such a mesh cannot share the asset's and is handed a
  *   clone of its own. `ownsGeometry` is the marker `toInstancedMeshes`

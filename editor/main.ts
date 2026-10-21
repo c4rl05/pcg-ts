@@ -24,7 +24,7 @@ import "pcg-ts/primitives";
  * of its two pages declares. See that file.
  */
 import "../shared/graph/tokens.css";
-import type { DataItem } from "pcg-ts";
+import { isDeviceResidentInstances, type DataItem, type InstanceBatch } from "pcg-ts";
 import { mount } from "svelte";
 import {
   GridHelper,
@@ -36,7 +36,12 @@ import {
 } from "three";
 import { createFpsMeter } from "../shared/fps.js";
 import { createScene } from "../shared/scene.js";
-import { createPlaceholderAssets } from "../shared/assets.js";
+import {
+  collectSuppliedMeshes,
+  createGraphAssetCache,
+  createPlaceholderAssets,
+  idsWithInstanceColour,
+} from "../shared/assets.js";
 import { createGpuPaths, requestGpuDevice, type CookPath, type GpuPaths } from "../shared/gpu.js";
 import { disposeDrawn, drawItem, type DrawMaterials } from "../shared/draw.js";
 import {
@@ -116,6 +121,13 @@ function applyGround(plan: GroundPlan): void {
  * geometry rather than as a decision.
  */
 const assets = createPlaceholderAssets();
+/**
+ * The meshes the GRAPH supplies — its `role: "asset"` outputs — converted
+ * once per mesh revision and kept for the page's life. The cache owns
+ * them, not the draw: `disposeDrawn` leaves them alone, and the cache
+ * frees an entry when a cook stops asking for it.
+ */
+const graphAssets = createGraphAssetCache();
 const outputGroup = new Group();
 scene.add(outputGroup);
 let drawn: Object3D[] = [];
@@ -341,28 +353,79 @@ function render(items: readonly DataItem[], info: RenderInfo): void {
   disposeDrawn(drawn);
   drawn = [];
   /**
-   * A palette slot per output, in the order the outputs first appear. The
-   * map is what makes an output that produced sixteen items one colour
-   * rather than sixteen.
+   * Asset outputs are not scene content. Each one's item is the mesh for
+   * the asset id equal to its name, so it is drawn wherever that id's
+   * instances are and nowhere else — and in particular not as a unit box
+   * at the origin, which would also drag the framing and the floor
+   * towards a thing the graph never placed. `measureDrawn` below only
+   * ever sees what was drawn, so leaving them out of the draw is the
+   * whole of keeping them out of the framing.
+   */
+  const sceneItems: { item: DataItem; owner: string }[] = [];
+  const assetItems: Record<string, DataItem[]> = {};
+  for (const [i, item] of items.entries()) {
+    const owner = info.outputs[i] ?? "";
+    if (info.assetOutputs.has(owner)) (assetItems[owner] ??= []).push(item);
+    else sceneItems.push({ item, owner });
+  }
+  /**
+   * A palette slot per output, in the order the outputs first appear —
+   * SCENE outputs first, so that a graph supplying its own meshes colours
+   * its parts exactly as it would without them. The map is what makes an
+   * output that produced sixteen items one colour rather than sixteen.
    */
   const slot = new Map<string, number>();
-  for (const name of info.outputs) if (!slot.has(name)) slot.set(name, slot.size);
+  for (const { owner } of sceneItems) if (!slot.has(owner)) slot.set(owner, slot.size);
+  for (const name of info.assetOutputs) if (!slot.has(name)) slot.set(name, slot.size);
   // A count per kind rather than a list: an arbitrary graph can produce a
   // dozen outputs, and "mesh · lines · points" repeated twelve times says
   // less than "3 mesh · 12 points".
   const tally = new Map<string, number>();
-  for (const [i, item] of items.entries()) {
+
+  /**
+   * One declaration per asset output, in declaration order. A refusal (an
+   * asset output that cooked to two items, or to lines) is shown and that
+   * id falls back to its placeholder: a page that blanked on a malformed
+   * asset would hide every scene output that cooked fine.
+   */
+  const supplied = collectSuppliedMeshes(
+    info.assetDecls,
+    assetItems,
+  );
+  for (const problem of supplied.problems) tally.set(`skipped: ${problem}`, 1);
+  const batches: InstanceBatch[] = [];
+  for (const { item } of sceneItems) {
+    if (item.kind === "instances" && !isDeviceResidentInstances(item)) batches.push(...item.batches);
+  }
+  const coloured = idsWithInstanceColour(batches);
+  /**
+   * WHITE when the batches carry their own colour: three multiplies
+   * `instanceColor` by the material, so a hue here would tint every
+   * authored colour into the output's. Otherwise the asset output's own
+   * hue, so the part still reads as itself. Normals mode never sees this:
+   * its override replaces the material and keeps the geometry.
+   */
+  const graphMap = graphAssets.resolve(supplied.meshes, (id) => ({
+    color: coloured.has(id) ? 0xffffff : OUTPUT_COLORS[(slot.get(id) ?? 0) % OUTPUT_COLORS.length],
+    roughness: 0.85,
+  }));
+
+  const usedGraphMeshes = new Set<string>();
+  for (const { item, owner } of sceneItems) {
     const { objects, report } = drawItem(item, {
       assets,
-      materials: materialsFor(shading, slot.get(info.outputs[i] ?? "") ?? 0),
+      graphAssets: graphMap,
+      materials: materialsFor(shading, slot.get(owner) ?? 0),
       pointSize: 0.16,
       ...(shading === "normals" ? { instanceMaterial: sharedNormal } : {}),
     });
     for (const obj of objects) outputGroup.add(obj);
     drawn.push(...objects);
     for (const what of report.drew) tally.set(what, (tally.get(what) ?? 0) + 1);
+    for (const id of report.supplied ?? []) usedGraphMeshes.add(id);
     if (report.skipped !== undefined) tally.set(`skipped: ${report.skipped}`, 1);
   }
+  if (usedGraphMeshes.size > 0) tally.set(`graph meshes: ${[...usedGraphMeshes].join(", ")}`, 1);
   drewSummary =
     tally.size === 0
       ? "nothing"
