@@ -11,6 +11,7 @@ import {
   diagnosticsOf,
   errorDiagnostics,
 } from "../diagnostics/index.js";
+import { canonicalOneOf } from "../diagnostics/canonical.js";
 // By path: the phrasing helper is internal plumbing the diagnostics barrel does not carry.
 import { type NameSuggestion, suggestNames } from "../diagnostics/didYouMean.js";
 import { isField } from "../fields/index.js";
@@ -194,6 +195,13 @@ export interface SerializedOutput {
   readonly id: string;
   readonly pin: string;
   readonly name: string;
+  /**
+   * `"asset"`: the output's geometry is the mesh for asset id = `name`,
+   * which a host draws as that id's instances rather than as scene
+   * content. Written only when set, and read only on the OUTERMOST graph —
+   * a subgraph body's outputs never reach a host.
+   */
+  readonly role?: "asset";
 }
 
 /**
@@ -312,7 +320,16 @@ const NODE_KEYS = ["id", "type", "params", "subgraph", "ref"] as const;
 const SUBGRAPH_PAYLOAD_KEYS = ["graph", "inputs", "outputs", "params"] as const;
 const SUBGRAPH_REF_KEYS = ["name", "hash"] as const;
 const CONNECTION_KEYS = ["from", "to"] as const;
-const OUTPUT_KEYS = ["id", "pin", "name"] as const;
+const OUTPUT_KEYS = ["id", "pin", "name", "role"] as const;
+/**
+ * A subgraph body's output keys: no `role`, which only the outermost graph
+ * reads. A body's `role` is still refused by its own reason (see
+ * `readOutputRole`), so it is held out of the unknown-key check rather than
+ * reported twice.
+ */
+const BODY_OUTPUT_KEYS = ["id", "pin", "name"] as const;
+/** The values an output's `role` may take; omitting it means scene content. */
+const OUTPUT_ROLES = ["asset"] as const;
 const EXPOSED_PIN_KEYS = ["name", "node", "pin"] as const;
 const EXPOSED_PARAM_KEYS = ["name", "targets", "description", "default", "min", "max"] as const;
 const EXPOSED_PARAM_TARGET_KEYS = ["node", "param"] as const;
@@ -1615,11 +1632,63 @@ function serializeGraphRec(graph: Graph, seen: Set<Graph>): SerializedGraph {
         })),
       outputs: graph._outputs
         .filter((o) => plumbing?.outputNames.has(o.name) !== true)
-        .map((o) => ({ id: o.node, pin: o.pin, name: o.name })),
+        .map((o) => {
+          // `seen` holds the graphs on the current path, so more than one
+          // means this is a wrapper's body. The loader refuses a body's
+          // role, so writing one would make a file this library cannot read.
+          if (o.role !== undefined && seen.size > 1) {
+            fail(
+              `cannot serialize output "${o.name}" (node "${o.node}" pin "${o.pin}") of a subgraph body: role "${o.role}" is only read on the outermost graph — a subgraph body's outputs never reach a host; declare the asset output on the graph that wraps it`,
+              "invalid-asset-output",
+            );
+          }
+          return { id: o.node, pin: o.pin, name: o.name, ...(o.role !== undefined ? { role: o.role } : {}) };
+        }),
     };
   } finally {
     seen.delete(graph);
   }
+}
+
+/**
+ * An output entry's `role`, canonicalized to the format's own string. Only
+ * the outermost graph reads it: a subgraph body's outputs feed its wrapper,
+ * never a host, so an asset declared there would supply nothing — and
+ * `hashableGraph` covers a payload verbatim, so admitting the key there
+ * would be a hash-moving format change for no reader.
+ */
+function readOutputRole(
+  role: unknown,
+  i: number,
+  nested: boolean,
+  at: Locate,
+  id: string,
+  pin: string,
+): "asset" {
+  if (nested) {
+    fault({
+      code: "invalid-asset-output",
+      message: `outputs[${i}]: role ${JSON.stringify(role)} is only read on the outermost graph — a subgraph body's outputs never reach a host; declare the asset output on the graph that wraps it`,
+      path: at("/role"),
+      nodeId: id,
+      pin,
+    });
+  }
+  const canonical = canonicalOneOf(OUTPUT_ROLES, role);
+  if (canonical === undefined) {
+    const near = typeof role === "string" ? suggestNames(role, OUTPUT_ROLES) : { names: [], clause: "" };
+    fault({
+      code: "invalid-asset-output",
+      message: `outputs[${i}]: role ${JSON.stringify(role)} is not a role; ${near.clause}valid: "asset" (omit role for scene content)`,
+      path: at("/role"),
+      nodeId: id,
+      pin,
+      got: role,
+      valid: [...OUTPUT_ROLES],
+      ...suggestionFields(near, (to) => `replace ${JSON.stringify(role)} with "${to}"`),
+    });
+  }
+  return canonical as "asset";
 }
 
 function checkEndpoint(v: unknown, label: string, path: string): [string, string] {
@@ -2777,7 +2846,12 @@ function readGraphDocument(json: unknown, ctx: ReadContext, sink: Sink): Graph {
           path: at(""),
         });
       }
-      checkKeys(sink, outJson, OUTPUT_KEYS, `outputs[${i}]`, NO_ANNOTATION_KEY, at);
+      if (nested) {
+        const { role: _role, ...rest } = outJson;
+        checkKeys(sink, rest, BODY_OUTPUT_KEYS, `outputs[${i}]`, NO_ANNOTATION_KEY, at);
+      } else {
+        checkKeys(sink, outJson, OUTPUT_KEYS, `outputs[${i}]`, NO_ANNOTATION_KEY, at);
+      }
       const { id, pin, name } = outJson;
       if (typeof id !== "string" || typeof pin !== "string" || typeof name !== "string") {
         fault({
@@ -2811,8 +2885,9 @@ function readGraphDocument(json: unknown, ctx: ReadContext, sink: Sink): Graph {
         fault(unknownPinFault(`outputs[${i}]: `, id, "output", pin, outPins, at("/pin"), ""));
       }
       if (reused && !graph._outputs.some((o) => o.name === name)) duplicate();
+      const role = Object.hasOwn(outJson, "role") ? readOutputRole(outJson.role, i, nested, at, id, pin) : undefined;
       try {
-        graph.output(handle, pin, name);
+        graph.output(handle, pin, name, role !== undefined ? { role } : undefined);
       } catch (err) {
         const carried = diagnosticsOf(err)[0]?.code;
         fault({
@@ -2823,7 +2898,7 @@ function readGraphDocument(json: unknown, ctx: ReadContext, sink: Sink): Graph {
                 ? "duplicate-output-name"
                 : "invalid-output",
           message: `outputs[${i}]: ${errText(err)}`,
-          path: at("/name"),
+          path: carried === "invalid-asset-output" ? at("/role") : at("/name"),
           nodeId: id,
           pin,
         });

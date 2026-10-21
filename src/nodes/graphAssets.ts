@@ -2,8 +2,11 @@
  * What asset ids can this graph spawn, without cooking it?
  *
  * `spawnInstances.assetId` is a free string whose meaning belongs to the
- * renderer — the library never validates one, because it cannot: an id is
- * a promise to a host that the library has never met. What it CAN do is
+ * renderer UNLESS THE GRAPH SUPPLIES IT: a top-level output declared
+ * `role: "asset"` is the mesh for the id equal to its name (see
+ * {@link describeSuppliedAssets} and `collectGraphAssets`). Every other id
+ * the library never validates, because it cannot: such an id is a promise
+ * to a host that the library has never met. What it CAN do is
  * say which promises a graph makes, which is the half that was missing.
  * A graph written by someone who could not read this repository invented
  * two asset ids that cooked perfectly and rendered as placeholder shapes,
@@ -108,6 +111,31 @@ export interface DescribedSpawner {
 export function describeGraphAssets(graph: Graph): DescribedSpawner[] {
   const out: DescribedSpawner[] = [];
   walkGraph(frameOf(graph, undefined, NO_OVERRIDES), out, new Set());
+  return out;
+}
+
+/** One asset id whose mesh the graph supplies itself; see {@link describeSuppliedAssets}. */
+export interface SuppliedAsset {
+  /** The asset id — the declaring output's name. */
+  readonly id: string;
+  /** The node whose output pin carries the mesh. */
+  readonly node: string;
+  /** That node's output pin. */
+  readonly pin: string;
+}
+
+/**
+ * Every asset id the graph supplies its own mesh for: the TOP-LEVEL
+ * outputs declared `role: "asset"`, in declaration order. Only the
+ * outermost graph is read — a subgraph body's outputs feed its wrapper,
+ * never a host, and the loader refuses the role there. An id a spawner
+ * emits that is not in this list is the renderer's to provide.
+ */
+export function describeSuppliedAssets(graph: Graph): SuppliedAsset[] {
+  const out: SuppliedAsset[] = [];
+  for (const o of graph.describe().outputs) {
+    if (o.role === "asset") out.push({ id: o.name, node: o.id, pin: o.pin });
+  }
   return out;
 }
 

@@ -802,6 +802,17 @@ is reported OPEN rather than guessed, which is the signal that the list
 is a lower bound. It is what an author checks a host's asset map
 against, and it costs no cook.
 
+A graph can also supply the mesh for an id itself. A top-level output
+declared `"role": "asset"` is the mesh for the asset id equal to its
+name, modelled in the instance's local frame (world units at scale 1;
+the host applies `T(P) · R(rot) · S(scale)` unmodified, so the graph
+models the pivot). The editor and `pcg render` draw those instances as
+that mesh instead of a placeholder, `pcg assets` marks the supplied ids,
+and a host reads them with `collectGraphAssets(outputs, cooked)` and,
+in three, `graphAssetMap(meshes, materialFor)` — skipping the asset
+outputs themselves (`isAssetOutput`) when it draws the rest. See
+docs/authoring.md, "A graph can supply its own mesh".
+
 **Per-instance colour, and why you have to ask for it.** Splitting into
 more asset ids is not the only variation channel. Point `spawnInstances`'
 `colorAttr` at an f32 point attribute with `tupleSize >= 3` and

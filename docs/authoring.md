@@ -33,7 +33,7 @@ A serialized graph is one JSON object (`SerializedGraph`):
 | `meta` | Optional `{ title, description, tags }` — the only place descriptive text belongs; there is no comment or annotation key. Excluded from the content hash, so retitling a graph invalidates nothing. |
 | `nodes` | Node instances. `id` must be unique and non-empty; `type` must be a registered node type; `params` maps param names to values. Omitted params take their schema defaults. A `subgraph` node additionally carries either a `subgraph` payload or a `ref` (below); no other node type may carry either. |
 | `connections` | Directed edges `from: [nodeId, outputPin]` to `to: [nodeId, inputPin]`. Pin kinds must be compatible (`any` matches everything); an input pin accepts one connection unless declared `multi`; cycles are rejected. |
-| `outputs` | Declared terminal outputs. Cooking pulls from these (and cooks only what they reach); `name` keys the collection in `CookResult.outputs`. |
+| `outputs` | Declared terminal outputs. Cooking pulls from these (and cooks only what they reach); `name` keys the collection in `CookResult.outputs`. Each is `{ id, pin, name }` plus, on the outermost graph only, an optional `role: "asset"`: the output's geometry is then the mesh for asset id = `name`, drawn as that id's instances rather than as scene content — see [A graph can supply its own mesh](#6-a-graph-can-supply-its-own-mesh-pure-json). |
 
 ### Validation behavior
 
@@ -62,6 +62,9 @@ valid:
   declares in `params` → refused, naming both sites and both fixes
 - a `params` block on a subgraph payload's inner graph → refused, naming
   the wrapper's exposed params as the right home
+- an output `role` other than `"asset"`, `role: "asset"` on a pin that
+  does not carry geometry, or any `role` on a subgraph payload's outputs
+  → refused (`invalid-asset-output`), naming the output, node and pin
 
 The unknown-key rule is worth stating plainly, because **the format is
 closed**. Until v0.10 an unrecognized key was ignored, which is how `meta`
@@ -2025,6 +2028,146 @@ would fail or not depending on the order it streamed in — exactly the
 order-dependence the determinism invariant forbids. A streamed `World`
 may hold many times the budget across its live cells, and that is
 correct.
+
+### 6. A graph can supply its own mesh (pure JSON)
+
+An asset id is normally a promise to the host: the graph names `"rock"`
+and the renderer decides what a rock looks like. When the shape is part
+of what the graph says — a brick on a stud lattice, a crate of stated
+size, a stud — the graph can supply the mesh itself. A **top-level**
+output may carry `"role": "asset"`, and that output's geometry is then the
+mesh for the asset id equal to the output's `name`:
+
+```json
+{
+  "formatVersion": 1,
+  "seed": 13,
+  "nodes": [
+    { "id": "scatter", "type": "pointScatterInBounds",
+      "params": { "count": 200, "boundsMin": [0, 0, 0], "boundsMax": [40, 0, 40] } },
+    { "id": "spawn", "type": "spawnInstances", "params": { "assetId": "crate" } },
+    { "id": "crateMesh", "type": "meshPrimitive",
+      "params": { "shape": "box", "size": [1, 1, 1], "center": [0, 0.5, 0] } }
+  ],
+  "connections": [ { "from": ["scatter", "out"], "to": ["spawn", "in"] } ],
+  "outputs": [
+    { "id": "spawn", "pin": "instances", "name": "instances" },
+    { "id": "crateMesh", "pin": "out", "name": "crate", "role": "asset" }
+  ]
+}
+```
+
+The editor and `pcg render` draw each `crate` instance as that box
+instead of a placeholder, and do not draw the `crate` output itself as
+scene content. In code the declaration is
+`graph.output(crateMesh, "out", "crate", { role: "asset" })`, and
+`graph.describe().outputs` reports `role` only on the outputs that carry
+it. Nothing else in the cook changes: an asset output is an ordinary
+output — cooked, cached, fingerprinted and shipped across the worker
+boundary like any other — so this is a reading of the cook result, not a
+second pipeline.
+
+**The mesh is in the instance's local frame**, in world units at scale
+1, and the host applies the instance transform `T(P) · R(rot) · S(scale)`
+unmodified. So the graph models the pivot, and the two conventions have
+to agree. The box above has its base at the origin, so `P` is where the
+crate stands. A unit box centred on the origin (`size [1, 1, 1]`,
+`center [0, 0, 0]`) is the other common choice: `P` is then the box's
+centre and `scale` its full extents, which is exactly what
+`packBricks`' `out` pin writes. Its `studs` pin writes identity scale,
+so the stud mesh is modelled at world size with its base at the origin.
+
+**Colour is per instance where the spawn carries it.** `colorAttr`
+reaches the batch as `colors` exactly as it does for host art, the three
+adapter turns it into `instanceColor`, and both the editor and
+`pcg render` draw each instance of a graph-supplied mesh in its own
+colour.
+
+What a loader and a cook refuse, all under code `invalid-asset-output`
+and each naming the output, its node and pin, and the fix:
+
+- a `role` other than `"asset"` — omit `role` for scene content, and a
+  near-miss such as `"assets"` gets a did-you-mean;
+- `role: "asset"` on a pin that does not carry geometry (a
+  `spawnInstances` `instances` pin, say): an asset is a mesh;
+- `role` on an output of a subgraph body or a registered primitive's
+  graph: only the outermost graph is read, because a body's outputs feed
+  its wrapper and never reach a host — declare the asset output on the
+  graph that wraps it;
+- a cook of the output that yields no items, or more than one (merge
+  them with `mergePrimitives` first), or an item that is not geometry;
+- a geometry with no face — no `poly` primitive with 3 or more vertices,
+  such as a polyline — since an asset is drawn as a triangle mesh;
+- a non-finite position on any point a face touches.
+
+The pin rules are checked when the graph is built or loaded; the cook
+rules when an asset is read off a cook result. One warning sits beside
+them: `asset-output-unused` when an asset output names an id no
+`spawnInstances` in the graph can emit, with a did-you-mean against the
+ids they do emit. It is reported only when every spawner's id set is
+closed (see `describeGraphAssets`), because an open set might emit the id
+and a warning that could be wrong is not one to act on.
+
+**Reading the meshes in code.** The root package exports the pieces a
+host needs, and `pcg-ts/three` turns them into an asset map:
+
+```ts
+import { MeshStandardMaterial } from "three";
+import { collectGraphAssets, cook, isAssetOutput } from "pcg-ts";
+import { graphAssetMap, toInstancedMeshes } from "pcg-ts/three";
+
+const result = await cook(graph);
+const declared = graph.describe().outputs;
+// Map<assetId, Geometry>, in declaration order.
+const meshes = collectGraphAssets(declared, result.outputs);
+const assets = {
+  ...graphAssetMap(meshes, () => new MeshStandardMaterial()),
+  ...hostArt, // spread order is precedence: here the host's art wins
+};
+for (const o of declared) {
+  if (isAssetOutput(o)) continue; // the mesh, not scene content
+  for (const item of result.outputs[o.name] ?? []) {
+    if (item.kind === "instances") scene.add(...toInstancedMeshes(item.batches, assets));
+  }
+}
+```
+
+`collectGraphAssets(outputs, cooked)` takes the declarations —
+`graph.describe().outputs` or a serialized graph's `outputs` both fit —
+and the cook result's outputs, or a worker pool's decoded ones. An asset
+output missing from `cooked` is skipped rather than refused, so a
+per-output cook that did not ask for it has nothing to supply; the
+refusals above throw as a `GraphError` carrying the diagnostic. The
+geometries are the cook result's own, so treat them as frozen.
+`graphAssetMap(meshes, materialFor, opts?)` converts each with
+`toBufferGeometry(mesh, opts)` and takes each material from
+`materialFor(id)`. Everything it returns belongs to the caller: dispose
+the geometries and materials when the map is retired, because
+`toInstancedMeshes` never disposes an asset map's shared geometry.
+
+**A host that draws every declared output must skip the asset outputs**
+— `isAssetOutput(o)` — or it draws each mesh a second time, as content,
+where it was modelled (at the origin, for the box above).
+`describeSuppliedAssets(graph)` lists the supplied ids as
+`{ id, node, pin }` without cooking.
+
+**Streamed `World` levels do not read asset outputs in this version.** A
+level cooks its graph per cell, and an asset output there is just another
+per-cell output. Leave asset outputs out of the level's `cookOutputs` and
+cook them once, outside the world, with
+`cook(graph, { outputs: assetNames })`.
+
+From the command line, `pcg assets` marks the ids the graph supplies with
+`*` and names what the renderer must still provide (JSON adds `supplied`,
+`hostIds` and `unusedSupplied`); `pcg cook --json` adds an `assets` block
+giving each supplied mesh's node, pin, points, triangles and local bounds;
+`pcg validate` marks an asset output `(asset)` and carries `role` in its
+JSON; and `pcg render --out x.png --output crate` draws the asset mesh on
+its own.
+
+The format change is one key: `role` is written only when set, so a
+graph without one serializes exactly as before, and it arrived at
+`formatVersion` 1 under the closed key list.
 
 ## The per-instance channel: the ABI between a graph and its host
 

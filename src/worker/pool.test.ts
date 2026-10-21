@@ -10,6 +10,7 @@ import {
   Graph,
   GraphSerializationError,
   NodeExecutionError,
+  collectGraphAssets,
   cook,
   deserializeGraph,
   fieldFromJson,
@@ -392,6 +393,35 @@ describe("CookWorkerPool", () => {
       // genuinely crossed the boundary.
       const other = await pool.cook({ graph: json, seed: 1 });
       expect(outputsDiff(remote.outputs, other.outputs)).not.toBeNull();
+    } finally {
+      await pool.close();
+    }
+  }, 60_000);
+
+  it("ships asset outputs across the wire as ordinary outputs collectGraphAssets reads", async () => {
+    const graph = new Graph(1);
+    const mesh = graph.add(meshPrimitive, { shape: "box", size: [1, 1, 1] }, "brickMesh");
+    const scatter = graph.add(pointScatterInBounds, { count: 8 }, "scatter");
+    const spawn = graph.add(spawnInstances, { assetId: "brick" }, "spawn");
+    graph.connect(scatter, "out", spawn, "in");
+    graph.output(mesh, "out", "brick", { role: "asset" });
+    graph.output(spawn, "instances", "bricks");
+    const json = serializeGraph(graph);
+    expect(json.outputs[0]).toEqual({ id: "brickMesh", pin: "out", name: "brick", role: "asset" });
+    const pool = new CookWorkerPool({ workers: 1, createWorker: entry.createWorker });
+    try {
+      const remote = await pool.cook({ graph: json });
+      const local = await cookLocally(json);
+      expect(outputsDiff(local, remote.outputs)).toBeNull();
+      const remoteMeshes = collectGraphAssets(json.outputs, remote.outputs);
+      const localMeshes = collectGraphAssets(json.outputs, local);
+      expect([...remoteMeshes.keys()]).toEqual(["brick"]);
+      const a = remoteMeshes.get("brick")!;
+      const b = localMeshes.get("brick")!;
+      expect(a.primitiveCount).toBe(b.primitiveCount);
+      expect([...(a.attrs.point.require("P").data as Float32Array)]).toEqual([
+        ...(b.attrs.point.require("P").data as Float32Array),
+      ]);
     } finally {
       await pool.close();
     }

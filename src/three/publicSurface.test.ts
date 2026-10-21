@@ -12,6 +12,9 @@ import { surfaceDiff, surfaceOf } from "../publicSurface.testsupport.js";
 const THREE_SURFACE = [
   "WorldThreeBinding", "checkAdoptionSeam", "createWebGpuInstanceAdapter",
   "fromBufferGeometry", "fromCurve",
+  // Graph-supplied meshes (outputs declared role "asset") as an AssetMap,
+  // so the host decides precedence by spread order against its own art.
+  "graphAssetMap",
   // `toInstancedMeshes`' disposal contract, which a caller writing its
   // own teardown instead of using WorldThreeBinding has to be able to
   // run: which slots a mesh's material occupies (`mesh.material` is a

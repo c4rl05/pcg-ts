@@ -15,7 +15,16 @@
  *   over the mesh it belongs to buries the surface.
  * - Instances are upright square pyramids (base 0.4, height 1) pushed
  *   through their full 4×4, coloured by asset id: orientation and scale
- *   are visible, the asset's look deliberately is not. At true scale a
+ *   are visible, the asset's look deliberately is not — UNLESS the graph
+ *   supplies the asset's mesh itself (an output declared `role: "asset"`,
+ *   handed in as `SceneOptions.meshes`). Then that mesh is what the
+ *   instance IS, so it is drawn through the same 4×4, flat-shaded like any
+ *   face, in the batch's per-instance colours when it carries them (the
+ *   spawn's `colorAttr`, which is intent, unlike a minted `color`) and in
+ *   the asset id's categorical colour otherwise. Its triangles are budgeted
+ *   by their own stride against the primitive cap, so a graph without a
+ *   supplied mesh draws exactly what it drew before, and they sit with
+ *   the proxies, so the ground camera never stands on one. At true scale a
  *   tree is a pixel from 200 m up, so every view but `ground` also marks
  *   each instance's apex with a small plus sign — a different shape from a
  *   point's square — because placement is what those views are for, and
@@ -79,6 +88,113 @@ const PROXY = [
 /** Proxy faces: four sides and a two-triangle base. */
 const PROXY_FACES = [0, 1, 4, 1, 2, 4, 2, 3, 4, 3, 0, 4, 0, 2, 1, 0, 3, 2] as const;
 
+/**
+ * A graph-supplied asset mesh, read once into the instance's LOCAL frame:
+ * the points its faces touch and the fan triangles over them, by the same
+ * reading `primitiveKinds` gives a drawn geometry. Lines and bare points
+ * of the asset are not part of what an instance draws.
+ */
+export interface LocalMesh {
+  /** xyz of every point a drawn face touches, each once. */
+  readonly points: Float64Array;
+  readonly pointCount: number;
+  /** Three indices into `points` per triangle. */
+  readonly triangles: Uint32Array;
+  readonly triangleCount: number;
+  /** Local box over `points`; absent when no face drew. */
+  readonly bounds?: Bounds3;
+  /** Highest local y: an instance's marker sits at its 4×4 times (0, top, 0). */
+  readonly top: number;
+}
+
+/**
+ * Read an asset geometry into its {@link LocalMesh}. Faces are
+ * fan-triangulated from their first vertex, as for any drawn geometry; a
+ * triangle with a non-finite corner is left out (`collectGraphAssets`
+ * refuses such a mesh before it gets here, so that is only a hand-built
+ * map's problem).
+ */
+export function localMesh(geo: Geometry): LocalMesh {
+  const P = positions(geo);
+  if (P === undefined) {
+    return { points: new Float64Array(0), pointCount: 0, triangles: new Uint32Array(0), triangleCount: 0, top: 0 };
+  }
+  const ts = P.tupleSize;
+  const data = P.data;
+  const px = (i: number): number => data[i * ts];
+  const py = (i: number): number => (ts >= 3 ? data[i * ts + 1] : 0);
+  const pz = (i: number): number => data[i * ts + (ts >= 3 ? 2 : 1)];
+  const finite = (i: number): boolean =>
+    Number.isFinite(px(i)) && Number.isFinite(py(i)) && Number.isFinite(pz(i));
+  const local = new Int32Array(geo.pointCount).fill(-1);
+  const pts = new Column();
+  const tris: number[] = [];
+  const slot = (i: number): number => {
+    if (local[i] < 0) {
+      local[i] = pts.length / 3;
+      pts.push3(px(i), py(i), pz(i));
+    }
+    return local[i];
+  };
+  const kind = primitiveKinds(geo);
+  for (let p = 0; p < geo.primitiveCount; p++) {
+    if (kind(p) !== "face") continue;
+    const start = geo.primVertexStart[p];
+    const count = geo.primVertexCount[p];
+    const first = geo.vertexToPoint[start];
+    for (let k = 1; k + 1 < count; k++) {
+      const b = geo.vertexToPoint[start + k];
+      const c = geo.vertexToPoint[start + k + 1];
+      if (!finite(first) || !finite(b) || !finite(c)) continue;
+      tris.push(slot(first), slot(b), slot(c));
+    }
+  }
+  const points = pts.view().slice();
+  const pointCount = points.length / 3;
+  let min0 = Number.POSITIVE_INFINITY;
+  let min1 = Number.POSITIVE_INFINITY;
+  let min2 = Number.POSITIVE_INFINITY;
+  let max0 = Number.NEGATIVE_INFINITY;
+  let max1 = Number.NEGATIVE_INFINITY;
+  let max2 = Number.NEGATIVE_INFINITY;
+  for (let i = 0; i < pointCount; i++) {
+    const x = points[i * 3];
+    const y = points[i * 3 + 1];
+    const z = points[i * 3 + 2];
+    if (x < min0) min0 = x;
+    if (x > max0) max0 = x;
+    if (y < min1) min1 = y;
+    if (y > max1) max1 = y;
+    if (z < min2) min2 = z;
+    if (z > max2) max2 = z;
+  }
+  return {
+    points,
+    pointCount,
+    triangles: Uint32Array.from(tris),
+    triangleCount: tris.length / 3,
+    ...(pointCount > 0 ? { bounds: { min: [min0, min1, min2], max: [max0, max1, max2] } } : {}),
+    top: pointCount > 0 ? max1 : 0,
+  };
+}
+
+/** One graph-supplied mesh as the scene drew it; see {@link Scene.meshAssets}. */
+export interface MeshAssetReport {
+  /** The asset id, which is the supplying output's name. */
+  readonly id: string;
+  /** Triangles in the mesh itself. */
+  readonly triangles: number;
+  /** Instances spawned with this id, and how many of them drew. */
+  readonly instancesTotal: number;
+  readonly instances: number;
+  /**
+   * Where the drawn colour came from: the batches' own per-instance colours
+   * (the spawn's `colorAttr`), the id's categorical colour, or both when
+   * some batches of the id carried colours and some did not.
+   */
+  readonly colors: "per-instance" | "categorical" | "mixed";
+}
+
 /** What {@link buildScene} needs beyond the collection. */
 export interface SceneOptions {
   /** The declared output each item came from, in collection order. */
@@ -91,6 +207,12 @@ export interface SceneOptions {
   readonly maxPoints: number;
   /** Cap on drawn primitives across the collection. */
   readonly maxPrimitives: number;
+  /**
+   * Asset meshes the graph supplies, by asset id (`collectGraphAssets`).
+   * Instances of these ids draw as the mesh rather than a pyramid; empty
+   * or absent leaves every instance a proxy.
+   */
+  readonly meshes?: ReadonlyMap<string, Geometry>;
 }
 
 /** What the scene holds, drawn and total. */
@@ -109,6 +231,15 @@ export interface SceneCounts {
   readonly skipped: number;
   /** Geometries whose points were not drawn because their topology was. */
   readonly pointsSuppressed: number;
+  /**
+   * Present only when the graph supplied asset meshes: instances drawn as
+   * those meshes (also counted in `instances` / `instancesTotal`), and the
+   * mesh triangles they put in the picture (not counted in `triangles`).
+   */
+  readonly meshInstances?: number;
+  readonly meshInstancesTotal?: number;
+  readonly meshTriangles?: number;
+  readonly meshTrianglesTotal?: number;
 }
 
 /** One colour in the picture and what it stands for. */
@@ -116,6 +247,12 @@ export interface LegendEntry {
   readonly kind: "output" | "asset";
   readonly name: string;
   readonly color: string;
+  /**
+   * Set on a graph-supplied asset whose instances drew in their own
+   * per-instance colours: `color` is then only the swatch for any of its
+   * instances that carried none.
+   */
+  readonly perInstanceColors?: true;
 }
 
 /** Everything the rasterizer draws, flat. */
@@ -125,7 +262,7 @@ export interface Scene {
   /** 3 lit channels (0..255) per triangle. */
   readonly faceColors: Float64Array;
   readonly faceCount: number;
-  /** Faces `[0, surfaceFaces)` are geometry; the rest are instance proxies. */
+  /** Faces `[0, surfaceFaces)` are geometry; the rest are instance proxies and graph-supplied meshes. */
   readonly surfaceFaces: number;
   /** 6 numbers per segment. */
   readonly lines: Float64Array;
@@ -145,6 +282,16 @@ export interface Scene {
   readonly legend: readonly LegendEntry[];
   readonly colorAttr?: string;
   readonly colorDomains?: readonly ColorDomain[];
+  /** Present only when meshes were supplied: each one, in the map's order. */
+  readonly meshAssets?: readonly MeshAssetReport[];
+}
+
+/** What the build pass tallies for one supplied mesh. */
+interface MeshTally {
+  drawn: number;
+  total: number;
+  colored: boolean;
+  plain: boolean;
 }
 
 /** A growable float column. */
@@ -247,6 +394,13 @@ export function buildScene(collection: DataCollection, opts: SceneOptions): Scen
   let primitivesTotal = 0;
   let instancesTotal = 0;
   let deviceInstances = 0;
+  const meshes = new Map<string, LocalMesh>();
+  for (const [id, geo] of opts.meshes ?? []) meshes.set(id, localMesh(geo));
+  // Instances drawn as a supplied mesh are budgeted in triangles, apart
+  // from the marks: with no mesh supplied both totals stay 0 and every
+  // stride below is what it always was.
+  let meshInstancesTotal = 0;
+  let meshTrianglesTotal = 0;
   // Colour slots: geometry outputs in the order they first appear (which is
   // declared-output order), then the asset ids, sorted.
   const outputOrder: string[] = [];
@@ -260,6 +414,11 @@ export function buildScene(collection: DataCollection, opts: SceneOptions): Scen
         for (const batch of item.batches) {
           instancesTotal += batch.count;
           assetIds.add(batch.assetId);
+          const mesh = meshes.get(batch.assetId);
+          if (mesh !== undefined) {
+            meshInstancesTotal += batch.count;
+            meshTrianglesTotal += batch.count * mesh.triangleCount;
+          }
         }
       }
       continue;
@@ -278,8 +437,9 @@ export function buildScene(collection: DataCollection, opts: SceneOptions): Scen
     }
     if (!drawsTopology || opts.points === true) pointsTotal += geo.pointCount;
   }
-  const markStride = strideFor(pointsTotal + instancesTotal, opts.maxPoints);
+  const markStride = strideFor(pointsTotal + instancesTotal - meshInstancesTotal, opts.maxPoints);
   const primStride = strideFor(primitivesTotal, opts.maxPrimitives);
+  const meshStride = strideFor(meshTrianglesTotal, opts.maxPrimitives);
   const rangeDomains = opts.attrDomain === undefined ? COLOR_DOMAINS : [opts.attrDomain];
   const range = opts.attr === undefined ? undefined : scalarRange(collection, opts.attr, rangeDomains);
   const slots = new Map<string, number>();
@@ -320,6 +480,13 @@ export function buildScene(collection: DataCollection, opts: SceneOptions): Scen
   let pointsSuppressed = 0;
   let markIndex = 0;
   let primIndex = 0;
+  let meshIndex = 0;
+  let meshInstancesDrawn = 0;
+  let meshTrianglesDrawn = 0;
+  /** Per mesh id: instances spawned and drawn, and whether its batches carried colours, or did not. */
+  const meshDrawn = new Map<string, MeshTally>();
+  for (const id of meshes.keys()) meshDrawn.set(id, { drawn: 0, total: 0, colored: false, plain: false });
+  let meshWorld = new Float64Array(0);
   let colorAttr: string | undefined;
   const colorDomains = new Set<ColorDomain>();
 
@@ -332,6 +499,80 @@ export function buildScene(collection: DataCollection, opts: SceneOptions): Scen
         const rgb = colorOf(`asset:${batch.assetId}`);
         const [r, g, b] = channels(rgb);
         const m = batch.transforms;
+        const mesh = meshes.get(batch.assetId);
+        if (mesh !== undefined) {
+          const tally = meshDrawn.get(batch.assetId) as MeshTally;
+          tally.total += batch.count;
+          const colors = batch.colors;
+          if (colors !== undefined) tally.colored = true;
+          else tally.plain = true;
+          if (meshWorld.length < mesh.points.length) meshWorld = new Float64Array(mesh.points.length);
+          const world = meshWorld;
+          const lp = mesh.points;
+          const tri = mesh.triangles;
+          for (let i = 0; i < batch.count; i++) {
+            const o = i * 16;
+            let finite = true;
+            for (let k = 0; k < 16; k++) finite = finite && Number.isFinite(m[o + k]);
+            if (!finite) {
+              meshIndex++;
+              skipped++;
+              continue;
+            }
+            // Every corner moves the bounds, drawn or not, so a cap never
+            // moves the camera.
+            for (let v = 0; v < mesh.pointCount; v++) {
+              const lx = lp[v * 3];
+              const ly = lp[v * 3 + 1];
+              const lz = lp[v * 3 + 2];
+              const wx = m[o] * lx + m[o + 4] * ly + m[o + 8] * lz + m[o + 12];
+              const wy = m[o + 1] * lx + m[o + 5] * ly + m[o + 9] * lz + m[o + 13];
+              const wz = m[o + 2] * lx + m[o + 6] * ly + m[o + 10] * lz + m[o + 14];
+              world[v * 3] = wx;
+              world[v * 3 + 1] = wy;
+              world[v * 3 + 2] = wz;
+              track(wx, wy, wz);
+            }
+            if (meshIndex++ % meshStride !== 0) continue;
+            // The batch's own colour, 0..1 per channel, when it carries a
+            // finite one; the id's categorical colour otherwise.
+            let ir = r;
+            let ig = g;
+            let ib = b;
+            if (colors !== undefined) {
+              const cr = colors[i * 3];
+              const cg = colors[i * 3 + 1];
+              const cb = colors[i * 3 + 2];
+              if (Number.isFinite(cr) && Number.isFinite(cg) && Number.isFinite(cb)) {
+                ir = Math.min(255, Math.max(0, cr * 255));
+                ig = Math.min(255, Math.max(0, cg * 255));
+                ib = Math.min(255, Math.max(0, cb * 255));
+              }
+            }
+            for (let t = 0; t < mesh.triangleCount; t++) {
+              const a = tri[t * 3] * 3;
+              const bb = tri[t * 3 + 1] * 3;
+              const c = tri[t * 3 + 2] * 3;
+              proxyFaces.push3(world[a], world[a + 1], world[a + 2]);
+              proxyFaces.push3(world[bb], world[bb + 1], world[bb + 2]);
+              proxyFaces.push3(world[c], world[c + 1], world[c + 2]);
+              const k = shade(
+                world[a], world[a + 1], world[a + 2],
+                world[bb], world[bb + 1], world[bb + 2],
+                world[c], world[c + 1], world[c + 2],
+              );
+              proxyColors.push3(ir * k, ig * k, ib * k);
+            }
+            const top = mesh.top;
+            markers.push3(m[o + 4] * top + m[o + 12], m[o + 5] * top + m[o + 13], m[o + 6] * top + m[o + 14]);
+            markerColors.push3(ir, ig, ib);
+            meshTrianglesDrawn += mesh.triangleCount;
+            meshInstancesDrawn++;
+            instancesDrawn++;
+            tally.drawn++;
+          }
+          continue;
+        }
         const world = new Float64Array(15);
         for (let i = 0; i < batch.count; i++) {
           const o = i * 16;
@@ -516,7 +757,20 @@ export function buildScene(collection: DataCollection, opts: SceneOptions): Scen
   // is also the order the colours were dealt in.
   const legendList: LegendEntry[] = [...slots.entries()].map(([key, rgb]) => {
     const colon = key.indexOf(":");
-    return { kind: key.slice(0, colon) as LegendEntry["kind"], name: key.slice(colon + 1), color: hexOf(rgb) };
+    const kind = key.slice(0, colon) as LegendEntry["kind"];
+    const name = key.slice(colon + 1);
+    const perInstance = kind === "asset" && meshDrawn.get(name)?.colored === true;
+    return { kind, name, color: hexOf(rgb), ...(perInstance ? { perInstanceColors: true as const } : {}) };
+  });
+  const meshAssets: MeshAssetReport[] = [...meshes].map(([id, mesh]) => {
+    const tally = meshDrawn.get(id) as MeshTally;
+    return {
+      id,
+      triangles: mesh.triangleCount,
+      instancesTotal: tally.total,
+      instances: tally.drawn,
+      colors: tally.colored ? (tally.plain ? "mixed" : "per-instance") : "categorical",
+    };
   });
   return {
     faces: faces.view(),
@@ -545,8 +799,17 @@ export function buildScene(collection: DataCollection, opts: SceneOptions): Scen
       deviceInstances,
       skipped,
       pointsSuppressed,
+      ...(meshes.size > 0
+        ? {
+            meshInstances: meshInstancesDrawn,
+            meshInstancesTotal,
+            meshTriangles: meshTrianglesDrawn,
+            meshTrianglesTotal,
+          }
+        : {}),
     },
     legend: legendList,
+    ...(meshes.size > 0 ? { meshAssets } : {}),
     ...(colorAttr !== undefined
       ? { colorAttr, colorDomains: COLOR_DOMAINS.filter((d) => colorDomains.has(d)) }
       : {}),

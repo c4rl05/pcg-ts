@@ -95,6 +95,18 @@ export interface OutputDecl {
   readonly name: string;
   readonly node: string;
   readonly pin: string;
+  /** Present only when the output was declared with `role: "asset"`. */
+  readonly role?: "asset";
+}
+
+/**
+ * Options of {@link Graph.output}. `role: "asset"` declares the output's
+ * geometry to be the mesh for the asset id equal to the output's name: a
+ * host draws it as that id's instances rather than as scene content (see
+ * `collectGraphAssets`). Omit `role` for ordinary scene content.
+ */
+export interface OutputOptions {
+  readonly role?: "asset";
 }
 
 /** @internal Memoized result of one node cook. */
@@ -310,6 +322,8 @@ export interface DescribedOutput {
   readonly id: string;
   readonly pin: string;
   readonly name: string;
+  /** `"asset"` when the output supplies the mesh for asset id = `name`; absent otherwise. */
+  readonly role?: "asset";
 }
 
 /**
@@ -927,22 +941,43 @@ export class Graph {
   /**
    * Declare a terminal output: cooking pulls from these (and cooks only
    * what they reach). `name` defaults to `"<nodeId>.<pin>"` and keys the
-   * collection in the cook result.
+   * collection in the cook result. `opts.role: "asset"` makes the
+   * output's geometry the mesh for asset id = `name` (see
+   * {@link OutputOptions}); the pin must then carry geometry.
    */
   output<O extends string>(
     handle: NodeHandle<unknown, string, O>,
     pin: PinName<O>,
     name?: string,
+    opts?: OutputOptions,
   ): void {
     const node = this.require(handle.id);
-    if (!findPin(node.def.outputs, pin)) {
+    const pinDef = findPin(node.def.outputs, pin);
+    if (!pinDef) {
       throw new GraphValidationError(`node "${node.id}" has no output pin "${pin}"`);
     }
     const outName = name ?? `${node.id}.${pin}`;
+    const role = opts?.role;
+    if (role !== undefined && role !== "asset") {
+      throw new GraphValidationError(
+        `output "${outName}" (node "${node.id}" pin "${pin}"): role ${JSON.stringify(role)} is not a role; valid: "asset" (omit role for scene content)`,
+        undefined,
+        "invalid-asset-output",
+      );
+    }
+    if (role === "asset" && pinDef.kind !== "geometry" && pinDef.kind !== "any") {
+      throw new GraphValidationError(
+        `output "${outName}" (node "${node.id}" pin "${pin}") is declared role "asset", but an asset is a mesh and that pin carries ${pinDef.kind}; point it at a geometry pin (meshPrimitive, extrudePolygon, sweepProfile, mergePrimitives), or drop "role"`,
+        undefined,
+        "invalid-asset-output",
+      );
+    }
     if (this._outputs.some((o) => o.name === outName)) {
       throw new GraphValidationError(`output "${outName}" is already declared`);
     }
-    this._outputs.push({ name: outName, node: node.id, pin });
+    this._outputs.push(
+      role === "asset" ? { name: outName, node: node.id, pin, role } : { name: outName, node: node.id, pin },
+    );
     this._version++;
   }
 
@@ -1008,7 +1043,11 @@ export class Graph {
       }),
     );
     const outputs = this._outputs.map((o) =>
-      Object.freeze({ id: o.node, pin: o.pin, name: o.name }),
+      Object.freeze(
+        o.role === undefined
+          ? { id: o.node, pin: o.pin, name: o.name }
+          : { id: o.node, pin: o.pin, name: o.name, role: o.role },
+      ),
     );
     return Object.freeze({
       nodes: Object.freeze(nodes),

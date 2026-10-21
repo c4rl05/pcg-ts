@@ -21,3 +21,11 @@ export {
   composeTRS,
 } from "./instances.js";
 export * from "./spawnNode.js";
+// Graph-supplied asset meshes: a top-level output declared role "asset"
+// is the mesh for asset id = its name. Published because every host that
+// draws instances (the CLI raster, the editor, an app's three scene)
+// reads the same cook result the same way, and the refusals — not one
+// geometry, no faces, a non-finite position — are agent-facing messages
+// that belong in one place.
+export { collectGraphAssets, isAssetOutput } from "./meshAssets.js";
+

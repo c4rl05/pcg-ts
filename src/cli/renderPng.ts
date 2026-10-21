@@ -5,7 +5,10 @@
  * The frames answer PLACEMENT and SHAPE — where things stand, how big, which
  * way up, whether the camera at eye height sees a bald patch — with unlit
  * proxies over flat-shaded surfaces. The look (materials, light, shadows,
- * the assets themselves) stays with the host and with `npm run preview`.
+ * the assets themselves) stays with the host and with `npm run preview` —
+ * except an asset whose mesh the GRAPH supplies (an output declared
+ * `role: "asset"`, passed as `meshes`): that mesh is part of what the graph
+ * says, so its instances draw as it, in their per-instance colours.
  *
  * Deterministic to the byte, on every platform: the poses, the rasterizer,
  * the scene and the encoder use only arithmetic IEEE 754 rounds the same
@@ -14,13 +17,14 @@
  * Internal in v1: the command is the surface. Not re-exported from
  * `pcg-ts/cli`, so its options can still move.
  */
-import type { DataCollection } from "../index.js";
+import type { DataCollection, Geometry } from "../index.js";
 import { CliError } from "./errors.js";
 import { drawLabel } from "./raster/font.js";
 import { encodePng, pixelHash } from "./raster/png.js";
 import { type Camera, Raster, makeCamera } from "./raster/raster.js";
 import {
   type LegendEntry,
+  type MeshAssetReport,
   type SceneCounts,
   buildScene,
   drawScene,
@@ -69,6 +73,16 @@ const LABEL_BOX = 0x2b3440;
 /** The drawing conventions, in the words every report uses. */
 export const INSTANCE_DRAWING =
   "instances are upright square-pyramid proxies (base 0.4, height 1) through each instance's 4x4, not the assets; top, side and hero also mark each apex with a cross";
+
+/**
+ * {@link INSTANCE_DRAWING} for a picture where the graph supplied meshes
+ * for `ids`: those instances are the meshes, every other id stays a proxy.
+ */
+export function instanceDrawing(ids: readonly string[]): string {
+  if (ids.length === 0) return INSTANCE_DRAWING;
+  const named = ids.map((id) => `"${id}"`).join(", ");
+  return `instances of ${ids.length === 1 ? "asset id" : "asset ids"} ${named}, whose mesh the graph supplies (an output declared role "asset"), are drawn as that mesh through each instance's 4x4, flat-shaded in the instance's own colour where its batch carries one and the id's legend colour otherwise; every other instance is an upright square-pyramid proxy (base 0.4, height 1), not the asset; top, side and hero also mark each instance with a cross, a mesh's at its local top (0, max y, 0)`;
+}
 export const POINT_DRAWING = "points are small squares, drawn only for geometry whose faces or lines drew nothing unless --points";
 export const GRID_DRAWING =
   "hero and ground add a ground grid just under the content's lowest point, drawn only where nothing else is";
@@ -99,6 +113,13 @@ export interface RenderPngOptions {
    * colours are categorical by this name; without it every item is "item".
    */
   readonly outputs?: readonly string[];
+  /**
+   * Asset meshes the graph supplies, by asset id — `collectGraphAssets`
+   * over the cook. Instances of these ids are drawn as the mesh. The
+   * outputs that supplied them must not also be in the collection, or the
+   * mesh draws a second time where it was modelled, at the origin.
+   */
+  readonly meshes?: ReadonlyMap<string, Geometry>;
   /**
    * The ground grid in the perspective views (default true). A switch for
    * tests that compare a frame with and without it; the command line has
@@ -146,6 +167,8 @@ export interface RenderPngResult {
   readonly legend: readonly LegendEntry[];
   readonly colorAttr?: string;
   readonly colorDomains?: readonly ColorDomain[];
+  /** Present only when `meshes` supplied any: each mesh and what it drew. */
+  readonly meshAssets?: readonly MeshAssetReport[];
   /**
    * What the marks in the picture ARE, stated rather than left to be
    * guessed from pixels: the frames draw proxies and helpers that are not
@@ -238,6 +261,7 @@ export function renderPng(collection: DataCollection, opts: RenderPngOptions = {
     ...(opts.attrDomain !== undefined ? { attrDomain: opts.attrDomain } : {}),
     maxPoints: opts.maxPoints ?? 200000,
     maxPrimitives: opts.maxPrimitives ?? 2000000,
+    ...(opts.meshes !== undefined && opts.meshes.size > 0 ? { meshes: opts.meshes } : {}),
   });
   const framing = frameBounds(scene.bounds, {
     ...(opts.extent !== undefined ? { extent: opts.extent } : {}),
@@ -344,8 +368,9 @@ export function renderPng(collection: DataCollection, opts: RenderPngOptions = {
     ...(scene.colorAttr !== undefined
       ? { colorAttr: scene.colorAttr, colorDomains: scene.colorDomains ?? [] }
       : {}),
+    ...(scene.meshAssets !== undefined ? { meshAssets: scene.meshAssets } : {}),
     drawing: {
-      instances: INSTANCE_DRAWING,
+      instances: instanceDrawing(scene.meshAssets?.map((m) => m.id) ?? []),
       markerViews: MARKER_VIEWS.filter((v) => reports.some((r) => r.name === v)),
       points: POINT_DRAWING,
       grid: gridOn

@@ -70,6 +70,11 @@ const ROOT_SURFACE = [
   "constant", "cook",
   "copyToPoints", "cos", "createGpuCookStats", "createPointCloud", "createPolyline", "cross",
   "createTriangleMesh", "dataInput", "defineNode", "describeGraphAssets", "describeGraphParams",
+  // Graph-supplied asset meshes: a top-level output declared role "asset"
+  // is the mesh for asset id = its name. The static half (which ids the
+  // graph supplies) and the cook-result half (the meshes, with the
+  // refusals every host would otherwise restate) — see src/spawn/meshAssets.ts.
+  "collectGraphAssets", "describeSuppliedAssets", "isAssetOutput",
   // The three halves of the per-instance ABI a HOST needs and the library
   // cannot use on its behalf: the CPU and device normalizers that read a
   // batch's named channels as one record (colour included, so an adapter

@@ -79,6 +79,7 @@ export {
   type GraphDescription,
   type GraphMeta,
   type NodeHandle,
+  type OutputOptions,
 } from "./graph.js";
 export {
   cook,

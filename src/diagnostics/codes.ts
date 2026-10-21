@@ -82,12 +82,14 @@ export const DIAGNOSTIC_CODES = Object.freeze({
   "invalid-output": "An output declaration is malformed.",
   "duplicate-output-name": "Two outputs share a name.",
   "unknown-output": "An output name was asked for — by the API or on the command line — that the graph does not declare.",
+  "invalid-asset-output": "An output declared role \"asset\" cannot supply a mesh: a bad role, a non-geometry pin, a subgraph body, or a cook that did not produce exactly one geometry with faces.",
 
   // Checks on a loaded graph.
   "required-pin-unconnected": "A required input pin on a node that feeds an output has no connection.",
   "node-unreachable": "A node feeds no declared output, so a cook never runs it.",
   "no-outputs": "The graph declares no outputs, so a cook produces nothing.",
   "stranded-graph-param-value": "A body holds a constant that looks derived from a declared graph param's value, so changing the param will not move it.",
+  "asset-output-unused": "An asset output names an id no spawnInstances can emit.",
 
   // Cook.
   "node-execution-failed": "A node's execute threw during a cook.",

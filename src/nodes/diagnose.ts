@@ -41,6 +41,11 @@
  *   once, instead of one `node-unreachable` per node.
  * - `stranded-graph-param-value` (warning): {@link strandedGraphParamValues},
  *   folded in so one call answers "is this graph sound".
+ * - `asset-output-unused` (warning): a top-level output declared
+ *   `role: "asset"` names an id no `spawnInstances` can emit, so the mesh
+ *   it supplies is never drawn. Reported only when EVERY spawner's id set
+ *   is closed (see `describeGraphAssets`): an open set may well emit the
+ *   id, and a warning that could be wrong is not one an agent can act on.
  *
  * BODIES. An INLINE wrapper body is checked too, with `nodePath` running
  * from the outermost wrapper to the node at fault; inside a body the portal
@@ -56,9 +61,12 @@
  * insertion order and each node's input pins in declaration order; then
  * each reachable inline wrapper's body in insertion order, recursively
  * (a graph's own records always precede those of the bodies inside it);
- * then the stranded-value warnings, in the order that lint reports them.
+ * then the stranded-value warnings, in the order that lint reports them;
+ * then the unused-asset warnings, in output declaration order.
  */
 import type { Diagnostic } from "../diagnostics/index.js";
+// By path: the phrasing helper is internal plumbing the diagnostics barrel does not carry.
+import { suggestNames } from "../diagnostics/didYouMean.js";
 import type { Graph } from "../graph/graph.js";
 import type { PinDef, PinKind } from "../graph/node.js";
 import {
@@ -68,6 +76,7 @@ import {
   analyzeStarvation,
   starvedPinKeys,
 } from "../graph/subgraph.js";
+import { describeGraphAssets, describeSuppliedAssets } from "./graphAssets.js";
 import { type StrandedGraphParamValue, strandedGraphParamValues } from "./graphParams.js";
 import { subgraphRefOf } from "./subgraphRefs.js";
 
@@ -266,9 +275,54 @@ function strandedDiagnostic(v: StrandedGraphParamValue): Diagnostic {
 }
 
 /**
+ * Asset outputs whose id no spawner can emit. Silent while any spawner's
+ * set is open: that spawner may emit the id, and saying otherwise would be
+ * a guess presented as a finding.
+ */
+function unusedAssetDiagnostics(graph: Graph): Diagnostic[] {
+  const supplied = describeSuppliedAssets(graph);
+  if (supplied.length === 0) return [];
+  const spawners = describeGraphAssets(graph);
+  if (spawners.some((s) => s.open.length > 0)) return [];
+  const emitted: string[] = [];
+  for (const s of spawners) {
+    for (const origin of s.ids) if (!emitted.includes(origin.id)) emitted.push(origin.id);
+  }
+  const out: Diagnostic[] = [];
+  for (const asset of supplied) {
+    if (emitted.includes(asset.id)) continue;
+    const head = `asset output ${JSON.stringify(asset.id)} (node ${JSON.stringify(asset.node)} pin ${JSON.stringify(asset.pin)}) supplies the mesh for asset id ${JSON.stringify(asset.id)}`;
+    if (spawners.length === 0) {
+      out.push({
+        code: "asset-output-unused",
+        severity: "warning",
+        message: `${head}, but the graph has no spawnInstances node, so nothing ever draws it; add a spawnInstances with assetId ${JSON.stringify(asset.id)}, or drop role "asset" to draw the output as scene content`,
+        nodeId: asset.node,
+        pin: asset.pin,
+        got: asset.id,
+      });
+      continue;
+    }
+    const near = suggestNames(asset.id, emitted);
+    out.push({
+      code: "asset-output-unused",
+      severity: "warning",
+      message: `${head}, but no spawnInstances in this graph can emit that id (they emit ${emitted.map((id) => JSON.stringify(id)).join(", ")}); ${near.clause}rename the output to an id a spawner emits, or drop role "asset" to draw it as scene content`,
+      nodeId: asset.node,
+      pin: asset.pin,
+      got: asset.id,
+      valid: [...emitted],
+      ...(near.names.length > 0 ? { didYouMean: near.names } : {}),
+    });
+  }
+  return out;
+}
+
+/**
  * The structural faults of a live graph, as records: unconnected required
  * pins (errors), nodes no output reads, a graph with no outputs, and
- * stranded graph-param values (warnings). Empty for a sound graph.
+ * stranded graph-param values and asset outputs no spawner can emit
+ * (warnings). Empty for a sound graph.
  *
  * Read-only and deterministic — the same graph gives the same list, in the
  * same order, every call. It never throws on a graph that exists, including
@@ -279,5 +333,6 @@ export function diagnoseGraph(graph: Graph): Diagnostic[] {
   const out: Diagnostic[] = [];
   diagnoseLevel(graph, [], new Set(), out, new Set());
   for (const v of strandedGraphParamValues(graph)) out.push(strandedDiagnostic(v));
+  out.push(...unusedAssetDiagnostics(graph));
   return out;
 }

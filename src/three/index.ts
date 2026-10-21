@@ -51,6 +51,12 @@ export {
   type InstancedAsset,
   type ToInstancedMeshesOptions,
 } from "./instanced.js";
+/**
+ * Graph-supplied asset meshes (top-level outputs declared role "asset",
+ * read off a cook result by `collectGraphAssets`) as an `AssetMap`, so a
+ * host spreads them under or over its own art.
+ */
+export { graphAssetMap } from "./graphAssets.js";
 export { toPointsObject, type ToPointsOptions } from "./debug.js";
 /**
  * The device-instancing seam, published from the module that defines it

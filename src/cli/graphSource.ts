@@ -12,9 +12,12 @@ import {
   type CookResult,
   type DataCollection,
   type Diagnostic,
+  type Geometry,
   type Graph,
   checkSerializedGraph,
+  collectGraphAssets,
   cook,
+  isAssetOutput,
 } from "../index.js";
 import { CliError, EXIT_INVALID_GRAPH } from "./errors.js";
 import type { CliIo } from "./io.js";
@@ -148,16 +151,26 @@ function upstreamOf(graph: Graph, roots: readonly string[]): Set<string> {
  * names nothing selects nothing here, so the command's own "unknown node"
  * or "unknown output" error still speaks.
  */
-export function requireCookable(loaded: LoadedGraph, target: TargetOptions = {}): void {
+export function requireCookable(
+  loaded: LoadedGraph,
+  target: TargetOptions = {},
+  extra: CookTargetExtras = {},
+): void {
   if (loaded.errors.length === 0) return;
   const { graph } = loaded;
   const declared = graph.describe().outputs;
-  const roots =
+  const picked =
     target.node !== undefined
       ? [target.node]
       : target.output !== undefined
         ? declared.filter((o) => o.name === target.output).map((o) => o.id)
         : declared.map((o) => o.id);
+  // A cook that also supplies asset meshes runs their nodes too, so a
+  // fault upstream of one is this command's to refuse.
+  const roots =
+    extra.withAssets === true && !assetTargeted(declared, target)
+      ? [...picked, ...declared.filter(isAssetOutput).map((o) => o.id)]
+      : picked;
   const cooked = upstreamOf(graph, roots);
   const relevant = loaded.errors.filter((d) => {
     const top = d.nodePath?.[0] ?? d.nodeId;
@@ -181,7 +194,43 @@ export interface Target {
   /** Human label, e.g. `node "scatter_0" pin "out"` or `output "points"`. */
   readonly label: string;
   readonly collection: DataCollection;
+  /**
+   * The name each `collection` item came from, in order: the declared
+   * output it was read from, or the node a `--node` read targeted.
+   */
+  readonly itemOutputs: readonly string[];
   readonly result: CookResult;
+  /**
+   * With `withAssets`: the asset meshes the graph supplies, by asset id, in
+   * declaration order (`collectGraphAssets`). Absent when the cook was not
+   * asked for them or the target IS an asset output (drawn as content).
+   */
+  readonly meshes?: ReadonlyMap<string, Geometry>;
+  /** With `withAssets`: the asset outputs left out of `collection` because they supplied `meshes`. */
+  readonly assetOutputs?: readonly string[];
+}
+
+/** What a cook-target adds beyond the flags. */
+export interface CookTargetExtras {
+  /**
+   * Treat outputs declared `role: "asset"` as meshes rather than content:
+   * leave them out of the collection a whole-graph target reads, cook them
+   * beside a `--output` or `--node` target, and hand them back as
+   * {@link Target.meshes}. A `--output` naming an asset output is still
+   * drawn as content — that is how the mesh itself is looked at — as is a
+   * graph whose every output is an asset, which has no scene to put one in.
+   */
+  readonly withAssets?: boolean;
+}
+
+/** Does `target` read an asset output itself, so it is content and supplies nothing? */
+function assetTargeted(
+  declared: readonly { readonly name: string; readonly role?: string }[],
+  target: TargetOptions,
+): boolean {
+  if (target.node !== undefined) return false;
+  if (target.output !== undefined) return declared.some((o) => o.name === target.output && isAssetOutput(o));
+  return declared.every(isAssetOutput);
 }
 
 /** The did-you-mean fields for a record, set only when there is a suggestion. */
@@ -258,24 +307,36 @@ export async function cookTarget(
   graph: Graph,
   target: TargetOptions,
   opts: CookOptions = {},
+  extra: CookTargetExtras = {},
 ): Promise<Target> {
+  const declaredAll = graph.describe().outputs;
+  const supplying = extra.withAssets === true && declaredAll.length > 0 && !assetTargeted(declaredAll, target);
+  const assetNames = supplying ? declaredAll.filter(isAssetOutput).map((o) => o.name) : [];
+  const assetsOf = (
+    result: CookResult,
+  ): { meshes?: ReadonlyMap<string, Geometry>; assetOutputs?: readonly string[] } =>
+    supplying ? { meshes: collectGraphAssets(declaredAll, result.outputs), assetOutputs: assetNames } : {};
+
   if (target.node !== undefined) {
     const pin = resolvePin(graph, target.node, target.pin);
     const name = tempOutputName(graph);
     graph.output({ id: target.node }, pin, name);
     try {
-      const result = await cook(graph, { ...opts, outputs: [name] });
+      const result = await cook(graph, { ...opts, outputs: [name, ...assetNames] });
+      const collection = result.outputs[name] ?? [];
       return {
         label: `node "${target.node}" pin "${pin}"`,
-        collection: result.outputs[name] ?? [],
+        collection,
+        itemOutputs: collection.map(() => target.node as string),
         result,
+        ...assetsOf(result),
       };
     } finally {
       graph.removeOutput(name);
     }
   }
 
-  const declared = graph.describe().outputs;
+  const declared = declaredAll;
   if (declared.length === 0) {
     throw new CliError(
       'this graph declares no outputs; add one to the JSON ("outputs": [{ "id": ..., "pin": ..., "name": ... }]) or target a node directly with --node <id>',
@@ -291,18 +352,27 @@ export async function cookTarget(
         { code: "unknown-output", got: target.output, valid: names, ...suggestionFields(near.names) },
       );
     }
-    const result = await cook(graph, { ...opts, outputs: [target.output] });
+    const outputs = [target.output, ...assetNames.filter((n) => n !== target.output)];
+    const result = await cook(graph, { ...opts, outputs });
+    const collection = result.outputs[target.output] ?? [];
     return {
       label: `output "${target.output}"`,
-      collection: result.outputs[target.output] ?? [],
+      collection,
+      itemOutputs: collection.map(() => target.output as string),
       result,
+      ...assetsOf(result),
     };
   }
   const result = await cook(graph, opts);
-  const collection = declared.flatMap((o) => result.outputs[o.name] ?? []);
+  // Supplying meshes, the asset outputs are not content: drawn where they
+  // were modelled they would be one stray mesh at the origin.
+  const scene = supplying ? declared.filter((o) => !isAssetOutput(o)) : declared;
+  const collection = scene.flatMap((o) => result.outputs[o.name] ?? []);
   return {
-    label: declared.length === 1 ? `output "${declared[0].name}"` : "all declared outputs",
+    label: scene.length === 1 ? `output "${scene[0].name}"` : "all declared outputs",
     collection,
+    itemOutputs: scene.flatMap((o) => (result.outputs[o.name] ?? []).map(() => o.name)),
     result,
+    ...assetsOf(result),
   };
 }

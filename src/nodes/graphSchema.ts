@@ -562,7 +562,7 @@ function graphObject(ctx: Context, top: boolean): JsonSchemaObject {
     ),
     outputs: described(
       ctx,
-      { type: ["array", "null"], items: { $ref: "#/$defs/output" } },
+      { type: ["array", "null"], items: { $ref: top ? "#/$defs/topOutput" : "#/$defs/output" } },
       "Declared terminal outputs.",
     ),
   };
@@ -631,6 +631,24 @@ function formatDefs(ctx: Context, refNames: readonly string[]): Record<string, J
       type: "object",
       required: ["id", "pin", "name"],
       properties: { id: { type: "string" }, pin: { type: "string" }, name: { type: "string" } },
+      additionalProperties: false,
+    },
+    // The outermost graph's outputs may also carry `role`: a subgraph
+    // body's outputs feed its wrapper, never a host, so the loader refuses
+    // the key there and the schema does the same.
+    topOutput: {
+      type: "object",
+      required: ["id", "pin", "name"],
+      properties: {
+        id: { type: "string" },
+        pin: { type: "string" },
+        name: { type: "string" },
+        role: described(
+          ctx,
+          { enum: ["asset"] },
+          "The output's geometry is the mesh for asset id = name: a host draws it as that id's spawned instances, not as scene content. Omit for scene content. The outermost graph only.",
+        ),
+      },
       additionalProperties: false,
     },
     graphParam: {

@@ -328,6 +328,34 @@ describe("graphJsonSchema: agreement with deserializeGraph", () => {
     }
   });
 
+  it("both accept an asset role on the outermost graph, and both refuse a bad one and one inside a payload", () => {
+    const mesh = { id: "brickMesh", type: "meshPrimitive", params: {} };
+    const top = oneNode(mesh, { outputs: [{ id: "brickMesh", pin: "out", name: "brick", role: "asset" }] });
+    expect(loaderAccepts(top)).toEqual({ ok: true });
+    expect(schemaAccepts(top), schemaErrors()).toBe(true);
+    for (const doc of [
+      oneNode(mesh, { outputs: [{ id: "brickMesh", pin: "out", name: "brick", role: "assets" }] }),
+      oneNode({
+        id: "p",
+        type: "subgraph",
+        params: {},
+        subgraph: {
+          graph: {
+            formatVersion: 1,
+            seed: 0,
+            nodes: [mesh],
+            outputs: [{ id: "brickMesh", pin: "out", name: "brick", role: "asset" }],
+          },
+          inputs: [],
+          outputs: [{ name: "out", node: "brickMesh", pin: "out" }],
+        },
+      }),
+    ]) {
+      expect(loaderAccepts(doc).ok, "the loader accepted it").toBe(false);
+      expect(schemaAccepts(doc), "the schema accepted it").toBe(false);
+    }
+  });
+
   it("both accept an fbm at exactly the octave bound", () => {
     const doc = withField({ fn: "fbm", base: "perlinNoise", opts: { octaves: MAX_FBM_OCTAVES } });
     expect(loaderAccepts(doc)).toEqual({ ok: true });

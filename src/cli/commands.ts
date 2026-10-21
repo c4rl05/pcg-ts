@@ -21,8 +21,12 @@ import {
   type NodeTypeInfo,
   type PinInfo,
   type ParamSchema,
+  type SuppliedAsset,
+  collectGraphAssets,
   cook,
   describeGraphAssets,
+  describeSuppliedAssets,
+  isAssetOutput,
   describeGraphParams,
   describeSubgraphParams,
   describeSubgraphPins,
@@ -71,6 +75,7 @@ import {
 import { cookFingerprint } from "./fingerprint.js";
 import { fmtFixed, fmtMs, fmtStat, fmtTuple, plural, table } from "./format.js";
 import {
+  type CookTargetExtras,
   type LoadedGraph,
   type TargetOptions,
   cookTarget,
@@ -102,6 +107,7 @@ import {
   SINGLE_SIZE,
   renderPng,
 } from "./renderPng.js";
+import { localMesh } from "./raster/scene.js";
 import {
   type AttrStats,
   type ItemSummary,
@@ -173,9 +179,10 @@ function loadCookable(
   path: string,
   target: TargetOptions,
   ctx: RunContext | undefined,
+  extra: CookTargetExtras = {},
 ): LoadedGraph {
   const loaded = loadGraph(io, path);
-  requireCookable(loaded, target);
+  requireCookable(loaded, target, extra);
   if (loaded.warnings.length > 0) ctx?.warn(loaded.warnings);
   return loaded;
 }
@@ -779,7 +786,15 @@ const validateCommand: Command = {
     lines.push(
       ...(description.outputs.length === 0
         ? ["  (none declared — nothing to cook without --node)"]
-        : table(description.outputs.map((o) => [o.name, `<- ${o.id}.${o.pin}`]))),
+        : table(
+            description.outputs.map((o) =>
+              // The column exists only when some output is an asset, so a
+              // graph without one prints exactly what it always did.
+              description.outputs.some(isAssetOutput)
+                ? [o.name, `<- ${o.id}.${o.pin}`, isAssetOutput(o) ? "(asset)" : ""]
+                : [o.name, `<- ${o.id}.${o.pin}`],
+            ),
+          )),
     );
     const params = boolFlag(args, "params") ? describeGraphParams(graph) : undefined;
     // Reported with or without the flag: this is a suspected DEFECT rather
@@ -848,7 +863,11 @@ const validateCommand: Command = {
         ...(meta !== undefined ? { meta } : {}),
         nodes,
         connections: description.connections.map((c) => ({ from: c.from, to: c.to })),
-        outputs: description.outputs.map((o) => ({ name: o.name, node: o.id, pin: o.pin })),
+        outputs: description.outputs.map((o) =>
+          o.role === undefined
+            ? { name: o.name, node: o.id, pin: o.pin }
+            : { name: o.name, node: o.id, pin: o.pin, role: o.role },
+        ),
         ...(params !== undefined ? { params } : {}),
       },
     });
@@ -869,6 +888,7 @@ const validateCommand: Command = {
 export function assetsReport(
   path: string,
   spawners: readonly DescribedSpawner[],
+  supplied: readonly SuppliedAsset[] = [],
 ): CommandOutcome {
   const openSpawners = spawners.filter((s) => s.open.length > 0);
   // First-occurrence order across the whole graph, matching the order
@@ -878,6 +898,14 @@ export function assetsReport(
   for (const s of spawners) {
     for (const origin of s.ids) if (!ids.includes(origin.id)) ids.push(origin.id);
   }
+  const complete = openSpawners.length === 0;
+  const suppliedIds = new Set(supplied.map((a) => a.id));
+  // What the renderer must still provide: every id a spawner can emit that
+  // the graph does not supply itself. A lower bound exactly when `ids` is.
+  const hostIds = ids.filter((id) => !suppliedIds.has(id));
+  // A supplied id no spawner can emit — only decidable when every set is
+  // complete, since an open set may yet emit it.
+  const unusedSupplied = complete ? supplied.map((a) => a.id).filter((id) => !ids.includes(id)) : [];
   const json = {
     path,
     spawnerCount: spawners.length,
@@ -888,10 +916,31 @@ export function assetsReport(
      * The report's own summary over the whole graph, derived here — a
      * spawner carries its reasons and nothing else.
      */
-    complete: openSpawners.length === 0,
+    complete,
     ids,
+    // Only when the graph supplies a mesh, so a graph without one reports
+    // exactly what it always did (its `hostIds` would equal `ids`).
+    ...(supplied.length > 0 ? { supplied, hostIds, unusedSupplied } : {}),
     spawners,
   };
+  const star = (id: string): string => (suppliedIds.has(id) ? `${id}*` : id);
+  const suppliedLines =
+    supplied.length === 0
+      ? []
+      : [
+          "",
+          `* supplied by the graph itself: ${supplied
+            .map((a) => `${a.id} <- ${a.node}.${a.pin}`)
+            .join(", ")} (outputs declared role "asset"); a host draws these from the cook, not from art of its own`,
+          ...(hostIds.length > 0
+            ? [`the renderer must provide${complete ? "" : " at least"}: ${hostIds.join(", ")}`]
+            : complete
+              ? ["the renderer needs no art of its own: the graph supplies every id it can emit"]
+              : []),
+          ...(unusedSupplied.length > 0
+            ? [`supplied but emitted by no spawner: ${unusedSupplied.join(", ")} — check the output's name against the spawners' assetId`]
+            : []),
+        ];
 
   // Not an empty table: "no rows" and "no spawners" look identical in one,
   // and the second is a fact about the graph worth stating outright.
@@ -905,6 +954,7 @@ export function assetsReport(
           "A graph without a spawner ends in points or geometry: it has nothing to",
           "hand a renderer as an instance, and so nothing here to check against a",
           "host's asset map. `pcg validate` lists what it does declare.",
+          ...suppliedLines,
         ].join("\n") + "\n",
       json,
     };
@@ -933,7 +983,7 @@ export function assetsReport(
     ...table([
       ["", "node", "assetId", "assetAttr", "can emit"],
       ...spawners.map((s) => {
-        const list = s.ids.map((o) => o.id).join(", ");
+        const list = s.ids.map((o) => star(o.id)).join(", ");
         const closed = s.open.length === 0;
         return [
           closed ? "" : "!",
@@ -981,8 +1031,9 @@ export function assetsReport(
     ids.length === 0
       ? "distinct ids: (none)"
       : openSpawners.length === 0
-        ? `distinct ids: ${ids.join(", ")}`
-        : `distinct ids so far (a lower bound): ${ids.join(", ")}`,
+        ? `distinct ids: ${ids.map(star).join(", ")}`
+        : `distinct ids so far (a lower bound): ${ids.map(star).join(", ")}`,
+    ...suppliedLines,
     "",
     "--json adds where each id came from: the node's own assetId, or the node",
     "that authored the string-table entry.",
@@ -994,13 +1045,13 @@ const assetsCommand: Command = {
   spec: {
     name: "assets",
     summary:
-      "List every asset id a graph can spawn, statically, without cooking it. Reads the spawnInstances params and the authored string tables together, so the answer covers every branch rather than the one a seed happened to reach; an id set that depends on values the walk cannot see is reported OPEN rather than guessed.",
+      "List every asset id a graph can spawn, statically, without cooking it. Reads the spawnInstances params and the authored string tables together, so the answer covers every branch rather than the one a seed happened to reach; an id set that depends on values the walk cannot see is reported OPEN rather than guessed. Ids the graph supplies a mesh for itself (outputs declared role \"asset\") are marked *, and the rest are what the renderer must provide.",
     positionals: [GRAPH_ARG],
     flags: {},
   },
   run(args, io) {
     const { graph, path } = loadGraph(io, args.positional[0]);
-    return Promise.resolve(assetsReport(path, describeGraphAssets(graph)));
+    return Promise.resolve(assetsReport(path, describeGraphAssets(graph), describeSuppliedAssets(graph)));
   },
 };
 
@@ -1088,11 +1139,53 @@ function outputDigestText(
   return hex === undefined ? "" : `  fingerprint ${hex}`;
 }
 
+/** One graph-supplied asset in the `cook` report. */
+interface SuppliedAssetJson {
+  /** The asset id: the output's name. */
+  readonly id: string;
+  readonly output: string;
+  readonly node: string;
+  readonly pin: string;
+  /** The geometry's points, and the triangles its faces fan into. */
+  readonly points: number;
+  readonly triangles: number;
+  /** Local box over the points the faces touch; null if none drew. */
+  readonly bounds: { readonly min: readonly number[]; readonly max: readonly number[] } | null;
+}
+
+/**
+ * The asset meshes a whole cook supplied, in declaration order — through
+ * `collectGraphAssets`, so a malformed asset output fails the command with
+ * its `invalid-asset-output` record rather than being reported as a mesh.
+ */
+function suppliedAssetsJson(
+  declared: readonly { readonly name: string; readonly id: string; readonly pin: string; readonly role?: string }[],
+  cooked: Record<string, DataCollection>,
+): SuppliedAssetJson[] {
+  const meshes = collectGraphAssets(declared, cooked);
+  const rows: SuppliedAssetJson[] = [];
+  for (const o of declared) {
+    const geo = meshes.get(o.name);
+    if (geo === undefined || !isAssetOutput(o)) continue;
+    const mesh = localMesh(geo);
+    rows.push({
+      id: o.name,
+      output: o.name,
+      node: o.id,
+      pin: o.pin,
+      points: geo.pointCount,
+      triangles: mesh.triangleCount,
+      bounds: mesh.bounds === undefined ? null : { min: [...mesh.bounds.min], max: [...mesh.bounds.max] },
+    });
+  }
+  return rows;
+}
+
 const cookCommand: Command = {
   spec: {
     name: "cook",
     summary:
-      "Cook every declared output headless and report what came out. --stats adds the per-node breakdown (cooked vs served from cache).",
+      "Cook every declared output headless and report what came out. --stats adds the per-node breakdown (cooked vs served from cache). Outputs declared role \"asset\" are also reported as the meshes they supply (assets in --json).",
     positionals: [GRAPH_ARG],
     flags: {
       seed: SEED_FLAG,
@@ -1127,6 +1220,7 @@ const cookCommand: Command = {
       outputs[name] = [...result.outputs[name]].map(summarizeItem);
     }
     const outPath = stringFlag(args, "out");
+    const assets = declared.some(isAssetOutput) ? suppliedAssetsJson(declared, result.outputs) : undefined;
     const json = {
       path,
       seed: graph.seed,
@@ -1135,6 +1229,7 @@ const cookCommand: Command = {
       nodes: nodesJson(perNode, timings),
       ...(digest !== undefined ? digest : {}),
       outputs,
+      ...(assets !== undefined ? { assets } : {}),
     };
 
     const lines = [
@@ -1147,6 +1242,18 @@ const cookCommand: Command = {
     for (const name of Object.keys(outputs)) {
       lines.push(`  ${name} (${plural(outputs[name].length, "item")})${outputDigestText(digest, name)}`);
       outputs[name].forEach((item, i) => lines.push(`    [${i}] ${itemLine(item)}`));
+    }
+    if (assets !== undefined) {
+      lines.push(
+        "",
+        `graph-supplied assets: ${assets
+          .map((a) => {
+            const b = a.bounds;
+            const size = b === null ? "empty" : [0, 1, 2].map((k) => fmtStat(b.max[k] - b.min[k])).join("×");
+            return `${a.id} (${plural(a.triangles, "tri")}, ${size})`;
+          })
+          .join(", ")}`,
+      );
     }
     if (boolFlag(args, "stats")) {
       lines.push("", "per-node:");
@@ -1504,17 +1611,12 @@ async function runRenderPng(
 
   const targetOpts = targetOptions(args, "render");
   checkCookFlags(args, "render");
-  const { graph, path } = loadCookable(io, args.positional[0], targetOpts, ctx);
+  const { graph, path } = loadCookable(io, args.positional[0], targetOpts, ctx, { withAssets: true });
   applySeed(args, "render", graph);
-  const target = await cookTarget(graph, targetOpts, cookOptions(args, "render"));
+  const target = await cookTarget(graph, targetOpts, cookOptions(args, "render"), { withAssets: true });
   // The name each item's default colour comes from: the declared output it
   // was read from, or the node a --node read targeted.
-  const outputs =
-    targetOpts.node !== undefined
-      ? target.collection.map(() => targetOpts.node as string)
-      : targetOpts.output !== undefined
-        ? target.collection.map(() => targetOpts.output as string)
-        : graph.describe().outputs.flatMap((o) => (target.result.outputs[o.name] ?? []).map(() => o.name));
+  const outputs = target.itemOutputs;
   const result = renderPng(target.collection, {
     ...(view !== undefined ? { view } : {}),
     ...(width !== undefined ? { width } : {}),
@@ -1526,6 +1628,7 @@ async function runRenderPng(
     ...(attrDomainName !== undefined ? { attrDomain: attrDomainName as ColorDomain } : {}),
     ...(maxPoints !== undefined ? { maxPoints } : {}),
     ...(maxPrimitives !== undefined ? { maxPrimitives } : {}),
+    ...(target.meshes !== undefined && target.meshes.size > 0 ? { meshes: target.meshes } : {}),
     outputs,
   });
   writeOut(outPath, () => writeBytes.call(io, outPath, result.png));
@@ -1551,6 +1654,7 @@ async function runRenderPng(
     ...(result.colorAttr !== undefined
       ? { colorAttr: result.colorAttr, colorDomains: result.colorDomains ?? [] }
       : {}),
+    ...(result.meshAssets !== undefined ? { meshAssets: result.meshAssets } : {}),
     pixelHash: result.pixelHash,
   };
   const truncated = c.points < c.pointsTotal || c.primitives < c.primitivesTotal || c.instances < c.instancesTotal;
@@ -1558,9 +1662,29 @@ async function runRenderPng(
   const text = [
     `wrote ${outPath}  ${result.width}x${result.height}  ${result.view === "sheet" ? `sheet: ${result.views.map((v) => v.name).join(", ")}` : `view ${result.view}`}`,
     `${path} — ${target.label}`,
-    `${c.points} of ${c.pointsTotal} points, ${c.primitives} of ${c.primitivesTotal} primitives (${plural(c.triangles, "triangle")}, ${plural(c.segments, "segment")}), ${c.instances} of ${c.instancesTotal} instances as pyramid proxies${
+    `${c.points} of ${c.pointsTotal} points, ${c.primitives} of ${c.primitivesTotal} primitives (${plural(c.triangles, "triangle")}, ${plural(c.segments, "segment")}), ${
+      c.meshInstancesTotal === undefined
+        ? `${c.instances} of ${c.instancesTotal} instances as pyramid proxies`
+        : `${c.instances} of ${c.instancesTotal} instances: ${c.meshInstances} of ${c.meshInstancesTotal} as graph-supplied meshes (${plural(c.meshTriangles ?? 0, "triangle")}), ${c.instances - (c.meshInstances ?? 0)} of ${c.instancesTotal - c.meshInstancesTotal} as pyramid proxies`
+    }${
       c.skipped > 0 ? `, ${c.skipped} skipped (non-finite)` : ""
     }${truncated ? " — capped, raise --max-points/--max-primitives to draw the rest" : ""}`,
+    ...(result.meshAssets !== undefined
+      ? [
+          `graph-supplied meshes: ${result.meshAssets
+            .map(
+              (m) =>
+                `${m.id} (${plural(m.triangles, "triangle")}, ${m.instances} of ${plural(m.instancesTotal, "instance")}, ${
+                  m.colors === "per-instance"
+                    ? "per-instance colours"
+                    : m.colors === "mixed"
+                      ? "per-instance colours where the batch carries them"
+                      : "legend colour"
+                })`,
+            )
+            .join(", ")}`,
+        ]
+      : []),
     ...(c.pointsSuppressed > 0
       ? [`points of ${plural(c.pointsSuppressed, "geometry", "geometries")} not drawn because their faces or lines were; pass --points to add them`]
       : []),
@@ -1592,7 +1716,11 @@ async function runRenderPng(
       ]),
     ),
     ...(result.legend.length > 0
-      ? [`colors: ${result.legend.map((l) => `${l.kind} "${l.name}" ${l.color}`).join(", ")}`]
+      ? [
+          `colors: ${result.legend
+            .map((l) => `${l.kind} "${l.name}" ${l.color}${l.perInstanceColors === true ? " (instances in their own colours)" : ""}`)
+            .join(", ")}`,
+        ]
       : []),
     `pixel hash ${result.pixelHash}`,
   ].join("\n");
@@ -1642,7 +1770,7 @@ const renderCommand: Command = {
   spec: {
     name: "render",
     summary:
-      "Draw a cooked collection as a deterministic picture: a top-down SVG (points as circles, polylines as paths), or PNG frames when --out ends in .png (hero, ground, top and side views tiled as a labelled sheet by default). Without --out the SVG goes to stdout; a PNG always needs --out. In the PNG, faces are flat-shaded, instances are upright square-pyramid proxies (not the assets) with a cross on each apex in top, side and hero, points are small squares, and hero and ground add a ground grid under the content, drawn only where nothing else is.",
+      "Draw a cooked collection as a deterministic picture: a top-down SVG (points as circles, polylines as paths), or PNG frames when --out ends in .png (hero, ground, top and side views tiled as a labelled sheet by default). Without --out the SVG goes to stdout; a PNG always needs --out. In the PNG, faces are flat-shaded, instances are upright square-pyramid proxies (not the assets) with a cross on each apex in top, side and hero, points are small squares, and hero and ground add a ground grid under the content, drawn only where nothing else is. An asset id the graph supplies a mesh for (an output declared role \"asset\") is drawn as that mesh instead, in each instance's own colour where the spawn carries one, and the asset output itself is not drawn as content; --output <that output> draws the mesh on its own.",
     positionals: [GRAPH_ARG],
     flags: {
       ...TARGET_FLAGS,
@@ -1756,9 +1884,11 @@ const renderCommand: Command = {
     }
     const maxPoints = intFlag(args, "max-points", "render", { min: 1 });
     const maxPrimitives = intFlag(args, "max-primitives", "render", { min: 1 });
-    const { graph, path } = loadCookable(io, args.positional[0], targetOpts, ctx);
+    const { graph, path } = loadCookable(io, args.positional[0], targetOpts, ctx, { withAssets: true });
     applySeed(args, "render", graph);
-    const target = await cookTarget(graph, targetOpts, cookOptions(args, "render"));
+    // With assets: the SVG draws instances as circles either way, but an
+    // asset output read as content would be a stray mesh at the origin.
+    const target = await cookTarget(graph, targetOpts, cookOptions(args, "render"), { withAssets: true });
     const result = renderSvg(target.collection, {
       ...(width !== undefined ? { width } : {}),
       ...(attr !== undefined ? { attr } : {}),

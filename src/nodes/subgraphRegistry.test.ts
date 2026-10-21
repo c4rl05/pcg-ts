@@ -888,7 +888,7 @@ describe("named subgraph registry", () => {
         outputs: [{ id: "a", pin: "out", name: "pts", description: "the scattered points" }],
       }),
     ).toThrow(
-      /outputs\[0\]: unknown key "description"; valid keys: id, pin, name\..*There is no annotation key: descriptive text belongs in the graph's "meta" block/s,
+      /outputs\[0\]: unknown key "description"; valid keys: id, pin, name, role\..*There is no annotation key: descriptive text belongs in the graph's "meta" block/s,
     );
   });
 

@@ -41,7 +41,12 @@ export {
   // cannot be written down is a field that gets copied into a local
   // interface instead of read.
   type OpenAssetSet,
+  // The other half of the same question: the ids the graph supplies its
+  // own mesh for (top-level outputs declared role "asset"), so "which ids
+  // must the renderer provide" is a set difference rather than a guess.
+  type SuppliedAsset,
   describeGraphAssets,
+  describeSuppliedAssets,
 } from "./nodes/graphAssets.js";
 // Named rather than re-exported by `./nodes/index.ts`: the module also
 // carries the field-key table its completeness test reads, which describes
