@@ -500,6 +500,7 @@ describe("category metadata", () => {
       runFit: "attribute",
       quotaRebalance: "attribute",
       packBricks: "point op",
+      brickConnectivity: "attribute",
       attributeRemap: "attribute",
       removeAttribute: "attribute",
       pointNeighborhood: "attribute",

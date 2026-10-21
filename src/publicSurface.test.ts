@@ -148,6 +148,9 @@ const ROOT_SURFACE = [
   // Packs boxes on a stud lattice into catalogue bricks, plus the studs
   // left showing.
   "packBricks",
+  // Which clutch-connected piece each brick is in, and the step at which
+  // a bottom-up build can place it.
+  "brickConnectivity",
   "orientAlongVector", "paramNamesOf", "parseFieldText",
   "partitionByAttribute",
   // Writes, per path point, whether a fan of rays cast from it is blocked

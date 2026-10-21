@@ -97,7 +97,7 @@ const ROOT_TYPE_SURFACE = [
   "NodeExecutionError", "NodeHandle", "NodeOutputs", "NodeSeedRef", "NodeSpec", "NodeTypeInfo",
   "NoiseFactory", "NoiseOpts", "NoiseRange", "NonFiniteReport", "OcclusionCullParams",
   "OpenAssetSet", "OrientAlongVectorParams", "OutputOptions", "ParamPatch", "ParamSchema", "ParamType",
-  "PackBricksParams", "ParamValue", "ParentCellRef", "PartitionByAttributeParams", "PathClipParams",
+  "BrickConnectivityParams", "PackBricksParams", "ParamValue", "ParentCellRef", "PartitionByAttributeParams", "PathClipParams",
   "PathCoverageParams", "PathPointAtParams", "PathResampleParams", "PathRunsParams", "PathScanParams",
   "PathSegmentsParams", "PathShiftParams", "Pcg32", "PinDef", "PinInfo", "PinKind",
   "PointGridParams", "PointListParams", "PointLineParams", "PointNeighborhoodParams", "PointScatterInBoundsParams",

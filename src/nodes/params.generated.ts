@@ -387,6 +387,76 @@ export type AttributeRemapInputs = "in";
 export type AttributeRemapOutputs = "out";
 
 /**
+ * Params of the `brickConnectivity` node type.
+ */
+export interface BrickConnectivityParams {
+  /**
+   * POINT attribute (f32 or i32, tuple size 3) holding each brick's minimum corner in WORLD
+   * units, as packBricks writes it. Refused, naming the point, unless every component lands
+   * on the lattice.
+   *
+   * @defaultValue `"boundsMin"`
+   */
+  minAttr: string;
+  /**
+   * POINT attribute (f32 or i32, tuple size 3) holding each brick's maximum corner in world
+   * units, on the same terms as `minAttr`.
+   *
+   * @defaultValue `"boundsMax"`
+   */
+  maxAttr: string;
+  /**
+   * World size of one lattice cell: [stud, plate, stud], the same lattice the bricks were
+   * packed on. x and z must be equal and every component positive.
+   *
+   * @defaultValue `[1,0.4,1]`
+   */
+  pitch: readonly number[];
+  /**
+   * World position of a lattice corner, as for packBricks.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  origin: readonly number[];
+  /**
+   * POINT attribute (i32) receiving each brick's piece: 0 for the piece holding the lowest
+   * point identity, then 1, 2… in the same order. -1 on a zero-volume box. May not be empty.
+   * An existing column of another shape under this name is refused rather than replaced.
+   *
+   * @defaultValue `"island"`
+   */
+  islandAttr: string;
+  /**
+   * POINT attribute (i32) receiving each brick's build step: the index of the bottom course
+   * at which it is placed, counting only courses at which some brick is placed, so steps run
+   * 0, 1, 2… with no gaps. -1 for a brick no order can attach (its piece never reaches the
+   * lowest course) and for a zero-volume box. May not be empty, and may not equal
+   * `islandAttr`.
+   *
+   * @defaultValue `"step"`
+   */
+  stepAttr: string;
+  /**
+   * Optional DETAIL attribute (u32) receiving the number of pieces; 1 is a build that lifts
+   * as one. Empty (the default) writes nothing. The same count packBricks' own `islandsAttr`
+   * gives for the bricks it packed.
+   *
+   * @defaultValue `""`
+   */
+  islandsAttr: string;
+}
+
+/**
+ * The input pin names of the `brickConnectivity` node type.
+ */
+export type BrickConnectivityInputs = "in";
+
+/**
+ * The output pin names of the `brickConnectivity` node type.
+ */
+export type BrickConnectivityOutputs = "out";
+
+/**
  * Params of the `bridgePaths` node type.
  */
 export interface BridgePathsParams {
@@ -2126,11 +2196,12 @@ export interface PackBricksParams {
    * also be placed a quarter turn about y (d along x, w along z), so [1, 4, 3] and [4, 1, 3]
    * are the same brick and listing both is refused. The ORDER is the last tie-break: two
    * entries of equal height, footprint and seam cost go to the earlier one. The default
-   * holds the common full-height bricks (h 3) and plates (h 1) from 1x1 to 2x8. Without [1,
-   * 1, 1] some occupancies cannot be covered at all — a gap one plate tall and one stud wide
-   * — and the cook is refused at the first such cell rather than leaving it empty.
+   * holds the common full-height bricks (h 3) from 1x1 to 2x8, and plates (h 1) from 1x1 to
+   * 2x16. Without [1, 1, 1] some occupancies cannot be covered at all — a gap one plate tall
+   * and one stud wide — and the cook is refused at the first such cell rather than leaving
+   * it empty.
    *
-   * @defaultValue `[2,8,3,2,6,3,2,4,3,2,3,3,2,2,3,1,8,3,1,6,3,1,4,3,1,3,3,1,2,3,1,1,3,2,8,1,2,6,1,2,4,1,2,3,1,2,2,1,1,8,1,1,6,1,1,4,1,1,3,1,1,2,1,1,1,1]`
+   * @defaultValue `[2,8,3,2,6,3,2,4,3,2,3,3,2,2,3,1,8,3,1,6,3,1,4,3,1,3,3,1,2,3,1,1,3,2,16,1,2,12,1,2,10,1,2,8,1,2,6,1,2,4,1,2,3,1,2,2,1,1,12,1,1,10,1,1,8,1,1,6,1,1,4,1,1,3,1,1,2,1,1,1,1]`
    */
   bricks: readonly number[];
   /**
@@ -2161,6 +2232,39 @@ export interface PackBricksParams {
    * @defaultValue `3`
    */
   stagger: number;
+  /**
+   * The reward, in studs of footprint, for every two separate PIECES a placement joins into
+   * one — pieces as stud clutch alone holds them, every piece already standing on the bottom
+   * course counting as one (the table holds those together). A plate laid over an empty room
+   * touches nothing below and starts a piece of its own; it is held only if something in a
+   * course above bridges it to the rest, and this is what makes the packer choose that
+   * bridge. Height is still chosen first and the join is weighed against `stagger` within
+   * it, so a wall, where everything below is already standing, packs exactly as with 0. The
+   * default of 16 is a 2x8 plate's worth: measured over forty generated houses, 0 left 378
+   * bricks that no build order could attach and 5 houses in one piece; with the longer
+   * default plates 220 and 11; adding a bond of 16 brought that to 24 bricks and 34 houses,
+   * and no value above it did better than 22. 0 ignores what holds together.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `16`
+   */
+  bond: number;
+  /**
+   * Which studs the `studs` output carries. 'exposed' (the default) is the finished build:
+   * only studs with nothing resting on them. 'all' is every stud of every brick's top face,
+   * whether or not a brick sits on it — what a PARTIAL build shows, since a stud is covered
+   * only once the brick above it is placed. Either way each stud carries `brickId`, the
+   * index in `out` of the brick it stands on, and `brickAbove`, the index of the brick
+   * resting on it or -1; with brickConnectivity's `step` read through those two indices
+   * (transferByIndex), 'stud is showing after step t' is `step(brickId) <= t` and
+   * (`brickAbove` < 0 or `step(brickAbove) > t`).
+   *
+   * - Enum: `"exposed"` | `"all"`
+   *
+   * @defaultValue `"exposed"`
+   */
+  studMode: "exposed" | "all";
   /**
    * Optional DETAIL attribute (u32) on `out` receiving how many separate pieces the bricks
    * form when only stud clutch holds them together: a brick joins every brick sitting

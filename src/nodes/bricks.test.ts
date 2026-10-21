@@ -20,7 +20,7 @@ import { AttributeNotFoundError, createPointCloud, type Geometry } from "../data
 import { canonicalPointRanks } from "../data/identity.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { hashCombine } from "../random/index.js";
-import { packBricks, type PackBricksParams } from "./bricks.js";
+import { brickConnectivity, packBricks, type PackBricksParams } from "./bricks.js";
 import {
   firstGeo,
   permutePoints,
@@ -754,4 +754,293 @@ describe("packBricks: cancellation", () => {
     });
     expect(calls).toBeGreaterThan(1);
   });
+});
+
+// ---------------------------------------------------------------------------
+// bond, studMode, the stud index columns and the longer default plates.
+
+/** brickConnectivity over a packed `out`: piece count and bricks no order attaches. */
+async function holding(out: Geometry, pitch: V3 = UNIT): Promise<{ islands: number; never: number }> {
+  const r = await runNode(
+    brickConnectivity,
+    { pitch, islandsAttr: "islands" },
+    { in: [makeGeometryItem(out)] },
+  );
+  const geo = firstGeo(r.out);
+  const step = geo.attrs.point.require("step");
+  let never = 0;
+  for (let i = 0; i < geo.pointCount; i++) if (step.get(i) < 0) never++;
+  return { islands: geo.attrs.detail.require("islands").get(0), never };
+}
+
+/**
+ * Four one-stud walls one brick course tall around a W x D room, and a
+ * floor `courses` plates thick laid over the whole of it — so the floor's
+ * plates over the empty room rest on nothing.
+ */
+function roomWithFloor(W: number, D: number, courses: number): BoxSpec[] {
+  return [
+    { lo: [0, 0, 0], hi: [W, 3, 1] },
+    { lo: [0, 0, D - 1], hi: [W, 3, D] },
+    { lo: [0, 0, 1], hi: [1, 3, D - 1] },
+    { lo: [W - 1, 0, 1], hi: [W, 3, D - 1] },
+    { lo: [0, 3, 0], hi: [W, 3 + courses, D] },
+  ];
+}
+
+describe("packBricks: bond", () => {
+  it("defaults to 16, and studMode to exposed", () => {
+    expect(packBricks.defaultParams.bond).toBe(16);
+    expect(packBricks.defaultParams.studMode).toBe("exposed");
+  });
+
+  it("joins floor plates over an empty room that bond 0 leaves loose", async () => {
+    // A 30 x 10 room under a two-plate floor, packed largest-first
+    // (stagger 0) so nothing but `bond` steers the upper course across the
+    // seams of the lower one. In the lower course a 30-stud row is more
+    // than one plate, and a plate in the middle of it touches no wall.
+    const specs = roomWithFloor(30, 10, 2);
+    const loose = await pack(boxCloud(specs), { stagger: 0, bond: 0 });
+    const bonded = await pack(boxCloud(specs), { stagger: 0, bond: 16 });
+    // Both cover exactly the boxes' cells: bond changes WHICH bricks.
+    const want = [...unionCells(specs).keys()].sort();
+    for (const r of [loose, bonded]) {
+      const { cells, doubled } = rasterize(readBricks(r.out));
+      expect(doubled).toBe(0);
+      expect([...cells.keys()].sort()).toEqual(want);
+    }
+    const a = await holding(loose.out);
+    const b = await holding(bonded.out);
+    // Non-vacuity: bond 0 really does leave bricks no order can attach.
+    expect(a.never).toBeGreaterThan(0);
+    expect(b.never).toBeLessThan(a.never);
+    expect(b.islands).toBeLessThan(a.islands);
+  });
+
+  it("is never worse than bond 0 over a range of floored rooms", async () => {
+    for (const [W, D, courses] of [
+      [20, 20, 2],
+      [30, 6, 2],
+      [34, 10, 2],
+      [40, 10, 2],
+      [40, 20, 3],
+    ] as const) {
+      for (const stagger of [0, 3]) {
+        const specs = roomWithFloor(W, D, courses);
+        const a = await holding((await pack(boxCloud(specs), { stagger, bond: 0 })).out);
+        const b = await holding((await pack(boxCloud(specs), { stagger, bond: 16 })).out);
+        expect(b.never, `${W}x${D}x${courses} stagger ${stagger}`).toBeLessThanOrEqual(a.never);
+      }
+    }
+  });
+
+  it("packs walls, where everything below is standing, exactly as bond 0 does", async () => {
+    const walls: Record<string, BoxSpec[]> = {
+      "a long wall": [{ lo: [0, 0, 0], hi: [17, 15, 1] }],
+      "a thick wall with a plate course": [{ lo: [0, 0, 0], hi: [23, 10, 2] }],
+      "an L": [
+        { lo: [0, 0, 0], hi: [9, 9, 2] },
+        { lo: [0, 0, 2], hi: [2, 9, 13] },
+      ],
+      "a room's four walls": roomWithFloor(30, 10, 0)
+        .slice(0, 4)
+        .map((b) => ({ lo: b.lo, hi: [b.hi[0], 12, b.hi[2]] as V3 })),
+    };
+    for (const [name, specs] of Object.entries(walls)) {
+      for (const stagger of [0, 3]) {
+        const a = await pack(boxCloud(specs), { stagger, bond: 0, islandsAttr: "islands" });
+        const b = await pack(boxCloud(specs), { stagger, bond: 16, islandsAttr: "islands" });
+        expect(a.out.pointCount, name).toBeGreaterThan(3);
+        expect(snapshotGeometry(b.out), `${name}, stagger ${stagger}`).toEqual(snapshotGeometry(a.out));
+        expect(snapshotGeometry(b.studs), `${name}, stagger ${stagger}`).toEqual(snapshotGeometry(a.studs));
+      }
+    }
+    // THE CONTROL: the comparison can say "different" — the floored room
+    // above does pack differently under the two bonds.
+    const specs = roomWithFloor(30, 10, 2);
+    const a = await pack(boxCloud(specs), { stagger: 0, bond: 0 });
+    const b = await pack(boxCloud(specs), { stagger: 0, bond: 16 });
+    expect(snapshotGeometry(b.out)).not.toEqual(snapshotGeometry(a.out));
+  });
+
+  it("refuses a negative or non-finite bond, naming the param", async () => {
+    const one = boxCloud([{ lo: [0, 0, 0], hi: [2, 3, 2] }]);
+    expect(await refusal(one, { bond: -1 })).toContain('param "bond"');
+    expect(await refusal(one, { bond: Number.NaN })).toContain('param "bond"');
+    expect(await refusal(one, { bond: Number.POSITIVE_INFINITY })).toContain('param "bond"');
+  });
+});
+
+describe("packBricks: studMode and the stud index columns", () => {
+  // A base, a plate on part of it, a brick overhanging the base's edge, a
+  // separate low block, and a column reaching the top of the grid.
+  const origin: V3 = [0.5, 0, -2];
+  const specs: BoxSpec[] = [
+    { lo: [0, 0, 0], hi: [6, 3, 4], tag: 1 },
+    { lo: [1, 3, 0], hi: [3, 4, 2], tag: 2 },
+    { lo: [4, 3, 1], hi: [8, 6, 3], tag: 3 },
+    { lo: [10, 0, 1], hi: [11, 2, 2], tag: 4 },
+    { lo: [12, 0, 0], hi: [14, 9, 2], tag: 5 },
+  ];
+
+  interface Stud {
+    key: string;
+    brickId: number;
+    brickAbove: number;
+  }
+
+  const readStuds = (studs: Geometry): Stud[] => {
+    const sp = studs.attrs.point;
+    const on = sp.require("brickId");
+    const under = sp.require("brickAbove");
+    expect(on.type).toBe("i32");
+    expect(under.type).toBe("i32");
+    return Array.from({ length: sp.count }, (_, s) => {
+      const P = sp.require("P").getTuple(s);
+      const cx = Math.round(((P[0] as number) - origin[0]) / PLATE[0] - 0.5);
+      const cy = Math.round(((P[1] as number) - origin[1]) / PLATE[1]);
+      const cz = Math.round(((P[2] as number) - origin[2]) / PLATE[2] - 0.5);
+      return { key: key(cx, cy, cz), brickId: on.get(s), brickAbove: under.get(s) };
+    });
+  };
+
+  const sortStuds = (list: readonly Stud[]): string[] =>
+    list.map((s) => `${s.key}|${s.brickId}|${s.brickAbove}`).sort();
+
+  /** The oracle: every top-face cell of every brick, and the brick whose bottom covers it. */
+  const everyTopStud = (bricks: readonly Brick[]): Stud[] => {
+    const out: Stud[] = [];
+    bricks.forEach((b, id) => {
+      const top = b.lo[1] + b.ext[1];
+      for (let z = b.lo[2]; z < b.lo[2] + b.ext[2]; z++) {
+        for (let x = b.lo[0]; x < b.lo[0] + b.ext[0]; x++) {
+          const above = bricks.findIndex(
+            (o) =>
+              o.lo[1] === top &&
+              o.lo[0] <= x &&
+              x < o.lo[0] + o.ext[0] &&
+              o.lo[2] <= z &&
+              z < o.lo[2] + o.ext[2],
+          );
+          out.push({ key: key(x, top, z), brickId: id, brickAbove: above });
+        }
+      }
+    });
+    return out;
+  };
+
+  it("'all' carries every stud of every top face, each naming the brick under and over it", async () => {
+    const { out, studs } = await pack(boxCloud(specs, PLATE, origin), {
+      pitch: PLATE,
+      origin,
+      studMode: "all",
+    });
+    const bricks = readBricks(out, PLATE, origin);
+    const want = everyTopStud(bricks);
+    const area = bricks.reduce((sum, b) => sum + b.ext[0] * b.ext[2], 0);
+    expect(want).toHaveLength(area);
+    expect(studs.pointCount).toBe(area);
+    const got = readStuds(studs);
+    expect(sortStuds(got)).toEqual(sortStuds(want));
+    // Non-vacuity: some studs are covered and some showing.
+    expect(got.some((s) => s.brickAbove >= 0)).toBe(true);
+    expect(got.some((s) => s.brickAbove < 0)).toBe(true);
+    // brickId points at a brick whose TOP FACE holds the stud, and the stud
+    // carries that brick's attributes; brickAbove's bottom is that face.
+    const sp = studs.attrs.point;
+    for (let s = 0; s < sp.count; s++) {
+      const P = sp.require("P").getTuple(s);
+      const b = bricks[sp.require("brickId").get(s)] as Brick;
+      expect(P[1]).toBeCloseTo(b.bMax[1] as number, 5);
+      expect(P[0]).toBeGreaterThan(b.bMin[0] as number);
+      expect(P[0]).toBeLessThan(b.bMax[0] as number);
+      expect(P[2]).toBeGreaterThan(b.bMin[2] as number);
+      expect(P[2]).toBeLessThan(b.bMax[2] as number);
+      expect(sp.require("tag").get(s)).toBe(b.tag);
+      expect(sp.require("brick").getString(s)).toBe(b.label);
+      const above = sp.require("brickAbove").get(s);
+      if (above >= 0) expect((bricks[above] as Brick).bMin[1]).toBeCloseTo(b.bMax[1] as number, 5);
+    }
+  });
+
+  it("'exposed' is exactly the studs of 'all' with nothing resting on them", async () => {
+    const geo = boxCloud(specs, PLATE, origin);
+    const all = await pack(geo, { pitch: PLATE, origin, studMode: "all" });
+    const exposed = await pack(geo, { pitch: PLATE, origin, studMode: "exposed" });
+    // The bricks do not depend on the mode.
+    expect(snapshotGeometry(exposed.out)).toEqual(snapshotGeometry(all.out));
+    const shown = readStuds(exposed.studs);
+    expect(shown.length).toBeGreaterThan(0);
+    for (const s of shown) expect(s.brickAbove).toBe(-1);
+    const subset = readStuds(all.studs).filter((s) => s.brickAbove < 0);
+    expect(sortStuds(shown)).toEqual(sortStuds(subset));
+    expect(shown.length).toBeLessThan(all.studs.pointCount);
+    // In the same order, too: 'exposed' is 'all' filtered, not re-sorted.
+    expect(shown.map((s) => s.key)).toEqual(subset.map((s) => s.key));
+  });
+
+  it("reads 'showing after the last step' through brickConnectivity as the exposed studs", async () => {
+    // The description's recipe: showing after step t is step(brickId) <= t
+    // and (brickAbove < 0 or step(brickAbove) > t). At the last step of a
+    // build that is all attached, that is exactly 'exposed'; at the step
+    // before, a stud whose cover comes last is still showing.
+    const geo = boxCloud(specs, PLATE, origin);
+    const all = await pack(geo, { pitch: PLATE, origin, studMode: "all" });
+    const exposed = await pack(geo, { pitch: PLATE, origin });
+    const r = await runNode(brickConnectivity, { pitch: PLATE, origin }, { in: [makeGeometryItem(all.out)] });
+    const stepCol = firstGeo(r.out).attrs.point.require("step");
+    const step = Array.from({ length: all.out.pointCount }, (_, i) => stepCol.get(i));
+    expect(step.every((s) => s >= 0)).toBe(true);
+    const last = Math.max(...step);
+    expect(last).toBeGreaterThan(0);
+    const studs = readStuds(all.studs);
+    const showing = (t: number) =>
+      studs.filter(
+        (s) => (step[s.brickId] as number) <= t && (s.brickAbove < 0 || (step[s.brickAbove] as number) > t),
+      );
+    expect(sortStuds(showing(last))).toEqual(sortStuds(readStuds(exposed.studs)));
+    expect(showing(last - 1).some((s) => s.brickAbove >= 0)).toBe(true);
+  });
+
+  it("refuses an input carrying brickId or brickAbove as another shape", async () => {
+    const withOn = boxCloud([{ lo: [0, 0, 0], hi: [2, 3, 2] }]);
+    withOn.attrs.point.add("brickId", "f32", 1, 0);
+    const a = await refusal(withOn);
+    expect(a).toContain('"brickId"');
+    expect(a).toContain("f32");
+    const withUnder = boxCloud([{ lo: [0, 0, 0], hi: [2, 3, 2] }]);
+    withUnder.attrs.point.add("brickAbove", "i32", 2, 0);
+    const b = await refusal(withUnder);
+    expect(b).toContain('"brickAbove"');
+    expect(b).toContain("tuple size 2");
+  });
+
+  it("carries both index columns on an empty studs pin", async () => {
+    const { studs } = await pack(createPointCloud(0), { studMode: "all" });
+    expect(studs.pointCount).toBe(0);
+    expect(studs.attrs.point.require("brickId").type).toBe("i32");
+    expect(studs.attrs.point.require("brickAbove").type).toBe("i32");
+  });
+});
+
+describe("packBricks: the longer default plates", () => {
+  for (const [w, d] of [
+    [2, 16],
+    [2, 12],
+    [2, 10],
+    [1, 12],
+    [1, 10],
+  ] as const) {
+    it(`lays a ${w}x${d} one-plate slab as one ${w}x${d}x1, either way round`, async () => {
+      for (const hi of [
+        [w, 1, d],
+        [d, 1, w],
+      ] as V3[]) {
+        const bricks = readBricks((await pack(boxCloud([{ lo: [0, 0, 0], hi }]))).out);
+        expect(bricks).toHaveLength(1);
+        expect(bricks[0]?.label).toBe(`${w}x${d}x1`);
+        expect(bricks[0]?.ext).toEqual(hi);
+      }
+    });
+  }
 });
