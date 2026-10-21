@@ -2,8 +2,8 @@ var e=`{
   "formatVersion": 1,
   "seed": 1889,
   "meta": {
-    "title": "A brick house split on a stud lattice",
-    "description": "A SHORT TERRACE OF HOUSES DERIVED BY A SPLIT GRAMMAR ON AN INTEGER LATTICE, and the input a brick packer will read: every terminal is an axis-aligned box whose corners are WHOLE NUMBERS -- x and z in studs, y in plates, a plate 0.4 of a stud -- carrying a string \`kind\` (wall, glass, door, roof, floor, ground) and a palette colour. THE GRAMMAR IS STAGED, NOT RECURSIVE, and that is the finding that matters for whether \`examples-facade\` and \`examples-floorplan\` are ever extracted into a split primitive. The derivation is lot -> blocks -> storeys -> a floor slab and four walls -> bays -> sill, head, two jambs and the opening, with a second branch from each block to the layers of a stepped gable roof. Every one of those rules has the SAME shape: fan the cell out to M slots against a rule cloud of M coincident points (\`copyToPoints\`, the slot riding on the source so it survives later filters), keep the slots a predicate allows, and rewrite the box piecewise by slot as sums of \`eq(slot, i) * value_i\`. The kind IS the stage, so there is no dispatch on a string anywhere. Depth is bounded -- two rounds of block splitting, at most three storeys, eight bays, fourteen roof layers -- so the rounds are written out and \`repeatUntil\` would buy nothing. This graph therefore does NOT agree in form with the two split graphs, and is not the third consumer that would justify extracting their recipe; the recurring thing here is the fan-out-keep-rewrite rule, and that is what to watch for a second time. THE CUT IS SNAPPED, AND DECIDED ON THE PARENT: \`floor(span * f + 0.5)\` clamped so neither half falls under six studs, carried to both children in \`targetNames\` exactly as the facade does, so the two halves of a block meet at one integer coordinate. THE WORKING BOX IS \`lo\`/\`hi\`, NOT \`boundsMin\`/\`boundsMax\`, because \`copyToPoints\` refuses to carry a standard column, and bounds are written once at the end in world units. One trap came with it: the two corners are rewritten by TWO nodes, so the second reads the first's output. The walls and openings are ordered so the second never reads a component the first changed; the roof rewrites both corners from every component, so it carries the block's original box (\`blo\`/\`bhi\`) and reads only that. A WINDOW GOES ONLY WHERE A WALL IS EXPOSED, and exposure is computed rather than assumed. Blocks share party walls, and a tall block beside a low one has a wall that is covered at the bottom and open above. Each candidate opening places a probe half a stud outside its wall at the BOTTOM of where it would be, and \`transferAttribute\` casts a ray straight up from it against a mesh of every block and roof layer, with \`hitAttr\` as the answer. That is an exact inside-test here and not a heuristic, for a reason worth stating: blocks and roof layers are prisms standing on the ground with nothing overhanging, so a point is inside one exactly when a ray going up from it hits a face, and if the bottom of the opening is free everything above it in that column is free too. ACROSS the opening it takes one probe PER STUD -- the first draft probed the centre only, and a neighbour ending mid-window or a roof layer stepping in left a window looking straight into a wall in three seeds of ten -- because a box on the lattice that overlaps the opening at all contains one of its studs; openings are at most two studs wide, so two probes. Doors go on the ground floor of the first lot-edge wall, south then north, in the middle bay; a z split happens at most once, so every block has one. TWO THINGS A PACKER READING THIS MUST KNOW: neighbouring blocks each build their own wall, so a party wall is TWO studs thick, and the stud at each gable end of a roof layer has kind \`wall\` (it is the gable, drawn in the wall's colour), so a count of \`wall\` pieces includes roof-height ones. The colours are a palette indexed by kind and per-block draws through \`lookup\`; the editor multiplies vertex colours by the output's hue, so they read cooler there than in \`pcg render\`.",
+    "title": "A brick house split on a stud lattice and built in bricks",
+    "description": "A SHORT TERRACE OF HOUSES DERIVED BY A SPLIT GRAMMAR ON AN INTEGER LATTICE, THEN BUILT IN BRICKS. Every terminal of the grammar is an axis-aligned box whose corners are WHOLE NUMBERS -- x and z in studs, y in plates, a plate 0.4 of a stud -- carrying a string \`kind\` (wall, glass, door, roof, floor, ground) and a palette colour; \`packBricks\` turns those boxes into catalogue bricks, and the house is drawn as two instance batches, bricks and the studs left showing. THE GRAMMAR IS STAGED, NOT RECURSIVE, and that is the finding that matters for whether \`examples-facade\` and \`examples-floorplan\` are ever extracted into a split primitive. The derivation is lot -> blocks -> storeys -> a floor slab and four walls -> bays -> sill, head, two jambs and the opening, with a second branch from each block to the layers of a stepped gable roof. Every one of those rules has the SAME shape: fan the cell out to M slots against a rule cloud of M coincident points (\`copyToPoints\`, the slot riding on the source so it survives later filters), keep the slots a predicate allows, and rewrite the box piecewise by slot as sums of \`eq(slot, i) * value_i\`. The kind IS the stage, so there is no dispatch on a string anywhere. Depth is bounded -- two rounds of block splitting, at most three storeys, eight bays, fourteen roof layers -- so the rounds are written out and \`repeatUntil\` would buy nothing. This graph therefore does NOT agree in form with the two split graphs, and is not the third consumer that would justify extracting their recipe; the recurring thing here is the fan-out-keep-rewrite rule, and that is what to watch for a second time. THE CUT IS SNAPPED, AND DECIDED ON THE PARENT: \`floor(span * f + 0.5)\` clamped so neither half falls under six studs, carried to both children in \`targetNames\` exactly as the facade does, so the two halves of a block meet at one integer coordinate. THE WORKING BOX IS \`lo\`/\`hi\`, NOT \`boundsMin\`/\`boundsMax\`, because \`copyToPoints\` refuses to carry a standard column, and bounds are written once at the end in world units. One trap came with it: the two corners are rewritten by TWO nodes, so the second reads the first's output. The walls and openings are ordered so the second never reads a component the first changed; the roof rewrites both corners from every component, so it carries the block's original box (\`blo\`/\`bhi\`) and reads only that. A WINDOW GOES ONLY WHERE A WALL IS EXPOSED, and exposure is computed rather than assumed. Blocks share party walls, and a tall block beside a low one has a wall that is covered at the bottom and open above. Each candidate opening places a probe half a stud outside its wall at the BOTTOM of where it would be, and \`transferAttribute\` casts a ray straight up from it against a mesh of every block and roof layer, with \`hitAttr\` as the answer. That is an exact inside-test here and not a heuristic, for a reason worth stating: blocks and roof layers are prisms standing on the ground with nothing overhanging, so a point is inside one exactly when a ray going up from it hits a face, and if the bottom of the opening is free everything above it in that column is free too. ACROSS the opening it takes one probe PER STUD -- the first draft probed the centre only, and a neighbour ending mid-window or a roof layer stepping in left a window looking straight into a wall in three seeds of ten -- because a box on the lattice that overlaps the opening at all contains one of its studs; openings are at most two studs wide, so two probes. Doors go on the ground floor of the first lot-edge wall, south then north, in the middle bay; a z split happens at most once, so every block has one. THE BUILD. \`packBricks\` reads the pieces' world corners, keeps \`kind\` and colour apart with \`groupBy\`, and lays every wall in full bricks with the joints staggered course to course; the catalogue is the default one plus a 32 x 32 BASEPLATE, which the ground is exactly -- one piece under the whole lot, not a margin of loose plates. Neighbouring blocks each build their own wall, so a party wall is two studs thick, and the stud at each gable end of a roof layer has kind \`wall\` (it is the gable, in the wall's colour). THE MESHES ARE THE GRAPH'S OWN: two outputs carry \`role: \\"asset\\"\`, so \`brick\` (a unit box centred on its point) and \`stud\` (a twelve-sided stud standing on its point) are the meshes the two spawners' asset ids resolve to, in the editor and in \`pcg render\`, rather than placeholders. One box serves every brick because a brick point's \`scale\` is its own-frame size and its \`rot\` the quarter turn of a brick laid sideways; the 0.04 taken off \`scale\` before spawning is the hairline that makes the joints read. \`islands\` on the packer's output counts the pieces stud clutch alone holds together -- usually more than one, because an upper floor or the first course of a roof is laid as plates over the hollow inside: the plates at its edges sit on the walls, and the ones in the middle are held only by whatever stands on them, which over an empty room is often nothing.",
     "tags": [
       "examples",
       "structure",
@@ -6346,9 +6346,53 @@ var e=`{
         "value": {
           "fn": "vec",
           "args": [
-            -2,
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lot",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 0
+                    },
+                    2
+                  ]
+                },
+                16
+              ]
+            },
             0,
-            -2
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lot",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 2
+                    },
+                    2
+                  ]
+                },
+                16
+              ]
+            }
           ]
         },
         "select": 0,
@@ -6373,17 +6417,23 @@ var e=`{
               "fn": "add",
               "args": [
                 {
-                  "fn": "component",
+                  "fn": "div",
                   "args": [
                     {
-                      "fn": "attribute",
-                      "name": "lot",
-                      "tupleSize": 3
-                    }
-                  ],
-                  "index": 0
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lot",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 0
+                    },
+                    2
+                  ]
                 },
-                2
+                16
               ]
             },
             1,
@@ -6391,17 +6441,23 @@ var e=`{
               "fn": "add",
               "args": [
                 {
-                  "fn": "component",
+                  "fn": "div",
                   "args": [
                     {
-                      "fn": "attribute",
-                      "name": "lot",
-                      "tupleSize": 3
-                    }
-                  ],
-                  "index": 2
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lot",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 2
+                    },
+                    2
+                  ]
                 },
-                2
+                16
               ]
             }
           ]
@@ -7151,43 +7207,102 @@ var e=`{
       }
     },
     {
-      "id": "centre",
-      "type": "setAttribute",
+      "id": "pack",
+      "type": "packBricks",
       "params": {
-        "name": "P",
-        "domain": "point",
-        "type": "f32",
-        "tupleSize": 3,
-        "value": {
-          "fn": "mul",
-          "args": [
-            0.5,
-            {
-              "fn": "add",
-              "args": [
-                {
-                  "fn": "attribute",
-                  "name": "boundsMin",
-                  "tupleSize": 3
-                },
-                {
-                  "fn": "attribute",
-                  "name": "boundsMax",
-                  "tupleSize": 3
-                }
-              ]
-            }
-          ]
-        },
-        "select": 0,
-        "values": [],
-        "weights": [],
-        "stringValue": "",
-        "seed": 0
+        "minAttr": "boundsMin",
+        "maxAttr": "boundsMax",
+        "pitch": [
+          1,
+          0.4,
+          1
+        ],
+        "origin": [
+          0,
+          0,
+          0
+        ],
+        "bricks": [
+          2,
+          8,
+          3,
+          2,
+          6,
+          3,
+          2,
+          4,
+          3,
+          2,
+          3,
+          3,
+          2,
+          2,
+          3,
+          1,
+          8,
+          3,
+          1,
+          6,
+          3,
+          1,
+          4,
+          3,
+          1,
+          3,
+          3,
+          1,
+          2,
+          3,
+          1,
+          1,
+          3,
+          2,
+          8,
+          1,
+          2,
+          6,
+          1,
+          2,
+          4,
+          1,
+          2,
+          3,
+          1,
+          2,
+          2,
+          1,
+          1,
+          8,
+          1,
+          1,
+          6,
+          1,
+          1,
+          4,
+          1,
+          1,
+          3,
+          1,
+          1,
+          2,
+          1,
+          1,
+          1,
+          1,
+          32,
+          32,
+          1
+        ],
+        "groupBy": [
+          "kind",
+          "tint"
+        ],
+        "stagger": 3,
+        "islandsAttr": "islands"
       }
     },
     {
-      "id": "size",
+      "id": "gap",
       "type": "setAttribute",
       "params": {
         "name": "scale",
@@ -7198,19 +7313,9 @@ var e=`{
           "fn": "sub",
           "args": [
             {
-              "fn": "sub",
-              "args": [
-                {
-                  "fn": "attribute",
-                  "name": "boundsMax",
-                  "tupleSize": 3
-                },
-                {
-                  "fn": "attribute",
-                  "name": "boundsMin",
-                  "tupleSize": 3
-                }
-              ]
+              "fn": "attribute",
+              "name": "scale",
+              "tupleSize": 3
             },
             0.04
           ]
@@ -7223,72 +7328,120 @@ var e=`{
       }
     },
     {
-      "id": "boxes",
-      "type": "copyToPoints",
+      "id": "bricks",
+      "type": "spawnInstances",
       "params": {
-        "targetNames": [
-          "tint"
-        ],
-        "targetIndexAttr": "",
-        "rotateAttrs": [],
-        "sourceGroupAttr": "",
-        "targetGroupAttr": "",
-        "mirrorAware": true,
-        "topology": "keep"
+        "assetId": "brick",
+        "assetAttr": "",
+        "colorAttr": "tint",
+        "instanceAttrs": []
       }
     },
     {
-      "id": "paint",
-      "type": "setAttribute",
+      "id": "studs",
+      "type": "spawnInstances",
       "params": {
-        "name": "color",
-        "domain": "point",
-        "type": "f32",
-        "tupleSize": 4,
-        "value": {
-          "fn": "vec",
-          "args": [
-            {
-              "fn": "component",
-              "args": [
-                {
-                  "fn": "attribute",
-                  "name": "tint",
-                  "tupleSize": 3
-                }
-              ],
-              "index": 0
-            },
-            {
-              "fn": "component",
-              "args": [
-                {
-                  "fn": "attribute",
-                  "name": "tint",
-                  "tupleSize": 3
-                }
-              ],
-              "index": 1
-            },
-            {
-              "fn": "component",
-              "args": [
-                {
-                  "fn": "attribute",
-                  "name": "tint",
-                  "tupleSize": 3
-                }
-              ],
-              "index": 2
-            },
-            1
-          ]
-        },
-        "select": 0,
-        "values": [],
-        "weights": [],
-        "stringValue": "",
-        "seed": 0
+        "assetId": "stud",
+        "assetAttr": "",
+        "colorAttr": "tint",
+        "instanceAttrs": []
+      }
+    },
+    {
+      "id": "brickMesh",
+      "type": "meshPrimitive",
+      "params": {
+        "shape": "box",
+        "size": [
+          1,
+          1,
+          1
+        ],
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "orientation": "xz",
+        "subdivisions": [
+          1,
+          1,
+          1
+        ],
+        "flip": false,
+        "normals": false
+      }
+    },
+    {
+      "id": "studRing",
+      "type": "pointList",
+      "params": {
+        "positions": [
+          0.3,
+          0,
+          0,
+          0.25981,
+          0,
+          0.15,
+          0.15,
+          0,
+          0.25981,
+          0,
+          0,
+          0.3,
+          -0.15,
+          0,
+          0.25981,
+          -0.25981,
+          0,
+          0.15,
+          -0.3,
+          0,
+          0,
+          -0.25981,
+          0,
+          -0.15,
+          -0.15,
+          0,
+          -0.25981,
+          0,
+          0,
+          -0.3,
+          0.15,
+          0,
+          -0.25981,
+          0.25981,
+          0,
+          -0.15
+        ],
+        "columnNames": [],
+        "columnTypes": [],
+        "columnValues": []
+      }
+    },
+    {
+      "id": "studOutline",
+      "type": "pointsToPath",
+      "params": {
+        "closed": true,
+        "groupAttr": "",
+        "orderAttr": "",
+        "shortGroups": "error"
+      }
+    },
+    {
+      "id": "studMesh",
+      "type": "extrudePolygon",
+      "params": {
+        "distance": 0.2125,
+        "direction": "+y",
+        "vector": [
+          0,
+          1,
+          0
+        ],
+        "caps": "top",
+        "sides": true
       }
     }
   ],
@@ -8429,56 +8582,83 @@ var e=`{
         "out"
       ],
       "to": [
-        "centre",
+        "pack",
         "in"
       ]
     },
     {
       "from": [
-        "centre",
+        "pack",
         "out"
       ],
       "to": [
-        "size",
+        "gap",
         "in"
       ]
     },
     {
       "from": [
-        "unitBox",
+        "gap",
         "out"
       ],
       "to": [
-        "boxes",
-        "source"
+        "bricks",
+        "in"
       ]
     },
     {
       "from": [
-        "size",
-        "out"
+        "pack",
+        "studs"
       ],
       "to": [
-        "boxes",
-        "target"
+        "studs",
+        "in"
       ]
     },
     {
       "from": [
-        "boxes",
+        "studRing",
         "out"
       ],
       "to": [
-        "paint",
+        "studOutline",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "studOutline",
+        "out"
+      ],
+      "to": [
+        "studMesh",
         "in"
       ]
     }
   ],
   "outputs": [
     {
-      "id": "paint",
+      "id": "bricks",
+      "pin": "instances",
+      "name": "bricks"
+    },
+    {
+      "id": "studs",
+      "pin": "instances",
+      "name": "studs"
+    },
+    {
+      "id": "brickMesh",
       "pin": "out",
-      "name": "house"
+      "name": "brick",
+      "role": "asset"
+    },
+    {
+      "id": "studMesh",
+      "pin": "out",
+      "name": "stud",
+      "role": "asset"
     }
   ]
 }
