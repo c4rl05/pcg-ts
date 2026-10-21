@@ -3,7 +3,7 @@
   "seed": 1889,
   "meta": {
     "title": "A brick house split on a stud lattice and built in bricks",
-    "description": "A SHORT TERRACE OF HOUSES DERIVED BY A SPLIT GRAMMAR ON AN INTEGER LATTICE, THEN BUILT IN BRICKS. Every terminal of the grammar is an axis-aligned box whose corners are WHOLE NUMBERS -- x and z in studs, y in plates, a plate 0.4 of a stud -- carrying a string `kind` (wall, glass, door, roof, floor, ground) and a palette colour; `packBricks` turns those boxes into catalogue bricks, and the house is drawn as two instance batches, bricks and the studs left showing. THE GRAMMAR IS STAGED, NOT RECURSIVE, and that is the finding that matters for whether `examples-facade` and `examples-floorplan` are ever extracted into a split primitive. The derivation is lot -> blocks -> storeys -> a floor slab and four walls -> bays -> sill, head, two jambs and the opening, with a ceiling slab over each block's top storey and a second branch from each block to the layers of a stepped gable roof standing on it. Every one of those rules has the SAME shape: fan the cell out to M slots against a rule cloud of M coincident points (`copyToPoints`, the slot riding on the source so it survives later filters), keep the slots a predicate allows, and rewrite the box piecewise by slot as sums of `eq(slot, i) * value_i`. The kind IS the stage, so there is no dispatch on a string anywhere. Depth is bounded -- two rounds of block splitting, at most three storeys, eight bays, fourteen roof layers -- so the rounds are written out and `repeatUntil` would buy nothing. This graph therefore does NOT agree in form with the two split graphs, and is not the third consumer that would justify extracting their recipe; the recurring thing here is the fan-out-keep-rewrite rule, and that is what to watch for a second time. THE CUT IS SNAPPED, AND DECIDED ON THE PARENT: `floor(span * f + 0.5)` clamped so neither half falls under six studs, carried to both children in `targetNames` exactly as the facade does, so the two halves of a block meet at one integer coordinate. THE WORKING BOX IS `lo`/`hi`, NOT `boundsMin`/`boundsMax`, because `copyToPoints` refuses to carry a standard column, and bounds are written once at the end in world units. One trap came with it: the two corners are rewritten by TWO nodes, so the second reads the first's output. The walls and openings are ordered so the second never reads a component the first changed; the roof rewrites both corners from every component, so it carries the block's original box (`blo`/`bhi`) and reads only that. A WINDOW GOES ONLY WHERE A WALL IS EXPOSED, and exposure is computed rather than assumed. Blocks share party walls, and a tall block beside a low one has a wall that is covered at the bottom and open above. Each candidate opening places a probe half a stud outside its wall at the BOTTOM of where it would be, and `transferAttribute` casts a ray straight up from it against a mesh of every block and roof layer, with `hitAttr` as the answer. That is an exact inside-test here and not a heuristic, for a reason worth stating: blocks and roof layers are prisms standing on the ground with nothing overhanging, so a point is inside one exactly when a ray going up from it hits a face, and if the bottom of the opening is free everything above it in that column is free too. ACROSS the opening it takes one probe PER STUD -- the first draft probed the centre only, and a neighbour ending mid-window or a roof layer stepping in left a window looking straight into a wall in three seeds of ten -- because a box on the lattice that overlaps the opening at all contains one of its studs; openings are at most two studs wide, so two probes. Doors go on the ground floor of the first lot-edge wall, south then north, in the middle bay; a z split happens at most once, so every block has one. THE BUILD. `packBricks` reads the pieces' world corners, keeps `kind` and colour apart with `groupBy`, and lays every wall in full bricks with the joints staggered course to course; the catalogue is the default one plus a 32 x 32 BASEPLATE, which the ground is exactly -- one piece under the whole lot, not a margin of loose plates. Neighbouring blocks each build their own wall, so a party wall is two studs thick, and the stud at each gable end of a roof layer has kind `wall` (it is the gable, in the wall's colour). THE MESHES ARE THE GRAPH'S OWN: two outputs carry `role: \"asset\"`, so `brick` (a unit box centred on its point) and `stud` (a twelve-sided stud standing on its point) are the meshes the two spawners' asset ids resolve to, in the editor and in `pcg render`, rather than placeholders. One box serves every brick because a brick point's `scale` is its own-frame size and its `rot` the quarter turn of a brick laid sideways; the 0.04 taken off `scale` before spawning is the hairline that makes the joints read. WHAT HOLDS TOGETHER is measured, not assumed. `brickConnectivity` numbers the pieces stud clutch alone holds together and gives every brick a build STEP: courses bottom up, a brick placed when it stands on the baseplate or grips one already placed, a plate hung under a floor placed with the floor. A floor or a roof's first course laid over an empty room is the hard case -- its plates touch nothing below, and the ones that reach no wall are held only by what is laid on them. Two things in the packer answer it, both found by counting over forty seeds: plates up to 2x16 in the catalogue, so a floor's plates reach a wall (378 bricks no order could attach became 220), and `bond`, which rewards a placement for every two pieces it joins, so the course above bridges the loose ones (24 left, 34 of the 40 houses in one piece, against 5 before). The last 24 were the inner strips of stepped roofs over an EMPTY ATTIC: only the two outer strips stood on walls, and a roof that narrows as it rises has no course wide enough to tie the middle ones back to them. That is the grammar's to fix, not the packer's -- a house has a ceiling -- so each block now carries a one-plate ceiling slab over its top storey and the roof stands on it: every house of the forty is one piece, and every brick has a step. A brick that never could be attached would keep step -1; the whole build draws it and every partial build leaves it out rather than show it hanging in air. THE `buildStep` PARAM shows the build as it stands after that step: bricks are kept while their step is at most it, and a stud shows once its brick is placed and until the brick resting on it is -- which is why the packer is asked for EVERY stud (`studMode: all`) with the index of the brick on it, and the step of each is read across by index.",
+    "description": "A SHORT TERRACE OF HOUSES DERIVED BY A SPLIT GRAMMAR ON AN INTEGER LATTICE, THEN BUILT IN BRICKS. Every terminal of the grammar is an axis-aligned box whose corners are WHOLE NUMBERS -- x and z in studs, y in plates, a plate 0.4 of a stud -- carrying a string `kind` (wall, glass, door, roof, floor, ground) and a palette colour; `packBricks` turns those boxes into catalogue bricks, and the house is drawn as two instance batches, bricks and the studs left showing. THE GRAMMAR IS STAGED, NOT RECURSIVE. The derivation is lot -> blocks -> storeys -> a floor slab and four walls -> bays -> sill, head, two jambs and the opening, with a ceiling slab over each block's top storey and a second branch from each block to the layers of a stepped gable roof standing on it. Every one of those rules has the SAME shape: fan the cell out to M slots against a rule cloud of M coincident points (`copyToPoints`, the slot riding on the source so it survives later filters), keep the slots a predicate allows, and rewrite the box piecewise by slot as sums of `eq(slot, i) * value_i`. The stage decides what a cell is, so no rule dispatches on a string; the one string dispatch is the palette, a `byAttribute` on `kind` that is the single table of colours. Depth is bounded -- two rounds of block splitting, at most three storeys, eight bays, fourteen roof layers -- so the rounds are written out rather than looped. That is the difference from `examples-facade` and `examples-floorplan`, which recurse under `repeatUntil`: what the three share is the fan-out-keep-rewrite rule, not the form of the derivation. THE CUT IS SNAPPED, AND DECIDED ON THE PARENT: `floor(span * f + 0.5)` clamped so neither half falls under six studs, carried to both children in `targetNames` exactly as the facade does, so the two halves of a block meet at one integer coordinate. THE WORKING BOX IS `lo`/`hi`, NOT `boundsMin`/`boundsMax`. The rule cloud, like every source, already carries the standard bounds columns, and `copyToPoints` will not carry a target column the source also has, since the two would write one column; so the box rides in two attributes of its own and bounds are written once, at the end, in world units. One trap came with it: the two corners are rewritten by TWO nodes, so the second reads the first's output. The walls and openings are ordered so the second never reads a component the first changed; the roof rewrites both corners from every component, so it carries the block's original box (`blo`/`bhi`) and reads only that. A WINDOW GOES ONLY WHERE A WALL IS EXPOSED, and exposure is computed rather than assumed. Blocks share party walls, and a tall block beside a low one has a wall that is covered at the bottom and open above. Each candidate opening places a probe half a stud outside its wall at the BOTTOM of where the opening would be, and `pathCoverage` with `near` = `far` = 0 asks whether it lies inside any block or roof layer, the boxes read as points with their size from their corners. Bottom is enough because roof layers stack on blocks that stand on the ground, with nothing overhanging: if the bottom of the opening is free, everything above it in that column is free too. ACROSS the opening it takes one point PER STUD, because a neighbour ending mid-window or a roof layer stepping in can cover part of the width, and a box on the lattice that overlaps the opening at all contains one of its studs; openings are at most two studs wide, so two rays spread along the wall. The window-or-solid roll is drawn BEFORE the probe moves the point: a random draw hashes the point's identity, its position as well as its seed, so a roll drawn after the probe would change whenever the probe did. Doors go on the ground floor of the first lot-edge wall, south then north, in the middle bay; a z split happens at most once, so every block has one. THE BUILD. `packBricks` reads the pieces' world corners, keeps `kind` and colour apart with `groupBy`, and lays every wall in full bricks with the joints staggered course to course; the catalogue is the default one plus a 32 x 32 BASEPLATE, which the ground is exactly -- one piece under the whole lot, not a margin of loose plates. Neighbouring blocks each build their own wall, so a party wall is two studs thick, and the stud at each gable end of a roof layer has kind `wall` (it is the gable, in the wall's colour). THE MESHES ARE THE GRAPH'S OWN: two outputs carry `role: \"asset\"`, so `brick` (a unit box centred on its point) and `stud` (a twelve-sided stud, its outline the `shape/path-loop` primitive) are the meshes the two spawners' asset ids resolve to, in the editor and in `pcg render`, rather than placeholders. One box serves every brick because a brick point's `scale` is its own-frame size and its `rot` the quarter turn of a brick laid sideways. A hairline gap is taken off every brick's `scale` so the joints read; a brick is centred on its point, so that lowers its drawn top by half the gap, and the stud mesh stands the same half-gap below its point so a stud sits on the brick as drawn. WHAT HOLDS TOGETHER is measured, not assumed. `brickConnectivity` numbers the pieces stud clutch alone holds together and gives every brick a build STEP: courses bottom up, a brick placed when it stands on the baseplate or grips one already placed, a plate hung under a floor placed with the floor. A floor or a roof's first course laid over an empty room is the hard case -- its plates touch nothing below, and the ones that reach no wall are held only by what is laid on them. The packer answers most of it: plates up to 2x16 in the catalogue, so a floor's plates reach a wall, and `bond`, which rewards a placement for every two pieces it joins, so the course above bridges the loose ones. What the packer cannot answer is a roof over an EMPTY ATTIC: only its two outer strips stand on walls, and a roof that narrows as it rises has no course wide enough to tie the middle strips back to them. That is the grammar's to fix -- a house has a ceiling -- so each block carries a one-plate ceiling slab over its top storey and the roof stands on it. A brick no order can attach keeps step -1; the whole build draws it and every partial build leaves it out rather than show it hanging in air. THE `buildStep` PARAM shows the build as it stands after that step: bricks are kept while their step is at most it, and a stud shows once its brick is placed and until the brick resting on it is -- which is why the packer is asked for EVERY stud (`studMode: all`) with the index of the brick on it, and the step of each is read across by index.",
     "tags": [
       "examples",
       "structure",
@@ -2642,15 +2642,15 @@
       "id": "slabKind",
       "type": "setAttribute",
       "params": {
-        "name": "k",
+        "name": "kind",
         "domain": "point",
-        "type": "f32",
+        "type": "string",
         "tupleSize": 1,
-        "value": 4,
+        "value": 0,
         "select": 0,
         "values": [],
         "weights": [],
-        "stringValue": "",
+        "stringValue": "floor",
         "seed": 0
       }
     },
@@ -2752,15 +2752,15 @@
       "id": "ceilKind",
       "type": "setAttribute",
       "params": {
-        "name": "k",
+        "name": "kind",
         "domain": "point",
-        "type": "f32",
+        "type": "string",
         "tupleSize": 1,
-        "value": 4,
+        "value": 0,
         "select": 0,
         "values": [],
         "weights": [],
-        "stringValue": "",
+        "stringValue": "floor",
         "seed": 0
       }
     },
@@ -3528,529 +3528,266 @@
       }
     },
     {
-      "id": "probeA",
+      "id": "winRoll",
       "type": "setAttribute",
       "params": {
-        "name": "P",
-        "domain": "point",
-        "type": "f32",
-        "tupleSize": 3,
-        "value": {
-          "fn": "vec",
-          "args": [
-            {
-              "fn": "select",
-              "args": [
-                {
-                  "fn": "attribute",
-                  "name": "alongX"
-                },
-                {
-                  "fn": "add",
-                  "args": [
-                    {
-                      "fn": "attribute",
-                      "name": "oa"
-                    },
-                    0.25
-                  ]
-                },
-                {
-                  "fn": "add",
-                  "args": [
-                    {
-                      "fn": "mul",
-                      "args": [
-                        {
-                          "fn": "eq",
-                          "args": [
-                            {
-                              "fn": "attribute",
-                              "name": "wall"
-                            },
-                            3
-                          ]
-                        },
-                        {
-                          "fn": "sub",
-                          "args": [
-                            {
-                              "fn": "component",
-                              "args": [
-                                {
-                                  "fn": "attribute",
-                                  "name": "lo",
-                                  "tupleSize": 3
-                                }
-                              ],
-                              "index": 0
-                            },
-                            0.5
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "fn": "mul",
-                      "args": [
-                        {
-                          "fn": "eq",
-                          "args": [
-                            {
-                              "fn": "attribute",
-                              "name": "wall"
-                            },
-                            4
-                          ]
-                        },
-                        {
-                          "fn": "add",
-                          "args": [
-                            {
-                              "fn": "component",
-                              "args": [
-                                {
-                                  "fn": "attribute",
-                                  "name": "hi",
-                                  "tupleSize": 3
-                                }
-                              ],
-                              "index": 0
-                            },
-                            0.5
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "fn": "add",
-              "args": [
-                {
-                  "fn": "add",
-                  "args": [
-                    {
-                      "fn": "component",
-                      "args": [
-                        {
-                          "fn": "attribute",
-                          "name": "lo",
-                          "tupleSize": 3
-                        }
-                      ],
-                      "index": 1
-                    },
-                    {
-                      "fn": "mul",
-                      "args": [
-                        {
-                          "fn": "sub",
-                          "args": [
-                            1,
-                            {
-                              "fn": "attribute",
-                              "name": "door"
-                            }
-                          ]
-                        },
-                        6
-                      ]
-                    }
-                  ]
-                },
-                0.5
-              ]
-            },
-            {
-              "fn": "select",
-              "args": [
-                {
-                  "fn": "attribute",
-                  "name": "alongX"
-                },
-                {
-                  "fn": "add",
-                  "args": [
-                    {
-                      "fn": "mul",
-                      "args": [
-                        {
-                          "fn": "eq",
-                          "args": [
-                            {
-                              "fn": "attribute",
-                              "name": "wall"
-                            },
-                            1
-                          ]
-                        },
-                        {
-                          "fn": "sub",
-                          "args": [
-                            {
-                              "fn": "component",
-                              "args": [
-                                {
-                                  "fn": "attribute",
-                                  "name": "lo",
-                                  "tupleSize": 3
-                                }
-                              ],
-                              "index": 2
-                            },
-                            0.5
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "fn": "mul",
-                      "args": [
-                        {
-                          "fn": "eq",
-                          "args": [
-                            {
-                              "fn": "attribute",
-                              "name": "wall"
-                            },
-                            2
-                          ]
-                        },
-                        {
-                          "fn": "add",
-                          "args": [
-                            {
-                              "fn": "component",
-                              "args": [
-                                {
-                                  "fn": "attribute",
-                                  "name": "hi",
-                                  "tupleSize": 3
-                                }
-                              ],
-                              "index": 2
-                            },
-                            0.5
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "fn": "add",
-                  "args": [
-                    {
-                      "fn": "attribute",
-                      "name": "oa"
-                    },
-                    0.25
-                  ]
-                }
-              ]
-            }
-          ]
-        },
-        "select": 0,
-        "values": [],
-        "weights": [],
-        "stringValue": "",
-        "seed": 0
-      }
-    },
-    {
-      "id": "coveredA",
-      "type": "transferAttribute",
-      "params": {
-        "name": "occ",
-        "mapping": "raycast",
-        "attrDomain": "point",
-        "uvAttr": "uv",
-        "direction": [
-          0,
-          1,
-          0
-        ],
-        "directionAttr": "",
-        "maxDistance": 0,
-        "missCountAttr": "",
-        "hitAttr": "coveredA"
-      }
-    },
-    {
-      "id": "probeB",
-      "type": "setAttribute",
-      "params": {
-        "name": "P",
-        "domain": "point",
-        "type": "f32",
-        "tupleSize": 3,
-        "value": {
-          "fn": "vec",
-          "args": [
-            {
-              "fn": "select",
-              "args": [
-                {
-                  "fn": "attribute",
-                  "name": "alongX"
-                },
-                {
-                  "fn": "sub",
-                  "args": [
-                    {
-                      "fn": "attribute",
-                      "name": "ob"
-                    },
-                    0.25
-                  ]
-                },
-                {
-                  "fn": "add",
-                  "args": [
-                    {
-                      "fn": "mul",
-                      "args": [
-                        {
-                          "fn": "eq",
-                          "args": [
-                            {
-                              "fn": "attribute",
-                              "name": "wall"
-                            },
-                            3
-                          ]
-                        },
-                        {
-                          "fn": "sub",
-                          "args": [
-                            {
-                              "fn": "component",
-                              "args": [
-                                {
-                                  "fn": "attribute",
-                                  "name": "lo",
-                                  "tupleSize": 3
-                                }
-                              ],
-                              "index": 0
-                            },
-                            0.5
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "fn": "mul",
-                      "args": [
-                        {
-                          "fn": "eq",
-                          "args": [
-                            {
-                              "fn": "attribute",
-                              "name": "wall"
-                            },
-                            4
-                          ]
-                        },
-                        {
-                          "fn": "add",
-                          "args": [
-                            {
-                              "fn": "component",
-                              "args": [
-                                {
-                                  "fn": "attribute",
-                                  "name": "hi",
-                                  "tupleSize": 3
-                                }
-                              ],
-                              "index": 0
-                            },
-                            0.5
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "fn": "add",
-              "args": [
-                {
-                  "fn": "add",
-                  "args": [
-                    {
-                      "fn": "component",
-                      "args": [
-                        {
-                          "fn": "attribute",
-                          "name": "lo",
-                          "tupleSize": 3
-                        }
-                      ],
-                      "index": 1
-                    },
-                    {
-                      "fn": "mul",
-                      "args": [
-                        {
-                          "fn": "sub",
-                          "args": [
-                            1,
-                            {
-                              "fn": "attribute",
-                              "name": "door"
-                            }
-                          ]
-                        },
-                        6
-                      ]
-                    }
-                  ]
-                },
-                0.5
-              ]
-            },
-            {
-              "fn": "select",
-              "args": [
-                {
-                  "fn": "attribute",
-                  "name": "alongX"
-                },
-                {
-                  "fn": "add",
-                  "args": [
-                    {
-                      "fn": "mul",
-                      "args": [
-                        {
-                          "fn": "eq",
-                          "args": [
-                            {
-                              "fn": "attribute",
-                              "name": "wall"
-                            },
-                            1
-                          ]
-                        },
-                        {
-                          "fn": "sub",
-                          "args": [
-                            {
-                              "fn": "component",
-                              "args": [
-                                {
-                                  "fn": "attribute",
-                                  "name": "lo",
-                                  "tupleSize": 3
-                                }
-                              ],
-                              "index": 2
-                            },
-                            0.5
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "fn": "mul",
-                      "args": [
-                        {
-                          "fn": "eq",
-                          "args": [
-                            {
-                              "fn": "attribute",
-                              "name": "wall"
-                            },
-                            2
-                          ]
-                        },
-                        {
-                          "fn": "add",
-                          "args": [
-                            {
-                              "fn": "component",
-                              "args": [
-                                {
-                                  "fn": "attribute",
-                                  "name": "hi",
-                                  "tupleSize": 3
-                                }
-                              ],
-                              "index": 2
-                            },
-                            0.5
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "fn": "sub",
-                  "args": [
-                    {
-                      "fn": "attribute",
-                      "name": "ob"
-                    },
-                    0.25
-                  ]
-                }
-              ]
-            }
-          ]
-        },
-        "select": 0,
-        "values": [],
-        "weights": [],
-        "stringValue": "",
-        "seed": 0
-      }
-    },
-    {
-      "id": "coveredB",
-      "type": "transferAttribute",
-      "params": {
-        "name": "occ",
-        "mapping": "raycast",
-        "attrDomain": "point",
-        "uvAttr": "uv",
-        "direction": [
-          0,
-          1,
-          0
-        ],
-        "directionAttr": "",
-        "maxDistance": 0,
-        "missCountAttr": "",
-        "hitAttr": "coveredB"
-      }
-    },
-    {
-      "id": "covered",
-      "type": "setAttribute",
-      "params": {
-        "name": "covered",
+        "name": "winRoll",
         "domain": "point",
         "type": "f32",
         "tupleSize": 1,
         "value": {
-          "fn": "max",
+          "fn": "randomField",
+          "key": "win"
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "probe",
+      "type": "setAttribute",
+      "params": {
+        "name": "P",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
           "args": [
             {
-              "fn": "attribute",
-              "name": "coveredA"
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "alongX"
+                },
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "oa"
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "ob"
+                        }
+                      ]
+                    },
+                    2
+                  ]
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "wall"
+                            },
+                            3
+                          ]
+                        },
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lo",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "wall"
+                            },
+                            4
+                          ]
+                        },
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "hi",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             },
             {
-              "fn": "attribute",
-              "name": "coveredB"
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lo",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 1
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            1,
+                            {
+                              "fn": "attribute",
+                              "name": "door"
+                            }
+                          ]
+                        },
+                        6
+                      ]
+                    }
+                  ]
+                },
+                0.5
+              ]
+            },
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "alongX"
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "wall"
+                            },
+                            1
+                          ]
+                        },
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lo",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 2
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "wall"
+                            },
+                            2
+                          ]
+                        },
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "hi",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 2
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "oa"
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "ob"
+                        }
+                      ]
+                    },
+                    2
+                  ]
+                }
+              ]
             }
           ]
         },
@@ -4059,6 +3796,105 @@
         "weights": [],
         "stringValue": "",
         "seed": 0
+      }
+    },
+    {
+      "id": "probeAlong",
+      "type": "setAttribute",
+      "params": {
+        "name": "along",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "alongX"
+            },
+            0,
+            {
+              "fn": "sub",
+              "args": [
+                1,
+                {
+                  "fn": "attribute",
+                  "name": "alongX"
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "covered",
+      "type": "pathCoverage",
+      "params": {
+        "direction": [
+          0,
+          1,
+          0
+        ],
+        "near": 0,
+        "far": 0,
+        "rayCount": 2,
+        "spread": {
+          "fn": "max",
+          "args": [
+            0,
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "ob"
+                        },
+                        {
+                          "fn": "attribute",
+                          "name": "oa"
+                        }
+                      ]
+                    },
+                    2
+                  ]
+                },
+                0.25
+              ]
+            }
+          ]
+        },
+        "minHits": 1,
+        "acrossAttr": "along",
+        "boxSize": {
+          "fn": "sub",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "hi",
+              "tupleSize": 3
+            },
+            {
+              "fn": "attribute",
+              "name": "lo",
+              "tupleSize": 3
+            }
+          ]
+        },
+        "coveredAttr": "covered",
+        "hitsAttr": ""
       }
     },
     {
@@ -4118,8 +3954,8 @@
                   "fn": "lt",
                   "args": [
                     {
-                      "fn": "randomField",
-                      "key": "win"
+                      "fn": "attribute",
+                      "name": "winRoll"
                     },
                     0.8
                   ]
@@ -4139,15 +3975,15 @@
       "id": "solidKind",
       "type": "setAttribute",
       "params": {
-        "name": "k",
+        "name": "kind",
         "domain": "point",
-        "type": "f32",
+        "type": "string",
         "tupleSize": 1,
         "value": 0,
         "select": 0,
         "values": [],
         "weights": [],
-        "stringValue": "",
+        "stringValue": "wall",
         "seed": 0
       }
     },
@@ -5208,9 +5044,9 @@
       "id": "opKind",
       "type": "setAttribute",
       "params": {
-        "name": "k",
+        "name": "kind",
         "domain": "point",
-        "type": "f32",
+        "type": "string",
         "tupleSize": 1,
         "value": {
           "fn": "select",
@@ -5233,7 +5069,11 @@
           ]
         },
         "select": 0,
-        "values": [],
+        "values": [
+          "wall",
+          "glass",
+          "door"
+        ],
         "weights": [],
         "stringValue": "",
         "seed": 0
@@ -6265,57 +6105,28 @@
       "id": "rfKind",
       "type": "setAttribute",
       "params": {
-        "name": "k",
+        "name": "kind",
         "domain": "point",
-        "type": "f32",
+        "type": "string",
         "tupleSize": 1,
         "value": {
-          "fn": "select",
+          "fn": "eq",
           "args": [
             {
-              "fn": "eq",
-              "args": [
-                {
-                  "fn": "attribute",
-                  "name": "part"
-                },
-                1
-              ]
+              "fn": "attribute",
+              "name": "part"
             },
-            3,
-            0
+            1
           ]
         },
         "select": 0,
-        "values": [],
+        "values": [
+          "wall",
+          "roof"
+        ],
         "weights": [],
         "stringValue": "",
         "seed": 0
-      }
-    },
-    {
-      "id": "unitBox",
-      "type": "meshPrimitive",
-      "params": {
-        "shape": "box",
-        "size": [
-          1,
-          1,
-          1
-        ],
-        "center": [
-          0,
-          0,
-          0
-        ],
-        "orientation": "xz",
-        "subdivisions": [
-          1,
-          1,
-          1
-        ],
-        "flip": false,
-        "normals": false
       }
     },
     {
@@ -6324,7 +6135,7 @@
       "params": {}
     },
     {
-      "id": "occP",
+      "id": "occluder",
       "type": "setAttribute",
       "params": {
         "name": "P",
@@ -6352,65 +6163,6 @@
             }
           ]
         },
-        "select": 0,
-        "values": [],
-        "weights": [],
-        "stringValue": "",
-        "seed": 0
-      }
-    },
-    {
-      "id": "occS",
-      "type": "setAttribute",
-      "params": {
-        "name": "scale",
-        "domain": "point",
-        "type": "f32",
-        "tupleSize": 3,
-        "value": {
-          "fn": "sub",
-          "args": [
-            {
-              "fn": "attribute",
-              "name": "hi",
-              "tupleSize": 3
-            },
-            {
-              "fn": "attribute",
-              "name": "lo",
-              "tupleSize": 3
-            }
-          ]
-        },
-        "select": 0,
-        "values": [],
-        "weights": [],
-        "stringValue": "",
-        "seed": 0
-      }
-    },
-    {
-      "id": "occBoxes",
-      "type": "copyToPoints",
-      "params": {
-        "targetNames": [],
-        "targetIndexAttr": "",
-        "rotateAttrs": [],
-        "sourceGroupAttr": "",
-        "targetGroupAttr": "",
-        "mirrorAware": true,
-        "topology": "keep"
-      }
-    },
-    {
-      "id": "occluder",
-      "type": "setAttribute",
-      "params": {
-        "name": "occ",
-        "domain": "point",
-        "type": "f32",
-        "tupleSize": 1,
-        "value": 1,
         "select": 0,
         "values": [],
         "weights": [],
@@ -6553,50 +6305,18 @@
       }
     },
     {
-      "id": "gWall",
-      "type": "setAttribute",
-      "params": {
-        "name": "wallTint",
-        "domain": "point",
-        "type": "f32",
-        "tupleSize": 1,
-        "value": 0,
-        "select": 0,
-        "values": [],
-        "weights": [],
-        "stringValue": "",
-        "seed": 0
-      }
-    },
-    {
-      "id": "gRoof",
-      "type": "setAttribute",
-      "params": {
-        "name": "roofTint",
-        "domain": "point",
-        "type": "f32",
-        "tupleSize": 1,
-        "value": 0,
-        "select": 0,
-        "values": [],
-        "weights": [],
-        "stringValue": "",
-        "seed": 0
-      }
-    },
-    {
       "id": "gKind",
       "type": "setAttribute",
       "params": {
-        "name": "k",
+        "name": "kind",
         "domain": "point",
-        "type": "f32",
+        "type": "string",
         "tupleSize": 1,
-        "value": 5,
+        "value": 0,
         "select": 0,
         "values": [],
         "weights": [],
-        "stringValue": "",
+        "stringValue": "ground",
         "seed": 0
       }
     },
@@ -6604,32 +6324,6 @@
       "id": "pieces",
       "type": "mergePoints",
       "params": {}
-    },
-    {
-      "id": "kind",
-      "type": "setAttribute",
-      "params": {
-        "name": "kind",
-        "domain": "point",
-        "type": "string",
-        "tupleSize": 1,
-        "value": {
-          "fn": "attribute",
-          "name": "k"
-        },
-        "select": 0,
-        "values": [
-          "wall",
-          "glass",
-          "door",
-          "roof",
-          "floor",
-          "ground"
-        ],
-        "weights": [],
-        "stringValue": "",
-        "seed": 0
-      }
     },
     {
       "id": "tint",
@@ -6640,464 +6334,134 @@
         "type": "f32",
         "tupleSize": 3,
         "value": {
-          "fn": "vec",
-          "args": [
-            {
-              "fn": "lookup",
+          "fn": "byAttribute",
+          "name": "kind",
+          "cases": {
+            "wall": {
+              "fn": "vec",
               "args": [
                 {
-                  "fn": "add",
+                  "fn": "lookup",
                   "args": [
                     {
-                      "fn": "add",
-                      "args": [
-                        {
-                          "fn": "add",
-                          "args": [
-                            {
-                              "fn": "add",
-                              "args": [
-                                {
-                                  "fn": "add",
-                                  "args": [
-                                    {
-                                      "fn": "mul",
-                                      "args": [
-                                        {
-                                          "fn": "eq",
-                                          "args": [
-                                            {
-                                              "fn": "attribute",
-                                              "name": "k"
-                                            },
-                                            0
-                                          ]
-                                        },
-                                        {
-                                          "fn": "attribute",
-                                          "name": "wallTint"
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "fn": "mul",
-                                      "args": [
-                                        {
-                                          "fn": "eq",
-                                          "args": [
-                                            {
-                                              "fn": "attribute",
-                                              "name": "k"
-                                            },
-                                            3
-                                          ]
-                                        },
-                                        {
-                                          "fn": "add",
-                                          "args": [
-                                            5,
-                                            {
-                                              "fn": "attribute",
-                                              "name": "roofTint"
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                },
-                                {
-                                  "fn": "mul",
-                                  "args": [
-                                    {
-                                      "fn": "eq",
-                                      "args": [
-                                        {
-                                          "fn": "attribute",
-                                          "name": "k"
-                                        },
-                                        1
-                                      ]
-                                    },
-                                    8
-                                  ]
-                                }
-                              ]
-                            },
-                            {
-                              "fn": "mul",
-                              "args": [
-                                {
-                                  "fn": "eq",
-                                  "args": [
-                                    {
-                                      "fn": "attribute",
-                                      "name": "k"
-                                    },
-                                    2
-                                  ]
-                                },
-                                9
-                              ]
-                            }
-                          ]
-                        },
-                        {
-                          "fn": "mul",
-                          "args": [
-                            {
-                              "fn": "eq",
-                              "args": [
-                                {
-                                  "fn": "attribute",
-                                  "name": "k"
-                                },
-                                4
-                              ]
-                            },
-                            10
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "fn": "mul",
-                      "args": [
-                        {
-                          "fn": "eq",
-                          "args": [
-                            {
-                              "fn": "attribute",
-                              "name": "k"
-                            },
-                            5
-                          ]
-                        },
-                        11
-                      ]
+                      "fn": "attribute",
+                      "name": "wallTint"
                     }
+                  ],
+                  "table": [
+                    0.93,
+                    0.85,
+                    0.7,
+                    0.95,
+                    0.6
+                  ]
+                },
+                {
+                  "fn": "lookup",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "wallTint"
+                    }
+                  ],
+                  "table": [
+                    0.92,
+                    0.75,
+                    0.16,
+                    0.76,
+                    0.63
+                  ]
+                },
+                {
+                  "fn": "lookup",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "wallTint"
+                    }
+                  ],
+                  "table": [
+                    0.88,
+                    0.55,
+                    0.12,
+                    0.16,
+                    0.64
                   ]
                 }
-              ],
-              "table": [
-                0.93,
-                0.85,
-                0.7,
-                0.95,
-                0.6,
-                0.42,
-                0.3,
-                0.2,
-                0.55,
-                0.42,
-                0.62,
-                0.3
               ]
             },
-            {
-              "fn": "lookup",
+            "roof": {
+              "fn": "vec",
               "args": [
                 {
-                  "fn": "add",
+                  "fn": "lookup",
                   "args": [
                     {
-                      "fn": "add",
-                      "args": [
-                        {
-                          "fn": "add",
-                          "args": [
-                            {
-                              "fn": "add",
-                              "args": [
-                                {
-                                  "fn": "add",
-                                  "args": [
-                                    {
-                                      "fn": "mul",
-                                      "args": [
-                                        {
-                                          "fn": "eq",
-                                          "args": [
-                                            {
-                                              "fn": "attribute",
-                                              "name": "k"
-                                            },
-                                            0
-                                          ]
-                                        },
-                                        {
-                                          "fn": "attribute",
-                                          "name": "wallTint"
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "fn": "mul",
-                                      "args": [
-                                        {
-                                          "fn": "eq",
-                                          "args": [
-                                            {
-                                              "fn": "attribute",
-                                              "name": "k"
-                                            },
-                                            3
-                                          ]
-                                        },
-                                        {
-                                          "fn": "add",
-                                          "args": [
-                                            5,
-                                            {
-                                              "fn": "attribute",
-                                              "name": "roofTint"
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                },
-                                {
-                                  "fn": "mul",
-                                  "args": [
-                                    {
-                                      "fn": "eq",
-                                      "args": [
-                                        {
-                                          "fn": "attribute",
-                                          "name": "k"
-                                        },
-                                        1
-                                      ]
-                                    },
-                                    8
-                                  ]
-                                }
-                              ]
-                            },
-                            {
-                              "fn": "mul",
-                              "args": [
-                                {
-                                  "fn": "eq",
-                                  "args": [
-                                    {
-                                      "fn": "attribute",
-                                      "name": "k"
-                                    },
-                                    2
-                                  ]
-                                },
-                                9
-                              ]
-                            }
-                          ]
-                        },
-                        {
-                          "fn": "mul",
-                          "args": [
-                            {
-                              "fn": "eq",
-                              "args": [
-                                {
-                                  "fn": "attribute",
-                                  "name": "k"
-                                },
-                                4
-                              ]
-                            },
-                            10
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "fn": "mul",
-                      "args": [
-                        {
-                          "fn": "eq",
-                          "args": [
-                            {
-                              "fn": "attribute",
-                              "name": "k"
-                            },
-                            5
-                          ]
-                        },
-                        11
-                      ]
+                      "fn": "attribute",
+                      "name": "roofTint"
                     }
+                  ],
+                  "table": [
+                    0.42,
+                    0.3,
+                    0.2
+                  ]
+                },
+                {
+                  "fn": "lookup",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "roofTint"
+                    }
+                  ],
+                  "table": [
+                    0.1,
+                    0.33,
+                    0.32
+                  ]
+                },
+                {
+                  "fn": "lookup",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "roofTint"
+                    }
+                  ],
+                  "table": [
+                    0.08,
+                    0.36,
+                    0.18
                   ]
                 }
-              ],
-              "table": [
-                0.92,
-                0.75,
-                0.16,
-                0.76,
-                0.63,
-                0.1,
-                0.33,
-                0.32,
-                0.8,
-                0.25,
-                0.62,
-                0.6
               ]
             },
-            {
-              "fn": "lookup",
-              "args": [
-                {
-                  "fn": "add",
-                  "args": [
-                    {
-                      "fn": "add",
-                      "args": [
-                        {
-                          "fn": "add",
-                          "args": [
-                            {
-                              "fn": "add",
-                              "args": [
-                                {
-                                  "fn": "add",
-                                  "args": [
-                                    {
-                                      "fn": "mul",
-                                      "args": [
-                                        {
-                                          "fn": "eq",
-                                          "args": [
-                                            {
-                                              "fn": "attribute",
-                                              "name": "k"
-                                            },
-                                            0
-                                          ]
-                                        },
-                                        {
-                                          "fn": "attribute",
-                                          "name": "wallTint"
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "fn": "mul",
-                                      "args": [
-                                        {
-                                          "fn": "eq",
-                                          "args": [
-                                            {
-                                              "fn": "attribute",
-                                              "name": "k"
-                                            },
-                                            3
-                                          ]
-                                        },
-                                        {
-                                          "fn": "add",
-                                          "args": [
-                                            5,
-                                            {
-                                              "fn": "attribute",
-                                              "name": "roofTint"
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                },
-                                {
-                                  "fn": "mul",
-                                  "args": [
-                                    {
-                                      "fn": "eq",
-                                      "args": [
-                                        {
-                                          "fn": "attribute",
-                                          "name": "k"
-                                        },
-                                        1
-                                      ]
-                                    },
-                                    8
-                                  ]
-                                }
-                              ]
-                            },
-                            {
-                              "fn": "mul",
-                              "args": [
-                                {
-                                  "fn": "eq",
-                                  "args": [
-                                    {
-                                      "fn": "attribute",
-                                      "name": "k"
-                                    },
-                                    2
-                                  ]
-                                },
-                                9
-                              ]
-                            }
-                          ]
-                        },
-                        {
-                          "fn": "mul",
-                          "args": [
-                            {
-                              "fn": "eq",
-                              "args": [
-                                {
-                                  "fn": "attribute",
-                                  "name": "k"
-                                },
-                                4
-                              ]
-                            },
-                            10
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "fn": "mul",
-                      "args": [
-                        {
-                          "fn": "eq",
-                          "args": [
-                            {
-                              "fn": "attribute",
-                              "name": "k"
-                            },
-                            5
-                          ]
-                        },
-                        11
-                      ]
-                    }
-                  ]
-                }
-              ],
-              "table": [
-                0.88,
-                0.55,
-                0.12,
-                0.16,
-                0.64,
-                0.08,
-                0.36,
-                0.18,
-                0.95,
-                0.12,
-                0.6,
-                0.25
-              ]
-            }
+            "glass": [
+              0.55,
+              0.8,
+              0.95
+            ],
+            "door": [
+              0.42,
+              0.25,
+              0.12
+            ],
+            "floor": [
+              0.62,
+              0.62,
+              0.6
+            ],
+            "ground": [
+              0.3,
+              0.6,
+              0.25
+            ]
+          },
+          "default": [
+            1,
+            0,
+            1
           ]
         },
         "select": 0,
@@ -7515,22 +6879,6 @@
       }
     },
     {
-      "id": "noneAbove",
-      "type": "setAttribute",
-      "params": {
-        "name": "stepAbove",
-        "domain": "point",
-        "type": "f32",
-        "tupleSize": 1,
-        "value": 1000000,
-        "select": 0,
-        "values": [],
-        "weights": [],
-        "stringValue": "",
-        "seed": 0
-      }
-    },
-    {
       "id": "stepOn",
       "type": "transferByIndex",
       "params": {
@@ -7658,60 +7006,28 @@
       }
     },
     {
-      "id": "studRing",
-      "type": "pointList",
-      "params": {
-        "positions": [
-          0.3,
-          0,
-          0,
-          0.25981,
-          0,
-          0.15,
-          0.15,
-          0,
-          0.25981,
-          0,
-          0,
-          0.3,
-          -0.15,
-          0,
-          0.25981,
-          -0.25981,
-          0,
-          0.15,
-          -0.3,
-          0,
-          0,
-          -0.25981,
-          0,
-          -0.15,
-          -0.15,
-          0,
-          -0.25981,
-          0,
-          0,
-          -0.3,
-          0.15,
-          0,
-          -0.25981,
-          0.25981,
-          0,
-          -0.15
-        ],
-        "columnNames": [],
-        "columnTypes": [],
-        "columnValues": []
-      }
-    },
-    {
       "id": "studOutline",
-      "type": "pointsToPath",
+      "type": "subgraph",
       "params": {
-        "closed": true,
-        "groupAttr": "",
-        "orderAttr": "",
-        "shortGroups": "error"
+        "count": 12,
+        "size": [
+          0.3,
+          0.3,
+          0.3
+        ],
+        "rotate": [
+          0,
+          0,
+          0
+        ],
+        "center": [
+          0,
+          -0.02,
+          0
+        ]
+      },
+      "ref": {
+        "name": "shape/path-loop"
       }
     },
     {
@@ -8293,62 +7609,32 @@
     },
     {
       "from": [
-        "probeA",
+        "probe",
         "out"
       ],
       "to": [
-        "coveredA",
+        "probeAlong",
         "in"
       ]
     },
     {
       "from": [
-        "occluder",
-        "out"
-      ],
-      "to": [
-        "coveredA",
-        "source"
-      ]
-    },
-    {
-      "from": [
-        "probeB",
-        "out"
-      ],
-      "to": [
-        "coveredB",
-        "in"
-      ]
-    },
-    {
-      "from": [
-        "occluder",
-        "out"
-      ],
-      "to": [
-        "coveredB",
-        "source"
-      ]
-    },
-    {
-      "from": [
-        "coveredA",
-        "out"
-      ],
-      "to": [
-        "probeB",
-        "in"
-      ]
-    },
-    {
-      "from": [
-        "coveredB",
+        "probeAlong",
         "out"
       ],
       "to": [
         "covered",
-        "in"
+        "path"
+      ]
+    },
+    {
+      "from": [
+        "occluder",
+        "out"
+      ],
+      "to": [
+        "covered",
+        "boxes"
       ]
     },
     {
@@ -8437,7 +7723,17 @@
         "out"
       ],
       "to": [
-        "probeA",
+        "winRoll",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "winRoll",
+        "out"
+      ],
+      "to": [
+        "probe",
         "in"
       ]
     },
@@ -8707,46 +8003,6 @@
         "out"
       ],
       "to": [
-        "occP",
-        "in"
-      ]
-    },
-    {
-      "from": [
-        "occP",
-        "out"
-      ],
-      "to": [
-        "occS",
-        "in"
-      ]
-    },
-    {
-      "from": [
-        "unitBox",
-        "out"
-      ],
-      "to": [
-        "occBoxes",
-        "source"
-      ]
-    },
-    {
-      "from": [
-        "occS",
-        "out"
-      ],
-      "to": [
-        "occBoxes",
-        "target"
-      ]
-    },
-    {
-      "from": [
-        "occBoxes",
-        "out"
-      ],
-      "to": [
         "occluder",
         "in"
       ]
@@ -8774,26 +8030,6 @@
     {
       "from": [
         "gHi",
-        "out"
-      ],
-      "to": [
-        "gWall",
-        "in"
-      ]
-    },
-    {
-      "from": [
-        "gWall",
-        "out"
-      ],
-      "to": [
-        "gRoof",
-        "in"
-      ]
-    },
-    {
-      "from": [
-        "gRoof",
         "out"
       ],
       "to": [
@@ -8864,16 +8100,6 @@
     {
       "from": [
         "pieces",
-        "out"
-      ],
-      "to": [
-        "kind",
-        "in"
-      ]
-    },
-    {
-      "from": [
-        "kind",
         "out"
       ],
       "to": [
@@ -8957,16 +8183,6 @@
         "studs"
       ],
       "to": [
-        "noneAbove",
-        "in"
-      ]
-    },
-    {
-      "from": [
-        "noneAbove",
-        "out"
-      ],
-      "to": [
         "stepOn",
         "in"
       ]
@@ -9018,16 +8234,6 @@
       ],
       "to": [
         "studs",
-        "in"
-      ]
-    },
-    {
-      "from": [
-        "studRing",
-        "out"
-      ],
-      "to": [
-        "studOutline",
         "in"
       ]
     },
