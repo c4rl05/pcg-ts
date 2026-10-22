@@ -449,23 +449,26 @@ also accepted and wraps into `constant`. Specs nest arbitrarily (up to
 
 ### Which params accept one
 
-73 of the standard library's 347 params do, across 38 node types, and one
-rule separates them from the other 274: **a param can be a field exactly
+76 of the standard library's 362 params do, across 39 node types, and one
+rule separates them from the other 286: **a param can be a field exactly
 when its value is read PER ELEMENT.** Everything settled before the
 elements are walked cannot be one, and there are five ways to be settled
 early.
 
-Those 73 are what the rule gives when it is swept over every numeric
+Those 76 are what the rule gives when it is swept over every numeric
 param in the library rather than applied case by case. It started at 20,
 and the first sweep refused only FOUR — `splineSample.spacing` and `volumeSample`'s
 `cellSize` and bounds — every one of them on the allocation clause.
 
-**The column is f32.** All 73 are `f32` (52) or `vec3` (21). No `i32`,
-`u32`, `enum`, `bool`, `string` or list param is ever field-capable,
-because a field resolves per element into a column and only f32 and its
-tuples read one. Part of that is executable rather than editorial: a
-schema declaring `acceptsField` on `items`, `numberList` or
-`stringList` is refused at node registration, naming the type. It is
+**The column is f32.** All 76 are `f32` (54) or `vec3` (21) but one:
+`splitBox.sizes` is a `numberList` whose field resolves to ONE f32 TUPLE
+per element, a component per list entry (`vec(a, b, c)`), and the node
+checks the width. No `i32`, `u32`, `enum`, `bool`, `string`,
+`stringList` or `items` param is ever field-capable, because a field
+resolves per element into a column and only f32 and its tuples read one.
+Part of that is executable rather than editorial: a schema declaring
+`acceptsField` on `items` or `stringList` is refused at node
+registration, naming the type. It is
 also the reason a noise's `opts.seed` admits no arbitrary expression
 (below) — a seed read through an f32 column arrives rounded to 24 bits,
 and one ULP in a seed is not a rounding error but `hashCombine`

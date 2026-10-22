@@ -130,7 +130,12 @@
    * 1-long array. Expand the broadcast instead: what is shown and what is
    * committed then both have the arity the schema declares.
    */
-  const arity = $derived(view.schema.type === "vec4" ? 4 : 3);
+  // A field-capable numberList (`splitBox.sizes`) is edited as its own
+  // entries: its arity is the list's current length, not a vec's.
+  const isList = $derived(view.schema.type === "numberList");
+  const arity = $derived(
+    view.schema.type === "vec4" ? 4 : isList ? asNumbers(view.value ?? view.schema.default).length : 3,
+  );
   const components = $derived.by((): number[] => {
     const n = asNumbers(view.value ?? view.schema.default);
     if (n.length === arity) return n;
@@ -164,7 +169,7 @@
     <button class:active={mode === "field"} onclick={toField}>Field</button>
   </div>
   {#if mode === "constant"}
-    {#if view.schema.type === "vec3" || view.schema.type === "vec4"}
+    {#if view.schema.type === "vec3" || view.schema.type === "vec4" || isList}
       <div class="vec">
         {#each components as comp, i}
           <NumberBox

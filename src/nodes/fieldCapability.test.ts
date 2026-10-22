@@ -24,8 +24,13 @@ import { listNodeTypes } from "./index.js";
  * and that is the point of the failure.
  */
 
-/** A field resolves to one f32 column, so these are the types that can read one. */
-const FIELD_COLUMN_TYPES = ["f32", "vec3", "vec4"];
+/**
+ * A field resolves to one f32 column, so these are the types that can read
+ * one. `numberList` is among them as a TUPLE — one f32 component per list
+ * entry, the node checking the width (`splitBox.sizes`) — which is still an
+ * f32 column; the integer, enum, string and item types never are.
+ */
+const FIELD_COLUMN_TYPES = ["f32", "vec3", "vec4", "numberList"];
 
 /** Skip the `__test_*` fixtures other suites register. */
 const standardTypes = () => listNodeTypes().filter((t) => !t.type.startsWith("__test_"));
@@ -38,7 +43,7 @@ const fieldCapableParams = () =>
   );
 
 describe("the rule for which params accept a field", () => {
-  it("clause 1: a field column is f32, so only f32/vec3/vec4 params take one", () => {
+  it("clause 1: a field column is f32, so only f32/vec3/vec4 (and a numberList, as a tuple) params take one", () => {
     const capable = fieldCapableParams();
     // Guard the sweep itself: an empty result would pass every assertion
     // below while proving nothing at all.

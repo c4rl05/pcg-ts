@@ -4781,6 +4781,87 @@
         ]
       }
     },
+    "basics-split-box.json": {
+      "outputs": {
+        "panels": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 3312,
+              "vertex": 4968,
+              "primitive": 1656,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "uv:f32x2",
+                "rot:f32x4",
+                "scale:f32x3",
+                "seed:u32"
+              ],
+              "primitive": [
+                "primtype:string"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -11.96,
+                0.04,
+                -0.25
+              ],
+              "max": [
+                11.96,
+                13.46,
+                0.25
+              ]
+            }
+          }
+        ],
+        "pieces": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 138,
+              "vertex": 0,
+              "primitive": 0,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "rot:f32x4",
+                "scale:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "seed:u32",
+                "piece:string",
+                "level:i32",
+                "bay:i32",
+                "door:f32",
+                "pieceIndex:i32"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -11.6875,
+                0.5,
+                0
+              ],
+              "max": [
+                11.6875,
+                13.25,
+                0
+              ]
+            }
+          }
+        ]
+      }
+    },
     "basics-stations-on-a-path.json": {
       "outputs": {
         "markers": [

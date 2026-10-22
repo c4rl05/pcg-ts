@@ -318,9 +318,11 @@ export function paramSchemaError(schema: ParamSchema): string | undefined {
       if (!Array.isArray(d) || !d.every((v) => typeof v === "number" && Number.isFinite(v))) {
         return "default must be an array of finite numbers ([] for an empty list)";
       }
-      if (schema.acceptsField === true) {
-        return "cannot accept fields — number lists are authoring data, not per-element values";
-      }
+      // A numberList MAY declare acceptsField — the one list type that may.
+      // Its field form resolves per element to a TUPLE, one component per
+      // list entry, which is how a per-cell list of sizes is spelled
+      // (`splitBox.sizes`: `vec(a, b, c)`). The width is the NODE's to
+      // check, because only the node knows how long its list must be.
       break;
     case "stringList":
       if (!Array.isArray(d) || !d.every((v) => typeof v === "string")) {
@@ -424,7 +426,8 @@ function looksLikeFieldSpec(value: unknown): boolean {
  * the first version of this message collapsed into one — and got wrong:
  *
  *   - Types that can NEVER carry a field. A field resolves per element,
- *     and only `f32`, `vec3` and `vec4` read one, so an `i32`, an `enum`,
+ *     and only `f32`, `vec3`, `vec4` and `numberList` (as a tuple, one
+ *     component per entry) read one, so an `i32`, an `enum`,
  *     a `bool` or a `string` is not "not yet" field-capable but
  *     structurally never. The route out is a graph param with `targets`,
  *     which WRITES the value instead of substituting it.
@@ -434,7 +437,7 @@ function looksLikeFieldSpec(value: unknown): boolean {
  *     the rig panel's very first knob — and self-contradicting, since the
  *     same sentence listed vec3 among the types that do read a field.
  */
-const NEVER_FIELD_CAPABLE = ["i32", "u32", "bool", "string", "enum", "items", "stringList", "numberList"] as const;
+const NEVER_FIELD_CAPABLE = ["i32", "u32", "bool", "string", "enum", "items", "stringList"] as const;
 
 /**
  * "a" or "an" for a type name, spoken rather than spelled: "an f32" and
@@ -451,7 +454,7 @@ function fieldSpecAdvice(schema: ParamSchema): string {
   const Article = article === "an" ? "An" : "A";
   const named = `${article} ${schema.type}`;
   if ((NEVER_FIELD_CAPABLE as readonly string[]).includes(schema.type)) {
-    return `. ${Article} ${schema.type} param is never field-capable — a field resolves per element, and only f32, vec3 and vec4 params read one — so no expression can live here. To drive it from one place, declare a graph param with "targets" naming this node and param: its value is WRITTEN into the slot rather than substituted into an expression, which is how a declaration reaches ${named}`;
+    return `. ${Article} ${schema.type} param is never field-capable — a field resolves per element, and only f32, vec3, vec4 and numberList params read one — so no expression can live here. To drive it from one place, declare a graph param with "targets" naming this node and param: its value is WRITTEN into the slot rather than substituted into an expression, which is how a declaration reaches ${named}`;
   }
   return `. ${schema.type} params CAN be field-capable, but this one does not declare it — the capability is per param, not per type, so a sibling of the same type may well accept the expression you are writing. Either move it to a param whose schema says acceptsField, or declare a graph param with "targets" naming this node and param, whose value is WRITTEN into the slot rather than substituted into an expression`;
 }

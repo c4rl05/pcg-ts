@@ -464,7 +464,7 @@ param, and the second has no other caller.
 **Recommendation: do not schedule.** Revisit if a STREAMED growth loop
 appears, and cost it as two nodes' worth of change rather than as a param.
 
-### Stretch: a `splitBounds` node — NOT NEEDED, the graph does it, 2026-09-08
+### Stretch: a `splitBounds` node — NOT NEEDED, the graph does it, 2026-09-08 (REVERSED for a cut-only `splitBox`, 2026-10-22 — see the last paragraphs)
 
 Proposed alongside the parent-pointer entry above: a core node that
 recursively splits a box along an axis, emitting cells tagged with depth,
@@ -529,6 +529,76 @@ THE STOP RULE'S OWN RANGE. Leaves stop splitting once their area falls under
 the same kind, with nothing wrong anywhere for a test to catch. With a cut
 between 0.34 and 0.66 the leaves land roughly in [0.34, 1] of `minArea`, and
 that is the interval a band list has to be chosen inside.
+
+**REVERSED, 2026-10-22, for a node that only CUTS — `splitBox`.** The
+objection above was to a node that owns the RECURSION, because a node that
+recurses has to own the stop rule, and a stop rule is an expression while a
+node param is a value. That objection still stands, and `splitBox` is shaped
+by it rather than against it: it cuts one level, along one axis, per cook,
+and stops nothing. Recursion is a `repeatUntil` around it, staging is several
+of it chained, and the stop rule stays exactly where both consumers above
+put it. What the node takes over is the part they shared VERBATIM — the
+fan-out, the parent-decided cut, the bounds write — which is the part a
+param CAN carry, because it is sizes, not a rule.
+
+The third consumer is `examples-brick-house`, and it agrees with neither of
+the first two about the stop rule (it has none: every stage is a fixed
+cut), which is why it buys the cut and not the recipe. It spells one split
+eleven times over as `repeatPoints(count)` then `setBounds` with a
+`choose(slot, …)` per corner — block rounds, storeys, setback tiers, bays, a
+seven-piece window opening, roof layers — and a reader recovers "plinth,
+three storeys, a ceiling plate" from those corners only by evaluating them
+in their head. So the case is ERGONOMICS AND LEGIBILITY, for agents and
+humans both, not new capability: everything `splitBox` does was already
+expressible, and the agent eval is what will say whether the sizes-not-
+corners spelling is the one an agent gets right first. If it does not move
+that number, this entry should say so next.
+
+Two things from the original exercise are built into the node rather than
+left to the author. The facade's defect — two halves drawing two cut
+fractions — cannot be written: `sizes` is resolved once per PARENT cell,
+before the cut, so a `randomField` drawn there is one number for every
+piece. And the area check that caught it is the node's default: `fit`
+"error" refuses absolute sizes that overrun the box, and refuses a split
+with nothing to take the rest, so a cut that silently loses area is a
+diagnostic naming the segment and the numbers rather than a picture that
+looks fine.
+
+It cost one change below the node. A per-cell list of sizes is a TUPLE
+field (`vec(a, b, c)` already concatenates any number of components), and
+the param vocabulary refused `acceptsField` on a `numberList`. That refusal
+is lifted for that one list type: a field-capable `numberList` resolves to
+one f32 tuple per element and the node checks the width. The column is
+still f32, so the rule the refusal protected — no integer, enum or string
+ever carries a field — is untouched.
+
+Measured on a scratch copy of the house (the committed graph is not
+re-emitted by this unit), four stages re-expressed and cooked against the
+original at 8 graph seeds × 7 param settings, comparing the packed bricks'
+position, rotation, scale, kind and build step: IDENTICAL IN ALL 56 for
+every stage. The three block rounds become one node each (−12 nodes), the
+storeys one (−2), the bays one (−4); the seven-piece opening becomes three
+chained cuts — y, then x `where` the band, then y `where` the middle —
+plus a setBounds for the sill's stand-out, which is +2 nodes and bought
+for legibility, not size. All four: 102 → 86 nodes, 11.0% fewer minified
+bytes. Two things to keep when the generator is moved over. A block round
+keeps the id `b{r}Cut`, because its cut draw moves into `splitBox.sizes`
+and `randomField` folds in the COOKING node's seed, which is derived from
+the id. And the nested opening changes 7.4% of the per-brick TINTS while
+leaving every brick where it was: a piece's seed is now
+hashCombine(hashCombine(s, 1), j) rather than hashCombine(s, k), and the
+tint is a draw on the brick that carries its box's seed. That is seed
+identity, not rounding — no two-level split can reproduce flat slot seeds
+— and it is a one-time reshuffle of colours, which is what accepting it
+costs.
+
+Open, and deliberately not in this unit: a group repeat (`{a | b}*`), a
+`"longestXZ"` axis (the block rounds write `2 * lt(sx, sz)` for it), the
+shell split (floor / walls / ceiling), and a label-keyed rule table. The
+nested opening also showed that a split's sizes resolve on the CHILD of the
+previous split, whose box no longer holds the parent's corners: the third
+cut had to re-derive the sill and head heights from the bay's params rather
+than read them off a box that had already been cut.
 
 ### Stretch: quaternion field functions — REFUTED BY THE CORPUS, 2026-09-08
 

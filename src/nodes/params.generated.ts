@@ -5536,6 +5536,193 @@ export type SplineSampleInputs = "in";
 export type SplineSampleOutputs = "out";
 
 /**
+ * Params of the `splitBox` node type.
+ */
+export interface SplitBoxParams {
+  /**
+   * The axis every cell is cut along: "x", "y" or "z" — a component of the cell's
+   * boundsMin/boundsMax, not a direction in the cell's rotated frame. "perCell" reads the
+   * axis PER CELL from `axisIndex` instead, for a split whose direction is the cell's own —
+   * a wall cut along its run, which is x for a south wall and z for an east one. Decided
+   * once per cook; with "perCell" only numbers are read per cell.
+   *
+   * - Enum: `"x"` | `"y"` | `"z"` | `"perCell"`
+   *
+   * @defaultValue `"x"`
+   */
+  axis: "x" | "y" | "z" | "perCell";
+  /**
+   * Read ONLY when `axis` is "perCell" (ignored otherwise): the axis each cell is cut along,
+   * 0 = x, 1 = y, 2 = z. As a field it is resolved on the input's point domain, ONE AXIS PER
+   * CELL, e.g. select(attribute("alongX"), 0, 2) or 2 * lt(<span x>, <span z>) for "the
+   * longer floor axis". Rounded to nearest; a value that rounds to anything but 0, 1 or 2,
+   * or is not finite, is refused naming the cell.
+   *
+   * - Range: `0..2`
+   * - Accepts a field.
+   *
+   * @defaultValue `0`
+   */
+  axisIndex: FieldParam;
+  /**
+   * One label per SEGMENT, in order from the box's MIN side; the list's length is the
+   * segment count, and `sizes` and `units` must have the same length. Each piece is written
+   * this label in `labelAttr`; a repeat segment gives all of its pieces the same one. Labels
+   * may repeat (["jamb", "opening", "jamb"]). An EMPTY label "" makes the segment a GAP: it
+   * takes its space along the axis and emits nothing — a margin, or the ceiling plate a
+   * storey split leaves to someone else. At least one segment.
+   *
+   * @defaultValue `["a","b"]`
+   */
+  labels: readonly string[];
+  /**
+   * One size per segment, read by its unit: a LENGTH for "absolute", a WEIGHT for
+   * "relative", the MODULE (the length one piece aims for) for "repeat". Plain, a list of
+   * numbers: [1, 3, 1]. AS A FIELD it is resolved on the PARENT CELL and must have ONE
+   * COMPONENT PER SEGMENT — build it with vec(...), which concatenates any number of
+   * components: vec(sub(attribute("sill"), <cell min y>), 3, 1). A field is where a per-cell
+   * decision goes, and since it is resolved once per cell before the cut, every piece agrees
+   * on it (a randomField drawn here cuts both halves at one coordinate). A NEGATIVE size
+   * counts as 0 (nothing, and dropped), like repeatPoints' count; a non-finite one is
+   * refused naming the cell; a repeat MODULE must be > 0 and is refused otherwise, since
+   * "pieces of size 0" has no count.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[1,1]`
+   */
+  sizes: FieldParam;
+  /**
+   * One unit per segment: "absolute" (the size is a length along the axis), "relative" (a
+   * weighted share of the REST — the box length less every absolute segment — so sizes [2,
+   * 1] with both relative cut the rest 2:1), or "repeat" (the rest cut into n EQUAL pieces,
+   * n = max(1, <repeatRound>(rest / size)), so "bays of about 4" on a 10-long wall is 2 bays
+   * of 5 with "floor"). At most ONE "repeat" per split, and not together with a "relative":
+   * both would claim the rest, so the pair is refused rather than given a rule. Decided once
+   * per cook.
+   *
+   * @defaultValue `["relative","relative"]`
+   */
+  units: readonly string[];
+  /**
+   * How a "repeat" segment's count rounds: n = max(1, <mode>(rest / module)). "floor" never
+   * makes a piece shorter than the module (as many WHOLE modules as fit, the remainder
+   * shared out), "ceil" never makes one longer, "round" is nearest with a half rounding up.
+   * A rest of 0 still gives n = 1, a piece of size 0, which is dropped.
+   *
+   * - Enum: `"floor"` | `"round"` | `"ceil"`
+   *
+   * @defaultValue `"floor"`
+   */
+  repeatRound: "floor" | "round" | "ceil";
+  /**
+   * A LATTICE STEP per axis [x, y, z]; the component of the axis a cell is cut along applies
+   * to it, and 0 means no snapping. Every INTERIOR cut is moved onto a multiple of the step
+   * on an ABSOLUTE lattice anchored at 0 — the cell's own min and max are never moved, so
+   * the pieces tile the cell exactly (except under `fit` "clip", where an underfill leaves
+   * the far end uncovered and the end of the covered run is snapped like any interior cut) —
+   * and is then clamped into the cell. Absolute rather than cell-relative, so two
+   * neighbouring cells agree on one lattice (a packer's). A cut within f32 precision of a
+   * lattice line counts as on it, so a box edge stored as 1.2000000477 stays on a 0.4
+   * lattice. Snapping can shrink a piece to nothing, and that piece is dropped. On an
+   * integer lattice whose cells are already integer, snap [1, 1, 1] with snapMode "floor"
+   * turns a repeat into u0 + floor(k * length / n) — whole-number bays.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  snap: readonly number[];
+  /**
+   * How an interior cut lands on the `snap` lattice: "round" to the nearest line (a half
+   * rounds up), "floor" to the line at or below it, "ceil" to the line at or above it.
+   * Ignored where the step is 0.
+   *
+   * - Enum: `"floor"` | `"round"` | `"ceil"`
+   *
+   * @defaultValue `"round"`
+   */
+  snapMode: "floor" | "round" | "ceil";
+  /**
+   * What happens when the absolute sizes do not fit the box. OVERFLOW (absolute sizes past
+   * the box length): "error" refuses the cook, naming the cell, the segment where the
+   * running total passed the box, and the numbers; "clip" lays the segments from the min
+   * side and cuts the one that crosses the max end there, dropping the rest; "scale" scales
+   * every absolute size down to fill the box exactly. The relative and repeat segments get
+   * nothing either way. UNDERFILL (no relative or repeat segment to take the rest, and the
+   * absolute sizes short of the box): "error" refuses, "clip" leaves the rest of the box
+   * UNCOVERED at the max end, "scale" scales the absolute sizes up to fill it. Relative
+   * segments whose weights are ALL 0 on a cell take nothing, so that cell counts as having
+   * no flexible segment. The default is strict because a cut that silently loses area is the
+   * defect worth refusing: a relative segment of weight 1 at the end is the usual way to say
+   * "and the rest".
+   *
+   * - Enum: `"error"` | `"clip"` | `"scale"`
+   *
+   * @defaultValue `"error"`
+   */
+  fit: "error" | "clip" | "scale";
+  /**
+   * Which cells are SPLIT: nonzero splits the cell, 0 PASSES IT THROUGH UNSPLIT — emitted
+   * once, exactly as it arrived, its seed and box unchanged and any label, index or count it
+   * already carried in `labelAttr`, `indexAttr` and `countAttr` kept (a column this node
+   * creates gives it the column's default: "", -1, 0). As a field it is resolved per cell,
+   * e.g. attributeIs("piece", "band"): a nested split — the band of a y split cut again in x
+   * — is then one more splitBox, with no filter and no merge, and the pieces keep their
+   * order. A non-finite value is refused naming the cell.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  where: FieldParam;
+  /**
+   * Name of the STRING point attribute (tuple 1) receiving each piece's label — what a
+   * downstream node dispatches on: attributeIs("piece", "window"), a byAttribute, a
+   * spawnInstances asset key. A REPORTING SLOT like repeatPoints' indexAttr: an input column
+   * of the same shape is rewritten on the split pieces (and kept on cells `where` passes
+   * through, which is how a nested split relabels only what it cut), one of another shape is
+   * refused, and a standard point attribute is refused by name. Empty writes no label.
+   *
+   * @defaultValue `"piece"`
+   */
+  labelAttr: string;
+  /**
+   * Name of the i32 point attribute (tuple 1) receiving each piece's SLOT index: its
+   * position in its cell's expanded segment list, a repeat counting each of its pieces, from
+   * 0 at the min side. Dropped and gap slots are COUNTED, so the numbers need not be
+   * contiguous: the opening of an under | sill | opening split is slot 2 whether or not the
+   * sill had any height. That is the index the seed is hashed with. A repeat-only split
+   * numbers its pieces 0 .. n - 1, exactly as repeatPoints numbers copies. A reporting slot
+   * on the same terms as `labelAttr` (default -1 on a column this node creates). Empty
+   * writes none.
+   *
+   * @defaultValue `"pieceIndex"`
+   */
+  indexAttr: string;
+  /**
+   * OPT-IN: name of an i32 point attribute (tuple 1) receiving, on every piece, its cell's
+   * SLOT COUNT — the length of the expanded segment list, dropped and gap slots included, so
+   * index < count always and a repeat-only split writes n, its piece count. Empty (the
+   * default) writes none. A reporting slot on the same terms as `labelAttr` (default 0 on a
+   * column this node creates). Must differ from `indexAttr`.
+   *
+   * @defaultValue `""`
+   */
+  countAttr: string;
+}
+
+/**
+ * The input pin names of the `splitBox` node type.
+ */
+export type SplitBoxInputs = "in";
+
+/**
+ * The output pin names of the `splitBox` node type.
+ */
+export type SplitBoxOutputs = "out";
+
+/**
  * Params of the `splitPolygons` node type.
  */
 export interface SplitPolygonsParams {

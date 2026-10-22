@@ -36,7 +36,7 @@ export interface ParamTypeSpelling {
   /**
    * The spelling when the schema declares `acceptsField`, or undefined for
    * a type that never carries a field (a field resolves per element, and
-   * only f32, vec3 and vec4 read one — see `fieldSpecAdvice` in
+   * only f32, vec3, vec4 and numberList read one — see `fieldSpecAdvice` in
    * `src/graph/params.ts`).
    */
   readonly field?: string;
@@ -98,7 +98,13 @@ export const PARAM_TYPE_SPELLINGS: { readonly [T in ParamType]: ParamTypeSpellin
     json: { type: "array", maxItems: 0 },
   },
   stringList: { plain: "readonly string[]", json: { type: "array", items: { type: "string" } } },
-  numberList: { plain: "readonly number[]", json: { type: "array", items: { type: "number" } } },
+  numberList: {
+    plain: "readonly number[]",
+    // Field-capable as a TUPLE, one component per entry (`splitBox.sizes`);
+    // `FieldParam` already admits the plain `readonly number[]`.
+    field: "FieldParam",
+    json: { type: "array", items: { type: "number" } },
+  },
 };
 
 /** The TypeScript type of one param, and the type-only imports it needs. */
@@ -117,7 +123,7 @@ export function paramTypeScript(schema: ParamSchema): {
     if (spelling.field === undefined) {
       throw new Error(
         `paramTypeScript: a "${schema.type}" param declares acceptsField, but PARAM_TYPE_SPELLINGS has no field ` +
-          `spelling for "${schema.type}"; only f32, vec3 and vec4 read a field — declare the param as one of ` +
+          `spelling for "${schema.type}"; only f32, vec3, vec4 and numberList read a field — declare the param as one of ` +
           "those, or give this type a `field` spelling if it has genuinely become field-capable",
       );
     }

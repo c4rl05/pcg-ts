@@ -86,6 +86,7 @@ export * from "./isosurface.js";
 export * from "./neighborhood.js";
 export * from "./pointOps.js";
 export * from "./repeatPoints.js";
+export * from "./splitBox.js";
 export * from "./filtering.js";
 export * from "./visibility.js";
 export * from "./coverage.js";
