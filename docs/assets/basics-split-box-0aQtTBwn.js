@@ -1,0 +1,572 @@
+var e=`{
+  "formatVersion": 1,
+  "seed": 7,
+  "meta": {
+    "title": "Cut boxes into labelled pieces",
+    "description": "\`splitBox\` CUTS every cell's box along one axis into an ordered list of LABELLED PIECES, one point per piece — the split of a split grammar, written as sizes instead of corners. A CELL IS A POINT WITH A BOX: the standard \`boundsMin\`/\`boundsMax\`. Here three blocks stand in a row, each 8 wide and as tall as its own storey count, drawn once per block. THE PIECES ARE THREE PARALLEL LISTS, one entry per segment from the min side: \`labels\`, \`sizes\` and \`units\`. \`storeys\` cuts each block in y into a plinth of 1 (\\"absolute\\"), as many storeys of 3 as the rest holds (\\"repeat\\", so a block 13.5 tall gets four) and a cornice of 0.5 (\\"absolute\\" again — absolute segments are taken first wherever they sit). A NESTED SPLIT IS ONE MORE NODE: \`bays\` cuts only the storeys in x — \`where\` is attributeIs(\\"piece\\", \\"storey\\"), so the plinth and the cornice pass through untouched, label and seed and all. Bays aim at 2.5 wide; 8 holds three of 2.67, and \`snap\` puts the two interior cuts on a 0.5 lattice, so they come out 2.5, 3 and 2.5 while the block's own ends never move. A SIZE CAN BE A FIELD, resolved on the PARENT cell, with one component per segment: \`opening\` cuts each bay in y into wall, opening and wall with \`sizes\` = vec(sill, height, 1). On the ground storey's middle bay the sill is 0 and the opening 2.4 — that is the door — and A PIECE OF ZERO SIZE IS DROPPED, so the door has no wall under it and no branch was written to say so. The last segment is \\"relative\\" with weight 1: it takes whatever the others leave, which is how a split says \\"and the rest\\". \`jambs\` cuts only the openings in x, 1 : 2 : 1 by weight, so each window and door is the middle half of its bay. Each piece keeps every attribute its cell carried — \`level\` (the storey's slot, written by the first split as its \`indexAttr\`) and \`door\` reach the pieces three splits down — and is seeded hashCombine(cellSeed, slot), exactly as repeatPoints seeds copy k, so this graph and a repeatPoints + setBounds spelling of it draw the same numbers. The pieces tile their blocks exactly, so the last nodes only draw them, reading each piece's box BY NAME — box(\\"center\\") for its middle, box(\\"sx\\"), box(\\"sy\\") and box(\\"sz\\") for its size, each the boundsMin/boundsMax expression it stands for and nothing more: a unit box per piece, centred on its box and a little smaller than it so the cuts show, an opening a fifth of the wall's depth so it reads as a recess, and every piece coloured by its label.",
+    "tags": [
+      "basics",
+      "split",
+      "bounds",
+      "grammar"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "row",
+      "type": "pointLine",
+      "params": {
+        "mode": "endpoints",
+        "count": 3,
+        "start": [
+          -8,
+          0,
+          0
+        ],
+        "end": [
+          8,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "blocks",
+      "type": "setBounds",
+      "params": {
+        "boundsMin": {
+          "fn": "sub",
+          "args": [
+            {
+              "fn": "position"
+            },
+            {
+              "fn": "vec",
+              "args": [
+                4,
+                0,
+                0.25
+              ]
+            }
+          ]
+        },
+        "boundsMax": {
+          "fn": "add",
+          "args": [
+            {
+              "fn": "position"
+            },
+            {
+              "fn": "vec",
+              "args": [
+                4,
+                {
+                  "fn": "add",
+                  "args": [
+                    1.5,
+                    {
+                      "fn": "mul",
+                      "args": [
+                        3,
+                        {
+                          "fn": "add",
+                          "args": [
+                            2,
+                            {
+                              "fn": "floor",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "randomField",
+                                      "key": "storeys"
+                                    },
+                                    3
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                0.25
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "storeys",
+      "type": "splitBox",
+      "params": {
+        "axis": "y",
+        "labels": [
+          "plinth",
+          "storey",
+          "cornice"
+        ],
+        "sizes": [
+          1,
+          3,
+          0.5
+        ],
+        "units": [
+          "absolute",
+          "repeat",
+          "absolute"
+        ],
+        "indexAttr": "level"
+      }
+    },
+    {
+      "id": "bays",
+      "type": "splitBox",
+      "params": {
+        "axis": "x",
+        "where": {
+          "fn": "attributeIs",
+          "name": "piece",
+          "value": "storey"
+        },
+        "labels": [
+          "bay"
+        ],
+        "sizes": [
+          2.5
+        ],
+        "units": [
+          "repeat"
+        ],
+        "snap": [
+          0.5,
+          0,
+          0
+        ],
+        "indexAttr": "bay"
+      }
+    },
+    {
+      "id": "door",
+      "type": "setAttribute",
+      "params": {
+        "name": "door",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "mul",
+          "args": [
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "attributeIs",
+                  "name": "piece",
+                  "value": "bay"
+                },
+                {
+                  "fn": "eq",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "level"
+                    },
+                    1
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "eq",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "bay"
+                },
+                1
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "opening",
+      "type": "splitBox",
+      "params": {
+        "axis": "y",
+        "where": {
+          "fn": "attributeIs",
+          "name": "piece",
+          "value": "bay"
+        },
+        "labels": [
+          "wall",
+          "opening",
+          "wall"
+        ],
+        "sizes": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "door"
+                },
+                0,
+                0.9
+              ]
+            },
+            {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "door"
+                },
+                2.4,
+                1.5
+              ]
+            },
+            1
+          ]
+        },
+        "units": [
+          "absolute",
+          "absolute",
+          "relative"
+        ]
+      }
+    },
+    {
+      "id": "jambs",
+      "type": "splitBox",
+      "params": {
+        "axis": "x",
+        "where": {
+          "fn": "attributeIs",
+          "name": "piece",
+          "value": "opening"
+        },
+        "labels": [
+          "wall",
+          "opening",
+          "wall"
+        ],
+        "sizes": [
+          1,
+          2,
+          1
+        ],
+        "units": [
+          "relative",
+          "relative",
+          "relative"
+        ]
+      }
+    },
+    {
+      "id": "centre",
+      "type": "setAttribute",
+      "params": {
+        "name": "P",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "box",
+          "name": "center"
+        }
+      }
+    },
+    {
+      "id": "size",
+      "type": "setAttribute",
+      "params": {
+        "name": "scale",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "max",
+              "args": [
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "box",
+                      "name": "sx"
+                    },
+                    0.08
+                  ]
+                },
+                0.01
+              ]
+            },
+            {
+              "fn": "max",
+              "args": [
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "box",
+                      "name": "sy"
+                    },
+                    0.08
+                  ]
+                },
+                0.01
+              ]
+            },
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "box",
+                  "name": "sz"
+                },
+                {
+                  "fn": "select",
+                  "args": [
+                    {
+                      "fn": "attributeIs",
+                      "name": "piece",
+                      "value": "opening"
+                    },
+                    0.2,
+                    1
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "tint",
+      "type": "setAttribute",
+      "params": {
+        "name": "color",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 4,
+        "value": {
+          "fn": "byAttribute",
+          "name": "piece",
+          "cases": {
+            "plinth": {
+              "fn": "vec",
+              "args": [
+                0.32,
+                0.3,
+                0.3,
+                1
+              ]
+            },
+            "cornice": {
+              "fn": "vec",
+              "args": [
+                0.4,
+                0.36,
+                0.33,
+                1
+              ]
+            },
+            "opening": {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "door"
+                },
+                {
+                  "fn": "vec",
+                  "args": [
+                    0.45,
+                    0.27,
+                    0.15,
+                    1
+                  ]
+                },
+                {
+                  "fn": "vec",
+                  "args": [
+                    0.45,
+                    0.62,
+                    0.75,
+                    1
+                  ]
+                }
+              ]
+            }
+          },
+          "default": {
+            "fn": "vec",
+            "args": [
+              0.86,
+              0.8,
+              0.7,
+              1
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "unitBox",
+      "type": "meshPrimitive",
+      "params": {
+        "shape": "box",
+        "size": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "panels",
+      "type": "copyToPoints",
+      "params": {
+        "topology": "keep"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": [
+        "row",
+        "out"
+      ],
+      "to": [
+        "blocks",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "blocks",
+        "out"
+      ],
+      "to": [
+        "storeys",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "storeys",
+        "out"
+      ],
+      "to": [
+        "bays",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "bays",
+        "out"
+      ],
+      "to": [
+        "door",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "door",
+        "out"
+      ],
+      "to": [
+        "opening",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "opening",
+        "out"
+      ],
+      "to": [
+        "jambs",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "jambs",
+        "out"
+      ],
+      "to": [
+        "centre",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "centre",
+        "out"
+      ],
+      "to": [
+        "size",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "size",
+        "out"
+      ],
+      "to": [
+        "tint",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "unitBox",
+        "out"
+      ],
+      "to": [
+        "panels",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "tint",
+        "out"
+      ],
+      "to": [
+        "panels",
+        "target"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "id": "tint",
+      "pin": "out",
+      "name": "pieces"
+    },
+    {
+      "id": "panels",
+      "pin": "out",
+      "name": "panels"
+    }
+  ]
+}
+`;export{e as default};
