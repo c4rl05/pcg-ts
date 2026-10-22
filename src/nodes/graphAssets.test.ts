@@ -500,7 +500,7 @@ describe("describeGraphAssets: the graph corpus", () => {
 
   it("finds every spawner in the corpus, bodies included", () => {
     expect(new Set(spawners.map((s) => s.file)).size).toBe(30);
-    expect(spawners).toHaveLength(47);
+    expect(spawners).toHaveLength(48);
     // Eight of them are inside a `write/instances-by-species` body.
     expect(spawners.filter((s) => s.node.includes(" > "))).toHaveLength(8);
   });
@@ -526,9 +526,10 @@ describe("describeGraphAssets: the graph corpus", () => {
         "boss",
         "boulder",
         "box",
-        // `examples-brick-house` spawns both, and supplies both meshes itself
-        // as `role: "asset"` outputs — this report still lists them, since it
-        // reads the spawners; `describeSuppliedAssets` is the other half.
+        // `examples-brick-house` spawns brick, stud and pot, and supplies all
+        // three meshes itself as `role: "asset"` outputs — this report still
+        // lists them, since it reads the spawners; `describeSuppliedAssets` is
+        // the other half.
         "brick",
         "bush",
         "chainLink",
@@ -542,6 +543,7 @@ describe("describeGraphAssets: the graph corpus", () => {
         "panel",
         "pine",
         "post",
+        "pot",
         "prop",
         // `basics-instance-channels` spawns one asset and carries the
         // per-instance channels instead — the id is a literal, so it is
