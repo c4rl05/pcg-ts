@@ -20,6 +20,7 @@ import { AttributeNotFoundError, createPointCloud, type Geometry } from "../data
 import { canonicalPointRanks } from "../data/identity.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { hashCombine } from "../random/index.js";
+import { holdBudget } from "./brickHoldBudget.js";
 import { brickConnectivity, packBricks, type PackBricksParams } from "./bricks.js";
 import {
   firstGeo,
@@ -788,6 +789,32 @@ function roomWithFloor(W: number, D: number, courses: number): BoxSpec[] {
   ];
 }
 
+/** One-stud walls of material 0 round the rectangle [x0, x1) x [z0, z1), from course y0 to y1. */
+function ring(x0: number, z0: number, x1: number, z1: number, y0: number, y1: number): BoxSpec[] {
+  return [
+    { lo: [x0, y0, z0], hi: [x1, y1, z0 + 1], tag: 0 },
+    { lo: [x0, y0, z1 - 1], hi: [x1, y1, z1], tag: 0 },
+    { lo: [x0, y0, z0 + 1], hi: [x0 + 1, y1, z1 - 1], tag: 0 },
+    { lo: [x1 - 1, y0, z0 + 1], hi: [x1, y1, z1 - 1], tag: 0 },
+  ];
+}
+
+/**
+ * Two rooms side by side, W1 x D1 and W2 x D2, walled one brick tall, under
+ * a one-plate floor (tag 1) and a second storey of walls: an upper floor of
+ * a terrace, where each floor plate has to reach a wall on its own.
+ */
+function twoRooms(W1: number, W2: number, D1: number, D2: number): BoxSpec[] {
+  return [
+    ...ring(0, 0, W1, D1, 0, 3),
+    ...ring(W1, 0, W1 + W2, D2, 0, 3),
+    { lo: [0, 3, 0], hi: [W1, 4, D1], tag: 1 },
+    { lo: [W1, 3, 0], hi: [W1 + W2, 4, D2], tag: 1 },
+    ...ring(0, 0, W1, D1, 4, 7),
+    ...ring(W1, 0, W1 + W2, D2, 4, 7),
+  ];
+}
+
 describe("packBricks: bond", () => {
   it("defaults to 16, and studMode to exposed", () => {
     expect(packBricks.defaultParams.bond).toBe(16);
@@ -940,36 +967,21 @@ describe("packBricks: what holds", () => {
     expect((await holding(out)).never).toBe(1);
   });
 
-  it("leaves next to nothing loose in a floor between two empty storeys over two rooms", async () => {
+  it("leaves nothing loose in a floor between two empty storeys over two rooms", async () => {
     // Two rooms side by side, W1 x D1 and W2 x D2, each walled one brick
     // tall, under a one-plate floor and a second storey of walls: the shape
     // a terrace of houses has at every upper floor. Measured over these 224
     // layouts, the score alone left 55 loose bricks in 46 of them; with
-    // what holds first, 3 in 3. Those three are a trap two placements back
-    // — every placement at the anchor strands a cell, because an earlier
-    // one used the plate that would have held it — which a one-step look
-    // at the cells beside a placement cannot see.
-    const ring = (x0: number, z0: number, x1: number, z1: number, y0: number, y1: number): BoxSpec[] => [
-      { lo: [x0, y0, z0], hi: [x1, y1, z0 + 1], tag: 0 },
-      { lo: [x0, y0, z1 - 1], hi: [x1, y1, z1], tag: 0 },
-      { lo: [x0, y0, z0 + 1], hi: [x0 + 1, y1, z1 - 1], tag: 0 },
-      { lo: [x1 - 1, y0, z0 + 1], hi: [x1, y1, z1 - 1], tag: 0 },
-    ];
+    // what holds first, 3 in 3 — a trap two placements back, which a
+    // one-step look at the cells beside a placement cannot see — and with
+    // the hold search behind it, none (see "packBricks: the hold search").
     let loose = 0;
     let layouts = 0;
     for (const W1 of [5, 7, 9, 11]) {
       for (const W2 of [5, 9]) {
         for (let D1 = 5; D1 <= 11; D1++) {
           for (const D2 of [5, 7, 9, 11]) {
-            const specs: BoxSpec[] = [
-              ...ring(0, 0, W1, D1, 0, 3),
-              ...ring(W1, 0, W1 + W2, D2, 0, 3),
-              { lo: [0, 3, 0], hi: [W1, 4, D1], tag: 1 },
-              { lo: [W1, 3, 0], hi: [W1 + W2, 4, D2], tag: 1 },
-              ...ring(0, 0, W1, D1, 4, 7),
-              ...ring(W1, 0, W1 + W2, D2, 4, 7),
-            ];
-            const { out } = await pack(boxCloud(specs), { groupBy: ["tag"] });
+            const { out } = await pack(boxCloud(twoRooms(W1, W2, D1, D2)), { groupBy: ["tag"] });
             loose += (await holding(out)).never;
             layouts++;
           }
@@ -977,7 +989,186 @@ describe("packBricks: what holds", () => {
       }
     }
     expect(layouts).toBe(224);
-    expect(loose).toBeLessThanOrEqual(3);
+    expect(loose).toBe(0);
+  });
+});
+
+describe("packBricks: the hold search", () => {
+  const floorPlates = (out: Geometry): Brick[] => readBricks(out).filter((b) => b.tag === 1);
+  /** The `holdSearch` detail: [searched, solved, none holds, left], or undefined when it never ran. */
+  const searched = (out: Geometry): number[] | undefined => {
+    const a = out.attrs.detail.get("holdSearch");
+    return a === undefined ? undefined : [0, 1, 2, 3].map((c) => a.get(0, c));
+  };
+  /** Runs `body` with some of the search's budgets replaced, restoring them after. */
+  async function withBudget<T>(budget: Partial<typeof holdBudget>, body: () => Promise<T>): Promise<T> {
+    const saved = { ...holdBudget };
+    Object.assign(holdBudget, budget);
+    try {
+      return await body();
+    } finally {
+      Object.assign(holdBudget, saved);
+    }
+  }
+  /** A region budget of 0 leaves every region to the greedy: the packer as it was before the search. */
+  const greedyOnly = <T>(body: () => Promise<T>): Promise<T> => withBudget({ region: 0 }, body);
+  const coversExactly = (specs: readonly BoxSpec[], out: Geometry): void => {
+    const { cells, doubled } = rasterize(readBricks(out));
+    expect(doubled).toBe(0);
+    expect([...cells.keys()].sort()).toEqual([...unionCells(specs).keys()].sort());
+  };
+
+  // THE 16 x 16 HOUSE AT SEED 1868 left one floor plate loose; this is its
+  // slab course cut down to the five boxes the trap needs. A floor (tag 1)
+  // of two rows, z = 7 from x = 0 and z = 8 from x = 1, both to x = 11; a
+  // post under (9, 7) and another under (10, 8); a wall over row 7 from
+  // x = 7. Row 7 comes first and is one 1x12, held by the post and the wall
+  // and stranding nothing a look beside it can see: the cell (11, 8) can
+  // still be held by a 1x2 through the post at (10, 8). But row 8 starts at
+  // x = 1, and its only held plate there runs to that post — a 1x10 — which
+  // leaves (11, 8) a lone plate on nothing under nothing. Stopping row 7 at
+  // x = 10 instead lets a plate turned down the last column tie (11, 8) to
+  // the wall over (11, 7), and then every plate is held.
+  const slab1868: BoxSpec[] = [
+    { lo: [0, 1, 7], hi: [12, 2, 8], tag: 1 },
+    { lo: [1, 1, 8], hi: [12, 2, 9], tag: 1 },
+    { lo: [7, 2, 7], hi: [15, 3, 8], tag: 2 },
+    { lo: [9, 0, 7], hi: [10, 1, 8], tag: 12 },
+    { lo: [10, 0, 8], hi: [11, 1, 9], tag: 14 },
+  ];
+  // The three of the 224 two-room layouts the greedy left a plate loose in
+  // (see "packBricks: what holds").
+  const traps: [number, number, number, number][] = [
+    [5, 9, 6, 11],
+    [9, 9, 6, 11],
+    [11, 9, 6, 11],
+  ];
+
+  it("holds the floor the greedy leaves a plate loose in, from the 16 x 16 house at seed 1868", async () => {
+    // Non-vacuity, and the oracle above: the greedy alone lays the 1x12,
+    // the 1x10 and the lone plate, and says the region was left to it.
+    const greedy = await greedyOnly(() => pack(boxCloud(slab1868), { groupBy: ["tag"] }));
+    expect(floorPlates(greedy.out).map((b) => [b.lo, b.ext])).toEqual([
+      [[0, 1, 7], [12, 1, 1]],
+      [[1, 1, 8], [10, 1, 1]],
+      [[11, 1, 8], [1, 1, 1]],
+    ]);
+    expect((await holding(greedy.out)).never).toBe(1);
+    expect(searched(greedy.out)).toEqual([1, 0, 0, 1]);
+
+    const { out } = await pack(boxCloud(slab1868), { groupBy: ["tag"] });
+    expect(searched(out)).toEqual([1, 1, 0, 0]);
+    expect((await holding(out)).never).toBe(0);
+    expect(floorPlates(out).some((b) => b.ext[0] === 12)).toBe(false);
+    coversExactly(slab1868, out);
+  });
+
+  it("solves the three two-room layouts the greedy leaves a plate loose in", async () => {
+    for (const [W1, W2, D1, D2] of traps) {
+      const specs = twoRooms(W1, W2, D1, D2);
+      const name = `${W1}, ${W2}, ${D1}, ${D2}`;
+      const greedy = await greedyOnly(() => pack(boxCloud(specs), { groupBy: ["tag"] }));
+      expect((await holding(greedy.out)).never, name).toBe(1);
+      const { out } = await pack(boxCloud(specs), { groupBy: ["tag"] });
+      expect(searched(out), name).toEqual([1, 1, 0, 0]);
+      expect((await holding(out)).never, name).toBe(0);
+      coversExactly(specs, out);
+    }
+  });
+
+  it("falls back to the greedy when a budget runs out, and says so", async () => {
+    const run = (budget: Partial<typeof holdBudget>) =>
+      withBudget(budget, () => pack(boxCloud(slab1868), { groupBy: ["tag"] }));
+    // Out of the region's budget and out of the cook's: both are the
+    // greedy's packing, the oracle of the case above, and both say so.
+    const region = await run({ region: 0 });
+    const cook = await run({ cook: 0 });
+    expect(searched(cook.out)).toEqual([1, 0, 0, 1]);
+    expect(snapshotGeometry(cook.out)).toEqual(snapshotGeometry(region.out));
+    expect(snapshotGeometry(cook.studs)).toEqual(snapshotGeometry(region.studs));
+    expect(floorPlates(cook.out).map((b) => b.ext[0])).toEqual([12, 10, 1]);
+    // With no budget for the scan, the search from the cell the fewest
+    // placements cover still solves it on its own.
+    const fewest = await run({ scan: 0 });
+    expect(searched(fewest.out)).toEqual([1, 1, 0, 0]);
+    expect((await holding(fewest.out)).never).toBe(0);
+    coversExactly(slab1868, fewest.out);
+  });
+
+  it("says when a region has no held packing, and lays it as the greedy does", async () => {
+    const cases: Record<string, BoxSpec[]> = {
+      // Gripped at one cell, so one plate at most can be held.
+      "an 8 x 4 floor gripped at one cell": [
+        { lo: [0, 0, 3], hi: [1, 3, 4], tag: 2 },
+        { lo: [0, 3, 0], hi: [8, 4, 4], tag: 1 },
+      ],
+      // The worst case for size: the middle of the floor is out of every
+      // plate's reach from the ring, which the search sees before it lays
+      // a brick.
+      // Every cell IS in reach of a held plate here — the plates through the
+      // three posts cover the floor between them — so no cell says it on
+      // its own: the search itself has to prove it, by the count. Three
+      // posts grip three plates at most, 96 studs, and the floor is 217.
+      "a 31 x 7 floor over three posts, every cell in reach": [
+        { lo: [0, 3, 0], hi: [31, 4, 7], tag: 1 },
+        { lo: [15, 0, 0], hi: [16, 3, 1], tag: 0 },
+        { lo: [15, 0, 3], hi: [16, 3, 4], tag: 0 },
+        { lo: [15, 0, 6], hi: [16, 3, 7], tag: 0 },
+      ],
+      "a 120 x 120 one-plate floor over a ring wall": [
+        ...ring(0, 0, 120, 120, 0, 3),
+        { lo: [0, 3, 0], hi: [120, 4, 120], tag: 1 },
+        ...ring(0, 0, 120, 120, 4, 7),
+      ],
+    };
+    for (const [name, specs] of Object.entries(cases)) {
+      const { out, studs } = await pack(boxCloud(specs), { groupBy: ["tag"] });
+      expect(searched(out), name).toEqual([1, 0, 1, 0]);
+      const greedy = await greedyOnly(() => pack(boxCloud(specs), { groupBy: ["tag"] }));
+      expect(snapshotGeometry(out).point, name).toEqual(snapshotGeometry(greedy.out).point);
+      expect(snapshotGeometry(studs), name).toEqual(snapshotGeometry(greedy.studs));
+      expect((await holding(out)).never, name).toBeGreaterThan(0);
+    }
+  });
+
+  it("never searches a course with no brick held by nothing, and writes nothing there", async () => {
+    const builds: Record<string, BoxSpec[]> = {
+      "a long wall": [{ lo: [0, 0, 0], hi: [17, 15, 1] }],
+      "a room's four walls": ring(0, 0, 30, 10, 0, 12),
+      "a floor whose plates each reach a wall": [
+        { lo: [0, 0, 7], hi: [2, 3, 8], tag: 2 },
+        { lo: [2, 0, 7], hi: [8, 3, 8], tag: 3 },
+        { lo: [0, 3, 0], hi: [8, 4, 8], tag: 1 },
+      ],
+      "a floor over two rooms the greedy holds": twoRooms(7, 5, 7, 5),
+    };
+    for (const [name, specs] of Object.entries(builds)) {
+      const a = await pack(boxCloud(specs), { groupBy: ["tag"], islandsAttr: "islands" });
+      expect(searched(a.out), name).toBeUndefined();
+      expect((await holding(a.out)).never, name).toBe(0);
+      // Nothing a budget could change: the greedy alone packs it the same.
+      const b = await greedyOnly(() => pack(boxCloud(specs), { groupBy: ["tag"], islandsAttr: "islands" }));
+      expect(snapshotGeometry(b.out), name).toEqual(snapshotGeometry(a.out));
+      expect(snapshotGeometry(b.studs), name).toEqual(snapshotGeometry(a.studs));
+    }
+  });
+
+  it("packs a searched course byte for byte the same however the input is ordered", async () => {
+    for (const specs of [slab1868, twoRooms(9, 9, 6, 11)]) {
+      const geo = boxCloud(specs);
+      const order = shuffledOrder(specs.length, 7);
+      const a = await pack(geo, { groupBy: ["tag"], islandsAttr: "islands" });
+      const again = await pack(geo, { groupBy: ["tag"], islandsAttr: "islands" });
+      const b = await pack(permutePoints(geo, order), { groupBy: ["tag"], islandsAttr: "islands" });
+      expect(searched(a.out)).toEqual([1, 1, 0, 0]);
+      expect(snapshotGeometry(again.out)).toEqual(snapshotGeometry(a.out));
+      expect(snapshotGeometry(b.out)).toEqual(snapshotGeometry(a.out));
+      expect(snapshotGeometry(b.studs)).toEqual(snapshotGeometry(a.studs));
+      // THE CONTROL: the comparison can say "different" — the greedy's
+      // packing of the same course is not the search's.
+      const greedy = await greedyOnly(() => pack(geo, { groupBy: ["tag"], islandsAttr: "islands" }));
+      expect(snapshotGeometry(greedy.out)).not.toEqual(snapshotGeometry(a.out));
+    }
   });
 });
 

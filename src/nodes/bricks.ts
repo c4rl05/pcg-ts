@@ -27,6 +27,22 @@
  * by nothing, then the score. A brick that does not fit anywhere is refused
  * naming the cell, which is the case of a catalogue with no 1x1 plate.
  *
+ * WHERE THE GREEDY STILL LAYS A BRICK HELD BY NOTHING, A SEARCH TAKES OVER.
+ * One placement ahead cannot see a trap set two or more back — an early
+ * plate that took the grip a later cell needed. So a course that comes out
+ * with such a brick is lifted and laid again, the region around the brick
+ * (its material's cells of the course, joined side to side) packed by an
+ * exact search for a packing that holds every brick: the held placements
+ * only, a cover count per cell so a placement that strands any cell of the
+ * region is dropped at once, conflict-directed backjumping so a failure
+ * returns to the placement to blame rather than the last one, in scan
+ * order first (the greedy's own choices wherever they hold) and then from
+ * the cell the fewest placements cover. It is budgeted in counted steps
+ * (`brickHoldBudget.ts`), never in time, and what it could not solve is
+ * laid by the greedy as before. A course with nothing held by nothing is
+ * never searched, so walls and every build the greedy already held are
+ * packed byte for byte as without it.
+ *
  * It is whole-input for the reason every packing is: a brick spans cells,
  * so cooked over half the boxes it would cut bricks at the half. No seed and
  * no randomness — the scan order and the catalogue order decide everything,
@@ -40,6 +56,7 @@ import { attributeNotFound } from "../data/attributeNotFound.js";
 import { canonicalPointRanks } from "../data/identity.js";
 import { deriveGeometry } from "../data/derive.js";
 import { makeGeometryItem } from "../graph/index.js";
+import { holdBudget } from "./brickHoldBudget.js";
 import { standardNode } from "./registry.js";
 import { CANCEL_STRIDE, gatherPoints, optionalGeometry, requireGeometry, requireReportSlot } from "./util.js";
 import type {
@@ -81,6 +98,8 @@ const BRICK_INDEX_ATTR = "brickIndex";
  * the one resting on it, -1 for none. */
 const STUD_ON_ATTR = "brickId";
 const STUD_UNDER_ATTR = "brickAbove";
+/** On `out`, DETAIL, only where the hold search ran: what it found. */
+const HOLD_ATTR = "holdSearch";
 
 /**
  * The default catalogue as flat [w, d, h] triples: w studs along x, d studs
@@ -95,6 +114,29 @@ const DEFAULT_BRICKS: readonly number[] = [
   2, 16, 1, 2, 12, 1, 2, 10, 1, 2, 8, 1, 2, 6, 1, 2, 4, 1, 2, 3, 1, 2, 2, 1, 1, 12, 1, 1, 10, 1, 1, 8, 1,
   1, 6, 1, 1, 4, 1, 1, 3, 1, 1, 2, 1, 1, 1, 1,
 ];
+
+/**
+ * How many times one course may be laid again: once for the regions its
+ * first laying left a brick held by nothing in, and again only for a region
+ * a relaying newly left one in (a solved region changes the pieces the
+ * greedy weighs elsewhere in the course).
+ */
+const HOLD_ROUNDS = 3;
+/** A region's state in the hold search. */
+const PENDING = 0;
+const SOLVED = 1;
+const NONE = 2;
+const LEFT = 3;
+
+/** The cells of one course the hold search packs as one problem. */
+interface Region {
+  /** Cell indices z * nx + x in the course, ascending: scan order. */
+  readonly cells: Int32Array;
+  /** The material, and the height of the brick the greedy left loose. */
+  readonly g: number;
+  readonly h: number;
+  state: number;
+}
 
 /** One way of placing a catalogue entry: as listed, or a quarter turn. */
 interface Candidate {
@@ -117,7 +159,7 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
   type: NODE,
   category: "point op",
   description:
-    "Reads axis-aligned BOXES on a stud lattice — one per point, its corners in two point attributes — and writes the BRICKS that build them: one point per brick, from a stated catalogue of footprints, that together fill exactly the lattice cells the boxes cover. The lattice is `pitch` in world units per cell (a stud is 1 across, a plate 0.4 tall, by default), anchored at `origin`; x and z count studs and y counts plates. Every corner must land on the lattice, and one that does not is refused naming the point and the corner, because a box half a stud off is a box the graph upstream built on a different lattice. Boxes may overlap: their cells are unioned, and a cell two boxes claim belongs to the one with the lower point IDENTITY (stored position bits plus `seed`), never the lower array index, so shuffling the input changes nothing — unless two overlapping boxes share both P and `seed`, which identity cannot tell apart, and then the earlier one in the input wins. WHAT A BRICK MAY NOT CROSS is `groupBy`: cells whose boxes differ in any listed attribute are different material and never share a brick, so a wall's colour changes exactly where its boxes' colour does. Each brick carries every point attribute of the box that owns its anchor cell. THE PACKING IS A SCANLINE GREEDY, course by course from the bottom and within a course in z then x. The first unfilled cell of a scan is always the minimum corner of the brick that covers it, so the scan never needs to backtrack; the choice there is WHICH catalogue entry, either way round. HEIGHT COMES FIRST: the tallest entry that fits is the course, so a wall is laid in full bricks and plates appear only where the space is shorter than a brick. Among footprints of that height the score is the footprint in studs less `stagger` for every stud of joint in the brick's bottom course that sits directly on a seam in the course below, counted only on the joints the placement decides — where the cell across is the same material and not yet filled — a running bond, the reason real walls hold together, charged only where a different brick could have avoided it — PLUS `bond` for every two separate pieces the placement joins into one, which is what keeps a floor or a roof laid over an empty room from coming out as loose plates (pieces as stud clutch holds them; see `islandsAttr`). AHEAD OF THAT SCORE, WITHIN THE HEIGHT, COMES WHAT HOLDS. A brick is gripped only through its top and bottom faces, so a placement with no brick under its footprint and no cell to be filled over it — a plate in the middle of a one-plate floor, over an empty room and under another — is loose in every build order. A placement that would leave a cell beside it with no HELD placement left to cover it STRANDS the cell: whatever brick covered it would be loose too. So each placement is charged the loose bricks it commits the build to — one if it is held by nothing, plus one for every cell it strands — and the fewest wins, then a held placement over one held by nothing, then the score. Both charges only ever decide where a course has cells with nothing under or over them; a wall, or anything standing on what is below it, packs by the score alone. Ties go to the larger footprint, then the earlier catalogue entry, then the entry as listed rather than turned. If nothing fits — a catalogue with no 1x1 plate meeting a one-plate gap — the cell is refused by name rather than left empty, so the output always covers the input exactly. OUTPUT `out`: one point per brick in scan order. P is the brick's centre, `rot` a quarter turn about y when the entry was placed turned (identity otherwise), and `scale` its full extents in its OWN frame — w and d studs and h plates as listed, in world units — so a unit box copied onto these points draws every brick in place. `boundsMin`/`boundsMax` are its world corners, the same convention it reads. `brick` (string) is the entry as `WxDxH`, ready to be spawnInstances' `assetAttr`, and `brickIndex` (i32) is its position in the catalogue — `bricks` followed by `extraBricks`. OUTPUT `studs`: one point per stud left SHOWING — on a brick's top where the lattice cell above is empty — at the stud's base centre on the brick's top face, carrying the brick's attributes and its `brick`/`brickIndex`, plus `brickId` and `brickAbove` (the indices in `out` of the brick it stands on and the brick resting on it, -1 for none; see `studMode`, which can ask for every stud instead), with identity `rot` and unit `scale`, so a stud mesh modelled at world size with its base at the origin spawns straight onto it; the bounds columns are reset to zero. `islandsAttr` optionally writes a DETAIL u32 on `out` counting the pieces the build falls into when only stud CLUTCH holds it — a brick is joined to the bricks sitting on its top face where their footprints overlap, and side contact does not count, so a value above 1 is a build that comes apart when lifted. HALO: none. A brick spans cells, so cooked over part of the boxes it cuts bricks at the part's edge; this belongs on an unbounded level or before a split. Not GPU-eligible: the packing is sequential by construction. The occupancy grid is dense over the boxes' joint extent and refused past 16.7 million cells.",
+    "Reads axis-aligned BOXES on a stud lattice — one per point, its corners in two point attributes — and writes the BRICKS that build them: one point per brick, from a stated catalogue of footprints, that together fill exactly the lattice cells the boxes cover. The lattice is `pitch` in world units per cell (a stud is 1 across, a plate 0.4 tall, by default), anchored at `origin`; x and z count studs and y counts plates. Every corner must land on the lattice, and one that does not is refused naming the point and the corner, because a box half a stud off is a box the graph upstream built on a different lattice. Boxes may overlap: their cells are unioned, and a cell two boxes claim belongs to the one with the lower point IDENTITY (stored position bits plus `seed`), never the lower array index, so shuffling the input changes nothing — unless two overlapping boxes share both P and `seed`, which identity cannot tell apart, and then the earlier one in the input wins. WHAT A BRICK MAY NOT CROSS is `groupBy`: cells whose boxes differ in any listed attribute are different material and never share a brick, so a wall's colour changes exactly where its boxes' colour does. Each brick carries every point attribute of the box that owns its anchor cell. THE PACKING IS A SCANLINE GREEDY, course by course from the bottom and within a course in z then x. The first unfilled cell of a scan is always the minimum corner of the brick that covers it, so the scan is complete without backtracking; the choice there is WHICH catalogue entry, either way round. HEIGHT COMES FIRST: the tallest entry that fits is the course, so a wall is laid in full bricks and plates appear only where the space is shorter than a brick. Among footprints of that height the score is the footprint in studs less `stagger` for every stud of joint in the brick's bottom course that sits directly on a seam in the course below, counted only on the joints the placement decides — where the cell across is the same material and not yet filled — a running bond, the reason real walls hold together, charged only where a different brick could have avoided it — PLUS `bond` for every two separate pieces the placement joins into one, which is what keeps a floor or a roof laid over an empty room from coming out as loose plates (pieces as stud clutch holds them; see `islandsAttr`). AHEAD OF THAT SCORE, WITHIN THE HEIGHT, COMES WHAT HOLDS. A brick is gripped only through its top and bottom faces, so a placement with no brick under its footprint and no cell to be filled over it — a plate in the middle of a one-plate floor, over an empty room and under another — is loose in every build order. A placement that would leave a cell beside it with no HELD placement left to cover it STRANDS the cell: whatever brick covered it would be loose too. So each placement is charged the loose bricks it commits the build to — one if it is held by nothing, plus one for every cell it strands — and the fewest wins, then a held placement over one held by nothing, then the score. Both charges only ever decide where a course has cells with nothing under or over them; a wall, or anything standing on what is below it, packs by the score alone. Ties go to the larger footprint, then the earlier catalogue entry, then the entry as listed rather than turned. If nothing fits — a catalogue with no 1x1 plate meeting a one-plate gap — the cell is refused by name rather than left empty, so the output always covers the input exactly. THE HOLD SEARCH answers what that one-placement look cannot see: a trap set two or more placements back, an early brick that took the grip a later cell needed. Wherever a course comes out with a brick held by nothing, that course is lifted and laid again with each REGION around such a brick — the course's cells of that material that were unfilled when the course began, joined side to side — packed by an EXACT search for a packing in which every brick is held: depth first over the held placements alone, first in scan order and then from the cell the fewest of them cover, each cell's placements tried by the same score, a placement dropped the moment it leaves a cell of the region with no held placement over it, and a failure going straight back to the latest placement to blame for it. Its first answer is the greedy's own choice wherever that choice holds. It is bounded in STEPS of work, never in time, so the result is the same on every machine and under any load: " + String(holdBudget.region) + " per region and " + String(holdBudget.cook) + " per cook, a few milliseconds for the regions a generated house has and some 30 ms at the bound. A region the search proves has no held packing (a cell no held brick can reach is the usual proof), one it does not finish within the budget, and one that mixes brick heights are laid by the greedy as before — byte for byte in a course where no region was solved; where one was, its bricks can join pieces the greedy weighs elsewhere in the course. A course with no brick held by nothing is never searched, so it packs exactly as the greedy alone does. Where the search ran, `out` carries a DETAIL u32 `holdSearch` of four counts — regions searched, solved, proven to have no held packing, and left to the greedy unproven (budget spent, or heights mixed) — and where it never ran there is no such attribute. OUTPUT `out`: one point per brick in scan order. P is the brick's centre, `rot` a quarter turn about y when the entry was placed turned (identity otherwise), and `scale` its full extents in its OWN frame — w and d studs and h plates as listed, in world units — so a unit box copied onto these points draws every brick in place. `boundsMin`/`boundsMax` are its world corners, the same convention it reads. `brick` (string) is the entry as `WxDxH`, ready to be spawnInstances' `assetAttr`, and `brickIndex` (i32) is its position in the catalogue — `bricks` followed by `extraBricks`. OUTPUT `studs`: one point per stud left SHOWING — on a brick's top where the lattice cell above is empty — at the stud's base centre on the brick's top face, carrying the brick's attributes and its `brick`/`brickIndex`, plus `brickId` and `brickAbove` (the indices in `out` of the brick it stands on and the brick resting on it, -1 for none; see `studMode`, which can ask for every stud instead), with identity `rot` and unit `scale`, so a stud mesh modelled at world size with its base at the origin spawns straight onto it; the bounds columns are reset to zero. `islandsAttr` optionally writes a DETAIL u32 on `out` counting the pieces the build falls into when only stud CLUTCH holds it — a brick is joined to the bricks sitting on its top face where their footprints overlap, and side contact does not count, so a value above 1 is a build that comes apart when lifted. HALO: none. A brick spans cells, so cooked over part of the boxes it cuts bricks at the part's edge; this belongs on an unbounded level or before a split. Not GPU-eligible: the packing is sequential by construction. The occupancy grid is dense over the boxes' joint extent and refused past 16.7 million cells.",
   inputs: [{ name: "in", kind: "geometry" }],
   outputs: [
     { name: "out", kind: "geometry" },
@@ -359,9 +401,15 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
     // so a piece is only ever as connected as what lies BELOW the scan.
     const up: number[] = [];
     const grounded: number[] = [];
+    // Off while the hold search lays bricks it may lift again: a union it
+    // undoes would leave compressed paths pointing at the wrong root. A
+    // piece's root is its lowest brick id either way (unions keep the lower
+    // root), so the answer does not depend on it.
+    let compress = true;
     const pieceOf = (i: number): number => {
       let r = i;
       while ((up[r] as number) !== r) r = up[r] as number;
+      if (!compress) return r;
       while ((up[i] as number) !== r) {
         const next = up[i] as number;
         up[i] = r;
@@ -564,7 +612,522 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
       return count;
     };
 
-    for (let y = 0; y < ny; y++) {
+    // ---- laying bricks -------------------------------------------------
+    // Joins brick `id` to the pieces it stands on.
+    const joinBelow = (id: number): void => {
+      const x = bx[id] as number;
+      const y = by[id] as number;
+      const z = bz[id] as number;
+      const cand = bCand[id] as Candidate;
+      if (y === 0) return;
+      for (let zz = z; zz < z + cand.fz; zz++) {
+        for (let xx = x; xx < x + cand.fx; xx++) {
+          const b = brickOf[at(xx, y - 1, zz)] as number;
+          if (b < 0) continue;
+          const ra = pieceOf(id);
+          const rb = pieceOf(b);
+          if (ra === rb) continue;
+          const r = Math.min(ra, rb);
+          up[Math.max(ra, rb)] = r;
+          grounded[r] = (grounded[ra] as number) | (grounded[rb] as number);
+        }
+      }
+    };
+    const lay = (x: number, y: number, z: number, cand: Candidate, o: number): void => {
+      const id = bCand.length;
+      fill(x, y, z, cand, id);
+      bx.push(x);
+      by.push(y);
+      bz.push(z);
+      bCand.push(cand);
+      bOwner.push(o);
+      up.push(id);
+      grounded.push(y === 0 ? 1 : 0);
+      joinBelow(id);
+    };
+    // Lifts every brick from id `start` on — the bricks of course y — and
+    // rebuilds the pieces of the rest. A piece's root is its lowest id, so
+    // the same unions rebuild exactly the pieces there were; the strand
+    // cache is the course's and is forgotten with it.
+    const unlay = (start: number, y: number): void => {
+      for (let id = bCand.length - 1; id >= start; id--) {
+        fill(bx[id] as number, y, bz[id] as number, bCand[id] as Candidate, -1);
+      }
+      for (const list of [bx, by, bz, bCand, bOwner, up, grounded] as unknown[][]) list.length = start;
+      for (let id = 0; id < start; id++) {
+        up[id] = id;
+        grounded[id] = by[id] === 0 ? 1 : 0;
+      }
+      for (let id = 0; id < start; id++) joinBelow(id);
+      for (let c = 0; c < sxz; c++) if (deadCourse[c] === y) deadCourse[c] = -1;
+    };
+
+    // ---- the hold search ---------------------------------------------
+    // The greedy looks one placement ahead. A trap set two or more
+    // placements back — a plate that took the grip a later cell needed —
+    // it cannot see, and there it lays a brick held by nothing. Where it
+    // does, and only there, the course is lifted and laid again with each
+    // REGION around such a brick — the cells of the course of that
+    // material, unfilled when the course began, joined side to side —
+    // solved by an exact search for a packing in which every brick is held:
+    // depth first over the held placements alone, trying the placements
+    // over a cell by the greedy's own score, and dropping one the moment it
+    // leaves any cell of the region with no held placement left to cover
+    // it. It runs in scan order first, so the packing it finds is the
+    // greedy's own choice at every anchor where that choice holds, and
+    // then, if that has not finished, from the cell the fewest placements
+    // cover. The search is bounded in STEPS, never in time, so the answer
+    // is the same on every machine: past the budget, or where the region has
+    // no held packing at all (a cell no held brick can reach is the common
+    // proof), the region is laid by the greedy as before.
+    // Per cell of a course: its region, the catalogue entry the search
+    // planned with its corner there, and its index within a region being
+    // searched. Allocated the first time a course needs them, so a cook the
+    // search never touches pays nothing for them.
+    let regionOf = new Int32Array(0);
+    let planOf = new Int32Array(0);
+    let localOf = new Int32Array(0);
+    const searchCells = (): void => {
+      if (regionOf.length === sxz) return;
+      regionOf = new Int32Array(sxz).fill(-1);
+      planOf = new Int32Array(sxz).fill(-1);
+      localOf = new Int32Array(sxz).fill(-1);
+    };
+    const touched: number[] = [];
+    const regions: Region[] = [];
+    /** Regions searched, solved, proven to have no held packing, and left to the greedy unproven. */
+    const holdStats = [0, 0, 0, 0];
+    let holdSpent = 0;
+    // Read once, so a cook runs on one set of budgets throughout.
+    const budgets = { ...holdBudget };
+    // A region: the 4-connected cells of course y of the material of cell
+    // c0, unfilled when the course began, around c0.
+    const openRegion = (c0: number, h: number, y: number): void => {
+      const cx0 = c0 % nx;
+      const g = cellGroup[at(cx0, y, (c0 - cx0) / nx)] as number;
+      const rid = regions.length;
+      const list = [c0];
+      regionOf[c0] = rid;
+      touched.push(c0);
+      const admit = (cx: number, cz: number): void => {
+        const c = cz * nx + cx;
+        if ((regionOf[c] as number) >= 0) return;
+        const kk = at(cx, y, cz);
+        if (cellGroup[kk] !== g || (brickOf[kk] as number) >= 0) return;
+        regionOf[c] = rid;
+        touched.push(c);
+        list.push(c);
+      };
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i] as number;
+        const cx = c % nx;
+        const cz = (c - cx) / nx;
+        if (cx > 0) admit(cx - 1, cz);
+        if (cx + 1 < nx) admit(cx + 1, cz);
+        if (cz > 0) admit(cx, cz - 1);
+        if (cz + 1 < nz) admit(cx, cz + 1);
+      }
+      list.sort((a, b) => a - b);
+      regions.push({ cells: Int32Array.from(list), g, h, state: PENDING });
+    };
+    // What a cell laid only for the question holds while it is asked.
+    const TEMP = 0x7fffffff;
+    const solve = (region: Region, y: number): void => {
+      region.state = LEFT;
+      holdStats[0]++;
+      const { cells, g, h } = region;
+      const K = cells.length;
+      if (holdSpent >= budgets.cook) {
+        holdStats[3]++;
+        return;
+      }
+      // ONE HEIGHT: the search lays bricks of the height the greedy did,
+      // which is exact only where that is the height at every anchor in
+      // every state — a 1x1 of it exists, every column takes it, and no
+      // column takes the next height up. A floor slab is such a region; one
+      // mixing heights is left to the greedy.
+      let nextH = Infinity;
+      let first = -1;
+      let last = -1;
+      let unit = false;
+      for (let i = 0; i < catalogue.length; i++) {
+        const cc = catalogue[i] as Candidate;
+        if (cc.h > h) nextH = Math.min(nextH, cc.h);
+        if (cc.h === h) {
+          if (first < 0) first = i;
+          last = i + 1;
+          if (cc.fx === 1 && cc.fz === 1) unit = true;
+        }
+      }
+      if (!unit) {
+        holdStats[3]++;
+        return;
+      }
+      const reach = Math.min(nextH, ny - y);
+      for (let i = 0; i < K; i++) {
+        const c = cells[i] as number;
+        const cx = c % nx;
+        const cz = (c - cx) / nx;
+        let free = 0;
+        while (free < reach) {
+          const kk = at(cx, y + free, cz);
+          if (cellGroup[kk] !== g || (brickOf[kk] as number) >= 0) break;
+          free++;
+        }
+        if (free < h || free >= nextH) {
+          holdStats[3]++;
+          return;
+        }
+      }
+      for (let i = 0; i < K; i++) localOf[cells[i] as number] = i;
+      const forget = (): void => {
+        for (let i = 0; i < K; i++) localOf[cells[i] as number] = -1;
+      };
+      // Every HELD placement of the height in the region, by anchor in scan
+      // order and at each anchor in catalogue order.
+      grips(y, h);
+      const pAt: number[] = [];
+      const pCand: number[] = [];
+      let steps = 0;
+      for (let i = 0; i < K; i++) {
+        const c = cells[i] as number;
+        const cx = c % nx;
+        const cz = (c - cx) / nx;
+        for (let ci = first; ci < last; ci++) {
+          const cc = catalogue[ci] as Candidate;
+          steps++;
+          if (cx + cc.fx > nx || cz + cc.fz > nz) continue;
+          if (!anyGrip(cx, cz, cx + cc.fx, cz + cc.fz)) continue;
+          if (!fits(cx, y, cz, cc, g)) continue;
+          pAt.push(i);
+          pCand.push(ci);
+        }
+      }
+      const P = pAt.length;
+      // Which placements cover each cell, and how many of them still fit.
+      const coverStart = new Int32Array(K + 1);
+      for (let p = 0; p < P; p++) {
+        const c = cells[pAt[p] as number] as number;
+        const cx = c % nx;
+        const cz = (c - cx) / nx;
+        const cc = catalogue[pCand[p] as number] as Candidate;
+        for (let zz = cz; zz < cz + cc.fz; zz++) {
+          for (let xx = cx; xx < cx + cc.fx; xx++) {
+            const li = (localOf[zz * nx + xx] as number) + 1;
+            coverStart[li] = (coverStart[li] as number) + 1;
+          }
+        }
+      }
+      const cover = new Int32Array(K);
+      for (let i = 0; i < K; i++) {
+        cover[i] = coverStart[i + 1] as number;
+        coverStart[i + 1] = (coverStart[i + 1] as number) + (coverStart[i] as number);
+      }
+      for (let i = 0; i < K; i++) {
+        if (cover[i] === 0) {
+          // A cell no held brick can reach: no packing holds every brick.
+          forget();
+          holdSpent += steps;
+          holdStats[2]++;
+          region.state = NONE;
+          return;
+        }
+      }
+      const coverList = new Int32Array(coverStart[K] as number);
+      const slot = coverStart.slice(0, K);
+      for (let p = 0; p < P; p++) {
+        const c = cells[pAt[p] as number] as number;
+        const cx = c % nx;
+        const cz = (c - cx) / nx;
+        const cc = catalogue[pCand[p] as number] as Candidate;
+        for (let zz = cz; zz < cz + cc.fz; zz++) {
+          for (let xx = cx; xx < cx + cc.fx; xx++) {
+            const li = localOf[zz * nx + xx] as number;
+            coverList[slot[li] as number] = p;
+            slot[li] = (slot[li] as number) + 1;
+          }
+        }
+      }
+      const filled = new Uint8Array(K);
+      const alive = new Uint8Array(P).fill(1);
+      const killed = new Int32Array(P);
+      // The frame whose brick retired each placement, while it is retired.
+      const killer = new Int32Array(P);
+      let nKilled = 0;
+      // Undo log of the pieces' unions, for `joins`: [index, old value]
+      // pairs, an index of -1 - i meaning grounded[i].
+      const undo: number[] = [];
+      const pieceRoots: number[] = [];
+      // Lays placement p for the question as frame d's brick: fills its
+      // cells, retires every placement it overlaps, and returns a cell of
+      // the region that left with no held placement to cover it, or -1.
+      const place = (p: number, d: number): number => {
+        const c = cells[pAt[p] as number] as number;
+        const px = c % nx;
+        const pz = (c - px) / nx;
+        const cc = catalogue[pCand[p] as number] as Candidate;
+        fill(px, y, pz, cc, TEMP);
+        for (let zz = pz; zz < pz + cc.fz; zz++) {
+          for (let xx = px; xx < px + cc.fx; xx++) filled[localOf[zz * nx + xx] as number] = 1;
+        }
+        let dead = -1;
+        for (let zz = pz; zz < pz + cc.fz; zz++) {
+          for (let xx = px; xx < px + cc.fx; xx++) {
+            const li = localOf[zz * nx + xx] as number;
+            for (let k = coverStart[li] as number; k < (coverStart[li + 1] as number); k++) {
+              const q = coverList[k] as number;
+              if (alive[q] === 0) continue;
+              alive[q] = 0;
+              killer[q] = d;
+              killed[nKilled++] = q;
+              const qc = cells[pAt[q] as number] as number;
+              const qx = qc % nx;
+              const qz = (qc - qx) / nx;
+              const qq = catalogue[pCand[q] as number] as Candidate;
+              steps += qq.area;
+              for (let z2 = qz; z2 < qz + qq.fz; z2++) {
+                for (let x2 = qx; x2 < qx + qq.fx; x2++) {
+                  const t = localOf[z2 * nx + x2] as number;
+                  cover[t] = (cover[t] as number) - 1;
+                  if (cover[t] === 0 && filled[t] === 0 && dead < 0) dead = t;
+                }
+              }
+            }
+          }
+        }
+        // The pieces it stands on become one, as laying it would make them.
+        if (bond > 0) {
+          pieceRoots.length = 0;
+          for (let zz = pz; zz < pz + cc.fz; zz++) {
+            for (let xx = px; xx < px + cc.fx; xx++) {
+              const b = brickOf[at(xx, y - 1, zz)] as number;
+              if (b < 0) continue;
+              const r = pieceOf(b);
+              if (!pieceRoots.includes(r)) pieceRoots.push(r);
+            }
+          }
+          if (pieceRoots.length > 1) {
+            let r = pieceRoots[0] as number;
+            for (const q of pieceRoots) r = Math.min(r, q);
+            for (const q of pieceRoots) {
+              if (q === r) continue;
+              undo.push(q, up[q] as number, -1 - r, grounded[r] as number);
+              up[q] = r;
+              grounded[r] = (grounded[r] as number) | (grounded[q] as number);
+            }
+          }
+        }
+        return dead;
+      };
+      // Undoes `place(p)`, given the logs' lengths before it.
+      const lift = (p: number, killedFrom: number, undoFrom: number): void => {
+        while (undo.length > undoFrom) {
+          const v = undo.pop() as number;
+          const i = undo.pop() as number;
+          if (i >= 0) up[i] = v;
+          else grounded[-1 - i] = v;
+        }
+        while (nKilled > killedFrom) {
+          const q = killed[--nKilled] as number;
+          alive[q] = 1;
+          const qc = cells[pAt[q] as number] as number;
+          const qx = qc % nx;
+          const qz = (qc - qx) / nx;
+          const qq = catalogue[pCand[q] as number] as Candidate;
+          for (let z2 = qz; z2 < qz + qq.fz; z2++) {
+            for (let x2 = qx; x2 < qx + qq.fx; x2++) {
+              const t = localOf[z2 * nx + x2] as number;
+              cover[t] = (cover[t] as number) + 1;
+            }
+          }
+        }
+        const c = cells[pAt[p] as number] as number;
+        const px = c % nx;
+        const pz = (c - px) / nx;
+        const cc = catalogue[pCand[p] as number] as Candidate;
+        fill(px, y, pz, cc, -1);
+        for (let zz = pz; zz < pz + cc.fz; zz++) {
+          for (let xx = px; xx < px + cc.fx; xx++) filled[localOf[zz * nx + xx] as number] = 0;
+        }
+      };
+      // The frames of the search, one per brick laid: the cell it covers,
+      // its moves (a slice of `moves`, best score first), the next to try,
+      // the one laid, and the logs' lengths before it.
+      const moves: number[] = [];
+      const moveScore: number[] = [];
+      const fCell = new Int32Array(K + 1);
+      const fStart = new Int32Array(K + 1);
+      const fNext = new Int32Array(K + 1);
+      const fEnd = new Int32Array(K + 1);
+      const fPlaced = new Int32Array(K + 1).fill(-1);
+      const fKilled = new Int32Array(K + 1);
+      const fUndo = new Int32Array(K + 1);
+      let top = 0;
+      // Opens frame d on the cell it must cover; false when every cell is
+      // covered, which is the region packed. In SCAN order that is the
+      // first unfilled cell from `from`, where every placement still open
+      // over it has its corner there — the greedy's own question. FEWEST
+      // FIRST, it is the unfilled cell the fewest open placements cover,
+      // the earliest of those: the cell most likely to fail, asked first.
+      const openFrame = (d: number, from: number, fewest: boolean): boolean => {
+        let a = -1;
+        if (fewest) {
+          let least = Infinity;
+          for (let i = 0; i < K; i++) {
+            if (filled[i] === 0 && (cover[i] as number) < least) {
+              least = cover[i] as number;
+              a = i;
+            }
+          }
+          steps += K >> 4;
+        } else {
+          a = from;
+          while (a < K && filled[a] === 1) a++;
+          if (a === K) a = -1;
+        }
+        if (a < 0) return false;
+        fCell[d] = a;
+        fStart[d] = top;
+        fNext[d] = top;
+        fPlaced[d] = -1;
+        for (let k = coverStart[a] as number; k < (coverStart[a + 1] as number); k++) {
+          const p = coverList[k] as number;
+          if (alive[p] === 0) continue;
+          const c = cells[pAt[p] as number] as number;
+          const px = c % nx;
+          const pz = (c - px) / nx;
+          const cc = catalogue[pCand[p] as number] as Candidate;
+          steps += 1 + cc.fx + cc.fz;
+          let score = cc.area - stagger * alignedSeams(px, y, pz, cc, g);
+          if (bond > 0) score += bond * joins(px, y, pz, cc);
+          // Best score first; ties keep catalogue order, as the greedy's
+          // strict > does (the cover list is in placement order).
+          let i = top++;
+          while (i > (fStart[d] as number) && (moveScore[i - 1] as number) < score) {
+            moves[i] = moves[i - 1] as number;
+            moveScore[i] = moveScore[i - 1] as number;
+            i--;
+          }
+          moves[i] = p;
+          moveScore[i] = score;
+        }
+        fEnd[d] = top;
+        return true;
+      };
+      // CONFLICT-DIRECTED BACKJUMPING. Each frame keeps the frames whose
+      // bricks are to blame for its failures so far: a cell left with no
+      // held placement blames the frames that retired every placement
+      // over it, and a frame whose every placement failed blames what each
+      // of them blamed plus the frames that retired the ones never tried.
+      // The search then goes straight back to the LATEST frame to blame,
+      // past every frame between, which had nothing to do with it: retrying
+      // those only lays the same failure again. Nothing is skipped that
+      // could have held — the blamed frames' bricks alone rule the cell out
+      // — so the search stays exact, and a failure blaming no frame is a
+      // proof that no packing of the region holds every brick.
+      const blame: number[][] = [];
+      const blameCell = (into: number[], t: number, d: number): void => {
+        for (let k = coverStart[t] as number; k < (coverStart[t + 1] as number); k++) {
+          const q = coverList[k] as number;
+          if (alive[q] === 0 && (killer[q] as number) < d && !into.includes(killer[q] as number)) into.push(killer[q] as number);
+        }
+      };
+      let depth = 0;
+      // One search, to SOLVED (the plan is written), NONE, or LEFT when the
+      // budget runs out; either way every brick it laid is lifted again.
+      const search = (fewest: boolean, budget: number): number => {
+        let outcome = LEFT;
+        depth = 0;
+        top = 0;
+        blame[0] = [];
+        if (!openFrame(0, 0, fewest)) outcome = SOLVED;
+        while (outcome === LEFT) {
+          if (steps > budget) break;
+          if ((++work & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
+          const d = depth;
+          if ((fPlaced[d] as number) >= 0) {
+            lift(fPlaced[d] as number, fKilled[d] as number, fUndo[d] as number);
+            fPlaced[d] = -1;
+          }
+          if (fNext[d] === fEnd[d]) {
+            const why = blame[d] as number[];
+            blameCell(why, fCell[d] as number, d);
+            let j = -1;
+            for (const k of why) if (k > j) j = k;
+            if (j < 0) {
+              // Every held placement over the cell is ruled out by nothing
+              // laid: no packing of the region holds every brick.
+              outcome = NONE;
+              break;
+            }
+            for (let k = d - 1; k > j; k--) {
+              if ((fPlaced[k] as number) >= 0) {
+                lift(fPlaced[k] as number, fKilled[k] as number, fUndo[k] as number);
+                fPlaced[k] = -1;
+              }
+            }
+            top = fEnd[j] as number;
+            const into = blame[j] as number[];
+            for (const k of why) if (k !== j && !into.includes(k)) into.push(k);
+            depth = j;
+            continue;
+          }
+          const p = moves[fNext[d] as number] as number;
+          fNext[d] = (fNext[d] as number) + 1;
+          fKilled[d] = nKilled;
+          fUndo[d] = undo.length;
+          fPlaced[d] = p;
+          const t = place(p, d);
+          if (t >= 0) {
+            blameCell(blame[d] as number[], t, d);
+            continue;
+          }
+          depth = d + 1;
+          if (!openFrame(depth, fCell[d] as number, fewest)) {
+            outcome = SOLVED;
+            break;
+          }
+          const fresh = blame[depth];
+          if (fresh === undefined) blame[depth] = [];
+          else fresh.length = 0;
+        }
+        if (outcome === SOLVED) {
+          for (let d = 0; d < depth; d++) {
+            const p = fPlaced[d] as number;
+            planOf[cells[pAt[p] as number] as number] = pCand[p] as number;
+          }
+        }
+        for (let d = Math.min(depth, K); d >= 0; d--) {
+          if ((fPlaced[d] as number) >= 0) {
+            lift(fPlaced[d] as number, fKilled[d] as number, fUndo[d] as number);
+            fPlaced[d] = -1;
+          }
+        }
+        return outcome;
+      };
+      // In scan order first, so the packing found is the greedy's own
+      // wherever the greedy's choice holds; fewest first with what is left
+      // when that runs out — a floor whose last rows fail by the widths
+      // left over can take a scan millions of steps to give up, and fewest
+      // first lays the long plates the middle of a room needs before the
+      // short ones that would take their grip.
+      const budget = Math.min(budgets.region, budgets.cook - holdSpent);
+      compress = false;
+      let outcome = search(false, Math.min(budget, budgets.scan));
+      if (outcome === LEFT) outcome = search(true, budget);
+      compress = true;
+      forget();
+      holdSpent += steps;
+      region.state = outcome;
+      if (outcome === SOLVED) holdStats[1]++;
+      else if (outcome === NONE) holdStats[2]++;
+      else holdStats[3]++;
+    };
+
+    // ---- the courses -------------------------------------------------
+    // Anchors of the course whose brick was held by nothing: cell, height.
+    const unheldAt: number[] = [];
+    const layCourse = (y: number, searching: boolean): void => {
       for (let z = 0; z < nz; z++) {
         for (let x = 0; x < nx; x++) {
           const k = at(x, y, z);
@@ -573,79 +1136,105 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
           if ((++work & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
           const g = cellGroup[k] as number;
           let best: Candidate | undefined;
-          let bestScore = -Infinity;
-          // Candidates are pre-sorted tallest first, then by footprint, then
-          // catalogue order, then as listed before turned, so a strict >
-          // keeps the tie-break. HEIGHT IS NOT TRADED against seams: the
-          // first height that fits is the course, and the seam cost only
-          // chooses among footprints of it. Scored on volume instead, a 1x1
-          // plate beat any full brick whose end met a seam, and the plate
-          // then knocked every course above it off the brick rhythm — a
-          // house's walls came out three quarters plates.
-          //
-          // Within that height, WHAT HOLDS comes before the score. Each
-          // placement is charged the loose bricks it commits the build to:
-          // one if it is held by nothing (see `held`), plus one for every
-          // cell beside it that it strands (see `strands`). The fewest wins,
-          // then a held placement over one held by nothing, and only then
-          // the score — no score buys back a brick that is loose in every
-          // build order. Charging a stranded cell like a loose brick is what
-          // keeps the rule from trading one loose brick for two: a held
-          // placement that strands two cells loses to the loose one that
-          // strands none. Both charges are zero wherever every cell of the
-          // course has something under or over it, so a wall, a solid block
-          // or anything standing on what is below packs by the score alone.
-          let bestLoose = Infinity;
           let bestHeld = false;
-          holdableBefore.clear();
-          for (const cand of catalogue) {
-            // Once a held placement stranding nothing is the best, only the
-            // score can be beaten, and no placement scores above its
-            // footprint plus a join for every stud but one: past that bound
-            // nothing smaller can win.
-            const settled = bestLoose === 0;
-            if (best !== undefined && (cand.h < best.h || (settled && cand.area + bond * (cand.area - 1) <= bestScore))) break;
-            if (!fits(x, y, z, cand, g)) continue;
-            const isHeld = held(x, y, z, cand);
-            let score = cand.area - stagger * alignedSeams(x, y, z, cand, g);
-            if (bond > 0) score += bond * joins(x, y, z, cand);
-            if (settled && (!isHeld || score <= bestScore)) continue;
-            const loose = (isHeld ? 0 : 1) + strands(x, y, z, cand, g);
-            if (loose > bestLoose) continue;
-            if (loose < bestLoose || (isHeld && !bestHeld) || (isHeld === bestHeld && score > bestScore)) {
-              bestScore = score;
-              best = cand;
-              bestLoose = loose;
-              bestHeld = isHeld;
+          if (searching) {
+            const c = z * nx + x;
+            const r = regionOf[c] as number;
+            if (r >= 0) {
+              const region = regions[r] as Region;
+              if (region.state === PENDING) solve(region, y);
+              const p = planOf[c] as number;
+              if (p >= 0) {
+                best = catalogue[p] as Candidate;
+                bestHeld = true;
+              }
             }
           }
           if (best === undefined) {
-            throw new Error(
-              `${NODE}: no entry in the catalogue ("bricks" plus "extraBricks") fits at lattice cell (${x + x0}, ${y + y0}, ${z + z0}) — world (${origin[0] + (x + x0) * pitch[0]}, ${origin[1] + (y + y0) * pitch[1]}, ${origin[2] + (z + z0) * pitch[2]}), in the box of point ${o}. The space left there is narrower or shorter than every brick in the catalogue; add [1, 1, 1] (a 1x1 plate) to "bricks" or "extraBricks" so any occupancy can be covered`,
-            );
-          }
-          const id = bCand.length;
-          fill(x, y, z, best, id);
-          bx.push(x);
-          by.push(y);
-          bz.push(z);
-          bCand.push(best);
-          bOwner.push(o);
-          up.push(id);
-          grounded.push(y === 0 ? 1 : 0);
-          for (let zz = z; zz < z + best.fz; zz++) {
-            for (let xx = x; xx < x + best.fx; xx++) {
-              const b = y === 0 ? -1 : (brickOf[at(xx, y - 1, zz)] as number);
-              if (b < 0) continue;
-              const ra = pieceOf(id);
-              const rb = pieceOf(b);
-              if (ra === rb) continue;
-              const r = Math.min(ra, rb);
-              up[Math.max(ra, rb)] = r;
-              grounded[r] = (grounded[ra] as number) | (grounded[rb] as number);
+            let bestScore = -Infinity;
+            // Candidates are pre-sorted tallest first, then by footprint, then
+            // catalogue order, then as listed before turned, so a strict >
+            // keeps the tie-break. HEIGHT IS NOT TRADED against seams: the
+            // first height that fits is the course, and the seam cost only
+            // chooses among footprints of it. Scored on volume instead, a 1x1
+            // plate beat any full brick whose end met a seam, and the plate
+            // then knocked every course above it off the brick rhythm — a
+            // house's walls came out three quarters plates.
+            //
+            // Within that height, WHAT HOLDS comes before the score. Each
+            // placement is charged the loose bricks it commits the build to:
+            // one if it is held by nothing (see `held`), plus one for every
+            // cell beside it that it strands (see `strands`). The fewest wins,
+            // then a held placement over one held by nothing, and only then
+            // the score — no score buys back a brick that is loose in every
+            // build order. Charging a stranded cell like a loose brick is what
+            // keeps the rule from trading one loose brick for two: a held
+            // placement that strands two cells loses to the loose one that
+            // strands none. Both charges are zero wherever every cell of the
+            // course has something under or over it, so a wall, a solid block
+            // or anything standing on what is below packs by the score alone.
+            let bestLoose = Infinity;
+            holdableBefore.clear();
+            for (const cand of catalogue) {
+              // Once a held placement stranding nothing is the best, only the
+              // score can be beaten, and no placement scores above its
+              // footprint plus a join for every stud but one: past that bound
+              // nothing smaller can win.
+              const settled = bestLoose === 0;
+              if (best !== undefined && (cand.h < best.h || (settled && cand.area + bond * (cand.area - 1) <= bestScore))) break;
+              if (!fits(x, y, z, cand, g)) continue;
+              const isHeld = held(x, y, z, cand);
+              let score = cand.area - stagger * alignedSeams(x, y, z, cand, g);
+              if (bond > 0) score += bond * joins(x, y, z, cand);
+              if (settled && (!isHeld || score <= bestScore)) continue;
+              const loose = (isHeld ? 0 : 1) + strands(x, y, z, cand, g);
+              if (loose > bestLoose) continue;
+              if (loose < bestLoose || (isHeld && !bestHeld) || (isHeld === bestHeld && score > bestScore)) {
+                bestScore = score;
+                best = cand;
+                bestLoose = loose;
+                bestHeld = isHeld;
+              }
+            }
+            if (best === undefined) {
+              throw new Error(
+                `${NODE}: no entry in the catalogue ("bricks" plus "extraBricks") fits at lattice cell (${x + x0}, ${y + y0}, ${z + z0}) — world (${origin[0] + (x + x0) * pitch[0]}, ${origin[1] + (y + y0) * pitch[1]}, ${origin[2] + (z + z0) * pitch[2]}), in the box of point ${o}. The space left there is narrower or shorter than every brick in the catalogue; add [1, 1, 1] (a 1x1 plate) to "bricks" or "extraBricks" so any occupancy can be covered`,
+              );
             }
           }
+          if (!bestHeld) unheldAt.push(z * nx + x, best.h);
+          lay(x, y, z, best, o);
         }
+      }
+    };
+
+    for (let y = 0; y < ny; y++) {
+      const start = bCand.length;
+      unheldAt.length = 0;
+      layCourse(y, false);
+      // Only a course that laid a brick held by nothing is searched; every
+      // other course is exactly the greedy's.
+      for (let round = 0; round < HOLD_ROUNDS && unheldAt.length > 0; round++) {
+        const fresh: number[] = [];
+        searchCells();
+        for (let i = 0; i < unheldAt.length; i += 2) {
+          if ((regionOf[unheldAt[i] as number] as number) < 0) fresh.push(unheldAt[i] as number, unheldAt[i + 1] as number);
+        }
+        if (fresh.length === 0) break;
+        unlay(start, y);
+        for (let i = 0; i < fresh.length; i += 2) {
+          if ((regionOf[fresh[i] as number] as number) < 0) openRegion(fresh[i] as number, fresh[i + 1] as number, y);
+        }
+        unheldAt.length = 0;
+        layCourse(y, true);
+      }
+      if (touched.length > 0) {
+        for (const c of touched) {
+          regionOf[c] = -1;
+          planOf[c] = -1;
+        }
+        touched.length = 0;
+        regions.length = 0;
       }
     }
 
@@ -729,6 +1318,12 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
         index[id] = cand.index;
       }
       if (islandsAttr !== "") bricksGeo.attrs.detail.replace(islandsAttr, "u32", 1, 0).set(0, islands);
+      // Written only where the hold search ran, so a build it never
+      // touched is byte for byte what it was.
+      if ((holdStats[0] as number) > 0) {
+        const rec = bricksGeo.attrs.detail.replace(HOLD_ATTR, "u32", 4, [0, 0, 0, 0]);
+        for (let c = 0; c < 4; c++) rec.set(0, holdStats[c] as number, c);
+      }
     }
 
     const studOwners = studBrick.map((id) => bOwner[id] as number);

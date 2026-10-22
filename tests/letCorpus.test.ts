@@ -92,6 +92,14 @@ function sizeOf(v: unknown): number {
   return n;
 }
 
+function readsScope(spec: unknown): boolean {
+  let found = false;
+  eachNode(spec, (node) => {
+    if (node.fn === "var" || node.fn === "let") found = true;
+  });
+  return found;
+}
+
 /**
  * `spec` with every repeated subexpression (of two nodes or more) bound
  * once in a root `let` and read through `var` — or, when nothing repeats,
@@ -100,14 +108,6 @@ function sizeOf(v: unknown): number {
  * sequential scope is exercised whenever two repeats nest. Undefined for a
  * single-node expression, which has nothing to bind.
  */
-function readsScope(spec: FieldSpec): boolean {
-  let found = false;
-  eachNode(spec, (node) => {
-    if (node.fn === "var" || node.fn === "let") found = true;
-  });
-  return found;
-}
-
 function letify(spec: FieldSpec): FieldSpec | undefined {
   const counts = new Map<string, number>();
   const root = JSON.stringify(spec);
