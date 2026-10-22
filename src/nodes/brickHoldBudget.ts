@@ -6,7 +6,10 @@
  * listed; a step of `settle` is one word of a bit row built or XORed in
  * its parity proof, or one rectangle or cut asked by its cut tiling — work
  * counted, never time — so whether a region is solved is the same on every
- * machine and under any load. Measured over 40 000 generated houses up to a
+ * machine and under any load. The GROUND repair, which lays a build again
+ * from a course where a piece of it floats, counts the lattice cells it lays
+ * again; the searches it runs while it does spend the budgets above, which
+ * are the cook's, so no repair can spend them twice. Measured over 40 000 generated houses up to a
  * 32 x 32 lot, the regions the greedy leaves a loose plate in were solved
  * in at most about 700 000 steps (a few milliseconds). Over the synthetic
  * slabs that run the search out, a parity proof took at most 1.6 million
@@ -37,6 +40,12 @@ export const holdBudget = {
   cuts: 1 << 20,
   /** What `settle` may spend over one cook, both together. */
   settle: 1 << 24,
+  /**
+   * What the GROUND repair may spend over one cook, in lattice cells laid
+   * again: each course it asks of costs every cell from that course up.
+   * Some ten relayings of a whole 32 x 32 lot's house.
+   */
+  ground: 1 << 20,
 };
 
 /**

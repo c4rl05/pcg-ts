@@ -774,6 +774,17 @@ async function holding(out: Geometry, pitch: V3 = UNIT): Promise<{ islands: numb
   return { islands: geo.attrs.detail.require("islands").get(0), never };
 }
 
+/** Runs `body` with some of the hold search's budgets replaced, restoring them after. */
+async function withHoldBudget<T>(budget: Partial<typeof holdBudget>, body: () => Promise<T>): Promise<T> {
+  const saved = { ...holdBudget };
+  Object.assign(holdBudget, budget);
+  try {
+    return await body();
+  } finally {
+    Object.assign(holdBudget, saved);
+  }
+}
+
 /**
  * Four one-stud walls one brick course tall around a W x D room, and a
  * floor `courses` plates thick laid over the whole of it — so the floor's
@@ -827,8 +838,11 @@ describe("packBricks: bond", () => {
     // seams of the lower one. In the lower course a 30-stud row is more
     // than one plate, and a plate in the middle of it touches no wall.
     const specs = roomWithFloor(30, 10, 2);
-    const loose = await pack(boxCloud(specs), { stagger: 0, bond: 0 });
-    const bonded = await pack(boxCloud(specs), { stagger: 0, bond: 16 });
+    // With the ground repair off, so what is weighed is bond's alone: the
+    // repair attaches what bond 0 leaves (see "attaching floating pieces").
+    const noRepair = { ground: 0 };
+    const loose = await withHoldBudget(noRepair, () => pack(boxCloud(specs), { stagger: 0, bond: 0 }));
+    const bonded = await withHoldBudget(noRepair, () => pack(boxCloud(specs), { stagger: 0, bond: 16 }));
     // Both cover exactly the boxes' cells: bond changes WHICH bricks.
     const want = [...unionCells(specs).keys()].sort();
     for (const r of [loose, bonded]) {
@@ -842,6 +856,8 @@ describe("packBricks: bond", () => {
     expect(a.never).toBeGreaterThan(0);
     expect(b.never).toBeLessThan(a.never);
     expect(b.islands).toBeLessThan(a.islands);
+    // And with it on, bond 0's floor comes out attached as well.
+    expect((await holding((await pack(boxCloud(specs), { stagger: 0, bond: 0 })).out)).never).toBe(0);
   });
 
   it("is never worse than bond 0 over a range of floored rooms", async () => {
@@ -1000,16 +1016,7 @@ describe("packBricks: the hold search", () => {
     const a = out.attrs.detail.get("holdSearch");
     return a === undefined ? undefined : [0, 1, 2, 3].map((c) => a.get(0, c));
   };
-  /** Runs `body` with some of the search's budgets replaced, restoring them after. */
-  async function withBudget<T>(budget: Partial<typeof holdBudget>, body: () => Promise<T>): Promise<T> {
-    const saved = { ...holdBudget };
-    Object.assign(holdBudget, budget);
-    try {
-      return await body();
-    } finally {
-      Object.assign(holdBudget, saved);
-    }
-  }
+  const withBudget = withHoldBudget;
   /**
    * A region budget of 0, and none for `settle`, leaves every region to the
    * greedy: the packer as it was before the search.
@@ -1370,6 +1377,256 @@ describe("packBricks: the hold search", () => {
     }
     // Not vacuous: regions were solved, so courses were laid again.
     expect(solved).toBeGreaterThan(20);
+  });
+});
+
+describe("packBricks: attaching floating pieces", () => {
+  /**
+   * The `groundRepair` detail: [pieces floating before, their bricks,
+   * pieces floating after, their bricks, courses asked, repairs kept], or
+   * undefined when nothing floated.
+   */
+  const repaired = (out: Geometry): number[] | undefined => {
+    const a = out.attrs.detail.get("groundRepair");
+    return a === undefined ? undefined : [0, 1, 2, 3, 4, 5].map((c) => a.get(0, c));
+  };
+  const searched = (out: Geometry): number[] | undefined => {
+    const a = out.attrs.detail.get("holdSearch");
+    return a === undefined ? undefined : [0, 1, 2, 3].map((c) => a.get(0, c));
+  };
+  /** The repair off: it still asks what floats, and asks no course to change. */
+  const noRepair = <T>(body: () => Promise<T>): Promise<T> => withHoldBudget({ ground: 0 }, body);
+  /**
+   * What floats, as brickConnectivity says it — the oracle, never the
+   * packer's own count: the pieces holding a brick of step -1, those
+   * bricks, and the courses they start in.
+   */
+  async function floating(out: Geometry): Promise<{ pieces: number; bricks: number; courses: number[] }> {
+    const r = await runNode(brickConnectivity, { pitch: UNIT }, { in: [makeGeometryItem(out)] });
+    const geo = firstGeo(r.out);
+    const step = geo.attrs.point.require("step");
+    const island = geo.attrs.point.require("island");
+    const lo = geo.attrs.point.require("boundsMin");
+    const pieces = new Set<number>();
+    const courses = new Set<number>();
+    let bricks = 0;
+    for (let i = 0; i < geo.pointCount; i++) {
+      if (step.get(i) >= 0) continue;
+      bricks++;
+      pieces.add(island.get(i));
+      courses.add(lo.get(i, 1));
+    }
+    return { pieces: pieces.size, bricks, courses: [...courses].sort((a, b) => a - b) };
+  }
+  const coversExactly = (specs: readonly BoxSpec[], out: Geometry): void => {
+    const { cells, doubled } = rasterize(readBricks(out));
+    expect(doubled).toBe(0);
+    expect([...cells.keys()].sort()).toEqual([...unionCells(specs).keys()].sort());
+  };
+  const params = { groupBy: ["tag"] };
+
+  // THE EAVE OF THE BRICK HOUSE AT SEED 1185, on a 32 x 32 lot without its
+  // third block split, cut down from 424 boxes to eight: a one-plate floor
+  // (tag 1) running out past its walls (tag 0, and 2 beyond them), and a
+  // roof (tag 3) two and three plates thick standing on the part over the
+  // room. The greedy lays the floor's edge row over nothing, held only by
+  // the roof plates over it, and the roof's edge column held only by that
+  // row: twelve bricks holding each other across two courses, every one of
+  // them held, none of them reaching the table. No per-course look sees it.
+  const eave: BoxSpec[] = [
+    { lo: [0, 3, 0], hi: [14, 4, 32], tag: 1 },
+    { lo: [14, 3, 21], hi: [15, 4, 32], tag: 1 },
+    { lo: [0, 0, 14], hi: [14, 3, 15], tag: 0 },
+    { lo: [0, 0, 16], hi: [1, 3, 21], tag: 0 },
+    { lo: [13, 0, 21], hi: [14, 3, 31], tag: 0 },
+    { lo: [14, 0, 21], hi: [15, 3, 31], tag: 2 },
+    { lo: [0, 4, 16], hi: [14, 6, 31], tag: 3 },
+    { lo: [1, 6, 16], hi: [13, 7, 31], tag: 3 },
+  ];
+  // The same delta-minimised further, to six boxes: a 1x1 plate of its own
+  // material (tag 2) hung under the floor's corner cell (14, 3, 22), on
+  // nothing. The two plates hold each other and nothing else. Its lowest
+  // course cannot be made firm — nothing under the hanging plate at all —
+  // so the repair asks the course above, where a plate from the corner
+  // reaches over the wall at x = 13.
+  const hanging: BoxSpec[] = [
+    { lo: [0, 3, 0], hi: [14, 4, 32], tag: 1 },
+    { lo: [14, 3, 22], hi: [15, 4, 23], tag: 1 },
+    { lo: [1, 0, 14], hi: [13, 3, 15], tag: 0 },
+    { lo: [13, 0, 21], hi: [14, 3, 23], tag: 0 },
+    { lo: [14, 2, 22], hi: [15, 3, 23], tag: 2 },
+    { lo: [1, 4, 22], hi: [13, 5, 25], tag: 3 },
+  ];
+
+  it("attaches a floor strip and the roof over it that hold each other and nothing else, from the house at seed 1185", async () => {
+    // Non-vacuity, and the oracle: with the repair off, twelve bricks of
+    // one piece float across two courses, and the hold search never ran.
+    const off = await noRepair(() => pack(boxCloud(eave), params));
+    expect(await floating(off.out)).toEqual({ pieces: 1, bricks: 12, courses: [3, 4] });
+    expect(searched(off.out)).toBeUndefined();
+    expect(repaired(off.out)).toEqual([1, 12, 1, 12, 0, 0]);
+
+    const { out } = await pack(boxCloud(eave), params);
+    expect((await floating(out)).bricks).toBe(0);
+    // One course asked — the floor, the piece's lowest — and kept.
+    expect(repaired(out)).toEqual([1, 12, 0, 0, 1, 1]);
+    expect(searched(out)).toBeUndefined();
+    coversExactly(eave, out);
+  });
+
+  it("asks the course above when the piece's lowest course cannot stand firm", async () => {
+    const off = await noRepair(() => pack(boxCloud(hanging), params));
+    expect(await floating(off.out)).toEqual({ pieces: 1, bricks: 2, courses: [2, 3] });
+    const { out } = await pack(boxCloud(hanging), params);
+    expect((await floating(out)).bricks).toBe(0);
+    // Two courses asked: the hanging plate's, which has no firm packing,
+    // and the floor's, kept.
+    expect(repaired(out)).toEqual([1, 2, 0, 0, 2, 1]);
+    coversExactly(hanging, out);
+  });
+
+  it("never engages where nothing floats: no detail, and byte for byte as with it off", async () => {
+    const builds: Record<string, BoxSpec[]> = {
+      "a long wall": [{ lo: [0, 0, 0], hi: [17, 15, 1] }],
+      "a room's four walls": ring(0, 0, 30, 10, 0, 12),
+      "a floor over two rooms the search holds": twoRooms(9, 9, 6, 11),
+      "a floored room": roomWithFloor(20, 20, 2),
+    };
+    for (const [name, specs] of Object.entries(builds)) {
+      const a = await pack(boxCloud(specs), { ...params, islandsAttr: "islands" });
+      expect((await floating(a.out)).bricks, name).toBe(0);
+      expect(repaired(a.out), name).toBeUndefined();
+      const b = await noRepair(() => pack(boxCloud(specs), { ...params, islandsAttr: "islands" }));
+      expect(snapshotGeometry(a.out), name).toEqual(snapshotGeometry(b.out));
+      expect(snapshotGeometry(a.studs), name).toEqual(snapshotGeometry(b.studs));
+    }
+  });
+
+  it("does not ask a course the hold search came back from without a held packing", async () => {
+    // The 21 x 21 walled slab: proven to have no held packing, so its loose
+    // plate is a piece no packing of that course can attach (a firm packing
+    // is a held one), and no packing of another course can either — held
+    // depends only on which cells are filled below and above.
+    const specs = [...ring(0, 0, 21, 21, 0, 3), { lo: [0, 3, 0], hi: [21, 4, 21], tag: 1 }, ...ring(0, 0, 21, 21, 4, 7)] as BoxSpec[];
+    const { out, studs } = await pack(boxCloud(specs), params);
+    expect(searched(out)).toEqual([1, 0, 1, 0]);
+    const f = await floating(out);
+    expect(f.bricks).toBeGreaterThan(0);
+    expect(repaired(out)).toEqual([f.pieces, f.bricks, f.pieces, f.bricks, 0, 0]);
+    const off = await noRepair(() => pack(boxCloud(specs), params));
+    expect(snapshotGeometry(out).point).toEqual(snapshotGeometry(off.out).point);
+    expect(snapshotGeometry(studs)).toEqual(snapshotGeometry(off.studs));
+  });
+
+  it("puts the build back exactly as it was when a repair does not stand", async () => {
+    // With no budget for the hold search or `settle`, no region the repair
+    // asks for can be packed, so every course it asks is laid again and
+    // then put back.
+    const starved = { region: 0, settle: 0 };
+    const a = await withHoldBudget(starved, () => pack(boxCloud(eave), params));
+    const b = await withHoldBudget({ ...starved, ground: 0 }, () => pack(boxCloud(eave), params));
+    const asked = repaired(a.out) as number[];
+    expect(asked.slice(0, 4)).toEqual([1, 12, 1, 12]);
+    expect(asked[4]).toBeGreaterThan(0);
+    expect(asked[5]).toBe(0);
+    expect(snapshotGeometry(a.out).point).toEqual(snapshotGeometry(b.out).point);
+    expect(snapshotGeometry(a.studs)).toEqual(snapshotGeometry(b.studs));
+  });
+
+  it("stops at its budget and says how far it got", async () => {
+    // The floor course is the first asked, and costs every cell from it up:
+    // one cell short of that, nothing is asked.
+    const cells = (bricks: Brick[]): number => {
+      const lo = [0, 1, 2].map((c) => Math.min(...bricks.map((b) => b.lo[c] as number)));
+      const hi = [0, 1, 2].map((c) => Math.max(...bricks.map((b) => (b.lo[c] as number) + (b.ext[c] as number))));
+      return ((hi[0] as number) - (lo[0] as number)) * ((hi[2] as number) - (lo[2] as number)) * ((hi[1] as number) - 3);
+    };
+    const off = await noRepair(() => pack(boxCloud(eave), params));
+    const cost = cells(readBricks(off.out));
+    const short = await withHoldBudget({ ground: cost - 1 }, () => pack(boxCloud(eave), params));
+    expect(repaired(short.out)).toEqual([1, 12, 1, 12, 0, 0]);
+    expect(snapshotGeometry(short.out).point).toEqual(snapshotGeometry(off.out).point);
+    const enough = await withHoldBudget({ ground: cost }, () => pack(boxCloud(eave), params));
+    expect(repaired(enough.out)).toEqual([1, 12, 0, 0, 1, 1]);
+  });
+
+  it("packs the same however the input is ordered, and as laying each course again in full", async () => {
+    for (const specs of [eave, hanging]) {
+      const geo = boxCloud(specs);
+      const p = { ...params, islandsAttr: "islands" };
+      const a = await pack(geo, p);
+      const again = await pack(geo, p);
+      const shuffled = await pack(permutePoints(geo, shuffledOrder(specs.length, 3)), p);
+      holdRelay.partial = false;
+      const full = await pack(geo, p).finally(() => {
+        holdRelay.partial = true;
+      });
+      for (const b of [again, shuffled, full]) {
+        expect(snapshotGeometry(b.out)).toEqual(snapshotGeometry(a.out));
+        expect(snapshotGeometry(b.studs)).toEqual(snapshotGeometry(a.studs));
+      }
+      // THE CONTROL: the comparison can say "different".
+      const off = await noRepair(() => pack(geo, p));
+      expect(snapshotGeometry(off.out).point).not.toEqual(snapshotGeometry(a.out).point);
+    }
+  });
+
+  it("says only what it checked: its counts are brickConnectivity's, before and after, over random eaves", async () => {
+    // Floors over a few walls and posts, with roof blocks of two materials
+    // over parts of them: many float, some across courses, and some of
+    // those the repair attaches.
+    let seed = 7;
+    const rnd = (a: number, b: number): number => a + Math.floor(((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296) * (b - a + 1));
+    let kept = 0;
+    let fewer = 0;
+    for (let i = 0; i < 80; i++) {
+      const W = rnd(6, 16);
+      const D = rnd(6, 16);
+      const specs: BoxSpec[] = [];
+      for (let k = rnd(1, 4); k > 0; k--) {
+        const [along, x, z, L] = [rnd(0, 1), rnd(1, W - 2), rnd(1, D - 2), rnd(2, 12)];
+        specs.push(along === 1 ? { lo: [x, 0, z], hi: [Math.min(W, x + L), 3, z + 1], tag: 0 } : { lo: [x, 0, z], hi: [x + 1, 3, Math.min(D, z + L)], tag: 0 });
+      }
+      for (let k = rnd(0, 3); k > 0; k--) {
+        const [x, z] = [rnd(0, W - 1), rnd(0, D - 1)];
+        specs.push({ lo: [x, rnd(0, 2), z], hi: [x + 1, 3, z + 1], tag: rnd(0, 1) === 1 ? 0 : 4 });
+      }
+      specs.push({ lo: [0, 3, 0], hi: [W, 4, D], tag: 1 });
+      for (let k = rnd(1, 3); k > 0; k--) {
+        const [x, z] = [rnd(0, W - 2), rnd(0, D - 2)];
+        const [w, d, y] = [rnd(1, W - x), rnd(1, D - z), 4 + rnd(0, 1)];
+        specs.push({ lo: [x, y, z], hi: [x + w, y + rnd(1, 3), z + d], tag: 2 + rnd(0, 1) });
+      }
+      const name = `case ${i}`;
+      const geo = boxCloud(specs);
+      // Overlapping boxes of two materials can leave a gap no entry fits;
+      // that refusal is not this test's business, and both cooks make it.
+      let a: { out: Geometry; studs: Geometry };
+      try {
+        a = await pack(geo, params);
+      } catch {
+        await expect(noRepair(() => pack(geo, params))).rejects.toThrow();
+        continue;
+      }
+      const off = await noRepair(() => pack(geo, params));
+      const before = await floating(off.out);
+      const after = await floating(a.out);
+      const rec = repaired(a.out);
+      if (before.bricks === 0) {
+        expect(rec, name).toBeUndefined();
+        expect(snapshotGeometry(a.out), name).toEqual(snapshotGeometry(off.out));
+        continue;
+      }
+      expect(rec, name).toEqual([before.pieces, before.bricks, after.pieces, after.bricks, (rec as number[])[4], (rec as number[])[5]]);
+      expect(after.bricks, name).toBeLessThanOrEqual(before.bricks);
+      if ((rec as number[])[5] === 0) expect(snapshotGeometry(a.out).point, name).toEqual(snapshotGeometry(off.out).point);
+      else coversExactly(specs, a.out);
+      kept += (rec as number[])[5] as number;
+      if (after.bricks < before.bricks) fewer++;
+    }
+    // Not vacuous: repairs were kept, in several builds.
+    expect(kept).toBeGreaterThan(3);
+    expect(fewer).toBeGreaterThan(2);
   });
 });
 
