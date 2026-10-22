@@ -59,6 +59,10 @@
  *   is written once. Sequential (a binding sees the earlier ones, the body
  *   sees all) and purely notational: the result is the field the inline
  *   expression builds, key included (see the `let` registration)
+ * - `{ fn: "box", name: "x0" }` — the evaluated element's own BOX by name:
+ *   `lo`/`hi`/`size`/`center` (vec3) and `x0 y0 z0 x1 y1 z1 sx sy sz cx cy
+ *   cz`. Notation over `attribute("boundsMin", 3)` and
+ *   `attribute("boundsMax", 3)`, key included (see `./boxNames.ts`)
  * - `{ fn: "component", args: [a], index: 0 }`
  * - `{ fn: "ramp", args: [a], stops: [[0, 0], [1, 1]] }`
  * - `{ fn: "lookup", args: [a], table: [0.4, 1, -2] }` — the table entry
@@ -94,6 +98,7 @@
  * grammar.
  */
 import {
+  type EvalContext,
   type Field,
   type FieldLike,
   abs,
@@ -179,6 +184,17 @@ import {
   withheldOver,
   withheldReason,
 } from "./spec.js";
+import {
+  BOX_EXPANSIONS,
+  BOX_MAX_ATTR,
+  BOX_MIN_ATTR,
+  BOX_NAMES,
+  BOX_NAME_DOCS,
+  type BoxName,
+  boxCornersRead,
+} from "./boxNames.js";
+// By path: the missing-attribute record is library plumbing (see the module).
+import { attributeNotFound } from "../data/attributeNotFound.js";
 import { NOISE_BASES, WORLEY_OUTPUTS } from "../noise/bases.js";
 import {
   type FbmOpts,
@@ -2089,16 +2105,21 @@ register(
       const visible = letScope.map((f) => f.name);
       const near = suggestNames(name, visible);
       const inScopeList = visible.length === 0 ? "no name is in scope here" : `names in scope: ${visible.join(", ")}`;
+      // The brick-house reflex: `x0` read as if the box names were
+      // bindings. They are a fn of their own, which is the whole answer.
+      const boxHint = canonicalOneOf(BOX_NAMES, name) === undefined
+        ? ""
+        : ` — "${name}" is a BOX NAME: the element's own box is {"fn": "box", "name": "${name}"}, no let needed`;
       fail(
         `${path}.name`,
-        letDeclared.includes(name)
+        (letDeclared.includes(name)
           ? `var "${name}": the binding "${name}" is not in scope here — a binding sees only the ` +
               `bindings written BEFORE it, never itself or a later one; ${near.clause}${inScopeList}`
           : letDeclared.length === 0
             ? `var "${name}": no let is in scope here; a var reads a name an enclosing let binds, in its ` +
                 "body or a later binding of the same let"
             : `var "${name}": no binding of that name is in scope here; ${near.clause}${inScopeList} — a ` +
-                "binding is visible in the let's body and in the bindings written after it",
+                "binding is visible in the let's body and in the bindings written after it") + boxHint,
         {
           got: name,
           valid: visible,
@@ -2130,6 +2151,130 @@ register(
       );
     }
     return frame.field;
+  },
+);
+
+// -- box names -------------------------------------------------------------
+
+/**
+ * The field one box name stands for, built from its spec in
+ * {@link BOX_EXPANSIONS} by the same combinators the parser would call on
+ * that spec — so the key and the columns are the hand-written
+ * expression's by construction, not by a second table kept in step. The
+ * handful of fns an expansion uses are the only ones this reads; anything
+ * else is a broken table, and says so.
+ */
+function buildBoxExpansion(spec: unknown): Field {
+  if (typeof spec === "number") return constant(spec);
+  const node = spec as Record<string, unknown>;
+  const args = (node.args as unknown[] | undefined) ?? [];
+  const fn = node.fn;
+  if (fn === "attribute") return attribute(node.name as string, node.tupleSize as number);
+  if (fn === "component") return component(buildBoxExpansion(args[0]), node.index as number);
+  if (fn === "sub") return sub(buildBoxExpansion(args[0]), buildBoxExpansion(args[1]));
+  if (fn === "add") return add(buildBoxExpansion(args[0]), buildBoxExpansion(args[1]));
+  if (fn === "mul") return mul(buildBoxExpansion(args[0]), buildBoxExpansion(args[1]));
+  throw new Error(`internal: box expansion uses fn ${JSON.stringify(fn)}, which buildBoxExpansion does not build`);
+}
+
+/** Levels a box expansion occupies, counted as `buildSpec` counts them (a literal is none). */
+function specHeight(spec: unknown): number {
+  if (typeof spec === "number") return 0;
+  const args = ((spec as Record<string, unknown>).args as unknown[] | undefined) ?? [];
+  return 1 + args.reduce<number>((h, a) => Math.max(h, specHeight(a)), 0);
+}
+
+/**
+ * The refusal for a domain whose elements carry no box. On the POINT
+ * domain both corners are standard attributes (`createPointCloud` adds
+ * them, a zero box at the origin until something sets one), so this fires
+ * only where a node removed one, or on a vertex, primitive or detail
+ * domain, which has no standard box at all.
+ */
+function boxNotFound(ctx: EvalContext, name: BoxName, attr: string): Error {
+  const fix =
+    ctx.domain === "point"
+      ? "give the points their boxes with setBounds first"
+      : `setBounds writes boxes on POINTS; land this field on the point domain, or move both corners here ` +
+        `with promoteAttribute`;
+  return attributeNotFound(ctx.geo, ctx.domain, attr, {
+    prefix: `box(${JSON.stringify(name)}): `,
+    suffix:
+      ` — a box name reads the box of the element it is evaluated on, which is the standard f32 tuple-3 ` +
+      `pair boundsMin/boundsMax; ${fix}`,
+  });
+}
+
+register(
+  "box",
+  // Reads two columns, exactly as the attributes it stands for do.
+  "per-element",
+  ["name"],
+  `{ fn: "box", name: "x0" }`,
+  {
+    description:
+      "Reads the BOX of the element the expression is evaluated on — a cell's standard " +
+      "`boundsMin`/`boundsMax` — by name, so a field that rewrites a box can say `box(\"sx\")` " +
+      "instead of re-deriving it. The names: " +
+      BOX_NAMES.map((n) => `\`${n}\` (${BOX_NAME_DOCS[n]})`).join(", ") +
+      ". Purely notational: each name IS that expression over " +
+      '`attribute("boundsMin", 3)` and `attribute("boundsMax", 3)` — same key, same columns, same GPU ' +
+      "kernel. A fn rather than bare names, so it never collides with a `let` binding or an attribute: " +
+      "a let may bind `x0` and read `box(\"x0\")` beside it. Inside a node param it reads the box " +
+      "that node is HANDED: setBounds resolves both corners against the incoming box before writing " +
+      "either, and splitBox resolves `sizes` on the parent cell. Every point carries a box (a zero " +
+      "box at the origin until setBounds or splitBox writes one); a domain missing either column " +
+      "refuses at evaluation, naming setBounds.",
+  },
+  (spec, path) => {
+    const raw = spec.name;
+    const name = canonicalOneOf(BOX_NAMES, raw) as BoxName | undefined;
+    if (name === undefined) {
+      if (typeof raw !== "string" || raw === "") {
+        fail(`${path}.name`, `box requires a "name", one of: ${BOX_NAMES.join(", ")}`, {
+          got: scalarGot(raw),
+          valid: BOX_NAMES,
+        });
+      }
+      const near = suggestNames(raw, BOX_NAMES);
+      fail(
+        `${path}.name`,
+        `box name "${raw}" is not one; ${near.clause}box names: ${BOX_NAMES.join(", ")} — ` +
+          `for an attribute of your own write {"fn": "attribute", "name": "${raw}"}`,
+        {
+          got: raw,
+          valid: BOX_NAMES,
+          didYouMean: near.names,
+          ...(near.only !== undefined ? { fix: `replace "${raw}" with "${near.only}"` } : {}),
+        },
+      );
+    }
+    // A box name nests as deep as the expression it stands for, for the
+    // reason a `var` does: the parser's depth bound has to accept exactly
+    // what it would accept written out, so the name is charged its
+    // expansion's height here rather than the one level its spec node has.
+    const height = specHeight(BOX_EXPANSIONS[name]);
+    const reached = inlineLevel - 1 + height;
+    if (reached > inlineDeepest) inlineDeepest = reached;
+    if (reached > MAX_SPEC_DEPTH) {
+      fail(
+        path,
+        `with box("${name}") expanded to the expression it stands for, this expression nests deeper than ` +
+          `${MAX_SPEC_DEPTH} levels; flatten the expression`,
+      );
+    }
+    // The name is decided HERE, once: what the evaluator closes over is
+    // the built expression and two booleans, never the string.
+    const inner = buildBoxExpansion(BOX_EXPANSIONS[name]);
+    const { min: needMin, max: needMax } = boxCornersRead(name);
+    const field = makeField(inner.key, inner.tupleSize, (ctx) => {
+      const set = ctx.geo.attrs[ctx.domain];
+      if (needMin && !set.has(BOX_MIN_ATTR)) throw boxNotFound(ctx, name, BOX_MIN_ATTR);
+      if (needMax && !set.has(BOX_MAX_ATTR)) throw boxNotFound(ctx, name, BOX_MAX_ATTR);
+      return inner.evaluate(ctx);
+    });
+    attachSpec(field, { fn: "box", name }, height);
+    return field;
   },
 );
 

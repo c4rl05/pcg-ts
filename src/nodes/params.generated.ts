@@ -5218,8 +5218,9 @@ export interface SetBoundsParams {
    * to THREE numbers per point — a scalar is REFUSED rather than broadcast, because
    * broadcasting would quietly hand every point a cube when a box was asked for. Both
    * corners are resolved against the INPUT geometry before either is written, so a field
-   * here reading `boundsMax` sees the corner this cook was HANDED, never one this node
-   * produced.
+   * here reading `boundsMax` — or any box name, box("hi") or box("size") — sees the box this
+   * cook was HANDED, never one this node produced: `vec(box("x0"), box("y0") + 1,
+   * box("z0"))` raises the floor of the incoming box by 1.
    *
    * - Accepts a field.
    *
@@ -5580,7 +5581,10 @@ export interface SplitBoxParams {
    * "relative", the MODULE (the length one piece aims for) for "repeat". Plain, a list of
    * numbers: [1, 3, 1]. AS A FIELD it is resolved on the PARENT CELL and must have ONE
    * COMPONENT PER SEGMENT — build it with vec(...), which concatenates any number of
-   * components: vec(sub(attribute("sill"), <cell min y>), 3, 1). A field is where a per-cell
+   * components: vec(sub(attribute("sill"), box("y0")), 3, 1). The BOX NAMES (box("y0"),
+   * box("sy"), box("center") and the rest) read the box of the PARENT cell here, so a size
+   * can be a share of the cell it cuts — vec(box("sy") * 0.25, 1) — and the sizes of a
+   * nested split read the piece the split before it made. A field is where a per-cell
    * decision goes, and since it is resolved once per cell before the cut, every piece agrees
    * on it (a randomField drawn here cuts both halves at one coordinate). A NEGATIVE size
    * counts as 0 (nothing, and dropped), like repeatPoints' count; a non-finite one is

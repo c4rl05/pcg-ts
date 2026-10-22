@@ -1987,6 +1987,33 @@ a `value` pin kind that NO node consumes — a wire type with a producer
 and no destination (`src/graph/node.ts`, `valueConstant`). A vestige
 pointing at exactly the model D3 would complete.
 
+**2026-10-22: the data fix, tried on the next complex graph — BOX NAMES.**
+The brick house was the next complex example, and what it repeated across
+nodes was not a formula but a VOCABULARY: every field that rewrites a box
+re-derives that box's corners and sizes, so the graph re-binds the same
+eleven names (`lo`, `hi`, `x0`..`z1`, `sx`, `sy`, `sz`) in nineteen `let`s,
+and its generator carries a 95-line optimiser that does nothing but choose
+which of them to bind. `splitBox` then made it worse in a new place: its
+`sizes` resolve on the parent cell, and a nested split had to re-derive
+sill and head heights by hand. That is the shape the D3 trigger asked to
+be tried as data first, and it collapsed as data: the grammar now names
+the evaluated element's own box, `{fn: "box", name: "x0"}` — `lo`, `hi`,
+`size`, `center` and their twelve components (`src/fields/boxNames.ts`).
+Each name IS one fixed expression over `attribute("boundsMin", 3)` and
+`attribute("boundsMax", 3)`, so it is notation exactly as `let` is: same
+`Field.key`, the same CPU bytes, the same WGSL under the same kernel key,
+held over the corpus by `tests/boxNames.test.ts` (126 rewritten
+expressions, 594 names, every one identical on all three axes; three
+deliberately wrong expansions differ on all three). Measured on the brick
+house without touching it: its 46 box-reading expressions, rewritten with
+box names and NO `let` at all, go from 42.7 kB of JSON to 36.4 kB and from
+1340 spec nodes to 1318 — smaller than the optimised lets, with nothing
+left to optimise. A fn rather than bare names, so a `let` binding `x0` and
+`box("x0")` sit side by side with no shadowing rule to learn. What this
+does NOT settle: it shares a vocabulary every box expression has, not an
+expression particular to one graph, so the truss case and §7.4 stand where
+they were (n=1 for the data fix again, and again it sufficed).
+
 ### ~~The seven remaining math primitives~~ — SHIPPED 2026-08-19
 
 `fract mod smoothstep exp log sign distance` are in the grammar, which

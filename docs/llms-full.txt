@@ -1025,7 +1025,7 @@ asked for, at the seams only.
 
 A field spec is `{ "fn": <name>, ...args }`. Entries in `args` arrays
 may be nested specs, finite numbers, or number arrays (plain values wrap
-into `constant`). All 67 fns (`listFieldFns()`):
+into `constant`). All 68 fns (`listFieldFns()`):
 
 - Inputs:
   - `{ fn: "constant", value: 1 | [1, 2, 3] }`
@@ -1062,6 +1062,27 @@ into `constant`). All 67 fns (`listFieldFns()`):
     Every case is evaluated then selected between, as the nested `lerp`s
     it replaces already did; at most one case can fire, so the answer
     does not depend on the order the cases are written in
+  - `{ fn: "box", name: "x0" }` — reads the BOX of the element being
+    evaluated (its standard `boundsMin`/`boundsMax`, f32 tuple 3) by name.
+    Text form `box("x0")`. Names: `lo` `hi` (the corners, vec3), `size`
+    (hi - lo), `center` (0.5 * (lo + hi)), `x0` `y0` `z0` (lo's components),
+    `x1` `y1` `z1` (hi's), `sx` `sy` `sz` (x1 - x0, ...), `cx` `cy` `cz`
+    (0.5 * (x0 + x1), ...). Pure notation: each name IS that expression
+    over `attribute("boundsMin", 3)`/`attribute("boundsMax", 3)`, e.g.
+    `x0` = `component(attribute("boundsMin", 3), 0)` — same `Field.key`,
+    same columns, same WGSL kernel, so bit-exact on the GPU. A fn, not bare
+    names, so it never collides with a `let` binding or an attribute: a let
+    may bind `x0` and read `box("x0")` beside it (only `box` itself is
+    reserved). A bare `x0` in text outside a let is refused with "did you
+    mean box("x0")?"; an unknown name is refused listing the 16 with a
+    did-you-mean. Every point carries a box (a zero box at the origin
+    until setBounds or splitBox writes one); a domain missing either
+    column (removed, or vertex/primitive/detail) refuses at EVALUATION
+    with `attribute-not-found`, prefixed `box("sx"): `, naming setBounds.
+    In a node param it reads the box the node was HANDED: setBounds
+    resolves both corners against the incoming box, splitBox resolves
+    `sizes` on the PARENT cell (`vec(box("sy") * 0.25, 1)` is a quarter of
+    the cell being cut). JSON/text only — no TypeScript constructor
   - `{ fn: "position" }` — reads P (tuple 3); `{ fn: "index" }` — 0,1,2,...
   - `{ fn: "fraction" }` — normalized index `i / (count - 1)`, spanning
     [0, 1] CLOSED: exactly 0 on the first element and exactly 1 on the

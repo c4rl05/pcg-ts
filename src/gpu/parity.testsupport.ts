@@ -88,6 +88,10 @@ export const PARITY_LAYOUT: FieldKernelLayout = {
     // them at all: a layout without a string attribute cannot compile
     // either.
     species: { type: "string", tupleSize: 1 },
+    // The standard box pair, for the box names. Every max corner sits
+    // above its min, as a real cell's does.
+    boundsMin: { type: "f32", tupleSize: 3 },
+    boundsMax: { type: "f32", tupleSize: 3 },
   },
 };
 
@@ -114,6 +118,9 @@ export const MINIMAL_SPECS: Record<string, FieldSpecArg> = {
   distance: { fn: "distance", args: [{ fn: "position" }, [0.25, -1.5, 2]] },
   constant: { fn: "constant", value: 1 },
   attribute: { fn: "attribute", name: "density" },
+  // The vec3 that reads both corners and folds them: the widest of the
+  // names, and the one whose lowering is more than a load.
+  box: { fn: "box", name: "center" },
   // Parity here is EXACT rather than budgeted, on both sides: the CPU
   // compares two table indices and writes 0 or 1, and so does the kernel.
   // No float interior, so nothing to round. The literal is one the

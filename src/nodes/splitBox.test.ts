@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { Geometry, createPointCloud, createPolyline } from "../data/index.js";
 import { attribute, constant } from "../fields/index.js";
-import { Graph, cook, makeGeometryItem } from "../graph/index.js";
+import { Graph, type NodeHandle, cook, makeGeometryItem } from "../graph/index.js";
 import { hashCombine } from "../random/index.js";
 import {
   deserializeGraph,
@@ -712,7 +712,7 @@ describe("splitBox: seeds and determinism", () => {
         g.add(setAttribute, { name: "r", type: "f32", value: fieldFromJson({ fn: "randomField", key: "r" }) }, "tint"),
     };
     const ids = order === "forward" ? ["grid", "box", "cut", "tint"] : ["tint", "cut", "box", "grid"];
-    const h: Record<string, ReturnType<typeof add.grid>> = {};
+    const h: Record<string, NodeHandle> = {};
     for (const id of ids) h[id] = add[id as keyof typeof add]();
     g.connect(h.grid, "out", h.box, "in");
     g.connect(h.box, "out", h.cut, "in");

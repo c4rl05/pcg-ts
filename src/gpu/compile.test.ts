@@ -19,6 +19,9 @@ const LAYOUT: FieldKernelLayout = {
     // column; `tags` is the tuple case, which the stride has to survive.
     species: { type: "string", tupleSize: 1 },
     tags: { type: "string", tupleSize: 2 },
+    // The standard box pair, which the box names read.
+    boundsMin: { type: "f32", tupleSize: 3 },
+    boundsMax: { type: "f32", tupleSize: 3 },
   },
 };
 
@@ -313,6 +316,7 @@ describe("grammar coverage", () => {
     constant: { fn: "constant", value: 1 },
     attribute: { fn: "attribute", name: "density" },
     attributeIs: { fn: "attributeIs", name: "species", value: "pine" },
+    box: { fn: "box", name: "center" },
     byAttribute: {
       fn: "byAttribute",
       name: "species",

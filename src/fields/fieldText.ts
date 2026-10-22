@@ -76,6 +76,7 @@
  * reading a field from text and reading one from JSON.
  */
 import { closestNames } from "../diagnostics/suggest.js";
+import { BOX_NAMES } from "./boxNames.js";
 import { FieldJsonError, type FieldFnInfo, listFieldFnInfos } from "./fieldJson.js";
 import { type FieldSpec, MAX_SPEC_DEPTH, specChildEntries } from "./spec.js";
 
@@ -306,6 +307,11 @@ const MEANT_INSTEAD = new Map<string, string>([
   ["u", "fraction()"],
   ["rand", 'randomField("key")'],
   ["random", 'randomField("key")'],
+  // A bare `x0` is what an author who has met the box names writes first,
+  // and what the brick house's generator spells them as. Inside a let that
+  // binds the word it is that binding (scope is checked first); anywhere
+  // else this names the fn they are.
+  ...BOX_NAMES.map((n): [string, string] => [n, `box("${n}")`]),
 ]);
 
 /**

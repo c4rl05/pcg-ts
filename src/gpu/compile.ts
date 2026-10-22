@@ -26,6 +26,7 @@
 import { MAX_SPEC_DEPTH, opaqueParam, paramSpecOf, paramValue, specChildren } from "../fields/spec.js";
 import type { FieldSpec, FieldSpecArg } from "../fields/fieldJson.js";
 import { fieldFromJson, fieldFromJsonValueFree } from "../fields/fieldJson.js";
+import { BOX_EXPANSIONS, type BoxName } from "../fields/boxNames.js";
 import { hashCombine, hashSeed, hashString } from "../random/hash.js";
 import { APPLY_CONST_COMPONENTS, applyUniformBytes } from "./applyKernels.js";
 import { NOISE_RAW_RANGES, type NoiseRange, hash2 } from "../noise/util.js";
@@ -614,6 +615,19 @@ HANDLERS.set("var", (spec, path, ctx) => {
     }
   }
   return slot.val;
+});
+
+/**
+ * A box name lowers as the expression it stands for, compiled in place
+ * from the one table the CPU parser builds from (`src/fields/boxNames.ts`)
+ * — so the kernel is the hand-written expression's, line for line, and
+ * the value numbering in `emit` shares every corner read with the rest of
+ * the body exactly as it would have inline. The name was validated by the
+ * parser before codegen, and is looked up once per compile.
+ */
+HANDLERS.set("box", (spec, path, ctx) => {
+  const name = spec.name as BoxName;
+  return compileNode(BOX_EXPANSIONS[name] as unknown as Record<string, unknown>, `${path}<box ${name}>`, ctx);
 });
 
 HANDLERS.set("index", (_spec, _path, ctx) => ctx.emit("f32(i)", 1));
@@ -1504,6 +1518,15 @@ function collectAttrNames(v: unknown, out: Set<string>): void {
     if (typeof v.name === "string") out.add(v.name);
     return;
   }
+  // A box name reads the corners its expansion reads, and no more: `x0`
+  // binds boundsMin alone, as `component(attribute("boundsMin", 3), 0)`
+  // would.
+  if (fn === "box") {
+    if (typeof v.name === "string" && Object.hasOwn(BOX_EXPANSIONS, v.name)) {
+      collectAttrNames(BOX_EXPANSIONS[v.name as BoxName], out);
+    }
+    return;
+  }
   // `byAttribute` reads a column AND holds nested branches, so unlike the
   // two above it must claim its name and then keep walking. Returning here
   // would leave an attribute read only inside a case value unbound, and the
@@ -2067,6 +2090,10 @@ function rootThroughLets(root: FieldSpec): FieldSpec {
       cur = cur.args[0];
     } else if (cur.fn === "var" && typeof cur.name === "string" && scope.has(cur.name)) {
       cur = scope.get(cur.name);
+    } else if (cur.fn === "box" && typeof cur.name === "string" && Object.hasOwn(BOX_EXPANSIONS, cur.name)) {
+      // `box("lo")` IS `attribute("boundsMin", 3)`, so it stores what that
+      // root stores.
+      cur = BOX_EXPANSIONS[cur.name as BoxName];
     } else {
       return cur as unknown as FieldSpec;
     }

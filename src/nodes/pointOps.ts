@@ -1887,7 +1887,7 @@ export const setBounds = standardNode<SetBoundsParams, SetBoundsInputs, SetBound
       default: [0, 0, 0],
       acceptsField: true,
       description:
-        "Minimum corner written to every point's boundsMin, in world units. As a FIELD it is PER POINT, which is the reading that makes this node worth more than a constant: an extent derived from the point's own `scale`, or from a species attribute, gives every instance the box it actually occupies rather than one box the whole cloud shares. Must evaluate to THREE numbers per point — a scalar is REFUSED rather than broadcast, because broadcasting would quietly hand every point a cube when a box was asked for. Both corners are resolved against the INPUT geometry before either is written, so a field here reading `boundsMax` sees the corner this cook was HANDED, never one this node produced.",
+        "Minimum corner written to every point's boundsMin, in world units. As a FIELD it is PER POINT, which is the reading that makes this node worth more than a constant: an extent derived from the point's own `scale`, or from a species attribute, gives every instance the box it actually occupies rather than one box the whole cloud shares. Must evaluate to THREE numbers per point — a scalar is REFUSED rather than broadcast, because broadcasting would quietly hand every point a cube when a box was asked for. Both corners are resolved against the INPUT geometry before either is written, so a field here reading `boundsMax` — or any box name, box(\"hi\") or box(\"size\") — sees the box this cook was HANDED, never one this node produced: `vec(box(\"x0\"), box(\"y0\") + 1, box(\"z0\"))` raises the floor of the incoming box by 1.",
     },
     boundsMax: {
       type: "vec3",

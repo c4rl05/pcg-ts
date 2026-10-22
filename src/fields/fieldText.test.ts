@@ -111,6 +111,7 @@ const EXAMPLES: Readonly<Record<string, FieldSpec>> = {
   constant: { fn: "constant", value: [1, 2, 3] },
   attribute: { fn: "attribute", name: "tangent", tupleSize: 3 },
   attributeIs: { fn: "attributeIs", name: "species", value: "pine" },
+  box: { fn: "box", name: "sx" },
   byAttribute: { fn: "byAttribute", name: "part", cases: { rod: 1, bar: [1, 0.7, 1] }, default: 1 },
   component: { fn: "component", args: [{ fn: "position" }], index: 0 },
   ramp: {

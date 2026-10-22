@@ -35,6 +35,7 @@
 import type { JsonValue } from "../diagnostics/index.js";
 import { MAX_LOOKUP_TABLE } from "../fields/spec.js";
 import { type FieldFnInfo, listFieldFnInfos } from "../fields/fieldJson.js";
+import { BOX_NAMES } from "../fields/boxNames.js";
 import { GRAPH_META_KEYS } from "../graph/graph.js";
 import {
   type Graph,
@@ -236,6 +237,7 @@ export const FIELD_SPEC_KEY_RULES: Readonly<Record<string, FieldKeyEntry>> = {
     byFn: {
       param: { schema: FIELD_PARAM_NAME, required: true },
       var: { schema: { type: "string", pattern: "^[A-Za-z_][A-Za-z0-9_]*$" }, required: true },
+      box: { schema: { type: "string", enum: [...BOX_NAMES] }, required: true },
     },
   },
   opts: {

@@ -440,8 +440,12 @@ describe("derived spec round-trip", () => {
    */
   // `let` and `var` are notation: TypeScript has variables of its own, so
   // no constructor spells one, and what a let BUILDS derives the inline
+  // expression (asserted below). `box` is notation too, over two
+  // attributes the combinator API already reads — a TypeScript author
+  // binds `component(attribute("boundsMin", 3), 0)` to a variable — so no
+  // constructor derives it, and the field it builds keys as that
   // expression (asserted below).
-  const JSON_ONLY = new Set(["let", "param", "var"]);
+  const JSON_ONLY = new Set(["box", "let", "param", "var"]);
 
   it("the matrix reaches every grammar fn a constructor can derive", () => {
     const reached = new Set<string>();
@@ -475,6 +479,12 @@ describe("derived spec round-trip", () => {
     expect(getFieldSpec(built)).toEqual(letSpec);
     expect(getFieldSpec(mul(built, 2))?.args).toEqual([letSpec, { fn: "constant", value: 2 }]);
     expect(built.key).toBe(add(attribute("w"), attribute("w")).key);
+    // A box name keeps its spelling the same way, and keys as the
+    // expression it stands for.
+    const boxed = fieldFromJson({ fn: "box", name: "x1" });
+    expect(getFieldSpec(boxed)).toEqual({ fn: "box", name: "x1" });
+    expect(getFieldSpec(mul(boxed, 2))?.args).toEqual([{ fn: "box", name: "x1" }, { fn: "constant", value: 2 }]);
+    expect(boxed.key).toBe(component(attribute("boundsMax", 3), 0).key);
   });
 
   for (const c of CASES) {

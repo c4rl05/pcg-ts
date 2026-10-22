@@ -445,7 +445,7 @@ Field-capable params (marked "Field" in [nodes.md](./nodes.md), or
 of a constant: `{ "fn": <name>, ... }`. Wherever a spec takes arguments
 (`args` entries, noise `position`), a finite number or number array is
 also accepted and wraps into `constant`. Specs nest arbitrarily (up to
-256 levels). `listFieldFns()` returns all 67 names at runtime.
+256 levels). `listFieldFns()` returns all 68 names at runtime.
 
 ### Which params accept one
 
@@ -598,6 +598,7 @@ both spellings:
 | `{ fn: "constant", value: 3 }` | `constant(3)` — see below |
 | `attribute` | `attribute("density")`, `attribute("tangent", 3)` |
 | `byAttribute` | `byAttribute("part", { rod: 1 }, 1)` |
+| `box` | `box("x0")`, `box("size")` — outside a `let`, a bare `x0` is refused as `did you mean box("x0")?` |
 | `component` | `component(expr, 0)` |
 | `ramp` | `ramp(expr, [[4.5, 0.02], [14, 0.3]])` |
 | `lookup` | `lookup(expr, [0, 0.5, 1])` |
@@ -639,6 +640,7 @@ idempotent.
 | `attribute` | `{ fn, name: "density", tupleSize?: 1 }` | Reads a numeric attribute of the target domain (a string attribute is read by `attributeIs` or `byAttribute` instead, never by this fn; `tupleSize`, when given, must match) |
 | `attributeIs` | `{ fn, name: "species", value: "pine" }` | 1 on elements whose STRING attribute equals the literal, 0 on all the others, on any domain. A predicate, never an index accessor: the string table is insertion-ordered and rebuilt by clone/filter/merge, so one logical value sits at different indices in different cells of a partitioned world |
 | `byAttribute` | `{ fn, name: "part", cases: { "rod": 1, "panel": [1, 0.7, 1] }, default: 1 }` | The N-way form: the case whose KEY equals the STRING attribute's value, or `default` where none does. Case values are full argument positions (spec, number, or tuple) and broadcast against each other like any other combinator's inputs. The `default` is REQUIRED |
+| `box` | `{ fn, name: "x0" }` | The box of the element being evaluated — its standard `boundsMin`/`boundsMax` (f32, tuple 3) — by name: a corner, a component, the size or the centre (table below). Pure notation over those two attributes |
 | `position` | `{ fn }` | The `P` attribute (f32, tuple 3) |
 | `index` | `{ fn }` | Element index 0, 1, 2, ... |
 | `fraction` | `{ fn }` | Normalized element index, `index / (count - 1)` |
@@ -721,6 +723,76 @@ Every case is evaluated and then selected between, exactly as the nested
 shared between cases are evaluated once. At most one case can fire —
 distinct keys intern at distinct table indices — so the result does not
 depend on the order you write the cases in.
+
+**`box` reads the box of the element it is evaluated on.** A cell is a
+point with a box, and the box is two standard point attributes,
+`boundsMin` and `boundsMax` (f32, tuple 3). A field that rewrites or cuts
+a box keeps needing that box's corners, extents and centre, and spelling
+each one out as `component`s and differences of the two attributes is
+long and easy to get wrong. `box` names them:
+
+| name | value | tuple |
+| --- | --- | --- |
+| `lo` | the min corner, `boundsMin` | 3 |
+| `hi` | the max corner, `boundsMax` | 3 |
+| `size` | `hi - lo` | 3 |
+| `center` | `0.5 * (lo + hi)` | 3 |
+| `x0` `y0` `z0` | the components of `lo` | 1 |
+| `x1` `y1` `z1` | the components of `hi` | 1 |
+| `sx` `sy` `sz` | `x1 - x0`, `y1 - y0`, `z1 - z0` | 1 |
+| `cx` `cy` `cz` | `0.5 * (x0 + x1)`, and so on | 1 |
+
+```json
+{ "fn": "vec", "args": [
+  { "fn": "mul", "args": [{ "fn": "box", "name": "sy" }, 0.25] },
+  1
+] }
+```
+
+is `vec(box("sy") * 0.25, 1)` in the text form: a quarter of the cell's
+height, then a weight of 1 for the rest — a `splitBox` `sizes` field.
+
+It is purely notational. Each name IS a fixed expression over
+`attribute("boundsMin", 3)` and `attribute("boundsMax", 3)` — `x0` is
+`component(attribute("boundsMin", 3), 0)`, `sx` is
+`component(attribute("boundsMax", 3), 0) - component(attribute("boundsMin", 3), 0)`,
+`center` is `0.5 * (attribute("boundsMin", 3) + attribute("boundsMax", 3))`
+— with the same `Field.key`, byte-identical CPU columns, and the same
+WGSL kernel text and kernel key. So on the GPU it is exactly as exact as
+the elementwise arithmetic it expands to, which is bit-exact, and it has
+no parity row of its own. It exists only in JSON and text: there is no
+TypeScript constructor, because a TypeScript author already has
+variables, `attribute` and `component`.
+
+It is a fn rather than sixteen bare names so that it lives in the fn
+namespace, beside `attribute`, `var` and `param`, and never collides with
+a `let` binding or an attribute name. A `let` may bind `x0` and read
+`box("x0")` beside it, and no shadowing question arises; the one
+reserved word is `box` itself, because a binding may not be named after
+a fn. In the text form a bare `x0` outside a `let` is refused
+with `did you mean box("x0")?`, and a JSON `{ "fn": "var", "name": "x0" }` with no
+binding in scope says the box names are `{ "fn": "box", "name": "x0" }`.
+An unknown name is refused naming the sixteen valid ones, with a
+did-you-mean: `box name "sX" is not one; did you mean "sx"? ...`.
+
+On points it never fails for want of a box: `createPointCloud` adds both
+corners as standard attributes, a zero box at the origin until
+`setBounds` or `splitBox` writes one. A domain missing either column — a
+point domain a node removed one from, or a vertex, primitive or detail
+domain, which has no standard box — refuses at EVALUATION with an
+`attribute-not-found` error prefixed `box("sx"): ` that names `setBounds`
+as the fix; off the point domain it adds that `setBounds` writes boxes on
+points, so land the field on points or promote both corners with
+`promoteAttribute`.
+
+Inside a node param it reads the box that node was HANDED. `setBounds`
+resolves both corners against the incoming box before writing either, so
+a box name in either corner reads the box the node received, never one
+it produced: `vec(box("x0"), box("y0") + 1, box("z0"))` raises the floor
+of the incoming box by 1. `splitBox` resolves its `sizes` field on the
+PARENT cell, so `vec(box("sy") * 0.25, 1)` is a quarter of the cell being
+cut, and the sizes of a nested split read the piece the split before it
+made.
 
 `fraction` spans **[0, 1] closed**: exactly 0 on the first element and
 exactly 1 on the last, matching `pointLine`'s `includeEnd: true`
@@ -5375,7 +5447,9 @@ makes. `trunc` is exact for `floor`'s reason instead: it emits the
 builtin, and an integer-valued result was a representable f32 already,
 so there is nothing left to round. `randomField`'s is point-domain:
 the kernel requires `P`, so a primitive-domain `randomField` declines to
-the CPU and keys on primitive identity there. One device is run-to-run
+the CPU and keys on primitive identity there. `box` adds nothing to this list:
+each of its names compiles to the attribute reads, `component` and
+add/sub/mul it stands for, as the identical kernel. One device is run-to-run
 byte-identical. Everything else matches within measured per-op-family
 budgets, in range-ULP units — |cpu−gpu| / (2⁻²³ · max|cpu|), i.e. ULPs
 at the top of the family's output range (raw max-ULP is misleading at

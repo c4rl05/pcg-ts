@@ -13,7 +13,8 @@ const SPECIES = ["pine", "oak", "birch"] as const;
  * Points-only geometry with the corpus attributes: `P` (f32x3 in
  * [-8, 8]), `density` (f32 in [0, 1]), `normal` (f32x3, unit length),
  * `uv` (f32x2 in [0, 1]), `active` (bool), `id` (u32), `material` (i32,
- * mixed signs), `species` (string, cycling through {@link SPECIES}).
+ * mixed signs), `species` (string, cycling through {@link SPECIES}), and
+ * the standard box pair `boundsMin`/`boundsMax` around P.
  *
  * `species` is dense rather than sparse on purpose: `attributeIs` is a
  * predicate, and a fixture where one literal matched a handful of lanes
@@ -31,6 +32,8 @@ export function makeParityGeometry(count: number): Geometry {
   const id = set.add("id", "u32", 1);
   const material = set.add("material", "i32", 1);
   const species = set.add("species", "string", 1);
+  const boundsMin = set.add("boundsMin", "f32", 3);
+  const boundsMax = set.add("boundsMax", "f32", 3);
   set.resize(count);
   // One `writable()` per column, taken after the resize that reallocates
   // and before the loop that fills them: a fork is a per-column cost and
@@ -42,6 +45,8 @@ export function makeParityGeometry(count: number): Geometry {
   const activeD = active.writable();
   const idD = id.writable();
   const materialD = material.writable();
+  const boundsMinD = boundsMin.writable();
+  const boundsMaxD = boundsMax.writable();
   for (let i = 0; i < count; i++) {
     for (let k = 0; k < 3; k++) {
       Pd[i * 3 + k] = (hashFloat(hashCombine(101, i, k)) - 0.5) * 16;
@@ -65,6 +70,13 @@ export function makeParityGeometry(count: number): Geometry {
     idD[i] = hashCombine(404, i);
     materialD[i] = (hashCombine(505, i) | 0) % 1000;
     species.setString(i, SPECIES[i % SPECIES.length]);
+    // A box around P, each half-extent in [0.25, 4.25): min below max on
+    // every axis, and uneven, so no two box names read the same number.
+    for (let k = 0; k < 3; k++) {
+      const half = 0.25 + 4 * hashFloat(hashCombine(707, i, k));
+      boundsMinD[i * 3 + k] = Pd[i * 3 + k] - half;
+      boundsMaxD[i * 3 + k] = Pd[i * 3 + k] + half * (1 + k * 0.5);
+    }
   }
   return geo;
 }

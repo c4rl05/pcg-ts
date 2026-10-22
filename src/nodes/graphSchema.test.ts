@@ -190,7 +190,7 @@ describe("graphJsonSchema: the field grammar's key table", () => {
     }
     // The count the table was written against; a new key is a new row.
     expect(keys.size).toBe(15);
-    expect(infos.length).toBe(67);
+    expect(infos.length).toBe(68);
   });
 
   it("holds no rule that no fn uses", () => {
@@ -459,7 +459,7 @@ describe("graphJsonSchema: agreement with deserializeGraph", () => {
     const sample = (fn: string, key: string): unknown => {
       switch (key) {
         case "name":
-          return fn === "param" ? "amount" : "density";
+          return fn === "param" ? "amount" : fn === "box" ? "sx" : "density";
         case "value":
           return fn === "attributeIs" ? "pine" : 1;
         case "cases":

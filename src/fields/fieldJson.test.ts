@@ -1659,7 +1659,7 @@ describe("variation classification", () => {
    * should see, so it fails here until someone writes it down.
    */
   const PER_ELEMENT = [
-    "attribute", "attributeIs", "byAttribute", "fbm", "fraction", "index", "let", "param", "perlinNoise",
+    "attribute", "attributeIs", "box", "byAttribute", "fbm", "fraction", "index", "let", "param", "perlinNoise",
     "position", "randomField", "simplexNoise", "valueNoise", "var", "worleyFeature", "worleyNoise",
   ];
 
