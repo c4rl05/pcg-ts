@@ -1522,7 +1522,7 @@ Reads the `source` geometry's point attributes AT A PER-POINT COMPUTED INDEX and
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-gather-by-index.json](../graphs/basics-gather-by-index.json) — 1 total (`pcg graphs --node transferByIndex`)
+**Examples:** [basics-gather-by-index.json](../graphs/basics-gather-by-index.json), [examples-brick-house.json](../graphs/examples-brick-house.json) — 2 total (`pcg graphs --node transferByIndex`)
 
 **Params:**
 
