@@ -20,7 +20,7 @@ import { AttributeNotFoundError, createPointCloud, type Geometry } from "../data
 import { canonicalPointRanks } from "../data/identity.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { hashCombine } from "../random/index.js";
-import { holdBudget } from "./brickHoldBudget.js";
+import { holdBudget, holdRelay } from "./brickHoldBudget.js";
 import { brickConnectivity, packBricks, type PackBricksParams } from "./bricks.js";
 import {
   firstGeo,
@@ -1010,8 +1010,11 @@ describe("packBricks: the hold search", () => {
       Object.assign(holdBudget, saved);
     }
   }
-  /** A region budget of 0 leaves every region to the greedy: the packer as it was before the search. */
-  const greedyOnly = <T>(body: () => Promise<T>): Promise<T> => withBudget({ region: 0 }, body);
+  /**
+   * A region budget of 0, and none for `settle`, leaves every region to the
+   * greedy: the packer as it was before the search.
+   */
+  const greedyOnly = <T>(body: () => Promise<T>): Promise<T> => withBudget({ region: 0, settle: 0 }, body);
   const coversExactly = (specs: readonly BoxSpec[], out: Geometry): void => {
     const { cells, doubled } = rasterize(readBricks(out));
     expect(doubled).toBe(0);
@@ -1079,10 +1082,11 @@ describe("packBricks: the hold search", () => {
   it("falls back to the greedy when a budget runs out, and says so", async () => {
     const run = (budget: Partial<typeof holdBudget>) =>
       withBudget(budget, () => pack(boxCloud(slab1868), { groupBy: ["tag"] }));
-    // Out of the region's budget and out of the cook's: both are the
-    // greedy's packing, the oracle of the case above, and both say so.
-    const region = await run({ region: 0 });
-    const cook = await run({ cook: 0 });
+    // Out of the region's budget and out of the cook's, with nothing for
+    // `settle` either: both are the greedy's packing, the oracle of the
+    // case above, and both say so.
+    const region = await run({ region: 0, settle: 0 });
+    const cook = await run({ cook: 0, settle: 0 });
     expect(searched(cook.out)).toEqual([1, 0, 0, 1]);
     expect(snapshotGeometry(cook.out)).toEqual(snapshotGeometry(region.out));
     expect(snapshotGeometry(cook.studs)).toEqual(snapshotGeometry(region.studs));
@@ -1169,6 +1173,203 @@ describe("packBricks: the hold search", () => {
       const greedy = await greedyOnly(() => pack(geo, { groupBy: ["tag"], islandsAttr: "islands" }));
       expect(snapshotGeometry(greedy.out)).not.toEqual(snapshotGeometry(a.out));
     }
+  });
+
+  // A one-plate floor W x D walled round below and above, where every
+  // plate has to reach the wall: the slab of an upper storey, one stud
+  // past what a slab of the default plates always packs.
+  const walledSlab = (W: number, D: number): BoxSpec[] => [
+    ...ring(0, 0, W, D, 0, 3),
+    { lo: [0, 3, 0], hi: [W, 4, D], tag: 1 },
+    ...ring(0, 0, W, D, 4, 7),
+  ];
+  // The house's catalogue: the default plates and bricks with its
+  // baseplates, 16 to 40 studs a side, appended.
+  const baseplates = [16, 16, 1, 16, 24, 1, 16, 32, 1, 16, 40, 1, 24, 24, 1, 24, 32, 1, 24, 40, 1, 32, 32, 1, 32, 40, 1, 40, 40, 1];
+
+  it("proves by parity that a 21 x 21 floor walled round has no held packing", async () => {
+    // Every plate that reaches the middle 13 x 13 of the floor from the
+    // wall does so by an even length (6 to 16, from 4 cells out), so it
+    // covers an even number of those 169 cells, and no set of them covers
+    // all 169. The search, laying one plate at a time, runs out before it
+    // sees that; the count is what proves it.
+    const specs = walledSlab(21, 21);
+    const searchOnly = await withBudget({ settle: 0 }, () => pack(boxCloud(specs), { groupBy: ["tag"] }));
+    expect(searched(searchOnly.out)).toEqual([1, 0, 0, 1]);
+    const { out, studs } = await pack(boxCloud(specs), { groupBy: ["tag"] });
+    expect(searched(out)).toEqual([1, 0, 1, 0]);
+    // Proven or not, the region is the greedy's, and the build is the same.
+    expect(snapshotGeometry(out).point).toEqual(snapshotGeometry(searchOnly.out).point);
+    expect(snapshotGeometry(studs)).toEqual(snapshotGeometry(searchOnly.studs));
+    expect((await holding(out)).never).toBeGreaterThan(0);
+  });
+
+  it("packs a 29 x 30 floor walled round that the search runs out on, by straight cuts", async () => {
+    // Held packings exist — a baseplate from the wall and strips of plates
+    // along the rest — but a search laying one plate at a time from a
+    // corner first tries every packing a wrong first baseplate allows.
+    const specs = walledSlab(29, 30);
+    const params = { groupBy: ["tag"], extraBricks: baseplates };
+    const searchOnly = await withBudget({ settle: 0 }, () => pack(boxCloud(specs), params));
+    expect(searched(searchOnly.out)).toEqual([1, 0, 0, 1]);
+    expect((await holding(searchOnly.out)).never).toBeGreaterThan(0);
+    const { out } = await pack(boxCloud(specs), params);
+    expect(searched(out)).toEqual([1, 1, 0, 0]);
+    expect((await holding(out)).never).toBe(0);
+    coversExactly(specs, out);
+    // And without the search at all, `settle` alone finds it.
+    const settleOnly = await withBudget({ region: 0 }, () => pack(boxCloud(specs), params));
+    expect(searched(settleOnly.out)).toEqual([1, 1, 0, 0]);
+    expect((await holding(settleOnly.out)).never).toBe(0);
+  });
+
+  it("solves exactly what has a held packing and proves none only where none exists, against an exhaustive count", async () => {
+    // Small floors over random posts, the search given no budget, so
+    // `settle` alone decides every region; each region checked against an
+    // exhaustive enumeration of held packings written here.
+    // The default catalogue's plates, either way round.
+    const plates: [number, number][] = [];
+    const flat = packBricks.defaultParams.bricks;
+    for (let i = 0; i < flat.length; i += 3) {
+      const [a, b, h] = [flat[i] as number, flat[i + 1] as number, flat[i + 2] as number];
+      if (h !== 1) continue;
+      plates.push([a, b]);
+      if (a !== b) plates.push([b, a]);
+    }
+    const anyHeld = (W: number, D: number, grip: Uint8Array): boolean => {
+      const filled = new Uint8Array(W * D);
+      const go = (): boolean => {
+        const c = filled.indexOf(0);
+        if (c < 0) return true;
+        const x = c % W;
+        const z = (c - x) / W;
+        for (const [fx, fz] of plates) {
+          if (x + fx > W || z + fz > D) continue;
+          let ok = true;
+          let held = false;
+          for (let zz = z; zz < z + fz && ok; zz++) {
+            for (let xx = x; xx < x + fx; xx++) {
+              if (filled[zz * W + xx] === 1) ok = false;
+              if (grip[zz * W + xx] === 1) held = true;
+            }
+          }
+          if (!ok || !held) continue;
+          for (let zz = z; zz < z + fz; zz++) for (let xx = x; xx < x + fx; xx++) filled[zz * W + xx] = 1;
+          if (go()) return true;
+          for (let zz = z; zz < z + fz; zz++) for (let xx = x; xx < x + fx; xx++) filled[zz * W + xx] = 0;
+        }
+        return false;
+      };
+      return go();
+    };
+    let seed = 12345;
+    const rnd = (): number => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296;
+    const tally = { searched: 0, solved: 0, none: 0, left: 0 };
+    for (let i = 0; i < 120; i++) {
+      const W = 3 + Math.floor(rnd() * 5);
+      const D = 3 + Math.floor(rnd() * 5);
+      const grip = new Uint8Array(W * D);
+      const specs: BoxSpec[] = [{ lo: [0, 3, 0], hi: [W, 4, D], tag: 1 }];
+      const dens = 0.04 + rnd() * 0.2;
+      for (let c = 0; c < W * D; c++) {
+        if (rnd() >= dens) continue;
+        grip[c] = 1;
+        specs.push({ lo: [c % W, 0, Math.floor(c / W)], hi: [(c % W) + 1, 3, Math.floor(c / W) + 1], tag: 0 });
+      }
+      const { out } = await withBudget({ region: 0 }, () => pack(boxCloud(specs), { groupBy: ["tag"] }));
+      const hs = searched(out);
+      if (hs === undefined) continue;
+      tally.searched++;
+      const exists = anyHeld(W, D, grip);
+      const name = `${W} x ${D}, case ${i}`;
+      if (hs[1] === 1) {
+        tally.solved++;
+        expect(exists, name).toBe(true);
+        expect((await holding(out)).never, name).toBe(0);
+        coversExactly(specs, out);
+      } else if (hs[2] === 1) {
+        tally.none++;
+        expect(exists, name).toBe(false);
+      } else tally.left++;
+    }
+    // Not vacuous: both answers came up, many times.
+    expect(tally.solved).toBeGreaterThan(5);
+    expect(tally.none).toBeGreaterThan(5);
+  });
+
+  it("lays again only what a searched region changes, brick for brick as laying the whole course again", async () => {
+    const full = (body: () => Promise<{ out: Geometry; studs: Geometry }>) => {
+      holdRelay.partial = false;
+      return body().finally(() => {
+        holdRelay.partial = true;
+      });
+    };
+    // A course of two materials, one after the other in scan order, both
+    // standing on plates that float in the course below (held from above,
+    // so each is a piece of its own until the course joins them). The
+    // first material is a region the search solves; its packing joins the
+    // floating pieces differently from the greedy's, and that changes the
+    // `bond` the greedy weighs at anchors of the second material, which
+    // the relaying has to see through the pieces alone — no cell of the
+    // second material is read differently. Measured: laying the earlier
+    // brick again there without weighing it, as if nothing under it had
+    // changed, comes out different from the full relaying in this case.
+    const floating: BoxSpec[] = [
+      { lo: [5, 0, 4], hi: [6, 3, 5], tag: 0 },
+      { lo: [11, 0, 3], hi: [12, 3, 4], tag: 0 },
+      { lo: [4, 3, 8], hi: [5, 4, 17], tag: 5 },
+      { lo: [8, 3, 1], hi: [9, 4, 11], tag: 6 },
+      { lo: [8, 3, 8], hi: [10, 4, 17], tag: 5 },
+      { lo: [4, 3, 4], hi: [5, 4, 17], tag: 6 },
+      { lo: [0, 3, 5], hi: [2, 4, 16], tag: 5 },
+      { lo: [6, 3, 4], hi: [9, 4, 16], tag: 6 },
+      { lo: [0, 4, 0], hi: [14, 5, 8], tag: 1 },
+      { lo: [0, 4, 8], hi: [14, 5, 17], tag: 2 },
+      { lo: [10, 5, 6], hi: [11, 8, 7], tag: 0 },
+      { lo: [7, 5, 7], hi: [8, 8, 8], tag: 0 },
+      { lo: [2, 5, 9], hi: [3, 8, 10], tag: 0 },
+    ];
+    const fixtures = [floating, slab1868, ...traps.map(([a, b, c, d]) => twoRooms(a, b, c, d)), walledSlab(29, 30)];
+    for (const specs of fixtures) {
+      const params = { groupBy: ["tag"], extraBricks: baseplates, islandsAttr: "islands" };
+      const a = await pack(boxCloud(specs), params);
+      const b = await full(() => pack(boxCloud(specs), params));
+      expect(searched(a.out)?.[1]).toBeGreaterThan(0);
+      expect(snapshotGeometry(a.out)).toEqual(snapshotGeometry(b.out));
+      expect(snapshotGeometry(a.studs)).toEqual(snapshotGeometry(b.studs));
+    }
+    // And many like the first: random floating plates under a course of
+    // two materials, posts to the ground under some cells and on top of
+    // others.
+    let seed = 5;
+    const rnd = (a: number, b: number): number => a + Math.floor(((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296) * (b - a + 1));
+    let solved = 0;
+    for (let i = 0; i < 150; i++) {
+      const W = rnd(8, 20);
+      const D = rnd(4, 10);
+      const specs: BoxSpec[] = [];
+      for (let k = rnd(1, 6); k > 0; k--) {
+        const [x, z] = [rnd(0, W - 1), rnd(0, 2 * D)];
+        specs.push({ lo: [x, 0, z], hi: [x + 1, 3, z + 1], tag: 0 });
+      }
+      for (let k = rnd(2, 6); k > 0; k--) {
+        const [x, z, w, d] = [rnd(0, W - 2), rnd(0, D), rnd(1, 3), rnd(D, 2 * D)];
+        specs.push({ lo: [x, 3, z], hi: [Math.min(W, x + w), 4, Math.min(2 * D + 1, z + d)], tag: 5 + (k % 2) });
+      }
+      specs.push({ lo: [0, 4, 0], hi: [W, 5, D], tag: 1 }, { lo: [0, 4, D], hi: [W, 5, 2 * D + 1], tag: 2 });
+      for (let k = rnd(0, 5); k > 0; k--) {
+        const [x, z] = [rnd(0, W - 1), rnd(0, 2 * D)];
+        specs.push({ lo: [x, 5, z], hi: [x + 1, 8, z + 1], tag: 0 });
+      }
+      const geo = boxCloud(specs);
+      const a = await pack(geo, { groupBy: ["tag"], islandsAttr: "islands" });
+      const b = await full(() => pack(geo, { groupBy: ["tag"], islandsAttr: "islands" }));
+      expect(snapshotGeometry(a.out), `case ${i}`).toEqual(snapshotGeometry(b.out));
+      expect(snapshotGeometry(a.studs), `case ${i}`).toEqual(snapshotGeometry(b.studs));
+      solved += searched(a.out)?.[1] ?? 0;
+    }
+    // Not vacuous: regions were solved, so courses were laid again.
+    expect(solved).toBeGreaterThan(20);
   });
 });
 
