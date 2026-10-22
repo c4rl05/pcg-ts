@@ -283,6 +283,7 @@ describe("the param rows", () => {
 
 describe("the demos are wired to it", () => {
   const DEMOS = [
+    "brick-build",
     "cave",
     "eiffel",
     "galaxy",

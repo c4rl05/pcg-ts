@@ -123,11 +123,15 @@ a parent — these are three different kinds of thing and the old single
   edits it live. It carried a `01-` prefix once, which is exactly what
   made it read as the first demo
 - `demos/` — `infinite-world`, `galaxy`, `gpu-world`, `racetrack`,
-  `road`, `lanterns`, `cave`, `eiffel`. Unnumbered on purpose: they
+  `road`, `lanterns`, `cave`, `eiffel`, `brick-build`. Unnumbered on purpose: they
   encode no order. Each exists because what it shows needs a host — a
   streamed world, a device-resident renderer, a spline the page was handed
   rather than made, a material to read a per-instance channel with, a sun
-  to judge a structure by. `lanterns` is the material: a `u32` `seed`
+  to judge a structure by, a clock to play a build on. `brick-build` is
+  the clock: it cooks the corpus brick house once, lets each brick's
+  `brickConnectivity` step out as an i32 channel, and plays the build
+  course by course in the vertex shader, because a graph has no time input
+  and would otherwise be cooked once per step. `lanterns` is the material: a `u32` `seed`
   channel drives hue, pulse phase and rate through a `ShaderMaterial`, so
   the graph settles structure while the host owns the clock — which no
   corpus graph can show. `eiffel` is the sun: the tower as built in 1889,

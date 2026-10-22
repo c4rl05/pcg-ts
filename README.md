@@ -84,7 +84,7 @@ All of this runs in a browser. Nothing to check out, nothing to build.
   through the mental model, the JSON format, the field grammar, errors as
   an API, and a full agent loop.
 
-And seven demos, each one something a single graph cannot be on its own:
+And nine demos, each one something a single graph cannot be on its own:
 
 <table>
 <tr>
@@ -105,9 +105,13 @@ And seven demos, each one something a single graph cannot be on its own:
 </tr>
 <tr>
 <td width="16%"><a href="https://c4rl05.github.io/pcg-ts/demos/eiffel/"><img alt="The eiffel demo, shown small: a brown iron lattice tower on four pale stone pedestals under a pale grey-blue sky, seen three-quarters on, its shadow thrown back and to the right across sand-coloured ground. A controls-and-readout panel fills the left edge, too small at this size to read." src="./docs/thumbs/eiffel.jpg" width="100%"></a></td>
+<td width="16%"><a href="https://c4rl05.github.io/pcg-ts/demos/cave/"><img alt="The cave demo, shown small: a warm-lit rock interior of smooth bulging walls and dark openings receding into shadow, lit from the camera. A controls-and-readout panel fills the left edge, too small at this size to read." src="./docs/thumbs/cave.jpg" width="100%"></a></td>
+<td width="16%"><a href="https://c4rl05.github.io/pcg-ts/demos/brick-build/"><img alt="The brick build demo, shown small: a short terrace of brick houses in pale yellow and cream, half built on a green baseplate, with one red stepped roof and its chimney on and the courses above the cream block still to come. A controls-and-readout panel fills the left edge, too small at this size to read." src="./docs/thumbs/brick-build.jpg" width="100%"></a></td>
 </tr>
 <tr>
 <td><b><a href="https://c4rl05.github.io/pcg-ts/demos/eiffel/">eiffel</a></b><br>The tower as built in 1889: Eiffel's own plates for the large structure, rules for everything smaller, lit by a low sun. Three depths — skeleton, laced, riveted — each a different graph.</td>
+<td><b><a href="https://c4rl05.github.io/pcg-ts/demos/cave/">cave</a></b><br>One node with no inputs makes the whole world: a noise contoured into triangles, cell by cubic cell, with no seam between neighbours.</td>
+<td><b><a href="https://c4rl05.github.io/pcg-ts/demos/brick-build/">brick build</a></b><br>A house packed into bricks and given a build order, played back course by course. Cooked once; scrubbing runs on the page's own clock.</td>
 </tr>
 </table>
 

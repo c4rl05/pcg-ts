@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * capture-demos.mjs — regenerate docs/manual-assets/*.jpg and docs/thumbs/*.jpg
- * from the editor (`editor/`) and the eight hosted demos under `demos/`.
+ * from the editor (`editor/`) and the nine hosted demos under `demos/`.
  * (Spelling that second path as a glob would end this comment early — the
  * star-slash closes it — and the file stops parsing. It did once.)
  *
@@ -63,7 +63,8 @@
  * 1889 for eiffel), and the only URL parameters any of them read are the
  * editor's `?graph=`, which this script sets deliberately, and eiffel's
  * `?laced` / `?rivets` / `?cam=` / `?still`, of which it sets the pose and
- * the still — so content is already reproducible. What is
+ * the still, and brick-build's `?still` / `?step=`, which open its build
+ * paused on one step — so content is already reproducible. What is
  * not reproducible is the camera: infinite-world flies forward at 18 u/s from
  * t=0, gpu-world has autopilot on, and the galaxy cruises. Each is stopped
  * through its own UI
@@ -135,6 +136,7 @@ const SIZES = {
   lanterns: { css: [1454, 783], out: [1454, 783] },
   cave: { css: [1454, 783], out: [1454, 783] },
   eiffel: { css: [1454, 783], out: [1454, 783] },
+  "brick-build": { css: [1454, 783], out: [1454, 783] },
 };
 
 /**
@@ -487,6 +489,16 @@ const DEMOS = [
       document.body.dataset.ready === "failed" ||
       (document.body.dataset.ready === "1" && has(s["total triangles"]) && s["total triangles"] !== "0"),
     failed: () => document.body.dataset.ready === "failed",
+  },
+  {
+    id: "brick-build",
+    // The build plays on the page's clock from the first frame and the
+    // camera orbits, so neither ever settles. `?still` stops both and
+    // `?step=` opens the build paused on that step, landed -- mid-build,
+    // because a build order is what the page shows and the finished house
+    // is the corpus graph's own picture.
+    path: "demos/brick-build/?still&step=20",
+    ready: (s, has) => document.body.dataset.ready === "1" && has(s["bricks"]),
   },
 ];
 

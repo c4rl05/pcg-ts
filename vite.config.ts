@@ -137,6 +137,7 @@ export default defineConfig({
         lanterns: here("demos/lanterns/index.html"),
         cave: here("demos/cave/index.html"),
         eiffel: here("demos/eiffel/index.html"),
+        "brick-build": here("demos/brick-build/index.html"),
       },
     },
   },
