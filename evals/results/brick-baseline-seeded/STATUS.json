@@ -1,0 +1,23 @@
+{
+  "state": "done",
+  "completed": 3,
+  "total": 3,
+  "wakeReasons": [],
+  "campaign": "brick-baseline-seeded",
+  "sleepUntil": null,
+  "blockedSince": null,
+  "infraSince": null,
+  "updatedAt": "2026-10-22T21:57:04.662Z",
+  "pid": 60780,
+  "currentSlot": null,
+  "attempt": 1,
+  "lastSlot": "r2.brick-house-seeded.A",
+  "gate": {
+    "decision": "stop",
+    "reasons": [
+      "gate arms not in the campaign: A-prime, stripped; configure gate.baselineArms, gate.strippedArm and gate.strippedRefArm"
+    ],
+    "replaceTasks": [],
+    "proposedReplacement": null
+  }
+}

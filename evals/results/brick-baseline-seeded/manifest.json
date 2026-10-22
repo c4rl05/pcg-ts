@@ -1,0 +1,155 @@
+{
+  "campaign": "brick-baseline-seeded",
+  "createdAt": "2026-10-22T20:08:15.296Z",
+  "model": "claude-sonnet-5",
+  "effort": null,
+  "agent": "claude-code",
+  "claudeVersion": "2.1.307",
+  "arms": [
+    {
+      "label": "A",
+      "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/baseline-bricks-0.18.0-ec145ab.tgz",
+      "sha256": "9ddf5dcad2c8cdb789ff7f855cdcdce7bb89e821a0fef77637fa0c332d5b172e",
+      "manifest": {
+        "role": "brick-house baseline: today's vocabulary",
+        "file": "baseline-bricks-0.18.0-ec145ab.tgz",
+        "sha256": "9ddf5dcad2c8cdb789ff7f855cdcdce7bb89e821a0fef77637fa0c332d5b172e",
+        "version": "0.18.0",
+        "gitSha": "ec145ab7bbe60fc21b39239b4f3c1e0a056c8398",
+        "dirty": false,
+        "node": "v22.20.0",
+        "packedAt": "2026-10-22T18:58:30.121Z"
+      }
+    }
+  ],
+  "tasks": [
+    {
+      "id": "brick-house-seeded",
+      "tier": "held-out",
+      "reserve": false,
+      "source": "../pcg-ts-private/evals/tasks/brick-house-seeded",
+      "sha256": "76b0b2b0dd4a0f3e4bcbe70cfefe0e8d2e4fa0680a3f406def725ebcc8876683",
+      "files": {
+        "CALIBRATION.md": "0c4d764bfc25b67f1467934cf544a3482bc2d230e8e7d406042a1742fe33162f",
+        "brief.md": "721741b67aceabcc1ee6652594ceeba42b12054b9f0e98e380316e5ffe40a6d0",
+        "check.mjs": "7bcc970be779dd4756c4cb15719c031c5bb0a971ec68159fdaed00e9ded98e5c",
+        "negatives/back-wall-all-doors.expect.json": "3e1cdee3f664da45ce66f6ceedeafbf2bdd76454f463db196c20dc810ee8aa4e",
+        "negatives/back-wall-all-doors.graph.json": "c01409c7421dcb7ff79272563359b579093362cfba73a9585c1d3708f6b363bb",
+        "negatives/brick-listed-twice.expect.json": "c35eb66bfdc30e6088f496d02e8b02de72485df3a00af36fe4d77ed9672535f9",
+        "negatives/brick-listed-twice.graph.json": "50b529cc2b17cc43cbdacb0cd178c897976e851276fd23f3546f0e37df564c28",
+        "negatives/fixed-size.expect.json": "52f8e3712d26d7abe29461032e46f410b7eeb4ab833eca06501e3ce4252927e1",
+        "negatives/fixed-size.graph.json": "2821ef43ff13a058890bca0f6dee449ca5e07e8ac70fe2a53b2299cb0b75b418",
+        "negatives/flat-roof.expect.json": "3c0afcfb248db4aecd27dec71e6eb1702d15424215ef74e0c5b50feac78ee64b",
+        "negatives/flat-roof.graph.json": "5a7675144cf67ff0053cd8ba423029143db23247d825f2d92c3ddc55d45660fd",
+        "negatives/floating-brick.expect.json": "c004979ae5477a9291cefc10addb4e121ccb96877f12b138cbd6e2fb83ae6311",
+        "negatives/floating-brick.graph.json": "9d6303add73984e855aed67f9f54bc556345c6218e9db692159c8e17b55ac2e4",
+        "negatives/no-roof.expect.json": "3c0afcfb248db4aecd27dec71e6eb1702d15424215ef74e0c5b50feac78ee64b",
+        "negatives/no-roof.graph.json": "eb34f273a08c74577eda6242e8614bbe2ad6e9d0f870037af91b450eca33ea8f",
+        "negatives/one-door.expect.json": "af182add92fb92922f2b0bc338cb1e06719c23c6f69b75c5230e7c9f7deebdbc",
+        "negatives/one-door.graph.json": "edf42f44905f711d667d7317f6f6e93c5770ccfb3039a6d87b2637315f2322af",
+        "negatives/oversized-lot.expect.json": "0854999551f6534880596ebca5c2c6745754791f80257b147ee29445e75be02f",
+        "negatives/oversized-lot.graph.json": "064844d9772ed6c4e936c2019b3448389f3bfbf3080dfa9dc424b660a07dd8e0",
+        "negatives/same-window-heights.expect.json": "e5919d2c0b595f99f56c0488b837a84e5407b0aab4ce769ee1d363dd57c1a47b",
+        "negatives/same-window-heights.graph.json": "b92b6c0110bd822ec2938b5fb95a1636d9230953a1eb505e27443333e4664518",
+        "negatives/two-storeys.expect.json": "266202d75af58f7bcd4693817c2931c65800e50082c115cae28b14593d7fe175",
+        "negatives/two-storeys.graph.json": "0a26f4398ffee1145bd19df7c11e56055aa6e3c5404b3a519747bd06db0d4dac",
+        "negatives/wide-bays.expect.json": "911354b549f288b37d33a2a78bb14f86a8513d917fb874d69615f872468beba0",
+        "negatives/wide-bays.graph.json": "e044b93bcf1027380e6a99f27d4ac22ebf57876d204d1cd29d210301fb1e3625",
+        "reference.graph.json": "fca41ac5d780189205bcb206ee7af030fac092a1a9d4974e43bc505e0e0dffc2",
+        "task.json": "3137c5208635a1daac0ee1851feac0543cb7590c6a814847668005f75264f5e4"
+      },
+      "budgets": {
+        "turns": 150,
+        "wallMinutes": 75
+      }
+    }
+  ],
+  "reserveTasks": [
+    "forest-clearing",
+    "spiral-stair"
+  ],
+  "retryOf": null,
+  "runsPerTask": 3,
+  "scheduleSeed": 20261023,
+  "schedule": [
+    {
+      "slotIndex": 0,
+      "slotId": "r0.brick-house-seeded.A",
+      "runIndex": 0,
+      "task": "brick-house-seeded",
+      "arm": "A",
+      "block": 0
+    },
+    {
+      "slotIndex": 1,
+      "slotId": "r1.brick-house-seeded.A",
+      "runIndex": 1,
+      "task": "brick-house-seeded",
+      "arm": "A",
+      "block": 1
+    },
+    {
+      "slotIndex": 2,
+      "slotId": "r2.brick-house-seeded.A",
+      "runIndex": 2,
+      "task": "brick-house-seeded",
+      "arm": "A",
+      "block": 2
+    }
+  ],
+  "caps": {
+    "turns": 80,
+    "wallMinutes": 30,
+    "outputTokens": 250000,
+    "scorerMinutes": 10,
+    "installMinutes": 10
+  },
+  "limits": {
+    "wakeAfterBlockedHours": 48,
+    "wakeAfterInfraHours": 12,
+    "maxContaminatedReschedules": 1,
+    "contaminationRateWindow": 6,
+    "contaminationRateMax": 0.5,
+    "$contaminationRateMaxWhy": "RESTORED to 0.5 on 2026-09-19 once v2 finished 96/96. It was raised to 1 (off) with v2 at 86/96, after the guard fired twice in a row on the same diagnosed FALSE POSITIVE. Every flag in the cluster is one bug: a heredoc piped to `node -` was named heredoc.sh whatever consumed it, so JavaScript was scanned as shell and a division or a regex literal read as a filesystem root. quarry-terraces trips it because it is the most code-heavy task. The fix is written and tested on branch v2-msys-falsepos (765a2bf), but agents/claude-code.mjs IS part of the campaign identity, so merging it before the campaign ends would strand the last slots -- and `limits` is NOT part of the identity, which is why this knob can move and that one cannot. The guard is worth having: it exists so a systematically compromised campaign stops instead of burning allowance, and earlier in this same campaign it was two GENUINE escapes (`find /` hunting the arm's own tarball) that the classifier caught correctly. What is turned off here is the halt, not the detection: per-run flagging and the one reschedule both still apply, every flag is still recorded, and the records are re-derived from their transcripts with `reclassify --write` once the fix lands. Restore 0.5 immediately after v2 finishes. Do not read a clean contamination rate in this campaign as evidence of anything until that re-derivation has run and its before/after table has been read."
+  },
+  "window": "always",
+  "gate": {
+    "$comment": "Defaults, used as-is by the pilot. A campaign overrides what it needs; see evals/README.md, 'The gate'. Effort thresholds are absent here on purpose — without them limb (a) is the pilot's solved-only comparison.",
+    "baselineArms": [
+      "A",
+      "A-prime"
+    ],
+    "strippedArm": "stripped",
+    "aaMaxGap": 0.28,
+    "strippedMinMargin": 0.17,
+    "label": "none (single-arm baseline)"
+  },
+  "prompt": "You are working in a Node.js project at {{cwd}} (in Git Bash: {{cwdBash}}), where the npm package pcg-ts is installed. That is your working directory. Read brief.md in this directory and do what it asks. Work only inside this directory. When you finish, the graph must be saved as graph.json in this directory.",
+  "promptSha256": "c1138921dd2697c3871ec154cdb73c1fba53985b8416b176554de79626256add",
+  "graphFile": "graph.json",
+  "sandboxRoot": "C:/pcg-eval/sandboxes",
+  "harnessGit": {
+    "sha": "ec145ab7bbe60fc21b39239b4f3c1e0a056c8398",
+    "dirty": true
+  },
+  "harnessCode": {
+    "sha256": "c50750ef4e7efdb85778005c0c02885a159867b28960090446f29b5398a413a8",
+    "files": {
+      "evals/harness/agents/claude-code.mjs": "dd54191d7448137b49684fe9afdd8be8c867ae47359dd960b1e7de1ce3d99580",
+      "evals/harness/limits.mjs": "5e1d67ca81a72743154d603f11d6152d22a89fbf4e03c52d30bc408290fe585d",
+      "evals/harness/reclassify.mjs": "12642b971cacd41d4953f4e40c1e448cede6511c9fb75d9d3210525f5f9f14f4",
+      "evals/harness/run.mjs": "20941aa41f843e7b6927368deec8bbc689a1f77e4ea5383a031ef28f85e036fa",
+      "evals/harness/sandbox.mjs": "2a9393db48c1ae2c59d38f1665f6a70d8ed467f1ac4a75f9ed6ae8f57e8937d4",
+      "evals/harness/score.mjs": "022aa81a4bc6074246f3499cfbe8eb149801c301881aa8a1d3e76e361e4e6a4f",
+      "evals/harness/selftest.mjs": "39add7610c43a00984a1c324485c1cc6529e85f0f6810f7eac72c0175f85ea02",
+      "evals/lib/digest.mjs": "c0a658ca025cced1483c0d88ce3680e68da7fc6fd5fb9cdcc2f7dacb6aa5d835",
+      "evals/lib/digest.test.mjs": "605efe87f5042256dda6991492ef9274eb1b9c95a6ce9a3134d4ac43a44a1f99",
+      "evals/lib/geometry.mjs": "4db54395ba0accca321fce0c1872a45cd4352f4aea7e89b2b3c670fb27be0642",
+      "evals/lib/geometry.test.mjs": "001bf5a8d17314db95f05e8b59568fd52b366221bf170035f0e855cdb67aee3f",
+      "evals/lib/index.mjs": "d3acf23e28c874e6528bf05f04eb3f18201c5b4ba27c295a3bf8fc6a97a3ad85",
+      "evals/lib/items.mjs": "6183675d9adfe07fda0316900a5b340b1ca6349a7ea7cbfbfa3c8fe0a2c774ae",
+      "evals/lib/scorer.test.mjs": "ddf1a3232c212e15a12cc67dd9eb6ecff79d178bf91c6b4173c93e52fdce5f98"
+    }
+  },
+  "configPath": "evals/eval.config.json"
+}

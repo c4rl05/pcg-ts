@@ -548,12 +548,22 @@ export function collectCanaries({ leakCwd, home = homedir() } = {}) {
   return { phrases: [...phrases], names: [...names], sources };
 }
 
+/** CLI-bundled plugins that are not a leak; see detectLeak. */
+const CLI_BUILTIN_PLUGINS = new Set(["cc-plugin-agents-md@builtin", "cc-plugin-plugin-authoring@builtin"]);
+
 /** Decide whether a probe session saw configuration it should not have. */
 export function detectLeak(result, canaries) {
   const hits = [];
   const init = result.init ?? {};
   for (const key of ["mcp_servers", "plugins", "skills", "slash_commands"]) {
-    const v = init[key];
+    let v = init[key];
+    // Plugins bundled INSIDE the CLI binary (path "builtin", source
+    // "<name>@builtin") are the same on every machine and carry none of this
+    // one's configuration. 2.1.307 lists two even under --safe-mode, with
+    // skills and slash commands still empty and the probe answering NONE
+    // everywhere (2026-10-22). Named, not matched by shape: a new builtin
+    // still flags, so a person decides whether it injects anything.
+    if (key === "plugins" && Array.isArray(v)) v = v.filter((p) => !(p?.path === "builtin" && CLI_BUILTIN_PLUGINS.has(String(p?.source ?? ""))));
     if (Array.isArray(v) && v.length) hits.push({ where: `init.${key}`, what: JSON.stringify(v).slice(0, 300) });
   }
   if (init.output_style && init.output_style !== "default") hits.push({ where: "init.output_style", what: init.output_style });
