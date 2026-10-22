@@ -4,7 +4,8 @@
  * A step of the search is one placement scored, one stud of a placement
  * retired, or one catalogue entry tried at a cell while the placements are
  * listed; a step of `settle` is one word of a bit row built or XORed in
- * its parity proof, or one rectangle or cut asked by its cut tiling — work
+ * its parity proof, one rectangle compared with another by its probes, or
+ * one rectangle or cut asked by its cut tiling — work
  * counted, never time — so whether a region is solved is the same on every
  * machine and under any load. The GROUND repair, which lays a build again
  * from a course where a piece of it floats, counts the lattice cells it lays
@@ -40,6 +41,18 @@ export const holdBudget = {
   cuts: 1 << 20,
   /** What `settle` may spend over one cook, both together. */
   settle: 1 << 24,
+  /**
+   * What `settle`'s PROBES, asked after its parity proof, may spend on one
+   * region and over one cook, in rectangles compared: some 10 ms a region at
+   * worst. Over the synthetic slab families with no held packing, a probe
+   * that found a proof took at most about 620 000 of them, and over random
+   * floors on posts with baseplates about a million; one that finds none
+   * spends its region's budget or its cells.
+   */
+  probe: 1 << 20,
+  probeCook: 1 << 23,
+  /** How many cells one region's probes may ask before they give up. */
+  probeCells: 128,
   /**
    * What the GROUND repair may spend over one cook, in lattice cells laid
    * again: each course it asks of costs every cell from that course up.

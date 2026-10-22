@@ -1304,6 +1304,106 @@ describe("packBricks: the hold search", () => {
     expect(tally.none).toBeGreaterThan(5);
   });
 
+  // A one-plate floor W x D over posts every k studs each way, from (0, 0):
+  // the floor of an open-plan storey on columns.
+  const postFloor = (W: number, D: number, k: number): BoxSpec[] => {
+    const specs: BoxSpec[] = [{ lo: [0, 3, 0], hi: [W, 4, D], tag: 1 }];
+    for (let z = 0; z < D; z += k) for (let x = 0; x < W; x += k) specs.push({ lo: [x, 0, z], hi: [x + 1, 3, z + 1], tag: 0 });
+    return specs;
+  };
+
+  it("proves by probes that a floor over posts too far apart has no held packing", async () => {
+    // 28 x 32 over posts every 5: the last post column is x = 25, so the
+    // cell (27, 2) — two rows from the post rows — is reached only by a
+    // baseplate from x = 12 or less, and so is (2, 2), by one to x = 15 or
+    // more; any two such overlap, so no packing covers both. The parity
+    // count does not rule it out, the search runs out, and so do the cuts.
+    const specs = postFloor(28, 32, 5);
+    const params = { groupBy: ["tag"], extraBricks: baseplates };
+    const without = await withBudget({ probe: 0 }, () => pack(boxCloud(specs), params));
+    expect(searched(without.out)).toEqual([1, 0, 0, 1]);
+    const { out, studs } = await pack(boxCloud(specs), params);
+    expect(searched(out)).toEqual([1, 0, 1, 0]);
+    // Proven or not, the region is the greedy's, and the build is the same.
+    expect(snapshotGeometry(out).point).toEqual(snapshotGeometry(without.out).point);
+    expect(snapshotGeometry(studs)).toEqual(snapshotGeometry(without.studs));
+    // And past the probes' cell budget, or their step budget, nothing is
+    // claimed.
+    expect(searched((await withBudget({ probeCells: 0 }, () => pack(boxCloud(specs), params))).out)).toEqual([1, 0, 0, 1]);
+    expect(searched((await withBudget({ probe: 1000 }, () => pack(boxCloud(specs), params))).out)).toEqual([1, 0, 0, 1]);
+  });
+
+  it("proves none by probes only where none exists, against an exhaustive count", async () => {
+    // Small floors over random posts, with every other answer given no
+    // budget — no search, no parity, no cuts — so a region proven to have
+    // no held packing is proven by a probe (or by a cell no held brick can
+    // reach, which needs no budget). Each is checked against an exhaustive
+    // enumeration written here.
+    const plates: [number, number][] = [];
+    const flat = packBricks.defaultParams.bricks;
+    for (let i = 0; i < flat.length; i += 3) {
+      const [a, b, h] = [flat[i] as number, flat[i + 1] as number, flat[i + 2] as number];
+      if (h !== 1) continue;
+      plates.push([a, b]);
+      if (a !== b) plates.push([b, a]);
+    }
+    const anyHeld = (W: number, D: number, grip: Uint8Array): boolean => {
+      const filled = new Uint8Array(W * D);
+      const go = (): boolean => {
+        const c = filled.indexOf(0);
+        if (c < 0) return true;
+        const x = c % W;
+        const z = (c - x) / W;
+        for (const [fx, fz] of plates) {
+          if (x + fx > W || z + fz > D) continue;
+          let ok = true;
+          let held = false;
+          for (let zz = z; zz < z + fz && ok; zz++) {
+            for (let xx = x; xx < x + fx; xx++) {
+              if (filled[zz * W + xx] === 1) ok = false;
+              if (grip[zz * W + xx] === 1) held = true;
+            }
+          }
+          if (!ok || !held) continue;
+          for (let zz = z; zz < z + fz; zz++) for (let xx = x; xx < x + fx; xx++) filled[zz * W + xx] = 1;
+          if (go()) return true;
+          for (let zz = z; zz < z + fz; zz++) for (let xx = x; xx < x + fx; xx++) filled[zz * W + xx] = 0;
+        }
+        return false;
+      };
+      return go();
+    };
+    let seed = 777;
+    const rnd = (): number => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296;
+    const none = { probes: 0, without: 0 };
+    const only = { region: 0, parity: 0, cuts: 0 };
+    for (let i = 0; i < 160; i++) {
+      const W = 3 + Math.floor(rnd() * 6);
+      const D = 3 + Math.floor(rnd() * 6);
+      const grip = new Uint8Array(W * D);
+      const specs: BoxSpec[] = [{ lo: [0, 3, 0], hi: [W, 4, D], tag: 1 }];
+      const dens = 0.04 + rnd() * 0.16;
+      for (let c = 0; c < W * D; c++) {
+        if (rnd() >= dens) continue;
+        grip[c] = 1;
+        specs.push({ lo: [c % W, 0, Math.floor(c / W)], hi: [(c % W) + 1, 3, Math.floor(c / W) + 1], tag: 0 });
+      }
+      const { out } = await withBudget(only, () => pack(boxCloud(specs), { groupBy: ["tag"] }));
+      const hs = searched(out);
+      if (hs === undefined) continue;
+      const name = `${W} x ${D}, case ${i}`;
+      if (hs[2] === 1) {
+        none.probes++;
+        expect(anyHeld(W, D, grip), name).toBe(false);
+      }
+      expect(hs[1], name).toBe(0);
+      const off = await withBudget({ ...only, probe: 0 }, () => pack(boxCloud(specs), { groupBy: ["tag"] }));
+      none.without += (searched(off.out) as number[])[2] as number;
+    }
+    // Not vacuous: the probes proved regions that nothing else could.
+    expect(none.probes - none.without).toBeGreaterThan(5);
+  });
+
   it("lays again only what a searched region changes, brick for brick as laying the whole course again", async () => {
     const full = (body: () => Promise<{ out: Geometry; studs: Geometry }>) => {
       holdRelay.partial = false;
