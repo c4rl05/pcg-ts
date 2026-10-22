@@ -1,9 +1,9 @@
-var e=`{
+import{t as e}from"./rolldown-runtime-DK3Fl9T5.js";var t=e({default:()=>n}),n=`{
   "formatVersion": 1,
   "seed": 1889,
   "meta": {
     "title": "A brick house split on a stud lattice and built in bricks",
-    "description": "A SHORT TERRACE OF HOUSES DERIVED BY A SPLIT GRAMMAR ON AN INTEGER LATTICE, THEN BUILT IN BRICKS. Every terminal of the grammar is an axis-aligned box whose corners are WHOLE NUMBERS -- x and z in studs, y in plates, a plate 0.4 of a stud -- carrying a string \`kind\` (wall, glass, door, roof, floor, ground, chimney) and a palette colour; \`packBricks\` turns those boxes into catalogue bricks, and the house is drawn as three instance batches: bricks, the studs left showing, and the pots on its chimneys. THE GRAMMAR IS STAGED, NOT RECURSIVE. The derivation is lot -> blocks -> tiers -> storeys -> a floor slab and four walls -> bays -> sill, head, two jambs and the opening, with a ceiling slab over each tier's top storey, a second branch from each block's top tier to the layers of its roof, and a third to its chimney. Every one of those rules has the SAME shape: decide on the parent, fan it out with \`repeatPoints\`, and rewrite each child's box from its copy index. THE FAN IS \`repeatPoints\` WITH THE CELL'S OWN COUNT: a block splits into \`1 + can\` children in each of three rounds (one when it is too small to leave two halves, and in the third round also when it is no longer than 16 studs), a block is one tier or two (two when it sets back), a tier stacks \`storeys\` storeys, a wall takes \`nb\` bays, a pitched roof takes \`ceil(short / 2)\` layers and a flat one a single layer, and each layer its pieces -- three on a gable, one on a hip, four on a flat roof -- and an opening takes five pieces -- sill, head, two jambs and the opening itself -- or four for a door, which has no sill. Each cell is repeated exactly as many times as it needs, so nothing is made only to be filtered away and no fan has a ceiling to outgrow. The copies carry every attribute of the parent, so a child knows everything its parent decided, and each copy gets its own seed, so the children still differ in every random draw. The copy index lands in \`slot\` (in \`tier\` for the tiers, and in \`layer\` and \`part\` for the roof, two repeats in a row), and each corner of the child's box is a CHOICE by it: \`choose(slot, case0, case1, ...)\` picks one whole expression by the index, so a part's five corners and an opening's five pieces are each one \`choose\`, and a roof piece's corner is a \`choose\` by the roof's style of a \`choose\` by the part -- exact, where the piecewise sum \`eq(slot, 0) * v0 + eq(slot, 1) * v1 + ...\` it replaces multiplied every case that did not fire by zero and added it in. The palette reads a block's colour the same way, \`choose(wallTint, [r, g, b], ...)\`, one row per entry. The stage decides what a cell is, so no rule dispatches on a string; the one string dispatch is the palette, a \`byAttribute\` on \`kind\` that is the single table of colours. The three split graphs in this corpus spell a rule the same way -- decide on the parent, fan out with \`repeatPoints\`, and select each child's box by \`slot\` in one \`setBounds\` -- and differ in how often they apply one. \`examples-facade\` and \`examples-floorplan\` apply ONE rule recursively under \`repeatUntil\` until every cell is small enough; this house applies a DIFFERENT rule at each stage, each a bounded number of times, so its stages are written out rather than looped. THE CUT IS SNAPPED, AND DECIDED ON THE PARENT: \`floor(span * f + 0.5)\` clamped so neither half falls under \`minBlock\` studs, drawn before the fan, as the facade and floorplan draw theirs, so both halves carry the same value and meet at one integer coordinate -- drawn after the fan it would differ per child, because the children have different seeds. THE WORKING BOX IS THE STANDARD \`boundsMin\`/\`boundsMax\`, IN LATTICE UNITS, and every rewrite of it is ONE \`setBounds\`. That matters: \`setBounds\` resolves both corners against the box it was handed before writing either, so a rewrite that computes the new minimum from the old maximum, or the reverse, can never read a corner it has just replaced. The roof's pieces and the tiers, each a function of every component of the box they arrive with, are written that way with nothing carried aside. The last \`setBounds\` converts the lattice to world units and centres the lot, and that is the box \`packBricks\` reads. An expression that reads a corner's component more than once names it once in a \`let\` -- \`let({ x0: component(attribute(\\"boundsMin\\", 3), 0), z0: ... }, ...)\`, then bare \`x0\` wherever it is read -- and a name is bound only where reading it by reference makes a smaller tree than writing it out again, so a lone \`attribute\` read twice stays inline (the generator tries every split of up to twelve names, and past that climbs to a smaller tree one name at a time). A \`let\` is notation: the field is the same as the one written out. A WINDOW GOES ONLY WHERE A WALL IS EXPOSED, and exposure is computed rather than assumed. Blocks share party walls, and a tall block beside a low one has a wall that is covered at the bottom and open above. Each candidate opening places a probe half a stud outside its wall at the BOTTOM of where the opening would be, and \`pathCoverage\` with \`near\` = \`far\` = 0 asks whether it lies inside any tier, roof layer or chimney's shadow (see below), the boxes read as points with their size from their corners. Bottom is enough because everything stacks, with nothing overhanging -- roof layers on tiers, an upper tier inside the footprint of the one under it, a chimney on a roof step or a parapet over solid roof -- all of it standing on the ground: if the bottom of the opening is free, everything above it in that column is free too. ACROSS the opening it takes one point PER STUD, because a neighbour ending mid-window or a roof layer stepping in can cover part of the width, and a box on the lattice that overlaps the opening at all contains one of its studs; the fan casts as many rays along the wall as the widest opening \`openingWidth\` allows has studs, four, the end rays a quarter stud inside the first and last stud, so no stud of any opening falls between two rays; \`rayCount\` takes no field, so the fan is sized for the param's maximum rather than read from it. The window-or-solid roll is drawn BEFORE the probe moves the point: a random draw hashes the point's identity, its position as well as its seed, so a roll drawn after the probe would change whenever the probe did. Doors go on the ground floor (the lower tier's first storey) of the first lot-edge wall -- south, then north, else west, else east -- in the middle bay, the edges read on the block while its box is still the block's. Every block has such a wall: a cut along one axis never moves a block off the lot edges of the other, so a block with neither a south nor a north edge was cut along z on both sides, which takes two of the three rounds, and the one left cannot cut it off both the west and the east edge; and with \`minBlock\` at least 5 that side wall is three studs or more between the south and north walls, wide enough for a door bay, so every block has a door. ROOFS, CHIMNEYS AND SETBACKS are decided per block by seeded rolls, each against its rate param. THE ROOF is one of three styles, drawn on the block: flat with \`flatRoofRate\`, else a hip with \`hipRoofRate\`, else a gable. A GABLE's layers step in one stud on the two long sides, its ridge along the long axis and the stud at each end of a layer its gable wall; a HIP's layers step in one stud on all four sides, so it closes to a ridge as long as the long side less the short, and two studs more (one for an odd short side); both rise \`roofStep\` plates a layer for \`ceil(short / 2)\` layers. A FLAT roof is the top tier's ceiling slab with a parapet on its edge, one stud thick and three plates tall, over the walls below. Every piece of every style is one \`setBounds\` whose corners are a \`choose\` by \`roofStyle\`. A CHIMNEY (\`chimneyRate\`) is a stack one stud by two, its long side along the ridge, rising four plates past the top of its roof, with a pot on each of its two top studs. On a pitched roof it stands on the exposed one-stud step of a layer in the upper half below the top, front or back by a roll: every layer above that one starts a stud further in, so the stack stands on the roof and overlaps no box, and along the ridge it keeps off a gable's end studs. On a flat roof it stands on the parapet's long side. For the exposure test a chimney counts as its SHADOW: the stack grown two studs every way across the roof, kept inside its tier, and down to the ceiling, because a stack standing a stud or two off a taller neighbour's wall is still in front of that wall's windows, past the probe half a stud out; so no window opens with a chimney two studs or less in front of it, nor beside one that close at its height. The pots are found rather than placed: a pot goes on every showing stud of a chimney brick with nothing resting on it, so in a partial build it comes with the chimney's last course. A SETBACK (\`setbackRate\`) steps a block of two storeys or more in above a storey drawn from the first to the one under the top, by two studs on every side the block has on the lot edge -- one where two would leave a side of the upper storeys under four studs, none where one would too -- while a party wall stays flush with its neighbour; a block with no lot-edge side never sets back. The block becomes two TIERS, each with its own storeys and ceiling: the lower tier's ceiling is the terrace, and only the upper tier, whose footprint the roof follows, takes the roof and the chimney. THE BUILD. \`packBricks\` reads the pieces' world corners, keeps \`kind\` and colour apart with \`groupBy\`, and lays every wall in full bricks with the joints staggered course to course; the catalogue is the default one with the BASEPLATES appended through \`extraBricks\` -- every size of 16, 24, 32 and 40 studs a side, either way round -- and the ground is exactly one of them, one piece under the whole lot rather than a margin of loose plates: on each axis the lot plus two studs either side, rounded up to a multiple of eight, so every lot from 8 to 32 studs keeps two to five studs of baseplate showing on every side. One catalogue serves every piece, so a baseplate is also just the largest plate that fits: a floor slab, which runs on across every block of its storey (the slabs share a kind and a colour), or a one-plate roof course sixteen studs or more each way takes one the way it takes any plate. Neighbouring blocks each build their own wall, so a party wall is two studs thick, and the stud at each gable end of a roof layer has kind \`wall\` (it is the gable, in the wall's colour), while a flat roof's parapet is \`roof\`, in the roof's colour, and a chimney is its own kind, one colour in every house. THE MESHES ARE THE GRAPH'S OWN: three outputs carry \`role: \\"asset\\"\`, so \`brick\` (a unit box centred on its point), \`stud\` (a twelve-sided \`meshPrimitive\` cylinder, 0.6 across and 1.7/3.2 of a plate tall, capped on top and open underneath where it stands on a brick) and \`pot\` (the same cylinder 0.8 across and 0.8 tall, standing over a stud and hiding it) are the meshes the three spawners' asset ids resolve to, in the editor and in \`pcg render\`, rather than placeholders. One box serves every brick because a brick point's \`scale\` is its own-frame size and its \`rot\` the quarter turn of a brick laid sideways. A hairline gap is taken off every brick's \`scale\` so the joints read; a brick is centred on its point, so that lowers its drawn top by half the gap, and the stud and pot meshes stand the same half-gap below their point so they sit on the brick as drawn. WHAT HOLDS TOGETHER is measured, not assumed. \`brickConnectivity\` numbers the pieces stud clutch alone holds together and gives every brick a build STEP: courses bottom up, a brick placed when it stands on the baseplate or grips one already placed, a plate hung under a floor placed with the floor. A floor or a roof's first course laid over an empty room is the hard case -- its plates touch nothing below, and the ones that reach no wall are held only by what is laid on them. Four things in the packer answer it. Plates up to 2x16 in the catalogue, so a floor's plates reach a wall. \`bond\`, which rewards a placement for every two pieces it joins, so the course above bridges the loose ones. And WHAT HOLDS, weighed before the score, for the floor that no course above can bridge: an upper storey's slab is ONE plate thick, over the empty room below and under the empty room above, with walls only at its edges, so each of its plates has to reach a wall by itself. A plate with nothing under it and nothing over it is loose in every build order, and a plate that would leave the cell beside it with no held plate left to cover it commits that cell to a loose plate too, so each placement is charged the loose plates it commits the build to and the fewest wins, before the score -- without the charge for the cell beside it, a plate could cut off the strip next to it in an occasional house. And the HOLD SEARCH, for the trap that looking one plate ahead cannot see: a plate laid early that takes the grip a cell two or more plates later needs. Where the greedy still lays a plate held by nothing, the packer lifts that course and solves the slab around it EXACTLY -- a search, bounded in steps rather than time so every machine gets the same house, for a packing in which every plate reaches a wall -- and lays it again; a course where nothing came out loose is never touched, so a house that was already in one piece is the same house byte for byte. A roof over an EMPTY ATTIC was beyond all four -- only its two outer strips stood on walls, and a roof that narrows as it rises has no course wide enough to tie the middle strips back to them -- and that was the grammar's to fix: a house has a ceiling, so each tier carries a one-plate ceiling slab over its top storey and the roof stands on it. A THIRD SPLIT ROUND is the grammar's too: two rounds leave a 32-stud lot blocks up to 21 studs square, and an upper storey's slab that size, or a flat roof, was past what the hold search always solves within its budget -- it left a plate loose in about one such house in a thousand, with every roof a gable and no setback -- so a block still longer than 16 studs is cut again across its longer side. Three more answers are the grammar's, all to one trap the packer's look cannot see: a plate laid on a plate over an empty room, each of the two looking held because the other is there, the pair held by nothing in a strip no wall reaches. So a FLAT roof is the tier's ceiling itself, with nothing laid on it but the parapet over its edge, which makes it an upper storey's slab by another name; a SETBACK's upper tier starts on the lower tier's ceiling plate, which is its first floor and the terrace round it in one slab, rather than on a slab of its own laid over it; and a chimney on a flat roof stands on the parapet, over the wall, rather than on the ceiling, where it would be held only by the plate under it. A two-plate floor slab would have answered the floor from the grammar too, bonding its second course across the first's joints, but at a plate on every storey and some seven per cent more bricks; the packer's rule costs neither, and changes nothing in a house that was already in one piece. A brick no order could attach would still get step -1, which says so: the whole build draws it, and every partial build leaves it out rather than show it hanging in air. THE \`buildStep\` PARAM shows the build as it stands after that step: bricks are kept while their step is at most it, and a stud shows once its brick is placed and until the brick resting on it is. The packer is asked for EVERY stud (\`studMode: all\`), each knowing the brick it stands on and the brick resting on it; the studs go through \`brickConnectivity\` alongside the bricks, which writes on each stud the step of both, so the rule is one filter on the studs with no join. The param's maximum, 138, is an upper bound on how tall a house can stand, in plates, taken from every param below at the top of its range: the ceiling over the most storeys at the tallest storey (a setback adds nothing, its upper tier starting on the lower one's ceiling), then the taller of a pitched roof -- the roof step times half a tier's short side rounded up, the short side at most the smaller lot maximum -- and a flat roof's parapet, then a chimney's rise over it -- a step is a distinct course bottom, so no house has more steps than that -- and so it is the whole build for every house; the exact range for one house is the \`stepCount\` detail \`brickConnectivity\` writes, steps 0 to stepCount - 1, which is what a host's build-step slider should run over. THE OTHER PARAMS are the grammar's own numbers, each READ by name with \`param(\\"...\\")\` in the field slots that use it and bound when the graph loads, so at its default every one cooks exactly what the literal it replaced did: \`storeyHeight\`, \`sillHeight\` and \`headHeight\` in plates, \`bayWidth\`, \`openingWidth\` and \`minBlock\` in studs, \`windowRate\` (the chance an exposed bay takes a window), \`minStoreys\` and \`maxStoreys\`, \`roofStep\` (the plates a pitched roof's layer rises), the four rates of the roofs, chimneys and setbacks (above), and the lot's range, \`lotWidthMin\`/\`lotWidthMax\` and \`lotDepthMin\`/\`lotDepthMax\`. A value that must land on the lattice is rounded where it is read, \`floor(param(\\"storeyHeight\\") + 0.5)\`, and a lot side is rounded down to an even number so the lot centres on whole studs; a max below its min reads as the min. The ranges hold jointly, not one at a time: every sill is below every head, and every head two plates under the lowest storey, so no combination makes an opening or a lintel of no height. Some numbers stay literals by choice -- the palette, the cut's 0.35 + 0.3 spread, the probe's half-stud offset, the parapet's three plates, a chimney's footprint and its four plates of rise, the setback's inset, the baseplate's margin -- and some because no field reaches their slot, so no param can: the lattice pitch (\`packBricks\` and \`brickConnectivity\` \`pitch\`), the baseplate sizes (\`extraBricks\`), the stud and pot meshes (\`meshPrimitive\` \`size\` and \`center\`), the probe fan (\`rayCount\`) -- and so the brick gap, since a turned gap would leave every stud standing off its brick by the difference. THE LOT STOPS AT 32 x 32, which stands on the largest baseplate, 40 x 40, with four studs of it showing on every side. It stopped at 28 x 22 before the packer had its hold search, because an upper storey's slab is one plate between empty rooms and looking one plate ahead still left one of its plates reaching no wall in an occasional house -- one house in eleven at 28 x 32. With the search and the grammar's answers above, the first 2000 seeds at the default params came out in one piece with no loose brick, and so did 1000 seeds with every param at its minimum and at its maximum, 1000 seeds of each of two dozen combinations pushed together -- every param at its maximum and every one at its minimum, a 32 x 32 lot of four storeys under each roof style forced, chimneys and setbacks forced on lots from 8 x 8 to 32 x 32 -- and 500 seeds at every lot from 16 x 16 to 32 x 32 in steps of four studs.",
+    "description": "A SHORT TERRACE OF HOUSES DERIVED BY A SPLIT GRAMMAR ON AN INTEGER LATTICE, THEN BUILT IN BRICKS. Every terminal of the grammar is an axis-aligned box whose corners are WHOLE NUMBERS -- x and z in studs, y in plates, a plate 0.4 of a stud -- carrying a string \`kind\` (wall, glass, door, trim, roof, floor, ground, chimney) and a palette colour; \`packBricks\` turns those boxes into catalogue bricks, and the house is drawn as three instance batches: bricks, the studs left showing, and the pots on its chimneys. THE GRAMMAR IS STAGED, NOT RECURSIVE. The derivation is lot -> blocks -> tiers -> storeys -> a floor slab and four walls -> bays -> the pieces round each opening, with a ceiling slab over each tier's top storey, a second branch from each block's top tier to the layers of its roof, and a third to its chimney. Every one of those rules has the SAME shape: decide on the parent, fan it out with \`repeatPoints\`, and rewrite each child's box from its copy index. THE FAN IS \`repeatPoints\` WITH THE CELL'S OWN COUNT: a block splits into \`1 + can\` children in each of three rounds (one when it is too small to leave two halves, and in the third round also when it is no longer than 16 studs), a block is one tier or two (two when it sets back), a tier stacks \`storeys\` storeys, a wall takes \`nb\` bays, a pitched roof takes \`ceil(short / 2)\` layers and a flat one a single layer, and each layer its pieces -- three on a gable, one on a hip, four on a flat roof -- and an opening takes seven pieces -- the wall under it, its sill, the opening itself, its lintel, the two jambs and the wall over it. Each cell is repeated exactly as many times as it needs, so no fan has a ceiling to outgrow, and nothing is made only to be filtered away but the pieces an opening does not have: a door's sill and the wall under it, the sill or lintel of a block that rolled none, and the wall over a lintel that fills the wall above its opening (every lintel at the default heights) come out with no height, and the packer skips a box that covers no cells, so one fan of seven serves every opening. The copies carry every attribute of the parent, so a child knows everything its parent decided, and each copy gets its own seed, so the children still differ in every random draw. The copy index lands in \`slot\` (in \`tier\` for the tiers, and in \`layer\` and \`part\` for the roof, two repeats in a row), and each corner of the child's box is a CHOICE by it: \`choose(slot, case0, case1, ...)\` picks one whole expression by the index, so a part's five corners and an opening's seven pieces are each one \`choose\`, and a roof piece's corner is a \`choose\` by the roof's style of a \`choose\` by the part -- exact, where the piecewise sum \`eq(slot, 0) * v0 + eq(slot, 1) * v1 + ...\` it replaces multiplied every case that did not fire by zero and added it in. The palette reads a block's colour the same way, \`choose(wallTint, [r, g, b], ...)\`, one row per entry. The stage decides what a cell is, so no rule dispatches on a string; the string dispatches are the palette, a \`byAttribute\` on \`kind\` that is the single table of colours, the per-brick tint after the packing, which touches only \`wall\`, and the studs filter, which drops the outer studs of \`trim\` (see THE FACADE TRIM). The three split graphs in this corpus spell a rule the same way -- decide on the parent, fan out with \`repeatPoints\`, and select each child's box by \`slot\` in one \`setBounds\` -- and differ in how often they apply one. \`examples-facade\` and \`examples-floorplan\` apply ONE rule recursively under \`repeatUntil\` until every cell is small enough; this house applies a DIFFERENT rule at each stage, each a bounded number of times, so its stages are written out rather than looped. THE CUT IS SNAPPED, AND DECIDED ON THE PARENT: \`floor(span * f + 0.5)\` clamped so neither half falls under \`minBlock\` studs, drawn before the fan, as the facade and floorplan draw theirs, so both halves carry the same value and meet at one integer coordinate -- drawn after the fan it would differ per child, because the children have different seeds. THE WORKING BOX IS THE STANDARD \`boundsMin\`/\`boundsMax\`, IN LATTICE UNITS, and every rewrite of it is ONE \`setBounds\`. That matters: \`setBounds\` resolves both corners against the box it was handed before writing either, so a rewrite that computes the new minimum from the old maximum, or the reverse, can never read a corner it has just replaced. The roof's pieces and the tiers, each a function of every component of the box they arrive with, are written that way with nothing carried aside. The last \`setBounds\` converts the lattice to world units and centres the lot, and that is the box \`packBricks\` reads. An expression that reads a corner's component more than once names it once in a \`let\` -- \`let({ x0: component(attribute(\\"boundsMin\\", 3), 0), z0: ... }, ...)\`, then bare \`x0\` wherever it is read -- and a name is bound only where reading it by reference makes a smaller tree than writing it out again, so a lone \`attribute\` read twice stays inline (the generator tries every split of up to twelve names, and past that climbs to a smaller tree one name at a time). A \`let\` is notation: the field is the same as the one written out. A WINDOW GOES ONLY WHERE A WALL IS EXPOSED, and exposure is computed rather than assumed. Blocks share party walls, and a tall block beside a low one has a wall that is covered at the bottom and open above. Each candidate opening places a probe half a stud outside its wall at the BOTTOM of where the opening would be -- for a window with a sill, one plate lower, in the course its sill stands out into -- and \`pathCoverage\` with \`near\` = \`far\` = 0 asks whether it lies inside any tier, roof layer or chimney's shadow (see below), the boxes read as points with their size from their corners. Bottom is enough because every occluder stacks, with nothing overhanging -- roof layers on tiers, an upper tier inside the footprint of the one under it, a chimney on a roof step or a parapet over solid roof -- all of it standing on the ground (a sill stands out of its wall, but it is no occluder: it stands only in cells its own probe found clear): if the bottom of the opening is free, everything above it in that column is free too. ACROSS the opening it takes one point PER STUD, because a neighbour ending mid-window or a roof layer stepping in can cover part of the width, and a box on the lattice that overlaps the opening at all contains one of its studs; the fan casts as many rays along the wall as the widest opening \`openingWidth\` allows has studs, four, the end rays a quarter stud inside the first and last stud, so no stud of any opening falls between two rays; \`rayCount\` takes no field, so the fan is sized for the param's maximum rather than read from it. The window-or-solid roll is drawn BEFORE the probe moves the point: a random draw hashes the point's identity, its position as well as its seed, so a roll drawn after the probe would change whenever the probe did. Doors go on the ground floor (the lower tier's first storey) of the first lot-edge wall -- south, then north, else west, else east -- in the middle bay, the edges read on the block while its box is still the block's. Every block has such a wall: a cut along one axis never moves a block off the lot edges of the other, so a block with neither a south nor a north edge was cut along z on both sides, which takes two of the three rounds, and the one left cannot cut it off both the west and the east edge; and with \`minBlock\` at least 5 that side wall is three studs or more between the south and north walls, wide enough for a door bay, so every block has a door. ROOFS, CHIMNEYS AND SETBACKS are decided per block by seeded rolls, each against its rate param. THE ROOF is one of three styles, drawn on the block: flat with \`flatRoofRate\`, else a hip with \`hipRoofRate\`, else a gable. A GABLE's layers step in one stud on the two long sides, its ridge along the long axis and the stud at each end of a layer its gable wall; a HIP's layers step in one stud on all four sides, so it closes to a ridge as long as the long side less the short, and two studs more (one for an odd short side); both rise \`roofStep\` plates a layer for \`ceil(short / 2)\` layers. A FLAT roof is the top tier's ceiling slab with a parapet on its edge, one stud thick and three plates tall, over the walls below. Every piece of every style is one \`setBounds\` whose corners are a \`choose\` by \`roofStyle\`. A CHIMNEY (\`chimneyRate\`) is a stack one stud by two, its long side along the ridge, rising four plates past the top of its roof, with a pot on each of its two top studs. On a pitched roof it stands on the exposed one-stud step of a layer in the upper half below the top, front or back by a roll: every layer above that one starts a stud further in, so the stack stands on the roof and overlaps no box, and along the ridge it keeps off a gable's end studs. On a flat roof it stands on the parapet's long side. For the exposure test a chimney counts as its SHADOW: the stack grown two studs every way across the roof, kept inside its tier, down to the ceiling and up past its pots, because a stack standing a stud or two off a taller neighbour's wall is still in front of that wall's windows, past the probe half a stud out; so no window opens with a chimney two studs or less in front of it, nor beside one that close at its height. The pots are found rather than placed: a pot goes on every showing stud of a chimney brick with nothing resting on it, so in a partial build it comes with the chimney's last course. A SETBACK (\`setbackRate\`) steps a block of two storeys or more in above a storey drawn from the first to the one under the top, by two studs on every side the block has on the lot edge -- one where two would leave a side of the upper storeys under four studs, none where one would too -- while a party wall stays flush with its neighbour; a block with no lot-edge side never sets back. The block becomes two TIERS, each with its own storeys and ceiling: the lower tier's ceiling is the terrace, and only the upper tier, whose footprint the roof follows, takes the roof and the chimney. THE FACADE TRIM is what keeps a big wall from reading flat up close: sills, lintels, a plinth, and bricks that are not all one colour. A SILL (\`sillRate\`) is a plate under a window, as wide as it, its top at \`sillHeight\`, standing one stud out from the wall face: a plate two studs deep, one row in the wall standing on the wall under it and one outside, so it is held through the wall and its outer row needs nothing under it. Its outer studs are not drawn -- a stud on a trim brick that nothing ever rests on is dropped from the studs batch -- so it reads as a smooth ledge, the way a tile has no studs; it is still a plate to the build, and nothing it holds needs those studs. A window that would have one is probed at the sill's course, so a sill only ever stands where nothing else is: it never meets a neighbour, a roof or a chimney. A LINTEL (\`lintelRate\`) is a block over each window and door, as wide as the opening and a brick tall, less where the wall over the opening is shorter. Both are the opening's width, not wider: a bay keeps a stud of jamb either side, often only one, and trim a stud wider than the window met the next window's and ran along the wall as a band. Sill and lintel are kind \`trim\`, its own material to the packer, in the TRIM colour, the block's wall colour darkened, so it stands out from the wall and from the pale glass alike and the two tie together. A PLINTH (\`plinthRate\`) lays every wall brick standing on the ground floor's slab, the bottom course all the way round every block, in dark grey. Sills and lintels are each rolled ONCE PER BLOCK, so every window of a block agrees and neighbouring blocks can differ; the plinth is rolled ONCE PER HOUSE, because it is laid on the packed bricks and a brick can run on across two blocks' walls of one colour, so a roll per block would spill a few studs of plinth into a neighbour that had none. And \`brickVariation\` is the share of wall bricks laid in an OFF-SHADE of their wall's colour, half darker and half lighter. The plinth and the off-shades are coloured on the BRICKS, after the packing, each brick drawing on its own identity: the packing read the boxes' colour, so neither moves a joint, and the variation is brick by brick rather than box by box. A stud takes the tint of the brick it stands on, gathered by \`transferByIndex\` through the \`brickId\` packBricks wrote on it, so a varied brick's studs match it. THE BUILD. \`packBricks\` reads the pieces' world corners, keeps \`kind\` and colour apart with \`groupBy\`, and lays every wall in full bricks with the joints staggered course to course; the catalogue is the default one with the BASEPLATES appended through \`extraBricks\` -- every size of 16, 24, 32 and 40 studs a side, either way round -- and the ground is exactly one of them, one piece under the whole lot rather than a margin of loose plates: on each axis the lot plus two studs either side, rounded up to a multiple of eight, so every lot from 8 to 32 studs keeps two to five studs of baseplate showing on every side. One catalogue serves every piece, so a baseplate is also just the largest plate that fits: a floor slab, which runs on across every block of its storey (the slabs share a kind and a colour), or a one-plate roof course sixteen studs or more each way takes one the way it takes any plate. Neighbouring blocks each build their own wall, so a party wall is two studs thick, and the stud at each gable end of a roof layer has kind \`wall\` (it is the gable, in the wall's colour), while a flat roof's parapet is \`roof\`, in the roof's colour, and a chimney is its own kind, one colour in every house. THE MESHES ARE THE GRAPH'S OWN: three outputs carry \`role: \\"asset\\"\`, so \`brick\` (a unit box centred on its point), \`stud\` (a twelve-sided \`meshPrimitive\` cylinder, 0.6 across and 1.7/3.2 of a plate tall, capped on top and open underneath where it stands on a brick) and \`pot\` (the same cylinder 0.8 across and 0.8 tall, standing over a stud and hiding it) are the meshes the three spawners' asset ids resolve to, in the editor and in \`pcg render\`, rather than placeholders. One box serves every brick because a brick point's \`scale\` is its own-frame size and its \`rot\` the quarter turn of a brick laid sideways. A hairline gap is taken off every brick's \`scale\` so the joints read; a brick is centred on its point, so that lowers its drawn top by half the gap, and the stud and pot meshes stand the same half-gap below their point so they sit on the brick as drawn. WHAT HOLDS TOGETHER is measured, not assumed. \`brickConnectivity\` numbers the pieces stud clutch alone holds together and gives every brick a build STEP: courses bottom up, a brick placed when it stands on the baseplate or grips one already placed, a plate hung under a floor placed with the floor. A floor or a roof's first course laid over an empty room is the hard case -- its plates touch nothing below, and the ones that reach no wall are held only by what is laid on them. Four things in the packer answer it. Plates up to 2x16 in the catalogue, so a floor's plates reach a wall. \`bond\`, which rewards a placement for every two pieces it joins, so the course above bridges the loose ones. And WHAT HOLDS, weighed before the score, for the floor that no course above can bridge: an upper storey's slab is ONE plate thick, over the empty room below and under the empty room above, with walls only at its edges, so each of its plates has to reach a wall by itself. A plate with nothing under it and nothing over it is loose in every build order, and a plate that would leave the cell beside it with no held plate left to cover it commits that cell to a loose plate too, so each placement is charged the loose plates it commits the build to and the fewest wins, before the score -- without the charge for the cell beside it, a plate could cut off the strip next to it in an occasional house. And the HOLD SEARCH, for the trap that looking one plate ahead cannot see: a plate laid early that takes the grip a cell two or more plates later needs. Where the greedy still lays a plate held by nothing, the packer lifts that course and solves the slab around it EXACTLY -- a search, bounded in steps rather than time so every machine gets the same house, for a packing in which every plate reaches a wall -- and lays it again; a course where nothing came out loose is never touched, so a house that was already in one piece is the same house byte for byte. A roof over an EMPTY ATTIC was beyond all four -- only its two outer strips stood on walls, and a roof that narrows as it rises has no course wide enough to tie the middle strips back to them -- and that was the grammar's to fix: a house has a ceiling, so each tier carries a one-plate ceiling slab over its top storey and the roof stands on it. A THIRD SPLIT ROUND is the grammar's too: two rounds leave a 32-stud lot blocks up to 21 studs square, and an upper storey's slab that size, or a flat roof, was past what the hold search always solves within its budget -- it left a plate loose in about one such house in a thousand, with every roof a gable and no setback -- so a block still longer than 16 studs is cut again across its longer side. Three more answers are the grammar's, all to one trap the packer's look cannot see: a plate laid on a plate over an empty room, each of the two looking held because the other is there, the pair held by nothing in a strip no wall reaches. So a FLAT roof is the tier's ceiling itself, with nothing laid on it but the parapet over its edge, which makes it an upper storey's slab by another name; a SETBACK's upper tier starts on the lower tier's ceiling plate, which is its first floor and the terrace round it in one slab, rather than on a slab of its own laid over it; and a chimney on a flat roof stands on the parapet, over the wall, rather than on the ceiling, where it would be held only by the plate under it. A two-plate floor slab would have answered the floor from the grammar too, bonding its second course across the first's joints, but at a plate on every storey and some seven per cent more bricks; the packer's rule costs neither, and changes nothing in a house that was already in one piece. A brick no order could attach would still get step -1, which says so: the whole build draws it, and every partial build leaves it out rather than show it hanging in air. THE \`buildStep\` PARAM shows the build as it stands after that step: bricks are kept while their step is at most it, and a stud shows once its brick is placed and until the brick resting on it is. The packer is asked for EVERY stud (\`studMode: all\`), each knowing the brick it stands on and the brick resting on it; the studs go through \`brickConnectivity\` alongside the bricks, which writes on each stud the step of both, so the rule is one filter on the studs with no join. The param's maximum, 138, is an upper bound on how tall a house can stand, in plates, taken from every param below at the top of its range: the ceiling over the most storeys at the tallest storey (a setback adds nothing, its upper tier starting on the lower one's ceiling), then the taller of a pitched roof -- the roof step times half a tier's short side rounded up, the short side at most the smaller lot maximum -- and a flat roof's parapet, then a chimney's rise over it -- a step is a distinct course bottom, so no house has more steps than that -- and so it is the whole build for every house; the exact range for one house is the \`stepCount\` detail \`brickConnectivity\` writes, steps 0 to stepCount - 1, which is what a host's build-step slider should run over. THE OTHER PARAMS are the grammar's own numbers, each READ by name with \`param(\\"...\\")\` in the field slots that use it and bound when the graph loads, so at its default every one cooks exactly what the literal it replaced did: \`storeyHeight\`, \`sillHeight\` and \`headHeight\` in plates, \`bayWidth\`, \`openingWidth\` and \`minBlock\` in studs, \`windowRate\` (the chance an exposed bay takes a window), \`minStoreys\` and \`maxStoreys\`, \`roofStep\` (the plates a pitched roof's layer rises), the four rates of the roofs, chimneys and setbacks and the four of the facade trim (above), and the lot's range, \`lotWidthMin\`/\`lotWidthMax\` and \`lotDepthMin\`/\`lotDepthMax\`. A value that must land on the lattice is rounded where it is read, \`floor(param(\\"storeyHeight\\") + 0.5)\`, and a lot side is rounded down to an even number so the lot centres on whole studs; a max below its min reads as the min. The ranges hold jointly, not one at a time: every sill is below every head, and every head two plates under the lowest storey, so no combination makes an opening or a lintel of no height. Some numbers stay literals by choice -- the palette, the trim's shade and the off-shades' two factors, a sill's one stud out and a lintel's brick of height, the cut's 0.35 + 0.3 spread, the probe's half-stud offset, the parapet's three plates, a chimney's footprint and its four plates of rise, the setback's inset, the baseplate's margin -- and some because no field reaches their slot, so no param can: the lattice pitch (\`packBricks\` and \`brickConnectivity\` \`pitch\`), the baseplate sizes (\`extraBricks\`), the stud and pot meshes (\`meshPrimitive\` \`size\` and \`center\`), the probe fan (\`rayCount\`) -- and so the brick gap, since a turned gap would leave every stud standing off its brick by the difference. THE LOT STOPS AT 32 x 32, which stands on the largest baseplate, 40 x 40, with four studs of it showing on every side. It stopped at 28 x 22 before the packer had its hold search, because an upper storey's slab is one plate between empty rooms and looking one plate ahead still left one of its plates reaching no wall in an occasional house -- one house in eleven at 28 x 32. With the search and the grammar's answers above, the first 2000 seeds at the default params came out in one piece with no loose brick, and so did 1000 seeds with every param at its minimum and at its maximum, 1000 seeds of each of some thirty combinations pushed together -- every param at its maximum and every one at its minimum, a 32 x 32 lot of four storeys under each roof style forced, with the facade trim forced on and off, chimneys and setbacks forced on lots from 8 x 8 to 32 x 32, the lowest sill under the highest head in the shortest storey -- and 500 seeds at every lot from 16 x 16 to 32 x 32 in steps of four studs; and in none of them did a sill or any other piece claim a lattice cell of another material.",
     "tags": [
       "examples",
       "structure",
@@ -30,14 +30,14 @@ var e=`{
       "value": 6,
       "min": 2,
       "max": 7,
-      "description": "Plates from a storey's floor up to the window sills. Rounded to a whole plate; its range ends below headHeight's, so a window always has a height."
+      "description": "Plates from a storey's floor up to the bottom of every window, which is the top of its sill where it has one. Rounded to a whole plate; its range ends below headHeight's, so a window always has a height."
     },
     {
       "name": "headHeight",
       "value": 12,
       "min": 8,
       "max": 13,
-      "description": "Plates from a storey's floor up to the top of every window and door. Rounded to a whole plate; its range ends two plates under the lowest storeyHeight, so a wall keeps at least one plate over its openings."
+      "description": "Plates from a storey's floor up to the top of every window and door. Rounded to a whole plate; its range ends two plates under the lowest storeyHeight, so a wall keeps at least one plate over its openings, the plate a lintel takes first."
     },
     {
       "name": "bayWidth",
@@ -59,6 +59,34 @@ var e=`{
       "min": 0,
       "max": 1,
       "description": "Chance that a bay wide enough for an opening, and exposed, takes a window rather than staying solid wall. Doors do not roll."
+    },
+    {
+      "name": "sillRate",
+      "value": 0.75,
+      "min": 0,
+      "max": 1,
+      "description": "Chance that a block's windows have SILLS: under each window a plate as wide as the window, its top at sillHeight, standing one stud out from the wall face, in the block's trim colour (its wall colour darkened). The studs on its outer row are not drawn, so it reads as a smooth ledge. A window with a sill opens only where the cells the sill stands out into are clear as well. Doors have none. Rolled per block, so every window of a block agrees."
+    },
+    {
+      "name": "lintelRate",
+      "value": 0.75,
+      "min": 0,
+      "max": 1,
+      "description": "Chance that a block's windows and doors have LINTELS: over each opening a block of the trim colour as wide as the opening and a brick tall, less where the wall over the opening is shorter. Rolled per block."
+    },
+    {
+      "name": "plinthRate",
+      "value": 0.5,
+      "min": 0,
+      "max": 1,
+      "description": "Chance that the house stands on a PLINTH: every wall brick whose bottom is the ground floor's bottom course, round every block, laid in dark grey. Rolled once for the whole house, not per block: it is laid on the packed bricks, and a brick can run on across the walls of two blocks of one colour, so a roll per block would spill into a neighbour that had none."
+    },
+    {
+      "name": "brickVariation",
+      "value": 0.15,
+      "min": 0,
+      "max": 1,
+      "description": "Share of wall bricks laid in an OFF-SHADE of their wall's colour, drawn brick by brick: half of them darker (0.88 of the colour), half lighter (1.1 of it, each channel capped at 1). Applied to the packed bricks, so it never moves a joint, and a brick's studs take its shade. 0 lays every wall in one colour."
     },
     {
       "name": "minBlock",
@@ -430,6 +458,34 @@ var e=`{
             }
           ]
         }
+      }
+    },
+    {
+      "id": "lotPlinth",
+      "type": "setAttribute",
+      "params": {
+        "name": "plinth",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "lt",
+          "args": [
+            {
+              "fn": "randomField",
+              "key": "plinth"
+            },
+            {
+              "fn": "param",
+              "name": "plinthRate"
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
       }
     },
     {
@@ -3076,6 +3132,56 @@ var e=`{
       }
     },
     {
+      "id": "blkTrim",
+      "type": "setAttribute",
+      "params": {
+        "name": "trim",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "lt",
+              "args": [
+                {
+                  "fn": "randomField",
+                  "key": "sill"
+                },
+                {
+                  "fn": "param",
+                  "name": "sillRate"
+                }
+              ]
+            },
+            {
+              "fn": "lt",
+              "args": [
+                {
+                  "fn": "randomField",
+                  "key": "lintel"
+                },
+                {
+                  "fn": "param",
+                  "name": "lintelRate"
+                }
+              ]
+            },
+            {
+              "fn": "attribute",
+              "name": "plinth"
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
       "id": "tierFan",
       "type": "repeatPoints",
       "params": {
@@ -5082,18 +5188,53 @@ var e=`{
                   "fn": "add",
                   "args": [
                     {
-                      "fn": "add",
+                      "fn": "sub",
                       "args": [
                         {
-                          "fn": "component",
+                          "fn": "add",
                           "args": [
                             {
-                              "fn": "attribute",
-                              "name": "boundsMin",
-                              "tupleSize": 3
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "boundsMin",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 1
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "fn": "attribute",
+                                      "name": "door"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "floor",
+                                  "args": [
+                                    {
+                                      "fn": "add",
+                                      "args": [
+                                        {
+                                          "fn": "param",
+                                          "name": "sillHeight"
+                                        },
+                                        0.5
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
                             }
-                          ],
-                          "index": 1
+                          ]
                         },
                         {
                           "fn": "mul",
@@ -5109,19 +5250,15 @@ var e=`{
                               ]
                             },
                             {
-                              "fn": "floor",
+                              "fn": "component",
                               "args": [
                                 {
-                                  "fn": "add",
-                                  "args": [
-                                    {
-                                      "fn": "param",
-                                      "name": "sillHeight"
-                                    },
-                                    0.5
-                                  ]
+                                  "fn": "attribute",
+                                  "name": "trim",
+                                  "tupleSize": 3
                                 }
-                              ]
+                              ],
+                              "index": 0
                             }
                           ]
                         }
@@ -5430,22 +5567,7 @@ var e=`{
       "id": "opFan",
       "type": "repeatPoints",
       "params": {
-        "count": {
-          "fn": "sub",
-          "args": [
-            5,
-            {
-              "fn": "eq",
-              "args": [
-                {
-                  "fn": "attribute",
-                  "name": "bk"
-                },
-                2
-              ]
-            }
-          ]
-        },
+        "count": 7,
         "indexAttr": "slot",
         "countAttr": ""
       }
@@ -5468,25 +5590,6 @@ var e=`{
               ],
               "index": 1
             },
-            "pc": {
-              "fn": "add",
-              "args": [
-                {
-                  "fn": "attribute",
-                  "name": "slot"
-                },
-                {
-                  "fn": "eq",
-                  "args": [
-                    {
-                      "fn": "attribute",
-                      "name": "bk"
-                    },
-                    2
-                  ]
-                }
-              ]
-            },
             "sill": {
               "fn": "add",
               "args": [
@@ -5495,19 +5598,24 @@ var e=`{
                   "name": "y0"
                 },
                 {
-                  "fn": "select",
+                  "fn": "mul",
                   "args": [
                     {
-                      "fn": "eq",
+                      "fn": "sub",
                       "args": [
+                        1,
                         {
-                          "fn": "attribute",
-                          "name": "bk"
-                        },
-                        2
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "bk"
+                            },
+                            2
+                          ]
+                        }
                       ]
                     },
-                    0,
                     {
                       "fn": "floor",
                       "args": [
@@ -5527,170 +5635,43 @@ var e=`{
                 }
               ]
             },
-            "u0": {
-              "fn": "choose",
+            "sb": {
+              "fn": "sub",
               "args": [
                 {
                   "fn": "var",
-                  "name": "pc"
+                  "name": "sill"
                 },
                 {
-                  "fn": "attribute",
-                  "name": "ua"
-                },
-                {
-                  "fn": "attribute",
-                  "name": "ua"
-                },
-                {
-                  "fn": "attribute",
-                  "name": "ua"
-                },
-                {
-                  "fn": "attribute",
-                  "name": "ob"
-                },
-                {
-                  "fn": "attribute",
-                  "name": "oa"
-                }
-              ]
-            }
-          },
-          "args": [
-            {
-              "fn": "vec",
-              "args": [
-                {
-                  "fn": "select",
+                  "fn": "mul",
                   "args": [
                     {
-                      "fn": "attribute",
-                      "name": "alongX"
-                    },
-                    {
-                      "fn": "var",
-                      "name": "u0"
-                    },
-                    {
-                      "fn": "component",
+                      "fn": "sub",
                       "args": [
+                        1,
                         {
-                          "fn": "attribute",
-                          "name": "boundsMin",
-                          "tupleSize": 3
-                        }
-                      ],
-                      "index": 0
-                    }
-                  ]
-                },
-                {
-                  "fn": "choose",
-                  "args": [
-                    {
-                      "fn": "var",
-                      "name": "pc"
-                    },
-                    {
-                      "fn": "var",
-                      "name": "y0"
-                    },
-                    {
-                      "fn": "add",
-                      "args": [
-                        {
-                          "fn": "var",
-                          "name": "y0"
-                        },
-                        {
-                          "fn": "floor",
+                          "fn": "eq",
                           "args": [
                             {
-                              "fn": "add",
-                              "args": [
-                                {
-                                  "fn": "param",
-                                  "name": "headHeight"
-                                },
-                                0.5
-                              ]
-                            }
+                              "fn": "attribute",
+                              "name": "bk"
+                            },
+                            2
                           ]
                         }
                       ]
                     },
                     {
-                      "fn": "var",
-                      "name": "sill"
-                    },
-                    {
-                      "fn": "var",
-                      "name": "sill"
-                    },
-                    {
-                      "fn": "var",
-                      "name": "sill"
-                    }
-                  ]
-                },
-                {
-                  "fn": "select",
-                  "args": [
-                    {
-                      "fn": "attribute",
-                      "name": "alongX"
-                    },
-                    {
                       "fn": "component",
                       "args": [
                         {
                           "fn": "attribute",
-                          "name": "boundsMin",
+                          "name": "trim",
                           "tupleSize": 3
                         }
                       ],
-                      "index": 2
-                    },
-                    {
-                      "fn": "var",
-                      "name": "u0"
+                      "index": 0
                     }
-                  ]
-                }
-              ]
-            }
-          ]
-        },
-        "boundsMax": {
-          "fn": "let",
-          "bind": {
-            "y0": {
-              "fn": "component",
-              "args": [
-                {
-                  "fn": "attribute",
-                  "name": "boundsMin",
-                  "tupleSize": 3
-                }
-              ],
-              "index": 1
-            },
-            "pc": {
-              "fn": "add",
-              "args": [
-                {
-                  "fn": "attribute",
-                  "name": "slot"
-                },
-                {
-                  "fn": "eq",
-                  "args": [
-                    {
-                      "fn": "attribute",
-                      "name": "bk"
-                    },
-                    2
                   ]
                 }
               ]
@@ -5719,12 +5700,392 @@ var e=`{
                 }
               ]
             },
+            "u0": {
+              "fn": "choose",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "slot"
+                },
+                {
+                  "fn": "attribute",
+                  "name": "ua"
+                },
+                {
+                  "fn": "attribute",
+                  "name": "oa"
+                },
+                {
+                  "fn": "attribute",
+                  "name": "oa"
+                },
+                {
+                  "fn": "attribute",
+                  "name": "oa"
+                },
+                {
+                  "fn": "attribute",
+                  "name": "ua"
+                },
+                {
+                  "fn": "attribute",
+                  "name": "ob"
+                },
+                {
+                  "fn": "attribute",
+                  "name": "ua"
+                }
+              ]
+            },
+            "out": {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "eq",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "slot"
+                    },
+                    1
+                  ]
+                },
+                1
+              ]
+            }
+          },
+          "args": [
+            {
+              "fn": "vec",
+              "args": [
+                {
+                  "fn": "select",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "alongX"
+                    },
+                    {
+                      "fn": "var",
+                      "name": "u0"
+                    },
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "boundsMin",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 0
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "out"
+                            },
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "wall"
+                                },
+                                3
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "choose",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "slot"
+                    },
+                    {
+                      "fn": "var",
+                      "name": "y0"
+                    },
+                    {
+                      "fn": "var",
+                      "name": "sb"
+                    },
+                    {
+                      "fn": "var",
+                      "name": "sill"
+                    },
+                    {
+                      "fn": "var",
+                      "name": "head"
+                    },
+                    {
+                      "fn": "var",
+                      "name": "sb"
+                    },
+                    {
+                      "fn": "var",
+                      "name": "sb"
+                    },
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "head"
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "trim",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 1
+                            },
+                            {
+                              "fn": "min",
+                              "args": [
+                                3,
+                                {
+                                  "fn": "sub",
+                                  "args": [
+                                    {
+                                      "fn": "component",
+                                      "args": [
+                                        {
+                                          "fn": "attribute",
+                                          "name": "boundsMax",
+                                          "tupleSize": 3
+                                        }
+                                      ],
+                                      "index": 1
+                                    },
+                                    {
+                                      "fn": "var",
+                                      "name": "head"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "select",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "alongX"
+                    },
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "boundsMin",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 2
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "out"
+                            },
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "wall"
+                                },
+                                1
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "var",
+                      "name": "u0"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "boundsMax": {
+          "fn": "let",
+          "bind": {
+            "y0": {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "boundsMin",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 1
+            },
+            "y1": {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "boundsMax",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 1
+            },
+            "sill": {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "var",
+                  "name": "y0"
+                },
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "sub",
+                      "args": [
+                        1,
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "bk"
+                            },
+                            2
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "param",
+                              "name": "sillHeight"
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "head": {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "var",
+                  "name": "y0"
+                },
+                {
+                  "fn": "floor",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "param",
+                          "name": "headHeight"
+                        },
+                        0.5
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "hl": {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "var",
+                  "name": "head"
+                },
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "trim",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 1
+                    },
+                    {
+                      "fn": "min",
+                      "args": [
+                        3,
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "y1"
+                            },
+                            {
+                              "fn": "var",
+                              "name": "head"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
             "u1": {
               "fn": "choose",
               "args": [
                 {
-                  "fn": "var",
-                  "name": "pc"
+                  "fn": "attribute",
+                  "name": "slot"
                 },
                 {
                   "fn": "attribute",
@@ -5732,7 +6093,15 @@ var e=`{
                 },
                 {
                   "fn": "attribute",
-                  "name": "ub"
+                  "name": "ob"
+                },
+                {
+                  "fn": "attribute",
+                  "name": "ob"
+                },
+                {
+                  "fn": "attribute",
+                  "name": "ob"
                 },
                 {
                   "fn": "attribute",
@@ -5744,8 +6113,24 @@ var e=`{
                 },
                 {
                   "fn": "attribute",
-                  "name": "ob"
+                  "name": "ub"
                 }
+              ]
+            },
+            "out": {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "eq",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "slot"
+                    },
+                    1
+                  ]
+                },
+                1
               ]
             }
           },
@@ -5765,15 +6150,39 @@ var e=`{
                       "name": "u1"
                     },
                     {
-                      "fn": "component",
+                      "fn": "add",
                       "args": [
                         {
-                          "fn": "attribute",
-                          "name": "boundsMax",
-                          "tupleSize": 3
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "boundsMax",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 0
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "out"
+                            },
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "wall"
+                                },
+                                4
+                              ]
+                            }
+                          ]
                         }
-                      ],
-                      "index": 0
+                      ]
                     }
                   ]
                 },
@@ -5781,59 +6190,53 @@ var e=`{
                   "fn": "choose",
                   "args": [
                     {
-                      "fn": "var",
-                      "name": "pc"
+                      "fn": "attribute",
+                      "name": "slot"
                     },
                     {
-                      "fn": "add",
+                      "fn": "sub",
                       "args": [
                         {
                           "fn": "var",
-                          "name": "y0"
+                          "name": "sill"
                         },
                         {
-                          "fn": "select",
+                          "fn": "mul",
                           "args": [
                             {
-                              "fn": "eq",
+                              "fn": "sub",
                               "args": [
+                                1,
                                 {
-                                  "fn": "attribute",
-                                  "name": "bk"
-                                },
-                                2
-                              ]
-                            },
-                            0,
-                            {
-                              "fn": "floor",
-                              "args": [
-                                {
-                                  "fn": "add",
+                                  "fn": "eq",
                                   "args": [
                                     {
-                                      "fn": "param",
-                                      "name": "sillHeight"
+                                      "fn": "attribute",
+                                      "name": "bk"
                                     },
-                                    0.5
+                                    2
                                   ]
                                 }
                               ]
+                            },
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "trim",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
                             }
                           ]
                         }
                       ]
                     },
                     {
-                      "fn": "component",
-                      "args": [
-                        {
-                          "fn": "attribute",
-                          "name": "boundsMax",
-                          "tupleSize": 3
-                        }
-                      ],
-                      "index": 1
+                      "fn": "var",
+                      "name": "sill"
                     },
                     {
                       "fn": "var",
@@ -5841,11 +6244,19 @@ var e=`{
                     },
                     {
                       "fn": "var",
-                      "name": "head"
+                      "name": "hl"
                     },
                     {
                       "fn": "var",
-                      "name": "head"
+                      "name": "hl"
+                    },
+                    {
+                      "fn": "var",
+                      "name": "hl"
+                    },
+                    {
+                      "fn": "var",
+                      "name": "y1"
                     }
                   ]
                 },
@@ -5857,15 +6268,39 @@ var e=`{
                       "name": "alongX"
                     },
                     {
-                      "fn": "component",
+                      "fn": "add",
                       "args": [
                         {
-                          "fn": "attribute",
-                          "name": "boundsMax",
-                          "tupleSize": 3
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "boundsMax",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 2
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "out"
+                            },
+                            {
+                              "fn": "eq",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "wall"
+                                },
+                                2
+                              ]
+                            }
+                          ]
                         }
-                      ],
-                      "index": 2
+                      ]
                     },
                     {
                       "fn": "var",
@@ -5894,39 +6329,55 @@ var e=`{
               "fn": "eq",
               "args": [
                 {
-                  "fn": "add",
-                  "args": [
-                    {
-                      "fn": "attribute",
-                      "name": "slot"
-                    },
-                    {
-                      "fn": "eq",
-                      "args": [
-                        {
-                          "fn": "attribute",
-                          "name": "bk"
-                        },
-                        2
-                      ]
-                    }
-                  ]
+                  "fn": "attribute",
+                  "name": "slot"
                 },
-                4
+                2
               ]
             },
             {
               "fn": "attribute",
               "name": "bk"
             },
-            0
+            {
+              "fn": "mul",
+              "args": [
+                3,
+                {
+                  "fn": "max",
+                  "args": [
+                    {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "slot"
+                        },
+                        1
+                      ]
+                    },
+                    {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "slot"
+                        },
+                        3
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
           ]
         },
         "select": 0,
         "values": [
           "wall",
           "glass",
-          "door"
+          "door",
+          "trim"
         ],
         "weights": [],
         "stringValue": "",
@@ -8158,48 +8609,53 @@ var e=`{
                       "fn": "add",
                       "args": [
                         {
-                          "fn": "component",
+                          "fn": "add",
                           "args": [
                             {
-                              "fn": "attribute",
-                              "name": "boundsMax",
-                              "tupleSize": 3
-                            }
-                          ],
-                          "index": 1
-                        },
-                        {
-                          "fn": "select",
-                          "args": [
-                            {
-                              "fn": "eq",
+                              "fn": "component",
                               "args": [
                                 {
                                   "fn": "attribute",
-                                  "name": "roofStyle"
-                                },
-                                2
-                              ]
+                                  "name": "boundsMax",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 1
                             },
-                            3,
                             {
-                              "fn": "mul",
+                              "fn": "select",
                               "args": [
                                 {
-                                  "fn": "attribute",
-                                  "name": "nl"
-                                },
-                                {
-                                  "fn": "floor",
+                                  "fn": "eq",
                                   "args": [
                                     {
-                                      "fn": "add",
+                                      "fn": "attribute",
+                                      "name": "roofStyle"
+                                    },
+                                    2
+                                  ]
+                                },
+                                3,
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "nl"
+                                    },
+                                    {
+                                      "fn": "floor",
                                       "args": [
                                         {
-                                          "fn": "param",
-                                          "name": "roofStep"
-                                        },
-                                        0.5
+                                          "fn": "add",
+                                          "args": [
+                                            {
+                                              "fn": "param",
+                                              "name": "roofStep"
+                                            },
+                                            0.5
+                                          ]
+                                        }
                                       ]
                                     }
                                   ]
@@ -8207,10 +8663,11 @@ var e=`{
                               ]
                             }
                           ]
-                        }
+                        },
+                        4
                       ]
                     },
-                    4
+                    2
                   ]
                 },
                 {
@@ -8645,6 +9102,40 @@ var e=`{
                 ]
               ]
             },
+            "trim": {
+              "fn": "choose",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "wallTint"
+                },
+                [
+                  0.651,
+                  0.644,
+                  0.616
+                ],
+                [
+                  0.595,
+                  0.525,
+                  0.385
+                ],
+                [
+                  0.49,
+                  0.112,
+                  0.084
+                ],
+                [
+                  0.665,
+                  0.532,
+                  0.112
+                ],
+                [
+                  0.42,
+                  0.441,
+                  0.448
+                ]
+              ]
+            },
             "roof": {
               "fn": "choose",
               "args": [
@@ -9055,6 +9546,161 @@ var e=`{
       }
     },
     {
+      "id": "vary",
+      "type": "setAttribute",
+      "params": {
+        "name": "tint",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "byAttribute",
+          "name": "kind",
+          "cases": {
+            "wall": {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "trim",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 2
+                    },
+                    {
+                      "fn": "lt",
+                      "args": [
+                        {
+                          "fn": "abs",
+                          "args": [
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "boundsMin",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 1
+                                },
+                                0.8
+                              ]
+                            }
+                          ]
+                        },
+                        0.1
+                      ]
+                    }
+                  ]
+                },
+                [
+                  0.27,
+                  0.28,
+                  0.3
+                ],
+                {
+                  "fn": "select",
+                  "args": [
+                    {
+                      "fn": "lt",
+                      "args": [
+                        {
+                          "fn": "randomField",
+                          "key": "vary"
+                        },
+                        {
+                          "fn": "param",
+                          "name": "brickVariation"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "lt",
+                          "args": [
+                            {
+                              "fn": "randomField",
+                              "key": "vary"
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                0.5,
+                                {
+                                  "fn": "param",
+                                  "name": "brickVariation"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            0.88,
+                            {
+                              "fn": "attribute",
+                              "name": "tint",
+                              "tupleSize": 3
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "min",
+                          "args": [
+                            {
+                              "fn": "mul",
+                              "args": [
+                                1.1,
+                                {
+                                  "fn": "attribute",
+                                  "name": "tint",
+                                  "tupleSize": 3
+                                }
+                              ]
+                            },
+                            1
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "attribute",
+                      "name": "tint",
+                      "tupleSize": 3
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "default": {
+            "fn": "attribute",
+            "name": "tint",
+            "tupleSize": 3
+          }
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
       "id": "shownAt",
       "type": "setAttribute",
       "params": {
@@ -9154,49 +9800,10 @@ var e=`{
           "fn": "mul",
           "args": [
             {
-              "fn": "le",
+              "fn": "mul",
               "args": [
                 {
-                  "fn": "select",
-                  "args": [
-                    {
-                      "fn": "lt",
-                      "args": [
-                        {
-                          "fn": "attribute",
-                          "name": "step"
-                        },
-                        0
-                      ]
-                    },
-                    138,
-                    {
-                      "fn": "attribute",
-                      "name": "step"
-                    }
-                  ]
-                },
-                {
-                  "fn": "param",
-                  "name": "buildStep"
-                }
-              ]
-            },
-            {
-              "fn": "max",
-              "args": [
-                {
-                  "fn": "lt",
-                  "args": [
-                    {
-                      "fn": "attribute",
-                      "name": "brickAbove"
-                    },
-                    0
-                  ]
-                },
-                {
-                  "fn": "gt",
+                  "fn": "le",
                   "args": [
                     {
                       "fn": "select",
@@ -9206,7 +9813,7 @@ var e=`{
                           "args": [
                             {
                               "fn": "attribute",
-                              "name": "stepAbove"
+                              "name": "step"
                             },
                             0
                           ]
@@ -9214,13 +9821,83 @@ var e=`{
                         138,
                         {
                           "fn": "attribute",
-                          "name": "stepAbove"
+                          "name": "step"
                         }
                       ]
                     },
                     {
                       "fn": "param",
                       "name": "buildStep"
+                    }
+                  ]
+                },
+                {
+                  "fn": "max",
+                  "args": [
+                    {
+                      "fn": "lt",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "brickAbove"
+                        },
+                        0
+                      ]
+                    },
+                    {
+                      "fn": "gt",
+                      "args": [
+                        {
+                          "fn": "select",
+                          "args": [
+                            {
+                              "fn": "lt",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "stepAbove"
+                                },
+                                0
+                              ]
+                            },
+                            138,
+                            {
+                              "fn": "attribute",
+                              "name": "stepAbove"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "param",
+                          "name": "buildStep"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "sub",
+              "args": [
+                1,
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "attributeIs",
+                      "name": "kind",
+                      "value": "trim"
+                    },
+                    {
+                      "fn": "lt",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "brickAbove"
+                        },
+                        0
+                      ]
                     }
                   ]
                 }
@@ -9230,6 +9907,23 @@ var e=`{
         },
         "seed": 0,
         "topology": "drop"
+      }
+    },
+    {
+      "id": "studTint",
+      "type": "transferByIndex",
+      "params": {
+        "index": {
+          "fn": "attribute",
+          "name": "brickId"
+        },
+        "attributes": [
+          "tint"
+        ],
+        "outNames": [],
+        "outOfRange": "clamp",
+        "hitAttr": "",
+        "missCountAttr": ""
       }
     },
     {
@@ -9411,6 +10105,16 @@ var e=`{
         "out"
       ],
       "to": [
+        "lotPlinth",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "lotPlinth",
+        "out"
+      ],
+      "to": [
         "b1Ax",
         "in"
       ]
@@ -9628,6 +10332,16 @@ var e=`{
     {
       "from": [
         "blkRoofStyle",
+        "out"
+      ],
+      "to": [
+        "blkTrim",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "blkTrim",
         "out"
       ],
       "to": [
@@ -10341,6 +11055,16 @@ var e=`{
         "out"
       ],
       "to": [
+        "vary",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "vary",
+        "out"
+      ],
+      "to": [
         "shownAt",
         "in"
       ]
@@ -10379,6 +11103,26 @@ var e=`{
       "from": [
         "connect",
         "studs"
+      ],
+      "to": [
+        "studTint",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "vary",
+        "out"
+      ],
+      "to": [
+        "studTint",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "studTint",
+        "out"
       ],
       "to": [
         "showing",
@@ -10462,4 +11206,4 @@ var e=`{
     }
   ]
 }
-`;export{e as default};
+`;export{t as n,n as t};
