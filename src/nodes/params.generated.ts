@@ -108,6 +108,25 @@ export interface ApplyRulesParams {
    * @defaultValue `[]`
    */
   scopeOf: readonly string[];
+  /**
+   * The i32 point attribute (tuple 1) linking a cell to the rule application it came from,
+   * written on "out" and on "trail": the ROW of "trail" holding the cell that a rule rewrote
+   * into this one, or -1 for a cell that came in on "in" (an axiom cell, or a terminal one
+   * that never fed a rule). "trail" lists every FED cell round by round, and within a round
+   * rule by rule in the body's exposed-output order, each rule's cells in frontier order —
+   * so on "trail" a row's ruleParent is always smaller than the row's own index, and
+   * following it from any cell walks its ancestors back to the axiom. Read an ancestor's box
+   * with transferByIndex (source "trail", index attribute("ruleParent"), outOfRange "miss"
+   * for the -1 roots), or draw the derivation tree with connectByIndex over "trail"
+   * (rootValue -1). The numbering does not depend on whether "trail" is wired, so the links
+   * on "out" always mean the same rows. Empty writes none. Not a standard attribute, and not
+   * the same name as labelAttr, depthAttr or rollAttr. A column of this name already on the
+   * cells in another shape is refused where it appears (on "in", or on the output of the
+   * rule that wrote it), the same whether or not "trail" is wired.
+   *
+   * @defaultValue `"ruleParent"`
+   */
+  parentAttr: string;
 }
 
 /**
@@ -1530,7 +1549,7 @@ export type FilterByExpressionInputs = "in";
 /**
  * The output pin names of the `filterByExpression` node type.
  */
-export type FilterByExpressionOutputs = "out";
+export type FilterByExpressionOutputs = "out" | "rest";
 
 /**
  * Params of the `filterPrimitivesByAttribute` node type.

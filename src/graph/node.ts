@@ -37,6 +37,28 @@ export interface PinDef<N extends string = string> {
    * pin plans zero iterations and cooks to empty outputs.
    */
   readonly optional?: boolean;
+  /**
+   * Output pins only: the node builds this output ONLY WHEN SOMETHING READS
+   * IT, so an unread side output costs nothing. "Reads" is decided from the
+   * graph's wiring, never from one cook's selection: the pin is read when a
+   * connection leaves it (to any node, in this cook's selection or not) or
+   * a graph output is declared on it — the same conservative test the
+   * executor already applies to a resident run's terminal geometry. A
+   * `pcg inspect --node <id> --pin <pin>` declares a temporary output, so an
+   * inspected pin is always built.
+   *
+   * The executor hands the node the read subset as
+   * {@link NodeExecuteArgs.readOutputs} and folds it into the node's memo
+   * key, so wiring a consumer onto the pin later recooks the node instead
+   * of serving the empty collection it emitted while unread. An unread
+   * on-demand pin may hold `[]`; every OTHER output must be byte-identical
+   * whichever on-demand pins are read — the flag skips work, it never
+   * changes an answer. Wiring-based rather than selection-based on
+   * purpose: a host that cooks each declared output in its own pass (the
+   * editor does) would otherwise flip the key every pass and recook the
+   * node twice per edit.
+   */
+  readonly onDemand?: boolean;
 }
 
 /** What execute returns: one collection per declared output pin. */
@@ -105,6 +127,16 @@ export interface NodeExecuteArgs<P> {
    * do with this.
    */
   readonly tripwire?: Tripwire;
+  /**
+   * The {@link PinDef.onDemand} output pins of this node that something
+   * reads (see there for what "reads" means), present exactly when the def
+   * declares at least one on-demand pin and the node is cooked by the
+   * executor. ABSENT means BUILD EVERY OUTPUT: a direct `def.execute(...)`
+   * call, or any caller that does not know about the flag, gets every pin
+   * built, so skipping is never the default. A node tests membership once,
+   * where it reads its params, and carries a boolean into its loops.
+   */
+  readonly readOutputs?: ReadonlySet<string>;
   /**
    * Throws `CookCancelledError` if the cook was aborted. Nodes doing long
    * loops should call it periodically so cancellation stays responsive.

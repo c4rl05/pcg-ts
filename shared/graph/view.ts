@@ -22,6 +22,12 @@ export interface PinView {
   readonly name: string;
   readonly kind: string;
   readonly multi: boolean;
+  /**
+   * An output the node builds only when read (`PinInfo.onDemand`): drawn
+   * and wirable, but never auto-declared, so an unwired side output costs
+   * nothing and is not drawn as a result.
+   */
+  readonly onDemand?: true;
 }
 
 /** One node box on the canvas. Position is view-only state. */
@@ -136,7 +142,12 @@ export function previewRows(rows: readonly PreviewRow[]): ParamPreview[] {
 }
 
 function pinViews(pins: readonly PinInfo[]): PinView[] {
-  return pins.map((p) => ({ name: p.name, kind: p.kind, multi: p.multi }));
+  return pins.map((p) => ({
+    name: p.name,
+    kind: p.kind,
+    multi: p.multi,
+    ...(p.onDemand === true ? { onDemand: true as const } : {}),
+  }));
 }
 
 /** Pin views for a registered node type. */

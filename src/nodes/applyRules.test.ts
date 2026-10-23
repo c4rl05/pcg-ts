@@ -37,6 +37,7 @@ import {
   RULES_CUT_OFF_ATTR,
   RULES_CUT_OFF_NAMES_ATTR,
   RULE_SRC_ATTR,
+  TRAIL_DROPPED_ATTR,
   applyRulesNode,
 } from "./applyRules.js";
 import {
@@ -1317,4 +1318,389 @@ describe("applyRules: second review findings", () => {
     // The round is in the roll's key: settle depths spread out.
     expect((await depths({ fn: "ge", args: [attr("ruleRoll"), 0.5] })).size).toBeGreaterThan(4);
   });
+});
+
+describe("applyRules: the derivation trail", () => {
+  /** The doc with `trail` declared as a graph output too, so it is read. */
+  const withTrail = (doc: Json): Json => ({
+    ...doc,
+    outputs: [...(doc.outputs as Json[]), { id: "rules", pin: "trail", name: "trail" }],
+  });
+
+  async function trailed(doc: Json, opts: Parameters<typeof cook>[1] = {}): Promise<{ out: Geometry; trail: Geometry }> {
+    const r = await cook(load(withTrail(doc)), opts);
+    return { out: geoOf(r.outputs.out), trail: geoOf(r.outputs.trail) };
+  }
+
+  const corner = (g: Geometry, name: string, i: number): number[] =>
+    [0, 1, 2].map((c) => g.attrs.point.require(name).get(i, c));
+
+  /** Is cell `i` of `g` inside trail row `p`'s box? */
+  function inside(trail: Geometry, p: number, g: Geometry, i: number): boolean {
+    const plo = corner(trail, "boundsMin", p);
+    const phi = corner(trail, "boundsMax", p);
+    const lo = corner(g, "boundsMin", i);
+    const hi = corner(g, "boundsMax", i);
+    return [0, 1, 2].every((c) => (plo[c] as number) <= (lo[c] as number) && (hi[c] as number) <= (phi[c] as number));
+  }
+
+  /** Every link names an EARLIER row, one round shallower, whose box contains the cell's. */
+  function expectTree(trail: Geometry, out: Geometry): void {
+    const parent = nums(trail, "ruleParent");
+    const depth = nums(trail, "ruleDepth");
+    parent.forEach((p, i) => {
+      if (depth[i] === 0) {
+        expect(p).toBe(-1);
+        return;
+      }
+      expect(p).toBeGreaterThanOrEqual(0);
+      expect(p).toBeLessThan(i);
+      expect(depth[p]).toBe((depth[i] as number) - 1);
+      expect(inside(trail, p, trail, i)).toBe(true);
+    });
+    const outDepth = nums(out, "ruleDepth");
+    nums(out, "ruleParent").forEach((p, i) => {
+      if (p === -1) return;
+      expect(depth[p]).toBe((outDepth[i] as number) - 1);
+      expect(inside(trail, p, out, i)).toBe(true);
+    });
+  }
+
+  it("holds every fed cell, round by round, with its label, depth, roll and parent row", async () => {
+    const { out, trail } = await trailed(scopeDoc());
+    // Fed: A×2, B×4, B×8, E×16, D×16 — every intermediate cell, none of the 16 terminal ones.
+    expect(trail.pointCount).toBe(46);
+    expect(strs(trail, "piece")).toEqual([
+      ...Array(2).fill("A"),
+      ...Array(12).fill("B"),
+      ...Array(16).fill("E"),
+      ...Array(16).fill("D"),
+    ]);
+    expect(nums(trail, "ruleDepth")).toEqual([
+      ...Array(2).fill(0),
+      ...Array(4).fill(1),
+      ...Array(8).fill(2),
+      ...Array(16).fill(3),
+      ...Array(16).fill(4),
+    ]);
+    // The first links, by hand: the round-1 B rows 2..5 came from the A rows 0, 0, 1, 1.
+    expect(nums(trail, "ruleParent").slice(0, 6)).toEqual([-1, -1, 0, 0, 1, 1]);
+    // Every fed cell carries a roll; the lineage column is gone, as on `out`.
+    for (const r of nums(trail, "ruleRoll")) expect(r).toBeGreaterThanOrEqual(0);
+    expect(trail.attrs.point.has(RULE_SRC_ATTR)).toBe(false);
+    expectTree(trail, out);
+    // `out`'s links name the D rows (30..45) one to one: a relabel keeps the box.
+    expect(nums(out, "ruleParent")).toEqual(Array.from({ length: 16 }, (_, i) => 30 + i));
+  });
+
+  it("walking ruleParent from any `out` cell reaches its axiom row in exactly its depth", async () => {
+    const { out, trail } = await trailed(scopeDoc());
+    const parent = nums(trail, "ruleParent");
+    const xs = nums(out, "boundsMin");
+    nums(out, "ruleParent").forEach((p0, i) => {
+      let p = p0;
+      let steps = 1;
+      while (parent[p] !== -1) {
+        p = parent[p] as number;
+        steps++;
+      }
+      expect(steps).toBe(5);
+      // The axiom row is the A cell the out cell lies in.
+      expect(p).toBe((xs[i] as number) < 50 ? 0 : 1);
+    });
+  });
+
+  it("within a round, rows go rule by rule in the body's exposed-output order, frontier order within a rule", async () => {
+    const cells: AxiomCell[] = ["Y", "X", "Y", "X"].map((label, i) => ({ x0: 10 * i, x1: 10 * i + 1, label }));
+    const body = (order: string[]): Json =>
+      rulesBody(
+        [
+          { name: "X", nodes: [relabel("xEnd", "end")] },
+          { name: "Y", nodes: [relabel("yEnd", "end")] },
+        ],
+        { outputOrder: order },
+      );
+    expect(nums((await trailed(rulesDoc(cells, body(["X", "Y"])))).trail, "boundsMin")).toEqual([10, 30, 0, 20]);
+    expect(nums((await trailed(rulesDoc(cells, body(["Y", "X"])))).trail, "boundsMin")).toEqual([0, 20, 10, 30]);
+  });
+
+  it("is byte-identical under any budget, insertion order and re-cook", async () => {
+    const base = await trailed(scopeDoc());
+    const ref = { out: snapshotGeometry(base.out), trail: snapshotGeometry(base.trail) };
+    const reversed = clone(withTrail(scopeDoc()));
+    (reversed.nodes as Json[]).reverse();
+    const budgeted = await trailed(scopeDoc(), { budgetMs: 1e-4 });
+    const rev = await cook(deserializeGraph(reversed));
+    for (const got of [budgeted, { out: geoOf(rev.outputs.out), trail: geoOf(rev.outputs.trail) }]) {
+      expect(snapshotGeometry(got.out)).toEqual(ref.out);
+      expect(snapshotGeometry(got.trail)).toEqual(ref.trail);
+    }
+    const g = load(withTrail(scopeDoc()));
+    await cook(g);
+    const again = await cook(g);
+    expect(again.stats.cooked).toBe(0);
+    expect(snapshotGeometry(geoOf(again.outputs.trail))).toEqual(ref.trail);
+  });
+
+  it("is not built while nothing reads it, and `out` is the same bytes either way", async () => {
+    const unread = load(scopeDoc());
+    const r = await cook(unread);
+    // Nothing is wired to `trail`: the pin holds the empty collection.
+    expect(unread.require("rules").cache?.outputs.trail).toEqual([]);
+    const read = await trailed(scopeDoc());
+    expect(snapshotGeometry(geoOf(r.outputs.out))).toEqual(snapshotGeometry(read.out));
+    // Wiring a reader on recooks the node (its key names what is read), and
+    // the next cook is a hit again.
+    unread.output({ id: "rules" }, "trail", "trail");
+    const wired = await cook(unread);
+    expect(wired.stats.cooked).toBeGreaterThan(0);
+    expect(geoOf(wired.outputs.trail).pointCount).toBe(46);
+    expect((await cook(unread)).stats.cooked).toBe(0);
+  });
+
+  it("a connection leaving `trail` counts as reading it: transferByIndex reads each cell's parent", async () => {
+    const doc = scopeDoc();
+    (doc.nodes as Json[]).push({
+      id: "up",
+      type: "transferByIndex",
+      params: {
+        index: attr("ruleParent"),
+        attributes: ["piece", "ruleDepth"],
+        outNames: ["parentPiece", "parentDepth"],
+        outOfRange: "miss",
+      },
+    });
+    (doc.connections as Json[]).push(wire("rules", "up"), wire("rules", "up", "trail", "source"));
+    (doc.outputs as Json[]).push({ id: "up", pin: "out", name: "up" });
+    const r = await cook(load(doc));
+    const up = geoOf(r.outputs.up);
+    expect(strs(up, "parentPiece")).toEqual(Array(16).fill("D"));
+    expect(nums(up, "parentDepth")).toEqual(Array(16).fill(4));
+  });
+
+  it("connectByIndex over `trail` draws the derivation tree: one edge per non-axiom row", async () => {
+    const doc = withTrail(scopeDoc());
+    (doc.nodes as Json[]).push({
+      id: "tree",
+      type: "connectByIndex",
+      params: { index: attr("ruleParent"), rootValue: -1 },
+    });
+    (doc.connections as Json[]).push(wire("rules", "tree", "trail", "in"));
+    (doc.outputs as Json[]).push({ id: "tree", pin: "out", name: "tree" });
+    const r = await cook(load(doc));
+    expect(geoOf(r.outputs.tree).primitiveCount).toBe(44);
+  });
+
+  it("at the depth cap: only applied cells are rows; the cut-off cell is on `out`, linked to its producer", async () => {
+    const body = rulesBody([
+      { name: "A", nodes: [relabel("ab", "B")] },
+      { name: "B", nodes: [relabel("ba", "A")] },
+      { name: "C", nodes: [relabel("cEnd", "end")] },
+    ]);
+    const doc = rulesDoc([{ x0: 0, x1: 1, label: "A" }, { x0: 2, x1: 3, label: "C" }], body, { maxDepth: 3 });
+    const { out, trail } = await trailed(doc);
+    // Round 0 feeds A and C (rule order), round 1 B, round 2 A; round 3 is the cap.
+    expect(strs(trail, "piece")).toEqual(["A", "C", "B", "A"]);
+    expect(nums(trail, "ruleParent")).toEqual([-1, -1, 0, 2]);
+    expect(nums(trail, "ruleDepth")).toEqual([0, 0, 1, 2]);
+    // `out` in settle order: C's `end` (round 1), then the B cut off at round 3.
+    expect(strs(out, "piece")).toEqual(["end", "B"]);
+    expect(nums(out, "ruleParent")).toEqual([1, 3]);
+    expect(cutOff(out)).toEqual([0, 1, 0]);
+  });
+
+  it("a cell terminal on `in` is on `out` with parent -1 and never on `trail`", async () => {
+    const { out, trail } = await trailed(
+      rulesDoc(
+        [
+          { x0: 0, x1: 8, label: "A" },
+          { x0: 50, x1: 51, label: "stone" },
+        ],
+        scopeGrammar(),
+      ),
+    );
+    expect(strs(out, "piece")[0]).toBe("stone");
+    expect(nums(out, "ruleParent")[0]).toBe(-1);
+    expect(strs(trail, "piece")).not.toContain("stone");
+    expect(trail.pointCount).toBe(23);
+  });
+
+  /** `oneRule()` over `geo`, with `out` and `trail` declared. */
+  async function cookTrailCode(geo: Geometry): Promise<{ out: Geometry; trail: Geometry }> {
+    const g = new Graph(7);
+    const src = g.add(dataInput, { items: [makeGeometryItem(geo)] }, "src");
+    const n = g.add(oneRule(), {}, "rules");
+    g.connect(src, "out", n, "in");
+    g.output(n, "out", "out");
+    g.output(n, "trail", "trail");
+    const r = await cook(g);
+    return { out: geoOf(r.outputs.out), trail: geoOf(r.outputs.trail) };
+  }
+
+  it("an empty `in`, or one with nothing to feed, gives a zero-row trail that still has the parent column", async () => {
+    for (const labels of [[], ["done"]]) {
+      const { out, trail } = await cookTrailCode(cellsGeo(labels));
+      expect(trail.pointCount).toBe(0);
+      expect(trail.attrs.point.get("ruleParent")?.type).toBe("i32");
+      expect(nums(out, "ruleParent")).toEqual(labels.map(() => -1));
+    }
+  });
+
+  it("carries the axiom's detail attributes onto `trail`, without the cut-off report", async () => {
+    const geo = cellsGeo(["facade"]);
+    geo.attrs.detail.add("lot", "i32", 1, 0).set(0, 7);
+    const { trail } = await cookTrailCode(geo);
+    expect(trail.attrs.detail.require("lot").get(0)).toBe(7);
+    expect(trail.attrs.detail.has(RULES_CUT_OFF_ATTR)).toBe(false);
+  });
+
+  it("hands back the lineage column `in` carried on `trail` too", async () => {
+    const geo = cellsGeo(["facade", "done", "facade"]);
+    const src = geo.attrs.point.add(RULE_SRC_ATTR, "u32", 1, 0);
+    [7, 8, 9].forEach((v, i) => src.set(i, v));
+    expect(nums((await cookTrailCode(geo)).trail, RULE_SRC_ATTR)).toEqual([7, 9]);
+  });
+
+  it("nested: the outer trail holds only the cells IT fed, and the outer links overwrite the inner ones", async () => {
+    // Outer A: split into P | P, an inner applyRules (P -> Q | Q), relabel end.
+    const inner = rulesBody([{ name: "P", nodes: [cut("pSplit", ["Q", "Q"])] }]);
+    const outer: Json = {
+      graph: {
+        formatVersion: 1,
+        seed: 0,
+        nodes: [
+          cut("aSplit", ["P", "P"]),
+          { id: "nested", type: "applyRules", params: {}, subgraph: inner },
+          relabel("toEnd", "end"),
+        ],
+        connections: [wire("aSplit", "nested"), wire("nested", "toEnd")],
+        outputs: [],
+      },
+      inputs: [{ name: "A", node: "aSplit", pin: "in" }],
+      outputs: [{ name: "A", node: "toEnd", pin: "out" }],
+    };
+    const { out, trail } = await trailed(
+      rulesDoc(
+        [
+          { x0: 0, x1: 8, label: "A" },
+          { x0: 20, x1: 24, label: "A" },
+        ],
+        outer,
+      ),
+    );
+    expect(strs(trail, "piece")).toEqual(["A", "A"]);
+    expect(nums(trail, "ruleParent")).toEqual([-1, -1]);
+    // The inner node's own links would read 0, 0, 1, 1, 2, 2, 3, 3 (its four P rows).
+    expect(nums(out, "ruleParent")).toEqual([0, 0, 0, 0, 1, 1, 1, 1]);
+  });
+
+  it("parentAttr '' writes no column on either output; a clashing name is refused", async () => {
+    const { out, trail } = await trailed(scopeDoc({ parentAttr: "" }));
+    expect(out.attrs.point.has("ruleParent")).toBe(false);
+    expect(trail.attrs.point.has("ruleParent")).toBe(false);
+    expect(trail.pointCount).toBe(46);
+    const clash = await rejection(runDoc(scopeDoc({ parentAttr: "ruleDepth" })));
+    expect(clash).toContain('params "depthAttr" and "parentAttr" both name "ruleDepth"');
+    const std = await rejection(runDoc(scopeDoc({ parentAttr: "seed" })));
+    expect(std).toContain('param "parentAttr" cannot write "seed"');
+  });
+
+  it("the trail's row cap holds whether or not `trail` is wired, so `out`'s links always name real rows", async () => {
+    // 65536 cells relabelled A <-> B: 65536 rows a round, so round 64 is the
+    // 65th and brings the trail to 4259840 rows, past 4194304. Neither the
+    // frontier nor `out` ever comes near the cell cap.
+    const inner = new Graph(5);
+    const ab = addRelabel(inner, "ab", "B");
+    const ba = addRelabel(inner, "ba", "A");
+    const def = applyRulesNode(
+      inner,
+      [pinOf("A", ab, "in"), pinOf("B", ba, "in")],
+      [pinOf("A", ab, "out"), pinOf("B", ba, "out")],
+    );
+    const msg = await rejection(cookCode(def, cellsGeo(new Array(65536).fill("A")), { maxDepth: 1024 }));
+    expect(msg).toContain('round 64 (fed: A×65536) brought "trail" to 4259840 rows');
+    expect(msg).toContain('counted whether or not "trail" is wired');
+    // The falsifier: one round fewer of the cycle stays under the cap.
+    const ok = await cookCode(def, cellsGeo(new Array(65536).fill("A")), { maxDepth: 64 });
+    expect(ok.converged).toBe(0);
+  }, 60_000);
+
+  it("a parentAttr column already on the cells in another shape is refused naming the param", async () => {
+    const geo = cellsGeo(["facade"]);
+    geo.attrs.point.add("ruleParent", "f32", 1, 0);
+    const msg = await rejection(cookCode(oneRule(), geo));
+    expect(msg).toContain('input "in" carries "ruleParent" as f32 tuple 1, but parentAttr writes that name as i32');
+  });
+
+  /** The cook's outcome with `trail` unwired and wired: an error message, or "ok". */
+  async function bothWirings(doc: Json): Promise<{ unwired: string; wired: string; trail?: Geometry }> {
+    const outcome = async (d: Json) =>
+      cook(load(d)).then(
+        (r) => ({ msg: "ok", r }),
+        (e: unknown) => ({ msg: e instanceof Error ? e.message : String(e), r: undefined }),
+      );
+    const u = await outcome(doc);
+    const w = await outcome(withTrail(doc));
+    return {
+      unwired: u.msg,
+      wired: w.msg,
+      ...(w.r?.outputs.trail !== undefined ? { trail: geoOf(w.r.outputs.trail) } : {}),
+    };
+  }
+
+  const removeCols = (id: string, names: string[]): Json => ({ id, type: "removeAttribute", params: { names } });
+  const setI32 = (id: string, name: string, value: number): Json => ({
+    id,
+    type: "setAttribute",
+    params: { name, domain: "point", type: "i32", value },
+  });
+
+  it("wiring trail cannot fail a cook: a column whose shape changes between rounds is left off the trail, by name", async () => {
+    // A writes tmp as f32 on its products, B swaps it for an i32, C removes
+    // it: the cells reaching `out` never carry two shapes, the trail's rows do.
+    const body = rulesBody([
+      { name: "A", nodes: [setF32("aTmp", "tmp", 1), relabel("aToB", "B")] },
+      { name: "B", nodes: [removeCols("bRm", ["tmp"]), setI32("bTmp", "tmp", 2), relabel("bToC", "C")] },
+      { name: "C", nodes: [removeCols("cRm", ["tmp"]), relabel("cEnd", "end")] },
+    ]);
+    const r = await bothWirings(rulesDoc([{ x0: 0, x1: 1, label: "A" }], body));
+    expect(r.unwired).toBe("ok");
+    expect(r.wired).toBe("ok");
+    const trail = r.trail as Geometry;
+    expect(strs(trail, "piece")).toEqual(["A", "B", "C"]);
+    expect(trail.attrs.point.has("tmp")).toBe(false);
+    const dropped = trail.attrs.detail.require(TRAIL_DROPPED_ATTR);
+    expect(Array.from({ length: dropped.tupleSize }, (_, i) => dropped.getString(0, i))).toEqual(["tmp"]);
+    // The falsifier: with no clash the column stays and no list is written.
+    const calm = await trailed(scopeDoc());
+    expect(calm.trail.attrs.detail.has(TRAIL_DROPPED_ATTR)).toBe(false);
+  });
+
+  it("a rule writing parentAttr's name in another shape is refused the same way whether or not trail is wired", async () => {
+    // A writes ruleParent as f32 on cells B then removes: only the trail's
+    // rows would ever carry it.
+    const body = rulesBody([
+      { name: "A", nodes: [setF32("aPar", "ruleParent", 0.5), relabel("aToB", "B")] },
+      { name: "B", nodes: [removeCols("bRm", ["ruleParent"]), relabel("bEnd", "end")] },
+    ]);
+    const r = await bothWirings(rulesDoc([{ x0: 0, x1: 1, label: "A" }], body));
+    expect(r.unwired).toBe(r.wired);
+    expect(r.unwired).toContain(`rule "A"'s output in round 0 carries "ruleParent" as f32 tuple 1`);
+    expect(r.unwired).not.toContain("frontier");
+  });
+
+  it("a runaway split is diagnosed as a runaway, not as a long trail, under either wiring", async () => {
+    // X -> X | X from one cell: the products and the trail cross their caps
+    // in the same round. The trail's cap is checked after the round's
+    // products, so the refusal is the split's own cap on what it emits
+    // (splitBox refuses before applyRules' cell cap can), never the
+    // "shorten a relabel chain" advice, which would be false here.
+    const body = rulesBody([{ name: "X", nodes: [cut("xx", ["X", "X"])] }]);
+    const doc = rulesDoc([{ x0: 0, x1: 1 << 30, label: "X" }], body, { maxDepth: 1024 });
+    const r = await bothWirings(doc);
+    expect(r.unwired).toBe(r.wired);
+    expect(r.unwired).toContain("applyRules: round 22 (fed: X×");
+    expect(r.unwired).toContain("the split would emit more than 4194304 points");
+    expect(r.unwired).not.toContain('brought "trail"');
+  }, 120_000);
 });

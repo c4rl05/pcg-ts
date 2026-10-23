@@ -168,8 +168,19 @@ function requireTopologyRule(nodeType: string, value: string): boolean {
  * runs even when the input has NO primitives, because what the output IS
  * must depend on the graph and never on the data — the rule selfPrune's
  * off-switch comment states.
+ *
+ * `keepEmpty` decides the one primitive the "all its points survived" test
+ * cannot place: one with NO vertices passes vacuously. Every filter keeps it
+ * (true). filterByExpression's `rest` passes false, so a split's two sides
+ * never both hold it — it stays where every point filter has always put it,
+ * on `out`.
  */
-function rebuildFiltered(geo: Geometry, keep: ArrayLike<number>, keepTopology: boolean): Geometry {
+function rebuildFiltered(
+  geo: Geometry,
+  keep: ArrayLike<number>,
+  keepTopology: boolean,
+  keepEmpty = true,
+): Geometry {
   if (!keepTopology) return gatherPoints(geo, keep);
   const alive = new Uint8Array(geo.pointCount);
   for (let j = 0; j < keep.length; j++) alive[keep[j]] = 1;
@@ -181,6 +192,7 @@ function rebuildFiltered(geo: Geometry, keep: ArrayLike<number>, keepTopology: b
   for (let p = 0; p < nPrims; p++) {
     const s = starts[p];
     const c = counts[p];
+    if (c === 0 && !keepEmpty) continue;
     // Vacuously true for c === 0: a primitive with no vertices references
     // no point, so it loses none. (filterPrimitivesByBounds writes down the
     // opposite vacuous answer for the same case, and the two agree —
@@ -1203,9 +1215,12 @@ export const filterByExpression = standardNode<
   type: "filterByExpression",
   category: "filter",
   description:
-    "Keeps points where a field-capable `predicate` evaluates to a non-zero number. The predicate is resolved once over the input's point domain, so it can read position, any attribute, noise, or per-point randomness — which means a test that would otherwise need a scratch attribute plus filterByAttribute becomes one node, with no leftover column on the output. Comparison field functions (gt/ge/lt/le/eq/ne) already yield 1 and 0, and combining them with mul acts as AND, max as OR. NaN never passes, so a predicate that fails to compute drops the point instead of keeping it. The predicate must evaluate to tuple size 1: comparisons broadcast elementwise, so comparing a vector yields a vector of flags, which is not a decision. Output is a point cloud of the survivors with all attributes carried — unless `topology` is set to 'keep', which also preserves every primitive ALL of whose points survived, renumbered onto them.",
+    "Keeps points where a field-capable `predicate` evaluates to a non-zero number. The predicate is resolved once over the input's point domain, so it can read position, any attribute, noise, or per-point randomness — which means a test that would otherwise need a scratch attribute plus filterByAttribute becomes one node, with no leftover column on the output. Comparison field functions (gt/ge/lt/le/eq/ne) already yield 1 and 0, and combining them with mul acts as AND, max as OR. NaN never passes, so a predicate that fails to compute drops the point instead of keeping it. The predicate must evaluate to tuple size 1: comparisons broadcast elementwise, so comparing a vector yields a vector of flags, which is not a decision. Output is a point cloud of the survivors with all attributes carried — unless `topology` is set to 'keep', which also preserves every primitive ALL of whose points survived, renumbered onto them. The second output `rest` carries the points the predicate rejected, so a two-way split is one node: it is the exact complement of `out` (0 and NaN land there), in stable input order with all attributes carried, and under 'keep' it preserves the primitives all of whose points were rejected, so a primitive straddling the split is on neither side, and a primitive with no vertices at all (which loses no point) stays on `out` only, so the two sides never share one. `rest` is built only when something reads it, and `out` is the same bytes either way.",
   inputs: [{ name: "in", kind: "geometry" }],
-  outputs: [{ name: "out", kind: "geometry" }],
+  outputs: [
+    { name: "out", kind: "geometry" },
+    { name: "rest", kind: "geometry", onDemand: true },
+  ],
   params: {
     predicate: {
       type: "f32",
@@ -1222,9 +1237,12 @@ export const filterByExpression = standardNode<
     },
     topology: TOPOLOGY_PARAM,
   },
-  execute({ inputs, params, seed: nodeSeed }) {
+  execute({ inputs, params, seed: nodeSeed, readOutputs }) {
     const geo = requireGeometry(inputs, "in", "filterByExpression");
     const keepTopology = requireTopologyRule("filterByExpression", params.topology);
+    // Decided once: absent `readOutputs` (a direct execute call) builds
+    // every output, so skipping `rest` is never the default.
+    const buildRest = readOutputs === undefined || readOutputs.has("rest");
     const seed = params.seed === 0 ? nodeSeed : hashCombine(nodeSeed, params.seed);
     // Deliberately NOT a `gpu: "fields"` adopter, unlike every other node
     // with a field-capable param. The device path is a documented
@@ -1234,7 +1252,8 @@ export const filterByExpression = standardNode<
     // COUNT, and with it every downstream index, per-point seed and cache
     // key. Adopting is one line plus a fixture in the bidirectional guard at
     // src/gpu/onePredicate.test.ts — do it only with a parity budget
-    // expressed in surviving points, not in ulps.
+    // expressed in surviving points, not in ulps. `rest` inherits the same
+    // reasoning: it is the complement of that decision, so it is CPU too.
     // Deliberately NOT guarded against non-finite values: a NaN predicate
     // means DROP THIS POINT, which this node's own description states and
     // the `> 0 || < 0` test below implements. A throw would delete a
@@ -1254,13 +1273,19 @@ export const filterByExpression = standardNode<
     }
     const data = col.data;
     const keep: number[] = [];
+    const rejected: number[] = [];
     for (let i = 0; i < geo.pointCount; i++) {
       // `> 0 || < 0` is the non-zero test that also rejects NaN, where
-      // `!== 0` would keep it.
+      // `!== 0` would keep it. Its negation is exactly what `rest` gets, so
+      // the two outputs partition the input.
       const v = data[i];
       if (v > 0 || v < 0) keep.push(i);
+      else if (buildRest) rejected.push(i);
     }
-    return { out: [makeGeometryItem(rebuildFiltered(geo, keep, keepTopology))] };
+    return {
+      out: [makeGeometryItem(rebuildFiltered(geo, keep, keepTopology))],
+      rest: buildRest ? [makeGeometryItem(rebuildFiltered(geo, rejected, keepTopology, false))] : [],
+    };
   },
 });
 

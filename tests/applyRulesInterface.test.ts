@@ -3,7 +3,7 @@
  * wire. The rule pairs are INTERIOR — fed and drained by the round loop —
  * so every view of the node (the pin description, the structural
  * diagnosis, the read-only graph picture, the JSON Schema) must show `in`
- * plus the broadcasts going in and `out`, `rounds`, `converged` coming out,
+ * plus the broadcasts going in and `out`, `trail`, `rounds`, `converged` coming out,
  * and never a rule name.
  */
 import { readFileSync } from "node:fs";
@@ -86,11 +86,11 @@ function rulesDef() {
 }
 
 describe("applyRules: the pins it describes", () => {
-  it("describeSubgraphPins lists in + broadcasts, and out / rounds / converged; no rule pair", () => {
+  it("describeSubgraphPins lists in + broadcasts, and out / trail / rounds / converged; no rule pair", () => {
     const pins = describeSubgraphPins(rulesDef());
     expect(pins).toBeDefined();
     expect(pins?.inputs.map((p) => p.name)).toEqual(["in", "occluder"]);
-    expect(pins?.outputs.map((p) => p.name)).toEqual(["out", "rounds", "converged"]);
+    expect(pins?.outputs.map((p) => p.name)).toEqual(["out", "trail", "rounds", "converged"]);
     expect(pins?.inputs.find((p) => p.name === "in")).toMatchObject({ kind: "geometry", synthesized: true });
     // The broadcast is the body's own pin, resolved through the inner node.
     expect(pins?.inputs.find((p) => p.name === "occluder")).toMatchObject({ kind: "geometry" });
@@ -104,7 +104,7 @@ describe("applyRules: the pins it describes", () => {
   it("the def's own pins agree", () => {
     const def = rulesDef();
     expect(def.inputs.map((p) => p.name)).toEqual(["in", "occluder"]);
-    expect(def.outputs.map((p) => p.name)).toEqual(["out", "rounds", "converged"]);
+    expect(def.outputs.map((p) => p.name)).toEqual(["out", "trail", "rounds", "converged"]);
   });
 });
 
@@ -149,20 +149,20 @@ describe("applyRules: diagnoseGraph", () => {
 });
 
 describe("applyRules: readGraph (the read-only graph view)", () => {
-  it("draws in + broadcasts going in and out / rounds / converged coming out", () => {
+  it("draws in + broadcasts going in and out / trail / rounds / converged coming out", () => {
     const doc = houseDoc({ broadcast: true });
     const picture = readGraph(doc as never);
     const node = picture.nodes.find((n) => n.id === "rules");
     expect(node).toBeDefined();
     expect(node?.inputs.map((p) => p.name)).toEqual(["in", "occluder"]);
-    expect(node?.outputs.map((p) => p.name)).toEqual(["out", "rounds", "converged"]);
+    expect(node?.outputs.map((p) => p.name)).toEqual(["out", "trail", "rounds", "converged"]);
   });
 
   it("does the same for the corpus graph, whose six rules are all interior", () => {
     const doc = JSON.parse(readFileSync(CORPUS, "utf8")) as Json;
     const node = readGraph(doc as never).nodes.find((n) => n.id === "grammar");
     expect(node?.inputs.map((p) => p.name)).toEqual(["in"]);
-    expect(node?.outputs.map((p) => p.name)).toEqual(["out", "rounds", "converged"]);
+    expect(node?.outputs.map((p) => p.name)).toEqual(["out", "trail", "rounds", "converged"]);
   });
 });
 

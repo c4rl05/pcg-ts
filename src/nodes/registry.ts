@@ -84,6 +84,15 @@ export interface PinInfo {
    * since nothing needs an output connected.
    */
   readonly required: boolean;
+  /**
+   * Output pins only: present, and `true`, on a `PinDef.onDemand` pin, one
+   * the node builds only when a connection or a declared graph output
+   * reads it. A host that declares outputs on its own (an editor showing
+   * every unconnected pin) must leave these out, or it builds the side
+   * output it was meant to skip and draws it as if it were a result.
+   * Absent on every other pin.
+   */
+  readonly onDemand?: true;
 }
 
 /** JSON-safe metadata of one registered node type. */
@@ -161,17 +170,26 @@ function copySchema(schema: ParamSchema): ParamSchema {
  * and an output is never required.
  */
 function pinInfos(pins: readonly PinDef[], side: "input" | "output"): PinInfo[] {
+  // Decided once, outside the per-pin closure (the param-string rule).
+  const isOutput = side === "output";
   return pins.map((p) => ({
     name: p.name,
     kind: p.kind,
     multi: p.multi === true,
     required: side === "input" && p.optional !== true,
+    ...(isOutput && p.onDemand === true ? { onDemand: true as const } : {}),
   }));
 }
 
 /** A caller's copy of catalog pins, field by field like everything else here. */
 function copyPins(pins: readonly PinInfo[]): PinInfo[] {
-  return pins.map((p) => ({ name: p.name, kind: p.kind, multi: p.multi, required: p.required }));
+  return pins.map((p) => ({
+    name: p.name,
+    kind: p.kind,
+    multi: p.multi,
+    required: p.required,
+    ...(p.onDemand === true ? { onDemand: true as const } : {}),
+  }));
 }
 
 /**

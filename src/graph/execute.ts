@@ -975,6 +975,41 @@ export function withExclusiveGraph<T>(graph: Graph, fn: () => Promise<T>): Promi
   return run;
 }
 
+/** Each def's on-demand output pin names, in declaration order; computed once per def. */
+const onDemandPinsOf = new WeakMap<object, readonly string[]>();
+
+/**
+ * The on-demand output pins (see `PinDef.onDemand`) of node `id` that the
+ * graph's WIRING reads: a connection leaves the pin, or a graph output is
+ * declared on it. `undefined` for a def declaring no on-demand pin — the
+ * common case, which then keys and executes exactly as before the flag.
+ * Deliberately independent of the cook's output selection; `PinDef.onDemand`
+ * says why.
+ */
+function readOnDemandOutputs(
+  graph: Graph,
+  id: string,
+  def: NodeState["def"],
+): ReadonlySet<string> | undefined {
+  let pins = onDemandPinsOf.get(def);
+  if (pins === undefined) {
+    pins = def.outputs.filter((p) => p.onDemand === true).map((p) => p.name);
+    onDemandPinsOf.set(def, pins);
+  }
+  if (pins.length === 0) return undefined;
+  const outgoing = graph._outFrom.get(id) ?? [];
+  const read = new Set<string>();
+  for (const pin of pins) {
+    if (
+      outgoing.some((c) => c.fromPin === pin) ||
+      graph._outputs.some((o) => o.node === id && o.pin === pin)
+    ) {
+      read.add(pin);
+    }
+  }
+  return read;
+}
+
 /**
  * Cook the graph: pull-based from its declared outputs (or the subset
  * selected via `opts.outputs`), topological order, sequential. Each node
@@ -1175,9 +1210,15 @@ async function cookRun(graph: Graph, opts: CookOptions): Promise<CookResult> {
         (def.gpu === "fields" && paramsHaveSpecField(node.params, acceptDerived)))
         ? `|gpu:${gpuSalt}`
         : "";
+    // On-demand outputs (PinDef.onDemand): which of them the WIRING reads,
+    // folded into the key so a consumer wired on later recooks the node.
+    // Empty suffix, and no `readOutputs`, for every def declaring none, so
+    // their keys and their execute args are exactly what they were.
+    const readOutputs = readOnDemandOutputs(graph, id, def);
+    const readMark = readOutputs === undefined ? "" : `|r${[...readOutputs].join(",")}`;
     const key = `${def.type}|s${seed}|p${stableValueHash(node.params, "params")}|i${inputSig.join(
       ";",
-    )}|x${extra}${gpuMark}`;
+    )}|x${extra}${readMark}${gpuMark}`;
 
     if (node.cache !== undefined && node.cache.key === key && node.cache.volatile !== true) {
       node.dirty = false;
@@ -1207,6 +1248,7 @@ async function cookRun(graph: Graph, opts: CookOptions): Promise<CookResult> {
           // Scoped to this node, so a wrapper's body reports its nodes as
           // `thisNode/innerNode` and the outermost cook sweeps them all.
           tripwire: tripwire?.scope(id),
+          ...(readOutputs === undefined ? {} : { readOutputs }),
         });
       } catch (err) {
         // A CookCancelledError only counts as cancellation when the signal

@@ -72,7 +72,7 @@ function fmtParam(v: unknown): string {
  * `applyRules` is why this exists. Its body's same-named input/output
  * pairs are RULES its round loop feeds and drains itself, never pins of the
  * node; its pins are `in` plus the broadcasts (exposed inputs with no
- * output of their name), and `out`, `rounds`, `converged`. The library
+ * output of their name), and `out`, `trail`, `rounds`, `converged`. The library
  * reports exactly that through `describeSubgraphPins` on a live def; this
  * is the same rule restated over the serialized form, and
  * `tests/applyRulesInterface.test.ts` holds the two together.
@@ -84,7 +84,7 @@ function wrapperPinNames(node: SerializedNode): { inputs: string[]; outputs: str
   const outs = payload.outputs.map((e) => e.name);
   if (node.type === "applyRules") {
     const ruleOut = new Set(outs);
-    return { inputs: ["in", ...ins.filter((n) => !ruleOut.has(n))], outputs: ["out", "rounds", "converged"] };
+    return { inputs: ["in", ...ins.filter((n) => !ruleOut.has(n))], outputs: ["out", "trail", "rounds", "converged"] };
   }
   if (node.type === "repeatUntil") return { inputs: ins, outputs: [...outs, "rounds", "converged"] };
   return { inputs: ins, outputs: outs };

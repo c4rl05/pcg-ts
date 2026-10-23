@@ -7,7 +7,7 @@
  * Params live on the graph itself (getParams/setParam; field-capable
  * entries may hold Fields), subgraph pins come from describeSubgraphPins,
  * and declared outputs are the file's own plus the auto policy (every
- * unconnected output pin), applied via output/removeOutput deltas.
+ * unconnected output pin that is not on demand), applied via output/removeOutput deltas.
  * Import validates and rebuilds via
  * deserializeGraph — the one place a fresh graph replaces the mirror —
  * and export reads serializeGraph. Cooks are debounced and run per
@@ -943,10 +943,11 @@ export class EditorController {
           "",
       });
       const described = describeSubgraphPins(def);
-      const toView = (p: { name: string; kind: string }): PinView => ({
+      const toView = (p: { name: string; kind: string; onDemand?: true }): PinView => ({
         name: p.name,
         kind: p.kind,
         multi: false,
+        ...(p.onDemand === true ? { onDemand: true as const } : {}),
       });
       return {
         inputs: (described?.inputs ?? []).map(toView),
@@ -1013,6 +1014,12 @@ export class EditorController {
         // `names.has(key)`: the file already uses this auto name for some
         // OTHER pin, and the file's declaration wins — overwriting it would
         // silently drop that pin's output, and its role with it.
+        // An on-demand pin (filterByExpression's `rest`, applyRules'
+        // `trail`) is never auto-declared: declaring it is what makes the
+        // node build it, and an unwired side output drawn as a result is
+        // the filter's rejects on top of its keeps. A file may still
+        // declare one, and wiring one builds it.
+        if (p.onDemand === true) continue;
         if (connected(n.id, p.name) || covered.has(key) || names.has(key)) continue;
         names.set(key, { id: n.id, pin: p.name, name: key });
       }

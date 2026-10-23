@@ -5,7 +5,7 @@
  * vector predicate is refused rather than silently reinterpreted.
  */
 import { describe, expect, it } from "vitest";
-import { createPointCloud } from "../data/index.js";
+import { createPointCloud, type Geometry, setPolylineTopology } from "../data/index.js";
 import type { FieldLike } from "../fields/index.js";
 import {
   attribute,
@@ -20,7 +20,10 @@ import {
   randomField,
   sub,
 } from "../fields/index.js";
+import { cook } from "../graph/execute.js";
+import { Graph } from "../graph/graph.js";
 import { makeGeometryItem } from "../graph/index.js";
+import { dataInput } from "../runtime/dataInput.js";
 import { fieldFromJson, filterByExpression, type FilterByExpressionParams } from "./index.js";
 import { firstGeo, positionsOf, runNode, snapshotGeometry } from "./nodes.testsupport.js";
 
@@ -181,5 +184,191 @@ describe("filterByExpression", () => {
     await expect(runNode(filterByExpression, {}, {})).rejects.toThrow(
       /filterByExpression: input pin "in" has no geometry connected/,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// rest: the rejected points, so a two-way split is one node
+
+/** Predicate values per point: positive, zero, NaN, negative, mixed. */
+const PRED = [1, 0, NaN, -2, 3, 0, NaN, 0.5];
+
+/** A line of PRED.length points with a `pred` column and an `idx` column. */
+function splitFixture(): Geometry {
+  const geo = cloudAt(PRED.map((_, i) => [i, 0, 0]));
+  geo.attrs.point.add("pred", "f32", 1, 0).writable().set(PRED);
+  const idx = geo.attrs.point.add("idx", "i32", 1, 0);
+  PRED.forEach((_, i) => idx.set(i, i));
+  const tag = geo.attrs.point.add("tag", "string", 1, "");
+  PRED.forEach((_, i) => tag.setString(i, `p${i}`));
+  return geo;
+}
+
+function idxOf(geo: Geometry): number[] {
+  const idx = geo.attrs.point.require("idx");
+  return Array.from({ length: geo.pointCount }, (_, i) => idx.get(i));
+}
+
+describe("filterByExpression rest", () => {
+  it("out and rest partition the input, each in stable input order; 0 and NaN go to rest", async () => {
+    const geo = splitFixture();
+    const res = await runNode(
+      filterByExpression,
+      { predicate: attribute("pred", 1) },
+      { in: [makeGeometryItem(geo)] },
+    );
+    const out = idxOf(firstGeo(res.out));
+    const rest = idxOf(firstGeo(res.rest));
+    expect(out).toEqual([0, 3, 4, 7]);
+    expect(rest).toEqual([1, 2, 5, 6]);
+    expect(out.length + rest.length).toBe(geo.pointCount);
+    expect([...out, ...rest].sort((a, b) => a - b)).toEqual(PRED.map((_, i) => i));
+    // Positions follow the same order, so the partition is of the points
+    // themselves, not just of the index column.
+    expect(positionsOf(firstGeo(res.rest)).map((p) => p[0])).toEqual([1, 2, 5, 6]);
+  });
+
+  it("carries every attribute onto rest", async () => {
+    const res = await runNode(
+      filterByExpression,
+      { predicate: attribute("pred", 1) },
+      { in: [makeGeometryItem(splitFixture())] },
+    );
+    const rest = firstGeo(res.rest);
+    const tag = rest.attrs.point.require("tag");
+    expect(Array.from({ length: rest.pointCount }, (_, i) => tag.getString(i))).toEqual([
+      "p1",
+      "p2",
+      "p5",
+      "p6",
+    ]);
+    const pred = rest.attrs.point.require("pred");
+    const values = Array.from({ length: rest.pointCount }, (_, i) => pred.get(i));
+    expect(values[0]).toBe(0);
+    expect(values[1]).toBeNaN();
+  });
+
+  it("topology 'keep' gives each side the primitives wholly on it; a straddler is on neither", async () => {
+    const geo = cloudAt(Array.from({ length: 6 }, (_, i) => [i, 0, 0]));
+    // Points 0,1 pass; 2..5 are rejected. [0,1] is out's, [2,3] and [4,5]
+    // are rest's, [1,2] straddles the split.
+    const prims = [
+      [0, 1],
+      [1, 2],
+      [2, 3],
+      [4, 5],
+    ];
+    const flat = prims.flat();
+    const start = prims.map((_, p) => p * 2);
+    const count = prims.map(() => 2);
+    setPolylineTopology(geo, flat, start, count);
+    const kind = geo.attrs.primitive.add("roadKind", "string", 1, "");
+    prims.forEach((_, p) => kind.setString(p, `road${p}`));
+    const res = await runNode(
+      filterByExpression,
+      { predicate: lt(component(position(), 0), 1.5), topology: "keep" },
+      { in: [makeGeometryItem(geo)] },
+    );
+    const out = firstGeo(res.out);
+    const rest = firstGeo(res.rest);
+    expect(out.pointCount).toBe(2);
+    expect(rest.pointCount).toBe(4);
+    expect(out.primitiveCount).toBe(1);
+    expect(rest.primitiveCount).toBe(2);
+    const kinds = (g: Geometry) => {
+      const k = g.attrs.primitive.require("roadKind");
+      return Array.from({ length: g.primitiveCount }, (_, p) => k.getString(p));
+    };
+    expect(kinds(out)).toEqual(["road0"]);
+    expect(kinds(rest)).toEqual(["road2", "road3"]);
+  });
+
+  it("a primitive with no vertices stays on out only, so the two sides never share a primitive", async () => {
+    const geo = cloudAt(Array.from({ length: 4 }, (_, i) => [i, 0, 0]));
+    // [0,1] out's, a zero-vertex primitive, [2,3] rest's.
+    // Built raw: the polyline helper refuses a primitive under 2 vertices.
+    geo.setTopology(new Uint32Array([0, 1, 2, 3]), new Uint32Array([0, 2, 2]), new Uint32Array([2, 0, 2]));
+    const kind = geo.attrs.primitive.add("roadKind", "string", 1, "");
+    ["whole", "empty", "rejected"].forEach((k, p) => kind.setString(p, k));
+    const res = await runNode(
+      filterByExpression,
+      { predicate: lt(component(position(), 0), 1.5), topology: "keep" },
+      { in: [makeGeometryItem(geo)] },
+    );
+    const kinds = (g: Geometry) => {
+      const k = g.attrs.primitive.require("roadKind");
+      return Array.from({ length: g.primitiveCount }, (_, p) => k.getString(p));
+    };
+    // `out` is what it was before `rest` existed: the vacuous survivor kept.
+    expect(kinds(firstGeo(res.out))).toEqual(["whole", "empty"]);
+    expect(kinds(firstGeo(res.rest))).toEqual(["rejected"]);
+    expect(firstGeo(res.out).primitiveCount + firstGeo(res.rest).primitiveCount).toBe(geo.primitiveCount);
+  });
+
+  function splitGraph(seed: number, predicate: FieldLike, geo: Geometry = splitFixture()): {
+    g: Graph;
+    f: ReturnType<Graph["add"]>;
+  } {
+    const g = new Graph(seed);
+    const src = g.add(dataInput, { items: [makeGeometryItem(geo)] }, "src");
+    const f = g.add(filterByExpression, { predicate }, "f");
+    g.connect(src, "out", f, "in");
+    g.output(f, "out", "kept");
+    return { g, f };
+  }
+
+  it("in a graph, rest is built only when wired, and out is the same bytes either way", async () => {
+    const pred = fieldFromJson({ fn: "attribute", name: "pred", tupleSize: 1 });
+    const unread = splitGraph(4, pred);
+    const a = await cook(unread.g);
+    expect(unread.g.require("f").cache?.outputs.rest).toEqual([]);
+
+    const read = splitGraph(4, pred);
+    read.g.output(read.f, "rest", "rest");
+    const b = await cook(read.g);
+    expect(snapshotGeometry(firstGeo(a.outputs.kept))).toEqual(
+      snapshotGeometry(firstGeo(b.outputs.kept)),
+    );
+    expect(idxOf(firstGeo(b.outputs.rest))).toEqual([1, 2, 5, 6]);
+
+    // Unchanged wiring serves the cache.
+    expect((await cook(unread.g)).stats.cooked).toBe(0);
+    // Declaring rest after a cook recooks the node (and only it), and rest
+    // is then built.
+    unread.g.output(unread.f, "rest", "rest");
+    const c = await cook(unread.g);
+    expect(c.stats.cooked).toBe(1);
+    expect(idxOf(firstGeo(c.outputs.rest))).toEqual([1, 2, 5, 6]);
+    expect(snapshotGeometry(firstGeo(c.outputs.kept))).toEqual(
+      snapshotGeometry(firstGeo(a.outputs.kept)),
+    );
+  });
+
+  it("a connection leaving rest counts as reading it", async () => {
+    const pred = fieldFromJson({ fn: "attribute", name: "pred", tupleSize: 1 });
+    const { g, f } = splitGraph(4, pred);
+    await cook(g);
+    expect(g.require("f").cache?.outputs.rest).toEqual([]);
+    const after = g.add(filterByExpression, {}, "after");
+    g.connect(f, "rest", after, "in");
+    g.output(after, "out", "afterRest");
+    const res = await cook(g);
+    expect(idxOf(firstGeo(res.outputs.afterRest))).toEqual([1, 2, 5, 6]);
+  });
+
+  it("rest from a seeded predicate is deterministic across fresh graphs", async () => {
+    const many = Array.from({ length: 400 }, (_, i) => [i, 0, 0]);
+    const half = lt(randomField("keep"), 0.5);
+    const run = async () => {
+      const { g, f } = splitGraph(13, half, cloudAt(many));
+      g.output(f, "rest", "rest");
+      return cook(g);
+    };
+    const a = await run();
+    const b = await run();
+    const restA = firstGeo(a.outputs.rest);
+    expect(restA.pointCount).toBeGreaterThan(150);
+    expect(restA.pointCount + firstGeo(a.outputs.kept).pointCount).toBe(many.length);
+    expect(snapshotGeometry(restA)).toEqual(snapshotGeometry(firstGeo(b.outputs.rest)));
   });
 });

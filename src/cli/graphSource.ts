@@ -291,11 +291,15 @@ function tempOutputName(graph: Graph): string {
  * subgraph runs), and removed again — including when the cook throws or
  * the cook is cancelled.
  *
- * One caveat, precisely. The declared outputs, their order, every node's
- * dirty flag, the seed and every memo cache come back exactly as they
- * were; `Graph.version` does NOT. `Graph.output` and `Graph.removeOutput`
- * each bump the counter and there is no API to put it back, so a graph
- * that goes through here comes out at `version + 2`. Harmless for the
+ * Two caveats, precisely. The declared outputs, their order, every node's
+ * dirty flag and the seed come back exactly as they were, and so does
+ * every memo cache EXCEPT the target node's when `pin` is an on-demand
+ * pin (`PinDef.onDemand`): the temporary output makes the pin read, which
+ * is in that node's memo key, so the node cooks once with the pin and its
+ * cache holds that cook afterwards (a later cook without the reader
+ * recooks it). And `Graph.version` does NOT come back: `Graph.output`
+ * and `Graph.removeOutput` each bump the counter and there is no API
+ * to put it back, so a graph that goes through here comes out at `version + 2`. Harmless for the
  * CLI, which discards the graph after one command. It is not harmless
  * when the graph is the BODY OF A SUBGRAPH node: the wrapping node folds
  * the inner graph's `version` into its memo key, so calling `cookTarget`

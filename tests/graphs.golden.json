@@ -352,7 +352,8 @@
                 "piece:string",
                 "ruleDepth:i32",
                 "ruleRoll:f32",
-                "pieceIndex:i32"
+                "pieceIndex:i32",
+                "ruleParent:i32"
               ],
               "detail": [
                 "rulesCutOff:i32x6",

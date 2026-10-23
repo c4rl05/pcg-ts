@@ -449,8 +449,8 @@ also accepted and wraps into `constant`. Specs nest arbitrarily (up to
 
 ### Which params accept one
 
-76 of the standard library's 362 params do, across 39 node types, and one
-rule separates them from the other 286: **a param can be a field exactly
+76 of the standard library's 369 params do, across 39 node types, and one
+rule separates them from the other 293: **a param can be a field exactly
 when its value is read PER ELEMENT.** Everything settled before the
 elements are walked cannot be one, and there are five ways to be settled
 early.

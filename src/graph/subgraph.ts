@@ -331,6 +331,13 @@ export interface DescribedSubgraphPin {
    * `{ name, kind }` still describes the ordinary case exactly.
    */
   readonly synthesized?: true;
+  /**
+   * Present, and always `true`, on a wrapper pin the def marks
+   * `PinDef.onDemand` (`applyRules`' `trail`): built only when something
+   * reads it, so a host declaring outputs on its own must leave it out.
+   * Absent otherwise, for the reason `synthesized` is.
+   */
+  readonly onDemand?: true;
 }
 
 /**
@@ -461,7 +468,14 @@ export function describeSubgraphPins<P>(def: NodeDef<P>): SubgraphPins | undefin
     const bodyNames = new Set(fromBody.map((p) => p.name));
     const fromWrapper = declared
       .filter((p) => !bodyNames.has(p.name))
-      .map((p) => Object.freeze({ name: p.name, kind: p.kind, synthesized: true as const }));
+      .map((p) =>
+        Object.freeze({
+          name: p.name,
+          kind: p.kind,
+          synthesized: true as const,
+          ...(p.onDemand === true ? { onDemand: true as const } : {}),
+        }),
+      );
     if (interior !== undefined) {
       // A wrapper with interior pins declares its own outer pins FIRST
       // (`applyRules`: `in` before the broadcasts), so its description

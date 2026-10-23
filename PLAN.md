@@ -613,9 +613,21 @@ expression on the rule's own cells. Non-termination is reported per rule
 (`rulesCutOff` on `out`, `converged` 0), not refused. `maxDepth` defaults to
 32, not 12: every relabel costs a round, and `basics-apply-rules` already
 runs ten. Inline only — no `ref` (`wrapper-ref-unsupported`) until recipes
-carry a wrapper kind. Still open: `trail`/`ruleParent` (slice 2), the brick
-house re-expressed on it (slice 2; churn accepted, verified by invariants
-and distributions), `route` and the `rest` pin, and the group repeat above.
+carry a wrapper kind. Still open: the brick house re-expressed on it
+(slice 2; churn accepted, verified by invariants and distributions),
+`route`, and the group repeat above.
+
+**2026-10-23: the `rest` pin and the derivation trail SHIPPED.**
+`filterByExpression.rest` is the exact complement of `out` (0 and NaN
+included), in input order. `applyRules.trail` holds every FED cell, round by
+round and rule by rule in exposed-output order, and `parentAttr`
+(`ruleParent`, on `trail` and `out`) is the trail row of the application that
+produced a cell, -1 for an `in` cell. Both are ON-DEMAND pins
+(`PinDef.onDemand`, new): built only when a connection or a declared output
+reads them, which the executor decides from the WIRING, not the cook's
+output selection (a per-output host would otherwise flip the memo key every
+pass), and folds into the memo key. That replaced the design's `keepTrail`
+param, which would have let a wired trail come out silently empty.
 
 ### Stretch: quaternion field functions — REFUTED BY THE CORPUS, 2026-09-08
 

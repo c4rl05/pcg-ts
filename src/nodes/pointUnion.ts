@@ -111,3 +111,49 @@ export function concatPointClouds(who: string, geos: readonly Geometry[]): Geome
   }
   return out;
 }
+
+/**
+ * {@link concatPointClouds} for a record that must NOT be able to fail: a
+ * column the inputs disagree on (type or tuple size) is left off the result
+ * instead of refused, and its name is returned in `dropped`, in
+ * first-occurrence order. Every other column follows the ordinary union.
+ *
+ * `applyRules`' trail is the one user: its blocks are cells from DIFFERENT
+ * rounds, which may legitimately carry one name in two shapes (a rule
+ * writes a scratch column as f32, a later rule removes it and writes it as
+ * i32), while the cells that reach `out` never meet. Refusing there would
+ * make wiring the trail fail a cook that succeeds unwired.
+ */
+export function concatPointCloudsDropping(geos: readonly Geometry[]): { geo: Geometry; dropped: string[] } {
+  const shape = new Map<string, string>();
+  const dropped: string[] = [];
+  const conflict = new Set<string>();
+  for (const geo of geos) {
+    for (const attr of geo.attrs.point) {
+      const s = `${attr.type}x${attr.tupleSize}`;
+      const seen = shape.get(attr.name);
+      if (seen === undefined) shape.set(attr.name, s);
+      else if (seen !== s && !conflict.has(attr.name)) {
+        conflict.add(attr.name);
+        dropped.push(attr.name);
+      }
+    }
+  }
+  const out = new Geometry();
+  const outSet = out.attrs.point;
+  for (const geo of geos) {
+    for (const attr of geo.attrs.point) {
+      if (conflict.has(attr.name) || outSet.has(attr.name)) continue;
+      outSet.add(attr.name, attr.type, attr.tupleSize, attr.defaultValue as AttrDefault);
+    }
+  }
+  let total = 0;
+  for (const geo of geos) total += geo.pointCount;
+  resizeForOverwrite(outSet, total);
+  let offset = 0;
+  for (const geo of geos) {
+    appendBlock(outSet, geo.attrs.point, offset, geo.pointCount);
+    offset += geo.pointCount;
+  }
+  return { geo: out, dropped };
+}

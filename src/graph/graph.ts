@@ -984,9 +984,12 @@ export class Graph {
   /**
    * Undeclare the named terminal output. Cooking afterwards no longer
    * produces it (and per-output cooking rejects the name); the name is
-   * free to redeclare. Bumps the version. Node caches are untouched —
+   * free to redeclare. Bumps the version. Node caches are untouched, and
    * removing an output changes what a cook pulls, not any memo key, so
-   * the next cook serves every unchanged node from cache. Unknown names
+   * the next cook serves every unchanged node from cache — with one
+   * exception: an output declared on a `PinDef.onDemand` pin is part of
+   * what makes that pin READ, which is in its node's memo key, so removing
+   * the last reader recooks that node (without the pin). Unknown names
    * throw, listing the declared outputs.
    */
   removeOutput(name: string): void {

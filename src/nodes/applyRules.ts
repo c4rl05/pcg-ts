@@ -67,6 +67,27 @@
  * detail attribute `rulesCutOff` on `out` counts them per rule, beside
  * `rulesCutOffRules` naming the rule behind each component — so the rule
  * that would not stop is named. `repeatUntil`'s cap is the precedent.
+ *
+ * THE DERIVATION TRAIL. `trail` holds every cell that was FED to a rule —
+ * the intermediate cells, one row per rule application — as it was fed:
+ * its own columns (its box), its label (which IS the rule it was fed to),
+ * `depthAttr`, `rollAttr`. Rows run round by round, and within a round in
+ * the fed-list order (rule by rule in the body's exposed-output order, each
+ * rule's cells in frontier order), so a row's parent is always an EARLIER
+ * row. `parentAttr` (i32) is the parent link, on `trail` AND on `out`: the
+ * `trail` ROW of the rule application that produced the cell, or -1 for a
+ * cell that came in on `in`. The row numbering is a fact of the grammar,
+ * not of the wiring, so `out`'s links mean the same thing whether or not
+ * `trail` is built — and it is built only when something reads it (an
+ * on-demand pin): unread, the loop keeps one int per frontier cell for the
+ * links and retains nothing. A cell cut off at the cap was never fed, so it
+ * is on `out` and not on `trail`. A NESTED applyRules' trail is its own:
+ * the outer node records the cells IT fed, and rewrites the parent column
+ * its products carry from the inner one. WIRING THE TRAIL NEVER FAILS A
+ * COOK that succeeds unwired: a column its rows (cells of different rounds)
+ * carry in two shapes is left off the trail and named in the detail
+ * attribute `trailDroppedColumns`; the parent column and the row cap are
+ * checked identically under either wiring.
  */
 // Imported from the graph modules directly, as `repeatUntil.ts` does: the
 // wrapper machinery is `@internal` and must not ride out through
@@ -95,7 +116,7 @@ import {
 } from "../graph/subgraph.js";
 import { isTripwireFailure } from "../graph/tripwire.js";
 import { hashCombine, hashFinalize, hashFloat, hashMix, hashSeed, hashString } from "../random/hash.js";
-import { concatPointClouds } from "./pointUnion.js";
+import { concatPointClouds, concatPointCloudsDropping } from "./pointUnion.js";
 import { gatherPoints, requireGeometryItem } from "./util.js";
 
 const NODE = "applyRules";
@@ -103,11 +124,12 @@ const NODE = "applyRules";
 /** The wrapper's own outer pins, which no body declares. */
 export const APPLY_RULES_OUTER_INPUT = "in";
 export const APPLY_RULES_OUTER_OUTPUT = "out";
+/** The derivation trail: every fed cell, with its parent link; see the header. */
+export const APPLY_RULES_TRAIL_OUTPUT = "trail";
 
 /**
- * Names a rule or a broadcast may not take: the wrapper's own pins (and
- * `trail`, reserved for the derivation-tree output a later version adds).
- * A rule named `out` would read as the wrapper's pin in every listing.
+ * Names a rule or a broadcast may not take: the wrapper's own pins. A rule
+ * named `out` would read as the wrapper's pin in every listing.
  */
 export const APPLY_RULES_RESERVED_NAMES: ReadonlySet<string> = new Set([
   "in",
@@ -128,6 +150,14 @@ export const RULES_CUT_OFF_ATTR = "rulesCutOff";
 
 /** Its companion: a string tuple naming the rule behind each component. */
 export const RULES_CUT_OFF_NAMES_ATTR = "rulesCutOffRules";
+
+/**
+ * Detail attribute on `trail`, present only when needed: a string tuple
+ * naming the point columns left off the trail because its rows (cells from
+ * different rounds) carry them in different shapes. See
+ * `concatPointCloudsDropping`.
+ */
+export const TRAIL_DROPPED_ATTR = "trailDroppedColumns";
 
 /**
  * `concatPointClouds`, with a shape conflict restated to name this node and
@@ -214,6 +244,23 @@ export const APPLY_RULES_PARAM_SCHEMAS: Readonly<Record<string, ParamSchema>> = 
       "produced it (0 on a cell that arrived terminal). Empty writes none, and is refused when \"scoped\" " +
       "lists anything, since the scope would then reach no column.",
   }),
+  parentAttr: Object.freeze({
+    type: "string",
+    default: "ruleParent",
+    description:
+      'The i32 point attribute (tuple 1) linking a cell to the rule application it came from, written on "out" ' +
+      'and on "trail": the ROW of "trail" holding the cell that a rule rewrote into this one, or -1 for a cell ' +
+      'that came in on "in" (an axiom cell, or a terminal one that never fed a rule). "trail" lists every FED ' +
+      "cell round by round, and within a round rule by rule in the body's exposed-output order, each rule's " +
+      'cells in frontier order — so on "trail" a row\'s ruleParent is always smaller than the row\'s own ' +
+      "index, and following it from any cell walks its ancestors back to the axiom. Read an ancestor's box " +
+      'with transferByIndex (source "trail", index attribute("ruleParent"), outOfRange "miss" for the -1 ' +
+      'roots), or draw the derivation tree with connectByIndex over "trail" (rootValue -1). The numbering ' +
+      'does not depend on whether "trail" is wired, so the links on "out" always mean the same rows. Empty ' +
+      "writes none. Not a standard attribute, and not the same name as labelAttr, depthAttr or rollAttr. A " +
+      'column of this name already on the cells in another shape is refused where it appears (on "in", or on ' +
+      'the output of the rule that wrote it), the same whether or not "trail" is wired.',
+  }),
   scoped: Object.freeze({
     type: "stringList",
     default: [],
@@ -299,7 +346,8 @@ function resolveRules(
         throw new GraphValidationError(
           `${NODE}: exposed ${side} "${exp.name}" uses a name reserved for this node's own pins ` +
             `(${[...APPLY_RULES_RESERVED_NAMES].map((n) => `"${n}"`).join(", ")}): the outer "in" takes the ` +
-            'axiom cells, "out" emits the terminal ones and "rounds"/"converged" report the loop. A rule or ' +
+            'axiom cells, "out" emits the terminal ones, "trail" the cells the rules rewrote, and ' +
+            '"rounds"/"converged" report the loop. A rule or ' +
             "broadcast of that name would read as the wrapper's pin everywhere it is listed. Rename it (a rule's " +
             "label with it).",
         );
@@ -382,6 +430,7 @@ function checkStampNames(
   labelAttr: string,
   depthAttr: string,
   rollAttr: string,
+  parentAttr: string,
   scopedCount: number,
 ): void {
   if (typeof labelAttr !== "string" || labelAttr === "") {
@@ -394,6 +443,7 @@ function checkStampNames(
   for (const [param, name] of [
     ["depthAttr", depthAttr],
     ["rollAttr", rollAttr],
+    ["parentAttr", parentAttr],
   ] as const) {
     if (typeof name !== "string") {
       throw new GraphValidationError(`${NODE}: param "${param}" is ${JSON.stringify(name)}; give a name, or "" for none.`);
@@ -401,14 +451,14 @@ function checkStampNames(
     if (name === "") continue;
     if (STANDARD_POINT_ATTRS.some((std) => std.name === name) || name === RULE_SRC_ATTR) {
       throw new GraphValidationError(
-        `${NODE}: param "${param}" cannot write "${name}" — it is ${name === RULE_SRC_ATTR ? "this node's lineage column" : `a standard point attribute (${STANDARD_POINT_ATTRS.map((s) => s.name).join(", ")})`}, whose meaning other nodes rely on. Name an attribute of your own (e.g. "${param === "depthAttr" ? "ruleDepth" : "ruleRoll"}").`,
+        `${NODE}: param "${param}" cannot write "${name}" — it is ${name === RULE_SRC_ATTR ? "this node's lineage column" : `a standard point attribute (${STANDARD_POINT_ATTRS.map((s) => s.name).join(", ")})`}, whose meaning other nodes rely on. Name an attribute of your own (e.g. "${param === "depthAttr" ? "ruleDepth" : param === "rollAttr" ? "ruleRoll" : "ruleParent"}").`,
       );
     }
     for (const [otherParam, otherName] of owned) {
       if (otherName === name) {
         throw new GraphValidationError(
           `${NODE}: params "${otherParam}" and "${param}" both name "${name}"; each is a column of its own ` +
-            "(a string label, an i32 depth, an f32 roll). Give them different names.",
+            "(a string label, an i32 depth, an f32 roll, an i32 parent row). Give them different names.",
         );
       }
     }
@@ -567,6 +617,8 @@ export function applyRulesNode(
   ];
   const outputPins: PinDef[] = [
     { name: APPLY_RULES_OUTER_OUTPUT, kind: "geometry" },
+    // Built only when read: an unread trail retains no cell (see the header).
+    { name: APPLY_RULES_TRAIL_OUTPUT, kind: "geometry", onDemand: true },
     { name: "rounds", kind: "value" },
     { name: "converged", kind: "value" },
   ];
@@ -589,7 +641,9 @@ export function applyRulesNode(
     gpu: "always",
     selfMetered: true,
     memoKey: () => transitiveVersionKey(inner, new Set()),
-    async execute({ inputs, params, seed, signal, budgetMs, gpu, tripwire, checkCancelled }) {
+    async execute({ inputs, params, seed, signal, budgetMs, gpu, tripwire, checkCancelled, readOutputs }) {
+      // Decided once: absent means a direct call, which builds every output.
+      const buildTrail = readOutputs === undefined || readOutputs.has(APPLY_RULES_TRAIL_OUTPUT);
       const maxDepth = params.maxDepth as number;
       if (!Number.isInteger(maxDepth) || maxDepth < 1 || maxDepth > MAX_DEPTH_CEILING) {
         throw new GraphValidationError(
@@ -600,13 +654,15 @@ export function applyRulesNode(
       const labelAttr = params.labelAttr as string;
       const depthAttr = params.depthAttr as string;
       const rollAttr = params.rollAttr as string;
+      const parentAttr = params.parentAttr as string;
       const scopeRule = resolveScopes(rules, params.scoped, params.scopeOf);
       // Decided ONCE, as booleans: no param string is compared in the loop.
       const writeDepth = depthAttr !== "";
       const writeRoll = rollAttr !== "";
+      const writeParent = parentAttr !== "";
       let scopedCount = 0;
       for (const s of scopeRule) if (s !== -1) scopedCount++;
-      checkStampNames(labelAttr, depthAttr, rollAttr, scopedCount);
+      checkStampNames(labelAttr, depthAttr, rollAttr, parentAttr, scopedCount);
       const inItem = requireGeometryItem(inputs, APPLY_RULES_OUTER_INPUT, NODE);
 
       // Scope SLOTS: one per distinct ancestor rule some rule is scoped to.
@@ -646,9 +702,20 @@ export function applyRulesNode(
           let rootIdx: Int32Array = new Int32Array(0);
           let scopeId: Uint32Array[] = [];
           let scopeHas: Uint8Array[] = [];
+          // The `trail` row of the application that produced each frontier
+          // cell, -1 for a cell from `in`. Kept whether or not the trail is
+          // built: `out` carries these links either way.
+          let parentRow: Int32Array = new Int32Array(0);
           const outBlocks: Geometry[] = [];
           const outRoots: Int32Array[] = [];
+          const outParents: Int32Array[] = [];
           let outCount = 0;
+          // Rows of every round so far: the base of the next round's rows.
+          let trailCount = 0;
+          // Retained only when the trail is built.
+          const trailBlocks: Geometry[] = [];
+          const trailRoots: Int32Array[] = [];
+          const trailParents: Int32Array[] = [];
           let rounds = 0;
           const cutOff = new Int32Array(rules.length);
 
@@ -671,6 +738,26 @@ export function applyRulesNode(
             return out;
           };
 
+          /**
+           * parentAttr is written on `out` and `trail` at the end, onto
+           * whatever the cells carry; a column of that name in another shape
+           * is refused HERE, on `in` and on each rule's products as they
+           * arrive, so the refusal is the same whether or not `trail` is
+           * wired (trail rows are fed cells that may never reach `out`).
+           */
+          const checkParentColumn = (geo: Geometry, where: string): void => {
+            if (!writeParent) return;
+            const col = geo.attrs.point.get(parentAttr);
+            if (col === undefined || (col.type === "i32" && col.tupleSize === 1)) return;
+            throw new GraphValidationError(
+              `${NODE}: ${where} carries "${parentAttr}" as ${col.type} tuple ${col.tupleSize}, but parentAttr ` +
+                `writes that name as i32 tuple 1 on "${APPLY_RULES_OUTER_OUTPUT}" and ` +
+                `"${APPLY_RULES_TRAIL_OUTPUT}" (the trail row each cell came from), which would delete the ` +
+                "column. Give parentAttr a name of its own, or stop writing that name in the rule (or upstream of " +
+                `"${APPLY_RULES_OUTER_INPUT}").`,
+            );
+          };
+
           const stampDepth = (geo: Geometry, depth: number): void => {
             if (!writeDepth || geo.pointCount === 0) return;
             stampColumn(geo, depthAttr, "i32", "depthAttr").fill(depth, 0, geo.pointCount);
@@ -680,13 +767,16 @@ export function applyRulesNode(
             outCount += geo.pointCount;
             outBlocks.push(geo);
             outRoots.push(Int32Array.from(cells, (i) => rootIdx[i] as number));
+            outParents.push(Int32Array.from(cells, (i) => parentRow[i] as number));
           };
 
           let rule = labelsOf(frontier, `input "${APPLY_RULES_OUTER_INPUT}"`);
+          checkParentColumn(frontier, `input "${APPLY_RULES_OUTER_INPUT}"`);
           if (frontier.pointCount > 0) {
             const ids = pointIdentities(frontier, NODE);
             rootId = ids;
             rootIdx = Int32Array.from({ length: frontier.pointCount }, (_, i) => i);
+            parentRow = new Int32Array(frontier.pointCount).fill(-1);
             scopeId = Array.from({ length: slotCount }, () => new Uint32Array(frontier.pointCount));
             scopeHas = Array.from({ length: slotCount }, () => new Uint8Array(frontier.pointCount));
           }
@@ -785,6 +875,18 @@ export function applyRulesNode(
               }
               fedGeo[r] = geo;
             }
+            // ---- this round's trail rows: trailCount + (position in the
+            // fed list), so the fed list's order IS the trail's order.
+            const rowBase = trailCount;
+            trailCount += fedCount;
+            if (buildTrail) {
+              for (let r = 0; r < rules.length; r++) {
+                const geo = fedGeo[r];
+                if (geo !== undefined) trailBlocks.push(geo);
+              }
+              trailRoots.push(Int32Array.from(fedCell, (i) => rootIdx[i] as number));
+              trailParents.push(Int32Array.from(fedCell, (i) => parentRow[i] as number));
+            }
 
             // ---- cook the body once, over the fed rules' outputs only.
             for (const portal of portals) {
@@ -828,6 +930,9 @@ export function applyRulesNode(
             // ---- check and link every product, then concatenate.
             const products: Geometry[] = [];
             const parentOf: Int32Array[] = [];
+            // Each product's parent as a position in the fed list (= its
+            // trail row minus rowBase), parallel to `parentOf`.
+            const parentFedOf: Int32Array[] = [];
             let nextCount = 0;
             for (let r = 0; r < rules.length; r++) {
               if (fedGeo[r] === undefined) continue;
@@ -844,11 +949,14 @@ export function applyRulesNode(
                 if (m === 0) {
                   products.push(geo);
                   parentOf.push(new Int32Array(0));
+                  parentFedOf.push(new Int32Array(0));
                   continue;
                 }
                 labelsOf(geo, `rule "${x}"'s output in round ${k}`);
+                checkParentColumn(geo, `rule "${x}"'s output in round ${k}`);
                 const col = geo.attrs.point.get(RULE_SRC_ATTR);
                 const parents = new Int32Array(m);
+                const parentsFed = new Int32Array(m);
                 const a = start[r] as number;
                 const b = start[r + 1] as number;
                 const srcData = col !== undefined && col.type !== "string" && col.tupleSize === 1 ? col.data : undefined;
@@ -870,9 +978,11 @@ export function applyRulesNode(
                     );
                   }
                   parents[j] = fedCell[v - 1] as number;
+                  parentsFed[j] = v - 1;
                 }
                 products.push(geo);
                 parentOf.push(parents);
+                parentFedOf.push(parentsFed);
                 nextCount += m;
               }
             }
@@ -884,6 +994,20 @@ export function applyRulesNode(
                   "small enough, or cap it with a depth test on the depth attribute.",
               );
             }
+            // Capped whether or not the trail is wired, so `out`'s parent
+            // links always name rows of a trail that would build, and the
+            // node succeeds or fails the same way under any wiring. Checked
+            // AFTER the round's cell cap, so a runaway split, which passes
+            // both in the same round, is diagnosed as the runaway it is.
+            if (trailCount > MAX_RULE_POINTS) {
+              throw new GraphValidationError(
+                `${NODE}: round ${k} (fed: ${fedSummary.join(", ")}) brought "${APPLY_RULES_TRAIL_OUTPUT}" to ` +
+                  `${trailCount} rows, past the ${MAX_RULE_POINTS}-point cap — every cell a rule rewrites is a row, ` +
+                  'counted whether or not "trail" is wired, because the parentAttr links on "out" number those ' +
+                  "rows. A long relabel chain over many cells adds a row per cell per round: shorten the chain " +
+                  "(fewer relabel rounds, a lower maxDepth) or feed fewer cells.",
+              );
+            }
             frontier =
               products.length === 0
                 ? gatherPoints(frontier, new Int32Array(0))
@@ -891,14 +1015,18 @@ export function applyRulesNode(
             // Lineage for the next frontier, in the same concatenation order.
             const nextRoot = new Uint32Array(nextCount);
             const nextRootIdx = new Int32Array(nextCount);
+            const nextParentRow = new Int32Array(nextCount);
             const nextScope = Array.from({ length: slotCount }, () => new Uint32Array(nextCount));
             const nextHas = Array.from({ length: slotCount }, () => new Uint8Array(nextCount));
             let o = 0;
-            for (const parents of parentOf) {
+            for (let block = 0; block < parentOf.length; block++) {
+              const parents = parentOf[block] as Int32Array;
+              const parentsFed = parentFedOf[block] as Int32Array;
               for (let j = 0; j < parents.length; j++, o++) {
                 const p = parents[j] as number;
                 if (usesRoot) nextRoot[o] = rootId[p] as number;
                 nextRootIdx[o] = rootIdx[p] as number;
+                nextParentRow[o] = rowBase + (parentsFed[j] as number);
                 const pr = rule[p] as number;
                 for (let s = 0; s < slotCount; s++) {
                   if (slotOfRule[pr] === s) {
@@ -913,6 +1041,7 @@ export function applyRulesNode(
             }
             rootId = nextRoot;
             rootIdx = nextRootIdx;
+            parentRow = nextParentRow;
             scopeId = nextScope;
             scopeHas = nextHas;
             rule = labelsOf(frontier, `round ${k}'s products`);
@@ -924,32 +1053,66 @@ export function applyRulesNode(
             }
           }
 
-          const outGeo =
-            outBlocks.length === 0
-              ? gatherPoints(inItem.geo, new Int32Array(0))
-              : concatAttributed(outBlocks, `the cells settling on "${APPLY_RULES_OUTER_OUTPUT}"`);
-          // Hand back the lineage column `in` carried (an enclosing
-          // applyRules' links), or none: see the header.
           const inSrc = inItem.geo.attrs.point.get(RULE_SRC_ATTR);
-          const outSrc = outGeo.attrs.point.get(RULE_SRC_ATTR);
-          if (inSrc === undefined || outSrc === undefined) {
-            outGeo.attrs.point.remove(RULE_SRC_ATTR);
-          } else {
-            const from = inSrc.data;
-            const to = outSrc.writable();
-            let o = 0;
-            for (const roots of outRoots) {
-              for (let j = 0; j < roots.length; j++, o++) to[o] = from[roots[j] as number] as number;
+          /**
+           * Concatenate one output's blocks and finish it: hand back the
+           * lineage column `in` carried (an enclosing applyRules' links) or
+           * none, write the parent links, and carry the axiom's detail
+           * attributes through, as splitBox does. `roots` and `parents` run
+           * parallel to the blocks' cells.
+           */
+          const finish = (
+            blocks: readonly Geometry[],
+            roots: readonly Int32Array[],
+            parents: readonly Int32Array[],
+            what: string,
+            dropConflicts: boolean,
+          ): Geometry => {
+            let dropped: string[] = [];
+            let geo: Geometry;
+            if (blocks.length === 0) geo = gatherPoints(inItem.geo, new Int32Array(0));
+            else if (dropConflicts) ({ geo, dropped } = concatPointCloudsDropping(blocks));
+            else geo = concatAttributed(blocks, what);
+            const src = geo.attrs.point.get(RULE_SRC_ATTR);
+            if (inSrc === undefined || src === undefined) {
+              geo.attrs.point.remove(RULE_SRC_ATTR);
+            } else {
+              const from = inSrc.data;
+              const to = src.writable();
+              let o = 0;
+              for (const block of roots) {
+                for (let j = 0; j < block.length; j++, o++) to[o] = from[block[j] as number] as number;
+              }
             }
-          }
-          // The axiom's detail attributes ride through, as splitBox carries
-          // them, and the cut-off report is added beside them.
-          const detailIn = inItem.geo.attrs.detail;
-          for (const attr of detailIn) {
-            if (attr.name === RULES_CUT_OFF_ATTR || attr.name === RULES_CUT_OFF_NAMES_ATTR) continue;
-            const copy = outGeo.attrs.detail.add(attr.name, attr.type, attr.tupleSize, attr.defaultValue as never);
-            copy.copyFrom(attr, 0, 0, 1);
-          }
+            if (writeParent) {
+              // Written even on zero cells, so a field downstream reading
+              // the column finds it; it overwrites whatever a nested
+              // applyRules left there, which named ITS trail's rows.
+              const col = stampColumn(geo, parentAttr, "i32", "parentAttr").writable();
+              let o = 0;
+              for (const block of parents) {
+                for (let j = 0; j < block.length; j++, o++) col[o] = block[j] as number;
+              }
+            }
+            for (const attr of inItem.geo.attrs.detail) {
+              if (attr.name === RULES_CUT_OFF_ATTR || attr.name === RULES_CUT_OFF_NAMES_ATTR) continue;
+              const copy = geo.attrs.detail.add(attr.name, attr.type, attr.tupleSize, attr.defaultValue as never);
+              copy.copyFrom(attr, 0, 0, 1);
+            }
+            if (dropped.length > 0) {
+              const list = geo.attrs.detail.replace(TRAIL_DROPPED_ATTR, "string", dropped.length, "");
+              dropped.forEach((name, i) => list.setString(0, name, i));
+            }
+            return geo;
+          };
+          const outGeo = finish(
+            outBlocks,
+            outRoots,
+            outParents,
+            `the cells settling on "${APPLY_RULES_OUTER_OUTPUT}"`,
+            false,
+          );
+          // The cut-off report sits beside the axiom's detail attributes.
           const report = outGeo.attrs.detail.add(RULES_CUT_OFF_ATTR, "i32", rules.length, 0);
           for (let r = 0; r < rules.length; r++) report.set(0, cutOff[r] as number, r);
           // Its companion, so the counts are NAMED without the body in hand:
@@ -958,8 +1121,22 @@ export function applyRulesNode(
           for (let r = 0; r < rules.length; r++) names.setString(0, rules[r] as string, r);
           let total = 0;
           for (const c of cutOff) total += c;
+          // An unread trail is the empty collection: nothing can read it in
+          // this wiring, and building it is the cost the pin exists to skip.
+          const trailItems: DataCollection = buildTrail
+            ? [
+                makeGeometryItem(
+                  // Rows from different rounds may carry one name in two
+                  // shapes; the trail drops such a column rather than fail a
+                  // cook that succeeds with the trail unwired.
+                  finish(trailBlocks, trailRoots, trailParents, `the cells recorded on "${APPLY_RULES_TRAIL_OUTPUT}"`, true),
+                  inItem.tags,
+                ),
+              ]
+            : [];
           return {
             [APPLY_RULES_OUTER_OUTPUT]: [makeGeometryItem(outGeo, inItem.tags)],
+            [APPLY_RULES_TRAIL_OUTPUT]: trailItems,
             rounds: [makeValueItem(rounds)],
             converged: [makeValueItem(total === 0 ? 1 : 0)],
           };
