@@ -1,0 +1,25 @@
+{
+  "state": "done",
+  "completed": 4,
+  "total": 4,
+  "wakeReasons": [],
+  "campaign": "brick-ab-A",
+  "sleepUntil": null,
+  "blockedSince": null,
+  "infraSince": null,
+  "updatedAt": "2026-10-23T02:24:51.903Z",
+  "pid": 69856,
+  "currentSlot": null,
+  "attempt": 1,
+  "lastSlot": "r3.brick-house-seeded.A",
+  "note": "stopped at --max-slots",
+  "wakeDetail": null,
+  "gate": {
+    "decision": "stop",
+    "reasons": [
+      "gate arms not in the campaign: A-prime, stripped; configure gate.baselineArms, gate.strippedArm and gate.strippedRefArm"
+    ],
+    "replaceTasks": [],
+    "proposedReplacement": null
+  }
+}

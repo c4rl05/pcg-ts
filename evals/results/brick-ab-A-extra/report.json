@@ -1,0 +1,247 @@
+{
+  "campaign": "brick-ab-A-extra",
+  "generatedAt": "2026-10-23T04:59:51.063Z",
+  "reclassified": null,
+  "progress": {
+    "done": 1,
+    "total": 1,
+    "complete": true
+  },
+  "model": "claude-sonnet-5",
+  "claudeVersion": "2.1.309",
+  "claudeVersionsSeen": [
+    "2.1.309"
+  ],
+  "arms": [
+    "A"
+  ],
+  "tasks": [
+    "brick-house-seeded"
+  ],
+  "summary": {
+    "cell": {
+      "brick-house-seeded": {
+        "A": {
+          "n": 1,
+          "solved": 1,
+          "contaminated": 0,
+          "infra": 0,
+          "p": 1,
+          "lo": 0.20654931437723745,
+          "hi": 1
+        }
+      }
+    },
+    "byArm": {
+      "A": {
+        "n": 1,
+        "solved": 1,
+        "contaminated": 0,
+        "infra": 0,
+        "p": 1,
+        "lo": 0.20654931437723745,
+        "hi": 1
+      }
+    },
+    "byTask": {
+      "brick-house-seeded": {
+        "n": 1,
+        "solved": 1,
+        "p": 1,
+        "lo": 0.20654931437723745,
+        "hi": 1
+      }
+    }
+  },
+  "pairedDeltas": [],
+  "processMetrics": {
+    "A": {
+      "runs": 1,
+      "turnsMean": 139,
+      "turnsMedian": 139,
+      "toolCallsMean": 138,
+      "validateCallsMean": 11,
+      "validateFailureRate": 0.09090909090909091,
+      "probeGraphsMean": 0,
+      "outputTokensMean": 195352,
+      "wallMinutesMean": 41.470733333333335,
+      "capsHit": {},
+      "readShare": {
+        "llms": 0,
+        "docs": 1,
+        "skills": 1,
+        "graphs": 0
+      },
+      "graphProducedRate": 1
+    }
+  },
+  "effort": {
+    "byArm": {
+      "A": {
+        "runs": 1,
+        "validateFailureRate": 0.09090909090909091,
+        "capsHit": {},
+        "capsHitRate": 0,
+        "readShare": {
+          "llms": 0,
+          "docs": 1,
+          "skills": 1,
+          "graphs": 0
+        },
+        "graphProducedRate": 1,
+        "metrics": {
+          "turns": {
+            "n": 1,
+            "mean": 139,
+            "median": 139,
+            "p25": 139,
+            "p75": 139
+          },
+          "toolCalls": {
+            "n": 1,
+            "mean": 138,
+            "median": 138,
+            "p25": 138,
+            "p75": 138
+          },
+          "wallMinutes": {
+            "n": 1,
+            "mean": 41.470733333333335,
+            "median": 41.470733333333335,
+            "p25": 41.470733333333335,
+            "p75": 41.470733333333335
+          },
+          "outputTokens": {
+            "n": 1,
+            "mean": 195352,
+            "median": 195352,
+            "p25": 195352,
+            "p75": 195352
+          },
+          "validateCalls": {
+            "n": 1,
+            "mean": 11,
+            "median": 11,
+            "p25": 11,
+            "p75": 11
+          },
+          "probeGraphs": {
+            "n": 1,
+            "mean": 0,
+            "median": 0,
+            "p25": 0,
+            "p75": 0
+          }
+        }
+      }
+    },
+    "cell": {
+      "brick-house-seeded": {
+        "A": {
+          "runs": 1,
+          "metrics": {
+            "turns": {
+              "n": 1,
+              "mean": 139,
+              "median": 139,
+              "p25": 139,
+              "p75": 139
+            },
+            "toolCalls": {
+              "n": 1,
+              "mean": 138,
+              "median": 138,
+              "p25": 138,
+              "p75": 138
+            },
+            "wallMinutes": {
+              "n": 1,
+              "mean": 41.470733333333335,
+              "median": 41.470733333333335,
+              "p25": 41.470733333333335,
+              "p75": 41.470733333333335
+            },
+            "outputTokens": {
+              "n": 1,
+              "mean": 195352,
+              "median": 195352,
+              "p25": 195352,
+              "p75": 195352
+            },
+            "validateCalls": {
+              "n": 1,
+              "mean": 11,
+              "median": 11,
+              "p25": 11,
+              "p75": 11
+            },
+            "probeGraphs": {
+              "n": 1,
+              "mean": 0,
+              "median": 0,
+              "p25": 0,
+              "p75": 0
+            }
+          }
+        }
+      }
+    }
+  },
+  "effortPaired": [],
+  "effortRef": "A",
+  "budgets": {
+    "brick-house-seeded": {
+      "turns": 200,
+      "wallMinutes": 100,
+      "varied": false,
+      "values": [
+        200
+      ],
+      "wallValues": [
+        100
+      ]
+    }
+  },
+  "effortMethod": "Effort is summarised as the MEDIAN over runs, not the mean: one run that hits its turn cap would otherwise move an arm on its own. Each comparison is PAIRED BY TASK — per task, the difference of the two arms' medians, and that difference as a fraction of the REFERENCE arm's median, since a task's turn count is set by the task. The stripped arm's reference is the tarball it was cut from, not the baseline: against a build from another commit, losing the docs and changing the library would be one effect. The aggregate is the mean of those per-task values, with a 95% percentile bootstrap over TASKS (2000 resamples, seeded per arm/reference/metric — so the same runs.jsonl always prints the same interval, and the metric rows are independent draws rather than one draw repeated) and an exact two-sided sign test on the per-task signs. The bootstrap treats the tasks as the sample: it answers 'would another set of tasks like these show the same difference', which is the question a campaign of a handful of tasks can ask. The A/A pair is the noise floor: whatever separates the same tarball under two labels is what run-to-run wobble looks like here, and an effect smaller than that is not an effect.",
+  "calibration": {
+    "arm": "A",
+    "rows": [
+      {
+        "task": "brick-house-seeded",
+        "tier": "held-out",
+        "runs": 1,
+        "turnsBudget": 200,
+        "turnsBudgetVaried": false,
+        "wallBudget": 100,
+        "solved": 1,
+        "graphProduced": 1,
+        "turns": 139,
+        "toolCalls": 138,
+        "wallMinutes": 41.470733333333335,
+        "outputTokens": 195352,
+        "validateCalls": 11,
+        "capsHit": [],
+        "contaminated": 0,
+        "infraError": 0,
+        "outcome": "ok",
+        "scorerError": false
+      }
+    ],
+    "totals": {
+      "tasks": 1,
+      "runs": 1,
+      "solved": 1,
+      "turnsMedian": 139,
+      "wallMinutesTotal": 41.470733333333335,
+      "outputTokensTotal": 195352,
+      "capsHit": [],
+      "contaminated": 0
+    }
+  },
+  "contaminated": [],
+  "infraErrors": [],
+  "scorerErrors": [],
+  "gate": null,
+  "proposedReplacement": null,
+  "caveat": "n = 1 runs per arm. A Wilson interval this wide detects only large effects; pass rates are not significance tests, and the gate is a go/stop rule, not a hypothesis test."
+}

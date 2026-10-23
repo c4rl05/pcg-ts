@@ -117,6 +117,46 @@
       "scheduleSeed": 20261023,
       "gate": { "label": "none (single-arm baseline)" }
     },
+    "brick-ab-A": {
+      "$comment": "A/B of the split-grammar vocabulary (2026-10-22), arm A: the baseline vocabulary at ec145ab. Same task as brick-baseline-seeded (brick-house-seeded, selected by id), same prompt, model and effort, but the tarball is packed from a clean LF worktree of ec145ab and CUT WITH --strip-graphs, so the corpus house (graphs/examples-brick-house.json, which every baseline run opened) is not in the package; docs/graphs.{json,md} go with it, and the node docs keep only dangling example links. Arm B is campaign brick-ab-B: the same task, budgets and strip set against the grammar vocabulary. The two arms are separate campaigns only because B's commit did not exist when A started; they are run interleaved, one slot at a time (--max-slots 1). taskBudgets RAISE the task's 150 turns / 75 min for BOTH arms to 200 turns / 100 min and the output-token cap from 250k to 400k: the baseline's r0 used 130 of 150 turns with the corpus house to read, and an arm without it may cost more, so a capped run would measure the cap instead of the arm.",
+      "arms": [{ "label": "A", "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/ab-A-nographs-0.18.0-ec145ab.tgz" }],
+      "tasks": { "include": ["brick-house-seeded"] },
+      "expectTaskCount": 1,
+      "runsPerTask": 4,
+      "scheduleSeed": 20261024,
+      "taskBudgets": { "brick-house-seeded": { "turns": 200, "wallMinutes": 100, "outputTokens": 400000 } },
+      "gate": { "label": "none (one arm of a two-campaign A/B; compared by hand)" }
+    },
+    "brick-ab-B": {
+      "$comment": "A/B of the split-grammar vocabulary (2026-10-22), arm B: the grammar vocabulary at d30ae215 (splitBox from c341678e, box names {\"fn\":\"box\",\"name\":\"x0\"} / box(\"x0\") from d30ae215). Everything but the tarball is brick-ab-A's: task brick-house-seeded by id, the same prompt, model, effort, taskBudgets (200 turns / 100 min / 400k output tokens) and strip set (--strip-graphs, the same three rules; it removes one entry more here, graphs/basics-split-box.json, the splitBox teaching graph that arm A never had). Packed from a clean LF worktree of d30ae215. Run interleaved with brick-ab-A, one slot at a time.",
+      "arms": [{ "label": "B", "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/ab-B-nographs-0.18.0-d30ae21.tgz" }],
+      "tasks": { "include": ["brick-house-seeded"] },
+      "expectTaskCount": 1,
+      "runsPerTask": 4,
+      "scheduleSeed": 20261025,
+      "taskBudgets": { "brick-house-seeded": { "turns": 200, "wallMinutes": 100, "outputTokens": 400000 } },
+      "gate": { "label": "none (one arm of a two-campaign A/B; compared by hand)", "baselineArms": ["B"], "$baselineArmsWhy": "gate is merged over the defaults, whose baselineArms[0] is A; report.mjs pairs every arm against that and crashed on a campaign with no arm A. Set after slot r0, mirrored into this campaign's manifest.json gate (gate is not part of the campaign identity)." }
+    },
+    "brick-ab-A-extra": {
+      "$comment": "ONE REPLACEMENT SLOT for brick-ab-A, whose r0 slot was contaminated on both attempts (a1 a classifier false positive, a2 a genuine `find / -maxdepth 1` listing of the Git install root) and so left the arm with 3 counted runs. Declared together with brick-ab-B-extra BEFORE either was run; counted whatever it scores, under the same contamination rules. Everything else is brick-ab-A's.",
+      "arms": [{ "label": "A", "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/ab-A-nographs-0.18.0-ec145ab.tgz" }],
+      "tasks": { "include": ["brick-house-seeded"] },
+      "expectTaskCount": 1,
+      "runsPerTask": 1,
+      "scheduleSeed": 20261026,
+      "taskBudgets": { "brick-house-seeded": { "turns": 200, "wallMinutes": 100, "outputTokens": 400000 } },
+      "gate": { "label": "none (replacement slot of a two-campaign A/B; compared by hand)", "baselineArms": ["A"] }
+    },
+    "brick-ab-B-extra": {
+      "$comment": "ONE REPLACEMENT SLOT for brick-ab-B, whose r3 session was degenerate: at turn 1 the model wrote its first tool call as plain text ('Bash: Read brief.md ...') and ended the turn, without a tool call, without reading the brief (1 turn, 49 output tokens, no graph). The harness scores that as an unsolved final run; it measures nothing about either vocabulary. Declared together with brick-ab-A-extra BEFORE either was run; counted whatever it scores, under the same contamination rules. Everything else is brick-ab-B's.",
+      "arms": [{ "label": "B", "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/ab-B-nographs-0.18.0-d30ae21.tgz" }],
+      "tasks": { "include": ["brick-house-seeded"] },
+      "expectTaskCount": 1,
+      "runsPerTask": 1,
+      "scheduleSeed": 20261027,
+      "taskBudgets": { "brick-house-seeded": { "turns": 200, "wallMinutes": 100, "outputTokens": 400000 } },
+      "gate": { "label": "none (replacement slot of a two-campaign A/B; compared by hand)", "baselineArms": ["B"] }
+    },
     "fixture": {
       "$comment": "Exercises the runner end to end with the harness fixture task. Use with --agent evals/harness/fixtures/stub-agent.mjs --scorer evals/harness/fixtures/stub-score.mjs to spend no allowance.",
       "arms": [

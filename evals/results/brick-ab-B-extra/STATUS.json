@@ -1,0 +1,16 @@
+{
+  "state": "done",
+  "completed": 1,
+  "total": 1,
+  "wakeReasons": [],
+  "campaign": "brick-ab-B-extra",
+  "sleepUntil": null,
+  "blockedSince": null,
+  "infraSince": null,
+  "updatedAt": "2026-10-23T03:49:03.905Z",
+  "pid": 58012,
+  "currentSlot": null,
+  "attempt": 1,
+  "lastSlot": "r0.brick-house-seeded.B",
+  "gate": null
+}
