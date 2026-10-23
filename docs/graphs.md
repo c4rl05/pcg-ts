@@ -4,10 +4,11 @@ Generated from the graphs in [`graphs`](../graphs) by `node scripts/gen-graphs.m
 
 Each file teaches ONE thing and cooks from JSON alone — no runtime-injected data, so `pcg cook <file>` on a clean install reproduces exactly what the corpus test asserts.
 
-107 examples, alphabetical by file:
+108 examples, alphabetical by file:
 
 - [basics-a-draw-that-survives-a-move.json](#basics-a-draw-that-survives-a-movejson) — Keep a random draw when the point moves
 - [basics-a-table-of-points.json](#basics-a-table-of-pointsjson) — Write a table of points into the graph
+- [basics-apply-rules.json](#basics-apply-rulesjson) — Rewrite boxes by rule
 - [basics-attribute-from-noise.json](#basics-attribute-from-noisejson) — Write an attribute from a noise field
 - [basics-attribute-remap.json](#basics-attribute-remapjson) — Rescale an attribute to a new range
 - [basics-bridge-two-paths.json](#basics-bridge-two-pathsjson) — Span the band between two paths
@@ -157,6 +158,24 @@ Some coordinates come from nowhere a rule can reach: a survey, a drawing, a cata
 **Outputs:** `stars` (from `spawn`.`instances`), `figure` (from `lines`.`out`)
 
 Cook it: `pcg cook graphs/basics-a-table-of-points.json --stats`
+
+## basics-apply-rules.json
+
+**Rewrite boxes by rule**
+
+`applyRules` runs a REWRITING GRAMMAR over labelled boxes, one round at a time: the recursion of a split grammar, in a graph that cannot wire a cycle. Three facades stand in a row, each a cell labelled "facade" with its own width and its own number of 3.2-high floors. A RULE IS A PIN PAIR in the node's one inline body: an exposed input and an exposed output with the SAME name, which is the label it rewrites. Each round the wrapper sorts the cells by their `piece` label, feeds every rule the cells carrying its name, cooks only those rules' branches, and the products, whatever they are now labelled, are the next round. A label with no rule — leaf, frame, glass, pane, mullion — is TERMINAL: its cells leave on `out`. `facade` cuts a facade into floors and `floor` cuts a floor into bays of about 4.5, both with splitBox "repeat". `panel` IS THE RECURSION: its products are labelled `panel` again. A panel whose longer side is under 1.7 STOPS by relabelling itself — setAttribute string, values ["panel", "leaf", "window"], the index a select on that size test — becoming a window when its roll is under 0.6 and a plain leaf otherwise; every other panel is halved along its longer side (splitBox axis "perCell", axisIndex picking x or y), at a ratio between 35:65 and 65:35 read off the same roll, and both halves go round again. So the depth tracks the size: nothing counts the splits, and a large bay simply takes more rounds to get small. THE ROLL is `ruleRoll`, a number in [0, 1) the wrapper writes on every cell it feeds, hashed from the node seed, the rule and a SCOPE: by default the cell itself, so every panel cuts at its own ratio. `window` is scoped to `facade` (`scoped` ["window"], `scopeOf` ["facade"]), so every window rolls the number of the facade it descends from, and its one relabel — values ["recessed", "oriel"] — gives a whole facade ONE window style: glass set back in a frame, or a pair of panes standing proud on either side of a mullion, each cut by two more splitBox rules. Every relabel costs a round, and `ruleDepth` records the round each cell settled in: this grammar runs about ten, well inside `maxDepth` 32; had a rule never stopped, `converged` would read 0 and the detail attribute `rulesCutOff` on `out` would name it, one count per rule. The last nodes only draw: a unit box per piece at its box's centre and size, leaves a little smaller so the cuts show, glass set back, panes and mullions standing proud, each leaf tinted by the roll that made it.
+
+**Tags:** `basics`, `split`, `grammar`, `rules`, `recursion`
+
+**Seed:** 11
+
+**Node types:** `applyRules`, `copyToPoints`, `meshPrimitive`, `pointLine`, `setAttribute`, `setBounds`, `splitBox`
+
+**Primitives:** *(none)*
+
+**Outputs:** `pieces` (from `tint`.`out`), `panels` (from `panels`.`out`), `rounds` (from `grammar`.`rounds`), `converged` (from `grammar`.`converged`)
+
+Cook it: `pcg cook graphs/basics-apply-rules.json --stats`
 
 ## basics-attribute-from-noise.json
 

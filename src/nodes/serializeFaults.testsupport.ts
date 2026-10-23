@@ -213,6 +213,13 @@ export const SINGLE_FAULT_CASES: readonly SingleFaultCase[] = [
     key: "ref",
   },
   {
+    name: "ref on an applyRules node",
+    doc: doc({ nodes: [{ id: "r", type: "applyRules", params: {}, ref: { name: "fill/scatter-even" } }] }),
+    code: "wrapper-ref-unsupported",
+    path: "/nodes/0/ref",
+    nodeId: "r",
+  },
+  {
     name: "unknown field fn",
     doc: doc({ nodes: [jitter("j", { amount: { fn: "consant", value: 1 } })] }),
     code: "unknown-field-fn",

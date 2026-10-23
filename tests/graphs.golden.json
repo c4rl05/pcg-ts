@@ -284,6 +284,104 @@
         ]
       }
     },
+    "basics-apply-rules.json": {
+      "outputs": {
+        "converged": [
+          {
+            "kind": "value",
+            "tags": [],
+            "value": 1
+          }
+        ],
+        "panels": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 36648,
+              "vertex": 54972,
+              "primitive": 18324,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "uv:f32x2",
+                "rot:f32x4",
+                "scale:f32x3",
+                "seed:u32"
+              ],
+              "primitive": [
+                "primtype:string"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -16.7213,
+                0,
+                -0.15
+              ],
+              "max": [
+                16.6379,
+                16,
+                0.66
+              ]
+            }
+          }
+        ],
+        "pieces": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 1527,
+              "vertex": 0,
+              "primitive": 0,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "rot:f32x4",
+                "scale:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "seed:u32",
+                "piece:string",
+                "ruleDepth:i32",
+                "ruleRoll:f32",
+                "pieceIndex:i32"
+              ],
+              "detail": [
+                "rulesCutOff:i32x6",
+                "rulesCutOffRules:stringx6"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -16.6613,
+                0.06,
+                -0.1
+              ],
+              "max": [
+                16.5779,
+                15.94,
+                0.3
+              ]
+            }
+          }
+        ],
+        "rounds": [
+          {
+            "kind": "value",
+            "tags": [],
+            "value": 10
+          }
+        ]
+      }
+    },
     "basics-attribute-from-noise.json": {
       "outputs": {
         "points": [

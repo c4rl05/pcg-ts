@@ -264,11 +264,11 @@ const ALLOWED: readonly Allowed[] = [
     why: "inside a thrown message on pointsToPath's short-group path; evaluated once, then the cook dies",
   },
   {
-    file: "src/nodes/pointOps.ts",
+    file: "src/nodes/pointUnion.ts",
     expr: "domain",
     literal: '"primitive"',
     sites: 1,
-    why: "merge's schema union: per ITEM and per COLUMN of that item, not per element of a column",
+    why: "merge's schema union (moved out of pointOps.ts to stay internal): per ITEM and per COLUMN of that item, not per element of a column",
   },
   {
     file: "src/nodes/registry.ts",

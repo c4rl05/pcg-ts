@@ -64,7 +64,11 @@ const ROOT_SURFACE = [
   "INSTANCE_COLOR_CHANNEL",
   "STANDARD_POINT_ATTRS", "TRANSFER_AREA_EPS", "TRANSFER_BARY_EPS", "TRANSFER_BOX_PAD_REL",
   "TRANSFER_DET_EPS", "VERSION", "World", "WorldValidationError", "abs", "acos", "add",
-  "applyGraphParamTargets", "applyParamPatches", "asin", "atan", "atan2", "attribute", "attributeIs", "attributeReduce",
+  "applyGraphParamTargets", "applyParamPatches",
+  // Wraps an inline rule body and runs it as a rewriting grammar: each
+  // same-named exposed input/output pair is a rule fed the cells carrying
+  // its label, one cook per round, until no cell carries a rule's label.
+  "applyRulesNode", "asin", "atan", "atan2", "attribute", "attributeIs", "attributeReduce",
   "attributeRemap", "buildInstanceBatches", "byAttribute", "capture", "captureAsync", "choose", "clamp",
   "cloneGeometry", "component", "composeTRS", "connectByIndex", "connectPoints",
   "constant", "cook",
@@ -174,7 +178,7 @@ const ROOT_SURFACE = [
   "resolveField", "sampleNearestPoint", "select", "selfPrune", "serializeGraph",
   "setAttribute", "setBounds", "setPolylineTopology", "sign",
   // Cuts each cell's box into labelled pieces along one axis — the split
-  // of a split grammar, which only CUTS: recursion stays with repeatUntil.
+  // of a split grammar, which only CUTS: recursion is applyRulesNode's.
   "splitBox",
   "simplexNoise", "sin",
   "smoothNormals", "smoothstep",

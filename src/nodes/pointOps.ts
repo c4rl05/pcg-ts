@@ -16,6 +16,7 @@ import {
 } from "../data/index.js";
 import { adoptTopology } from "../data/adoptTopology.js";
 import { resizeForOverwrite } from "../data/overwrite.js";
+import { appendBlock, concatPointClouds, unionColumns } from "./pointUnion.js";
 import { pointIdentities } from "../data/identity.js";
 import { deriveGeometry } from "../data/derive.js";
 import { type GeometryItem, makeGeometryItem } from "../graph/index.js";
@@ -1475,73 +1476,6 @@ export const copyToPoints = standardNode<
   },
 });
 
-/**
- * Union the attribute columns of one domain across every input into
- * `into`: first-occurrence order, and the first occurrence's type, tuple
- * size and default. Two inputs disagreeing on an attribute's shape is a
- * hard error naming it — the alternative is a column whose meaning
- * changes halfway down, which nothing downstream could notice.
- *
- * Copying the values is the caller's job, because the two merges append
- * different things: this only settles what columns exist and what an
- * input that lacks one contributes (its default, filled by `resize`).
- *
- * `primtype` on the primitive domain is the ONE column whose default is
- * overridden, and {@link mergePrimitives} explains why.
- */
-function unionColumns(
-  who: string,
-  items: readonly GeometryItem[],
-  domain: Domain,
-  into: AttributeSet,
-): void {
-  for (const item of items) {
-    for (const attr of item.geo.attrs[domain]) {
-      const existing = into.get(attr.name);
-      if (!existing) {
-        // `attr.type === "string"` is not decoration: the empty default
-        // below is only a legal default FOR a string column, and a
-        // hand-built numeric column under this name would otherwise be
-        // refused by the attribute layer in an error naming neither this
-        // node nor the input it came from. Such a column is not a type
-        // tag anyway, so it takes the ordinary rule.
-        const isPrimType =
-          domain === "primitive" && attr.name === PRIMTYPE_ATTR && attr.type === "string";
-        into.add(
-          attr.name,
-          attr.type,
-          attr.tupleSize,
-          isPrimType ? "" : (attr.defaultValue as AttrDefault),
-        );
-      } else if (existing.type !== attr.type || existing.tupleSize !== attr.tupleSize) {
-        throw new Error(
-          `${who}: attribute "${attr.name}" has conflicting shapes across inputs on the ${domain} ` +
-            `domain (${existing.type} tuple ${existing.tupleSize} vs ${attr.type} tuple ${attr.tupleSize}). ` +
-            `Every input must agree on a name's type and tuple size — rename one side with setAttribute, ` +
-            `or drop the column upstream with removeAttribute (domain "${domain}", names ["${attr.name}"]).`,
-        );
-      }
-    }
-  }
-}
-
-/**
- * Write one input's block `[offset, offset + n)` of every column of `into`,
- * for a merge that sized `into` with `resizeForOverwrite` and so skipped
- * the default fill. A column the input carries is copied over the block; a
- * column it lacks gets its default over the block — exactly what the fill
- * over the whole result used to leave there, now written once instead of
- * written and then copied over. Blocks tile the result, so after the last
- * input every element of every column has been written exactly once.
- */
-function appendBlock(into: AttributeSet, from: AttributeSet, offset: number, n: number): void {
-  for (const dst of into) {
-    const src = from.get(dst.name);
-    if (src === undefined) dst.fillDefault(offset, offset + n);
-    else dst.copyFrom(src, 0, offset, n);
-  }
-}
-
 /** Concatenate the point clouds of every connected input. */
 export const mergePoints = standardNode<MergePointsParams, MergePointsInputs, MergePointsOutputs>({
   type: "mergePoints",
@@ -1564,17 +1498,10 @@ export const mergePoints = standardNode<MergePointsParams, MergePointsInputs, Me
     if (items.length === 0) {
       return { out: [makeGeometryItem(createPointCloud(0))] };
     }
-    const out = new Geometry();
-    const outSet = out.attrs.point;
-    unionColumns("mergePoints", items, "point", outSet);
-    let total = 0;
-    for (const item of items) total += item.geo.pointCount;
-    resizeForOverwrite(outSet, total);
-    let offset = 0;
-    for (const item of items) {
-      appendBlock(outSet, item.geo.attrs.point, offset, item.geo.pointCount);
-      offset += item.geo.pointCount;
-    }
+    const out = concatPointClouds(
+      "mergePoints",
+      items.map((item) => item.geo),
+    );
     const tags = new Set<string>();
     for (const item of items) for (const tag of item.tags) tags.add(tag);
     return { out: [makeGeometryItem(out, tags)] };

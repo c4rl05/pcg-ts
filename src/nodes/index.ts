@@ -53,6 +53,9 @@ export { forEachNode } from "./forEach.js";
 // `MAX_ROUNDS_CEILING`, `REPEAT_UNTIL_PARAM_SCHEMAS` and the rest are this
 // module's business and `serialize.ts`'s, not the package's.
 export { repeatUntilNode } from "./repeatUntil.js";
+// The factory only, for the same reason: the param schemas, the reserved
+// names and the cap are this module's business and `serialize.ts`'s.
+export { applyRulesNode } from "./applyRules.js";
 // Named exports rather than `export *`: the registry's test doors
 // (`__resetSubgraphRegistry`, `__defineSubgraphUnchecked`) and its
 // serialization-internal helpers are deliberately not part of the package.

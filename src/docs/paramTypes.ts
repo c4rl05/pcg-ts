@@ -67,7 +67,7 @@ export const ZERO_PARAM_ALIASES: readonly string[] = ["mergePoints", "mergePrimi
  * A list, like {@link ZERO_PARAM_ALIASES}, so `paramTypes.test.ts` can name
  * a new pinless type instead of silently typing it `never`.
  */
-export const PER_INSTANCE_PIN_TYPES: readonly string[] = ["forEach", "repeatUntil", "subgraph"];
+export const PER_INSTANCE_PIN_TYPES: readonly string[] = ["applyRules", "forEach", "repeatUntil", "subgraph"];
 
 function pascal(type: string): string {
   return type.charAt(0).toUpperCase() + type.slice(1);

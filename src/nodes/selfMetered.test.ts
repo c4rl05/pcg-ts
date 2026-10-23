@@ -38,7 +38,7 @@ import { getNodeType, listNodeTypes } from "./index.js";
  * yielding on the budget — belongs here, and every assertion below then
  * says where it is missing.
  */
-const SELF_METERING = ["forEach", "repeatUntil", "subgraph"];
+const SELF_METERING = ["applyRules", "forEach", "repeatUntil", "subgraph"];
 
 /** A leaf that just passes its input through; never self-metering. */
 const passthrough = defineNode<Record<string, never>>({
@@ -77,7 +77,7 @@ function wrapperDefs(): Record<string, NodeDef<Record<string, unknown>>> {
 }
 
 describe("selfMetered: the catalog names the set", () => {
-  it("publishes exactly the three composites, and nothing else", () => {
+  it("publishes exactly the four composites, and nothing else", () => {
     const flagged = listNodeTypes()
       .filter((t) => t.selfMetered === true)
       .map((t) => t.type)
@@ -99,6 +99,7 @@ describe("selfMetered: the catalog names the set", () => {
     // The whole point: no lookup table on the consumer's side.
     const byType = new Map(listNodeTypes().map((t) => [t.type, t.selfMetered === true]));
     expect(byType.get("repeatUntil")).toBe(true);
+    expect(byType.get("applyRules")).toBe(true);
     expect(byType.get("forEach")).toBe(true);
     expect(byType.get("subgraph")).toBe(true);
     expect(byType.get("pointGrid")).toBe(false);

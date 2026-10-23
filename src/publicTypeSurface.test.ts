@@ -42,7 +42,7 @@ import { entryPointSurface } from "./publicTypeSurface.testsupport.js";
  * say why in the barrel that exports it, not only here.
  */
 const ROOT_TYPE_SURFACE = [
-  "ArcTileParams", "AssetIdOrigin",
+  "ApplyRulesParams", "ArcTileParams", "AssetIdOrigin",
   // A column's buffer AS AN IDENTITY. Published because it is the type of
   // `ReadonlyAttrData.buffer`, and a consumer comparing two columns'
   // storage — which is exactly what it is for — has to be able to name

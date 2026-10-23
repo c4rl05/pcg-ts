@@ -24,6 +24,7 @@ import {
   deserializeGraph,
   fieldFromJson,
   fieldToJson,
+  applyRulesNode,
   forEachNode,
   repeatUntilNode,
   getFieldSpec,
@@ -915,7 +916,9 @@ export class EditorController {
           ? forEachNode
           : sn.type === "repeatUntil"
             ? repeatUntilNode
-            : subgraphNode;
+            : sn.type === "applyRules"
+              ? applyRulesNode
+              : subgraphNode;
       const def = wrap(
         inner,
         payload.inputs.map(toExposed),

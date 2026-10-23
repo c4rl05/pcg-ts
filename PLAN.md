@@ -600,6 +600,23 @@ previous split, whose box no longer holds the parent's corners: the third
 cut had to re-derive the sill and head heights from the bay's params rather
 than read them off a box that had already been cut.
 
+**2026-10-23: the label-keyed rule table SHIPPED, as a wrapper —
+`applyRules`, slice 1.** It answers the 2026-09-08 objection rather than
+overruling it: the node owns NO stop rule. One inline body, and a rule is a
+same-named exposed input/output pair, the name being the label it rewrites;
+each round the wrapper feeds every rule the cells carrying its label and
+cooks only the fed rules' outputs (`CookOptions.outputs`), so a branch is
+never cooked empty. Variants and stopping are RELABELS inside a branch
+(setAttribute string `values` + an index on the wrapper's `ruleRoll`, which
+`scoped`/`scopeOf` can key to an ancestor), so the stop rule stays an author
+expression on the rule's own cells. Non-termination is reported per rule
+(`rulesCutOff` on `out`, `converged` 0), not refused. `maxDepth` defaults to
+32, not 12: every relabel costs a round, and `basics-apply-rules` already
+runs ten. Inline only — no `ref` (`wrapper-ref-unsupported`) until recipes
+carry a wrapper kind. Still open: `trail`/`ruleParent` (slice 2), the brick
+house re-expressed on it (slice 2; churn accepted, verified by invariants
+and distributions), `route` and the `rest` pin, and the group repeat above.
+
 ### Stretch: quaternion field functions — REFUTED BY THE CORPUS, 2026-09-08
 
 Proposed: `quatFromAxisAngle`, `quatMul` and `rotateVec` as field-grammar
@@ -2013,6 +2030,11 @@ left to optimise. A fn rather than bare names, so a `let` binding `x0` and
 does NOT settle: it shares a vocabulary every box expression has, not an
 expression particular to one graph, so the truss case and §7.4 stand where
 they were (n=1 for the data fix again, and again it sufficed).
+
+**2026-10-23: `applyRules` needed no D3 either.** Its rule branches are
+ordinary wiring inside one body, and the corner vocabulary they read is the
+box names above. A predicate wanted in both a relabel and a `where` gets the
+data fix: written once as an attribute.
 
 ### ~~The seven remaining math primitives~~ — SHIPPED 2026-08-19
 

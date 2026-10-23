@@ -62,6 +62,7 @@ import {
 } from "../nodes/index.js";
 import { forEachNode } from "../nodes/forEach.js";
 import { repeatUntilNode } from "../nodes/repeatUntil.js";
+import { applyRulesNode } from "../nodes/applyRules.js";
 import { resolveOnMaybeGpu } from "../nodes/util.js";
 import { fieldFromJson } from "../fields/fieldJson.js";
 import { dataInput } from "../runtime/index.js";
@@ -686,14 +687,16 @@ function alwaysAdopterSources(): string[] {
 /**
  * The composite adopters under test: a wrapper around one adopter.
  *
- * All three wrappers, because each forwards the outer resolver into a
+ * All four wrappers, because each forwards the outer resolver into a
  * nested cook it cannot see inside, and so each salts on the resolver's
  * mere presence. `forEach` runs its body once per item and is fed exactly
  * one; `repeatUntil` runs its body until a detail scalar reads zero and is
- * given a body that settles on its first round. The fixtures differ in the
+ * given a body that settles on its first round; `applyRules` is given one
+ * rule that relabels its cells to a terminal label in its first round. The
+ * fixtures differ in the
  * loop and in nothing else that matters here.
  */
-const ALWAYS_WRAPPERS = ["subgraph", "forEach", "repeatUntil"] as const;
+const ALWAYS_WRAPPERS = ["subgraph", "forEach", "repeatUntil", "applyRules"] as const;
 
 // Defaults to `subgraph` because the literal-key pin further down calls
 // this through a one-argument builder signature, and those literals are the
@@ -721,6 +724,23 @@ function alwaysFixture(
     const din = cloudInput(g, 20);
     const n = g.add(def);
     g.connect(din, "out", n, "each");
+    g.output(n, "out", "out");
+    return { g, id: n.id };
+  }
+  if (wrapper === "applyRules") {
+    // One rule, "a": the adopter, then a relabel to a terminal label, so
+    // the grammar settles after one round.
+    const done = inner.add(setAttribute, { name: "piece", type: "string", stringValue: "done" });
+    inner.connect(sa, "out", done, "in");
+    const def = applyRulesNode(inner, [{ name: "a", node: sa, pin: "in" }], [
+      { name: "a", node: done, pin: "out" },
+    ]);
+    const g = new Graph(11);
+    const din = cloudInput(g, 20);
+    const label = g.add(setAttribute, { name: "piece", type: "string", stringValue: "a" });
+    const n = g.add(def);
+    g.connect(din, "out", label, "in");
+    g.connect(label, "out", n, "in");
     g.output(n, "out", "out");
     return { g, id: n.id };
   }
@@ -757,10 +777,11 @@ describe('the gpu:"always" class is covered too', () => {
       .map((info) => info.type)
       .filter((type) => getNodeType(type).def.gpu === "always");
     expect(registered, 'no registered node type declares gpu:"always"').toEqual([]);
-    // One entry per wrapper. A FOURTH arriving here means a new composite
+    // One entry per wrapper. A FIFTH arriving here means a new composite
     // that forwards a resolver into a cook this file does not exercise.
     expect(alwaysAdopterSources()).toEqual([
       "graph/subgraph.ts",
+      "nodes/applyRules.ts",
       "nodes/forEach.ts",
       "nodes/repeatUntil.ts",
     ]);

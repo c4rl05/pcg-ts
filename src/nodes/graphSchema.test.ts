@@ -82,7 +82,7 @@ function defaults(params: Readonly<Record<string, ParamSchema>>): Json {
 }
 
 const types = listNodeTypes();
-const standard = types.filter((t) => !["subgraph", "forEach", "repeatUntil"].includes(t.type));
+const standard = types.filter((t) => !["subgraph", "forEach", "repeatUntil", "applyRules"].includes(t.type));
 
 function findParam(predicate: (s: ParamSchema) => boolean): { type: string; param: string } {
   for (const t of standard) {

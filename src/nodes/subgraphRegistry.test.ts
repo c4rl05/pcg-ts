@@ -794,7 +794,7 @@ describe("named subgraph registry", () => {
       ).toThrow(
         new RegExp(
           `node "p": type "pointScatterInBounds" wraps no inner graph, so it cannot carry "${key}"; ` +
-            `only "subgraph", "forEach" and "repeatUntil" nodes wrap one`,
+            `only "subgraph", "forEach", "repeatUntil" and "applyRules" nodes wrap one`,
         ),
       );
     }

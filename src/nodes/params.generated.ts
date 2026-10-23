@@ -25,6 +25,92 @@ import type { DataItem } from "../graph/index.js";
 import type { FieldParam } from "./util.js";
 
 /**
+ * Params of the `applyRules` node type.
+ */
+export interface ApplyRulesParams {
+  /**
+   * The most ROUNDS the grammar runs: the body cooks at most this many times, and a cell is
+   * expanded at lineage depth maxDepth - 1 at the deepest. EVERY RELABEL COSTS A ROUND — a
+   * rule that only picks a variant (window -> arched | square) or marks a cell finished
+   * (panel -> leaf) is one round of depth for the cells it relabels — so count the relabels
+   * when sizing it: a facade split into floors, floors into panels, panels halved until
+   * small and then given a styled window is easily fifteen rounds deep. Reaching the cap is
+   * NOT an error and is not silent: the cells still carrying a rule's label go to "out"
+   * unexpanded, "converged" reports 0 and the detail attribute "rulesCutOff" on "out" counts
+   * them per rule, with "rulesCutOffRules" naming the rule behind each component, so the
+   * rule that would not stop is named. A grammar that GROWS every round is stopped sooner,
+   * by the 4194304-point cap, which is refused naming the round and the rule.
+   *
+   * - Range: `1..1024`
+   *
+   * @defaultValue `32`
+   */
+  maxDepth: number;
+  /**
+   * The STRING point attribute (tuple 1) the frontier is dispatched on: a cell whose label
+   * equals a rule's name is fed to that rule, any other label is terminal and goes to "out".
+   * splitBox's labelAttr default, so a split's labels ARE the rules' names. Required on "in"
+   * and on every rule's products; a missing or non-string column is refused naming the rule
+   * that dropped it.
+   *
+   * @defaultValue `"piece"`
+   */
+  labelAttr: string;
+  /**
+   * The i32 point attribute (tuple 1) written on every cell as it is classified: the ROUND,
+   * which is the cell's lineage depth (an "in" cell is 0, its products 1, ...). A rule reads
+   * it as iteration metadata — lt(attribute("ruleDepth"), 3) caps a recursion at a fixed
+   * depth. On "out" it is the depth the cell settled at (maxDepth on a cell the cap cut
+   * off). Empty writes none. Not a standard attribute, and not the same name as labelAttr or
+   * rollAttr.
+   *
+   * @defaultValue `"ruleDepth"`
+   */
+  depthAttr: string;
+  /**
+   * The f32 point attribute (tuple 1) written on every FED cell: a number in [0, 1) hashed
+   * from this node's seed, the rule's label and the cell's SCOPE identity (see "scoped"); an
+   * UNSCOPED roll also folds in the round, so a rule that keeps a cell's label and identity
+   * (a relabel-only recursion: "stay a panel while the roll is under 0.7") draws afresh
+   * every round. The branch picks a variant with it — setAttribute string, values ["arched",
+   * "square"], value lt(attribute("ruleRoll"), 0.5) — so the weights sit in the branch,
+   * resolved on that rule's cells only. Different rules roll independently even under one
+   * scope. On "out" a cell carries the roll of the rule application that produced it (0 on a
+   * cell that arrived terminal). Empty writes none, and is refused when "scoped" lists
+   * anything, since the scope would then reach no column.
+   *
+   * @defaultValue `"ruleRoll"`
+   */
+  rollAttr: string;
+  /**
+   * Rules whose ROLL is SHARED by a scope, parallel to "scopeOf": rule scoped[i] rolls on
+   * the identity of its NEAREST ANCESTOR fed to rule scopeOf[i], so every such cell under
+   * one ancestor rolls the same number — one window style per facade is scoped ["window"],
+   * scopeOf ["facade"]. A rule not listed rolls on its own cell's identity, so every cell
+   * differs. The roll is shared; the DECISION is shared only if the branch's selector reads
+   * nothing per cell besides the roll. A RECURSIVE rule scoped to an ancestor rolls the same
+   * number at every depth and so decides the same at every depth, which is usually a
+   * mistake. Each entry must name a rule (did-you-mean otherwise), once.
+   *
+   * @defaultValue `[]`
+   */
+  scoped: readonly string[];
+  /**
+   * The scope of each "scoped" entry, same length: the name of a RULE (the nearest ancestor
+   * that was fed to it), or "root" — the cell on "in" the scoped cell descends from, which
+   * every cell has. A rule scoped to ITSELF is refused: its nearest ancestor-or-self fed to
+   * it is the cell itself, which is exactly what not listing it does. A cell with NO
+   * ancestor fed to its scope rule — it arrived on "in" already carrying the scoped label,
+   * or came down a branch that never passed through the scope rule — is REFUSED, naming the
+   * rule, the round and the scope, rather than rolled on some other identity: scope it to
+   * "root", or route every such cell through the scope rule.
+   *
+   * @defaultValue `[]`
+   */
+  scopeOf: readonly string[];
+}
+
+/**
  * Params of the `arcTile` node type.
  */
 export interface ArcTileParams {

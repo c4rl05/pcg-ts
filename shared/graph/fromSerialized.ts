@@ -65,24 +65,61 @@ function fmtParam(v: unknown): string {
 }
 
 /**
+ * The outer pin NAMES an inline wrapper payload gives its node, read off
+ * the payload alone — no live def, no validation, which this view never
+ * does. Undefined for anything that is not a wrapper with an inline body.
+ *
+ * `applyRules` is why this exists. Its body's same-named input/output
+ * pairs are RULES its round loop feeds and drains itself, never pins of the
+ * node; its pins are `in` plus the broadcasts (exposed inputs with no
+ * output of their name), and `out`, `rounds`, `converged`. The library
+ * reports exactly that through `describeSubgraphPins` on a live def; this
+ * is the same rule restated over the serialized form, and
+ * `tests/applyRulesInterface.test.ts` holds the two together.
+ */
+function wrapperPinNames(node: SerializedNode): { inputs: string[]; outputs: string[] } | undefined {
+  const payload = node.subgraph;
+  if (payload === undefined) return undefined;
+  const ins = payload.inputs.map((e) => e.name);
+  const outs = payload.outputs.map((e) => e.name);
+  if (node.type === "applyRules") {
+    const ruleOut = new Set(outs);
+    return { inputs: ["in", ...ins.filter((n) => !ruleOut.has(n))], outputs: ["out", "rounds", "converged"] };
+  }
+  if (node.type === "repeatUntil") return { inputs: ins, outputs: [...outs, "rounds", "converged"] };
+  return { inputs: ins, outputs: outs };
+}
+
+/**
  * The pins a node draws.
  *
  * The registry knows them for every standard node type. It does NOT know
- * them for a `subgraph` or `forEach` node, whose pins come from the graph
+ * them for a wrapper (`subgraph`, `forEach`, `repeatUntil`, `applyRules`),
+ * whose registry entry declares none because its pins come from the graph
  * it wraps — the editor resolves those through the live def it built, and
- * there is no live def here. So a wrapper falls back to the pins the
- * CONNECTIONS prove it has, which is exactly the set that has anything
- * drawn to it: an unwired pin on a wrapper would be a name with no cable,
- * and this view has no way to offer it one.
+ * there is no live def here. So a wrapper reads its pin names off an
+ * inline payload where it has one ({@link wrapperPinNames}), and adds the
+ * pins the CONNECTIONS prove it has, which covers a `ref` (whose payload
+ * lives in a registry this view does not consult): an unwired pin on a
+ * referenced wrapper would be a name with no cable, and this view has no
+ * way to offer it one.
  */
 function pinsFor(node: SerializedNode, used: UsedPins): { inputs: PinView[]; outputs: PinView[] } {
+  let registered: { inputs: PinView[]; outputs: PinView[] } | undefined;
   try {
-    return nodePinsForType(node.type);
+    registered = nodePinsForType(node.type);
   } catch {
-    const derived = (names: ReadonlySet<string> | undefined): PinView[] =>
-      [...(names ?? [])].map((name) => ({ name, kind: "any", multi: false }));
-    return { inputs: derived(used.inputs.get(node.id)), outputs: derived(used.outputs.get(node.id)) };
+    registered = undefined;
   }
+  const isWrapper = node.subgraph !== undefined || node.ref !== undefined;
+  if (registered !== undefined && !isWrapper) return registered;
+  const fromPayload = wrapperPinNames(node);
+  const derived = (names: readonly string[], usedNames: ReadonlySet<string> | undefined): PinView[] =>
+    [...new Set([...names, ...(usedNames ?? [])])].map((name) => ({ name, kind: "any", multi: false }));
+  return {
+    inputs: derived(fromPayload?.inputs ?? [], used.inputs.get(node.id)),
+    outputs: derived(fromPayload?.outputs ?? [], used.outputs.get(node.id)),
+  };
 }
 
 interface UsedPins {

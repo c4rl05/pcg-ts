@@ -61,6 +61,7 @@ export const DIAGNOSTIC_CODES = Object.freeze({
   "missing-subgraph-payload": "A subgraph, forEach or repeatUntil node carries neither a reference nor an inline payload.",
   "reserved-plumbing-name": "An exposed pin or param uses a name the wrapper reserves for its own plumbing.",
   "wrapper-kind-mismatch": "A recipe written for one wrapper kind was used under another.",
+  "wrapper-ref-unsupported": "A wrapper that takes its body inline only (applyRules) was given a registry reference.",
   "invalid-exposed-pin": "An exposed pin mapping names a node or pin the body does not have, or duplicates a name.",
   "invalid-exposed-param": "An exposed param declaration is malformed or targets a param the body does not have.",
 

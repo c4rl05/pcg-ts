@@ -105,16 +105,20 @@ export interface PortalParams {
 }
 
 /**
- * The three node types built on the inner-graph machinery below.
+ * The four node types built on the inner-graph machinery below.
  *
  * `subgraph` cooks its body once, forwarding each pin's whole collection.
  * `forEach` cooks it once per element of one designated pin, broadcasting
  * the rest. `repeatUntil` cooks it repeatedly, feeding one designated pin's
  * OUTPUT back into its own input until a detail-domain scalar says the body
- * has stopped changing things. All three share everything except that loop,
- * which is why they share a spec, a payload shape and a construction path.
+ * has stopped changing things. `applyRules` cooks it once per ROUND of a
+ * rewriting grammar: each same-named exposed input/output pair is a rule,
+ * and the wrapper feeds every rule the cells carrying its label and gathers
+ * the products into the next round. All four share everything except that
+ * loop, which is why they share a spec, a payload shape and a construction
+ * path.
  */
-export type WrapperKind = "subgraph" | "forEach" | "repeatUntil";
+export type WrapperKind = "subgraph" | "forEach" | "repeatUntil" | "applyRules";
 
 /**
  * Exposed-input names reserved for the iterated pin of a `forEach`.
@@ -244,6 +248,23 @@ export interface SubgraphSpec {
    * into its own memo key.
    */
   readonly params: readonly ExposedParam[];
+  /**
+   * Exposed pins that are NOT pins of the wrapping node: the body's side of
+   * a loop the WRAPPER feeds and drains itself, by name. Absent on every
+   * wrapper whose exposed pins are all outer pins (`subgraph`, `forEach`,
+   * `repeatUntil`).
+   *
+   * `applyRules` is the one that sets it. Its rule pairs — an exposed input
+   * and an exposed output sharing a label — are fed and read by its round
+   * loop, never by a connection, while its outer `in` and `out` are pins no
+   * body declares. Every consumer that reads a wrapper's interface off its
+   * spec (`describeSubgraphPins`, the starvation analysis) consults this,
+   * so a rule pair is never reported as a pin a caller could wire.
+   */
+  readonly interior?: {
+    readonly inputs: ReadonlySet<string>;
+    readonly outputs: ReadonlySet<string>;
+  };
 }
 
 /**
@@ -348,8 +369,17 @@ function resolveExposedKind(
       );
     }
     const exposedList = side === "input" ? nested.inputs : nested.outputs;
-    const innerExp = exposedList.find((e) => e.name === exp.pin);
+    const interior = side === "input" ? nested.interior?.inputs : nested.interior?.outputs;
+    const innerExp = exposedList.find((e) => e.name === exp.pin && interior?.has(e.name) !== true);
     if (innerExp === undefined) {
+      // A pin the nested WRAPPER declares itself — `repeatUntil`'s
+      // `rounds`, `applyRules`' `in` and `out` — has no inner pin to follow:
+      // its kind is the def's. An interior pin (an `applyRules` rule) is
+      // not a pin of the node at all, so it falls through to the refusal.
+      const declared = (side === "input" ? state.def.inputs : state.def.outputs).find(
+        (p) => p.name === exp.pin && interior?.has(p.name) !== true,
+      );
+      if (declared !== undefined) return declared.kind;
       throw new GraphValidationError(
         `describeSubgraphPins: exposed ${side} "${exp.name}" maps to pin "${exp.pin}" of subgraph node "${state.id}", which exposes no such ${side}; exposed ${side}s: ${exposedList.map((e) => `"${e.name}"`).join(", ") || "(none)"}`,
       );
@@ -393,10 +423,17 @@ export function describeSubgraphPins<P>(def: NodeDef<P>): SubgraphPins | undefin
   const spec = subgraphSpecs.get(def);
   if (spec === undefined) return undefined;
   const resolveSide = (
-    exposed: readonly ExposedPin[],
+    allExposed: readonly ExposedPin[],
     declared: readonly PinDef[],
     side: "input" | "output",
   ): readonly DescribedSubgraphPin[] => {
+    // A wrapper's INTERIOR pins (see `SubgraphSpec.interior`) are the
+    // body's half of a loop the wrapper runs itself, so they are not pins
+    // of the node and are not described as such: an `applyRules` rule pair
+    // listed here would be a pin the editor drew and an agent tried to wire.
+    const interior = side === "input" ? spec.interior?.inputs : spec.interior?.outputs;
+    const exposed =
+      interior === undefined ? allExposed : allExposed.filter((exp) => !interior.has(exp.name));
     const fromBody = exposed.map((exp) =>
       Object.freeze({
         name: exp.name,
@@ -425,6 +462,18 @@ export function describeSubgraphPins<P>(def: NodeDef<P>): SubgraphPins | undefin
     const fromWrapper = declared
       .filter((p) => !bodyNames.has(p.name))
       .map((p) => Object.freeze({ name: p.name, kind: p.kind, synthesized: true as const }));
+    if (interior !== undefined) {
+      // A wrapper with interior pins declares its own outer pins FIRST
+      // (`applyRules`: `in` before the broadcasts), so its description
+      // follows the def's order rather than "body, then wrapper".
+      const byName = new Map<string, DescribedSubgraphPin>();
+      for (const p of [...fromBody, ...fromWrapper]) byName.set(p.name, p);
+      return Object.freeze(
+        declared
+          .map((p) => byName.get(p.name))
+          .filter((p): p is DescribedSubgraphPin => p !== undefined),
+      );
+    }
     return Object.freeze([...fromBody, ...fromWrapper]);
   };
   return Object.freeze({
@@ -989,6 +1038,10 @@ export function analyzeStarvation(
     if (spec === undefined) return out;
     for (const exp of spec.inputs) {
       if (spec.wrapper === "forEach" && ITERATED_PIN_NAMES.has(exp.name)) continue;
+      // Fed by the wrapper's own loop, never by a connection: an
+      // `applyRules` rule input holds that round's cells whenever its
+      // branch cooks at all.
+      if (spec.interior?.inputs.has(exp.name) === true) continue;
       if (receivesNothing(id, exp.name)) out.add(`__in_${exp.name}`);
     }
     return out;
@@ -1006,7 +1059,9 @@ export function analyzeStarvation(
     onPath.add(key);
     let result = false;
     const spec = specOf(id);
-    if (spec !== undefined && spec.wrapper !== "repeatUntil") {
+    // A loop's outputs are taken to deliver: `repeatUntil` refuses an empty
+    // carry by name, and `applyRules`' `out` is its own pin, no body's.
+    if (spec !== undefined && spec.wrapper !== "repeatUntil" && spec.wrapper !== "applyRules") {
       if (isZeroIteration(id)) {
         result = true;
       } else {
@@ -1050,6 +1105,15 @@ export function analyzeStarvation(
         const pin = state.def.inputs.find((p) => p.name === blame.name);
         if (pin === undefined) continue;
         starved.push({ nodeId: state.id, pin, via: viaOf(pin.name), jointly: blame.jointly });
+      }
+      // A required pin the WRAPPER declared, which no body pin stands
+      // behind (`applyRules`' `in`), is judged the plain way: it throws
+      // when nothing reaches it.
+      const exposedNames = new Set(spec.inputs.map((e) => e.name));
+      for (const pin of state.def.inputs) {
+        if (exposedNames.has(pin.name) || pin.optional === true) continue;
+        if (!receivesNothing(state.id, pin.name)) continue;
+        starved.push({ nodeId: state.id, pin, via: viaOf(pin.name), jointly: [] });
       }
       continue;
     }
@@ -1359,6 +1423,7 @@ export function recordWrapperSpec(
   exposedInputs: readonly ExposedPin[],
   exposedOutputs: readonly ExposedPin[],
   paramList: readonly ExposedParam[],
+  interior?: { readonly inputs: ReadonlySet<string>; readonly outputs: ReadonlySet<string> },
 ): void {
   const detach = (e: ExposedPin): ExposedPin => ({ name: e.name, node: { id: e.node.id }, pin: e.pin });
   subgraphSpecs.set(def, {
@@ -1368,6 +1433,9 @@ export function recordWrapperSpec(
     inputs: exposedInputs.map(detach),
     outputs: exposedOutputs.map(detach),
     params: paramList,
+    ...(interior !== undefined
+      ? { interior: { inputs: new Set(interior.inputs), outputs: new Set(interior.outputs) } }
+      : {}),
   });
 }
 

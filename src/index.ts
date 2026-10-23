@@ -57,3 +57,5 @@ export { type GraphJsonSchemaOptions, graphJsonSchema } from "./nodes/graphSchem
 // the node registers in `serialize.ts`, where the same shape is still spelled
 // inline, and `./nodes/index.ts` publishes only the loop's factory.
 export type { RepeatUntilParams } from "./nodes/params.generated.js";
+// `applyRules`' params, published for the same reason as `repeatUntil`'s.
+export type { ApplyRulesParams } from "./nodes/params.generated.js";

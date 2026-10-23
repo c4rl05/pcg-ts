@@ -2,7 +2,7 @@
 
 Generated from the node registry metadata (`listNodeTypes()`) by `node scripts/gen-node-reference.mjs` — do not edit by hand. The same metadata, machine-readable, is in [nodes.json](./nodes.json). For the graph JSON format and field-expression grammar see [authoring.md](./authoring.md).
 
-72 node types, grouped by `category` (node sections below are alphabetical):
+73 node types, grouped by `category` (node sections below are alphabetical):
 
 **attribute**
 
@@ -29,6 +29,7 @@ Generated from the node registry metadata (`listNodeTypes()`) by `node scripts/g
 
 **composite**
 
+- [applyRules](#applyrules) — Composite node that runs a REWRITING GRAMMAR over labelled cells, one ROUND at a time: the recursion of a split grammar (a facade into floors, floors into panels, panels halved until they are small), in a graph that cannot wire a cycle.
 - [forEach](#foreach) — Composite node that cooks an inner graph ONCE PER ELEMENT instead of once.
 - [repeatUntil](#repeatuntil) — Composite node that cooks an inner graph REPEATEDLY, feeding each round's output back into its own input until the body stops changing anything — a bounded fixed point, in a graph where a cycle cannot be wired.
 - [subgraph](#subgraph) — Composite node wrapping an inner graph as a single node.
@@ -105,6 +106,31 @@ Generated from the node registry metadata (`listNodeTypes()`) by `node scripts/g
 **value**
 
 - [valueConstant](#valueconstant) — Emits a single constant number as a value item, for feeding value pins or tagging pipelines with plain data.
+
+## applyRules
+
+Composite node that runs a REWRITING GRAMMAR over labelled cells, one ROUND at a time: the recursion of a split grammar (a facade into floors, floors into panels, panels halved until they are small), in a graph that cannot wire a cycle. ONE INLINE BODY, AND A RULE IS A PIN PAIR: an exposed input and an exposed output with the SAME name form a rule, and that name is the LABEL it rewrites. Each round the frontier is partitioned by the string point attribute `labelAttr` ("piece", splitBox's): input X receives every cell labelled X, and output X's cells are that rule's products, whatever labels they carry, so a `panel` rule whose products are labelled `panel` again is a recursion. A label with no rule is TERMINAL: its cells leave on `out`, in the order they settle. An exposed input with NO same-named output is a BROADCAST, fed whole to every round (an occluder, a lookup cloud). So the node's own pins are `in` (the axiom cells, round 0's frontier) plus the broadcasts, and `out`, `rounds` (how many times the body cooked) and `converged` (1, or 0 when maxDepth cut the grammar off); the rule pairs are interior and are never wired. ONLY FED RULES COOK: each round cooks the body once, requesting only the outputs of rules that received cells, so a branch is never cooked on an empty input and may freely read a column only its own producers write. That is why the body is checked when it is built: output X may not depend on another rule's input (duplicate the node, or move it upstream of a broadcast; a node reading only broadcasts may be shared), input X must reach output X, a broadcast must reach some rule, and an output with no same-named input is refused (there are no side outputs). VARIANTS AND STOPPING ARE RELABELS IN THE BRANCH, never wrapper params: a rule picks a variant with setAttribute type "string", values ["square", "arched"] and an index field reading the roll, lt(attribute("ruleRoll"), 0.4); it stops a recursion by relabelling small cells to a terminal label (values ["panel", "leaf"], index lt(max(box("sx"), box("sy")), 1.2)) and cutting the rest with a splitBox whose `where` is attributeIs("piece", "panel"). EVERY RELABEL COSTS ONE ROUND of depth, so size maxDepth for it. ITERATION METADATA: every cell gets `depthAttr` (i32) as it is classified, the round, which is its lineage depth; every FED cell also gets `rollAttr` (f32 in [0, 1)), hashed from this node's seed, the rule's label and a SCOPE identity: the cell's own by default (and the round, so a relabel-only recursion draws afresh each round), or, with `scoped`/`scopeOf`, its nearest ancestor that was fed to the named rule ("root" for its axiom cell), so every window under one facade rolls the same number. A scoped cell with no such ancestor is refused, and a rule scoped to itself is refused as a no-op. PRODUCTS MUST DERIVE FROM THE RULE'S INPUT: each fed cell carries a u32 lineage column `__ruleSrc`, and a product that lost it or names a cell fed to another rule (a fresh pointList merged in, a broadcast cell) is refused by name. On `out` the column is handed back as the axiom cell carried it on `in` (removed when `in` had none), so an applyRules nests inside another's rule branch, directly or inside a subgraph. A column one rule writes and another does not is default-filled on the other's cells when a round's products are concatenated (mergePoints' union, in the body's exposed-output order). TERMINATION IS REPORTED, NOT THROWN: cells still feeding a rule at maxDepth go to `out` unexpanded, `converged` is 0, and the detail attribute `rulesCutOff` on `out` (i32, one component per rule in the body's exposed-output order, always written, all zero when converged) counts them per rule, with `rulesCutOffRules` (a string tuple, same order) naming the rule behind each component; a grammar grown past 4194304 cells is refused, naming the round. SEEDS: the body cooks under one seed for every round, hashCombine(nodeSeed, hashString("applyRules")); splitBox re-seeds each piece from its parent, so a cell's draws follow its lineage rather than the round. That holds only for rules that RE-SEED: a relabel keeps the cell's identity, so a randomField in a relabel-only recursion draws the parent's number again every round (it stops at once or never); a per-round chance reads `ruleRoll` instead. A cell's subtree is independent of its siblings only when every node in its branches is ELEMENTWISE: an attributeReduce or neighbourhood node couples all cells of one label in one round, and `out` indices shift whenever a sibling's output changes. The loop is CPU; a branch's field params may resolve on the GPU device, each node recording its own fallback. Inline payload only: no `ref` in this version. Create instances with applyRulesNode(innerGraph, exposedInputs, exposedOutputs, exposedParams), or deserialize a graph containing one.
+
+**Category:** composite
+
+**Meters the cook budget itself:** under `cook(graph, { budgetMs })` this node yields to the event loop inside its own execute, so its `NodeDoneInfo.elapsedMs` is wall time spanning those yields — not an uninterrupted block. Derive a longest-block figure from a cook with the budget unset.
+
+**Inputs:** *(none)*
+
+**Outputs:** *(none)*
+
+**Examples:** [basics-apply-rules.json](../graphs/basics-apply-rules.json) — 1 total (`pcg graphs --node applyRules`)
+
+**Params:**
+
+| Param | Type | Default | Range | Enum | Field | Description |
+| --- | --- | --- | --- | --- | --- | --- |
+| `maxDepth` | u32 | `32` | 1..1024 |  |  | The most ROUNDS the grammar runs: the body cooks at most this many times, and a cell is expanded at lineage depth maxDepth - 1 at the deepest. EVERY RELABEL COSTS A ROUND — a rule that only picks a variant (window -> arched \| square) or marks a cell finished (panel -> leaf) is one round of depth for the cells it relabels — so count the relabels when sizing it: a facade split into floors, floors into panels, panels halved until small and then given a styled window is easily fifteen rounds deep. Reaching the cap is NOT an error and is not silent: the cells still carrying a rule's label go to "out" unexpanded, "converged" reports 0 and the detail attribute "rulesCutOff" on "out" counts them per rule, with "rulesCutOffRules" naming the rule behind each component, so the rule that would not stop is named. A grammar that GROWS every round is stopped sooner, by the 4194304-point cap, which is refused naming the round and the rule. |
+| `labelAttr` | string | `"piece"` |  |  |  | The STRING point attribute (tuple 1) the frontier is dispatched on: a cell whose label equals a rule's name is fed to that rule, any other label is terminal and goes to "out". splitBox's labelAttr default, so a split's labels ARE the rules' names. Required on "in" and on every rule's products; a missing or non-string column is refused naming the rule that dropped it. |
+| `depthAttr` | string | `"ruleDepth"` |  |  |  | The i32 point attribute (tuple 1) written on every cell as it is classified: the ROUND, which is the cell's lineage depth (an "in" cell is 0, its products 1, ...). A rule reads it as iteration metadata — lt(attribute("ruleDepth"), 3) caps a recursion at a fixed depth. On "out" it is the depth the cell settled at (maxDepth on a cell the cap cut off). Empty writes none. Not a standard attribute, and not the same name as labelAttr or rollAttr. |
+| `rollAttr` | string | `"ruleRoll"` |  |  |  | The f32 point attribute (tuple 1) written on every FED cell: a number in [0, 1) hashed from this node's seed, the rule's label and the cell's SCOPE identity (see "scoped"); an UNSCOPED roll also folds in the round, so a rule that keeps a cell's label and identity (a relabel-only recursion: "stay a panel while the roll is under 0.7") draws afresh every round. The branch picks a variant with it — setAttribute string, values ["arched", "square"], value lt(attribute("ruleRoll"), 0.5) — so the weights sit in the branch, resolved on that rule's cells only. Different rules roll independently even under one scope. On "out" a cell carries the roll of the rule application that produced it (0 on a cell that arrived terminal). Empty writes none, and is refused when "scoped" lists anything, since the scope would then reach no column. |
+| `scoped` | stringList | `[]` |  |  |  | Rules whose ROLL is SHARED by a scope, parallel to "scopeOf": rule scoped[i] rolls on the identity of its NEAREST ANCESTOR fed to rule scopeOf[i], so every such cell under one ancestor rolls the same number — one window style per facade is scoped ["window"], scopeOf ["facade"]. A rule not listed rolls on its own cell's identity, so every cell differs. The roll is shared; the DECISION is shared only if the branch's selector reads nothing per cell besides the roll. A RECURSIVE rule scoped to an ancestor rolls the same number at every depth and so decides the same at every depth, which is usually a mistake. Each entry must name a rule (did-you-mean otherwise), once. |
+| `scopeOf` | stringList | `[]` |  |  |  | The scope of each "scoped" entry, same length: the name of a RULE (the nearest ancestor that was fed to it), or "root" — the cell on "in" the scoped cell descends from, which every cell has. A rule scoped to ITSELF is refused: its nearest ancestor-or-self fed to it is the cell itself, which is exactly what not listing it does. A cell with NO ancestor fed to its scope rule — it arrived on "in" already carrying the scoped label, or came down a branch that never passed through the scope rule — is REFUSED, naming the rule, the round and the scope, rather than rolled on some other identity: scope it to "root", or route every such cell through the scope rule. |
 
 ## arcTile
 
@@ -280,7 +306,7 @@ Copies the source point cloud onto every target point (output count = source poi
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-copy-to-points.json](../graphs/basics-copy-to-points.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 19 total (`pcg graphs --node copyToPoints`)
+**Examples:** [basics-copy-to-points.json](../graphs/basics-copy-to-points.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 20 total (`pcg graphs --node copyToPoints`)
 
 **Params:**
 
@@ -560,7 +586,7 @@ Builds a parametric triangle mesh with no input: shape 'plane' is one axis-align
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-mesh-primitive.json](../graphs/basics-mesh-primitive.json), [basics-surface-sample.json](../graphs/basics-surface-sample.json), [basics-promote-attribute.json](../graphs/basics-promote-attribute.json) — 21 total (`pcg graphs --node meshPrimitive`)
+**Examples:** [basics-mesh-primitive.json](../graphs/basics-mesh-primitive.json), [basics-surface-sample.json](../graphs/basics-surface-sample.json), [basics-promote-attribute.json](../graphs/basics-promote-attribute.json) — 22 total (`pcg graphs --node meshPrimitive`)
 
 **Params:**
 
@@ -883,7 +909,7 @@ Creates `count` evenly spaced points on a straight line. mode 'endpoints' (the d
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-phyllotaxis.json](../graphs/basics-phyllotaxis.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 22 total (`pcg graphs --node pointLine`)
+**Examples:** [basics-phyllotaxis.json](../graphs/basics-phyllotaxis.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 23 total (`pcg graphs --node pointLine`)
 
 **Params:**
 
@@ -1281,7 +1307,7 @@ Creates or overwrites an attribute on the chosen domain. Numeric types fill from
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-attribute-from-noise.json](../graphs/basics-attribute-from-noise.json), [basics-mask-by-species.json](../graphs/basics-mask-by-species.json), [basics-attribute-remap.json](../graphs/basics-attribute-remap.json) — 70 total (`pcg graphs --node setAttribute`)
+**Examples:** [basics-attribute-from-noise.json](../graphs/basics-attribute-from-noise.json), [basics-mask-by-species.json](../graphs/basics-mask-by-species.json), [basics-attribute-remap.json](../graphs/basics-attribute-remap.json) — 71 total (`pcg graphs --node setAttribute`)
 
 **Params:**
 
@@ -1308,7 +1334,7 @@ Sets the standard per-point bounds attributes: writes boundsMin and boundsMax (f
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-two-kinds-of-bounds.json](../graphs/basics-two-kinds-of-bounds.json), [basics-split-box.json](../graphs/basics-split-box.json), [examples-facade.json](../graphs/examples-facade.json) — 5 total (`pcg graphs --node setBounds`)
+**Examples:** [basics-two-kinds-of-bounds.json](../graphs/basics-two-kinds-of-bounds.json), [basics-split-box.json](../graphs/basics-split-box.json), [basics-apply-rules.json](../graphs/basics-apply-rules.json) — 6 total (`pcg graphs --node setBounds`)
 
 **Params:**
 
@@ -1381,7 +1407,7 @@ Samples points along polyline primitives by arc length, treating all polylines o
 
 ## splitBox
 
-CUTS every cell's box along one axis into an ordered list of LABELLED PIECES and emits one point per piece — the split of a split grammar (a block into storeys, a wall into bays, a bay into jamb | opening | jamb). A CELL IS A POINT WITH A BOX: its standard `boundsMin`/`boundsMax`, cut in the coordinates they hold; P, rotation and scale are not read and nothing is moved, so every piece sits where its cell sat and only its box differs. THE PIECES are three parallel lists, one entry per SEGMENT in order from the box's MIN side: `labels` (the name each piece is given), `sizes` (a number each, or a field of that many components resolved on the parent cell) and `units` — "absolute" is that length; "relative" is a weighted share of the REST, what the absolute segments leave; "repeat" cuts the rest into max(1, <repeatRound>(rest / size)) EQUAL pieces of about `size` each (`repeatRound` is floor, round or ceil; floor by default), so `labels ["bay"], sizes [4], units ["repeat"]` gives a 10-long wall two bays of 5. A LABEL OF "" IS A GAP: it takes its space and emits nothing. A PIECE OF ZERO SIZE IS DROPPED — that is how an absent sill or lintel disappears without a branch. `snap` puts every interior cut on a lattice, `fit` says what happens when absolute sizes do not fit, and `where` passes chosen cells through UNSPLIT, which is how a nested split stays one node per level: split y into under | band | over, then split x WHERE attributeIs("piece", "band"), and the under and over pieces ride through untouched. THIS NODE ONLY CUTS, ONE LEVEL: recursion is a repeatUntil around it, staging is several of it chained, and any decision the children must agree on is made on the PARENT — a field in `sizes` is resolved once per cell, before the cut, so a random cut position drawn there is the same for both halves. Every POINT ATTRIBUTE IS CARRIED onto every piece, strings included, exactly as repeatPoints carries them, and the DETAIL attributes come through unchanged; TOPOLOGY IS DROPPED. OUTPUT ORDER is cell-major, each cell's pieces min side first. SEEDS: the piece in slot k of a cell with seed s gets hashCombine(s, k) — repeatPoints' copy-k seed — where k counts EVERY slot of the cell's expanded list, dropped and gap slots included, so a piece's seed does not move when a sibling vanishes, and splitBox is seed-identical to repeatPoints(count = slots) followed by setBounds. No node identity enters a piece's seed; the node's own seed reaches only the fields it resolves (a randomField in `sizes`). A cell can emit NOTHING (a zero-length box, or nothing but gaps), and the output is capped at 4194304 points in all, refused past that naming the cell the total ran out on. The seed identity holds PER LEVEL: a nested split seeds its inner pieces hashCombine(hashCombine(s, j), k), so it is not seed-identical to one flat repeatPoints over all the pieces. CPU only, like repeatPoints: piece counts and drops are comparisons.
+CUTS every cell's box along one axis into an ordered list of LABELLED PIECES and emits one point per piece — the split of a split grammar (a block into storeys, a wall into bays, a bay into jamb | opening | jamb). A CELL IS A POINT WITH A BOX: its standard `boundsMin`/`boundsMax`, cut in the coordinates they hold; P, rotation and scale are not read and nothing is moved, so every piece sits where its cell sat and only its box differs. THE PIECES are three parallel lists, one entry per SEGMENT in order from the box's MIN side: `labels` (the name each piece is given), `sizes` (a number each, or a field of that many components resolved on the parent cell) and `units` — "absolute" is that length; "relative" is a weighted share of the REST, what the absolute segments leave; "repeat" cuts the rest into max(1, <repeatRound>(rest / size)) EQUAL pieces of about `size` each (`repeatRound` is floor, round or ceil; floor by default), so `labels ["bay"], sizes [4], units ["repeat"]` gives a 10-long wall two bays of 5. A LABEL OF "" IS A GAP: it takes its space and emits nothing. A PIECE OF ZERO SIZE IS DROPPED — that is how an absent sill or lintel disappears without a branch. `snap` puts every interior cut on a lattice, `fit` says what happens when absolute sizes do not fit, and `where` passes chosen cells through UNSPLIT, which is how a nested split stays one node per level: split y into under | band | over, then split x WHERE attributeIs("piece", "band"), and the under and over pieces ride through untouched. THIS NODE ONLY CUTS, ONE LEVEL: recursion is an applyRules around it (each label a rule, the stop a relabel to a label with no rule), staging is several of it chained, and any decision the children must agree on is made on the PARENT — a field in `sizes` is resolved once per cell, before the cut, so a random cut position drawn there is the same for both halves. Every POINT ATTRIBUTE IS CARRIED onto every piece, strings included, exactly as repeatPoints carries them, and the DETAIL attributes come through unchanged; TOPOLOGY IS DROPPED. OUTPUT ORDER is cell-major, each cell's pieces min side first. SEEDS: the piece in slot k of a cell with seed s gets hashCombine(s, k) — repeatPoints' copy-k seed — where k counts EVERY slot of the cell's expanded list, dropped and gap slots included, so a piece's seed does not move when a sibling vanishes, and splitBox is seed-identical to repeatPoints(count = slots) followed by setBounds. No node identity enters a piece's seed; the node's own seed reaches only the fields it resolves (a randomField in `sizes`). A cell can emit NOTHING (a zero-length box, or nothing but gaps), and the output is capped at 4194304 points in all, refused past that naming the cell the total ran out on. The seed identity holds PER LEVEL: a nested split seeds its inner pieces hashCombine(hashCombine(s, j), k), so it is not seed-identical to one flat repeatPoints over all the pieces. CPU only, like repeatPoints: piece counts and drops are comparisons.
 
 **Category:** point op
 
@@ -1389,7 +1415,7 @@ CUTS every cell's box along one axis into an ordered list of LABELLED PIECES and
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-split-box.json](../graphs/basics-split-box.json) — 1 total (`pcg graphs --node splitBox`)
+**Examples:** [basics-split-box.json](../graphs/basics-split-box.json), [basics-apply-rules.json](../graphs/basics-apply-rules.json) — 2 total (`pcg graphs --node splitBox`)
 
 **Params:**
 

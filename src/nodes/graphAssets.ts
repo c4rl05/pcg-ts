@@ -539,6 +539,7 @@ function opaqueReason(
         `either as a column the source already carried or as a target column named in "targetNames" — this ` +
         `walk cannot read a template's attributes, so it cannot say which${tail}`
       );
+    case "applyRules":
     case "forEach":
     case "repeatUntil":
     case "subgraph":

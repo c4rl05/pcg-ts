@@ -47,8 +47,9 @@ import {
   fieldToJson,
   inlineParamValuesOf,
 } from "../fields/fieldJson.js";
+import { APPLY_RULES_PARAM_SCHEMAS, applyRulesNode } from "./applyRules.js";
 import { forEachNode } from "./forEach.js";
-import type { RepeatUntilParams } from "./params.generated.js";
+import type { ApplyRulesParams, RepeatUntilParams } from "./params.generated.js";
 import { REPEAT_UNTIL_PARAM_SCHEMAS, repeatUntilNode } from "./repeatUntil.js";
 import { getNodeType, hasNodeType, listNodeTypes, standardNode } from "./registry.js";
 import { type ExposedParamDecl, resolveExposedParam } from "./subgraphParams.js";
@@ -693,6 +694,52 @@ standardNode<RepeatUntilParams>({
 });
 
 /**
+ * Registry entry for the rule-grammar composite. Metadata-only for the
+ * same reason as the three above, and carrying the same payload, plus the
+ * grammar's own params (see {@link APPLY_RULES_PARAM_SCHEMAS}). Unlike
+ * them it takes an INLINE payload only: a registered recipe records no
+ * wrapper kind, and a rule body's pin names reserve nothing that could
+ * name it, so a `ref` to one is refused until recipes carry a kind.
+ */
+standardNode<ApplyRulesParams>({
+  type: "applyRules",
+  category: "composite",
+  // See the `subgraph` entry above.
+  selfMetered: true,
+  description:
+    "Composite node that runs a REWRITING GRAMMAR over labelled cells, one ROUND at a time: the recursion of a split grammar (a facade into floors, floors into panels, panels halved until they are small), in a graph that cannot wire a cycle. ONE INLINE BODY, AND A RULE IS A PIN PAIR: an exposed input and an exposed output with the SAME name form a rule, and that name is the LABEL it rewrites. Each round the frontier is partitioned by the string point attribute `labelAttr` (\"piece\", splitBox's): input X receives every cell labelled X, and output X's cells are that rule's products, whatever labels they carry, so a `panel` rule whose products are labelled `panel` again is a recursion. A label with no rule is TERMINAL: its cells leave on `out`, in the order they settle. An exposed input with NO same-named output is a BROADCAST, fed whole to every round (an occluder, a lookup cloud). So the node's own pins are `in` (the axiom cells, round 0's frontier) plus the broadcasts, and `out`, `rounds` (how many times the body cooked) and `converged` (1, or 0 when maxDepth cut the grammar off); the rule pairs are interior and are never wired. ONLY FED RULES COOK: each round cooks the body once, requesting only the outputs of rules that received cells, so a branch is never cooked on an empty input and may freely read a column only its own producers write. That is why the body is checked when it is built: output X may not depend on another rule's input (duplicate the node, or move it upstream of a broadcast; a node reading only broadcasts may be shared), input X must reach output X, a broadcast must reach some rule, and an output with no same-named input is refused (there are no side outputs). VARIANTS AND STOPPING ARE RELABELS IN THE BRANCH, never wrapper params: a rule picks a variant with setAttribute type \"string\", values [\"square\", \"arched\"] and an index field reading the roll, lt(attribute(\"ruleRoll\"), 0.4); it stops a recursion by relabelling small cells to a terminal label (values [\"panel\", \"leaf\"], index lt(max(box(\"sx\"), box(\"sy\")), 1.2)) and cutting the rest with a splitBox whose `where` is attributeIs(\"piece\", \"panel\"). EVERY RELABEL COSTS ONE ROUND of depth, so size maxDepth for it. ITERATION METADATA: every cell gets `depthAttr` (i32) as it is classified, the round, which is its lineage depth; every FED cell also gets `rollAttr` (f32 in [0, 1)), hashed from this node's seed, the rule's label and a SCOPE identity: the cell's own by default (and the round, so a relabel-only recursion draws afresh each round), or, with `scoped`/`scopeOf`, its nearest ancestor that was fed to the named rule (\"root\" for its axiom cell), so every window under one facade rolls the same number. A scoped cell with no such ancestor is refused, and a rule scoped to itself is refused as a no-op. PRODUCTS MUST DERIVE FROM THE RULE'S INPUT: each fed cell carries a u32 lineage column `__ruleSrc`, and a product that lost it or names a cell fed to another rule (a fresh pointList merged in, a broadcast cell) is refused by name. On `out` the column is handed back as the axiom cell carried it on `in` (removed when `in` had none), so an applyRules nests inside another's rule branch, directly or inside a subgraph. A column one rule writes and another does not is default-filled on the other's cells when a round's products are concatenated (mergePoints' union, in the body's exposed-output order). TERMINATION IS REPORTED, NOT THROWN: cells still feeding a rule at maxDepth go to `out` unexpanded, `converged` is 0, and the detail attribute `rulesCutOff` on `out` (i32, one component per rule in the body's exposed-output order, always written, all zero when converged) counts them per rule, with `rulesCutOffRules` (a string tuple, same order) naming the rule behind each component; a grammar grown past 4194304 cells is refused, naming the round. SEEDS: the body cooks under one seed for every round, hashCombine(nodeSeed, hashString(\"applyRules\")); splitBox re-seeds each piece from its parent, so a cell's draws follow its lineage rather than the round. That holds only for rules that RE-SEED: a relabel keeps the cell's identity, so a randomField in a relabel-only recursion draws the parent's number again every round (it stops at once or never); a per-round chance reads `ruleRoll` instead. A cell's subtree is independent of its siblings only when every node in its branches is ELEMENTWISE: an attributeReduce or neighbourhood node couples all cells of one label in one round, and `out` indices shift whenever a sibling's output changes. The loop is CPU; a branch's field params may resolve on the GPU device, each node recording its own fallback. Inline payload only: no `ref` in this version. Create instances with applyRulesNode(innerGraph, exposedInputs, exposedOutputs, exposedParams), or deserialize a graph containing one.",
+  inputs: [],
+  outputs: [],
+  params: {
+    maxDepth: APPLY_RULES_PARAM_SCHEMAS.maxDepth,
+    labelAttr: APPLY_RULES_PARAM_SCHEMAS.labelAttr,
+    depthAttr: APPLY_RULES_PARAM_SCHEMAS.depthAttr,
+    rollAttr: APPLY_RULES_PARAM_SCHEMAS.rollAttr,
+    scoped: APPLY_RULES_PARAM_SCHEMAS.scoped,
+    scopeOf: APPLY_RULES_PARAM_SCHEMAS.scopeOf,
+  },
+  execute() {
+    throw new Error(
+      'the registered "applyRules" definition is metadata-only and cannot cook; create applyRules nodes with applyRulesNode(innerGraph, exposedInputs, exposedOutputs), or deserialize a graph containing one',
+    );
+  },
+});
+
+/** The wrapper types: the node types whose JSON carries an inner graph. */
+function isWrapperType(type: string): type is WrapperKind {
+  return type === "subgraph" || type === "forEach" || type === "repeatUntil" || type === "applyRules";
+}
+
+/** A wrapper's OWN params — the loop's, not the body's — by kind. */
+function wrapperOwnParams(wrapper: WrapperKind): Readonly<Record<string, ParamSchema>> {
+  return wrapper === "repeatUntil"
+    ? REPEAT_UNTIL_PARAM_SCHEMAS
+    : wrapper === "applyRules"
+      ? APPLY_RULES_PARAM_SCHEMAS
+      : {};
+}
+
+/**
  * The factory that builds each wrapper kind, for the writer's refusal when
  * a def of a wrapper type carries no recorded spec. A map rather than a
  * chain of ternaries so a fourth wrapper is a compile error here (the
@@ -703,6 +750,7 @@ const WRAPPER_FACTORIES: Readonly<Record<WrapperKind, string>> = {
   subgraph: "subgraphNode(...)",
   forEach: "forEachNode(...)",
   repeatUntil: "repeatUntilNode(...)",
+  applyRules: "applyRulesNode(...)",
 };
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -1372,10 +1420,8 @@ function buildEmbeddedSubgraphNode(
   // ones and round-trip through the same code path. Read from the single
   // schema definition the factory uses, so a saved graph can never load
   // under a different bound than it was authored with.
-  if (spec.wrapper === "repeatUntil") {
-    for (const [name, schema] of Object.entries(REPEAT_UNTIL_PARAM_SCHEMAS)) {
-      declared.set(name, schema);
-    }
+  for (const [name, schema] of Object.entries(wrapperOwnParams(spec.wrapper))) {
+    declared.set(name, schema);
   }
   for (const key of Object.keys(nodeParams)) {
     if (!declared.has(key)) {
@@ -1559,7 +1605,7 @@ function serializeGraphRec(graph: Graph, seen: Set<Graph>): SerializedGraph {
         continue;
       }
       const type = state.def.type;
-      if (type === "subgraph" || type === "forEach" || type === "repeatUntil") {
+      if (isWrapperType(type)) {
         fail(
           `cannot serialize node "${state.id}": its definition was not created by ${
             WRAPPER_FACTORIES[type]
@@ -2110,6 +2156,14 @@ function addSubgraphNode(w: WrapperReading, sink: Sink): NodeHandle {
       nodeId: id,
     });
   }
+  if (refJson !== undefined && w.wrapper === "applyRules") {
+    fault({
+      code: "wrapper-ref-unsupported",
+      message: `node "${id}": an "applyRules" node takes its rule body INLINE, under "subgraph" ({ graph, inputs, outputs }); a "ref" to a registered recipe is not supported in this version — a recipe records no wrapper kind, and a rule body's pin names reserve nothing that could say it is one. Inline the body.`,
+      path: at("/ref"),
+      nodeId: id,
+    });
+  }
   if (refJson !== undefined) {
     const refAt = under(at("/ref"));
     const ref = readSubgraphRef(id, refJson, refAt, sink);
@@ -2401,7 +2455,9 @@ function buildSubgraphNode(
         ? forEachNode(inner, inputs, outputs, exposed)
         : wrapper === "repeatUntil"
           ? repeatUntilNode(inner, inputs, outputs, exposed)
-          : subgraphNode(inner, inputs, outputs, exposed);
+          : wrapper === "applyRules"
+            ? applyRulesNode(inner, inputs, outputs, exposed)
+            : subgraphNode(inner, inputs, outputs, exposed);
   } catch (err) {
     fault({
       code: wrapperFactoryCode(err),
@@ -2417,10 +2473,8 @@ function buildSubgraphNode(
   // body and so absent from `exposed`, but present on every instance and
   // written by the writer, so the reader has to know them or a saved
   // `maxRounds` would come back as "unknown param".
-  if (wrapper === "repeatUntil") {
-    for (const [name, schema] of Object.entries(REPEAT_UNTIL_PARAM_SCHEMAS)) {
-      declared.set(name, schema);
-    }
+  for (const [name, schema] of Object.entries(wrapperOwnParams(wrapper))) {
+    declared.set(name, schema);
   }
   const exposedNames = [...declared.keys()];
   const params = readParams(
@@ -2705,7 +2759,7 @@ function readGraphDocument(json: unknown, ctx: ReadContext, sink: Sink): Graph {
       }
       const accepted = new Set<string>();
       authoredParamKeys.set(id, accepted);
-      if (type === "subgraph" || type === "forEach" || type === "repeatUntil") {
+      if (isWrapperType(type)) {
         handles.set(
           id,
           addSubgraphNode(
@@ -2734,7 +2788,7 @@ function readGraphDocument(json: unknown, ctx: ReadContext, sink: Sink): Graph {
         if (nodeJson[key] !== undefined) {
           sink.report({
             code: "wrapper-key-on-plain-node",
-            message: `node "${id}": type "${type}" wraps no inner graph, so it cannot carry "${key}"; only "subgraph", "forEach" and "repeatUntil" nodes wrap one (inline under "subgraph", or by name under "ref")`,
+            message: `node "${id}": type "${type}" wraps no inner graph, so it cannot carry "${key}"; only "subgraph", "forEach", "repeatUntil" and "applyRules" nodes wrap one (inline under "subgraph", or by name under "ref"; "applyRules" inline only)`,
             path: at(`/${key}`),
             nodeId: id,
             key,

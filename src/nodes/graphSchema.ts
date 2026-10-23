@@ -76,7 +76,10 @@ const FIELD_SPEC_REF = "#/$defs/fieldSpec";
 const FIELD_ARG_REF = "#/$defs/fieldArg";
 
 /** The wrapper types, sorted: the loader dispatches on exactly these names. */
-const WRAPPER_TYPES: readonly WrapperKind[] = ["forEach", "repeatUntil", "subgraph"];
+const WRAPPER_TYPES: readonly WrapperKind[] = ["applyRules", "forEach", "repeatUntil", "subgraph"];
+
+/** Wrappers whose body is INLINE only: a `ref` on one is refused by the loader. */
+const INLINE_ONLY_WRAPPERS: ReadonlySet<string> = new Set(["applyRules"]);
 
 function isWrapper(type: string): type is WrapperKind {
   return (WRAPPER_TYPES as readonly string[]).includes(type);
@@ -405,6 +408,7 @@ function probeRefTarget(
 ): RefTarget {
   const loads: { type: WrapperKind; params: Record<string, ParamSchema> }[] = [];
   for (const type of WRAPPER_TYPES) {
+    if (INLINE_ONLY_WRAPPERS.has(type)) continue;
     let graph: Graph;
     try {
       graph = deserializeGraph({
@@ -515,11 +519,16 @@ function nodeTypeBranch(ctx: Context, info: NodeTypeInfo): JsonSchemaObject {
     then: described(
       ctx,
       {
-        oneOf: [
-          { properties: { subgraph: true }, required: ["subgraph"] },
-          { properties: { ref: true }, required: ["ref"] },
-        ],
+        ...(INLINE_ONLY_WRAPPERS.has(info.type)
+          ? { required: ["subgraph"] }
+          : {
+              oneOf: [
+                { properties: { subgraph: true }, required: ["subgraph"] },
+                { properties: { ref: true }, required: ["ref"] },
+              ],
+            }),
         properties: {
+          ...(INLINE_ONLY_WRAPPERS.has(info.type) ? { ref: false, subgraph: true } : {}),
           params: {
             type: ["object", "null"],
             ...(own.length > 0 ? { properties } : {}),
