@@ -1,0 +1,25 @@
+{
+  "state": "done",
+  "completed": 6,
+  "total": 6,
+  "wakeReasons": [],
+  "campaign": "estate-ab-A",
+  "sleepUntil": null,
+  "blockedSince": null,
+  "infraSince": null,
+  "updatedAt": "2026-10-23T15:59:49.182Z",
+  "pid": 59184,
+  "currentSlot": null,
+  "attempt": 1,
+  "lastSlot": "r5.estate-division.A",
+  "note": "stopped at --max-slots",
+  "wakeDetail": null,
+  "gate": {
+    "decision": "stop",
+    "reasons": [
+      "gate arms not in the campaign: , stripped; configure gate.baselineArms, gate.strippedArm and gate.strippedRefArm"
+    ],
+    "replaceTasks": [],
+    "proposedReplacement": null
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "state": "done",
+  "completed": 1,
+  "total": 1,
+  "wakeReasons": [],
+  "campaign": "estate-cal-B",
+  "sleepUntil": null,
+  "blockedSince": null,
+  "infraSince": null,
+  "updatedAt": "2026-10-23T11:55:26.350Z",
+  "pid": 53704,
+  "currentSlot": null,
+  "attempt": 1,
+  "lastSlot": "r0.estate-division.B",
+  "gate": null
+}

@@ -157,6 +157,72 @@
       "taskBudgets": { "brick-house-seeded": { "turns": 200, "wallMinutes": 100, "outputTokens": 400000 } },
       "gate": { "label": "none (replacement slot of a two-campaign A/B; compared by hand)", "baselineArms": ["B"] }
     },
+    "estate-cal-A": {
+      "$comment": "Estate A/B (2026-10-23), CALIBRATION, arm A, NOT COUNTED: one run to set the counted caps. Library ec145ab7 (before splitBox, box names and applyRules), packed from a clean LF worktree with the e15e60b5 packer and stripped with its --strip-graphs (rewrites dangling corpus links, fails on any it misses). Task estate-division, its selftest graphs ported to the ec145ab7 vocabulary (build/port.mjs in the task). Generous caps (200 turns / 100 min / 400k output tokens) so the run measures the task, not the cap. Contaminated attempts are NOT rescheduled by the harness (limits.maxContaminatedReschedules 0): flags are read by hand under the pre-registered rule in pcg-ts-private/evals/tasks/ESTATE-AB.md.",
+      "arms": [{ "label": "A", "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/estate-A-nographs-0.18.0-ec145ab.tgz" }],
+      "tasks": { "include": ["estate-division"] },
+      "expectTaskCount": 1,
+      "runsPerTask": 1,
+      "scheduleSeed": 20261101,
+      "taskBudgets": { "estate-division": { "turns": 200, "wallMinutes": 100, "outputTokens": 400000 } },
+      "limits": { "maxContaminatedReschedules": 0 },
+      "gate": { "label": "none (calibration run of a two-campaign A/B; not counted)", "baselineArms": ["A"] }
+    },
+    "estate-cal-B": {
+      "$comment": "Estate A/B CALIBRATION, arm B, NOT COUNTED. Library 9f0cdb5b (adds splitBox, box names, applyRules, rest, trail), packed and stripped exactly as estate-cal-A. Everything else is estate-cal-A's.",
+      "arms": [{ "label": "B", "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/estate-B-nographs-0.18.0-9f0cdb5.tgz" }],
+      "tasks": { "include": ["estate-division"] },
+      "expectTaskCount": 1,
+      "runsPerTask": 1,
+      "scheduleSeed": 20261102,
+      "taskBudgets": { "estate-division": { "turns": 200, "wallMinutes": 100, "outputTokens": 400000 } },
+      "limits": { "maxContaminatedReschedules": 0 },
+      "gate": { "label": "none (calibration run of a two-campaign A/B; not counted)", "baselineArms": ["B"] }
+    },
+    "estate-ab-A": {
+      "$comment": "Estate A/B (2026-10-23), COUNTED, arm A: library ec145ab7 (before splitBox, box names and applyRules), packed from a clean LF worktree with the e15e60b5 packer, --strip-graphs with rewrites. 6 slots, run interleaved with estate-ab-B one slot at a time (A r0, B r0, A r1, ...). Caps fixed by the pre-registered rule (pcg-ts-private/evals/tasks/ESTATE-AB.md): 1.5 x the larger calibration cost, rounded up. Calibration: A 74 turns / 16.4 min / 81,719 output tokens, B 62 / 13.7 / 66,765, so 1.5 x A = 111 / 24.6 / 122,579 -> 115 turns / 25 min / 130k tokens, the same for both arms. Harness reschedules off (maxContaminatedReschedules 0); flags are judged by hand under the pre-registered replacement rule.",
+      "arms": [{ "label": "A", "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/estate-A-nographs-0.18.0-ec145ab.tgz" }],
+      "tasks": { "include": ["estate-division"] },
+      "expectTaskCount": 1,
+      "runsPerTask": 6,
+      "scheduleSeed": 20261111,
+      "taskBudgets": { "estate-division": { "turns": 115, "wallMinutes": 25, "outputTokens": 130000 } },
+      "limits": { "maxContaminatedReschedules": 0 },
+      "gate": { "label": "none (one arm of a two-campaign A/B; pass rate primary; compared by hand)", "baselineArms": ["A"] }
+    },
+    "estate-ab-B": {
+      "$comment": "Estate A/B COUNTED, arm B: library 9f0cdb5b (adds splitBox, box names, applyRules, rest, trail), packed and stripped exactly as arm A. Everything else is estate-ab-A. Caps fixed by the pre-registered rule (pcg-ts-private/evals/tasks/ESTATE-AB.md): 1.5 x the larger calibration cost, rounded up. Calibration: A 74 turns / 16.4 min / 81,719 output tokens, B 62 / 13.7 / 66,765, so 1.5 x A = 111 / 24.6 / 122,579 -> 115 turns / 25 min / 130k tokens, the same for both arms. Harness reschedules off (maxContaminatedReschedules 0); flags are judged by hand under the pre-registered replacement rule.",
+      "arms": [{ "label": "B", "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/estate-B-nographs-0.18.0-9f0cdb5.tgz" }],
+      "tasks": { "include": ["estate-division"] },
+      "expectTaskCount": 1,
+      "runsPerTask": 6,
+      "scheduleSeed": 20261112,
+      "taskBudgets": { "estate-division": { "turns": 115, "wallMinutes": 25, "outputTokens": 130000 } },
+      "limits": { "maxContaminatedReschedules": 0 },
+      "gate": { "label": "none (one arm of a two-campaign A/B; pass rate primary; compared by hand)", "baselineArms": ["B"] }
+    },
+    "estate-ab-A-reserve": {
+      "$comment": "RESERVE for estate-ab-A, declared with it BEFORE any counted run: at most 2 slots, run in order ONLY when a counted A run is replaced under the pre-registered rule (contaminated by a genuine outside read that reached the agent, or degenerate: under 3 turns or the brief never read). A reserve run counts whatever it scores. Same caps and package as estate-ab-A.",
+      "arms": [{ "label": "A", "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/estate-A-nographs-0.18.0-ec145ab.tgz" }],
+      "tasks": { "include": ["estate-division"] },
+      "expectTaskCount": 1,
+      "runsPerTask": 2,
+      "scheduleSeed": 20261113,
+      "taskBudgets": { "estate-division": { "turns": 115, "wallMinutes": 25, "outputTokens": 130000 } },
+      "limits": { "maxContaminatedReschedules": 0 },
+      "gate": { "label": "none (reserve slots of a two-campaign A/B)", "baselineArms": ["A"] }
+    },
+    "estate-ab-B-reserve": {
+      "$comment": "RESERVE for estate-ab-B, declared with it BEFORE any counted run, under the same rule as estate-ab-A-reserve. Same caps and package as estate-ab-B.",
+      "arms": [{ "label": "B", "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/estate-B-nographs-0.18.0-9f0cdb5.tgz" }],
+      "tasks": { "include": ["estate-division"] },
+      "expectTaskCount": 1,
+      "runsPerTask": 2,
+      "scheduleSeed": 20261114,
+      "taskBudgets": { "estate-division": { "turns": 115, "wallMinutes": 25, "outputTokens": 130000 } },
+      "limits": { "maxContaminatedReschedules": 0 },
+      "gate": { "label": "none (reserve slots of a two-campaign A/B)", "baselineArms": ["B"] }
+    },
     "fixture": {
       "$comment": "Exercises the runner end to end with the harness fixture task. Use with --agent evals/harness/fixtures/stub-agent.mjs --scorer evals/harness/fixtures/stub-score.mjs to spend no allowance.",
       "arms": [
