@@ -517,6 +517,28 @@ finding was that agents read the shipped `graphs/` corpus in 83–89% of runs in
 EVERY arm, the docs-stripped one included**, so the prose was never what the
 docs-blind arm lost.
 
+**The graphs set rewrites the prose it keeps** (`evals/harness/refs.mjs`).
+Removing the corpus used to leave every `**Examples:**` link in
+`docs/nodes.md` and `docs/primitives.md`, and the corpus paths cited in the
+README, `docs/authoring.md`, `llms.txt`, `docs/llms-full.txt` and the skills,
+pointing at files the package no longer held; three sessions in the last
+campaign ran `find /` hunting for them. Now, in the PACKED COPY only (the
+source tree is never touched), each reference to a stripped graph, the
+`graphs/` directory or the corpus index becomes plain text that says what it
+was and that it is not included in this package, and the sentence stays:
+`[basics-colonnade.json](../graphs/basics-colonnade.json)` becomes
+`basics-colonnade (corpus example, not included in this package)`, a run of
+them on one `Examples:` line shares one plural note, and `package.json` drops
+the stripped entries from `files`. JSON is rewritten through its parsed
+strings. Web URLs (the hosted editor, GitHub tree links) resolve outside the
+package and are left alone; `dist/` and `bin/` are code and are not
+rewritten. After packing, every file outside `dist/` and `bin/` is scanned,
+and any reference left fails the pack with a `DanglingReferenceError` naming
+each file, line and path; the tarball is deleted. The manifest records
+`rewritten` (file, changed lines, references per file) and `danglingCheck`.
+`--no-rewrite` skips the rewrite, so the scan fails: it exists to show the
+check bites, and `pack.test.mjs` asserts both halves.
+
 **How the CLI degrades without the corpus** (measured 2026-09-18 against
 `stripped-all-0.17.0-9284b1f`, recorded per tarball in the manifest's
 `degradation`, which probes `pcg graphs`, `pcg nodes <type>` and `pcg agents`):
@@ -532,6 +554,15 @@ docs-blind arm lost.
 - `pcg --help`, `pcg nodes --json`, `validate`, `cook`, `inspect` and `render`
   are unaffected. Nothing an agent needs to AUTHOR a graph was removed — only
   what it could read to learn how.
+- Both corpus notes still NAME the missing file: `pcg graphs` prints
+  `graphs: node_modules/pcg-ts/docs/graphs.json could not be read (ENOENT …)`
+  and `pcg nodes <type>` prints `examples: unavailable — <same>` (re-measured
+  2026-10-23 on a stripped pack of the current tree; recorded per probe as
+  `degradation[].namesCorpusPath`). Unlike the prose, the packer does not
+  rewrite this: the wording lives in `src/cli/corpus.ts` (`readCorpusIndex`),
+  and saying "the example corpus is not included in this package" there is a
+  library change, not an eval one. The `**Examples:**` lines still end in
+  `` (`pcg graphs --node <type>`) ``, which answers with that note.
 
 ## Calibration
 

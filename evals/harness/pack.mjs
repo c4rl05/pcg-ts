@@ -33,6 +33,16 @@
  * the command fails; `pcg graphs` and `pcg nodes <type>` are probed too and
  * their behaviour recorded in the manifest's `degradation` (they degrade to a
  * note rather than an error — see readCorpusIndex in src/cli/corpus.ts).
+ *
+ * The `graphs` set also REWRITES the packed copy of every prose file it
+ * keeps (see refs.mjs): each link or path naming a stripped graph, the
+ * corpus directory or its index becomes plain text saying the corpus
+ * example is not included in this package, and the sentence around it
+ * stays. The result is then scanned, and a reference left behind fails the
+ * pack with a DanglingReferenceError. The manifest records every rewritten
+ * file with its changed-line and reference counts in `rewritten`.
+ * `--no-rewrite` skips the rewrite and so makes the scan fail: it exists to
+ * show the check can.
  */
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -40,6 +50,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync, gzipSync } from "node:zlib";
+import { DanglingReferenceError, findStrippedRefsInFile, isProsePath, rewriteFile, strippedGraphNames } from "./refs.mjs";
 import { REPO_ROOT, createSandbox, readJson, runNpm, sha256, sha256File, writeJson } from "./sandbox.mjs";
 
 /**
@@ -171,20 +182,63 @@ export function matchesStripRule(relPath, rules = STRIP_RULES) {
   return rules.some((r) => (r.kind === "file" ? relPath === r.path : relPath === r.path.slice(0, -1) || relPath.startsWith(r.path)));
 }
 
-/** Filter a .tgz buffer, returning the new .tgz buffer and the removed paths. */
-export function stripTgz(tgz, rules = STRIP_RULES) {
+/**
+ * One record with its file body replaced: the metadata headers before it are
+ * kept byte for byte, the entry header gets the new size and checksum, and
+ * the body is padded to the block. A pax `size` record would override the
+ * header's size field, so a record carrying one is refused rather than
+ * written wrong (npm pack writes none).
+ */
+function replaceRecordBody(tar, rec, body) {
+  const headerOff = rec.end - Math.ceil(rec.size / BLOCK) * BLOCK - BLOCK;
+  const meta = tar.subarray(rec.start, headerOff);
+  if (/(^|\n)\d+ size=/.test(meta.toString("latin1"))) throw new Error(`tar: ${rec.path} carries a pax size record; rewriting it is not supported`);
+  const header = Buffer.from(tar.subarray(headerOff, headerOff + BLOCK));
+  const octal = body.length.toString(8);
+  if (octal.length > 11) throw new Error(`tar: ${rec.path} is too large for a ustar size field after rewriting`);
+  // Keep the original field's terminator style (npm writes 10 digits, space, NUL).
+  const sizeField = octal.length <= 10 && header[134] === 0x20 ? `${octal.padStart(10, "0")} \0` : `${octal.padStart(11, "0")}\0`;
+  header.write(sizeField, 124, 12, "latin1");
+  const tail = Buffer.from(header.subarray(154, 156));
+  header.fill(0x20, 148, 156);
+  let sum = 0;
+  for (const b of header) sum += b;
+  header.write(sum.toString(8).padStart(6, "0"), 148, 6, "latin1");
+  tail.copy(header, 154);
+  const pad = Buffer.alloc((BLOCK - (body.length % BLOCK)) % BLOCK);
+  return Buffer.concat([meta, header, body, pad]);
+}
+
+/**
+ * Filter a .tgz buffer, returning the new .tgz buffer and the removed paths.
+ * With `rewrite(relPath, bytes, removed)` — called for each kept regular file
+ * once every removal is known — a returned Buffer replaces that file's body;
+ * null keeps the original bytes.
+ */
+export function stripTgz(tgz, rules = STRIP_RULES, { rewrite } = {}) {
   const tar = gunzipSync(tgz);
   const records = tarRecords(tar);
   const kept = [];
   const removed = [];
+  const keptRecs = [];
   for (const rec of records) {
     if (rec.path !== null && matchesStripRule(packageRelative(rec.path), rules)) removed.push(packageRelative(rec.path));
-    else kept.push(tar.subarray(rec.start, rec.end));
+    else keptRecs.push(rec);
+  }
+  for (const rec of keptRecs) {
+    const isFile = rec.path !== null && rec.type === "0";
+    const next = isFile && rewrite ? rewrite(packageRelative(rec.path), dataOf(tar, rec), removed) : null;
+    kept.push(next ? replaceRecordBody(tar, rec, next) : tar.subarray(rec.start, rec.end));
   }
   let body = Buffer.concat([...kept, Buffer.alloc(BLOCK * 2)]);
   const RECORD = BLOCK * 20;
   if (body.length % RECORD) body = Buffer.concat([body, Buffer.alloc(RECORD - (body.length % RECORD))]);
   return { tgz: gzipSync(body, { level: 9 }), removed };
+}
+
+function dataOf(tar, rec) {
+  const dataStart = rec.end - Math.ceil(rec.size / BLOCK) * BLOCK;
+  return tar.subarray(dataStart, dataStart + rec.size);
 }
 
 /** List package-relative entry paths of a .tgz. */
@@ -199,8 +253,39 @@ export function readTgzFile(tgzPath, relPath) {
   const tar = gunzipSync(readFileSync(tgzPath));
   const rec = tarRecords(tar).find((r) => r.path && packageRelative(r.path) === relPath);
   if (!rec) return null;
-  const dataStart = rec.end - Math.ceil(rec.size / BLOCK) * BLOCK;
-  return tar.subarray(dataStart, dataStart + rec.size);
+  return dataOf(tar, rec);
+}
+
+/**
+ * The rewrite the `graphs` set applies to a kept prose file (refs.mjs), as a
+ * `stripTgz` callback. `log` collects `{ file, lines, references }` per
+ * rewritten file for the manifest.
+ */
+export function corpusRefRewriter(rules, log = []) {
+  const isStripped = (p) => matchesStripRule(p, rules) || matchesStripRule(`${p}/`, rules);
+  return (relPath, bytes, removed) => {
+    if (!isProsePath(relPath)) return null;
+    const r = rewriteFile(relPath, bytes, { names: strippedGraphNames(removed), isStripped });
+    if (!r.bytes) return null;
+    log.push({ file: relPath, lines: r.lines, references: r.count });
+    return r.bytes;
+  };
+}
+
+/**
+ * Every reference to a stripped corpus path left in a packed tarball's prose,
+ * as `{ file, line, match }`. `names` are the stripped graphs' file stems.
+ */
+export function findDanglingRefs(tgzPath, names) {
+  const tar = gunzipSync(readFileSync(tgzPath));
+  const hits = [];
+  for (const rec of tarRecords(tar)) {
+    if (rec.path === null || rec.type !== "0") continue;
+    const rel = packageRelative(rec.path);
+    if (!isProsePath(rel)) continue;
+    for (const h of findStrippedRefsInFile(rel, dataOf(tar, rec), names)) hits.push({ file: rel, ...h });
+  }
+  return hits;
 }
 
 function manifestPathFor(tgzPath) {
@@ -261,6 +346,10 @@ export function verifyTarball(tgzPath) {
         exitCode: r.status,
         crashed: /^\s*(Error|TypeError|ReferenceError)\b|\bat .*\.mjs:\d+/m.test(text),
         firstLine: text.split(/\r?\n/).find((l) => l.trim()) ?? "",
+        // Whether what the command printed still points at a corpus path
+        // (a stripped arm's CLI note names the missing docs/graphs.json).
+        // Matched loosely: the note carries an absolute path, `\` on Windows.
+        namesCorpusPath: /graphs\.(json|md)\b|\bgraphs[\\/]/.test(text),
       };
     });
     return {
@@ -279,7 +368,7 @@ export function verifyTarball(tgzPath) {
  * Derive a sensitivity arm by removing one or more STRIP_SETS from a tarball.
  * `sets` defaults to `["docs"]`, which is what `stripDocs` was.
  */
-export function stripTarball({ tarball, sets = ["docs"], outDir, label, verify = true }) {
+export function stripTarball({ tarball, sets = ["docs"], outDir, label, verify = true, rewrite = true }) {
   const chosen = [...new Set(sets)];
   if (!chosen.length) throw new Error(`--strip-*: name at least one strip set (${Object.keys(STRIP_SETS).join(", ")})`);
   const rules = stripRulesFor(chosen);
@@ -293,7 +382,12 @@ export function stripTarball({ tarball, sets = ["docs"], outDir, label, verify =
   const version = srcManifest?.version ?? pkgJson.version;
   const gitSha = srcManifest?.gitSha ?? null;
   const sha7 = gitSha ? gitSha.slice(0, 7) : sha256File(src).slice(0, 7);
-  const { tgz, removed } = stripTgz(readFileSync(src), rules);
+  // The graphs set rewrites what still names the corpus; `rewrite: false`
+  // (`--no-rewrite`) skips it so the dangling-reference check below can be
+  // seen to fail.
+  const rewritten = [];
+  const rewriteCorpus = chosen.includes("graphs") && rewrite;
+  const { tgz, removed } = stripTgz(readFileSync(src), rules, rewriteCorpus ? { rewrite: corpusRefRewriter(rules, rewritten) } : {});
   // Every set must have bitten. A set that matched nothing means the package
   // stopped shipping what the arm is supposed to lose, and a silently
   // identical arm is the one failure this command exists to prevent.
@@ -308,6 +402,15 @@ export function stripTarball({ tarball, sets = ["docs"], outDir, label, verify =
   writeFileSync(out, tgz);
   const leftovers = listTgz(out).filter((p) => matchesStripRule(p, rules));
   if (leftovers.length) throw new Error(`${flag}: ${out} still holds ${leftovers.join(", ")}`);
+  let danglingCheck = "not applicable (the graphs set was not stripped)";
+  if (chosen.includes("graphs")) {
+    const dangling = findDanglingRefs(out, strippedGraphNames(removed));
+    if (dangling.length) {
+      rmSync(out, { force: true });
+      throw new DanglingReferenceError(out, dangling);
+    }
+    danglingCheck = `0 references to stripped corpus paths in ${listTgz(out).filter(isProsePath).length} prose files (everything outside dist/ and bin/)`;
+  }
   let verification = null;
   if (verify) {
     verification = verifyTarball(out);
@@ -329,13 +432,15 @@ export function stripTarball({ tarball, sets = ["docs"], outDir, label, verify =
     strippedPaths: rules.map((r) => r.path),
     derivedFrom: { file: basename(src), sha256: sha256File(src) },
     removed,
+    rewritten: rewriteCorpus ? rewritten : "skipped",
+    danglingCheck,
     verification: verification?.detail ?? "skipped",
     degradation: verification?.degradation ?? "skipped",
     // Measured on 2026-09-18 against stripped-all-0.17.0-9284b1f, not assumed;
     // `degradation` above is the evidence for whichever arm this is.
     note:
       (chosen.includes("graphs")
-        ? "This arm ships no graph corpus. `pcg nodes <type>` still answers (exit 0) and simply drops its example list, because readCorpusIndex in src/cli/corpus.ts never throws — a missing docs/graphs.json comes back as available:false. `pcg graphs`, whose whole answer IS the corpus, exits 1 with a named cause and no stack trace. "
+        ? "This arm ships no graph corpus. Every prose file that named a corpus graph, the corpus directory or its index was rewritten in the packed copy to say the example is not included in this package (`rewritten`), and a scan found none left (`danglingCheck`). `pcg nodes <type>` still answers (exit 0) and simply drops its example list, because readCorpusIndex in src/cli/corpus.ts never throws — a missing docs/graphs.json comes back as available:false. `pcg graphs`, whose whole answer IS the corpus, exits 1 with a named cause and no stack trace. Both CLI notes name the missing docs/graphs.json with its ENOENT (`degradation[].namesCorpusPath`); that wording lives in src/cli/corpus.ts, not in the packer. "
         : "") +
       (chosen.includes("docs")
         ? "This arm ships no llms.txt, docs/ or skills/. `pcg agents`, which reads the shipped skill, exits 1 with a named cause and no stack trace. "
@@ -402,7 +507,10 @@ export function packFromRepo({ repoRoot = REPO_ROOT, label = "candidate", role, 
 const USAGE = [
   "usage: node evals/harness/pack.mjs --from-repo [--label L] [--role R] [--out DIR] [--no-build]",
   "       node evals/harness/pack.mjs --strip-docs [<tgz>] [--strip-graphs] [--from <tgz>] [--label L] [--out DIR] [--no-verify]",
-  "       node evals/harness/pack.mjs --strip-graphs <tgz> [--label L] [--out DIR] [--no-verify]",
+  "       node evals/harness/pack.mjs --strip-graphs <tgz> [--label L] [--out DIR] [--no-verify] [--no-rewrite]",
+  "",
+  "--strip-graphs rewrites the packed prose that names the corpus and fails if a reference is left;",
+  "--no-rewrite skips the rewrite, so the pack fails with DanglingReferenceError (proof the check bites).",
   "       node evals/harness/pack.mjs --verify <tgz>",
   "",
   `strip sets: ${Object.entries(STRIP_SETS)
@@ -456,7 +564,14 @@ function main(argv) {
     }
     const strip = parseStripArgs(argv);
     if (strip) {
-      const r = stripTarball({ tarball: strip.tarball, sets: strip.sets, outDir: get("--out"), label: get("--label"), verify: !argv.includes("--no-verify") });
+      const r = stripTarball({
+        tarball: strip.tarball,
+        sets: strip.sets,
+        outDir: get("--out"),
+        label: get("--label"),
+        verify: !argv.includes("--no-verify"),
+        rewrite: !argv.includes("--no-rewrite"),
+      });
       console.log(JSON.stringify(r, null, 2));
       return 0;
     }
