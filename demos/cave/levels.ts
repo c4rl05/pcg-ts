@@ -10,8 +10,9 @@
  * triangles where that value crosses a threshold — and the cell's whole
  * output is one geometry item.
  *
- * IT IS ALSO THE FIRST `cellMode: "xyz"` LEVEL IN THE REPO. Every other
- * one partitions the XZ plane and leaves Y unbounded, which is right for
+ * IT WAS ALSO THE FIRST `cellMode: "xyz"` LEVEL IN THE REPO (eiffel's
+ * detail bands are the other one now). A plain level partitions the XZ
+ * plane and leaves Y unbounded, which is right for
  * ground cover and wrong for a volume: a cave has as much above and below
  * as it has around, so the cells are cubes and a coordinate is
  * `[cx, cy, cz]`. `xzCell` cannot narrow one of those — its `min` and

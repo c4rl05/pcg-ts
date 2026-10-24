@@ -1141,13 +1141,14 @@ infinite deterministic spiral galaxy with click-to-visit star systems
 world drawing from device-resident instance transforms
 ([live](https://c4rl05.github.io/pcg-ts/demos/gpu-world/)), and roadside
 art placed along a spline the page was handed rather than made
-([live](https://c4rl05.github.io/pcg-ts/demos/racetrack/)), to six legibility
+([live](https://c4rl05.github.io/pcg-ts/demos/racetrack/)), its legibility
 rules run as a bounded fixed point,
 because a single pass through them cannot satisfy them all. Beside it,
 [`demos/road`](https://c4rl05.github.io/pcg-ts/demos/road/)
-is the same page with no placement rules in it at all: the two have
-identical module names on purpose, so `diff demos/racetrack demos/road`
-reads as exactly what the rules added.
+takes a spline the same way and places no rules at all: one evenly
+spaced row per side. The two share a spline module and a naming scheme
+but have diverged in both directions, so a diff between them is not a
+list of what the rules add.
 [`editor/`](#the-editor) beside them is a tool rather than a demo, and
 has its own chapter above.
 
