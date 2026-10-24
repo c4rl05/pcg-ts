@@ -254,15 +254,45 @@ describe("shellSplit: layout", () => {
 });
 
 describe("shellSplit: frames", () => {
-  it("writes along, up and out axis codes and the outward normal per face", async () => {
+  it("writes along, up and out axis codes, the along and up signs, and the outward normal per face", async () => {
     const out = await shell(worked(), { thickness: WORKED_T, interiorLabel: "room" });
     //                 floor south north west east ceiling interior
     expect(col(out, "alongAxis")).toEqual([0, 0, 0, 2, 2, 0, 0]);
+    expect(col(out, "alongSign")).toEqual([1, -1, 1, 1, -1, 1, 1]);
     expect(col(out, "upAxis")).toEqual([2, 1, 1, 1, 1, 2, 1]);
+    expect(col(out, "upSign")).toEqual([1, 1, 1, 1, 1, -1, 1]);
     expect(col(out, "outAxis")).toEqual([1, 2, 2, 0, 0, 1, 2]);
     expect(col(out, "outward")).toEqual([
       0, -1, 0, 0, 0, -1, 0, 0, 1, -1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0,
     ]);
+  });
+
+  it("is RIGHT-HANDED on every face: signed along x signed up = outward", async () => {
+    const out = await shell(worked(), { thickness: WORKED_T, interiorLabel: "room" });
+    const unit = (axis: number, sign: number) => [0, 1, 2].map((k) => (k === axis ? sign : 0));
+    const cross = (a: number[], b: number[]) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    const [ax, as, ux, us, ox, n] = ["alongAxis", "alongSign", "upAxis", "upSign", "outAxis", "outward"].map((c) => col(out, c));
+    for (let i = 0; i < out.pointCount; i++) {
+      const c = cross(unit(ax[i], as[i]), unit(ux[i], us[i]));
+      // The interior's outward is zero; its frame is still right-handed, out +z.
+      const expected = i === 6 ? unit(ox[i], 1) : n.slice(i * 3, i * 3 + 3);
+      expect(c.map((v) => v + 0)).toEqual(expected);
+    }
+  });
+
+  it("on every wall, along runs LEFT TO RIGHT as seen from outside, and up is +y", async () => {
+    const out = await shell(worked(), { faces: ["south", "north", "west", "east"], labels: ["s", "n", "w", "e"], thickness: [1] });
+    const [ax, as, ux, us] = ["alongAxis", "alongSign", "upAxis", "upSign"].map((c) => col(out, c));
+    const n = col(out, "outward");
+    for (let i = 0; i < 4; i++) {
+      // A viewer outside faces -outward with +y up; their right is
+      // forward x up.
+      const fwd = n.slice(i * 3, i * 3 + 3).map((v) => -v);
+      const right = [fwd[1] * 0 - fwd[2] * 1, fwd[2] * 0 - fwd[0] * 0, fwd[0] * 1 - fwd[1] * 0];
+      const along = [0, 1, 2].map((k) => (k === ax[i] ? as[i] : 0));
+      expect(along).toEqual(right.map((v) => v + 0));
+      expect([ux[i], us[i]]).toEqual([1, 1]);
+    }
   });
 
   it("the outward normal points from the box's centre through the face", async () => {
@@ -287,9 +317,11 @@ describe("shellSplit: frames", () => {
     });
   });
 
-  it("is what splitBox perCell reads: one split cuts every wall into bays along its own run", async () => {
+  it("is what splitBox perCell reads: one split cuts every wall into bays from its LEFT end", async () => {
     // 8 x 6 x 6, walls 1 thick: south and north run 8 along x, west and
-    // east run 4 along z between them. Bays of 2.
+    // east run 4 along z between them. Bays of 2, slot 0 at the left as
+    // seen from outside: max x on the south wall, min x north, min z west,
+    // max z east.
     const walls = await shell(cells([[[0, 0, 0], [8, 6, 6]]]), {
       faces: ["south", "north", "west", "east"],
       labels: ["wall", "wall", "wall", "wall"],
@@ -302,6 +334,7 @@ describe("shellSplit: frames", () => {
           {
             axis: "perCell",
             axisIndex: f('attribute("alongAxis")'),
+            direction: f('attribute("alongSign")'),
             labels: ["bay"],
             sizes: [2],
             units: ["repeat"],
@@ -311,13 +344,14 @@ describe("shellSplit: frames", () => {
       ).out,
     );
     expect(col(bays, "face")).toEqual([1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 4, 4]);
+    expect(col(bays, "pieceIndex")).toEqual([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 0, 1]);
     const along = col(bays, "alongAxis");
     const spans = boxes(bays).map(([a, b], i) => [a[along[i]], b[along[i]]]);
     expect(spans).toEqual([
-      [0, 2], [2, 4], [4, 6], [6, 8],
+      [6, 8], [4, 6], [2, 4], [0, 2],
       [0, 2], [2, 4], [4, 6], [6, 8],
       [1, 3], [3, 5],
-      [1, 3], [3, 5],
+      [3, 5], [1, 3],
     ]);
     // ...and the wall's length along its run is one expression for all four.
     const len = firstGeo(
@@ -332,6 +366,207 @@ describe("shellSplit: frames", () => {
     expect(col(len, "len")).toEqual([8, 8, 4, 4]);
   });
 
+  it("one rule places an ASYMMETRIC facade correctly on all four walls, checked from outside", async () => {
+    // The reviewer's reproduction: two cells (one off the origin), a shell,
+    // bays from the left of every wall, then ONE applyRules rule for "bay"
+    // that makes bay 0 a door and every other bay a window, flush with the
+    // outer face. Seen by a viewer standing outside each wall, the door
+    // must be the LEFTMOST opening, and each opening's position from the
+    // left must be (pieceIndex + 0.5) / bayCount — no per-wall fix-up.
+    const T = 0.4;
+    const D = 0.1;
+    const lo = `let({ o: attribute("outward", 3), m: abs(attribute("outward", 3)) }, box("center") + o * (box("size") * 0.5 - ${D / 2}) - ((1 - m) * box("size") * 0.25 + m * ${D / 2}))`;
+    const hi = `let({ o: attribute("outward", 3), m: abs(attribute("outward", 3)) }, box("center") + o * (box("size") * 0.5 - ${D / 2}) + ((1 - m) * box("size") * 0.25 + m * ${D / 2}))`;
+    const F = (t: string) => parseFieldText(t);
+    const graph = {
+      formatVersion: 1,
+      seed: 7,
+      nodes: [
+        { id: "pts", type: "pointLine", params: { mode: "endpoints", count: 2, start: [0, 0, 0], end: [23, 1, -17] } },
+        { id: "box", type: "setBounds", params: { boundsMin: F("position()"), boundsMax: F("position() + vec(12, 3, 8)") } },
+        { id: "shell", type: "shellSplit", params: { thickness: [T] } },
+        {
+          id: "bays",
+          type: "splitBox",
+          params: {
+            axis: "perCell",
+            axisIndex: F('attribute("alongAxis")'),
+            direction: F('attribute("alongSign")'),
+            labels: ["bay"],
+            sizes: [2],
+            units: ["repeat"],
+            where: F('attributeIs("piece", "wall")'),
+            countAttr: "bayCount",
+          },
+        },
+        {
+          id: "grammar",
+          type: "applyRules",
+          params: { maxDepth: 4 },
+          subgraph: {
+            graph: {
+              formatVersion: 1,
+              seed: 0,
+              nodes: [
+                { id: "winBox", type: "setBounds", params: { boundsMin: F(lo), boundsMax: F(hi) } },
+                {
+                  id: "kind",
+                  type: "setAttribute",
+                  params: { name: "piece", type: "string", values: ["window", "door"], value: F('attribute("pieceIndex") == 0') },
+                },
+                { id: "tLeft", type: "setAttribute", params: { name: "tLeft", type: "f32", value: F('(attribute("pieceIndex") + 0.5) / attribute("bayCount")') } },
+              ],
+              connections: [
+                { from: ["winBox", "out"], to: ["kind", "in"] },
+                { from: ["kind", "out"], to: ["tLeft", "in"] },
+              ],
+              outputs: [],
+            },
+            inputs: [{ name: "bay", node: "winBox", pin: "in" }],
+            outputs: [{ name: "bay", node: "tLeft", pin: "out" }],
+          },
+        },
+      ],
+      connections: [
+        { from: ["pts", "out"], to: ["box", "in"] },
+        { from: ["box", "out"], to: ["shell", "in"] },
+        { from: ["shell", "out"], to: ["bays", "in"] },
+        { from: ["bays", "out"], to: ["grammar", "in"] },
+      ],
+      outputs: [
+        { id: "shell", pin: "out", name: "shell" },
+        { id: "grammar", pin: "out", name: "result" },
+      ],
+    };
+    const res = await cook(deserializeGraph(JSON.parse(JSON.stringify(graph))));
+    const sh = firstGeo(res.outputs.shell);
+    const out = firstGeo(res.outputs.result);
+    // The walls, keyed by cell (its box's min corner) and face.
+    const shBoxes = boxes(sh);
+    const shFace = col(sh, "face");
+    const wallOf = (lo: number[], face: number): Box =>
+      shBoxes.find(([a, b], i) => shFace[i] === face && [0, 1, 2].every((k) => lo[k] >= a[k] - 1e-4 && lo[k] <= b[k] + 1e-4))!;
+    const labels = strings(out, "piece");
+    const faces = col(out, "face");
+    const n = col(out, "outward");
+    const tLeft = col(out, "tLeft");
+    const perWall = new Map<string, { label: string; t: number }[]>();
+    let openings = 0;
+    boxes(out).forEach(([a, b], i) => {
+      if (labels[i] !== "window" && labels[i] !== "door") return;
+      openings++;
+      const wall = wallOf(a, faces[i]);
+      const o = n.slice(i * 3, i * 3 + 3);
+      const right = [o[2], 0, -o[0]]; // (-outward) x (0, 1, 0)
+      const wc = [0, 1, 2].map((k) => (wall[0][k] + wall[1][k]) / 2);
+      const c = [0, 1, 2].map((k) => (a[k] + b[k]) / 2);
+      const lateral = [0, 1, 2].reduce((s, k) => s + (c[k] - wc[k]) * right[k], 0);
+      const half = [0, 1, 2].reduce((s, k) => s + ((wall[1][k] - wall[0][k]) / 2) * Math.abs(right[k]), 0);
+      const tViewer = (lateral + half) / (2 * half);
+      expect(Math.abs(tViewer - tLeft[i])).toBeLessThan(1e-4);
+      const key = `${wall[0].join(",")}:${faces[i]}`;
+      perWall.set(key, [...(perWall.get(key) ?? []), { label: labels[i], t: tViewer }]);
+    });
+    expect(openings).toBe(36);
+    expect(perWall.size).toBe(8);
+    for (const list of perWall.values()) {
+      const doors = list.filter((x) => x.label === "door");
+      expect(doors.length).toBe(1);
+      expect(Math.min(...list.map((x) => x.t))).toBe(doors[0].t);
+    }
+  });
+});
+
+describe("shellSplit: the documented idioms, on every wall", () => {
+  /** A 12 x 3 x 8 cell, walls 1 thick, and one setAttribute per idiom. */
+  async function walls(): Promise<Geometry> {
+    return shell(cells([[[0, 0, 0], [12, 3, 8]]]), {
+      faces: ["south", "north", "west", "east"],
+      labels: ["wall", "wall", "wall", "wall"],
+      thickness: [1],
+    });
+  }
+  async function vec3(geo: Geometry, text: string): Promise<number[][]> {
+    const out = firstGeo(
+      (await runNode(setAttribute, { name: "v", type: "f32", tupleSize: 3, value: f(text) }, { in: [makeGeometryItem(geo)] })).out,
+    );
+    const v = col(out, "v");
+    return Array.from({ length: out.pointCount }, (_, i) => v.slice(i * 3, i * 3 + 3));
+  }
+  /** Per wall: its out axis, the outward sign, and the outer face's coordinate on that axis. */
+  function outer(geo: Geometry): { oa: number; s: number; plane: number }[] {
+    const oa = col(geo, "outAxis");
+    const n = col(geo, "outward");
+    return boxes(geo).map(([a, b], i) => {
+      const s = n[i * 3 + oa[i]];
+      return { oa: oa[i], s, plane: s > 0 ? b[oa[i]] : a[oa[i]] };
+    });
+  }
+
+  it('the outer face\'s centre is box("center") + attribute("outward", 3) * box("size") * 0.5', async () => {
+    const geo = await walls();
+    const p = await vec3(geo, 'box("center") + attribute("outward", 3) * box("size") * 0.5');
+    const o = outer(geo);
+    boxes(geo).forEach(([a, b], i) => {
+      for (let k = 0; k < 3; k++) expect(p[i][k]).toBe(k === o[i].oa ? o[i].plane : (a[k] + b[k]) / 2);
+    });
+  });
+
+  it("a probe d outside the outer face adds d to that, on every wall", async () => {
+    const geo = await walls();
+    const p = await vec3(geo, 'box("center") + attribute("outward", 3) * (box("size") * 0.5 + 0.5)');
+    outer(geo).forEach(({ oa, s, plane }, i) => expect((p[i][oa] - plane) * s).toBe(0.5));
+  });
+
+  it("a piece moved out by d adds outward * d to BOTH corners: same size, outer face d further out", async () => {
+    const geo = await walls();
+    const moved = firstGeo(
+      (
+        await runNode(
+          setBounds,
+          { boundsMin: f('box("lo") + attribute("outward", 3) * 0.25'), boundsMax: f('box("hi") + attribute("outward", 3) * 0.25') },
+          { in: [makeGeometryItem(geo)] },
+        )
+      ).out,
+    );
+    const before = outer(geo);
+    const after = outer(moved);
+    boxes(moved).forEach((b, i) => {
+      expect(volume(b)).toBe(volume(boxes(geo)[i]));
+      expect((after[i].plane - before[i].plane) * before[i].s).toBe(0.25);
+    });
+  });
+
+  it("leaves from the outside in: slot 0 is the OUTER leaf on every wall", async () => {
+    const geo = await walls();
+    const leaves = firstGeo(
+      (
+        await runNode(
+          splitBox,
+          {
+            axis: "perCell",
+            axisIndex: f('attribute("outAxis")'),
+            direction: f('dot(attribute("outward", 3), vec(-1, -1, -1))'),
+            labels: ["outer", "inner"],
+            sizes: [0.25, 1],
+            units: ["absolute", "relative"],
+          },
+          { in: [makeGeometryItem(geo)] },
+        )
+      ).out,
+    );
+    expect(strings(leaves, "piece")).toEqual(["outer", "inner", "outer", "inner", "outer", "inner", "outer", "inner"]);
+    const o = outer(geo);
+    boxes(leaves).forEach(([a, b], i) => {
+      const w = o[Math.floor(i / 2)];
+      const touches = w.s > 0 ? b[w.oa] === w.plane : a[w.oa] === w.plane;
+      expect(touches).toBe(i % 2 === 0);
+      expect(b[w.oa] - a[w.oa]).toBe(i % 2 === 0 ? 0.25 : 0.75);
+    });
+  });
+});
+
+describe("shellSplit: frames (continued)", () => {
   it("box names keep their world meaning: box(\"sx\") is the x extent on every face", async () => {
     const out = await shell(worked(), { thickness: WORKED_T });
     const sx = firstGeo(
@@ -490,6 +725,21 @@ describe("shellSplit: fit", () => {
     expect(await rejection(shell(input, { faces: ["west", "east"], labels: ["w", "e"], thickness: [0.15] }))).toMatch(
       /west and east OVERLAP/,
     );
+  });
+
+  it("names the one face when its opposite is not there: a floor alone thicker than the box", async () => {
+    const msg = await rejection(shell(cells([[[0, 0, 0], [4, 2, 4]]]), { faces: ["floor"], labels: ["f"], thickness: [3] }));
+    expect(msg).toMatch(/cell 0's floor is 3 thick along y, but its box is only 2 across \(0 to 2\), so the floor alone is thicker than the box/);
+    expect(msg).not.toMatch(/ceiling/);
+  });
+
+  it("a box narrower than two f32 steps still tiles: an absent face never snaps", async () => {
+    // The reviewer's reproduction: x spans ONE f32 step at 1e5, and no face
+    // is cut along x. The interior must still cover y 1 .. 3.
+    const input = cells([[[100000, 0, 0], [100000.0078125, 4, 4]]]);
+    const out = await shell(input, { faces: ["floor", "ceiling"], labels: ["f", "c"], thickness: [1], interiorLabel: "in" });
+    expect(strings(out, "piece")).toEqual(["f", "c", "in"]);
+    expect(tilingFailures(input, out)).toEqual([]);
   });
 
   it("refuses an unknown fit", async () => {

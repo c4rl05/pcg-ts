@@ -32,7 +32,21 @@
  * copyToPoints reads them as extents in the point's own frame, so a
  * face-local box would be misread by all of them. Instead each piece gets
  * its axes as integer codes (0 = x, 1 = y, 2 = z), which is exactly what
- * splitBox's `axis: "perCell"` reads, and its outward normal as a vec3.
+ * splitBox's `axis: "perCell"` reads, a SIGN for along and up, which is
+ * what splitBox's `direction` reads, and its outward normal as a vec3.
+ *
+ * THE FRAME IS RIGHT-HANDED ON EVERY FACE: along x up = outward, with
+ * along and up signed. On a wall up is +y, so along is up x outward —
+ * left to right as seen from OUTSIDE that wall, whichever way it faces:
+ * -x on the south wall, +x north, +z west, -z east. So a split along each
+ * wall from the start of its along (axisIndex attribute("alongAxis"),
+ * direction attribute("alongSign")) puts slot 0 at the viewer's left on
+ * all four, and one rule places an asymmetric facade correctly on every
+ * wall. Floor and ceiling take along = +x on both, and up the in-plane
+ * axis that keeps the frame right-handed: +z under the floor (seen from
+ * below), -z on the ceiling (seen from above). Without the signs, the
+ * first bay landed on the viewer's right on two walls and on the left on
+ * the other two.
  *
  * SEEDS ARE repeatPoints' SEEDS. The piece of face code k (0 floor, 1
  * south, 2 north, 3 west, 4 east, 5 ceiling, 6 interior) of a cell whose
@@ -81,14 +95,17 @@ const FIT_ERROR = 0;
 const FIT_CLIP = 1;
 
 /**
- * Per face code: the along, up and out axes (0 = x, 1 = y, 2 = z) and the
- * outward normal. Along and up point along the POSITIVE world axis, so a
- * box read through them is a length and never negative; only the outward
- * normal carries a sign. The interior faces nowhere: its frame is the
- * world's (along x, up y, out z) and its outward normal is zero.
+ * Per face code: the along, up and out axes (0 = x, 1 = y, 2 = z), the
+ * signs of along and up, and the outward normal, chosen so that
+ * (ALONG_SIGN * e[ALONG]) x (UP_SIGN * e[UP]) = OUTWARD on every face —
+ * the test file checks that cross product. The interior faces nowhere: its
+ * frame is the world's (along +x, up +y, out z) and its outward normal is
+ * zero.
  */
 const ALONG = [0, 0, 0, 2, 2, 0, 0] as const;
+const ALONG_SIGN = [1, -1, 1, 1, -1, 1, 1] as const;
 const UP = [2, 1, 1, 1, 1, 2, 1] as const;
+const UP_SIGN = [1, 1, 1, 1, 1, -1, 1] as const;
 const OUT = [1, 2, 2, 0, 0, 1, 2] as const;
 const OUTWARD: readonly (readonly [number, number, number])[] = [
   [0, -1, 0],
@@ -131,7 +148,7 @@ export const shellSplit = standardNode<ShellSplitParams, ShellSplitInputs, Shell
   type: NODE,
   category: "point op",
   description:
-    "BREAKS every cell's box into its SHELL — floor, the four walls south / north / west / east, and ceiling — plus, if asked, the INTERIOR they enclose, and emits one point per piece, each piece a box with its OWN FRAME and a label: the component split of a split grammar, which turns a mass into the faces later rules decorate. A CELL IS A POINT WITH A BOX, as in splitBox: its standard `boundsMin`/`boundsMax`, read in the coordinates they hold; P, rotation and scale are not read and nothing is moved, so a ROTATED cell is split in its stored box exactly as an unrotated one, and its P, rot and scale ride onto every piece unchanged. THE FACES are named by side: \"floor\" is the min-y side and \"ceiling\" the max-y side; \"south\" is min z, \"north\" max z, \"west\" min x, \"east\" max x. `faces` lists the ones to cut, in the order they are emitted, `labels` gives each its label (several may share one — the default labels all four walls \"wall\", so one applyRules rule or one attributeIs(\"piece\", \"wall\") serves every wall, and `faceAttr` still says which), and `thickness` gives each its depth into the box. A FACE NOT LISTED TAKES NO THICKNESS, so the faces beside it reach the box's side (list no ceiling and the walls run to the top); a face listed with the label \"\" is a GAP: it takes its thickness and emits nothing. EVERY PIECE IS INSET, carved out of the box; nothing grows past it. CORNERS: the floor and ceiling span the FULL footprint; the walls stand between them; the south and north walls run the full x extent and OWN the vertical corners; the west and east walls stand between south and north. So with the interior the pieces TILE the box exactly, no gap and no overlap, every shared plane one stored number. A piece of no volume is dropped — a face of thickness 0, a west wall when south and north meet, any piece of a flat box. THE FRAME is written as attributes, never as a transform: `alongAxisAttr`, `upAxisAttr` and `outAxisAttr` receive the piece's axes as codes (0 = x, 1 = y, 2 = z) — along x, up y, out z for the south and north walls; along z, up y, out x for the west and east walls; along x, up z, out y for the floor and ceiling; the world's for the interior — and `outwardAttr` its OUTWARD unit normal ([0, 0, -1] on the south wall, [0, -1, 0] under the floor, zero for the interior). Along and up are the POSITIVE world axes, so a box read through them is a length; only `outward` has a sign. That is what lets a rule be written ONCE for every wall: a splitBox with axis \"perCell\" and axisIndex attribute(\"alongAxis\") cuts any wall into bays along its run, the wall's length is choose(attribute(\"alongAxis\"), box(\"sx\"), box(\"sy\"), box(\"sz\")), and a sill pushed out of its wall is box(\"lo\") + attribute(\"outward\") * <depth>. BOX NAMES KEEP THEIR WORLD MEANING — box(\"sx\") is the x extent on every face, not \"along\" — because the boxes stay in the coordinates every box node reads (splitBox, packBricks, filterByBounds); a face-local box with a rotated transform would make box(\"sx\") mean along and be misread by all of them. `thickness` is a LENGTH in the box's units, one per face or one for all, plain or a field resolved on the PARENT cell (box(\"sy\") * 0.1, a per-cell attribute); a negative one counts as 0. `fit` says what happens when a pair of opposite faces is thicker than the box between them (floor + ceiling past its height, south + north past its depth, west + east past its width): \"error\" refuses, naming the cell, the faces and the numbers; \"clip\" lets the min-side face keep its thickness and gives the max-side face what is left; \"scale\" shrinks both in proportion so they meet. A pair that exactly fills its span fits, and leaves no interior. `where` passes chosen cells through UNSPLIT, as in splitBox. Every POINT ATTRIBUTE IS CARRIED onto every piece, strings included, and the DETAIL attributes come through unchanged; TOPOLOGY IS DROPPED. OUTPUT ORDER is cell-major, each cell's pieces in `faces` order with the interior last. SEEDS: the piece of face code k — 0 floor, 1 south, 2 north, 3 west, 4 east, 5 ceiling, 6 interior, the code `faceAttr` writes — of a cell with seed s gets hashCombine(s, k), repeatPoints' copy-k seed, so a piece's seed depends on its FACE alone: it moves neither when `faces` is reordered nor when a sibling is dropped, and floor and walls are seed-identical to repeatPoints(count = 5) with copy k cut into face k. No node identity enters a piece's seed; the node's own seed reaches only the fields it resolves. CPU only: which pieces exist is a comparison per cell.",
+    "BREAKS every cell's box into its SHELL — floor, the four walls south / north / west / east, and ceiling — plus, if asked, the INTERIOR they enclose, and emits one point per piece, each piece a box with its OWN FRAME and a label: the component split of a split grammar, which turns a mass into the faces later rules decorate. A CELL IS A POINT WITH A BOX, as in splitBox: its standard `boundsMin`/`boundsMax`, read in the coordinates they hold; P, rotation and scale are not read and nothing is moved, so a ROTATED cell is split in its stored box exactly as an unrotated one, and its P, rot and scale ride onto every piece unchanged. THE FACES are named by side: \"floor\" is the min-y side and \"ceiling\" the max-y side; \"south\" is min z, \"north\" max z, \"west\" min x, \"east\" max x. `faces` lists the ones to cut, in the order they are emitted, `labels` gives each its label (several may share one — the default labels all four walls \"wall\", so one applyRules rule or one attributeIs(\"piece\", \"wall\") serves every wall, and `faceAttr` still says which), and `thickness` gives each its depth into the box. A FACE NOT LISTED TAKES NO THICKNESS, so the faces beside it reach the box's side (list no ceiling and the walls run to the top); a face listed with the label \"\" is a GAP: it takes its thickness and emits nothing. EVERY PIECE IS INSET, carved out of the box; nothing grows past it. CORNERS: the floor and ceiling span the FULL footprint; the walls stand between them; the south and north walls run the full x extent and OWN the vertical corners; the west and east walls stand between south and north. So with the interior the pieces TILE the box exactly, no gap and no overlap, every shared plane one stored number. A piece of no volume is dropped — a face of thickness 0, a west wall when south and north meet, any piece of a flat box. THE FRAME is written as attributes, never as a transform, and it is RIGHT-HANDED on every face (along x up = outward): `alongAxisAttr`, `upAxisAttr` and `outAxisAttr` receive the piece's axes as codes (0 = x, 1 = y, 2 = z), `alongSignAttr` and `upSignAttr` the direction along and up run (+1 or -1), and `outwardAttr` the OUTWARD unit normal. On a wall up is +y and along runs LEFT TO RIGHT AS SEEN FROM OUTSIDE it: -x on the south wall, +x north, +z west, -z east. Floor and ceiling run along +x, up +z under the floor (seen from below) and -z on the ceiling (seen from above); the outward normal is [0, -1, 0] under the floor, [0, 1, 0] on the ceiling, [0, 0, -1] south, [0, 0, 1] north, [-1, 0, 0] west, [1, 0, 0] east, zero for the interior (whose frame is +x, +y, z). That is what lets a rule be written ONCE for every wall, the same text on all four. BAYS FROM THE LEFT: splitBox with axis \"perCell\", axisIndex attribute(\"alongAxis\") and direction attribute(\"alongSign\") — slot 0 is the leftmost bay seen from outside, so \"the door in bay 0\" is on the left of every wall. STOREYS: the same on attribute(\"upAxis\") and attribute(\"upSign\"). LENGTH along: choose(attribute(\"alongAxis\"), box(\"sx\"), box(\"sy\"), box(\"sz\")). THE OUTER FACE is box(\"center\") + attribute(\"outward\", 3) * box(\"size\") * 0.5 (its centre), a probe d outside it box(\"center\") + attribute(\"outward\", 3) * (box(\"size\") * 0.5 + d). MOVING A PIECE OUT by d adds attribute(\"outward\", 3) * d to BOTH corners (box(\"lo\") and box(\"hi\")); moving one corner alone grows the box on south and west and shrinks it on north and east. LEAVES from the outside in: splitBox perCell on attribute(\"outAxis\") with direction dot(attribute(\"outward\", 3), vec(-1, -1, -1)) — slot 0 is the outer leaf on every wall. BOX NAMES KEEP THEIR WORLD MEANING — box(\"sx\") is the x extent on every face, not \"along\" — because the boxes stay in the coordinates every box node reads (splitBox, packBricks, filterByBounds); a face-local box with a rotated transform would make box(\"sx\") mean along and be misread by all of them. `thickness` is a LENGTH in the box's units, one per face or one for all, plain or a field resolved on the PARENT cell (box(\"sy\") * 0.1, a per-cell attribute); a negative one counts as 0. `fit` says what happens when a pair of opposite faces is thicker than the box between them (floor + ceiling past its height, south + north past its depth, west + east past its width): \"error\" refuses, naming the cell, the faces and the numbers; \"clip\" lets the min-side face keep its thickness and gives the max-side face what is left; \"scale\" shrinks both in proportion so they meet. A pair that exactly fills its span fits, and leaves no interior. `where` passes chosen cells through UNSPLIT, as in splitBox. Every POINT ATTRIBUTE IS CARRIED onto every piece, strings included, and the DETAIL attributes come through unchanged; TOPOLOGY IS DROPPED. OUTPUT ORDER is cell-major, each cell's pieces in `faces` order with the interior last. SEEDS: the piece of face code k — 0 floor, 1 south, 2 north, 3 west, 4 east, 5 ceiling, 6 interior, the code `faceAttr` writes — of a cell with seed s gets hashCombine(s, k), repeatPoints' copy-k seed, so a piece's seed depends on its FACE alone: it moves neither when `faces` is reordered nor when a sibling is dropped, and floor and walls are seed-identical to repeatPoints(count = 5) with copy k cut into face k. No node identity enters a piece's seed; the node's own seed reaches only the fields it resolves. CPU only: which pieces exist is a comparison per cell.",
   inputs: [{ name: "in", kind: "geometry" }],
   outputs: [{ name: "out", kind: "geometry" }],
   params: {
@@ -172,7 +189,7 @@ export const shellSplit = standardNode<ShellSplitParams, ShellSplitInputs, Shell
       default: 1,
       acceptsField: true,
       description:
-        'Which cells are SPLIT: nonzero splits the cell, 0 PASSES IT THROUGH UNSPLIT — emitted once, exactly as it arrived, its seed and box unchanged and any value it already carried in the attributes this node writes kept (a column this node creates gives it the column\'s default: "" for the label, -1 for the face and the axis codes, [0, 0, 0] for the outward normal). As a field it is resolved per cell, e.g. attributeIs("piece", "storey"). A non-finite value is refused naming the cell. A field `thickness` is still resolved on EVERY cell, passed-through ones included, so it must be finite there too.',
+        'Which cells are SPLIT: nonzero splits the cell, 0 PASSES IT THROUGH UNSPLIT — emitted once, exactly as it arrived, its seed and box unchanged and any value it already carried in the attributes this node writes kept (a column this node creates gives it the column\'s default: "" for the label, -1 for the face and the axis codes, 0 for the signs, [0, 0, 0] for the outward normal). As a field it is resolved per cell, e.g. attributeIs("piece", "storey"). A non-finite value is refused naming the cell. A field `thickness` is still resolved on EVERY cell, passed-through ones included, so it must be finite there too.',
     },
     labelAttr: {
       type: "string",
@@ -190,25 +207,37 @@ export const shellSplit = standardNode<ShellSplitParams, ShellSplitInputs, Shell
       type: "string",
       default: "alongAxis",
       description:
-        'Name of the i32 point attribute (tuple 1) receiving the axis each piece RUNS along, 0 = x, 1 = y, 2 = z: x for the south and north walls, the floor, the ceiling and the interior; z for the west and east walls. It is exactly what splitBox\'s axisIndex reads under axis "perCell", so attribute("alongAxis") there cuts every wall along its own run. A reporting slot on the same terms as `labelAttr`. Empty writes none.',
+        'Name of the i32 point attribute (tuple 1) receiving the axis each piece RUNS along, 0 = x, 1 = y, 2 = z: x for the south and north walls, the floor, the ceiling and the interior; z for the west and east walls. It is exactly what splitBox\'s axisIndex reads under axis "perCell", so attribute("alongAxis") there cuts every wall along its own run; pair it with `alongSignAttr` to cut from the left. A reporting slot on the same terms as `labelAttr`. Empty writes none.',
+    },
+    alongSignAttr: {
+      type: "string",
+      default: "alongSign",
+      description:
+        'Name of the i32 point attribute (tuple 1) receiving the SIGN along runs, +1 or -1, so that along x up = outward on every face: on a wall, along runs LEFT TO RIGHT AS SEEN FROM OUTSIDE — -1 on the south wall (along -x) and the east wall (along -z), +1 on north (+x) and west (+z); +1 on the floor, the ceiling and the interior. It is what splitBox\'s `direction` reads: axisIndex attribute("alongAxis") with direction attribute("alongSign") cuts every wall from its left end, slot 0 leftmost. A reporting slot on the same terms as `labelAttr` (0 on a passed-through cell when this node creates the column). Empty writes none.',
     },
     upAxisAttr: {
       type: "string",
       default: "upAxis",
       description:
-        'Name of the i32 point attribute (tuple 1) receiving each piece\'s second in-face axis, 0 = x, 1 = y, 2 = z: y for the walls and the interior, z for the floor and the ceiling (whose faces lie flat). With alongAxis it spans the face; a storey or course split up a wall is a splitBox perCell on attribute("upAxis"). A reporting slot on the same terms as `labelAttr`. Empty writes none.',
+        'Name of the i32 point attribute (tuple 1) receiving each piece\'s second in-face axis, 0 = x, 1 = y, 2 = z: y for the walls and the interior, z for the floor and the ceiling (whose faces lie flat). With alongAxis it spans the face; a storey or course split up a wall is a splitBox perCell on attribute("upAxis"), direction attribute("upSign"). A reporting slot on the same terms as `labelAttr`. Empty writes none.',
+    },
+    upSignAttr: {
+      type: "string",
+      default: "upSign",
+      description:
+        'Name of the i32 point attribute (tuple 1) receiving the SIGN up runs, +1 or -1: +1 on the walls (up is +y), the floor (+z, seen from below) and the interior; -1 on the ceiling (-z, seen from above), which is what keeps along x up = outward there. Read by splitBox\'s `direction` with axisIndex attribute("upAxis"). A reporting slot on the same terms as `labelAttr` (0 on a passed-through cell when this node creates the column). Empty writes none.',
     },
     outAxisAttr: {
       type: "string",
       default: "outAxis",
       description:
-        'Name of the i32 point attribute (tuple 1) receiving the axis each piece\'s THICKNESS runs along, 0 = x, 1 = y, 2 = z: z for the south and north walls, x for the west and east walls, y for the floor and the ceiling, z for the interior. A wall cut through its depth into an inner and an outer leaf is a splitBox perCell on attribute("outAxis"). A reporting slot on the same terms as `labelAttr`. Empty writes none.',
+        'Name of the i32 point attribute (tuple 1) receiving the axis each piece\'s THICKNESS runs along, 0 = x, 1 = y, 2 = z: z for the south and north walls, x for the west and east walls, y for the floor and the ceiling, z for the interior. A wall cut through its depth into leaves is a splitBox perCell on attribute("outAxis"); with direction dot(attribute("outward", 3), vec(-1, -1, -1)) its slot 0 is the OUTER leaf on every wall (the sign of along x up, reversed, so the cut starts at the outer face). A reporting slot on the same terms as `labelAttr`. Empty writes none.',
     },
     outwardAttr: {
       type: "string",
       default: "outward",
       description:
-        'Name of the f32 point attribute (tuple 3) receiving each piece\'s OUTWARD unit normal — the side of the box it bounds, pointing out: [0, -1, 0] for the floor, [0, 1, 0] for the ceiling, [0, 0, -1] south, [0, 0, 1] north, [-1, 0, 0] west, [1, 0, 0] east, and [0, 0, 0] for the interior, which faces nowhere. It is the one signed axis, so it is what moves something OUT of its face: box("lo") + attribute("outward") * 0.5, or a probe half a unit outside the wall. A reporting slot on the same terms as `labelAttr`. Empty writes none.',
+        'Name of the f32 point attribute (tuple 3) receiving each piece\'s OUTWARD unit normal — the side of the box it bounds, pointing out: [0, -1, 0] for the floor, [0, 1, 0] for the ceiling, [0, 0, -1] south, [0, 0, 1] north, [-1, 0, 0] west, [1, 0, 0] east, and [0, 0, 0] for the interior, which faces nowhere. It is what moves something OUT of its face, the same text on every wall: the centre of the OUTER face is box("center") + attribute("outward", 3) * box("size") * 0.5, a probe half a unit outside it box("center") + attribute("outward", 3) * (box("size") * 0.5 + 0.5), and a piece moved out by d adds attribute("outward", 3) * d to BOTH its corners — moving box("lo") alone would grow the box on the south and west walls and shrink it on the north and east. A reporting slot on the same terms as `labelAttr`. Empty writes none.',
     },
   },
   execute({ inputs, params, seed, checkCancelled }) {
@@ -293,7 +322,9 @@ export const shellSplit = standardNode<ShellSplitParams, ShellSplitInputs, Shell
       ["labelAttr", params.labelAttr, "string", 1, "shellPiece"],
       ["faceAttr", params.faceAttr, "i32", 1, "shellFace"],
       ["alongAxisAttr", params.alongAxisAttr, "i32", 1, "faceAlong"],
+      ["alongSignAttr", params.alongSignAttr, "i32", 1, "faceAlongSign"],
       ["upAxisAttr", params.upAxisAttr, "i32", 1, "faceUp"],
+      ["upSignAttr", params.upSignAttr, "i32", 1, "faceUpSign"],
       ["outAxisAttr", params.outAxisAttr, "i32", 1, "faceOut"],
       ["outwardAttr", params.outwardAttr, "f32", 3, "faceOutward"],
     ] as const;
@@ -403,6 +434,14 @@ export const shellSplit = standardNode<ShellSplitParams, ShellSplitInputs, Shell
         const eps = ULP_TOL * f32Ulp(Math.max(Math.abs(c0), Math.abs(c1)));
         const tol = Math.max(FIT_EPS * Math.max(len, sum), eps);
         if (sum > len + tol) {
+          if (fit === FIT_ERROR && (tMin === 0 || tMax === 0)) {
+            // One face alone is thicker than the span: there is no pair.
+            const k = tMin === 0 ? kMax : kMin;
+            const t = tMin === 0 ? tMax : tMin;
+            throw new Error(
+              `${NODE}: cell ${i}'s ${FACES[k]} is ${t} thick along ${AXIS_NAMES[a]}, but its box is only ${len} across (${c0} to ${c1}), so the ${FACES[k]} alone is thicker than the box. Set "fit" to "clip" or "scale" (the ${FACES[k]} takes the whole span), or bound the thickness, e.g. min(<thickness>, box("s${AXIS_NAMES[a]}")).`,
+            );
+          }
           if (fit === FIT_ERROR) {
             throw new Error(
               `${NODE}: cell ${i}'s ${FACES[kMin]} and ${FACES[kMax]} OVERLAP — together ${sum} thick (${tMin} + ${tMax}) along ${AXIS_NAMES[a]}, but its box is ${len} across (${c0} to ${c1}). Set "fit" to "clip" (the ${FACES[kMin]} keeps its thickness, the ${FACES[kMax]} gets the rest) or "scale" (both shrink until they meet), or bound the thickness, e.g. min(<thickness>, box("s${AXIS_NAMES[a]}") * 0.5).`,
@@ -420,11 +459,15 @@ export const shellSplit = standardNode<ShellSplitParams, ShellSplitInputs, Shell
         // The planes, each from its own side; then made to meet when they
         // cross or come within f32 precision, so the pieces tile exactly.
         // A plane within f32 precision of the far side IS the far side, so
-        // a face that fills its span leaves no sliver for its opposite.
+        // a face that fills its span leaves no sliver for its opposite. The
+        // snap never reaches past half the span (a box narrower than two
+        // ulps is still split by what was asked), and a face of no
+        // thickness never snaps: it is not there to fill anything.
+        const snapEps = Math.min(eps, len / 2);
         let p0 = c0 + tMin;
         let p1 = c1 - tMax;
-        if (p0 > c1 - eps) p0 = c1;
-        if (p1 < p0 + eps) p1 = p0;
+        if (tMin > 0 && p0 > c1 - snapEps) p0 = c1;
+        if (p1 < p0 + snapEps) p1 = p0;
         cut[a * 2] = p0;
         cut[a * 2 + 1] = p1;
       }
@@ -530,15 +573,17 @@ export const shellSplit = standardNode<ShellSplitParams, ShellSplitInputs, Shell
     // Report columns: a same-shape column carried from the input is KEPT
     // (pass-through cells keep their values) and written only on the
     // pieces; a missing one is created with its default.
-    const [labelName, faceName, alongName, upName, outAxisName, outwardName] = slots.map((s) => s[1]);
+    const [labelName, faceName, alongName, alongSignName, upName, upSignName, outAxisName, outwardName] = slots.map((s) => s[1]);
     const labelOut = labelName !== "" ? (outSet.get(labelName) ?? outSet.add(labelName, "string", 1, "")) : undefined;
     const oLabel = labelOut !== undefined ? (labelOut.writable() as Uint32Array) : undefined;
-    const i32Col = (name: string): Int32Array | undefined =>
-      name !== "" ? ((outSet.get(name) ?? outSet.add(name, "i32", 1, -1)).writable() as Int32Array) : undefined;
-    const oFace = i32Col(faceName);
-    const oAlong = i32Col(alongName);
-    const oUp = i32Col(upName);
-    const oOutAxis = i32Col(outAxisName);
+    const i32Col = (name: string, fill: number): Int32Array | undefined =>
+      name !== "" ? ((outSet.get(name) ?? outSet.add(name, "i32", 1, fill)).writable() as Int32Array) : undefined;
+    const oFace = i32Col(faceName, -1);
+    const oAlong = i32Col(alongName, -1);
+    const oAlongSign = i32Col(alongSignName, 0);
+    const oUp = i32Col(upName, -1);
+    const oUpSign = i32Col(upSignName, 0);
+    const oOutAxis = i32Col(outAxisName, -1);
     const oOutward =
       outwardName !== "" ? ((outSet.get(outwardName) ?? outSet.add(outwardName, "f32", 3, [0, 0, 0])).writable() as Float32Array) : undefined;
     // Each label interned ONCE into the output's string table.
@@ -562,7 +607,9 @@ export const shellSplit = standardNode<ShellSplitParams, ShellSplitInputs, Shell
       if (oLabel) oLabel[w] = label;
       if (oFace) oFace[w] = k;
       if (oAlong) oAlong[w] = ALONG[k];
+      if (oAlongSign) oAlongSign[w] = ALONG_SIGN[k];
       if (oUp) oUp[w] = UP[k];
+      if (oUpSign) oUpSign[w] = UP_SIGN[k];
       if (oOutAxis) oOutAxis[w] = OUT[k];
       if (oOutward) {
         const v = OUTWARD[k];

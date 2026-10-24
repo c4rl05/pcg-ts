@@ -922,3 +922,141 @@ describe("splitBox: the corpus teaching graph", () => {
     expect(heights.size).toBeGreaterThan(1);
   });
 });
+
+describe("splitBox: direction", () => {
+  const abc = { labels: ["a", "b", "c"], sizes: [2, 3, 5], units: ["absolute", "absolute", "absolute"] };
+
+  it("a negative direction lays the list from the MAX side: first label at the max end, slot 0 there", async () => {
+    const out = await split(unitCell(0, 10), { ...abc, direction: -1 });
+    expect(spans(out)).toEqual([
+      [8, 10],
+      [5, 8],
+      [0, 5],
+    ]);
+    expect(strings(out, "piece")).toEqual(["a", "b", "c"]);
+    expect(col(out, "pieceIndex")).toEqual([0, 1, 2]);
+  });
+
+  it("keeps each slot's seed: slot k is hashCombine(s, k) from either end", async () => {
+    const fwd = await split(unitCell(0, 10), abc);
+    const rev = await split(unitCell(0, 10), { ...abc, direction: -1 });
+    expect(col(rev, "seed")).toEqual(col(fwd, "seed"));
+    expect(col(rev, "seed")).toEqual([0, 1, 2].map((k) => hashCombine(100, k)));
+  });
+
+  it("a repeat counts from the max side", async () => {
+    const out = await split(unitCell(0, 10), { labels: ["bay"], sizes: [4], units: ["repeat"], direction: -1 });
+    expect(spans(out)).toEqual([
+      [5, 10],
+      [0, 5],
+    ]);
+    expect(col(out, "pieceIndex")).toEqual([0, 1]);
+  });
+
+  it('"clip" leaves an underfill uncovered at the MIN end', async () => {
+    const out = await split(unitCell(0, 10), {
+      labels: ["a", "b"],
+      sizes: [2, 3],
+      units: ["absolute", "absolute"],
+      fit: "clip",
+      direction: -1,
+    });
+    expect(spans(out)).toEqual([
+      [8, 10],
+      [5, 8],
+    ]);
+  });
+
+  it("snaps a reversed cut on the same absolute lattice", async () => {
+    const p = { labels: ["a", "b"], sizes: [3, 1], units: ["absolute", "relative"], snap: [2, 0, 0], snapMode: "round" };
+    // Reversed: the raw cut is 10 - 3 = 7, which rounds to 8; forward it is
+    // 3, which rounds to 4.
+    expect(spans(await split(unitCell(0, 10), { ...p, direction: -1 }))).toEqual([
+      [8, 10],
+      [0, 8],
+    ]);
+    expect(spans(await split(unitCell(0, 10), p))).toEqual([
+      [0, 4],
+      [4, 10],
+    ]);
+  });
+
+  it("as a field it is read per cell, by its sign alone (0 is forward)", async () => {
+    const geo = cells([
+      [[0, 0, 0], [10, 1, 1]],
+      [[0, 0, 0], [10, 1, 1]],
+      [[0, 0, 0], [10, 1, 1]],
+    ]);
+    const d = geo.attrs.point.add("d", "f32", 1, 0);
+    d.set(0, -0.5);
+    d.set(1, 0);
+    d.set(2, 7);
+    const out = await split(geo, { ...abc, direction: fieldFromJson({ fn: "attribute", name: "d" }) });
+    expect(spans(out)).toEqual([
+      [8, 10], [5, 8], [0, 5],
+      [0, 2], [2, 5], [5, 10],
+      [0, 2], [2, 5], [5, 10],
+    ]);
+  });
+
+  it("refuses a non-finite direction, naming the param", async () => {
+    expect(await rejection(split(unitCell(0, 10), { ...abc, direction: fieldFromJson(parseFieldText("1 / 0")) }))).toMatch(/direction/);
+    expect(await rejection(split(unitCell(0, 10), { ...abc, direction: Number.NaN }))).toMatch(/direction/);
+  });
+
+  it("ABSENT, the output is byte-identical to direction 1, plain or as a field, across every layout path", async () => {
+    // The default path is the code as it was; these configurations touch
+    // every branch of it (relative, absolute, repeat, snap, clip, scale,
+    // gaps, per-cell axis, pass-through).
+    const geo = (): Geometry => {
+      const g = cells([
+        [[0, 0, 0], [10, 3, 7]],
+        [[1.2, 0.4, -3], [9.7, 5, 2]],
+        [[-1e5, 0, 0], [-1e5 + 13, 1, 1]],
+      ]);
+      g.attrs.point.add("ax", "f32", 1, 0).set(1, 2);
+      return g;
+    };
+    const configs: Record<string, unknown>[] = [
+      { labels: ["a", "b"], sizes: [1, 2], units: ["relative", "relative"] },
+      { labels: ["a", "", "c"], sizes: [1, 2, 1], units: ["absolute", "relative", "absolute"], snap: [0.4, 0.4, 0.4], snapMode: "floor" },
+      { labels: ["x", "bay"], sizes: [1, 2.5], units: ["absolute", "repeat"], repeatRound: "ceil", snap: [1, 1, 1] },
+      { labels: ["a", "b"], sizes: [4, 30], units: ["absolute", "absolute"], fit: "clip" },
+      { labels: ["a", "b"], sizes: [4, 30], units: ["absolute", "absolute"], fit: "scale" },
+      { axis: "perCell", axisIndex: fieldFromJson({ fn: "attribute", name: "ax" }), labels: ["a", "b"], sizes: [1, 1], units: ["relative", "relative"] },
+      { labels: ["a", "b"], sizes: [1, 1], units: ["relative", "relative"], where: fieldFromJson({ fn: "attribute", name: "ax" }) },
+    ];
+    for (const c of configs) {
+      const absent = snapshotGeometry(await split(geo(), c));
+      expect(snapshotGeometry(await split(geo(), { ...c, direction: 1 }))).toEqual(absent);
+      expect(snapshotGeometry(await split(geo(), { ...c, direction: fieldFromJson({ fn: "add", args: [{ fn: "attribute", name: "ax" }, 1] }) }))).toEqual(absent);
+    }
+  });
+
+  it("CONTROL: the byte comparison reports a reversed cell", async () => {
+    const absent = snapshotGeometry(await split(unitCell(0, 10), abc));
+    expect(snapshotGeometry(await split(unitCell(0, 10), { ...abc, direction: -1 }))).not.toEqual(absent);
+  });
+
+  it("a serialized graph without the param loads and cooks as before", async () => {
+    const g = new Graph(3);
+    const grid = g.add(pointGrid, { countX: 2, countY: 1, countZ: 1, spacing: [5, 5, 5] }, "grid");
+    const box = g.add(
+      setBounds,
+      { boundsMin: fieldFromJson({ fn: "position" }), boundsMax: fieldFromJson({ fn: "add", args: [{ fn: "position" }, [4, 3, 4]] }) },
+      "box",
+    );
+    const cut = g.add(splitBox, { labels: ["a", "b"], sizes: [1, 3], units: ["relative", "relative"] }, "cut");
+    g.connect(grid, "out", box, "in");
+    g.connect(box, "out", cut, "in");
+    g.output(cut, "out", "pieces");
+    const json = serializeGraph(g);
+    const node = json.nodes.find((x) => x.id === "cut")!;
+    const params = node.params as Record<string, unknown>;
+    delete params.direction;
+    const back = deserializeGraph(JSON.parse(JSON.stringify(json)));
+    const a = firstGeo((await cook(g)).outputs.pieces);
+    const b = firstGeo((await cook(back)).outputs.pieces);
+    expect(snapshotGeometry(b)).toEqual(snapshotGeometry(a));
+  });
+});

@@ -142,7 +142,7 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
   type: NODE,
   category: "point op",
   description:
-    "CUTS every cell's box along one axis into an ordered list of LABELLED PIECES and emits one point per piece — the split of a split grammar (a block into storeys, a wall into bays, a bay into jamb | opening | jamb). A CELL IS A POINT WITH A BOX: its standard `boundsMin`/`boundsMax`, cut in the coordinates they hold; P, rotation and scale are not read and nothing is moved, so every piece sits where its cell sat and only its box differs. THE PIECES are three parallel lists, one entry per SEGMENT in order from the box's MIN side: `labels` (the name each piece is given), `sizes` (a number each, or a field of that many components resolved on the parent cell) and `units` — \"absolute\" is that length; \"relative\" is a weighted share of the REST, what the absolute segments leave; \"repeat\" cuts the rest into max(1, <repeatRound>(rest / size)) EQUAL pieces of about `size` each (`repeatRound` is floor, round or ceil; floor by default), so `labels [\"bay\"], sizes [4], units [\"repeat\"]` gives a 10-long wall two bays of 5. A LABEL OF \"\" IS A GAP: it takes its space and emits nothing. A PIECE OF ZERO SIZE IS DROPPED — that is how an absent sill or lintel disappears without a branch. `snap` puts every interior cut on a lattice, `fit` says what happens when absolute sizes do not fit, and `where` passes chosen cells through UNSPLIT, which is how a nested split stays one node per level: split y into under | band | over, then split x WHERE attributeIs(\"piece\", \"band\"), and the under and over pieces ride through untouched. THIS NODE ONLY CUTS, ONE LEVEL: recursion is an applyRules around it (each label a rule, the stop a relabel to a label with no rule), staging is several of it chained, and any decision the children must agree on is made on the PARENT — a field in `sizes` is resolved once per cell, before the cut, so a random cut position drawn there is the same for both halves. Every POINT ATTRIBUTE IS CARRIED onto every piece, strings included, exactly as repeatPoints carries them, and the DETAIL attributes come through unchanged; TOPOLOGY IS DROPPED. OUTPUT ORDER is cell-major, each cell's pieces min side first. SEEDS: the piece in slot k of a cell with seed s gets hashCombine(s, k) — repeatPoints' copy-k seed — where k counts EVERY slot of the cell's expanded list, dropped and gap slots included, so a piece's seed does not move when a sibling vanishes, and splitBox is seed-identical to repeatPoints(count = slots) followed by setBounds. No node identity enters a piece's seed; the node's own seed reaches only the fields it resolves (a randomField in `sizes`). A cell can emit NOTHING (a zero-length box, or nothing but gaps), and the output is capped at 4194304 points in all, refused past that naming the cell the total ran out on. The seed identity holds PER LEVEL: a nested split seeds its inner pieces hashCombine(hashCombine(s, j), k), so it is not seed-identical to one flat repeatPoints over all the pieces. CPU only, like repeatPoints: piece counts and drops are comparisons.",
+    "CUTS every cell's box along one axis into an ordered list of LABELLED PIECES and emits one point per piece — the split of a split grammar (a block into storeys, a wall into bays, a bay into jamb | opening | jamb). A CELL IS A POINT WITH A BOX: its standard `boundsMin`/`boundsMax`, cut in the coordinates they hold; P, rotation and scale are not read and nothing is moved, so every piece sits where its cell sat and only its box differs. THE PIECES are three parallel lists, one entry per SEGMENT in order from the box's MIN side: `labels` (the name each piece is given), `sizes` (a number each, or a field of that many components resolved on the parent cell) and `units` — \"absolute\" is that length; \"relative\" is a weighted share of the REST, what the absolute segments leave; \"repeat\" cuts the rest into max(1, <repeatRound>(rest / size)) EQUAL pieces of about `size` each (`repeatRound` is floor, round or ceil; floor by default), so `labels [\"bay\"], sizes [4], units [\"repeat\"]` gives a 10-long wall two bays of 5. A LABEL OF \"\" IS A GAP: it takes its space and emits nothing. A PIECE OF ZERO SIZE IS DROPPED — that is how an absent sill or lintel disappears without a branch. `snap` puts every interior cut on a lattice, `fit` says what happens when absolute sizes do not fit, and `where` passes chosen cells through UNSPLIT, which is how a nested split stays one node per level: split y into under | band | over, then split x WHERE attributeIs(\"piece\", \"band\"), and the under and over pieces ride through untouched. THIS NODE ONLY CUTS, ONE LEVEL: recursion is an applyRules around it (each label a rule, the stop a relabel to a label with no rule), staging is several of it chained, and any decision the children must agree on is made on the PARENT — a field in `sizes` is resolved once per cell, before the cut, so a random cut position drawn there is the same for both halves. Every POINT ATTRIBUTE IS CARRIED onto every piece, strings included, exactly as repeatPoints carries them, and the DETAIL attributes come through unchanged; TOPOLOGY IS DROPPED. OUTPUT ORDER is cell-major, each cell's pieces min side first. `direction` turns a cell's list round: a NEGATIVE direction lays the segments from the MAX side instead (the first label at the max end, slot 0 there), which is how one split cuts a wall from the left as seen from outside whichever way it faces — direction attribute(\"alongSign\") on shellSplit's walls. SEEDS: the piece in slot k of a cell with seed s gets hashCombine(s, k) — repeatPoints' copy-k seed — where k counts EVERY slot of the cell's expanded list, dropped and gap slots included, so a piece's seed does not move when a sibling vanishes, and splitBox is seed-identical to repeatPoints(count = slots) followed by setBounds. No node identity enters a piece's seed; the node's own seed reaches only the fields it resolves (a randomField in `sizes`). A cell can emit NOTHING (a zero-length box, or nothing but gaps), and the output is capped at 4194304 points in all, refused past that naming the cell the total ran out on. The seed identity holds PER LEVEL: a nested split seeds its inner pieces hashCombine(hashCombine(s, j), k), so it is not seed-identical to one flat repeatPoints over all the pieces. CPU only, like repeatPoints: piece counts and drops are comparisons.",
   inputs: [{ name: "in", kind: "geometry" }],
   outputs: [{ name: "out", kind: "geometry" }],
   params: {
@@ -208,6 +208,13 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       default: "error",
       description:
         'What happens when the absolute sizes do not fit the box. OVERFLOW (absolute sizes past the box length): "error" refuses the cook, naming the cell, the segment where the running total passed the box, and the numbers; "clip" lays the segments from the min side and cuts the one that crosses the max end there, dropping the rest; "scale" scales every absolute size down to fill the box exactly. The relative and repeat segments get nothing either way. UNDERFILL (no relative or repeat segment to take the rest, and the absolute sizes short of the box): "error" refuses, "clip" leaves the rest of the box UNCOVERED at the max end, "scale" scales the absolute sizes up to fill it. Relative segments whose weights are ALL 0 on a cell take nothing, so that cell counts as having no flexible segment. The default is strict because a cut that silently loses area is the defect worth refusing: a relative segment of weight 1 at the end is the usual way to say "and the rest".',
+    },
+    direction: {
+      type: "f32",
+      default: 1,
+      acceptsField: true,
+      description:
+        'Which END of the box the segment list starts from. POSITIVE (the default, and 0) lays it from the MIN side, as every other param here describes. NEGATIVE lays it from the MAX side: the first label sits at the max end and is slot 0, a repeat counts from there, `fit` "clip" cuts at the MIN end and an underfill leaves the min end uncovered — the same split mirrored, with the same seeds per slot. As a field it is resolved per cell, so one node can cut every wall of a shell from its own start: shellSplit writes `alongSign` (+1 or -1) so that, seen from outside, along runs left to right on every wall, and direction attribute("alongSign") with axisIndex attribute("alongAxis") puts slot 0 at the left of each. Read only its sign; a non-finite value is refused naming the cell.',
     },
     where: {
       type: "f32",
@@ -338,6 +345,7 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
     }
     requireFinitePlainParam(params.where, NODE, "where", "Write 1 to split every cell, 0 to pass every cell through, or a field.");
     requireFinitePlainParam(params.axisIndex, NODE, "axisIndex", "An axis index is 0 (x), 1 (y) or 2 (z).");
+    requireFinitePlainParam(params.direction, NODE, "direction", "Write 1 to cut from the min side, -1 from the max side, or a field.");
 
     const labelName = params.labelAttr;
     const indexName = params.indexAttr;
@@ -435,6 +443,15 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       axisOf[i] = a;
     }
     const splits = (i: number): boolean => (whereCol === undefined ? whereAll : whereCol[i] !== 0);
+    // The direction is decided per cell as a boolean: only its sign is read.
+    let dirCol: ArrayLike<number> | undefined;
+    let revAll = false;
+    if (isField(params.direction)) {
+      dirCol = requireScalarColumn(resolveOn(src, "point", params.direction, seed, NODE, "direction"), NODE, "direction", "cell", "a cut direction").data;
+    } else {
+      revAll = (params.direction as number) < 0;
+    }
+    const reversed = (i: number): boolean => (dirCol === undefined ? revAll : dirCol[i] < 0);
     const sizeAt = (i: number, j: number): number => sizes[i * N + j];
 
     // ---- the layout of one cell, into reused scratch: slot ends and the
@@ -537,6 +554,9 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       // The RAW slot ends, as offsets accumulated from the min side. A
       // repeat's ends are start + r * rest / n, each computed from the
       // start rather than accumulated, so n pieces do not drift.
+      // A REVERSED cell lays the same offsets from its max side: the
+      // forward arithmetic is kept as it was, byte for byte.
+      const rev = reversed(i);
       let cum = 0;
       let k = 0;
       for (let j = 0; j < N; j++) {
@@ -544,7 +564,8 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
         if (u === REP) {
           const start = cum;
           for (let r = 1; r <= repN; r++) {
-            ends[k] = cLo + (r === repN ? start + rest : start + (r * rest) / repN);
+            const off = r === repN ? start + rest : start + (r * rest) / repN;
+            ends[k] = rev ? cHi - off : cLo + off;
             segOf[k++] = j;
           }
           cum = start + rest;
@@ -553,7 +574,7 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
         const s = Math.max(0, sizeAt(i, j));
         if (u === ABS) cum += clipAbs ? Math.max(0, Math.min(s, len - cum)) : s * absScale;
         else cum += relSum > 0 ? (rest * s) / relSum : 0;
-        ends[k] = cLo + cum;
+        ends[k] = rev ? cHi - cum : cLo + cum;
         segOf[k++] = j;
       }
       // Then each end made final: an end at the box's max (to f32
@@ -562,8 +583,24 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       // A piece is emitted when it is not a gap and has length as STORED.
       const step = snap[a];
       const endTol = ULP_TOL * f32Ulp(Math.max(Math.abs(cLo), Math.abs(cHi)));
-      let prev = cLo;
       let emitted = 0;
+      if (rev) {
+        // Mirrored: from the max side down, the min IS the min.
+        let prev = cHi;
+        for (let q = 0; q < k; q++) {
+          let b = ends[q];
+          if (b <= cLo + endTol) b = cLo;
+          else if (step > 0) b = snapToLattice(b, step, snapMode);
+          if (b < cLo) b = cLo;
+          if (b > prev) b = prev;
+          ends[q] = b;
+          if (isGap[segOf[q]] === 0 && Math.fround(prev) > Math.fround(b)) emitted++;
+          prev = b;
+        }
+        L.slots = k;
+        return emitted;
+      }
+      let prev = cLo;
       for (let q = 0; q < k; q++) {
         let b = ends[q];
         if (b >= cHi - endTol) b = cHi;
@@ -642,6 +679,24 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       const a = axisOf[i];
       const h1 = hashMix(hashSeed(2), sd === undefined ? 0 : sd[i]);
       const slots = L.slots;
+      if (reversed(i)) {
+        let prev = hi[i * 3 + a];
+        for (let k = 0; k < slots; k++) {
+          const b = L.ends[k];
+          const j = L.segOf[k];
+          if (isGap[j] === 0 && Math.fround(prev) > Math.fround(b)) {
+            oLo[w * 3 + a] = b;
+            oHi[w * 3 + a] = prev;
+            oSeed[w] = slotSeed(h1, k);
+            if (oLabel) oLabel[w] = labelCode[j];
+            if (oIndex) oIndex[w] = k;
+            if (oCount) oCount[w] = slots;
+            w++;
+          }
+          prev = b;
+        }
+        continue;
+      }
       let prev = lo[i * 3 + a];
       for (let k = 0; k < slots; k++) {
         const b = L.ends[k];

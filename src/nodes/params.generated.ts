@@ -5430,10 +5430,11 @@ export interface ShellSplitParams {
    * Which cells are SPLIT: nonzero splits the cell, 0 PASSES IT THROUGH UNSPLIT — emitted
    * once, exactly as it arrived, its seed and box unchanged and any value it already carried
    * in the attributes this node writes kept (a column this node creates gives it the
-   * column's default: "" for the label, -1 for the face and the axis codes, [0, 0, 0] for
-   * the outward normal). As a field it is resolved per cell, e.g. attributeIs("piece",
-   * "storey"). A non-finite value is refused naming the cell. A field `thickness` is still
-   * resolved on EVERY cell, passed-through ones included, so it must be finite there too.
+   * column's default: "" for the label, -1 for the face and the axis codes, 0 for the signs,
+   * [0, 0, 0] for the outward normal). As a field it is resolved per cell, e.g.
+   * attributeIs("piece", "storey"). A non-finite value is refused naming the cell. A field
+   * `thickness` is still resolved on EVERY cell, passed-through ones included, so it must be
+   * finite there too.
    *
    * - Accepts a field.
    *
@@ -5464,28 +5465,55 @@ export interface ShellSplitParams {
    * Name of the i32 point attribute (tuple 1) receiving the axis each piece RUNS along, 0 =
    * x, 1 = y, 2 = z: x for the south and north walls, the floor, the ceiling and the
    * interior; z for the west and east walls. It is exactly what splitBox's axisIndex reads
-   * under axis "perCell", so attribute("alongAxis") there cuts every wall along its own run.
-   * A reporting slot on the same terms as `labelAttr`. Empty writes none.
+   * under axis "perCell", so attribute("alongAxis") there cuts every wall along its own run;
+   * pair it with `alongSignAttr` to cut from the left. A reporting slot on the same terms as
+   * `labelAttr`. Empty writes none.
    *
    * @defaultValue `"alongAxis"`
    */
   alongAxisAttr: string;
   /**
+   * Name of the i32 point attribute (tuple 1) receiving the SIGN along runs, +1 or -1, so
+   * that along x up = outward on every face: on a wall, along runs LEFT TO RIGHT AS SEEN
+   * FROM OUTSIDE — -1 on the south wall (along -x) and the east wall (along -z), +1 on north
+   * (+x) and west (+z); +1 on the floor, the ceiling and the interior. It is what splitBox's
+   * `direction` reads: axisIndex attribute("alongAxis") with direction
+   * attribute("alongSign") cuts every wall from its left end, slot 0 leftmost. A reporting
+   * slot on the same terms as `labelAttr` (0 on a passed-through cell when this node creates
+   * the column). Empty writes none.
+   *
+   * @defaultValue `"alongSign"`
+   */
+  alongSignAttr: string;
+  /**
    * Name of the i32 point attribute (tuple 1) receiving each piece's second in-face axis, 0
    * = x, 1 = y, 2 = z: y for the walls and the interior, z for the floor and the ceiling
    * (whose faces lie flat). With alongAxis it spans the face; a storey or course split up a
-   * wall is a splitBox perCell on attribute("upAxis"). A reporting slot on the same terms as
-   * `labelAttr`. Empty writes none.
+   * wall is a splitBox perCell on attribute("upAxis"), direction attribute("upSign"). A
+   * reporting slot on the same terms as `labelAttr`. Empty writes none.
    *
    * @defaultValue `"upAxis"`
    */
   upAxisAttr: string;
   /**
+   * Name of the i32 point attribute (tuple 1) receiving the SIGN up runs, +1 or -1: +1 on
+   * the walls (up is +y), the floor (+z, seen from below) and the interior; -1 on the
+   * ceiling (-z, seen from above), which is what keeps along x up = outward there. Read by
+   * splitBox's `direction` with axisIndex attribute("upAxis"). A reporting slot on the same
+   * terms as `labelAttr` (0 on a passed-through cell when this node creates the column).
+   * Empty writes none.
+   *
+   * @defaultValue `"upSign"`
+   */
+  upSignAttr: string;
+  /**
    * Name of the i32 point attribute (tuple 1) receiving the axis each piece's THICKNESS runs
    * along, 0 = x, 1 = y, 2 = z: z for the south and north walls, x for the west and east
    * walls, y for the floor and the ceiling, z for the interior. A wall cut through its depth
-   * into an inner and an outer leaf is a splitBox perCell on attribute("outAxis"). A
-   * reporting slot on the same terms as `labelAttr`. Empty writes none.
+   * into leaves is a splitBox perCell on attribute("outAxis"); with direction
+   * dot(attribute("outward", 3), vec(-1, -1, -1)) its slot 0 is the OUTER leaf on every wall
+   * (the sign of along x up, reversed, so the cut starts at the outer face). A reporting
+   * slot on the same terms as `labelAttr`. Empty writes none.
    *
    * @defaultValue `"outAxis"`
    */
@@ -5494,10 +5522,13 @@ export interface ShellSplitParams {
    * Name of the f32 point attribute (tuple 3) receiving each piece's OUTWARD unit normal —
    * the side of the box it bounds, pointing out: [0, -1, 0] for the floor, [0, 1, 0] for the
    * ceiling, [0, 0, -1] south, [0, 0, 1] north, [-1, 0, 0] west, [1, 0, 0] east, and [0, 0,
-   * 0] for the interior, which faces nowhere. It is the one signed axis, so it is what moves
-   * something OUT of its face: box("lo") + attribute("outward") * 0.5, or a probe half a
-   * unit outside the wall. A reporting slot on the same terms as `labelAttr`. Empty writes
-   * none.
+   * 0] for the interior, which faces nowhere. It is what moves something OUT of its face,
+   * the same text on every wall: the centre of the OUTER face is box("center") +
+   * attribute("outward", 3) * box("size") * 0.5, a probe half a unit outside it
+   * box("center") + attribute("outward", 3) * (box("size") * 0.5 + 0.5), and a piece moved
+   * out by d adds attribute("outward", 3) * d to BOTH its corners — moving box("lo") alone
+   * would grow the box on the south and west walls and shrink it on the north and east. A
+   * reporting slot on the same terms as `labelAttr`. Empty writes none.
    *
    * @defaultValue `"outward"`
    */
@@ -5925,6 +5956,23 @@ export interface SplitBoxParams {
    * @defaultValue `"error"`
    */
   fit: "error" | "clip" | "scale";
+  /**
+   * Which END of the box the segment list starts from. POSITIVE (the default, and 0) lays it
+   * from the MIN side, as every other param here describes. NEGATIVE lays it from the MAX
+   * side: the first label sits at the max end and is slot 0, a repeat counts from there,
+   * `fit` "clip" cuts at the MIN end and an underfill leaves the min end uncovered — the
+   * same split mirrored, with the same seeds per slot. As a field it is resolved per cell,
+   * so one node can cut every wall of a shell from its own start: shellSplit writes
+   * `alongSign` (+1 or -1) so that, seen from outside, along runs left to right on every
+   * wall, and direction attribute("alongSign") with axisIndex attribute("alongAxis") puts
+   * slot 0 at the left of each. Read only its sign; a non-finite value is refused naming the
+   * cell.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  direction: FieldParam;
   /**
    * Which cells are SPLIT: nonzero splits the cell, 0 PASSES IT THROUGH UNSPLIT — emitted
    * once, exactly as it arrived, its seed and box unchanged and any label, index or count it
