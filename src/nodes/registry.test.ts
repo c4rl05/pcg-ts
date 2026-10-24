@@ -467,6 +467,7 @@ describe("category metadata", () => {
       repeatPoints: "point op",
       splitBox: "point op",
       shellSplit: "point op",
+      boxContact: "point op",
       mergePoints: "point op",
       mergePrimitives: "point op",
       orientAlongVector: "point op",

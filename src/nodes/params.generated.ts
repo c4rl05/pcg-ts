@@ -492,6 +492,125 @@ export type AttributeRemapInputs = "in";
 export type AttributeRemapOutputs = "out";
 
 /**
+ * Params of the `boxContact` node type.
+ */
+export interface BoxContactParams {
+  /**
+   * The question asked of each (query, target) pair. "overlap": the boxes CROSS — sharing
+   * only a face, an edge or a corner is NOT an overlap, so neighbouring grammar cells that
+   * tile a block do not overlap each other. "touch": the closed test — they overlap OR share
+   * a face, edge or corner; with a margin, "within that distance along each of the query's
+   * axes". "contain": the target lies wholly inside the (grown) query, boundary included.
+   * "inside": the (grown) query lies wholly inside the target, boundary included. Decided
+   * once per cook.
+   *
+   * - Enum: `"overlap"` | `"touch"` | `"contain"` | `"inside"`
+   *
+   * @defaultValue `"overlap"`
+   */
+  mode: "overlap" | "touch" | "contain" | "inside";
+  /**
+   * How far the QUERY box is GROWN on both sides along each of its own three axes before the
+   * test, in world units [x, y, z] (scale is not applied; for a "world" query the axes are
+   * the world's). 0 tests the box as it is. As a FIELD it is resolved per QUERY point — a
+   * scalar broadcasts to all three axes — so each query can reach as far as it needs: a
+   * window that must have two clear studs in front of it, but not beside it, grows along its
+   * wall's normal only. NEGATIVE shrinks the query: "inside" with a small negative margin
+   * tolerates a sliver of overhang, and "overlap" with one ignores a contact shallower than
+   * it. A query whose grown size is below zero on any axis is EMPTY and meets nothing, in
+   * every mode. Must be finite.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  margin: FieldParam;
+  /**
+   * How the QUERY points' boundsMin/boundsMax are read. "world" (the default): as world
+   * coordinates, P, rot and scale not read — the convention of setBounds, splitBox and
+   * packBricks, and so of every grammar cell. "local": in the point's own frame, placed by
+   * P, rot and scale exactly as spawnInstances places a mesh (world = P + rot * (scale *
+   * corner)); a rotated point is then tested as an ORIENTED box, exactly. Decided once per
+   * cook.
+   *
+   * - Enum: `"world"` | `"local"`
+   *
+   * @defaultValue `"world"`
+   */
+  queryFrame: "world" | "local";
+  /**
+   * How the TARGET points' boundsMin/boundsMax are read, with the same two choices as
+   * `queryFrame`, chosen independently: grammar cells ("world") can be queried against
+   * placed, rotated instances ("local"). Decided once per cook.
+   *
+   * - Enum: `"world"` | `"local"`
+   *
+   * @defaultValue `"world"`
+   */
+  targetFrame: "world" | "local";
+  /**
+   * OPT-IN: the name of a tuple-1 point attribute present on BOTH inputs; a target whose
+   * value EQUALS the query's is skipped, as if absent. This is how a bay does not count its
+   * own wall (give the wall an id before splitting it — splitBox carries every attribute
+   * onto its pieces — and give the targets the same column), and how siblings or the
+   * children of one parent ignore each other. Numbers compare by value across numeric types
+   * (i32, u32, f32, bool), and NaN never equals anything; strings compare by TEXT, so the
+   * two inputs' string tables need not agree. A string on one side and a number on the other
+   * is refused. Empty (the default) excludes nothing.
+   *
+   * @defaultValue `""`
+   */
+  excludeAttr: string;
+  /**
+   * Skip target i for query i: for ONE cloud wired to both pins, asking whether each box
+   * meets any OTHER box of its own set. Refused when the two inputs have different point
+   * counts, since they cannot then be one cloud. With two different clouds of equal size it
+   * silently pairs them by index, so leave it off there.
+   *
+   * @defaultValue `false`
+   */
+  excludeSelf: boolean;
+  /**
+   * Name of the bool point attribute (tuple 1) receiving whether the query met at least one
+   * target. A REPORTING SLOT: an existing bool tuple-1 column of that name is reset and
+   * rewritten, one of any other shape is refused rather than destroyed. Empty writes no flag
+   * (then countAttr or targetAttr must be set).
+   *
+   * @defaultValue `"contact"`
+   */
+  hitAttr: string;
+  /**
+   * OPT-IN: name of the i32 point attribute (tuple 1) receiving how many DISTINCT targets
+   * the query met (exclusions not counted). Worth writing when the question is how crowded a
+   * box is rather than whether it is clear. A reporting slot on the same terms as hitAttr.
+   * Empty (the default) writes none.
+   *
+   * @defaultValue `""`
+   */
+  countAttr: string;
+  /**
+   * OPT-IN: name of the i32 point attribute (tuple 1) receiving the INDEX, in the targets
+   * input, of the met target whose box centre is nearest the query's box centre (ties to the
+   * lowest index), or -1 when none was met. Feed it to transferByIndex as `index` to read
+   * that target's own attributes — its label, its id, its colour. A reporting slot on the
+   * same terms as hitAttr. Empty (the default) writes none.
+   *
+   * @defaultValue `""`
+   */
+  targetAttr: string;
+}
+
+/**
+ * The input pin names of the `boxContact` node type.
+ */
+export type BoxContactInputs = "in" | "targets";
+
+/**
+ * The output pin names of the `boxContact` node type.
+ */
+export type BoxContactOutputs = "out";
+
+/**
  * Params of the `brickConnectivity` node type.
  */
 export interface BrickConnectivityParams {

@@ -3848,6 +3848,109 @@
           "if": {
             "properties": {
               "type": {
+                "const": "boxContact"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "description": "Asks, for every BOX on the `in` pin (the QUERIES), whether it meets any box on the `targets` pin, and writes the answer onto the query points as attributes: `hitAttr` a bool (any target met), `countAttr` an i32 (how many distinct targets), `targetAttr` an i32 (the index of the met target whose centre is nearest the query's centre, -1 for none). Nothing else changes — same points, same order, same topology, every attribute carried — so the usual next step is a filter or a relabel on the flag. This is the CONTEXT QUERY of a split grammar (the occlusion query of the shape-grammar literature, and the box form of a point-in-volume or group-by-bounding-object test): is this window blocked by a neighbour or a chimney, does this bay cross any box of another set, is this room inside the lot. A BOX is a point's standard `boundsMin`/`boundsMax`, read in one of two FRAMES, chosen per input by `queryFrame` and `targetFrame`: \"world\" (the default) reads the two corners as WORLD coordinates and does not read P, rot or scale — the convention setBounds, splitBox and packBricks write, so grammar cells need nothing done to them; \"local\" reads them in the point's OWN frame, mapped through P, rot and scale exactly as spawnInstances places a mesh (world = P + rot * (scale * corner)), so a rotated box is tested as the ORIENTED box it is (rot is normalized first, so a non-unit quaternion places the box rigidly where spawnInstances' matrix would also scale it). THE MODE (`mode`) is the question: \"overlap\" — the two boxes CROSS: on every separating direction their extents overlap by more than zero, so boxes that only share a face, an edge or a corner do NOT overlap (two neighbouring grammar cells are not overlapping), while a zero-thickness box passing through a solid one does; \"touch\" — the same test closed, so sharing a face, edge or corner COUNTS (the party-wall neighbour); \"contain\" — the target lies wholly inside the query, boundary included; \"inside\" — the query lies wholly inside the target, boundary included. THE TESTS ARE EXACT for oriented boxes too — the separating-axis test on all fifteen axes for overlap and touch, the support extent along the outer box's three axes for contain and inside — with two stated approximations that apply only where a box is ROTATED: a cross axis of two edges within 1e-6 rad of parallel is skipped as rounding noise, which can only report contact across a gap of at most about 1e-6 of the boxes' size; and a gap or overlap within 1e-12 of the pair's scale (its largest centre coordinate plus both boxes' half-extents) is read as exact contact, so two boxes under one P and rot that share a face share it under every rotation rather than as rounding decides. Axis-aligned pairs (every \"world\" box, and \"local\" ones with no rotation) are compared exactly. THE MARGIN (`margin`, per query point) GROWS THE QUERY box by that much on BOTH sides along each of its own three axes before the test, in world units (scale is not applied to it): margin 0.5 with \"touch\" asks \"is any target within half a unit of this box, measured per axis\" — a box-shaped neighbourhood, not a rounded one. A vec3 gives each axis its own reach (grow a wall's box only across its faces, not along its run, e.g. vec(0, 0, 2) on a wall running along x — both faces grow); a scalar field broadcasts to all three. A NEGATIVE margin shrinks the query, which is how a containment test tolerates a sliver (\"inside\" with margin -0.01), and a query shrunk past nothing on any axis is EMPTY and meets nothing in every mode. EXCLUSION: `excludeAttr` names a tuple-1 attribute present on BOTH inputs, and a target whose value EQUALS the query's is skipped — the bay that must not count its own wall carries its wall's id (write one with setAttribute before the split; splitBox carries every attribute onto its pieces), and siblings or one parent are excluded the same way. Numbers compare by value whatever their numeric type (NaN never equals anything); strings compare by text, so the two inputs' string tables may differ. `excludeSelf` skips target i for query i, for one cloud wired to BOTH pins (\"does this box overlap any OTHER box of its set\"); it is refused when the two inputs have different point counts, since they cannot then be one cloud. STAGING: query against an EARLIER stage — another branch's finished output, or an applyRules `trail` (the consumed ancestors, whose boxes are the blocks and storeys a later stage needs) — never against the frontier still being rewritten. DETERMINISM: nothing is drawn, nothing is accumulated, and the nearest target is the minimum of (centre distance, target index), so the answers do not depend on the order the targets arrive in beyond that index. COST: O(queries x candidate targets), the candidates found by a uniform grid over the targets' centres with a linear tier for the largest half, pruned by a bounding-sphere bound (two boxes can meet only if their centres are within the sum of their half-diagonals) that changes the cost, never the answer. Under a partitioned cook it is exact given every target whose centre lies within the query's half-diagonal (margin included) plus the largest target's half-diagonal. ERRORS name the pin and point: a box that is not finite or is inside out (min above max), a missing bounds pair, a frame of \"local\" on points without P. CPU ONLY, and deliberately not a GPU adopter: the margin is a value that decides a contact, and a device-rounded margin one ulp off flips a touching pair — the same reason filterByExpression keeps its predicate on the CPU.",
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "countAttr": {
+                    "default": "",
+                    "description": "OPT-IN: name of the i32 point attribute (tuple 1) receiving how many DISTINCT targets the query met (exclusions not counted). Worth writing when the question is how crowded a box is rather than whether it is clear. A reporting slot on the same terms as hitAttr. Empty (the default) writes none.",
+                    "type": "string"
+                  },
+                  "excludeAttr": {
+                    "default": "",
+                    "description": "OPT-IN: the name of a tuple-1 point attribute present on BOTH inputs; a target whose value EQUALS the query's is skipped, as if absent. This is how a bay does not count its own wall (give the wall an id before splitting it — splitBox carries every attribute onto its pieces — and give the targets the same column), and how siblings or the children of one parent ignore each other. Numbers compare by value across numeric types (i32, u32, f32, bool), and NaN never equals anything; strings compare by TEXT, so the two inputs' string tables need not agree. A string on one side and a number on the other is refused. Empty (the default) excludes nothing.",
+                    "type": "string"
+                  },
+                  "excludeSelf": {
+                    "default": false,
+                    "description": "Skip target i for query i: for ONE cloud wired to both pins, asking whether each box meets any OTHER box of its own set. Refused when the two inputs have different point counts, since they cannot then be one cloud. With two different clouds of equal size it silently pairs them by index, so leave it off there.",
+                    "type": "boolean"
+                  },
+                  "hitAttr": {
+                    "default": "contact",
+                    "description": "Name of the bool point attribute (tuple 1) receiving whether the query met at least one target. A REPORTING SLOT: an existing bool tuple-1 column of that name is reset and rewritten, one of any other shape is refused rather than destroyed. Empty writes no flag (then countAttr or targetAttr must be set).",
+                    "type": "string"
+                  },
+                  "margin": {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      {
+                        "$ref": "#/$defs/fieldSpec"
+                      }
+                    ],
+                    "default": [
+                      0,
+                      0,
+                      0
+                    ],
+                    "description": "How far the QUERY box is GROWN on both sides along each of its own three axes before the test, in world units [x, y, z] (scale is not applied; for a \"world\" query the axes are the world's). 0 tests the box as it is. As a FIELD it is resolved per QUERY point — a scalar broadcasts to all three axes — so each query can reach as far as it needs: a window that must have two clear studs in front of it, but not beside it, grows along its wall's normal only. NEGATIVE shrinks the query: \"inside\" with a small negative margin tolerates a sliver of overhang, and \"overlap\" with one ignores a contact shallower than it. A query whose grown size is below zero on any axis is EMPTY and meets nothing, in every mode. Must be finite."
+                  },
+                  "mode": {
+                    "default": "overlap",
+                    "description": "The question asked of each (query, target) pair. \"overlap\": the boxes CROSS — sharing only a face, an edge or a corner is NOT an overlap, so neighbouring grammar cells that tile a block do not overlap each other. \"touch\": the closed test — they overlap OR share a face, edge or corner; with a margin, \"within that distance along each of the query's axes\". \"contain\": the target lies wholly inside the (grown) query, boundary included. \"inside\": the (grown) query lies wholly inside the target, boundary included. Decided once per cook.",
+                    "enum": [
+                      "overlap",
+                      "touch",
+                      "contain",
+                      "inside"
+                    ],
+                    "type": "string"
+                  },
+                  "queryFrame": {
+                    "default": "world",
+                    "description": "How the QUERY points' boundsMin/boundsMax are read. \"world\" (the default): as world coordinates, P, rot and scale not read — the convention of setBounds, splitBox and packBricks, and so of every grammar cell. \"local\": in the point's own frame, placed by P, rot and scale exactly as spawnInstances places a mesh (world = P + rot * (scale * corner)); a rotated point is then tested as an ORIENTED box, exactly. Decided once per cook.",
+                    "enum": [
+                      "world",
+                      "local"
+                    ],
+                    "type": "string"
+                  },
+                  "targetAttr": {
+                    "default": "",
+                    "description": "OPT-IN: name of the i32 point attribute (tuple 1) receiving the INDEX, in the targets input, of the met target whose box centre is nearest the query's box centre (ties to the lowest index), or -1 when none was met. Feed it to transferByIndex as `index` to read that target's own attributes — its label, its id, its colour. A reporting slot on the same terms as hitAttr. Empty (the default) writes none.",
+                    "type": "string"
+                  },
+                  "targetFrame": {
+                    "default": "world",
+                    "description": "How the TARGET points' boundsMin/boundsMax are read, with the same two choices as `queryFrame`, chosen independently: grammar cells (\"world\") can be queried against placed, rotated instances (\"local\"). Decided once per cook.",
+                    "enum": [
+                      "world",
+                      "local"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "ref": false,
+              "subgraph": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "brickConnectivity"
               }
             },
@@ -12211,6 +12314,7 @@
             "arcTile",
             "attributeReduce",
             "attributeRemap",
+            "boxContact",
             "brickConnectivity",
             "bridgePaths",
             "connectByIndex",

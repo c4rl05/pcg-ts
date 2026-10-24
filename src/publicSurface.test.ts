@@ -184,6 +184,9 @@ const ROOT_SURFACE = [
   // Cuts each cell's box into labelled pieces along one axis — the split
   // of a split grammar, which only CUTS: recursion is applyRulesNode's.
   "splitBox",
+  // Per-query contact against a second set of boxes: overlap, touch,
+  // contain or inside — the context query of a split grammar.
+  "boxContact",
   "simplexNoise", "sin",
   "smoothNormals", "smoothstep",
   "spawnInstances", "specChildEntries", "splineSample", "sqrt", "standardNode", "step",
