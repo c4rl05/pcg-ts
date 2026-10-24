@@ -298,9 +298,9 @@
             "kind": "geometry",
             "tags": [],
             "counts": {
-              "point": 36648,
-              "vertex": 54972,
-              "primitive": 18324,
+              "point": 33192,
+              "vertex": 49788,
+              "primitive": 16596,
               "detail": 1
             },
             "attrs": {
@@ -334,7 +334,7 @@
             "kind": "geometry",
             "tags": [],
             "counts": {
-              "point": 1527,
+              "point": 1383,
               "vertex": 0,
               "primitive": 0,
               "detail": 1
