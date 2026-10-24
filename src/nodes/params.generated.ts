@@ -5899,10 +5899,14 @@ export interface SplitBoxParams {
    */
   units: readonly string[];
   /**
-   * How a "repeat" segment's count rounds: n = max(1, <mode>(rest / module)). "floor" never
-   * makes a piece shorter than the module (as many WHOLE modules as fit, the remainder
-   * shared out), "ceil" never makes one longer, "round" is nearest with a half rounding up.
-   * A rest of 0 still gives n = 1, a piece of size 0, which is dropped.
+   * How a "repeat" segment's count rounds: n = max(1, <mode>(rest / module)). A rest within
+   * f32 precision of a whole number of modules — a millionth of the box, or two f32 steps at
+   * its coordinates, whichever is larger — counts as exactly that many, so two equal walls
+   * get the same count wherever they stand (a rest of 4 that the stored box makes 3.9999998
+   * holds two modules of 2, not one). "floor" never makes a piece shorter than the module
+   * (as many WHOLE modules as fit, the remainder shared out), "ceil" never makes one longer,
+   * "round" is nearest with a half rounding up. A rest of 0 still gives n = 1, a piece of
+   * size 0, which is dropped.
    *
    * - Enum: `"floor"` | `"round"` | `"ceil"`
    *
@@ -5960,13 +5964,17 @@ export interface SplitBoxParams {
    * Which END of the box the segment list starts from. POSITIVE (the default, and 0) lays it
    * from the MIN side, as every other param here describes. NEGATIVE lays it from the MAX
    * side: the first label sits at the max end and is slot 0, a repeat counts from there,
-   * `fit` "clip" cuts at the MIN end and an underfill leaves the min end uncovered — the
-   * same split mirrored, with the same seeds per slot. As a field it is resolved per cell,
-   * so one node can cut every wall of a shell from its own start: shellSplit writes
-   * `alongSign` (+1 or -1) so that, seen from outside, along runs left to right on every
-   * wall, and direction attribute("alongSign") with axisIndex attribute("alongAxis") puts
-   * slot 0 at the left of each. Read only its sign; a non-finite value is refused naming the
-   * cell.
+   * `fit` "clip" cuts at the MIN end and an underfill leaves the min end uncovered, with the
+   * same seeds per slot. Without `snap` that is the forward split mirrored. WITH `snap` it
+   * is not: the lattice stays the ABSOLUTE one anchored at world 0, and "floor" and "ceil"
+   * keep their world meaning (down and up the axis), so neighbouring cells cut in either
+   * direction still share one lattice — box [0, 10], absolute sizes [3, 7], snap 4: forward
+   * the first piece is [0, 4], reversed it is [8, 10] (the raw cut at 7 rounds to 8), not
+   * the mirror image [6, 10]. As a field it is resolved per cell, so one node can cut every
+   * wall of a shell from its own start: shellSplit writes `alongSign` (+1 or -1) so that,
+   * seen from outside, along runs left to right on every wall, and direction
+   * attribute("alongSign") with axisIndex attribute("alongAxis") puts slot 0 at the left of
+   * each. Read only its sign; a non-finite value is refused naming the cell.
    *
    * - Accepts a field.
    *
@@ -6001,12 +6009,12 @@ export interface SplitBoxParams {
   /**
    * Name of the i32 point attribute (tuple 1) receiving each piece's SLOT index: its
    * position in its cell's expanded segment list, a repeat counting each of its pieces, from
-   * 0 at the min side. Dropped and gap slots are COUNTED, so the numbers need not be
-   * contiguous: the opening of an under | sill | opening split is slot 2 whether or not the
-   * sill had any height. That is the index the seed is hashed with. A repeat-only split
-   * numbers its pieces 0 .. n - 1, exactly as repeatPoints numbers copies. A reporting slot
-   * on the same terms as `labelAttr` (default -1 on a column this node creates). Empty
-   * writes none.
+   * 0 at the START of the cut — the min side, or the max side where `direction` is negative.
+   * Dropped and gap slots are COUNTED, so the numbers need not be contiguous: the opening of
+   * an under | sill | opening split is slot 2 whether or not the sill had any height. That
+   * is the index the seed is hashed with. A repeat-only split numbers its pieces 0 .. n - 1,
+   * exactly as repeatPoints numbers copies. A reporting slot on the same terms as
+   * `labelAttr` (default -1 on a column this node creates). Empty writes none.
    *
    * @defaultValue `"pieceIndex"`
    */

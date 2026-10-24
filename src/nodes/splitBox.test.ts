@@ -230,7 +230,8 @@ describe("splitBox: repeat", () => {
   it("refuses a repeat past the output cap before laying it out", async () => {
     const msg = await rejection(split(unitCell(0, 1), { labels: ["bay"], sizes: [1e-7], units: ["repeat"] }));
     expect(msg).toMatch(/more than 4194304 points/);
-    expect(msg).toMatch(/segment 0 \("bay"\) repeats \d{7} times at cell 0/);
+    // 1 / f32(1e-7) is 9999999.88: within f32 slack of the 10^7 pieces meant.
+    expect(msg).toMatch(/segment 0 \("bay"\) repeats 10000000 times at cell 0/);
   });
 });
 
@@ -1058,5 +1059,62 @@ describe("splitBox: direction", () => {
     const a = firstGeo((await cook(g)).outputs.pieces);
     const b = firstGeo((await cook(back)).outputs.pieces);
     expect(snapshotGeometry(b)).toEqual(snapshotGeometry(a));
+  });
+});
+
+describe("splitBox: direction and the absolute lattice", () => {
+  it("a reversed split with snap is NOT the mirror image: the lattice stays the world's", async () => {
+    // The reviewer's case: box [0, 10], absolute sizes [3, 7], snap 4. The
+    // forward cut at 3 rounds to 4; the reversed raw cut at 10 - 3 = 7
+    // rounds to 8 on the same world lattice, not to 6 (the mirror of 4).
+    const p = { labels: ["a", "b"], sizes: [3, 7], units: ["absolute", "absolute"], snap: [4, 0, 0], snapMode: "round" };
+    expect(spans(await split(unitCell(0, 10), p))).toEqual([
+      [0, 4],
+      [4, 10],
+    ]);
+    expect(spans(await split(unitCell(0, 10), { ...p, direction: -1 }))).toEqual([
+      [8, 10],
+      [0, 8],
+    ]);
+  });
+
+  it('"floor" and "ceil" keep their world meaning when reversed', async () => {
+    // Raw reversed cut at 7: floor takes it down to 4, ceil up to 8.
+    const p = { labels: ["a", "b"], sizes: [3, 7], units: ["absolute", "absolute"], snap: [4, 0, 0], direction: -1 };
+    expect(spans(await split(unitCell(0, 10), { ...p, snapMode: "floor" }))).toEqual([
+      [4, 10],
+      [0, 4],
+    ]);
+    expect(spans(await split(unitCell(0, 10), { ...p, snapMode: "ceil" }))).toEqual([
+      [8, 10],
+      [0, 8],
+    ]);
+  });
+});
+
+describe("splitBox: the repeat count has f32 slack", () => {
+  it("two equal walls get the same count wherever they stand (the reviewer's reproduction)", async () => {
+    // Two 7.2-long walls along z: one at 0.4 .. 7.6, one at -16.6 .. -9.4.
+    // Stored in f32 the first is 7.1999999 long and the second 7.2000008,
+    // so after a 3.2 door bay the rests are 3.9999999 and 4.0000008 — and
+    // floor(rest / 2) was 1 for one and 2 for the other.
+    const geo = cells([
+      [[0, 0, 0.4], [1, 3, 7.6]],
+      [[0, 0, -16.6], [1, 3, -9.4]],
+    ]);
+    const out = await split(geo, { axis: "z", labels: ["door", "window"], sizes: [3.2, 2], units: ["absolute", "repeat"] });
+    expect(strings(out, "piece")).toEqual(["door", "window", "window", "door", "window", "window"]);
+  });
+
+  it("CONTROL: a rest really short of a whole module still rounds down", async () => {
+    // 7.19 long: the rest is 3.99, a hundredth short — far past f32 slack.
+    const out = await split(cells([[[0, 0, 0], [1, 3, 7.19]]]), { axis: "z", labels: ["door", "window"], sizes: [3.2, 2], units: ["absolute", "repeat"] });
+    expect(strings(out, "piece")).toEqual(["door", "window"]);
+  });
+
+  it("the slack is the same for ceil: a rest within f32 of 2 modules is 2, not 3", async () => {
+    const geo = cells([[[0, 0, -16.6], [1, 3, -9.4]]]);
+    const out = await split(geo, { axis: "z", labels: ["door", "window"], sizes: [3.2, 2], units: ["absolute", "repeat"], repeatRound: "ceil" });
+    expect(strings(out, "piece")).toEqual(["door", "window", "window"]);
   });
 });
