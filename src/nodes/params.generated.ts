@@ -510,21 +510,51 @@ export interface BoxContactParams {
    */
   mode: "overlap" | "touch" | "contain" | "inside";
   /**
-   * How far the QUERY box is GROWN on both sides along each of its own three axes before the
+   * How far the QUERY box is GROWN on BOTH sides along each of its own three axes before the
    * test, in world units [x, y, z] (scale is not applied; for a "world" query the axes are
    * the world's). 0 tests the box as it is. As a FIELD it is resolved per QUERY point — a
-   * scalar broadcasts to all three axes — so each query can reach as far as it needs: a
-   * window that must have two clear studs in front of it, but not beside it, grows along its
-   * wall's normal only. NEGATIVE shrinks the query: "inside" with a small negative margin
-   * tolerates a sliver of overhang, and "overlap" with one ignores a contact shallower than
-   * it. A query whose grown size is below zero on any axis is EMPTY and meets nothing, in
-   * every mode. Must be finite.
+   * scalar broadcasts to all three axes — so each query can reach as far as it needs. vec(0,
+   * 0, 2) on a wall running along x grows both its faces, the inside one too; to reach out
+   * of ONE face, use marginMin or marginMax instead. NEGATIVE shrinks the query: "inside"
+   * with a small negative margin tolerates a sliver of overhang, and "overlap" with one
+   * ignores a contact shallower than it. Adds to marginMin and marginMax. A query whose size
+   * after all three is below zero on any axis is EMPTY and meets nothing, in every mode.
+   * Must be finite.
    *
    * - Accepts a field.
    *
    * @defaultValue `[0,0,0]`
    */
   margin: FieldParam;
+  /**
+   * How far the query box's MIN-SIDE face — the one its boundsMin corner is on, along each
+   * of its own axes — moves OUT before the test, in world units [x, y, z], on top of
+   * `margin`. Signed: positive reaches out of that face only, negative pulls it in, and with
+   * marginMax it can shift the box (marginMin -d, marginMax +d moves it d along the axis) or
+   * carve a probe out of it. A wall whose outside is -z looks two units out of its front,
+   * and not into the house, with marginMin vec(0, 0, 2). As a FIELD it is resolved per QUERY
+   * point and may read the query's box names: the window probe half a stud in front of a
+   * south wall, flattened onto the outside, is marginMin vec(0, 0, 0.5) with marginMax
+   * vec(0, 0, -0.5 - box("sz")), plus whatever pulls the sides in to the opening. For a
+   * "local" query the side is the box's own, before its scale's sign. Must be finite.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  marginMin: FieldParam;
+  /**
+   * How far the query box's MAX-SIDE face — the one its boundsMax corner is on, along each
+   * of its own axes — moves OUT before the test, in world units [x, y, z], on top of
+   * `margin`. Signed, with the same readings as marginMin, mirrored: a wall whose outside is
+   * +z reaches out of its front with marginMax vec(0, 0, 2). As a FIELD it is resolved per
+   * QUERY point. Must be finite.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  marginMax: FieldParam;
   /**
    * How the QUERY points' boundsMin/boundsMax are read. "world" (the default): as world
    * coordinates, P, rot and scale not read — the convention of setBounds, splitBox and
@@ -590,10 +620,11 @@ export interface BoxContactParams {
   countAttr: string;
   /**
    * OPT-IN: name of the i32 point attribute (tuple 1) receiving the INDEX, in the targets
-   * input, of the met target whose box centre is nearest the query's box centre (ties to the
-   * lowest index), or -1 when none was met. Feed it to transferByIndex as `index` to read
-   * that target's own attributes — its label, its id, its colour. A reporting slot on the
-   * same terms as hitAttr. Empty (the default) writes none.
+   * input, of the met target whose box centre is nearest the centre of the query box AS
+   * TESTED (after its margins), ties — distances within 1e-12 relative, so a rotation's
+   * rounding cannot decide one — to the lowest index, or -1 when none was met. Feed it to
+   * transferByIndex as `index` to read that target's own attributes — its label, its id, its
+   * colour. A reporting slot on the same terms as hitAttr. Empty (the default) writes none.
    *
    * @defaultValue `""`
    */

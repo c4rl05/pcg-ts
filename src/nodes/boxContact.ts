@@ -4,16 +4,26 @@
  * sit inside any box of another set (the targets)? The answer is written
  * onto the query points as attributes, and nothing else changes.
  *
- * WHAT IT REPLACES. The brick house asked "is anything standing in front of
- * this window?" with five nodes: a probe point moved half a stud out of the
+ * WHAT IT REPLACES. The brick house asks "is anything standing in front of
+ * this window?" with four nodes: a probe point moved half a stud out of the
  * wall, a direction attribute for the fan, a `pathCoverage` ray fan with
- * near = far = 0 (rays of no length, so a fan of containment tests), an
+ * near = far = 0 (rays of no length, so a fan of containment tests), and an
  * occluder cloud whose P had to be moved to each box's centre because the
- * ray test reads boxes as P plus a size, and a chimney "shadow" box grown
- * by hand. The fan needed a ray per stud of the widest opening, and
- * `rayCount` takes no field, so it was sized for the param's MAXIMUM. All
- * of that is a box-against-boxes question, and this node asks it directly:
- * the bay's own box, grown by a margin, against the occluders' own boxes.
+ * ray test reads boxes as P plus a size. The fan needed a ray per stud of
+ * the widest opening, and `rayCount` takes no field, so it was sized for
+ * the param's MAXIMUM. Those four are one box-against-boxes question, and
+ * this node asks it directly: the bay's own box, its outward face pushed
+ * half a stud out and the rest pulled in to the opening (`marginMin` /
+ * `marginMax`, one face each), against the occluders' own boxes. Measured
+ * on the house (graph 102 -> 99 nodes): with "touch" and those two margins
+ * built from the old probe's own expression, 0 of 924 bays over 20 seeds
+ * change, and the bricks, studs and pots are identical. The bay's whole
+ * box grown symmetrically is NOT that query (it spans the storey, so a
+ * lower roof under the sill blocks it: 44 of 924 bays change). The
+ * chimney's "shadow" box stays: it is a keep-out volume on the TARGET side,
+ * reaching below the stack, which no margin on the query can express.
+ * "touch" is right for a zero-thickness probe; for a solid query box,
+ * "overlap", or a box stacked on the one below touches it.
  *
  * THE TESTS ARE EXACT, rotated boxes included: the overlap and touch modes
  * are the separating-axis test on all fifteen axes of two oriented boxes,
@@ -23,23 +33,26 @@
  * lives: near-parallel edge axes (`PARALLEL_EPS`) and the boundary band
  * that reads a contact as a contact through rounding (`BOUNDARY_REL`).
  *
- * ACCELERATION is the internal uniform grid (`src/spatial`), in the
- * two-tier shape `pathCoverage` uses: targets whose bounding sphere is no
- * larger than the median are binned by centre, the rest are scanned for
- * every query. The grid changes what an answer COSTS and never what it is
- * — the prefilter is a bounding-sphere inequality, sound by the triangle
+ * ACCELERATION is a uniform grid per size class of target (`buildLevels`),
+ * so a mix of sizes stays near linear. It is this file's own `CellIndex`
+ * rather than `src/spatial`'s `UniformGrid`: that one keys its cells by
+ * STRING, and at 160k boxes its lookups were 68% of the cook and grew
+ * faster than the count (measured: x2.5 to x3 per doubling); numeric keys
+ * in an open-addressed table with the members laid out per cell do not.
+ * The grids change what an answer COSTS and never what it is — the
+ * prefilter is a bounding-sphere inequality, sound by the triangle
  * inequality, with a slack that only ever admits more candidates.
  *
  * DETERMINISM. Nothing is drawn and nothing is accumulated in floating
  * point. A query's count is the number of distinct targets that pass, and
- * its nearest target is the minimum of (centre distance, target index),
- * so neither depends on the order the grid hands candidates over.
+ * its nearest target is the lowest index among the hits within a tie band
+ * of the least centre distance (`NEAREST_TIE_REL`), so neither depends on
+ * the order the grids hand candidates over.
  */
 import { canonicalOneOf } from "../diagnostics/canonical.js";
 import type { Attribute, Geometry } from "../data/index.js";
 import { deriveGeometry } from "../data/derive.js";
 import { makeGeometryItem } from "../graph/index.js";
-import { UniformGrid } from "../spatial/index.js";
 import type {
   BoxContactInputs,
   BoxContactOutputs,
@@ -73,7 +86,7 @@ const INSIDE = 3;
 type ModeCode = 0 | 1 | 2 | 3;
 
 /**
- * THE ONE APPROXIMATION. A cross axis `A_a x B_b` of the separating-axis
+ * THE FIRST APPROXIMATION. A cross axis `A_a x B_b` of the separating-axis
  * test has length sin(angle) between the two edges; when the edges are
  * parallel it is the zero vector and is no axis at all, so it is skipped.
  * It is skipped from 1 - cos^2 < 1e-12, i.e. edges within 1e-6 rad of
@@ -96,10 +109,258 @@ const SPHERE_SLACK = 1e-9;
  * of random rotations and missed by "touch" at about half (measured by the
  * independent verification of this node). Within this band a comparison
  * is read as EQUALITY — contact, not overlap; contained, boundary
- * included. The axis-aligned path needs none: its arithmetic on f32
- * corners is exact for every case that sits on a boundary.
+ * included. In both directions, so it is the SECOND approximation: a real
+ * gap inside the band is a touch, and a real overlap inside it is not an
+ * overlap. On an edge-edge axis both sides of the comparison are distances
+ * times that axis' length, sin of the angle between the edges, so the band
+ * is scaled by it too; unscaled it widened to band / sin, up to ~1e-6 of the
+ * pair's size near parallel. The axis-aligned path uses no band: it
+ * compares the corners' own arithmetic directly.
  */
 const BOUNDARY_REL = 1e-12;
+
+/**
+ * NEAREST-TARGET TIES. Two targets at the same true distance from a rotated
+ * query come out of the rotation ~1e-16 apart, so "ties go to the lowest
+ * index" needs a band: squared distances within 1e-12 of (the least one
+ * plus the squared largest coordinate of the query's centre) count as
+ * equal, and the lowest index among them wins.
+ */
+const NEAREST_TIE_REL = 1e-12;
+
+/** Cell coordinates past this are folded by widening the cell (cost only). */
+const CELL_COORD_LIMIT = 2 ** 29;
+
+/**
+ * A uniform grid over a fixed set of points with NUMERIC cell keys: each
+ * point's cell (floor(coordinate / cell) per axis) goes into an
+ * open-addressed hash table of the occupied cells, and the points are laid
+ * out cell by cell (counting sort), so a lookup is a few integer probes and
+ * a contiguous run. `queryUnordered` returns every point within `radius` of
+ * a position (boundary included), each once, in no particular order — the
+ * caller's answer must not depend on the order, and boxContact's does not.
+ * Built once per cook and never mutated.
+ */
+class CellIndex {
+  private readonly inv: number;
+  private readonly cell: number;
+  private readonly pos: Float64Array;
+  private readonly count: number;
+  /** Hash table: slot -> cell id + 1 (0 = empty). */
+  private readonly table: Int32Array;
+  private readonly mask: number;
+  /** Per cell id: its integer coordinates, and its run in `items`. */
+  private readonly cx: Int32Array;
+  private readonly cy: Int32Array;
+  private readonly cz: Int32Array;
+  private readonly start: Int32Array;
+  private readonly items: Int32Array;
+  private readonly cells: number;
+
+  constructor(pos: Float64Array, count: number, cell: number) {
+    let maxAbs = 0;
+    for (let k = 0; k < count * 3; k++) maxAbs = Math.max(maxAbs, Math.abs(pos[k]));
+    // Keep every cell coordinate inside Int32 by widening the cell when the
+    // spread demands it; a wider cell only costs candidates.
+    if (maxAbs / cell > CELL_COORD_LIMIT) cell = maxAbs / CELL_COORD_LIMIT;
+    this.cell = cell;
+    this.inv = 1 / cell;
+    this.pos = pos;
+    this.count = count;
+    let size = 16;
+    while (size < count * 2) size *= 2;
+    this.table = new Int32Array(size);
+    this.mask = size - 1;
+    const cx = new Int32Array(count);
+    const cy = new Int32Array(count);
+    const cz = new Int32Array(count);
+    const cellOf = new Int32Array(count);
+    let cells = 0;
+    for (let k = 0; k < count; k++) {
+      const x = Math.floor(pos[k * 3] * this.inv);
+      const y = Math.floor(pos[k * 3 + 1] * this.inv);
+      const z = Math.floor(pos[k * 3 + 2] * this.inv);
+      let slot = cellHash(x, y, z) & this.mask;
+      for (;;) {
+        const id = this.table[slot] - 1;
+        if (id < 0) {
+          cx[cells] = x;
+          cy[cells] = y;
+          cz[cells] = z;
+          this.table[slot] = ++cells;
+          cellOf[k] = cells - 1;
+          break;
+        }
+        if (cx[id] === x && cy[id] === y && cz[id] === z) {
+          cellOf[k] = id;
+          break;
+        }
+        slot = (slot + 1) & this.mask;
+      }
+    }
+    this.cells = cells;
+    this.cx = cx.slice(0, cells);
+    this.cy = cy.slice(0, cells);
+    this.cz = cz.slice(0, cells);
+    const start = new Int32Array(cells + 1);
+    for (let k = 0; k < count; k++) start[cellOf[k] + 1]++;
+    for (let c = 0; c < cells; c++) start[c + 1] += start[c];
+    const fill = start.slice(0, cells);
+    const items = new Int32Array(count);
+    for (let k = 0; k < count; k++) items[fill[cellOf[k]]++] = k;
+    this.start = start;
+    this.items = items;
+  }
+
+  /** Every point within `radius` of (x, y, z), boundary included, each once. */
+  queryUnordered(x: number, y: number, z: number, radius: number, out: number[]): number[] {
+    out.length = 0;
+    if (!(radius >= 0) || this.count === 0) return out;
+    const r2 = radius * radius;
+    const pos = this.pos;
+    // The cells the query sphere's bounding box overlaps — not a symmetric
+    // ring around the query's cell, which reads 5 cells an axis as soon as
+    // the radius passes the cell size by a hair.
+    const x0 = Math.floor((x - radius) * this.inv);
+    const x1 = Math.floor((x + radius) * this.inv);
+    const y0 = Math.floor((y - radius) * this.inv);
+    const y1 = Math.floor((y + radius) * this.inv);
+    const z0 = Math.floor((z - radius) * this.inv);
+    const z1 = Math.floor((z + radius) * this.inv);
+    const block = (x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1);
+    // A block larger than the occupied cells, or one whose coordinates leave
+    // Int32, reads every point instead: the same set, by a different route.
+    const lim = CELL_COORD_LIMIT * 2;
+    if (
+      !(block <= this.cells) ||
+      !(Math.max(Math.abs(x0), Math.abs(x1), Math.abs(y0), Math.abs(y1), Math.abs(z0), Math.abs(z1)) <= lim)
+    ) {
+      for (let k = 0; k < this.count; k++) {
+        const dx = pos[k * 3] - x;
+        const dy = pos[k * 3 + 1] - y;
+        const dz = pos[k * 3 + 2] - z;
+        if (dx * dx + dy * dy + dz * dz <= r2) out.push(k);
+      }
+      return out;
+    }
+    for (let ix = x0; ix <= x1; ix++) {
+      for (let iy = y0; iy <= y1; iy++) {
+        for (let iz = z0; iz <= z1; iz++) {
+          let slot = cellHash(ix, iy, iz) & this.mask;
+          let id = -1;
+          for (;;) {
+            const t = this.table[slot] - 1;
+            if (t < 0) break;
+            if (this.cx[t] === ix && this.cy[t] === iy && this.cz[t] === iz) {
+              id = t;
+              break;
+            }
+            slot = (slot + 1) & this.mask;
+          }
+          if (id < 0) continue;
+          for (let q = this.start[id]; q < this.start[id + 1]; q++) {
+            const k = this.items[q];
+            const dx = pos[k * 3] - x;
+            const dy = pos[k * 3 + 1] - y;
+            const dz = pos[k * 3 + 2] - z;
+            if (dx * dx + dy * dy + dz * dz <= r2) out.push(k);
+          }
+        }
+      }
+    }
+    return out;
+  }
+}
+
+/** A 32-bit mix of three integer cell coordinates. */
+function cellHash(x: number, y: number, z: number): number {
+  let h = Math.imul(x | 0, 0x8da6b343) ^ Math.imul(y | 0, 0xd8163841) ^ Math.imul(z | 0, 0xcb1ab31f);
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x2c1b3c6d);
+  h ^= h >>> 12;
+  return h >>> 0;
+}
+
+/** One level of the target index: a grid over targets of similar size. */
+interface Level {
+  /** Grid over this level's target centres. */
+  readonly grid: CellIndex;
+  /** Grid point index -> target index. */
+  readonly members: Uint32Array;
+  /** The largest bounding-sphere radius in the level. */
+  readonly radius: number;
+}
+
+/**
+ * THE TARGET INDEX: one uniform grid PER SIZE CLASS, the classes doubling
+ * in bounding-sphere radius from the smallest positive one. A query asks
+ * each level for the centres within (its own radius + the level's largest),
+ * which is sound by the triangle inequality: two boxes meet only if their
+ * centres are within the sum of their radii. Within a level the radii
+ * differ by at most 2x, so the search radius stays tight for every target
+ * in it, and a mix of sizes costs one grid per size class rather than a
+ * linear scan of everything above the median (the first version's second
+ * tier, which made two brick sizes quadratic). Each level's cell is its
+ * largest radius plus the median query radius, so a typical query reads a
+ * 3x3x3 block of cells per level. The levels change the COST of an answer,
+ * never the answer.
+ */
+function buildLevels(T: BoxTable, tRad: Float64Array, qRad: Float64Array, absSlack: number): Level[] {
+  const m = T.count;
+  if (m === 0) return [];
+  let r0 = Infinity;
+  for (let j = 0; j < m; j++) if (tRad[j] > 0 && tRad[j] < r0) r0 = tRad[j];
+  const byLevel = new Map<number, number[]>();
+  for (let j = 0; j < m; j++) {
+    const r = tRad[j];
+    const lv = r > r0 ? Math.ceil(Math.log2(r / r0)) : 0;
+    let list = byLevel.get(lv);
+    if (list === undefined) {
+      list = [];
+      byLevel.set(lv, list);
+    }
+    list.push(j);
+  }
+  const qSorted = Float64Array.from(qRad).sort();
+  const qMedian = qSorted.length > 0 ? qSorted[(qSorted.length - 1) >> 1] : 0;
+  const levels: Level[] = [];
+  const order = Array.from(byLevel.keys()).sort((a, b) => a - b);
+  for (const lv of order) {
+    const list = byLevel.get(lv)!;
+    let radius = 0;
+    for (const j of list) if (tRad[j] > radius) radius = tRad[j];
+    const members = Uint32Array.from(list);
+    const positions = new Float64Array(members.length * 3);
+    for (let k = 0; k < members.length; k++) {
+      positions[k * 3] = T.centre[members[k] * 3];
+      positions[k * 3 + 1] = T.centre[members[k] * 3 + 1];
+      positions[k * 3 + 2] = T.centre[members[k] * 3 + 2];
+    }
+    // The cell is the median query's REACH, slack included and a hair over, so
+    // that query reads 3x3x3 cells: sized at the bare radius sum, the slack
+    // tipped every median query into a 5x5x5 block.
+    const base = radius + qMedian;
+    let cell = (base * (1 + SPHERE_SLACK) + absSlack) * (1 + 1e-6);
+    if (!(base > 0) || !Number.isFinite(cell)) {
+      // Point-sized boxes: size the cell from the spread of the centres.
+      let ext = 0;
+      for (let k = 0; k < 3; k++) {
+        let lo = Infinity;
+        let hi = -Infinity;
+        for (let q = 0; q < members.length; q++) {
+          const v = positions[q * 3 + k];
+          if (v < lo) lo = v;
+          if (v > hi) hi = v;
+        }
+        ext = Math.max(ext, hi - lo);
+      }
+      cell = ext > 0 ? ext / Math.cbrt(members.length) : 1;
+    }
+    const grid = new CellIndex(positions, members.length, cell);
+    levels.push({ grid, members, radius });
+  }
+  return levels;
+}
 
 /**
  * A box cloud in the one form the pair tests want: SoA world centres, the
@@ -109,7 +370,10 @@ interface BoxTable {
   readonly count: number;
   /** World centre, 3 per box. */
   readonly centre: Float64Array;
-  /** The images of local +X, +Y, +Z, 9 per box (rows). */
+  /**
+   * Where the box's local +X, +Y, +Z land, 9 per box (rows): the rotated
+   * axes, each turned round where its scale is negative.
+   */
   readonly axes: Float64Array;
   /** World half-extents along those axes, 3 per box. */
   readonly half: Float64Array;
@@ -143,7 +407,7 @@ function buildBoxes(geo: Geometry, local: boolean, pin: string, frameParam: stri
   ] as const) {
     if (!isF32Tuple(attr, 3)) {
       throw new Error(
-        `${NODE}: the input on pin "${pin}" ${attr === undefined ? `has no "${name}" point attribute` : `has "${name}" as ${attr.type} tupleSize ${attr.tupleSize}`}; a box is the standard f32 tuple-3 pair boundsMin/boundsMax. Give the points their boxes with setBounds first.`,
+        `${NODE}: the input on pin "${pin}" ${attr === undefined ? `has no "${name}" point attribute (it has: ${pts.names().join(", ") || "none"})` : `has "${name}" as ${attr.type} tupleSize ${attr.tupleSize}`}; a box is the standard f32 tuple-3 pair boundsMin/boundsMax. Give the points their boxes with setBounds first.`,
       );
     }
   }
@@ -247,11 +511,17 @@ function buildBoxes(geo: Geometry, local: boolean, pin: string, frameParam: stri
         `${NODE}: point ${i} on pin "${pin}" has a non-finite P (${p0}, ${p1}, ${p2}) or scale (${sx}, ${sy}, ${sz}). Fix whatever wrote it, or filter the point out first.`,
       );
     }
+    // Each row is where the box's local +k lands in the world: the rotated
+    // axis, turned round by a negative scale. So "the min side along k" is
+    // always the side the boundsMin corner is on, which is what the
+    // one-sided margins grow; the tests read the axes through abs and do
+    // not care about the frame's handedness.
+    const sgn = [sx < 0 ? -1 : 1, sy < 0 ? -1 : 1, sz < 0 ? -1 : 1];
     for (let k = 0; k < 3; k++) {
       rotateVec(v, qx, qy, qz, qw, k === 0 ? 1 : 0, k === 1 ? 1 : 0, k === 2 ? 1 : 0);
-      axes[i * 9 + k * 3] = v[0];
-      axes[i * 9 + k * 3 + 1] = v[1];
-      axes[i * 9 + k * 3 + 2] = v[2];
+      axes[i * 9 + k * 3] = sgn[k] * v[0];
+      axes[i * 9 + k * 3 + 1] = sgn[k] * v[1];
+      axes[i * 9 + k * 3 + 2] = sgn[k] * v[2];
     }
     const mx = 0.5 * (lo[o] + hi[o]) * sx;
     const my = 0.5 * (lo[o + 1] + hi[o + 1]) * sy;
@@ -266,10 +536,11 @@ function buildBoxes(geo: Geometry, local: boolean, pin: string, frameParam: stri
     half[o + 2] = Math.abs(0.5 * (hi[o + 2] - lo[o + 2]) * sz);
     const ax = axes;
     const b = i * 9;
+    // Aligned: every row is a world axis, either way round (a mirror only).
     aligned[i] =
-      ax[b] === 1 && ax[b + 1] === 0 && ax[b + 2] === 0 &&
-      ax[b + 3] === 0 && ax[b + 4] === 1 && ax[b + 5] === 0 &&
-      ax[b + 6] === 0 && ax[b + 7] === 0 && ax[b + 8] === 1
+      Math.abs(ax[b]) === 1 && ax[b + 1] === 0 && ax[b + 2] === 0 &&
+      ax[b + 3] === 0 && Math.abs(ax[b + 4]) === 1 && ax[b + 5] === 0 &&
+      ax[b + 6] === 0 && ax[b + 7] === 0 && Math.abs(ax[b + 8]) === 1
         ? 1
         : 0;
   }
@@ -410,13 +681,19 @@ function boxesMeet(
     const a2 = (a + 2) % 3;
     for (let b = 0; b < 3; b++) {
       const rab = R[a * 3 + b];
-      if (1 - rab * rab < PARALLEL_EPS) continue;
+      const sin2 = 1 - rab * rab;
+      if (sin2 < PARALLEL_EPS) continue;
       const b1 = (b + 1) % 3;
       const b2 = (b + 2) % 3;
+      // Both sides are projections onto A_a x B_b, which has length sin of
+      // the angle between the edges, so they are distances times that
+      // length. The band is a distance, and is scaled the same way; unscaled
+      // it would widen to tol / sin, ~1e6 times the stated band near parallel.
+      const band = tol * Math.sqrt(sin2);
       const lhs = Math.abs(tA[a2] * R[a1 * 3 + b] - tA[a1] * R[a2 * 3 + b]);
       const rhs =
         ha[a1] * AR[a2 * 3 + b] + ha[a2] * AR[a1 * 3 + b] + hb[b1] * AR[a * 3 + b2] + hb[b2] * AR[a * 3 + b1];
-      if (strict ? lhs >= rhs - tol : lhs > rhs + tol) return false;
+      if (strict ? lhs >= rhs - band : lhs > rhs + band) return false;
     }
   }
   return true;
@@ -478,7 +755,7 @@ export const boxContact = standardNode<BoxContactParams, BoxContactInputs, BoxCo
   type: NODE,
   category: "point op",
   description:
-    "Asks, for every BOX on the `in` pin (the QUERIES), whether it meets any box on the `targets` pin, and writes the answer onto the query points as attributes: `hitAttr` a bool (any target met), `countAttr` an i32 (how many distinct targets), `targetAttr` an i32 (the index of the met target whose centre is nearest the query's centre, -1 for none). Nothing else changes — same points, same order, same topology, every attribute carried — so the usual next step is a filter or a relabel on the flag. This is the CONTEXT QUERY of a split grammar (the occlusion query of the shape-grammar literature, and the box form of a point-in-volume or group-by-bounding-object test): is this window blocked by a neighbour or a chimney, does this bay cross any box of another set, is this room inside the lot. A BOX is a point's standard `boundsMin`/`boundsMax`, read in one of two FRAMES, chosen per input by `queryFrame` and `targetFrame`: \"world\" (the default) reads the two corners as WORLD coordinates and does not read P, rot or scale — the convention setBounds, splitBox and packBricks write, so grammar cells need nothing done to them; \"local\" reads them in the point's OWN frame, mapped through P, rot and scale exactly as spawnInstances places a mesh (world = P + rot * (scale * corner)), so a rotated box is tested as the ORIENTED box it is (rot is normalized first, so a non-unit quaternion places the box rigidly where spawnInstances' matrix would also scale it). THE MODE (`mode`) is the question: \"overlap\" — the two boxes CROSS: on every separating direction their extents overlap by more than zero, so boxes that only share a face, an edge or a corner do NOT overlap (two neighbouring grammar cells are not overlapping), while a zero-thickness box passing through a solid one does; \"touch\" — the same test closed, so sharing a face, edge or corner COUNTS (the party-wall neighbour); \"contain\" — the target lies wholly inside the query, boundary included; \"inside\" — the query lies wholly inside the target, boundary included. THE TESTS ARE EXACT for oriented boxes too — the separating-axis test on all fifteen axes for overlap and touch, the support extent along the outer box's three axes for contain and inside — with two stated approximations that apply only where a box is ROTATED: a cross axis of two edges within 1e-6 rad of parallel is skipped as rounding noise, which can only report contact across a gap of at most about 1e-6 of the boxes' size; and a gap or overlap within 1e-12 of the pair's scale (its largest centre coordinate plus both boxes' half-extents) is read as exact contact, so two boxes under one P and rot that share a face share it under every rotation rather than as rounding decides. Axis-aligned pairs (every \"world\" box, and \"local\" ones with no rotation) are compared exactly. THE MARGIN (`margin`, per query point) GROWS THE QUERY box by that much on BOTH sides along each of its own three axes before the test, in world units (scale is not applied to it): margin 0.5 with \"touch\" asks \"is any target within half a unit of this box, measured per axis\" — a box-shaped neighbourhood, not a rounded one. A vec3 gives each axis its own reach (grow a wall's box only across its faces, not along its run, e.g. vec(0, 0, 2) on a wall running along x — both faces grow); a scalar field broadcasts to all three. A NEGATIVE margin shrinks the query, which is how a containment test tolerates a sliver (\"inside\" with margin -0.01), and a query shrunk past nothing on any axis is EMPTY and meets nothing in every mode. EXCLUSION: `excludeAttr` names a tuple-1 attribute present on BOTH inputs, and a target whose value EQUALS the query's is skipped — the bay that must not count its own wall carries its wall's id (write one with setAttribute before the split; splitBox carries every attribute onto its pieces), and siblings or one parent are excluded the same way. Numbers compare by value whatever their numeric type (NaN never equals anything); strings compare by text, so the two inputs' string tables may differ. `excludeSelf` skips target i for query i, for one cloud wired to BOTH pins (\"does this box overlap any OTHER box of its set\"); it is refused when the two inputs have different point counts, since they cannot then be one cloud. STAGING: query against an EARLIER stage — another branch's finished output, or an applyRules `trail` (the consumed ancestors, whose boxes are the blocks and storeys a later stage needs) — never against the frontier still being rewritten. DETERMINISM: nothing is drawn, nothing is accumulated, and the nearest target is the minimum of (centre distance, target index), so the answers do not depend on the order the targets arrive in beyond that index. COST: O(queries x candidate targets), the candidates found by a uniform grid over the targets' centres with a linear tier for the largest half, pruned by a bounding-sphere bound (two boxes can meet only if their centres are within the sum of their half-diagonals) that changes the cost, never the answer. Under a partitioned cook it is exact given every target whose centre lies within the query's half-diagonal (margin included) plus the largest target's half-diagonal. ERRORS name the pin and point: a box that is not finite or is inside out (min above max), a missing bounds pair, a frame of \"local\" on points without P. CPU ONLY, and deliberately not a GPU adopter: the margin is a value that decides a contact, and a device-rounded margin one ulp off flips a touching pair — the same reason filterByExpression keeps its predicate on the CPU.",
+    "Asks, for every BOX on the `in` pin (the QUERIES), whether it meets any box on the `targets` pin, and writes the answer onto the query points as attributes: `hitAttr` a bool (any target met), `countAttr` an i32 (how many distinct targets), `targetAttr` an i32 (the index of the met target whose centre is nearest the centre of the query box as tested, -1 for none). Nothing else changes — same points, same order, same topology, every attribute carried — so the usual next step is a filter or a relabel on the flag. This is the CONTEXT QUERY of a split grammar (the occlusion query of the shape-grammar literature, and the box form of a point-in-volume or group-by-bounding-object test): is this window blocked by a neighbour or a chimney, does this bay cross any box of another set, is this room inside the lot. A BOX is a point's standard `boundsMin`/`boundsMax`, read in one of two FRAMES, chosen per input by `queryFrame` and `targetFrame`: \"world\" (the default) reads the two corners as WORLD coordinates and does not read P, rot or scale — the convention setBounds, splitBox and packBricks write, so grammar cells need nothing done to them; \"local\" reads them in the point's OWN frame, mapped through P, rot and scale exactly as spawnInstances places a mesh (world = P + rot * (scale * corner)), so a rotated box is tested as the ORIENTED box it is (rot is normalized first, so a non-unit quaternion places the box rigidly where spawnInstances' matrix would also scale it). THE MODE (`mode`) is the question: \"overlap\" — the two boxes CROSS: on every separating direction their extents overlap by more than zero, so boxes that only share a face, an edge or a corner do NOT overlap (two neighbouring grammar cells are not overlapping), while a zero-thickness box passing through a solid one does; \"touch\" — the same test closed, so sharing a face, edge or corner COUNTS (the party-wall neighbour); \"contain\" — the target lies wholly inside the query, boundary included; \"inside\" — the query lies wholly inside the target, boundary included. THE TESTS ARE EXACT for oriented boxes too — the separating-axis test on all fifteen axes for overlap and touch, the support extent along the outer box's three axes for contain and inside — with two stated approximations that apply only where a box is ROTATED: a cross axis of two edges within 1e-6 rad of parallel is skipped as rounding noise, which can only turn \"apart\" into \"meet\", across a gap of at most about 1e-6 of the boxes' size; and a gap or an overlap within 1e-12 of the pair's scale (its largest centre coordinate plus both boxes' half-extents), on any axis, is read as EXACT contact in both directions — \"touch\" accepts it and \"overlap\" rejects it — so two boxes under one P and rot that share a face share it under every rotation rather than as rounding decides. Axis-aligned pairs (every \"world\" box, and \"local\" ones with no rotation) are compared exactly. THE MARGINS move the QUERY box's faces before the test, per query point, in world units along the box's own three axes (scale is not applied to them), and leave the point's own bounds untouched. `margin` GROWS BOTH faces of each axis: margin 0.5 with \"touch\" asks \"is any target within half a unit of this box, measured per axis\" — a box-shaped neighbourhood, not a rounded one; a vec3 gives each axis its own reach, and a scalar field broadcasts to all three. `marginMin` and `marginMax` move ONE face each — the face on the boundsMin side and the face on the boundsMax side — signed, so they reach out of one face only (a wall whose outside is -z: marginMin vec(0, 0, 2) looks two units out of the front and not into the house behind it), shift the box (marginMin -d with marginMax +d moves it d), or carve the query down to a probe of its own: the window test is the bay's box with its outward face pushed half a stud out, its inward face pulled to meet it, and its sides and height pulled in to the opening, all as fields reading the bay's box names and attributes. The three add: the min face moves out by margin + marginMin, the max face by margin + marginMax. A NEGATIVE total shrinks the query, which is how a containment test tolerates a sliver (\"inside\" with margin -0.01), and a query shrunk past nothing on any axis is EMPTY and meets nothing in every mode. EXCLUSION: `excludeAttr` names a tuple-1 attribute present on BOTH inputs, and a target whose value EQUALS the query's is skipped — the bay that must not count its own wall carries its wall's id (write one with setAttribute before the split; splitBox carries every attribute onto its pieces), and siblings or one parent are excluded the same way. Numbers compare by value whatever their numeric type (NaN never equals anything); strings compare by text, so the two inputs' string tables may differ. `excludeSelf` skips target i for query i, for one cloud wired to BOTH pins (\"does this box overlap any OTHER box of its set\"); it is refused when the two inputs have different point counts, since they cannot then be one cloud. STAGING: query against an EARLIER stage — another branch's finished output, or an applyRules `trail` (the consumed ancestors, whose boxes are the blocks and storeys a later stage needs) — never against the frontier still being rewritten. DETERMINISM: nothing is drawn, nothing is accumulated, and the nearest target is the LOWEST INDEX among the hits whose squared centre distance is within 1e-12 of the least (relative to it plus the squared largest coordinate of the query's centre), so the answers do not depend on the order the targets arrive in beyond that index, and a rotation's rounding cannot break a true tie. COST: near linear in the two counts for any mix of sizes — the targets are binned by centre into one uniform grid per SIZE CLASS (radii doubling), and each query reads each class's grid within its own half-diagonal plus that class's largest, a bounding-sphere bound (two boxes can meet only if their centres are within the sum of their half-diagonals) that changes the cost, never the answer. Under a partitioned cook it is exact given every target whose centre lies within the query's half-diagonal (margins included, measured from the moved centre) plus the largest target's half-diagonal. ERRORS name the pin and point: a box that is not finite or is inside out (min above max), a missing bounds pair, a frame of \"local\" on points without P. CPU ONLY, and deliberately not a GPU adopter: the margin is a value that decides a contact, and a device-rounded margin one ulp off flips a touching pair — the same reason filterByExpression keeps its predicate on the CPU.",
   inputs: [
     { name: "in", kind: "geometry" },
     { name: "targets", kind: "geometry" },
@@ -497,7 +774,21 @@ export const boxContact = standardNode<BoxContactParams, BoxContactInputs, BoxCo
       default: [0, 0, 0],
       acceptsField: true,
       description:
-        "How far the QUERY box is GROWN on both sides along each of its own three axes before the test, in world units [x, y, z] (scale is not applied; for a \"world\" query the axes are the world's). 0 tests the box as it is. As a FIELD it is resolved per QUERY point — a scalar broadcasts to all three axes — so each query can reach as far as it needs: a window that must have two clear studs in front of it, but not beside it, grows along its wall's normal only. NEGATIVE shrinks the query: \"inside\" with a small negative margin tolerates a sliver of overhang, and \"overlap\" with one ignores a contact shallower than it. A query whose grown size is below zero on any axis is EMPTY and meets nothing, in every mode. Must be finite.",
+        "How far the QUERY box is GROWN on BOTH sides along each of its own three axes before the test, in world units [x, y, z] (scale is not applied; for a \"world\" query the axes are the world's). 0 tests the box as it is. As a FIELD it is resolved per QUERY point — a scalar broadcasts to all three axes — so each query can reach as far as it needs. vec(0, 0, 2) on a wall running along x grows both its faces, the inside one too; to reach out of ONE face, use marginMin or marginMax instead. NEGATIVE shrinks the query: \"inside\" with a small negative margin tolerates a sliver of overhang, and \"overlap\" with one ignores a contact shallower than it. Adds to marginMin and marginMax. A query whose size after all three is below zero on any axis is EMPTY and meets nothing, in every mode. Must be finite.",
+    },
+    marginMin: {
+      type: "vec3",
+      default: [0, 0, 0],
+      acceptsField: true,
+      description:
+        "How far the query box's MIN-SIDE face — the one its boundsMin corner is on, along each of its own axes — moves OUT before the test, in world units [x, y, z], on top of `margin`. Signed: positive reaches out of that face only, negative pulls it in, and with marginMax it can shift the box (marginMin -d, marginMax +d moves it d along the axis) or carve a probe out of it. A wall whose outside is -z looks two units out of its front, and not into the house, with marginMin vec(0, 0, 2). As a FIELD it is resolved per QUERY point and may read the query's box names: the window probe half a stud in front of a south wall, flattened onto the outside, is marginMin vec(0, 0, 0.5) with marginMax vec(0, 0, -0.5 - box(\"sz\")), plus whatever pulls the sides in to the opening. For a \"local\" query the side is the box's own, before its scale's sign. Must be finite.",
+    },
+    marginMax: {
+      type: "vec3",
+      default: [0, 0, 0],
+      acceptsField: true,
+      description:
+        "How far the query box's MAX-SIDE face — the one its boundsMax corner is on, along each of its own axes — moves OUT before the test, in world units [x, y, z], on top of `margin`. Signed, with the same readings as marginMin, mirrored: a wall whose outside is +z reaches out of its front with marginMax vec(0, 0, 2). As a FIELD it is resolved per QUERY point. Must be finite.",
     },
     queryFrame: {
       type: "enum",
@@ -541,7 +832,7 @@ export const boxContact = standardNode<BoxContactParams, BoxContactInputs, BoxCo
       type: "string",
       default: "",
       description:
-        "OPT-IN: name of the i32 point attribute (tuple 1) receiving the INDEX, in the targets input, of the met target whose box centre is nearest the query's box centre (ties to the lowest index), or -1 when none was met. Feed it to transferByIndex as `index` to read that target's own attributes — its label, its id, its colour. A reporting slot on the same terms as hitAttr. Empty (the default) writes none.",
+        "OPT-IN: name of the i32 point attribute (tuple 1) receiving the INDEX, in the targets input, of the met target whose box centre is nearest the centre of the query box AS TESTED (after its margins), ties — distances within 1e-12 relative, so a rotation's rounding cannot decide one — to the lowest index, or -1 when none was met. Feed it to transferByIndex as `index` to read that target's own attributes — its label, its id, its colour. A reporting slot on the same terms as hitAttr. Empty (the default) writes none.",
     },
   },
   execute({ inputs, params, seed, checkCancelled }) {
@@ -563,12 +854,14 @@ export const boxContact = standardNode<BoxContactParams, BoxContactInputs, BoxCo
     const qLocal = qFrame === "local";
     const tLocal = tFrame === "local";
     const excludeSelf = params.excludeSelf === true;
-    requireFinitePlainParam(
-      params.margin,
-      NODE,
-      "margin",
-      "A margin is a finite distance per axis (negative shrinks the query box). Write [0, 0, 0] for none.",
-    );
+    for (const name of ["margin", "marginMin", "marginMax"] as const) {
+      requireFinitePlainParam(
+        params[name],
+        NODE,
+        name,
+        "A margin is a finite distance per axis (negative pulls the face in). Write [0, 0, 0] for none.",
+      );
+    }
 
     const slots = [
       ["hitAttr", params.hitAttr, "bool", "contactHit"],
@@ -636,125 +929,105 @@ export const boxContact = standardNode<BoxContactParams, BoxContactInputs, BoxCo
       tKey = keys.t;
     }
 
-    const marginCol = requireVec3Column(
-      resolveOn(src, "point", params.margin, seed, NODE, "margin"),
-      NODE,
-      "margin",
-      "query point",
-      "a margin is a distance per axis of the query box",
+    const marginCols = (["margin", "marginMin", "marginMax"] as const).map((name) =>
+      requireVec3Column(
+        resolveOn(src, "point", params[name], seed, NODE, name),
+        NODE,
+        name,
+        "query point",
+        "a margin is a distance per axis of the query box",
+      ),
     );
+    const [marginCol, minCol, maxCol] = marginCols;
 
     const Q = buildBoxes(src, qLocal, "in", "queryFrame");
     const T = buildBoxes(tgt, tLocal, "targets", "targetFrame");
 
-    // ---- the grown queries, and every box's bounding-sphere radius.
+    // ---- the queries as TESTED: each face moved out by its margin (the
+    // symmetric one plus that side's own), which grows the half-extent by
+    // the mean of the two and moves the centre by half their difference,
+    // along the axis the box's local +k lands on.
+    const qc = new Float64Array(n * 3);
     const qh = new Float64Array(n * 3);
     const qEmpty = new Uint8Array(n);
     const qRad = new Float64Array(n);
     for (let i = 0; i < n; i++) {
       let empty = false;
+      qc[i * 3] = Q.centre[i * 3];
+      qc[i * 3 + 1] = Q.centre[i * 3 + 1];
+      qc[i * 3 + 2] = Q.centre[i * 3 + 2];
       for (let k = 0; k < 3; k++) {
-        const g = Q.half[i * 3 + k] + readComp(marginCol, i, k);
+        const sym = readComp(marginCol, i, k);
+        const a = sym + readComp(minCol, i, k);
+        const b = sym + readComp(maxCol, i, k);
+        const g = Q.half[i * 3 + k] + 0.5 * (a + b);
         qh[i * 3 + k] = g;
         if (g < 0) empty = true;
+        const shift = 0.5 * (b - a);
+        if (shift !== 0) {
+          qc[i * 3] += shift * Q.axes[i * 9 + k * 3];
+          qc[i * 3 + 1] += shift * Q.axes[i * 9 + k * 3 + 1];
+          qc[i * 3 + 2] += shift * Q.axes[i * 9 + k * 3 + 2];
+        }
       }
       qEmpty[i] = empty ? 1 : 0;
       qRad[i] = empty ? 0 : Math.hypot(qh[i * 3], qh[i * 3 + 1], qh[i * 3 + 2]);
     }
+    const G: BoxTable = { count: n, centre: qc, axes: Q.axes, half: qh, aligned: Q.aligned };
     const tRad = new Float64Array(m);
     for (let j = 0; j < m; j++) tRad[j] = Math.hypot(T.half[j * 3], T.half[j * 3 + 1], T.half[j * 3 + 2]);
 
     // An absolute slack for the prefilter, from the largest coordinate in
     // play: rounding in a centre is relative to IT, not to the radii.
     let maxCoord = 0;
-    for (const c of [Q.centre, T.centre]) for (let k = 0; k < c.length; k++) maxCoord = Math.max(maxCoord, Math.abs(c[k]));
+    for (const c of [qc, T.centre]) for (let k = 0; k < c.length; k++) maxCoord = Math.max(maxCoord, Math.abs(c[k]));
     const absSlack = 1e-12 * maxCoord;
 
-    // ---- the index: targets no larger than the median binned by centre,
-    // the rest scanned per query.
-    let grid: UniformGrid | undefined;
-    let binned = new Uint32Array(0);
-    let large = new Uint32Array(0);
-    let split = 0;
-    if (m > 0 && n > 0) {
-      const sorted = Float64Array.from(tRad).sort();
-      split = sorted[(m - 1) >> 1];
-      const bin: number[] = [];
-      const big: number[] = [];
-      for (let j = 0; j < m; j++) (tRad[j] <= split ? bin : big).push(j);
-      binned = Uint32Array.from(bin);
-      large = Uint32Array.from(big);
-      const qSorted = Float64Array.from(qRad).sort();
-      let cell = split + qSorted[(n - 1) >> 1];
-      if (!(cell > 0) || !Number.isFinite(cell)) {
-        // All boxes are points (or near enough): size the cell from the
-        // spread of the binned centres instead. Never decides an answer.
-        let ext = 0;
-        for (let k = 0; k < 3; k++) {
-          let lo = Infinity;
-          let hi = -Infinity;
-          for (const j of binned) {
-            const v = T.centre[j * 3 + k];
-            if (v < lo) lo = v;
-            if (v > hi) hi = v;
-          }
-          ext = Math.max(ext, hi - lo);
-        }
-        cell = ext > 0 ? ext / Math.cbrt(binned.length) : 1;
-      }
-      const positions = new Float64Array(binned.length * 3);
-      for (let k = 0; k < binned.length; k++) {
-        positions[k * 3] = T.centre[binned[k] * 3];
-        positions[k * 3 + 1] = T.centre[binned[k] * 3 + 1];
-        positions[k * 3 + 2] = T.centre[binned[k] * 3 + 2];
-      }
-      grid = UniformGrid.build({ data: positions, stride: 3, count: binned.length }, cell);
-    }
+    const levels = n > 0 ? buildLevels(T, tRad, qRad, absSlack) : [];
 
     // ---- the queries
     const hit = new Uint8Array(n);
     const count = new Int32Array(n);
     const nearest = new Int32Array(n).fill(-1);
     const cand: number[] = [];
+    const hitJ: number[] = [];
+    const hitD: number[] = [];
     for (let i = 0; i < n; i++) {
       if ((i & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
       if (qEmpty[i] === 1 || m === 0) continue;
-      const cx = Q.centre[i * 3];
-      const cy = Q.centre[i * 3 + 1];
-      const cz = Q.centre[i * 3 + 2];
-      let c = 0;
-      let best = -1;
-      let bestD = Infinity;
-      const consider = (j: number): void => {
-        if (excludeSelf && j === i) return;
-        if (qKey !== undefined && qKey[i] === tKey![j]) return;
-        if (!boxesMeet(mode, Q, qh, i, T, j)) return;
-        c++;
-        const dx = T.centre[j * 3] - cx;
-        const dy = T.centre[j * 3 + 1] - cy;
-        const dz = T.centre[j * 3 + 2] - cz;
-        const d = dx * dx + dy * dy + dz * dz;
-        if (d < bestD || (d === bestD && j < best)) {
-          bestD = d;
-          best = j;
+      const cx = qc[i * 3];
+      const cy = qc[i * 3 + 1];
+      const cz = qc[i * 3 + 2];
+      hitJ.length = 0;
+      hitD.length = 0;
+      for (const level of levels) {
+        const reach = (qRad[i] + level.radius) * (1 + SPHERE_SLACK) + absSlack;
+        level.grid.queryUnordered(cx, cy, cz, reach, cand);
+        for (let k = 0; k < cand.length; k++) {
+          const j = level.members[cand[k]];
+          if (excludeSelf && j === i) continue;
+          if (qKey !== undefined && qKey[i] === tKey![j]) continue;
+          if (!boxesMeet(mode, G, qh, i, T, j)) continue;
+          const dx = T.centre[j * 3] - cx;
+          const dy = T.centre[j * 3 + 1] - cy;
+          const dz = T.centre[j * 3 + 2] - cz;
+          hitJ.push(j);
+          hitD.push(dx * dx + dy * dy + dz * dz);
         }
-      };
-      if (grid !== undefined && binned.length > 0) {
-        const reach = (qRad[i] + split) * (1 + SPHERE_SLACK) + absSlack;
-        grid.queryRadiusUnordered(cx, cy, cz, reach, cand);
-        for (let k = 0; k < cand.length; k++) consider(binned[cand[k]]);
       }
-      for (let k = 0; k < large.length; k++) {
-        const j = large[k];
-        const reach = (qRad[i] + tRad[j]) * (1 + SPHERE_SLACK) + absSlack;
-        const dx = T.centre[j * 3] - cx;
-        const dy = T.centre[j * 3 + 1] - cy;
-        const dz = T.centre[j * 3 + 2] - cz;
-        if (dx * dx + dy * dy + dz * dz > reach * reach) continue;
-        consider(j);
-      }
+      const c = hitJ.length;
       hit[i] = c > 0 ? 1 : 0;
       count[i] = c;
+      if (c === 0) continue;
+      // Nearest, in two passes so the answer is a function of the SET of
+      // hits and never of the order they were found in: the least distance,
+      // then the lowest index among the hits within the tie band of it.
+      let dMin = Infinity;
+      for (let k = 0; k < c; k++) if (hitD[k] < dMin) dMin = hitD[k];
+      const cMax = Math.max(Math.abs(cx), Math.abs(cy), Math.abs(cz));
+      const within = dMin + NEAREST_TIE_REL * (dMin + cMax * cMax);
+      let best = -1;
+      for (let k = 0; k < c; k++) if (hitD[k] <= within && (best < 0 || hitJ[k] < best)) best = hitJ[k];
       nearest[i] = best;
     }
 

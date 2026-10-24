@@ -459,6 +459,143 @@ describe("boxContact: exact contact under a shared rotation", () => {
   });
 });
 
+describe("boxContact: near-parallel edges", () => {
+  // Two bars on edge (45 degrees about x), the upper one twisted by theta
+  // about z, stacked ridge on ridge: only the cross axis of the two ridges
+  // separates them, and that axis has length sin(theta). The band must be a
+  // DISTANCE on it too, or near parallel it widens to band / sin theta and
+  // touch reports real gaps of ~1e-6 as contact. The upper bar is swept
+  // over consecutive f32 heights through the contact at sqrt(2); every
+  // answer must match the corner-and-edge reference.
+  const qmul = (a: number[], b: number[]): number[] => [
+    a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+    a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+    a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+    a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+  ];
+  const rx = [Math.sin(Math.PI / 8), 0, 0, Math.cos(Math.PI / 8)];
+  const bar = (P: number[], rot: number[]): BoxSpec => ({ lo: [-1, -0.5, -0.5], hi: [1, 0.5, 0.5], P, rot });
+  const nextF32 = (x: number, steps: number): number => {
+    const buf = new Float32Array([x]);
+    new Int32Array(buf.buffer)[0] += steps;
+    return buf[0];
+  };
+  const local = { queryFrame: "local", targetFrame: "local" };
+
+  for (const theta of [1e-3, 1e-5, 3e-6, 1.2e-6]) {
+    it(`twisted by ${theta} rad: touch and overlap match the reference on every f32 step through contact`, async () => {
+      const rotB = qmul([0, 0, Math.sin(theta / 2), Math.cos(theta / 2)], rx);
+      const lower = bar([0, 0, 0], rx);
+      const heights = Array.from({ length: 24 }, (_, s) => nextF32(f(Math.SQRT2), s - 12));
+      const want = heights.map((H) => (obbMeet(obbOf(lower, true), obbOf(bar([0, 0, H], rotB), true)) ? 1 : 0));
+      expect(new Set(want)).toEqual(new Set([0, 1]));
+      for (const mode of ["touch", "overlap"] as const) {
+        const got: number[] = [];
+        for (const H of heights) got.push((await answer(cloud([lower]), cloud([bar([0, 0, H], rotB)]), { ...local, mode })).hit[0]);
+        expect([mode, got]).toEqual([mode, want]);
+      }
+    });
+  }
+});
+
+describe("boxContact: nearest-target ties under rotation", () => {
+  // Four targets on the four sides of a query, all under the query's own P
+  // and rot: their true centre distances are equal under every rotation,
+  // and only rounding tells them apart. The lowest index must win.
+  const rand = rng(51);
+  const cases = 200;
+  const frames = Array.from({ length: cases }, (_, i) => ({ P: [i * 50 + 0.37, 1.5, -2.25], rot: randomQuat(rand) }));
+  const sides: [number[], number[]][] = [
+    [[2, 0, 0], [3, 2, 2]],
+    [[-1, 0, 0], [0, 2, 2]],
+    [[0, 0, 2], [2, 2, 3]],
+    [[0, 0, -1], [2, 2, 0]],
+  ];
+
+  it("count 4, and the nearest is the case's first target, for 200 random rotations and every order of the four", async () => {
+    const q = cloud(frames.map((fr) => ({ lo: [0, 0, 0], hi: [2, 2, 2], ...fr })));
+    for (const order of [[0, 1, 2, 3], [3, 2, 1, 0], [2, 0, 3, 1]]) {
+      const t = cloud(frames.flatMap((fr) => order.map((k) => ({ lo: sides[k][0], hi: sides[k][1], ...fr }))));
+      const got = await answer(q, t, { mode: "touch", queryFrame: "local", targetFrame: "local" });
+      expect(got.count).toEqual(Array(cases).fill(4));
+      expect(got.target).toEqual(frames.map((_, i) => i * 4));
+    }
+  });
+});
+
+describe("boxContact: one-sided margins", () => {
+  // A wall along x whose outside is -z: a box in front of it, one behind it
+  // (inside the house), and one off its +x end.
+  const wall = (): Geometry => cloud([{ lo: [0, 0, 0], hi: [4, 3, 1] }]);
+  const front = { lo: [1, 0, -1.5], hi: [2, 1, -0.5] };
+  const behind = { lo: [1, 0, 1.5], hi: [2, 1, 2.5] };
+  const end = { lo: [4.5, 0, 0], hi: [5, 1, 1] };
+  const targets = (): Geometry => cloud([front, behind, end]);
+
+  it("margin grows both faces; marginMin and marginMax one face each", async () => {
+    const both = await contact(wall(), targets(), { mode: "touch", margin: [0, 0, 0.5], targetAttr: "who", countAttr: "n" });
+    expect(col(both, "n")).toEqual([2]);
+    const out = await contact(wall(), targets(), { mode: "touch", marginMin: [0, 0, 0.5], targetAttr: "who" });
+    expect(col(out, "who")).toEqual([0]);
+    const inside = await contact(wall(), targets(), { mode: "touch", marginMax: [0, 0, 0.5], targetAttr: "who" });
+    expect(col(inside, "who")).toEqual([1]);
+    expect(col(await contact(wall(), targets(), { mode: "touch", marginMax: [0.5, 0, 0], targetAttr: "who" }), "who")).toEqual([2]);
+    expect(col(await contact(wall(), targets(), { mode: "touch", marginMin: [0.5, 0, 0] }), "contact")).toEqual([0]);
+  });
+
+  it("they add to margin, and a min/max pair of opposite signs SHIFTS the box", async () => {
+    // margin 0.25 + marginMin 0.25 reaches the front box; 0.25 alone does not.
+    expect(col(await contact(wall(), targets(), { mode: "touch", margin: [0, 0, 0.25] }), "contact")).toEqual([0]);
+    const reach = await contact(wall(), targets(), { mode: "touch", margin: [0, 0, 0.25], marginMin: [0, 0, 0.25], targetAttr: "who" });
+    expect(col(reach, "who")).toEqual([0]);
+    // Moved 1.5 out of the front face (and flattened to the wall's depth):
+    // the moved box [-1.5, -0.5] in z sits exactly on the front box.
+    const moved = await contact(wall(), targets(), {
+      mode: "overlap",
+      marginMin: [0, 0, 1.5],
+      marginMax: [0, 0, -1.5],
+      targetAttr: "who",
+    });
+    expect(col(moved, "who")).toEqual([0]);
+  });
+
+  it("can carve a zero-thickness probe out of the box without touching its bounds", async () => {
+    // The window probe: the front face pushed half a unit out, the back
+    // face pulled to meet it, height pulled to one line at y = 0.5.
+    const q = wall();
+    const probe = { mode: "touch", marginMin: [0, -0.5, 0.5], marginMax: [0, -2.5, -1.5] };
+    const blocker = cloud([{ lo: [3, 0, -1], hi: [5, 1, 0] }]);
+    const low = cloud([{ lo: [3, 0, -1], hi: [5, 0.25, 0] }]);
+    const out = await contact(q, blocker, probe);
+    expect(col(out, "contact")).toEqual([1]);
+    expect(col(await contact(q, low, probe), "contact")).toEqual([0]);
+    expect(col(out, "boundsMin")).toEqual([0]);
+    expect(Array.from(out.attrs.point.require("boundsMax").data.slice(0, 3))).toEqual([4, 3, 1]);
+  });
+
+  it('"local": the min side is the boundsMin side in the box\'s own frame, a negative scale included', async () => {
+    // Local x mirrored: the box spans world x [-1, 0], and its boundsMin
+    // face (local x = 0) is the world face at x = 0.
+    const q = cloud([{ lo: [0, 0, 0], hi: [1, 1, 1], scale: [-1, 1, 1] }]);
+    const right = cloud([{ lo: [0.3, 0, 0], hi: [1, 1, 1] }]);
+    const left = cloud([{ lo: [-2, 0, 0], hi: [-1.3, 1, 1] }]);
+    const p = { mode: "touch", queryFrame: "local", marginMin: [0.5, 0, 0] };
+    expect(col(await contact(q, right, p), "contact")).toEqual([1]);
+    expect(col(await contact(q, left, p), "contact")).toEqual([0]);
+    const pm = { mode: "touch", queryFrame: "local", marginMax: [0.5, 0, 0] };
+    expect(col(await contact(q, right, pm), "contact")).toEqual([0]);
+    expect(col(await contact(q, left, pm), "contact")).toEqual([1]);
+  });
+
+  it("the nearest target is measured from the moved box", async () => {
+    // Unshifted, the two are equally near the wall's centre; with the box
+    // moved out of the front face, the front box is the nearer.
+    const all = cloud([front, behind]);
+    const shifted = await contact(wall(), all, { mode: "touch", margin: [0, 0, 3], marginMin: [0, 0, 1], marginMax: [0, 0, -1], targetAttr: "who" });
+    expect(col(shifted, "who")).toEqual([0]);
+  });
+});
+
 describe("boxContact: frames", () => {
   it('"world" ignores P, rot and scale entirely', async () => {
     const rand = rng(3);
@@ -717,6 +854,22 @@ describe("boxContact: determinism and scale", () => {
     const qq = latticeBoxes(r, 1500, 60, 2);
     const got = await answer(cloud(qq), cloud(big), { mode: "touch", margin: 1 });
     expect(got).toEqual(aabbReference(qq, big, "touch", qq.map(() => [1, 1, 1])));
+  });
+
+  it("one grid per size class: sizes spread over four decades, points included, still match brute force", async () => {
+    const r = rng(34);
+    const wide = (n: number): BoxSpec[] =>
+      Array.from({ length: n }, (_, i) => {
+        const c = [0, 1, 2].map(() => f(r() * 80));
+        const h = i % 17 === 0 ? 0 : f(0.005 * Math.pow(10, r() * 4)); // 0.005 .. 50, and some points
+        return { lo: c.map((v) => f(v - h)), hi: c.map((v) => f(v + h)) };
+      });
+    const ts = wide(2000);
+    const qs = wide(1200);
+    for (const mode of ["touch", "contain"] as const) {
+      const got = await answer(cloud(qs), cloud(ts), { mode, margin: 0.5 });
+      expect(got).toEqual(aabbReference(qs, ts, mode, qs.map(() => [0.5, 0.5, 0.5])));
+    }
   });
 });
 
