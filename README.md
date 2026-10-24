@@ -20,7 +20,7 @@ scatter points over this ground, thin them out with noise, turn each
 survivor a random amount, put a tree on every one — and PCG-TS runs it.
 The recipe is a small graph of nodes; running it is called a *cook*. Feed
 it the same seed and you get the same world back, byte for byte, on any
-machine, forever.
+machine.
 
 PCG-TS is built for real-time use — cooking is budgeted and cancellable so
 it can run inside a frame, and the field grammar compiles to WGSL to run
