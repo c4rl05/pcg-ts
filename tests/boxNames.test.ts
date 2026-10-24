@@ -9,9 +9,18 @@
  * Two rewrites per expression. One replaces matches where they stand, so
  * a box name lands inside a `let` binding the author wrote. The other
  * first expands every `let` (a `var` replaced by its binding) and then
- * replaces, which is what reaches the brick house: it binds `lo` and reads
- * `component(lo, 0)`, so a box expression only becomes visible once the
- * bindings are gone.
+ * replaces, which reaches an expression that binds `lo` and reads
+ * `component(lo, 0)`, where a box expression only becomes visible once
+ * the bindings are gone. A rewrite counts only where it INTRODUCES a box
+ * name: an expression already written with box names, which is how the
+ * brick house is written now, would otherwise be compared with itself.
+ *
+ * And the reverse direction: every expression in the corpus that is
+ * WRITTEN with box names is expanded, each `{fn: "box", name}` replaced by
+ * the hand-written expression it names, and the expansion must agree with
+ * it on the same three axes. Graph params (`param("x")`) are replaced by
+ * number literals in both directions, the same literal on both sides, so
+ * an expression that reads one still stands alone and is checked.
  *
  * The match is against the expressions as an author spells them here,
  * written out below in the text form — not read from the table the
@@ -139,6 +148,30 @@ function inlineLets(v: unknown, scope: ReadonlyMap<string, unknown> = new Map())
   return mapChildren(v, (c) => inlineLets(c, scope));
 }
 
+/** `spec` with every `{fn: "box", name}` replaced by the hand-written expression it names. */
+const BY_NAME = new Map(BY_HAND.map(([name, text]) => [name, parseFieldText(text)]));
+function expandBoxes(v: unknown): unknown {
+  if (!isSpec(v)) return v;
+  if (v.fn === "box" && typeof v.name === "string") {
+    const e = BY_NAME.get(v.name);
+    if (e === undefined) throw new Error(`no hand-written expansion for box("${v.name}")`);
+    return e;
+  }
+  return mapChildren(v, expandBoxes);
+}
+
+/**
+ * `spec` with every graph param read replaced by a number literal, one
+ * per name, so the expression stands alone. A param at the root has no
+ * child position to take a literal and is left as it is.
+ */
+function bindParams(v: unknown): unknown {
+  const literal = (name: string): number => 1.5 + (name.length % 7) * 0.75;
+  const walk = (c: unknown): unknown =>
+    isSpec(c) && c.fn === "param" && typeof c.name === "string" ? literal(c.name) : isSpec(c) ? mapChildren(c, walk) : c;
+  return isSpec(v) ? mapChildren(v, walk) : v;
+}
+
 function countBoxes(v: unknown): number {
   if (!isSpec(v)) return 0;
   let n = v.fn === "box" ? 1 : 0;
@@ -171,6 +204,14 @@ function attributesOf(spec: unknown, out = new Map<string, { tupleSize: number; 
 }
 
 const COUNT = 97;
+
+// The vacuity floors, each set a little under what the corpus gave when it
+// was last measured (the numbers are in the guards' comments).
+// Measured 2026-10-24: forward 30 rewrites holding 170 introduced box
+// names, 30 evaluated, 30 compiled; reverse 33 expansions of 119 box
+// names, 33 evaluated, 32 compiled.
+const FORWARD_COUNTS = { rewritten: 25, names: 150, evaluated: 25, compiled: 25 };
+const REVERSE_COUNTS = { expanded: 28, names: 100, evaluated: 28, compiled: 28 };
 
 function ctxFor(spec: FieldSpec): { ctx: EvalContext; layout: FieldKernelLayout } {
   const geo = createPointCloud(COUNT);
@@ -287,13 +328,17 @@ describe(`field expressions across ${GRAPHS_DIR}/, rewritten with box names, are
     expect(corpus.length).toBeGreaterThan(100);
   });
 
-  for (const [i, spec] of corpus.entries()) {
-    for (const [how, rewrite] of [
-      ["in place", (s: FieldSpec) => boxify(s)],
-      ["lets expanded", (s: FieldSpec) => boxify(inlineLets(s))],
+  for (const [i, raw] of corpus.entries()) {
+    const spec = bindParams(raw) as FieldSpec;
+    for (const [how, prepare] of [
+      ["in place", (s: FieldSpec) => s],
+      ["lets expanded", (s: FieldSpec) => inlineLets(s) as FieldSpec],
     ] as const) {
-      const out = rewrite(spec) as FieldSpec;
-      const n = countBoxes(out);
+      const before = prepare(spec);
+      const out = boxify(before) as FieldSpec;
+      // only the box names this rewrite INTRODUCED: one already written
+      // with them would otherwise be compared with itself
+      const n = countBoxes(out) - countBoxes(before);
       if (n === 0) continue;
       it(`[${i}] ${how}: ${JSON.stringify(spec).slice(0, 60)}`, () => {
         try {
@@ -320,16 +365,64 @@ describe(`field expressions across ${GRAPHS_DIR}/, rewritten with box names, are
   }
 
   it("rewrote, evaluated and compiled enough of them to mean something", () => {
-    // Vacuity guard, set under what the corpus gave on 2026-10-22 (126
-    // rewrites holding 594 box names; 88 evaluated, 126 compiled): every
-    // check above is skippable by a spec that does not stand alone or
-    // does not evaluate on this fixture, so the counts must show the
-    // sweep did its job. The CPU count is the lower one because the
-    // fixture cannot serve every expression's reads (a name read both as
-    // a string and as a number gets one column, which serves only one).
-    expect(rewritten).toBeGreaterThan(100);
-    expect(names).toBeGreaterThan(400);
-    expect(evaluated).toBeGreaterThan(60);
-    expect(compiled).toBeGreaterThan(100);
+    console.log(`box names forward: ${rewritten} rewrites, ${names} names, ${evaluated} evaluated, ${compiled} compiled`);
+    // Vacuity guard, set under what the corpus gave on 2026-10-24 once a
+    // rewrite counts only where it introduces a box name and graph params
+    // are bound to literals (FORWARD_COUNTS below): every check above is
+    // skippable by a spec that does not stand alone or does not evaluate
+    // on this fixture, so the counts must show the sweep did its job. The
+    // CPU count is the lower one because the fixture cannot serve every
+    // expression's reads (a name read both as a string and as a number
+    // gets one column, which serves only one). The brick house no longer
+    // feeds this direction -- it writes box names itself -- and is held by
+    // the reverse direction below instead.
+    expect(rewritten).toBeGreaterThan(FORWARD_COUNTS.rewritten);
+    expect(names).toBeGreaterThan(FORWARD_COUNTS.names);
+    expect(evaluated).toBeGreaterThan(FORWARD_COUNTS.evaluated);
+    expect(compiled).toBeGreaterThan(FORWARD_COUNTS.compiled);
+  });
+});
+
+describe(`field expressions across ${GRAPHS_DIR}/ written with box names equal their expansions`, () => {
+  let expanded = 0;
+  let names = 0;
+  let evaluated = 0;
+  let compiled = 0;
+
+  for (const [i, raw] of corpus.entries()) {
+    const spec = bindParams(raw) as FieldSpec;
+    const n = countBoxes(spec);
+    if (n === 0) continue;
+    it(`[${i}] expanded: ${JSON.stringify(raw).slice(0, 60)}`, () => {
+      try {
+        fieldFromJson(spec);
+      } catch {
+        return; // does not stand alone; not this suite's subject
+      }
+      const out = expandBoxes(spec) as FieldSpec;
+      expect(countBoxes(out)).toBe(0);
+      const v = compare(out, spec);
+      expect(v.key, "Field.key").toBe(true);
+      if (v.cpu !== undefined) {
+        expect(v.cpu, "CPU bytes").toBe(true);
+        evaluated++;
+      }
+      if (v.wgsl !== undefined) {
+        expect(v.wgsl, "WGSL text and kernel key").toBe(true);
+        compiled++;
+      }
+      expanded++;
+      names += n;
+    });
+  }
+
+  it("expanded, evaluated and compiled enough of them to mean something", () => {
+    console.log(`box names reverse: ${expanded} expansions, ${names} names, ${evaluated} evaluated, ${compiled} compiled`);
+    // Vacuity guard, set under what the corpus gave on 2026-10-24
+    // (REVERSE_COUNTS below), most of it the brick house.
+    expect(expanded).toBeGreaterThan(REVERSE_COUNTS.expanded);
+    expect(names).toBeGreaterThan(REVERSE_COUNTS.names);
+    expect(evaluated).toBeGreaterThan(REVERSE_COUNTS.evaluated);
+    expect(compiled).toBeGreaterThan(REVERSE_COUNTS.compiled);
   });
 });

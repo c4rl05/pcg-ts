@@ -7,9 +7,10 @@
  * standard `boundsMin`/`boundsMax` pair, and a field that rewrites a box
  * (a setBounds corner, a splitBox size) keeps needing that box's corners
  * and sizes. Without names for them an author re-derives them every time:
- * the brick house graph binds the same eleven names in nineteen `let`s,
- * and its generator carries an optimiser just to decide which of them to
- * bind. A `let` names a subexpression of ONE expression; these name the
+ * the brick house graph, before it was written with these names, bound the
+ * same eleven names in nineteen `let`s, and its generator carried an
+ * optimiser just to decide which of them to bind. A `let` names a
+ * subexpression of ONE expression; these name the
  * eleven (and five more) that every box expression shares.
  *
  * WHAT THEY ARE: notation. Each name is exactly the expression in

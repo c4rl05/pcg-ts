@@ -121,7 +121,7 @@ Composite node that runs a REWRITING GRAMMAR over labelled cells, one ROUND at a
 
 **Outputs:** *(none)*
 
-**Examples:** [basics-apply-rules.json](../graphs/basics-apply-rules.json) — 1 total (`pcg graphs --node applyRules`)
+**Examples:** [basics-apply-rules.json](../graphs/basics-apply-rules.json), [examples-brick-house.json](../graphs/examples-brick-house.json) — 2 total (`pcg graphs --node applyRules`)
 
 **Params:**
 
@@ -220,7 +220,7 @@ Asks, for every BOX on the `in` pin (the QUERIES), whether it meets any box on t
 
 **Outputs:** `out` (geometry)
 
-**Examples:** *(no corpus graph uses it)*
+**Examples:** [examples-brick-house.json](../graphs/examples-brick-house.json) — 1 total (`pcg graphs --node boxContact`)
 
 **Params:**
 
@@ -756,7 +756,7 @@ Measures, at every point of the `path` input, whether that point is COVERED from
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-under-cover.json](../graphs/basics-under-cover.json), [examples-brick-house.json](../graphs/examples-brick-house.json) — 2 total (`pcg graphs --node pathCoverage`)
+**Examples:** [basics-under-cover.json](../graphs/basics-under-cover.json) — 1 total (`pcg graphs --node pathCoverage`)
 
 **Params:**
 
@@ -1200,7 +1200,7 @@ Emits every input point `count` times — a PER-POINT number of times when `coun
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-repeat-points.json](../graphs/basics-repeat-points.json), [examples-facade.json](../graphs/examples-facade.json), [examples-brick-house.json](../graphs/examples-brick-house.json) — 4 total (`pcg graphs --node repeatPoints`)
+**Examples:** [basics-repeat-points.json](../graphs/basics-repeat-points.json), [examples-facade.json](../graphs/examples-facade.json), [examples-floorplan.json](../graphs/examples-floorplan.json) — 3 total (`pcg graphs --node repeatPoints`)
 
 **Params:**
 
@@ -1384,7 +1384,7 @@ BREAKS every cell's box into its SHELL — floor, the four walls south / north /
 
 **Outputs:** `out` (geometry)
 
-**Examples:** *(no corpus graph uses it)*
+**Examples:** [examples-brick-house.json](../graphs/examples-brick-house.json) — 1 total (`pcg graphs --node shellSplit`)
 
 **Params:**
 
@@ -1477,7 +1477,7 @@ CUTS every cell's box along one axis into an ordered list of LABELLED PIECES and
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-split-box.json](../graphs/basics-split-box.json), [basics-apply-rules.json](../graphs/basics-apply-rules.json) — 2 total (`pcg graphs --node splitBox`)
+**Examples:** [basics-split-box.json](../graphs/basics-split-box.json), [basics-apply-rules.json](../graphs/basics-apply-rules.json), [examples-brick-house.json](../graphs/examples-brick-house.json) — 3 total (`pcg graphs --node splitBox`)
 
 **Params:**
 

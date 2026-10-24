@@ -991,8 +991,9 @@ describe("shellSplit: seeds and determinism", () => {
 
 describe("shellSplit: the same parts as the five-copy spelling", () => {
   /**
-   * The brick house's parts: repeatPoints(count = 5) then setBounds with a
-   * choose of five corners per corner — slab, then walls S N W E, the S and
+   * The brick house's parts as it spelled them before it was written on
+   * shellSplit (which it now is): repeatPoints(count = 5) then setBounds
+   * with a choose of five corners per corner — slab, then walls S N W E, the S and
    * N walls owning the corners. shellSplit with faces floor, south, north,
    * west, east and thickness 1 must be the same points: boxes, seeds and P,
    * and the random draws taken after them.

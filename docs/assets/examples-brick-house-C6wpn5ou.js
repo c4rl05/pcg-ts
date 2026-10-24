@@ -1,0 +1,7503 @@
+import{t as e}from"./rolldown-runtime-DK3Fl9T5.js";var t=e({default:()=>n}),n=`{
+  "formatVersion": 1,
+  "seed": 1889,
+  "meta": {
+    "title": "A brick house split on a stud lattice and built in bricks",
+    "description": "A SHORT TERRACE OF HOUSES DERIVED BY A SPLIT GRAMMAR ON AN INTEGER LATTICE, THEN BUILT IN BRICKS. Every terminal of the grammar is an axis-aligned box whose corners are WHOLE NUMBERS -- x and z in studs, y in plates, a plate 0.4 of a stud -- carrying a string \`kind\` (wall, glass, door, trim, roof, floor, ground, chimney) and a palette colour; \`packBricks\` turns those boxes into catalogue bricks, and the house is drawn as three instance batches: bricks, the studs left showing, and the pots on its chimneys. THE GRAMMAR IS TWO RULE TABLES, each an \`applyRules\`. A rule is a pin pair in the wrapper's body named after the label it rewrites, the label is \`kind\`, and a label no rule claims is TERMINAL -- so a piece's label is the material it is built in, and nothing relabels it into a kind afterwards. MASSING runs from the lot: \`block\` (cut in two along its longer floor axis while both halves keep \`minBlock\` studs, three rounds deep, the third only for a block still longer than 16 studs; a block not cut becomes a \`mass\`), \`mass\` (draws the block's storeys, colours, door wall, setback and trim, then cuts the air over its footprint into its ground slab, its lower tier and the rest, \`upper\`), \`upper\` (steps in by the setback and cuts into the upper tier and the roof space over the top tier), \`roofSpace\` (a declared draw: flat, else hip, else gable), and one rule for each roof style. FACADE runs from the tiers: \`tier\` (cut into storeys, each broken into its shell), \`face\` (a wall cut into bays), \`bay\` (a declared draw: an opening, or wall), \`opening\` (the pieces round a window or a door) and \`sill\`. Each rule is a chain of one to eight nodes, most of them two or three, and reading the body top to bottom is reading the grammar. Every rule application costs a round, and the wrapper's \`ruleDepth\` is the round, which is how the block rule keeps to three rounds of cutting. THE GRAMMAR CUTS. \`splitBox\` cuts a box along one axis into labelled pieces -- \`absolute\` lengths, \`relative\` shares of the rest, or a \`repeat\` of equal pieces about one module long -- every attribute riding onto every piece, and its sizes are a field resolved on the PARENT, so a decision both halves share is made once: a block's cut, \`clamp(floor(span * (0.35 + 0.3 * ruleRoll) + 0.5), minBlock, span - minBlock)\` studs from its min side, puts both halves on one integer coordinate. A label of \`\\"\\"\` is a GAP that takes its space and emits nothing, which is how a setback steps in (a gap on each lot-edge side of the upper tier) and how each layer of a pitched roof steps in (a gap of \`layer\` studs either side). A piece of no size is DROPPED, which is how one opening rule serves every opening: a door's sill and the wall under it, the sill of a block that rolled none, and a lintel that rolled none come out with no height and are not emitted, with no branch. Because a cut can only divide what is there, the lot is a column of AIR as tall as any house can stand, and a mass's storeys and roof are cut from it, the air over the roof a gap. THE PER-BLOCK DECISIONS are made in the \`mass\` rule, on the block, before it is cut, so every piece of it carries them: \`storeys\`, \`wallTint\`, \`roofTint\`, \`doorWall\`, \`inset\`, \`lowSt\` and \`trim\` (the sill and lintel rolls, and the house's plinth roll). The roof style is a DECLARED DRAW: the \`roofSpace\` rule is a string \`setAttribute\` whose \`values\` are gable, hip and flat and whose index is \`select(lt(ruleRoll, flatRoofRate), 2, lt(ruleRoll, flatRoofRate + (1 - flatRoofRate) * hipRoofRate))\`, one roll against both rates; the bay rule's opening-or-wall is the same shape, on \`windowRate\`. \`ruleRoll\` is the wrapper's own roll for each rule application. TIERS AND STOREYS. A mass is its ground slab, then the lower tier, then the upper part. A tier is a whole number of storeys, each \`storeyHeight\` plates: \`shellSplit\` breaks a storey into the CEILING slab over it, a plate over the full footprint that is the next storey's floor (or the tier's ceiling over the top storey), and the four walls under it, south and north full length and west and east between them. A SETBACK (\`setbackRate\`) steps a block of two storeys or more in above a storey drawn from the first to the one under the top, by \`inset\` studs on every side the block has on the lot edge (two where that keeps four studs a side, else one, else none and no setback), a party wall staying flush with its neighbour; the upper tier stands on the lower tier's top ceiling, which is its first floor and the terrace round it in one slab, held by the walls below and the walls above alike. Only the top tier is roofed: the roof space is cut from the upper part over the upper tier, or over the whole mass when there is no setback. ROOFS. A GABLE's layers step in one stud on the two long sides, its ridge along the long axis and the stud at each end of a layer its gable wall, in the wall's colour; a HIP's layers step in one stud on all four sides, so it closes to a ridge as long as the long side less the short, and two studs more (one for an odd short side); both rise \`roofStep\` plates a layer for \`ceil(short / 2)\` layers, cut from the roof space as a \`repeat\` of \`roofStep\` with the air over them a gap, each layer told its index in \`layer\`. A FLAT roof is the top tier's ceiling slab with a parapet on its edge, one stud thick and three plates tall, over the walls below: a \`shellSplit\` of the four walls alone. The ceiling under every roof is what lets a roof stand on a floor rather than over an empty attic. THE WALLS CARRY THEIR OWN FRAME. \`shellSplit\` writes on every wall the axis it runs along and the sign that makes it run LEFT TO RIGHT AS SEEN FROM OUTSIDE (\`alongAxis\`, \`alongSign\`), its outward normal (\`outward\`) and its face code (\`face\`: 1 south, 2 north, 3 west, 4 east), so the facade rules are written ONCE for every wall: the bay split is \`splitBox\` with axis \`perCell\` on \`alongAxis\` and \`direction\` \`alongSign\`, \`max(1, floor(len / bayWidth))\` bays snapped to whole studs, slot 0 the leftmost seen from outside; the opening is set in its bay from the left, as nearly centred as whole studs allow, \`openingWidth\` studs at most with a stud of jamb either side; and a sill stands out by adding \`outward\` to its box. The DOOR goes on the ground floor -- the storey whose walls start on the slab over the baseplate, \`box(\\"y0\\")\` = 2 -- of the first lot-edge wall, south, then north, else west, else east, in the middle bay. Every block has such a wall: a cut along one axis never moves a block off the lot edges of the other, so a block with neither a south nor a north edge was cut along z on both sides, which takes two of the three rounds, and the one left cannot cut it off both the west and the east edge; with \`minBlock\` at least 5 that side wall is three studs or more between the south and north walls, wide enough for a door bay. BOX NAMES. A field reads the box of the cell it is evaluated on by name -- \`box(\\"x0\\")\`, \`box(\\"sz\\")\`, \`box(\\"center\\")\`, \`box(\\"lo\\")\` and the rest -- so a size, an axis or a margin is written in the cell's own terms with nothing carried aside, and a split's sizes read the PARENT's box. A \`let\` names a value one field reads more than once (a wall's length, the opening it takes); like a box name, it is notation for the field written out. A WINDOW GOES ONLY WHERE A WALL IS EXPOSED, and exposure is a query, not an assumption. Blocks share party walls, and a tall block beside a low one has a wall that is covered at the bottom and open above. The \`bay\` rule asks \`boxContact\` whether a PROBE overlaps anything the massing made -- every slab, tier and roof piece, and every chimney's shadow (below), merged and fed to the facade stage as a BROADCAST input. The probe is the bay's own box carved by the node's \`marginMin\` and \`marginMax\`, fields of the bay's box names and frame: along the wall the opening's width less a quarter stud at each end, so it crosses every stud of the opening and no stud beside it; up the wall the one course where the opening starts -- for a window with a sill, the sill's course, the cells the sill stands out into; through the wall a sheet half a stud OUTSIDE its face. Bottom is enough because everything the massing makes stacks on the ground with nothing overhanging, so if the bottom of the opening is free, every course above it is. This is why the grammar is two stages: a query reads an EARLIER stage, never the frontier still being rewritten. A CHIMNEY (\`chimneyRate\`) is a stack one stud by two, its long side along the ridge, rising four plates past the top of its roof, with a pot on each of its two top studs. It is PLACED rather than cut -- it stands in the air beside the upper layers of a roof, a box no split of the roof space makes -- so it is read from the massing's \`trail\`, the cells each rule rewrote: every roof space the style rule took, its box the top tier's footprint from the tier's top up, is rolled, and one \`setBounds\` places the stack. On a pitched roof it stands on the exposed one-stud step of a layer in the upper half below the top, front or back by a roll: every layer above that one starts a stud further in, so the stack stands on the roof and overlaps no piece, and along the ridge it keeps off a gable's end studs. On a flat roof it stands on the parapet's long side, over the wall below, which holds it. For the window query a chimney counts as its SHADOW: the stack grown two studs every way across the roof, kept inside its tier, from the tier's top up past its pots, because a stack standing a stud or two off a taller neighbour's wall is still in front of that wall's windows, past the probe half a stud out. The pots are found rather than placed: a pot goes on every showing stud of a chimney brick with nothing resting on it, so in a partial build it comes with the chimney's last course. THE FACADE TRIM is what keeps a big wall from reading flat up close: sills, lintels, a plinth, and bricks that are not all one colour. A SILL (\`sillRate\`) is a plate under a window, as wide as it, its top at \`sillHeight\`, standing one stud out from the wall face: a plate two studs deep, one row in the wall standing on the wall under it and one outside, held through the wall. Its outer studs are not drawn -- a stud on a trim brick that nothing ever rests on is dropped from the studs batch -- so it reads as a smooth ledge. A LINTEL (\`lintelRate\`) is a block over each window and door, as wide as the opening and a brick tall, less where the wall over the opening is shorter. Both are the opening's width, not wider: a bay keeps a stud of jamb either side, often only one, and trim a stud wider met the next window's and ran along the wall as a band. Sill and lintel are kind \`trim\`, in the TRIM colour: on a wall with a hue its colour darkened, and on a white or grey wall a warm sandstone, because a neutral trim on the pale glass reads as more of the pane. A PLINTH (\`plinthRate\`) lays every wall brick standing on the ground floor's slab in dark grey. Sills and lintels are rolled ONCE PER BLOCK, so every window of a block agrees; the plinth ONCE PER HOUSE, because it is laid on the packed bricks and a brick can run on across two blocks' walls of one colour. And \`brickVariation\` is the share of wall bricks laid in an OFF-SHADE of their wall's colour, half darker and half lighter. The plinth and the off-shades are coloured on the BRICKS, after the packing, each brick drawing on its own identity, so neither moves a joint; a stud takes the tint of the brick it stands on, gathered by \`transferByIndex\` through the \`brickId\` packBricks wrote on it. THE BUILD. \`packBricks\` reads the pieces' world corners -- the last \`setBounds\` converts the lattice to world units and centres the lot -- keeps \`kind\` and colour apart with \`groupBy\`, and lays every wall in full bricks with the joints staggered course to course; the catalogue is the default one with the BASEPLATES appended through \`extraBricks\` -- every size of 16, 24, 32 and 40 studs a side, either way round -- and the ground is exactly one of them, one piece under the whole lot: on each axis the lot plus two studs either side, rounded up to a multiple of eight. A floor slab runs on across every block of its storey (the slabs share a kind and a colour), and neighbouring blocks each build their own wall, so a party wall is two studs thick. THE MESHES ARE THE GRAPH'S OWN: three outputs carry \`role: \\"asset\\"\`, so \`brick\` (a unit box), \`stud\` (a twelve-sided \`meshPrimitive\` cylinder, capped on top and open underneath) and \`pot\` are the meshes the three spawners' asset ids resolve to. One box serves every brick because a brick point's \`scale\` is its own-frame size and its \`rot\` the quarter turn of a brick laid sideways; a hairline gap is taken off every \`scale\` so the joints read, and the stud and pot meshes stand half that gap low so they sit on the brick as drawn. WHAT HOLDS TOGETHER is measured, not assumed. \`brickConnectivity\` numbers the pieces stud clutch alone holds together and gives every brick a build STEP: courses bottom up, a brick placed when it stands on the baseplate or grips one already placed, a plate hung under a floor placed with the floor. An upper storey's slab is ONE plate between empty rooms with walls only at its edges, so each of its plates has to reach a wall by itself; the packer answers it with plates up to 2x16, a \`bond\` reward for joining pieces, a charge for every loose plate a placement commits the build to, weighed before the score, and a HOLD SEARCH that lifts a course with a loose plate and solves the slab exactly, bounded in steps rather than time so every machine gets the same house. The grammar answers the rest: a house has a ceiling under its roof; a third split round cuts a block still longer than 16 studs, because a one-plate slab that size, an upper floor or a flat roof, was past what the hold search always solves within its budget; a flat roof is the ceiling itself with only the parapet on it; a setback's upper tier starts on the lower tier's ceiling plate rather than on a slab of its own; and a chimney on a flat roof stands on the parapet, over the wall. A brick no order could attach would get step -1, which says so: the whole build draws it, and every partial build leaves it out rather than show it hanging in air. THE \`buildStep\` PARAM shows the build as it stands after that step: bricks are kept while their step is at most it, and a stud shows once its brick is placed and until the brick resting on it is. The packer is asked for EVERY stud (\`studMode: all\`), and the studs go through \`brickConnectivity\` alongside the bricks, which writes on each stud the step of both. The param's maximum, 138, is an upper bound on how tall a house can stand, in plates, taken from every param below at the top of its range -- the ceiling over the most storeys at the tallest storey, the taller of a pitched roof and a parapet, and a chimney's rise -- and so it is the whole build for every house; the exact range for one house is the \`stepCount\` detail \`brickConnectivity\` writes. It is also the height of the lot's air column. THE OTHER PARAMS are the grammar's own numbers, each READ by name with \`param(\\"...\\")\` in the field slots that use it -- the two rule stages declare the ones their bodies read and are fed the graph's own -- so at its default every one cooks exactly what the literal it replaced did: \`storeyHeight\`, \`sillHeight\` and \`headHeight\` in plates, \`bayWidth\`, \`openingWidth\` and \`minBlock\` in studs, \`windowRate\`, \`minStoreys\` and \`maxStoreys\`, \`roofStep\`, the four rates of the roofs, chimneys and setbacks and the four of the facade trim, and the lot's range, \`lotWidthMin\`/\`lotWidthMax\` and \`lotDepthMin\`/\`lotDepthMax\`. A value that must land on the lattice is rounded where it is read, \`floor(param(\\"storeyHeight\\") + 0.5)\`, and a lot side is rounded down to an even number so the lot centres on whole studs; a max below its min reads as the min. The ranges hold jointly: every sill is below every head, and every head two plates under the lowest storey, so no combination makes an opening or a lintel of no height. Some numbers stay literals by choice -- the palette, the trim's shade and sandstone, the off-shades' two factors, a sill's one stud out and a lintel's brick of height, the cut's 0.35 + 0.3 spread, the probe's half stud, the parapet's three plates, a chimney's footprint, rise and shadow, the setback's inset, the baseplate's margin -- and some because no field reaches their slot: the lattice pitch, the baseplate sizes (\`extraBricks\`) and the stud and pot meshes, and so the brick gap. THE LOT STOPS AT 32 x 32, which stands on the largest baseplate, 40 x 40, with four studs of it showing on every side. Measured on this grammar, not assumed from the one before it: the first 2000 seeds at the default params came out in one piece, with no brick step -1 and no piece claiming a lattice cell of another material, and so did 200 seeds with every param at its maximum and 200 at its minimum, 150 on a 32 x 32 lot of four storeys, 200 on that lot under each roof style forced, and 300 each with the trim, chimneys and setbacks forced on, with them forced off and every bay a window, on an 8 x 8 lot of four storeys with chimneys and setbacks forced, and with the lowest sill under the highest head in the shortest storey.",
+    "tags": [
+      "examples",
+      "structure",
+      "topology"
+    ]
+  },
+  "params": [
+    {
+      "name": "buildStep",
+      "value": 138,
+      "min": 0,
+      "max": 138,
+      "description": "Show the build as it stands after this many steps, counting from 0. A step is one course of the build placed bottom up, with anything hanging under a brick placed alongside it; the default and maximum, 138, is an upper bound on how tall a house can stand in plates, taken from every other param at the top of its range, so it is past every house's last step and shows the whole build -- including any brick no order can attach (step -1), which every smaller value hides rather than draw hanging in air. The exact range for one house is the stepCount detail brickConnectivity writes: steps 0 to stepCount - 1."
+    },
+    {
+      "name": "storeyHeight",
+      "value": 16,
+      "min": 15,
+      "max": 21,
+      "description": "Plates from one storey's floor to the next, its one-plate floor slab included: 16 is the slab and five bricks of wall. Rounded to a whole plate."
+    },
+    {
+      "name": "sillHeight",
+      "value": 6,
+      "min": 2,
+      "max": 7,
+      "description": "Plates from a storey's floor up to the bottom of every window, which is the top of its sill where it has one. Rounded to a whole plate; its range ends below headHeight's, so a window always has a height."
+    },
+    {
+      "name": "headHeight",
+      "value": 12,
+      "min": 8,
+      "max": 13,
+      "description": "Plates from a storey's floor up to the top of every window and door. Rounded to a whole plate; its range ends two plates under the lowest storeyHeight, so a wall keeps at least one plate over its openings, the plate a lintel takes first."
+    },
+    {
+      "name": "bayWidth",
+      "value": 4,
+      "min": 3,
+      "max": 8,
+      "description": "Target bay width in studs: a wall L studs long takes max(1, floor(L / bayWidth)) bays, cut on whole studs, and each bay holds at most one window or door."
+    },
+    {
+      "name": "openingWidth",
+      "value": 2,
+      "min": 1,
+      "max": 4,
+      "description": "Widest window or door, in studs, rounded to a whole stud; a bay keeps at least a stud of wall either side, so a narrower bay takes a narrower opening."
+    },
+    {
+      "name": "windowRate",
+      "value": 0.8,
+      "min": 0,
+      "max": 1,
+      "description": "Chance that a bay wide enough for an opening, and exposed, takes a window rather than staying solid wall. Doors do not roll."
+    },
+    {
+      "name": "sillRate",
+      "value": 0.75,
+      "min": 0,
+      "max": 1,
+      "description": "Chance that a block's windows have SILLS: under each window a plate as wide as the window, its top at sillHeight, standing one stud out from the wall face, in the block's trim colour (its wall colour darkened, or a warm sandstone on a white or grey wall). The studs on its outer row are not drawn, so it reads as a smooth ledge. A window with a sill opens only where the cells the sill stands out into are clear as well. Doors have none. Rolled per block, so every window of a block agrees."
+    },
+    {
+      "name": "lintelRate",
+      "value": 0.75,
+      "min": 0,
+      "max": 1,
+      "description": "Chance that a block's windows and doors have LINTELS: over each opening a block of the trim colour as wide as the opening and a brick tall, less where the wall over the opening is shorter. Rolled per block."
+    },
+    {
+      "name": "plinthRate",
+      "value": 0.5,
+      "min": 0,
+      "max": 1,
+      "description": "Chance that the house stands on a PLINTH: every wall brick whose bottom is the ground floor's bottom course, round every block, laid in dark grey. Rolled once for the whole house, not per block: it is laid on the packed bricks, and a brick can run on across the walls of two blocks of one colour, so a roll per block would spill into a neighbour that had none."
+    },
+    {
+      "name": "brickVariation",
+      "value": 0.15,
+      "min": 0,
+      "max": 1,
+      "description": "Share of wall bricks laid in an OFF-SHADE of their wall's colour, drawn brick by brick: half of them darker (0.88 of the colour), half lighter (1.1 of it, each channel capped at 1). Applied to the packed bricks, so it never moves a joint, and a brick's studs take its shade. 0 lays every wall in one colour."
+    },
+    {
+      "name": "minBlock",
+      "value": 6,
+      "min": 5,
+      "max": 9,
+      "description": "Smallest side, in studs, a split may leave: a block is cut in two only when both halves are at least this wide, in each of three rounds (the third only cuts a block longer than 16 studs). Rounded to a whole stud. It starts at 5 so that a block with no south or north lot edge, whose door goes on a side wall between them, has a wall at least three studs long for it."
+    },
+    {
+      "name": "minStoreys",
+      "value": 1,
+      "min": 1,
+      "max": 4,
+      "description": "Fewest storeys a block draws. Rounded; a maxStoreys below it reads as this."
+    },
+    {
+      "name": "maxStoreys",
+      "value": 3,
+      "min": 1,
+      "max": 4,
+      "description": "Most storeys a block draws: each block takes a whole number uniformly from minStoreys to this."
+    },
+    {
+      "name": "roofStep",
+      "value": 2,
+      "min": 1,
+      "max": 3,
+      "description": "Plates each layer of a pitched roof rises while it steps in one stud: on both long sides for a gable, on all four for a hip. Rounded to a whole plate."
+    },
+    {
+      "name": "flatRoofRate",
+      "value": 0.25,
+      "min": 0,
+      "max": 1,
+      "description": "Chance that a block's roof is flat: its ceiling slab, grey like every floor, with a parapet on the edge one stud thick and three plates tall, the parapet in the roof's colour. Drawn first; a block that does not take it has a pitched roof."
+    },
+    {
+      "name": "hipRoofRate",
+      "value": 0.4,
+      "min": 0,
+      "max": 1,
+      "description": "Chance that a pitched roof is a hip, stepping in on all four sides, rather than a gable, stepping in on the two long sides between gable ends. 0 makes every pitched roof a gable."
+    },
+    {
+      "name": "chimneyRate",
+      "value": 0.5,
+      "min": 0,
+      "max": 1,
+      "description": "Chance that a block's roof has a chimney: a stack one stud by two rising from a roof step (from the parapet on a flat roof) four plates past the roof's top, with a pot on each of its two top studs."
+    },
+    {
+      "name": "setbackRate",
+      "value": 0.35,
+      "min": 0,
+      "max": 1,
+      "description": "Chance that a block of two storeys or more steps its upper storeys in from the storeys below, on the sides it has on the lot edge, leaving a terrace; the roof stands on the upper storeys. A block with no lot-edge side, or too small to step in and keep four studs a side, never does."
+    },
+    {
+      "name": "lotWidthMin",
+      "value": 14,
+      "min": 8,
+      "max": 32,
+      "description": "Narrowest lot, along x, in studs, rounded down to an even number so the lot centres on whole studs. The baseplate grows with the lot, keeping at least two studs of it on every side."
+    },
+    {
+      "name": "lotWidthMax",
+      "value": 26,
+      "min": 8,
+      "max": 32,
+      "description": "Widest lot, along x, in studs: the width is drawn in even steps from lotWidthMin to this, and a value below the min reads as the min."
+    },
+    {
+      "name": "lotDepthMin",
+      "value": 10,
+      "min": 8,
+      "max": 32,
+      "description": "Shallowest lot, along z, in studs, rounded down to an even number."
+    },
+    {
+      "name": "lotDepthMax",
+      "value": 18,
+      "min": 8,
+      "max": 32,
+      "description": "Deepest lot, along z, in studs: the depth is drawn in even steps from lotDepthMin to this, and a value below the min reads as the min."
+    }
+  ],
+  "nodes": [
+    {
+      "id": "lotPt",
+      "type": "pointLine",
+      "params": {
+        "mode": "endpoints",
+        "count": 1,
+        "start": [
+          0,
+          0,
+          0
+        ],
+        "end": [
+          0,
+          0,
+          0
+        ],
+        "includeEnd": true,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "lotSize",
+      "type": "setAttribute",
+      "params": {
+        "name": "lot",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "let",
+          "bind": {
+            "w0": {
+              "fn": "mul",
+              "args": [
+                2,
+                {
+                  "fn": "floor",
+                  "args": [
+                    {
+                      "fn": "div",
+                      "args": [
+                        {
+                          "fn": "param",
+                          "name": "lotWidthMin"
+                        },
+                        2
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "w1": {
+              "fn": "mul",
+              "args": [
+                2,
+                {
+                  "fn": "floor",
+                  "args": [
+                    {
+                      "fn": "div",
+                      "args": [
+                        {
+                          "fn": "param",
+                          "name": "lotWidthMax"
+                        },
+                        2
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "d0": {
+              "fn": "mul",
+              "args": [
+                2,
+                {
+                  "fn": "floor",
+                  "args": [
+                    {
+                      "fn": "div",
+                      "args": [
+                        {
+                          "fn": "param",
+                          "name": "lotDepthMin"
+                        },
+                        2
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "d1": {
+              "fn": "mul",
+              "args": [
+                2,
+                {
+                  "fn": "floor",
+                  "args": [
+                    {
+                      "fn": "div",
+                      "args": [
+                        {
+                          "fn": "param",
+                          "name": "lotDepthMax"
+                        },
+                        2
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "args": [
+            {
+              "fn": "vec",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "var",
+                      "name": "w0"
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        2,
+                        {
+                          "fn": "floor",
+                          "args": [
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "randomField",
+                                  "key": "w"
+                                },
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "max",
+                                      "args": [
+                                        0,
+                                        {
+                                          "fn": "div",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "var",
+                                                  "name": "w1"
+                                                },
+                                                {
+                                                  "fn": "var",
+                                                  "name": "w0"
+                                                }
+                                              ]
+                                            },
+                                            2
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    0.999
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                0,
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "var",
+                      "name": "d0"
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        2,
+                        {
+                          "fn": "floor",
+                          "args": [
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "randomField",
+                                  "key": "d"
+                                },
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "max",
+                                      "args": [
+                                        0,
+                                        {
+                                          "fn": "div",
+                                          "args": [
+                                            {
+                                              "fn": "sub",
+                                              "args": [
+                                                {
+                                                  "fn": "var",
+                                                  "name": "d1"
+                                                },
+                                                {
+                                                  "fn": "var",
+                                                  "name": "d0"
+                                                }
+                                              ]
+                                            },
+                                            2
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    0.999
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "lotBox",
+      "type": "setBounds",
+      "params": {
+        "boundsMin": {
+          "fn": "vec",
+          "args": [
+            0,
+            1,
+            0
+          ]
+        },
+        "boundsMax": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "lot",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 0
+            },
+            139,
+            {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "lot",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "lotPlinth",
+      "type": "setAttribute",
+      "params": {
+        "name": "plinth",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "lt",
+          "args": [
+            {
+              "fn": "randomField",
+              "key": "plinth"
+            },
+            {
+              "fn": "param",
+              "name": "plinthRate"
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "lotKind",
+      "type": "setAttribute",
+      "params": {
+        "name": "kind",
+        "domain": "point",
+        "type": "string",
+        "tupleSize": 1,
+        "value": 0,
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "block",
+        "seed": 0
+      }
+    },
+    {
+      "id": "massing",
+      "type": "applyRules",
+      "params": {
+        "storeyHeight": {
+          "fn": "param",
+          "name": "storeyHeight"
+        },
+        "sillRate": {
+          "fn": "param",
+          "name": "sillRate"
+        },
+        "lintelRate": {
+          "fn": "param",
+          "name": "lintelRate"
+        },
+        "minBlock": {
+          "fn": "param",
+          "name": "minBlock"
+        },
+        "minStoreys": {
+          "fn": "param",
+          "name": "minStoreys"
+        },
+        "maxStoreys": {
+          "fn": "param",
+          "name": "maxStoreys"
+        },
+        "roofStep": {
+          "fn": "param",
+          "name": "roofStep"
+        },
+        "flatRoofRate": {
+          "fn": "param",
+          "name": "flatRoofRate"
+        },
+        "hipRoofRate": {
+          "fn": "param",
+          "name": "hipRoofRate"
+        },
+        "setbackRate": {
+          "fn": "param",
+          "name": "setbackRate"
+        },
+        "maxDepth": 32,
+        "labelAttr": "kind",
+        "depthAttr": "ruleDepth",
+        "rollAttr": "ruleRoll",
+        "parentAttr": "ruleParent",
+        "scoped": [],
+        "scopeOf": []
+      },
+      "subgraph": {
+        "graph": {
+          "formatVersion": 1,
+          "seed": 0,
+          "nodes": [
+            {
+              "id": "canSplit",
+              "type": "setAttribute",
+              "params": {
+                "name": "kind",
+                "domain": "point",
+                "type": "string",
+                "tupleSize": 1,
+                "value": {
+                  "fn": "let",
+                  "bind": {
+                    "span": {
+                      "fn": "max",
+                      "args": [
+                        {
+                          "fn": "box",
+                          "name": "sx"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "sz"
+                        }
+                      ]
+                    },
+                    "mb": {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "param",
+                              "name": "minBlock"
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    },
+                    "d": {
+                      "fn": "attribute",
+                      "name": "ruleDepth"
+                    }
+                  },
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "ge",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "span"
+                                },
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    2,
+                                    {
+                                      "fn": "var",
+                                      "name": "mb"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "lt",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "d"
+                                },
+                                3
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "max",
+                          "args": [
+                            {
+                              "fn": "lt",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "d"
+                                },
+                                2
+                              ]
+                            },
+                            {
+                              "fn": "gt",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "span"
+                                },
+                                16
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "select": 0,
+                "values": [
+                  "mass",
+                  "block"
+                ],
+                "weights": [],
+                "stringValue": "",
+                "seed": 0
+              }
+            },
+            {
+              "id": "halve",
+              "type": "splitBox",
+              "params": {
+                "axis": "perCell",
+                "axisIndex": {
+                  "fn": "select",
+                  "args": [
+                    {
+                      "fn": "ge",
+                      "args": [
+                        {
+                          "fn": "box",
+                          "name": "sx"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "sz"
+                        }
+                      ]
+                    },
+                    0,
+                    2
+                  ]
+                },
+                "labels": [
+                  "block",
+                  "block"
+                ],
+                "sizes": {
+                  "fn": "let",
+                  "bind": {
+                    "span": {
+                      "fn": "max",
+                      "args": [
+                        {
+                          "fn": "box",
+                          "name": "sx"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "sz"
+                        }
+                      ]
+                    },
+                    "mb": {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "param",
+                              "name": "minBlock"
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "args": [
+                    {
+                      "fn": "vec",
+                      "args": [
+                        {
+                          "fn": "clamp",
+                          "args": [
+                            {
+                              "fn": "floor",
+                              "args": [
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "var",
+                                          "name": "span"
+                                        },
+                                        {
+                                          "fn": "add",
+                                          "args": [
+                                            0.35,
+                                            {
+                                              "fn": "mul",
+                                              "args": [
+                                                0.3,
+                                                {
+                                                  "fn": "attribute",
+                                                  "name": "ruleRoll"
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    0.5
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "var",
+                              "name": "mb"
+                            },
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "span"
+                                },
+                                {
+                                  "fn": "var",
+                                  "name": "mb"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        1
+                      ]
+                    }
+                  ]
+                },
+                "units": [
+                  "absolute",
+                  "relative"
+                ],
+                "repeatRound": "floor",
+                "snap": [
+                  0,
+                  0,
+                  0
+                ],
+                "snapMode": "round",
+                "fit": "error",
+                "direction": 1,
+                "where": {
+                  "fn": "attributeIs",
+                  "name": "kind",
+                  "value": "block"
+                },
+                "labelAttr": "kind",
+                "indexAttr": "",
+                "countAttr": ""
+              }
+            },
+            {
+              "id": "storeys",
+              "type": "setAttribute",
+              "params": {
+                "name": "storeys",
+                "domain": "point",
+                "type": "f32",
+                "tupleSize": 1,
+                "value": {
+                  "fn": "let",
+                  "bind": {
+                    "s0": {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "param",
+                              "name": "minStoreys"
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "s0"
+                        },
+                        {
+                          "fn": "floor",
+                          "args": [
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "randomField",
+                                  "key": "storeys"
+                                },
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "max",
+                                      "args": [
+                                        0,
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            {
+                                              "fn": "floor",
+                                              "args": [
+                                                {
+                                                  "fn": "add",
+                                                  "args": [
+                                                    {
+                                                      "fn": "param",
+                                                      "name": "maxStoreys"
+                                                    },
+                                                    0.5
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "var",
+                                              "name": "s0"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    0.999
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "select": 0,
+                "values": [],
+                "weights": [],
+                "stringValue": "",
+                "seed": 0
+              }
+            },
+            {
+              "id": "wallTint",
+              "type": "setAttribute",
+              "params": {
+                "name": "wallTint",
+                "domain": "point",
+                "type": "f32",
+                "tupleSize": 1,
+                "value": {
+                  "fn": "floor",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "randomField",
+                          "key": "wallTint"
+                        },
+                        4.999
+                      ]
+                    }
+                  ]
+                },
+                "select": 0,
+                "values": [],
+                "weights": [],
+                "stringValue": "",
+                "seed": 0
+              }
+            },
+            {
+              "id": "roofTint",
+              "type": "setAttribute",
+              "params": {
+                "name": "roofTint",
+                "domain": "point",
+                "type": "f32",
+                "tupleSize": 1,
+                "value": {
+                  "fn": "floor",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "randomField",
+                          "key": "roofTint"
+                        },
+                        2.999
+                      ]
+                    }
+                  ]
+                },
+                "select": 0,
+                "values": [],
+                "weights": [],
+                "stringValue": "",
+                "seed": 0
+              }
+            },
+            {
+              "id": "doorWall",
+              "type": "setAttribute",
+              "params": {
+                "name": "doorWall",
+                "domain": "point",
+                "type": "f32",
+                "tupleSize": 1,
+                "value": {
+                  "fn": "let",
+                  "bind": {
+                    "w": {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "box",
+                          "name": "x0"
+                        },
+                        0
+                      ]
+                    },
+                    "e": {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "box",
+                          "name": "x1"
+                        },
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "lot",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 0
+                        }
+                      ]
+                    },
+                    "s": {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "box",
+                          "name": "z0"
+                        },
+                        0
+                      ]
+                    },
+                    "n": {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "box",
+                          "name": "z1"
+                        },
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "lot",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 2
+                        }
+                      ]
+                    }
+                  },
+                  "args": [
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "s"
+                        },
+                        1,
+                        {
+                          "fn": "select",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "n"
+                            },
+                            2,
+                            {
+                              "fn": "select",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "w"
+                                },
+                                3,
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    4,
+                                    {
+                                      "fn": "var",
+                                      "name": "e"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "select": 0,
+                "values": [],
+                "weights": [],
+                "stringValue": "",
+                "seed": 0
+              }
+            },
+            {
+              "id": "inset",
+              "type": "setAttribute",
+              "params": {
+                "name": "inset",
+                "domain": "point",
+                "type": "f32",
+                "tupleSize": 1,
+                "value": {
+                  "fn": "let",
+                  "bind": {
+                    "w": {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "box",
+                          "name": "x0"
+                        },
+                        0
+                      ]
+                    },
+                    "e": {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "box",
+                          "name": "x1"
+                        },
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "lot",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 0
+                        }
+                      ]
+                    },
+                    "s": {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "box",
+                          "name": "z0"
+                        },
+                        0
+                      ]
+                    },
+                    "n": {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "box",
+                          "name": "z1"
+                        },
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "lot",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 2
+                        }
+                      ]
+                    }
+                  },
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "gt",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "add",
+                                      "args": [
+                                        {
+                                          "fn": "var",
+                                          "name": "w"
+                                        },
+                                        {
+                                          "fn": "var",
+                                          "name": "e"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "var",
+                                      "name": "s"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "var",
+                                  "name": "n"
+                                }
+                              ]
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "fn": "select",
+                          "args": [
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "ge",
+                                  "args": [
+                                    {
+                                      "fn": "sub",
+                                      "args": [
+                                        {
+                                          "fn": "box",
+                                          "name": "sx"
+                                        },
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            2,
+                                            {
+                                              "fn": "add",
+                                              "args": [
+                                                {
+                                                  "fn": "var",
+                                                  "name": "w"
+                                                },
+                                                {
+                                                  "fn": "var",
+                                                  "name": "e"
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    4
+                                  ]
+                                },
+                                {
+                                  "fn": "ge",
+                                  "args": [
+                                    {
+                                      "fn": "sub",
+                                      "args": [
+                                        {
+                                          "fn": "box",
+                                          "name": "sz"
+                                        },
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            2,
+                                            {
+                                              "fn": "add",
+                                              "args": [
+                                                {
+                                                  "fn": "var",
+                                                  "name": "s"
+                                                },
+                                                {
+                                                  "fn": "var",
+                                                  "name": "n"
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    4
+                                  ]
+                                }
+                              ]
+                            },
+                            2,
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "ge",
+                                  "args": [
+                                    {
+                                      "fn": "sub",
+                                      "args": [
+                                        {
+                                          "fn": "box",
+                                          "name": "sx"
+                                        },
+                                        {
+                                          "fn": "add",
+                                          "args": [
+                                            {
+                                              "fn": "var",
+                                              "name": "w"
+                                            },
+                                            {
+                                              "fn": "var",
+                                              "name": "e"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    4
+                                  ]
+                                },
+                                {
+                                  "fn": "ge",
+                                  "args": [
+                                    {
+                                      "fn": "sub",
+                                      "args": [
+                                        {
+                                          "fn": "box",
+                                          "name": "sz"
+                                        },
+                                        {
+                                          "fn": "add",
+                                          "args": [
+                                            {
+                                              "fn": "var",
+                                              "name": "s"
+                                            },
+                                            {
+                                              "fn": "var",
+                                              "name": "n"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    4
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "select": 0,
+                "values": [],
+                "weights": [],
+                "stringValue": "",
+                "seed": 0
+              }
+            },
+            {
+              "id": "lowSt",
+              "type": "setAttribute",
+              "params": {
+                "name": "lowSt",
+                "domain": "point",
+                "type": "f32",
+                "tupleSize": 1,
+                "value": {
+                  "fn": "let",
+                  "bind": {
+                    "s": {
+                      "fn": "attribute",
+                      "name": "storeys"
+                    }
+                  },
+                  "args": [
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "lt",
+                                  "args": [
+                                    {
+                                      "fn": "randomField",
+                                      "key": "setback"
+                                    },
+                                    {
+                                      "fn": "param",
+                                      "name": "setbackRate"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "ge",
+                                  "args": [
+                                    {
+                                      "fn": "var",
+                                      "name": "s"
+                                    },
+                                    2
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "gt",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "inset"
+                                },
+                                0
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "add",
+                          "args": [
+                            1,
+                            {
+                              "fn": "floor",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "randomField",
+                                      "key": "setbackAt"
+                                    },
+                                    {
+                                      "fn": "sub",
+                                      "args": [
+                                        {
+                                          "fn": "var",
+                                          "name": "s"
+                                        },
+                                        1
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "var",
+                          "name": "s"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "select": 0,
+                "values": [],
+                "weights": [],
+                "stringValue": "",
+                "seed": 0
+              }
+            },
+            {
+              "id": "trim",
+              "type": "setAttribute",
+              "params": {
+                "name": "trim",
+                "domain": "point",
+                "type": "f32",
+                "tupleSize": 3,
+                "value": {
+                  "fn": "vec",
+                  "args": [
+                    {
+                      "fn": "lt",
+                      "args": [
+                        {
+                          "fn": "randomField",
+                          "key": "sill"
+                        },
+                        {
+                          "fn": "param",
+                          "name": "sillRate"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "lt",
+                      "args": [
+                        {
+                          "fn": "randomField",
+                          "key": "lintel"
+                        },
+                        {
+                          "fn": "param",
+                          "name": "lintelRate"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "attribute",
+                      "name": "plinth"
+                    }
+                  ]
+                },
+                "select": 0,
+                "values": [],
+                "weights": [],
+                "stringValue": "",
+                "seed": 0
+              }
+            },
+            {
+              "id": "massUp",
+              "type": "splitBox",
+              "params": {
+                "axis": "y",
+                "axisIndex": 0,
+                "labels": [
+                  "floor",
+                  "tier",
+                  "upper"
+                ],
+                "sizes": {
+                  "fn": "vec",
+                  "args": [
+                    1,
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lowSt"
+                        },
+                        {
+                          "fn": "floor",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "param",
+                                  "name": "storeyHeight"
+                                },
+                                0.5
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    1
+                  ]
+                },
+                "units": [
+                  "absolute",
+                  "absolute",
+                  "relative"
+                ],
+                "repeatRound": "floor",
+                "snap": [
+                  0,
+                  0,
+                  0
+                ],
+                "snapMode": "round",
+                "fit": "error",
+                "direction": 1,
+                "where": 1,
+                "labelAttr": "kind",
+                "indexAttr": "",
+                "countAttr": ""
+              }
+            },
+            {
+              "id": "stepX",
+              "type": "splitBox",
+              "params": {
+                "axis": "x",
+                "axisIndex": 0,
+                "labels": [
+                  "",
+                  "upper",
+                  ""
+                ],
+                "sizes": {
+                  "fn": "vec",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "inset"
+                            },
+                            {
+                              "fn": "lt",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lowSt"
+                                },
+                                {
+                                  "fn": "attribute",
+                                  "name": "storeys"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "box",
+                              "name": "x0"
+                            },
+                            0
+                          ]
+                        }
+                      ]
+                    },
+                    1,
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "inset"
+                            },
+                            {
+                              "fn": "lt",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lowSt"
+                                },
+                                {
+                                  "fn": "attribute",
+                                  "name": "storeys"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "box",
+                              "name": "x1"
+                            },
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lot",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 0
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "units": [
+                  "absolute",
+                  "relative",
+                  "absolute"
+                ],
+                "repeatRound": "floor",
+                "snap": [
+                  0,
+                  0,
+                  0
+                ],
+                "snapMode": "round",
+                "fit": "error",
+                "direction": 1,
+                "where": 1,
+                "labelAttr": "kind",
+                "indexAttr": "",
+                "countAttr": ""
+              }
+            },
+            {
+              "id": "stepZ",
+              "type": "splitBox",
+              "params": {
+                "axis": "z",
+                "axisIndex": 0,
+                "labels": [
+                  "",
+                  "upper",
+                  ""
+                ],
+                "sizes": {
+                  "fn": "vec",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "inset"
+                            },
+                            {
+                              "fn": "lt",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lowSt"
+                                },
+                                {
+                                  "fn": "attribute",
+                                  "name": "storeys"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "box",
+                              "name": "z0"
+                            },
+                            0
+                          ]
+                        }
+                      ]
+                    },
+                    1,
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "inset"
+                            },
+                            {
+                              "fn": "lt",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lowSt"
+                                },
+                                {
+                                  "fn": "attribute",
+                                  "name": "storeys"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "box",
+                              "name": "z1"
+                            },
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "lot",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 2
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "units": [
+                  "absolute",
+                  "relative",
+                  "absolute"
+                ],
+                "repeatRound": "floor",
+                "snap": [
+                  0,
+                  0,
+                  0
+                ],
+                "snapMode": "round",
+                "fit": "error",
+                "direction": 1,
+                "where": 1,
+                "labelAttr": "kind",
+                "indexAttr": "",
+                "countAttr": ""
+              }
+            },
+            {
+              "id": "upperUp",
+              "type": "splitBox",
+              "params": {
+                "axis": "y",
+                "axisIndex": 0,
+                "labels": [
+                  "tier",
+                  "roofSpace"
+                ],
+                "sizes": {
+                  "fn": "vec",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "storeys"
+                            },
+                            {
+                              "fn": "attribute",
+                              "name": "lowSt"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "floor",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "param",
+                                  "name": "storeyHeight"
+                                },
+                                0.5
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    1
+                  ]
+                },
+                "units": [
+                  "absolute",
+                  "relative"
+                ],
+                "repeatRound": "floor",
+                "snap": [
+                  0,
+                  0,
+                  0
+                ],
+                "snapMode": "round",
+                "fit": "error",
+                "direction": 1,
+                "where": 1,
+                "labelAttr": "kind",
+                "indexAttr": "",
+                "countAttr": ""
+              }
+            },
+            {
+              "id": "roofStyle",
+              "type": "setAttribute",
+              "params": {
+                "name": "kind",
+                "domain": "point",
+                "type": "string",
+                "tupleSize": 1,
+                "value": {
+                  "fn": "let",
+                  "bind": {
+                    "r": {
+                      "fn": "attribute",
+                      "name": "ruleRoll"
+                    },
+                    "f": {
+                      "fn": "param",
+                      "name": "flatRoofRate"
+                    }
+                  },
+                  "args": [
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "lt",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "r"
+                            },
+                            {
+                              "fn": "var",
+                              "name": "f"
+                            }
+                          ]
+                        },
+                        2,
+                        {
+                          "fn": "lt",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "r"
+                            },
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "f"
+                                },
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "sub",
+                                      "args": [
+                                        1,
+                                        {
+                                          "fn": "var",
+                                          "name": "f"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "param",
+                                      "name": "hipRoofRate"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "select": 0,
+                "values": [
+                  "gable",
+                  "hip",
+                  "flat"
+                ],
+                "weights": [],
+                "stringValue": "",
+                "seed": 0
+              }
+            },
+            {
+              "id": "gableLayers",
+              "type": "splitBox",
+              "params": {
+                "axis": "y",
+                "axisIndex": 0,
+                "labels": [
+                  "layer",
+                  ""
+                ],
+                "sizes": {
+                  "fn": "let",
+                  "bind": {
+                    "st": {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "param",
+                              "name": "roofStep"
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    },
+                    "nl": {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "div",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "min",
+                                  "args": [
+                                    {
+                                      "fn": "box",
+                                      "name": "sx"
+                                    },
+                                    {
+                                      "fn": "box",
+                                      "name": "sz"
+                                    }
+                                  ]
+                                },
+                                1
+                              ]
+                            },
+                            2
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "args": [
+                    {
+                      "fn": "vec",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "st"
+                        },
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "box",
+                              "name": "sy"
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "nl"
+                                },
+                                {
+                                  "fn": "var",
+                                  "name": "st"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "units": [
+                  "repeat",
+                  "absolute"
+                ],
+                "repeatRound": "floor",
+                "snap": [
+                  0,
+                  0,
+                  0
+                ],
+                "snapMode": "round",
+                "fit": "error",
+                "direction": 1,
+                "where": 1,
+                "labelAttr": "kind",
+                "indexAttr": "layer",
+                "countAttr": ""
+              }
+            },
+            {
+              "id": "gableSlope",
+              "type": "splitBox",
+              "params": {
+                "axis": "perCell",
+                "axisIndex": {
+                  "fn": "select",
+                  "args": [
+                    {
+                      "fn": "ge",
+                      "args": [
+                        {
+                          "fn": "box",
+                          "name": "sx"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "sz"
+                        }
+                      ]
+                    },
+                    2,
+                    0
+                  ]
+                },
+                "labels": [
+                  "",
+                  "slope",
+                  ""
+                ],
+                "sizes": {
+                  "fn": "vec",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "layer"
+                    },
+                    1,
+                    {
+                      "fn": "attribute",
+                      "name": "layer"
+                    }
+                  ]
+                },
+                "units": [
+                  "absolute",
+                  "relative",
+                  "absolute"
+                ],
+                "repeatRound": "floor",
+                "snap": [
+                  0,
+                  0,
+                  0
+                ],
+                "snapMode": "round",
+                "fit": "error",
+                "direction": 1,
+                "where": 1,
+                "labelAttr": "kind",
+                "indexAttr": "",
+                "countAttr": ""
+              }
+            },
+            {
+              "id": "gableEnds",
+              "type": "splitBox",
+              "params": {
+                "axis": "perCell",
+                "axisIndex": {
+                  "fn": "select",
+                  "args": [
+                    {
+                      "fn": "ge",
+                      "args": [
+                        {
+                          "fn": "box",
+                          "name": "sx"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "sz"
+                        }
+                      ]
+                    },
+                    0,
+                    2
+                  ]
+                },
+                "labels": [
+                  "wall",
+                  "roof",
+                  "wall"
+                ],
+                "sizes": [
+                  1,
+                  1,
+                  1
+                ],
+                "units": [
+                  "absolute",
+                  "relative",
+                  "absolute"
+                ],
+                "repeatRound": "floor",
+                "snap": [
+                  0,
+                  0,
+                  0
+                ],
+                "snapMode": "round",
+                "fit": "error",
+                "direction": 1,
+                "where": 1,
+                "labelAttr": "kind",
+                "indexAttr": "",
+                "countAttr": ""
+              }
+            },
+            {
+              "id": "hipLayers",
+              "type": "splitBox",
+              "params": {
+                "axis": "y",
+                "axisIndex": 0,
+                "labels": [
+                  "layer",
+                  ""
+                ],
+                "sizes": {
+                  "fn": "let",
+                  "bind": {
+                    "st": {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "param",
+                              "name": "roofStep"
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    },
+                    "nl": {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "div",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "min",
+                                  "args": [
+                                    {
+                                      "fn": "box",
+                                      "name": "sx"
+                                    },
+                                    {
+                                      "fn": "box",
+                                      "name": "sz"
+                                    }
+                                  ]
+                                },
+                                1
+                              ]
+                            },
+                            2
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "args": [
+                    {
+                      "fn": "vec",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "st"
+                        },
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "box",
+                              "name": "sy"
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "nl"
+                                },
+                                {
+                                  "fn": "var",
+                                  "name": "st"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "units": [
+                  "repeat",
+                  "absolute"
+                ],
+                "repeatRound": "floor",
+                "snap": [
+                  0,
+                  0,
+                  0
+                ],
+                "snapMode": "round",
+                "fit": "error",
+                "direction": 1,
+                "where": 1,
+                "labelAttr": "kind",
+                "indexAttr": "layer",
+                "countAttr": ""
+              }
+            },
+            {
+              "id": "hipX",
+              "type": "splitBox",
+              "params": {
+                "axis": "x",
+                "axisIndex": 0,
+                "labels": [
+                  "",
+                  "roof",
+                  ""
+                ],
+                "sizes": {
+                  "fn": "vec",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "layer"
+                    },
+                    1,
+                    {
+                      "fn": "attribute",
+                      "name": "layer"
+                    }
+                  ]
+                },
+                "units": [
+                  "absolute",
+                  "relative",
+                  "absolute"
+                ],
+                "repeatRound": "floor",
+                "snap": [
+                  0,
+                  0,
+                  0
+                ],
+                "snapMode": "round",
+                "fit": "error",
+                "direction": 1,
+                "where": 1,
+                "labelAttr": "kind",
+                "indexAttr": "",
+                "countAttr": ""
+              }
+            },
+            {
+              "id": "hipZ",
+              "type": "splitBox",
+              "params": {
+                "axis": "z",
+                "axisIndex": 0,
+                "labels": [
+                  "",
+                  "roof",
+                  ""
+                ],
+                "sizes": {
+                  "fn": "vec",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "layer"
+                    },
+                    1,
+                    {
+                      "fn": "attribute",
+                      "name": "layer"
+                    }
+                  ]
+                },
+                "units": [
+                  "absolute",
+                  "relative",
+                  "absolute"
+                ],
+                "repeatRound": "floor",
+                "snap": [
+                  0,
+                  0,
+                  0
+                ],
+                "snapMode": "round",
+                "fit": "error",
+                "direction": 1,
+                "where": 1,
+                "labelAttr": "kind",
+                "indexAttr": "",
+                "countAttr": ""
+              }
+            },
+            {
+              "id": "parapetCourse",
+              "type": "splitBox",
+              "params": {
+                "axis": "y",
+                "axisIndex": 0,
+                "labels": [
+                  "parapet",
+                  ""
+                ],
+                "sizes": {
+                  "fn": "vec",
+                  "args": [
+                    3,
+                    1
+                  ]
+                },
+                "units": [
+                  "absolute",
+                  "relative"
+                ],
+                "repeatRound": "floor",
+                "snap": [
+                  0,
+                  0,
+                  0
+                ],
+                "snapMode": "round",
+                "fit": "error",
+                "direction": 1,
+                "where": 1,
+                "labelAttr": "kind",
+                "indexAttr": "",
+                "countAttr": ""
+              }
+            },
+            {
+              "id": "parapet",
+              "type": "shellSplit",
+              "params": {
+                "faces": [
+                  "south",
+                  "north",
+                  "west",
+                  "east"
+                ],
+                "labels": [
+                  "roof",
+                  "roof",
+                  "roof",
+                  "roof"
+                ],
+                "thickness": [
+                  1
+                ],
+                "interiorLabel": "",
+                "fit": "error",
+                "where": 1,
+                "labelAttr": "kind",
+                "faceAttr": "",
+                "alongAxisAttr": "",
+                "alongSignAttr": "",
+                "upAxisAttr": "",
+                "upSignAttr": "",
+                "outAxisAttr": "",
+                "outwardAttr": ""
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from": [
+                "canSplit",
+                "out"
+              ],
+              "to": [
+                "halve",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "storeys",
+                "out"
+              ],
+              "to": [
+                "wallTint",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "wallTint",
+                "out"
+              ],
+              "to": [
+                "roofTint",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "roofTint",
+                "out"
+              ],
+              "to": [
+                "doorWall",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "doorWall",
+                "out"
+              ],
+              "to": [
+                "inset",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "inset",
+                "out"
+              ],
+              "to": [
+                "lowSt",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "lowSt",
+                "out"
+              ],
+              "to": [
+                "trim",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "trim",
+                "out"
+              ],
+              "to": [
+                "massUp",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "stepX",
+                "out"
+              ],
+              "to": [
+                "stepZ",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "stepZ",
+                "out"
+              ],
+              "to": [
+                "upperUp",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "gableLayers",
+                "out"
+              ],
+              "to": [
+                "gableSlope",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "gableSlope",
+                "out"
+              ],
+              "to": [
+                "gableEnds",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "hipLayers",
+                "out"
+              ],
+              "to": [
+                "hipX",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "hipX",
+                "out"
+              ],
+              "to": [
+                "hipZ",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "parapetCourse",
+                "out"
+              ],
+              "to": [
+                "parapet",
+                "in"
+              ]
+            }
+          ],
+          "outputs": []
+        },
+        "inputs": [
+          {
+            "name": "block",
+            "node": "canSplit",
+            "pin": "in"
+          },
+          {
+            "name": "mass",
+            "node": "storeys",
+            "pin": "in"
+          },
+          {
+            "name": "upper",
+            "node": "stepX",
+            "pin": "in"
+          },
+          {
+            "name": "roofSpace",
+            "node": "roofStyle",
+            "pin": "in"
+          },
+          {
+            "name": "gable",
+            "node": "gableLayers",
+            "pin": "in"
+          },
+          {
+            "name": "hip",
+            "node": "hipLayers",
+            "pin": "in"
+          },
+          {
+            "name": "flat",
+            "node": "parapetCourse",
+            "pin": "in"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "block",
+            "node": "halve",
+            "pin": "out"
+          },
+          {
+            "name": "mass",
+            "node": "massUp",
+            "pin": "out"
+          },
+          {
+            "name": "upper",
+            "node": "upperUp",
+            "pin": "out"
+          },
+          {
+            "name": "roofSpace",
+            "node": "roofStyle",
+            "pin": "out"
+          },
+          {
+            "name": "gable",
+            "node": "gableEnds",
+            "pin": "out"
+          },
+          {
+            "name": "hip",
+            "node": "hipZ",
+            "pin": "out"
+          },
+          {
+            "name": "flat",
+            "node": "parapet",
+            "pin": "out"
+          }
+        ],
+        "params": [
+          {
+            "name": "storeyHeight",
+            "targets": [],
+            "description": "The graph param storeyHeight, read by name in the rules.",
+            "default": 16,
+            "min": 15,
+            "max": 21
+          },
+          {
+            "name": "sillRate",
+            "targets": [],
+            "description": "The graph param sillRate, read by name in the rules.",
+            "default": 0.75,
+            "min": 0,
+            "max": 1
+          },
+          {
+            "name": "lintelRate",
+            "targets": [],
+            "description": "The graph param lintelRate, read by name in the rules.",
+            "default": 0.75,
+            "min": 0,
+            "max": 1
+          },
+          {
+            "name": "minBlock",
+            "targets": [],
+            "description": "The graph param minBlock, read by name in the rules.",
+            "default": 6,
+            "min": 5,
+            "max": 9
+          },
+          {
+            "name": "minStoreys",
+            "targets": [],
+            "description": "The graph param minStoreys, read by name in the rules.",
+            "default": 1,
+            "min": 1,
+            "max": 4
+          },
+          {
+            "name": "maxStoreys",
+            "targets": [],
+            "description": "The graph param maxStoreys, read by name in the rules.",
+            "default": 3,
+            "min": 1,
+            "max": 4
+          },
+          {
+            "name": "roofStep",
+            "targets": [],
+            "description": "The graph param roofStep, read by name in the rules.",
+            "default": 2,
+            "min": 1,
+            "max": 3
+          },
+          {
+            "name": "flatRoofRate",
+            "targets": [],
+            "description": "The graph param flatRoofRate, read by name in the rules.",
+            "default": 0.25,
+            "min": 0,
+            "max": 1
+          },
+          {
+            "name": "hipRoofRate",
+            "targets": [],
+            "description": "The graph param hipRoofRate, read by name in the rules.",
+            "default": 0.4,
+            "min": 0,
+            "max": 1
+          },
+          {
+            "name": "setbackRate",
+            "targets": [],
+            "description": "The graph param setbackRate, read by name in the rules.",
+            "default": 0.35,
+            "min": 0,
+            "max": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "tiers",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "attributeIs",
+          "name": "kind",
+          "value": "tier"
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "chimRoll",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "mul",
+          "args": [
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "attributeIs",
+                      "name": "kind",
+                      "value": "gable"
+                    },
+                    {
+                      "fn": "attributeIs",
+                      "name": "kind",
+                      "value": "hip"
+                    }
+                  ]
+                },
+                {
+                  "fn": "attributeIs",
+                  "name": "kind",
+                  "value": "flat"
+                }
+              ]
+            },
+            {
+              "fn": "lt",
+              "args": [
+                {
+                  "fn": "randomField",
+                  "key": "chimney"
+                },
+                {
+                  "fn": "param",
+                  "name": "chimneyRate"
+                }
+              ]
+            }
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "chimPick",
+      "type": "setAttribute",
+      "params": {
+        "name": "chimAt",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "let",
+          "bind": {
+            "rx": {
+              "fn": "ge",
+              "args": [
+                {
+                  "fn": "box",
+                  "name": "sx"
+                },
+                {
+                  "fn": "box",
+                  "name": "sz"
+                }
+              ]
+            },
+            "fl": {
+              "fn": "attributeIs",
+              "name": "kind",
+              "value": "flat"
+            },
+            "nl": {
+              "fn": "floor",
+              "args": [
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "min",
+                          "args": [
+                            {
+                              "fn": "box",
+                              "name": "sx"
+                            },
+                            {
+                              "fn": "box",
+                              "name": "sz"
+                            }
+                          ]
+                        },
+                        1
+                      ]
+                    },
+                    2
+                  ]
+                }
+              ]
+            },
+            "kl": {
+              "fn": "floor",
+              "args": [
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "nl"
+                        },
+                        1
+                      ]
+                    },
+                    2
+                  ]
+                }
+              ]
+            },
+            "k": {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "var",
+                  "name": "fl"
+                },
+                0,
+                {
+                  "fn": "max",
+                  "args": [
+                    0,
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "kl"
+                        },
+                        {
+                          "fn": "floor",
+                          "args": [
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "randomField",
+                                  "key": "chimAt"
+                                },
+                                {
+                                  "fn": "sub",
+                                  "args": [
+                                    {
+                                      "fn": "sub",
+                                      "args": [
+                                        {
+                                          "fn": "var",
+                                          "name": "nl"
+                                        },
+                                        1
+                                      ]
+                                    },
+                                    {
+                                      "fn": "var",
+                                      "name": "kl"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "a0": {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "var",
+                  "name": "rx"
+                },
+                {
+                  "fn": "box",
+                  "name": "x0"
+                },
+                {
+                  "fn": "box",
+                  "name": "z0"
+                }
+              ]
+            },
+            "e": {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "attributeIs",
+                  "name": "kind",
+                  "value": "hip"
+                },
+                {
+                  "fn": "var",
+                  "name": "k"
+                },
+                1
+              ]
+            }
+          },
+          "args": [
+            {
+              "fn": "vec",
+              "args": [
+                {
+                  "fn": "var",
+                  "name": "k"
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "a0"
+                        },
+                        {
+                          "fn": "var",
+                          "name": "e"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "randomField",
+                              "key": "chimU"
+                            },
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "sub",
+                                  "args": [
+                                    {
+                                      "fn": "sub",
+                                      "args": [
+                                        {
+                                          "fn": "sub",
+                                          "args": [
+                                            {
+                                              "fn": "select",
+                                              "args": [
+                                                {
+                                                  "fn": "var",
+                                                  "name": "rx"
+                                                },
+                                                {
+                                                  "fn": "box",
+                                                  "name": "x1"
+                                                },
+                                                {
+                                                  "fn": "box",
+                                                  "name": "z1"
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "fn": "var",
+                                              "name": "a0"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            2,
+                                            {
+                                              "fn": "var",
+                                              "name": "e"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    2
+                                  ]
+                                },
+                                0.999
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "lt",
+                  "args": [
+                    {
+                      "fn": "randomField",
+                      "key": "chimSide"
+                    },
+                    0.5
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "chimBox",
+      "type": "setBounds",
+      "params": {
+        "boundsMin": {
+          "fn": "let",
+          "bind": {
+            "rx": {
+              "fn": "ge",
+              "args": [
+                {
+                  "fn": "box",
+                  "name": "sx"
+                },
+                {
+                  "fn": "box",
+                  "name": "sz"
+                }
+              ]
+            },
+            "fl": {
+              "fn": "attributeIs",
+              "name": "kind",
+              "value": "flat"
+            },
+            "st": {
+              "fn": "floor",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "param",
+                      "name": "roofStep"
+                    },
+                    0.5
+                  ]
+                }
+              ]
+            },
+            "k": {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "chimAt",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 0
+            },
+            "u": {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "chimAt",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 1
+            },
+            "c": {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "chimAt",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "select",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "rx"
+                            },
+                            {
+                              "fn": "box",
+                              "name": "z1"
+                            },
+                            {
+                              "fn": "box",
+                              "name": "x1"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "var",
+                          "name": "k"
+                        }
+                      ]
+                    },
+                    1
+                  ]
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "rx"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "z0"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "x0"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "var",
+                      "name": "k"
+                    }
+                  ]
+                }
+              ]
+            },
+            "yb": {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "box",
+                  "name": "y0"
+                },
+                {
+                  "fn": "select",
+                  "args": [
+                    {
+                      "fn": "var",
+                      "name": "fl"
+                    },
+                    3,
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "k"
+                            },
+                            1
+                          ]
+                        },
+                        {
+                          "fn": "var",
+                          "name": "st"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "args": [
+            {
+              "fn": "vec",
+              "args": [
+                {
+                  "fn": "select",
+                  "args": [
+                    {
+                      "fn": "var",
+                      "name": "rx"
+                    },
+                    {
+                      "fn": "var",
+                      "name": "u"
+                    },
+                    {
+                      "fn": "var",
+                      "name": "c"
+                    }
+                  ]
+                },
+                {
+                  "fn": "var",
+                  "name": "yb"
+                },
+                {
+                  "fn": "select",
+                  "args": [
+                    {
+                      "fn": "var",
+                      "name": "rx"
+                    },
+                    {
+                      "fn": "var",
+                      "name": "c"
+                    },
+                    {
+                      "fn": "var",
+                      "name": "u"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "boundsMax": {
+          "fn": "let",
+          "bind": {
+            "rx": {
+              "fn": "ge",
+              "args": [
+                {
+                  "fn": "box",
+                  "name": "sx"
+                },
+                {
+                  "fn": "box",
+                  "name": "sz"
+                }
+              ]
+            },
+            "fl": {
+              "fn": "attributeIs",
+              "name": "kind",
+              "value": "flat"
+            },
+            "st": {
+              "fn": "floor",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "param",
+                      "name": "roofStep"
+                    },
+                    0.5
+                  ]
+                }
+              ]
+            },
+            "nl": {
+              "fn": "floor",
+              "args": [
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "min",
+                          "args": [
+                            {
+                              "fn": "box",
+                              "name": "sx"
+                            },
+                            {
+                              "fn": "box",
+                              "name": "sz"
+                            }
+                          ]
+                        },
+                        1
+                      ]
+                    },
+                    2
+                  ]
+                }
+              ]
+            },
+            "k": {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "chimAt",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 0
+            },
+            "u": {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "chimAt",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 1
+            },
+            "c": {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "chimAt",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "select",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "rx"
+                            },
+                            {
+                              "fn": "box",
+                              "name": "z1"
+                            },
+                            {
+                              "fn": "box",
+                              "name": "x1"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "var",
+                          "name": "k"
+                        }
+                      ]
+                    },
+                    1
+                  ]
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "rx"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "z0"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "x0"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "var",
+                      "name": "k"
+                    }
+                  ]
+                }
+              ]
+            },
+            "yt": {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "box",
+                      "name": "y0"
+                    },
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "fl"
+                        },
+                        3,
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "nl"
+                            },
+                            {
+                              "fn": "var",
+                              "name": "st"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                4
+              ]
+            }
+          },
+          "args": [
+            {
+              "fn": "vec",
+              "args": [
+                {
+                  "fn": "select",
+                  "args": [
+                    {
+                      "fn": "var",
+                      "name": "rx"
+                    },
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "u"
+                        },
+                        2
+                      ]
+                    },
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "c"
+                        },
+                        1
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "var",
+                  "name": "yt"
+                },
+                {
+                  "fn": "select",
+                  "args": [
+                    {
+                      "fn": "var",
+                      "name": "rx"
+                    },
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "c"
+                        },
+                        1
+                      ]
+                    },
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "u"
+                        },
+                        2
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "chimKind",
+      "type": "setAttribute",
+      "params": {
+        "name": "kind",
+        "domain": "point",
+        "type": "string",
+        "tupleSize": 1,
+        "value": 0,
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "chimney",
+        "seed": 0
+      }
+    },
+    {
+      "id": "chimShadow",
+      "type": "setBounds",
+      "params": {
+        "boundsMin": {
+          "fn": "let",
+          "bind": {
+            "rx": {
+              "fn": "ge",
+              "args": [
+                {
+                  "fn": "box",
+                  "name": "sx"
+                },
+                {
+                  "fn": "box",
+                  "name": "sz"
+                }
+              ]
+            },
+            "k": {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "chimAt",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 0
+            },
+            "u": {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "chimAt",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 1
+            },
+            "c": {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "chimAt",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "select",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "rx"
+                            },
+                            {
+                              "fn": "box",
+                              "name": "z1"
+                            },
+                            {
+                              "fn": "box",
+                              "name": "x1"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "var",
+                          "name": "k"
+                        }
+                      ]
+                    },
+                    1
+                  ]
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "rx"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "z0"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "x0"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "var",
+                      "name": "k"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "args": [
+            {
+              "fn": "vec",
+              "args": [
+                {
+                  "fn": "max",
+                  "args": [
+                    {
+                      "fn": "box",
+                      "name": "x0"
+                    },
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "select",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "rx"
+                            },
+                            {
+                              "fn": "var",
+                              "name": "u"
+                            },
+                            {
+                              "fn": "var",
+                              "name": "c"
+                            }
+                          ]
+                        },
+                        2
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "box",
+                  "name": "y0"
+                },
+                {
+                  "fn": "max",
+                  "args": [
+                    {
+                      "fn": "box",
+                      "name": "z0"
+                    },
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "select",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "rx"
+                            },
+                            {
+                              "fn": "var",
+                              "name": "c"
+                            },
+                            {
+                              "fn": "var",
+                              "name": "u"
+                            }
+                          ]
+                        },
+                        2
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "boundsMax": {
+          "fn": "let",
+          "bind": {
+            "rx": {
+              "fn": "ge",
+              "args": [
+                {
+                  "fn": "box",
+                  "name": "sx"
+                },
+                {
+                  "fn": "box",
+                  "name": "sz"
+                }
+              ]
+            },
+            "fl": {
+              "fn": "attributeIs",
+              "name": "kind",
+              "value": "flat"
+            },
+            "st": {
+              "fn": "floor",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "param",
+                      "name": "roofStep"
+                    },
+                    0.5
+                  ]
+                }
+              ]
+            },
+            "nl": {
+              "fn": "floor",
+              "args": [
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "min",
+                          "args": [
+                            {
+                              "fn": "box",
+                              "name": "sx"
+                            },
+                            {
+                              "fn": "box",
+                              "name": "sz"
+                            }
+                          ]
+                        },
+                        1
+                      ]
+                    },
+                    2
+                  ]
+                }
+              ]
+            },
+            "k": {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "chimAt",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 0
+            },
+            "u": {
+              "fn": "component",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "chimAt",
+                  "tupleSize": 3
+                }
+              ],
+              "index": 1
+            },
+            "c": {
+              "fn": "select",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "chimAt",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                {
+                  "fn": "sub",
+                  "args": [
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "select",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "rx"
+                            },
+                            {
+                              "fn": "box",
+                              "name": "z1"
+                            },
+                            {
+                              "fn": "box",
+                              "name": "x1"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "var",
+                          "name": "k"
+                        }
+                      ]
+                    },
+                    1
+                  ]
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "rx"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "z0"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "x0"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "var",
+                      "name": "k"
+                    }
+                  ]
+                }
+              ]
+            },
+            "yt": {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "box",
+                      "name": "y0"
+                    },
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "fl"
+                        },
+                        3,
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "nl"
+                            },
+                            {
+                              "fn": "var",
+                              "name": "st"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                4
+              ]
+            }
+          },
+          "args": [
+            {
+              "fn": "vec",
+              "args": [
+                {
+                  "fn": "min",
+                  "args": [
+                    {
+                      "fn": "box",
+                      "name": "x1"
+                    },
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "select",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "rx"
+                            },
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "u"
+                                },
+                                2
+                              ]
+                            },
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "c"
+                                },
+                                1
+                              ]
+                            }
+                          ]
+                        },
+                        2
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "var",
+                      "name": "yt"
+                    },
+                    2
+                  ]
+                },
+                {
+                  "fn": "min",
+                  "args": [
+                    {
+                      "fn": "box",
+                      "name": "z1"
+                    },
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "select",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "rx"
+                            },
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "c"
+                                },
+                                1
+                              ]
+                            },
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "u"
+                                },
+                                2
+                              ]
+                            }
+                          ]
+                        },
+                        2
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "occluder",
+      "type": "mergePoints",
+      "params": {}
+    },
+    {
+      "id": "facade",
+      "type": "applyRules",
+      "params": {
+        "storeyHeight": {
+          "fn": "param",
+          "name": "storeyHeight"
+        },
+        "sillHeight": {
+          "fn": "param",
+          "name": "sillHeight"
+        },
+        "headHeight": {
+          "fn": "param",
+          "name": "headHeight"
+        },
+        "bayWidth": {
+          "fn": "param",
+          "name": "bayWidth"
+        },
+        "openingWidth": {
+          "fn": "param",
+          "name": "openingWidth"
+        },
+        "windowRate": {
+          "fn": "param",
+          "name": "windowRate"
+        },
+        "maxDepth": 32,
+        "labelAttr": "kind",
+        "depthAttr": "ruleDepth",
+        "rollAttr": "ruleRoll",
+        "parentAttr": "ruleParent",
+        "scoped": [],
+        "scopeOf": []
+      },
+      "subgraph": {
+        "graph": {
+          "formatVersion": 1,
+          "seed": 0,
+          "nodes": [
+            {
+              "id": "storeys",
+              "type": "splitBox",
+              "params": {
+                "axis": "y",
+                "axisIndex": 0,
+                "labels": [
+                  "storey"
+                ],
+                "sizes": {
+                  "fn": "floor",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "param",
+                          "name": "storeyHeight"
+                        },
+                        0.5
+                      ]
+                    }
+                  ]
+                },
+                "units": [
+                  "repeat"
+                ],
+                "repeatRound": "floor",
+                "snap": [
+                  0,
+                  0,
+                  0
+                ],
+                "snapMode": "round",
+                "fit": "error",
+                "direction": 1,
+                "where": 1,
+                "labelAttr": "kind",
+                "indexAttr": "",
+                "countAttr": ""
+              }
+            },
+            {
+              "id": "shell",
+              "type": "shellSplit",
+              "params": {
+                "faces": [
+                  "ceiling",
+                  "south",
+                  "north",
+                  "west",
+                  "east"
+                ],
+                "labels": [
+                  "floor",
+                  "face",
+                  "face",
+                  "face",
+                  "face"
+                ],
+                "thickness": [
+                  1
+                ],
+                "interiorLabel": "",
+                "fit": "error",
+                "where": 1,
+                "labelAttr": "kind",
+                "faceAttr": "face",
+                "alongAxisAttr": "alongAxis",
+                "alongSignAttr": "alongSign",
+                "upAxisAttr": "",
+                "upSignAttr": "",
+                "outAxisAttr": "",
+                "outwardAttr": "outward"
+              }
+            },
+            {
+              "id": "bays",
+              "type": "splitBox",
+              "params": {
+                "axis": "perCell",
+                "axisIndex": {
+                  "fn": "attribute",
+                  "name": "alongAxis"
+                },
+                "labels": [
+                  "bay"
+                ],
+                "sizes": {
+                  "fn": "param",
+                  "name": "bayWidth"
+                },
+                "units": [
+                  "repeat"
+                ],
+                "repeatRound": "floor",
+                "snap": [
+                  1,
+                  1,
+                  1
+                ],
+                "snapMode": "floor",
+                "fit": "error",
+                "direction": {
+                  "fn": "attribute",
+                  "name": "alongSign"
+                },
+                "where": 1,
+                "labelAttr": "kind",
+                "indexAttr": "bay",
+                "countAttr": "nb"
+              }
+            },
+            {
+              "id": "door",
+              "type": "setAttribute",
+              "params": {
+                "name": "door",
+                "domain": "point",
+                "type": "f32",
+                "tupleSize": 1,
+                "value": {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "box",
+                              "name": "y0"
+                            },
+                            2
+                          ]
+                        },
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "face"
+                            },
+                            {
+                              "fn": "attribute",
+                              "name": "doorWall"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "eq",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "bay"
+                        },
+                        {
+                          "fn": "floor",
+                          "args": [
+                            {
+                              "fn": "div",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "nb"
+                                },
+                                2
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "select": 0,
+                "values": [],
+                "weights": [],
+                "stringValue": "",
+                "seed": 0
+              }
+            },
+            {
+              "id": "exposed",
+              "type": "boxContact",
+              "params": {
+                "mode": "overlap",
+                "margin": [
+                  0,
+                  0,
+                  0
+                ],
+                "marginMin": {
+                  "fn": "let",
+                  "bind": {
+                    "len": {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "alongAxis"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "fn": "box",
+                          "name": "sx"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "sz"
+                        }
+                      ]
+                    },
+                    "ow": {
+                      "fn": "min",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "len"
+                            },
+                            2
+                          ]
+                        },
+                        {
+                          "fn": "floor",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "param",
+                                  "name": "openingWidth"
+                                },
+                                0.5
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "left": {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "div",
+                          "args": [
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "len"
+                                },
+                                {
+                                  "fn": "var",
+                                  "name": "ow"
+                                }
+                              ]
+                            },
+                            2
+                          ]
+                        }
+                      ]
+                    },
+                    "o": {
+                      "fn": "attribute",
+                      "name": "outward",
+                      "tupleSize": 3
+                    },
+                    "a": {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "alongAxis"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "fn": "vec",
+                          "args": [
+                            1,
+                            0,
+                            0
+                          ]
+                        },
+                        {
+                          "fn": "vec",
+                          "args": [
+                            0,
+                            0,
+                            1
+                          ]
+                        }
+                      ]
+                    },
+                    "up": {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "sub",
+                              "args": [
+                                1,
+                                {
+                                  "fn": "attribute",
+                                  "name": "door"
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "floor",
+                                  "args": [
+                                    {
+                                      "fn": "add",
+                                      "args": [
+                                        {
+                                          "fn": "param",
+                                          "name": "sillHeight"
+                                        },
+                                        0.5
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "trim",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 0
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        0.5
+                      ]
+                    },
+                    "p": {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "box",
+                                  "name": "center"
+                                },
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "var",
+                                      "name": "o"
+                                    },
+                                    {
+                                      "fn": "add",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "box",
+                                              "name": "size"
+                                            },
+                                            0.5
+                                          ]
+                                        },
+                                        0.5
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "var",
+                                      "name": "a"
+                                    },
+                                    {
+                                      "fn": "attribute",
+                                      "name": "alongSign"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "sub",
+                                  "args": [
+                                    {
+                                      "fn": "add",
+                                      "args": [
+                                        {
+                                          "fn": "var",
+                                          "name": "left"
+                                        },
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "var",
+                                              "name": "ow"
+                                            },
+                                            0.5
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "var",
+                                          "name": "len"
+                                        },
+                                        0.5
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "vec",
+                          "args": [
+                            0,
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "box",
+                                      "name": "y0"
+                                    },
+                                    {
+                                      "fn": "var",
+                                      "name": "up"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "box",
+                                  "name": "cy"
+                                }
+                              ]
+                            },
+                            0
+                          ]
+                        }
+                      ]
+                    },
+                    "half": {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "a"
+                        },
+                        {
+                          "fn": "max",
+                          "args": [
+                            0,
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "var",
+                                      "name": "ow"
+                                    },
+                                    0.5
+                                  ]
+                                },
+                                0.25
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "args": [
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "box",
+                          "name": "lo"
+                        },
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "p"
+                            },
+                            {
+                              "fn": "var",
+                              "name": "half"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "marginMax": {
+                  "fn": "let",
+                  "bind": {
+                    "len": {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "alongAxis"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "fn": "box",
+                          "name": "sx"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "sz"
+                        }
+                      ]
+                    },
+                    "ow": {
+                      "fn": "min",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "len"
+                            },
+                            2
+                          ]
+                        },
+                        {
+                          "fn": "floor",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "param",
+                                  "name": "openingWidth"
+                                },
+                                0.5
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "left": {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "div",
+                          "args": [
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "len"
+                                },
+                                {
+                                  "fn": "var",
+                                  "name": "ow"
+                                }
+                              ]
+                            },
+                            2
+                          ]
+                        }
+                      ]
+                    },
+                    "o": {
+                      "fn": "attribute",
+                      "name": "outward",
+                      "tupleSize": 3
+                    },
+                    "a": {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "alongAxis"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "fn": "vec",
+                          "args": [
+                            1,
+                            0,
+                            0
+                          ]
+                        },
+                        {
+                          "fn": "vec",
+                          "args": [
+                            0,
+                            0,
+                            1
+                          ]
+                        }
+                      ]
+                    },
+                    "up": {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "sub",
+                              "args": [
+                                1,
+                                {
+                                  "fn": "attribute",
+                                  "name": "door"
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "floor",
+                                  "args": [
+                                    {
+                                      "fn": "add",
+                                      "args": [
+                                        {
+                                          "fn": "param",
+                                          "name": "sillHeight"
+                                        },
+                                        0.5
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "trim",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 0
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        0.5
+                      ]
+                    },
+                    "p": {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "box",
+                                  "name": "center"
+                                },
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "var",
+                                      "name": "o"
+                                    },
+                                    {
+                                      "fn": "add",
+                                      "args": [
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "box",
+                                              "name": "size"
+                                            },
+                                            0.5
+                                          ]
+                                        },
+                                        0.5
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "var",
+                                      "name": "a"
+                                    },
+                                    {
+                                      "fn": "attribute",
+                                      "name": "alongSign"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "sub",
+                                  "args": [
+                                    {
+                                      "fn": "add",
+                                      "args": [
+                                        {
+                                          "fn": "var",
+                                          "name": "left"
+                                        },
+                                        {
+                                          "fn": "mul",
+                                          "args": [
+                                            {
+                                              "fn": "var",
+                                              "name": "ow"
+                                            },
+                                            0.5
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "fn": "mul",
+                                      "args": [
+                                        {
+                                          "fn": "var",
+                                          "name": "len"
+                                        },
+                                        0.5
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "vec",
+                          "args": [
+                            0,
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "add",
+                                  "args": [
+                                    {
+                                      "fn": "box",
+                                      "name": "y0"
+                                    },
+                                    {
+                                      "fn": "var",
+                                      "name": "up"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "box",
+                                  "name": "cy"
+                                }
+                              ]
+                            },
+                            0
+                          ]
+                        }
+                      ]
+                    },
+                    "half": {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "a"
+                        },
+                        {
+                          "fn": "max",
+                          "args": [
+                            0,
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "var",
+                                      "name": "ow"
+                                    },
+                                    0.5
+                                  ]
+                                },
+                                0.25
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "args": [
+                    {
+                      "fn": "sub",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "p"
+                            },
+                            {
+                              "fn": "var",
+                              "name": "half"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "box",
+                          "name": "hi"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "queryFrame": "world",
+                "targetFrame": "world",
+                "excludeAttr": "",
+                "excludeSelf": false,
+                "hitAttr": "covered",
+                "countAttr": "",
+                "targetAttr": ""
+              }
+            },
+            {
+              "id": "bayKind",
+              "type": "setAttribute",
+              "params": {
+                "name": "kind",
+                "domain": "point",
+                "type": "string",
+                "tupleSize": 1,
+                "value": {
+                  "fn": "let",
+                  "bind": {
+                    "len": {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "alongAxis"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "fn": "box",
+                          "name": "sx"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "sz"
+                        }
+                      ]
+                    }
+                  },
+                  "args": [
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "ge",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "len"
+                                },
+                                3
+                              ]
+                            },
+                            {
+                              "fn": "sub",
+                              "args": [
+                                1,
+                                {
+                                  "fn": "attribute",
+                                  "name": "covered"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "max",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "door"
+                            },
+                            {
+                              "fn": "lt",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "ruleRoll"
+                                },
+                                {
+                                  "fn": "param",
+                                  "name": "windowRate"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "select": 0,
+                "values": [
+                  "wall",
+                  "opening"
+                ],
+                "weights": [],
+                "stringValue": "",
+                "seed": 0
+              }
+            },
+            {
+              "id": "jambs",
+              "type": "splitBox",
+              "params": {
+                "axis": "perCell",
+                "axisIndex": {
+                  "fn": "attribute",
+                  "name": "alongAxis"
+                },
+                "labels": [
+                  "wall",
+                  "opening",
+                  "wall"
+                ],
+                "sizes": {
+                  "fn": "let",
+                  "bind": {
+                    "len": {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "eq",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "alongAxis"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "fn": "box",
+                          "name": "sx"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "sz"
+                        }
+                      ]
+                    },
+                    "ow": {
+                      "fn": "min",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "len"
+                            },
+                            2
+                          ]
+                        },
+                        {
+                          "fn": "floor",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "param",
+                                  "name": "openingWidth"
+                                },
+                                0.5
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "left": {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "div",
+                          "args": [
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "len"
+                                },
+                                {
+                                  "fn": "var",
+                                  "name": "ow"
+                                }
+                              ]
+                            },
+                            2
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "args": [
+                    {
+                      "fn": "vec",
+                      "args": [
+                        {
+                          "fn": "var",
+                          "name": "left"
+                        },
+                        {
+                          "fn": "var",
+                          "name": "ow"
+                        },
+                        1
+                      ]
+                    }
+                  ]
+                },
+                "units": [
+                  "absolute",
+                  "absolute",
+                  "relative"
+                ],
+                "repeatRound": "floor",
+                "snap": [
+                  0,
+                  0,
+                  0
+                ],
+                "snapMode": "round",
+                "fit": "error",
+                "direction": {
+                  "fn": "attribute",
+                  "name": "alongSign"
+                },
+                "where": 1,
+                "labelAttr": "kind",
+                "indexAttr": "",
+                "countAttr": ""
+              }
+            },
+            {
+              "id": "courses",
+              "type": "splitBox",
+              "params": {
+                "axis": "y",
+                "axisIndex": 0,
+                "labels": [
+                  "wall",
+                  "sill",
+                  "glass",
+                  "door",
+                  "trim",
+                  "wall"
+                ],
+                "sizes": {
+                  "fn": "let",
+                  "bind": {
+                    "d": {
+                      "fn": "attribute",
+                      "name": "door"
+                    },
+                    "sh": {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "param",
+                              "name": "sillHeight"
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    },
+                    "hh": {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "param",
+                              "name": "headHeight"
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    },
+                    "hs": {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            1,
+                            {
+                              "fn": "var",
+                              "name": "d"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "component",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "trim",
+                              "tupleSize": 3
+                            }
+                          ],
+                          "index": 0
+                        }
+                      ]
+                    }
+                  },
+                  "args": [
+                    {
+                      "fn": "vec",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "fn": "var",
+                                      "name": "d"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "var",
+                                  "name": "sh"
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "var",
+                              "name": "hs"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "var",
+                          "name": "hs"
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "sub",
+                              "args": [
+                                1,
+                                {
+                                  "fn": "var",
+                                  "name": "d"
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "sub",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "hh"
+                                },
+                                {
+                                  "fn": "var",
+                                  "name": "sh"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "d"
+                            },
+                            {
+                              "fn": "var",
+                              "name": "hh"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "mul",
+                          "args": [
+                            {
+                              "fn": "component",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "trim",
+                                  "tupleSize": 3
+                                }
+                              ],
+                              "index": 1
+                            },
+                            {
+                              "fn": "min",
+                              "args": [
+                                3,
+                                {
+                                  "fn": "sub",
+                                  "args": [
+                                    {
+                                      "fn": "box",
+                                      "name": "sy"
+                                    },
+                                    {
+                                      "fn": "var",
+                                      "name": "hh"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        1
+                      ]
+                    }
+                  ]
+                },
+                "units": [
+                  "absolute",
+                  "absolute",
+                  "absolute",
+                  "absolute",
+                  "absolute",
+                  "relative"
+                ],
+                "repeatRound": "floor",
+                "snap": [
+                  0,
+                  0,
+                  0
+                ],
+                "snapMode": "round",
+                "fit": "error",
+                "direction": 1,
+                "where": {
+                  "fn": "attributeIs",
+                  "name": "kind",
+                  "value": "opening"
+                },
+                "labelAttr": "kind",
+                "indexAttr": "",
+                "countAttr": ""
+              }
+            },
+            {
+              "id": "sillOut",
+              "type": "setBounds",
+              "params": {
+                "boundsMin": {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "box",
+                      "name": "lo"
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "min",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "outward",
+                              "tupleSize": 3
+                            },
+                            0
+                          ]
+                        },
+                        1
+                      ]
+                    }
+                  ]
+                },
+                "boundsMax": {
+                  "fn": "add",
+                  "args": [
+                    {
+                      "fn": "box",
+                      "name": "hi"
+                    },
+                    {
+                      "fn": "mul",
+                      "args": [
+                        {
+                          "fn": "max",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "outward",
+                              "tupleSize": 3
+                            },
+                            0
+                          ]
+                        },
+                        1
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": "sillTrim",
+              "type": "setAttribute",
+              "params": {
+                "name": "kind",
+                "domain": "point",
+                "type": "string",
+                "tupleSize": 1,
+                "value": 0,
+                "select": 0,
+                "values": [],
+                "weights": [],
+                "stringValue": "trim",
+                "seed": 0
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from": [
+                "storeys",
+                "out"
+              ],
+              "to": [
+                "shell",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "door",
+                "out"
+              ],
+              "to": [
+                "exposed",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "exposed",
+                "out"
+              ],
+              "to": [
+                "bayKind",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "jambs",
+                "out"
+              ],
+              "to": [
+                "courses",
+                "in"
+              ]
+            },
+            {
+              "from": [
+                "sillOut",
+                "out"
+              ],
+              "to": [
+                "sillTrim",
+                "in"
+              ]
+            }
+          ],
+          "outputs": []
+        },
+        "inputs": [
+          {
+            "name": "tier",
+            "node": "storeys",
+            "pin": "in"
+          },
+          {
+            "name": "face",
+            "node": "bays",
+            "pin": "in"
+          },
+          {
+            "name": "bay",
+            "node": "door",
+            "pin": "in"
+          },
+          {
+            "name": "opening",
+            "node": "jambs",
+            "pin": "in"
+          },
+          {
+            "name": "sill",
+            "node": "sillOut",
+            "pin": "in"
+          },
+          {
+            "name": "occluder",
+            "node": "exposed",
+            "pin": "targets"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "tier",
+            "node": "shell",
+            "pin": "out"
+          },
+          {
+            "name": "face",
+            "node": "bays",
+            "pin": "out"
+          },
+          {
+            "name": "bay",
+            "node": "bayKind",
+            "pin": "out"
+          },
+          {
+            "name": "opening",
+            "node": "courses",
+            "pin": "out"
+          },
+          {
+            "name": "sill",
+            "node": "sillTrim",
+            "pin": "out"
+          }
+        ],
+        "params": [
+          {
+            "name": "storeyHeight",
+            "targets": [],
+            "description": "The graph param storeyHeight, read by name in the rules.",
+            "default": 16,
+            "min": 15,
+            "max": 21
+          },
+          {
+            "name": "sillHeight",
+            "targets": [],
+            "description": "The graph param sillHeight, read by name in the rules.",
+            "default": 6,
+            "min": 2,
+            "max": 7
+          },
+          {
+            "name": "headHeight",
+            "targets": [],
+            "description": "The graph param headHeight, read by name in the rules.",
+            "default": 12,
+            "min": 8,
+            "max": 13
+          },
+          {
+            "name": "bayWidth",
+            "targets": [],
+            "description": "The graph param bayWidth, read by name in the rules.",
+            "default": 4,
+            "min": 3,
+            "max": 8
+          },
+          {
+            "name": "openingWidth",
+            "targets": [],
+            "description": "The graph param openingWidth, read by name in the rules.",
+            "default": 2,
+            "min": 1,
+            "max": 4
+          },
+          {
+            "name": "windowRate",
+            "targets": [],
+            "description": "The graph param windowRate, read by name in the rules.",
+            "default": 0.8,
+            "min": 0,
+            "max": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "gBox",
+      "type": "setBounds",
+      "params": {
+        "boundsMin": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lot",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 0
+                    },
+                    2
+                  ]
+                },
+                {
+                  "fn": "mul",
+                  "args": [
+                    4,
+                    {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "div",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "lot",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 0
+                                },
+                                11
+                              ]
+                            },
+                            8
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            0,
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lot",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 2
+                    },
+                    2
+                  ]
+                },
+                {
+                  "fn": "mul",
+                  "args": [
+                    4,
+                    {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "div",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "lot",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 2
+                                },
+                                11
+                              ]
+                            },
+                            8
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "boundsMax": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lot",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 0
+                    },
+                    2
+                  ]
+                },
+                {
+                  "fn": "mul",
+                  "args": [
+                    4,
+                    {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "div",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "lot",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 0
+                                },
+                                11
+                              ]
+                            },
+                            8
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            1,
+            {
+              "fn": "add",
+              "args": [
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lot",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 2
+                    },
+                    2
+                  ]
+                },
+                {
+                  "fn": "mul",
+                  "args": [
+                    4,
+                    {
+                      "fn": "floor",
+                      "args": [
+                        {
+                          "fn": "div",
+                          "args": [
+                            {
+                              "fn": "add",
+                              "args": [
+                                {
+                                  "fn": "component",
+                                  "args": [
+                                    {
+                                      "fn": "attribute",
+                                      "name": "lot",
+                                      "tupleSize": 3
+                                    }
+                                  ],
+                                  "index": 2
+                                },
+                                11
+                              ]
+                            },
+                            8
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gKind",
+      "type": "setAttribute",
+      "params": {
+        "name": "kind",
+        "domain": "point",
+        "type": "string",
+        "tupleSize": 1,
+        "value": 0,
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "ground",
+        "seed": 0
+      }
+    },
+    {
+      "id": "pieces",
+      "type": "mergePoints",
+      "params": {}
+    },
+    {
+      "id": "tint",
+      "type": "setAttribute",
+      "params": {
+        "name": "tint",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "byAttribute",
+          "name": "kind",
+          "cases": {
+            "wall": {
+              "fn": "choose",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "wallTint"
+                },
+                [
+                  0.93,
+                  0.92,
+                  0.88
+                ],
+                [
+                  0.85,
+                  0.75,
+                  0.55
+                ],
+                [
+                  0.7,
+                  0.16,
+                  0.12
+                ],
+                [
+                  0.95,
+                  0.76,
+                  0.16
+                ],
+                [
+                  0.6,
+                  0.63,
+                  0.64
+                ]
+              ]
+            },
+            "trim": {
+              "fn": "choose",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "wallTint"
+                },
+                [
+                  0.787,
+                  0.665,
+                  0.505
+                ],
+                [
+                  0.595,
+                  0.525,
+                  0.385
+                ],
+                [
+                  0.49,
+                  0.112,
+                  0.084
+                ],
+                [
+                  0.665,
+                  0.532,
+                  0.112
+                ],
+                [
+                  0.705,
+                  0.593,
+                  0.445
+                ]
+              ]
+            },
+            "roof": {
+              "fn": "choose",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "roofTint"
+                },
+                [
+                  0.42,
+                  0.1,
+                  0.08
+                ],
+                [
+                  0.3,
+                  0.33,
+                  0.36
+                ],
+                [
+                  0.2,
+                  0.32,
+                  0.18
+                ]
+              ]
+            },
+            "chimney": [
+              0.42,
+              0.2,
+              0.16
+            ],
+            "glass": [
+              0.55,
+              0.8,
+              0.95
+            ],
+            "door": [
+              0.42,
+              0.25,
+              0.12
+            ],
+            "floor": [
+              0.62,
+              0.62,
+              0.6
+            ],
+            "ground": [
+              0.3,
+              0.6,
+              0.25
+            ]
+          },
+          "default": [
+            1,
+            0,
+            1
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "bounds",
+      "type": "setBounds",
+      "params": {
+        "boundsMin": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "box",
+                  "name": "x0"
+                },
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lot",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 0
+                    },
+                    2
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "box",
+                  "name": "y0"
+                },
+                0.4
+              ]
+            },
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "box",
+                  "name": "z0"
+                },
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lot",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 2
+                    },
+                    2
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "boundsMax": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "box",
+                  "name": "x1"
+                },
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lot",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 0
+                    },
+                    2
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "box",
+                  "name": "y1"
+                },
+                0.4
+              ]
+            },
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "box",
+                  "name": "z1"
+                },
+                {
+                  "fn": "div",
+                  "args": [
+                    {
+                      "fn": "component",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "lot",
+                          "tupleSize": 3
+                        }
+                      ],
+                      "index": 2
+                    },
+                    2
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "pack",
+      "type": "packBricks",
+      "params": {
+        "minAttr": "boundsMin",
+        "maxAttr": "boundsMax",
+        "pitch": [
+          1,
+          0.4,
+          1
+        ],
+        "origin": [
+          0,
+          0,
+          0
+        ],
+        "bricks": [
+          2,
+          8,
+          3,
+          2,
+          6,
+          3,
+          2,
+          4,
+          3,
+          2,
+          3,
+          3,
+          2,
+          2,
+          3,
+          1,
+          8,
+          3,
+          1,
+          6,
+          3,
+          1,
+          4,
+          3,
+          1,
+          3,
+          3,
+          1,
+          2,
+          3,
+          1,
+          1,
+          3,
+          2,
+          16,
+          1,
+          2,
+          12,
+          1,
+          2,
+          10,
+          1,
+          2,
+          8,
+          1,
+          2,
+          6,
+          1,
+          2,
+          4,
+          1,
+          2,
+          3,
+          1,
+          2,
+          2,
+          1,
+          1,
+          12,
+          1,
+          1,
+          10,
+          1,
+          1,
+          8,
+          1,
+          1,
+          6,
+          1,
+          1,
+          4,
+          1,
+          1,
+          3,
+          1,
+          1,
+          2,
+          1,
+          1,
+          1,
+          1
+        ],
+        "extraBricks": [
+          16,
+          16,
+          1,
+          16,
+          24,
+          1,
+          16,
+          32,
+          1,
+          16,
+          40,
+          1,
+          24,
+          24,
+          1,
+          24,
+          32,
+          1,
+          24,
+          40,
+          1,
+          32,
+          32,
+          1,
+          32,
+          40,
+          1,
+          40,
+          40,
+          1
+        ],
+        "groupBy": [
+          "kind",
+          "tint"
+        ],
+        "stagger": 3,
+        "bond": 16,
+        "studMode": "all",
+        "islandsAttr": "islands"
+      }
+    },
+    {
+      "id": "connect",
+      "type": "brickConnectivity",
+      "params": {
+        "minAttr": "boundsMin",
+        "maxAttr": "boundsMax",
+        "pitch": [
+          1,
+          0.4,
+          1
+        ],
+        "origin": [
+          0,
+          0,
+          0
+        ],
+        "islandAttr": "island",
+        "stepAttr": "step",
+        "stepAboveAttr": "stepAbove",
+        "stepCountAttr": "stepCount",
+        "islandsAttr": "islands"
+      }
+    },
+    {
+      "id": "vary",
+      "type": "setAttribute",
+      "params": {
+        "name": "tint",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "let",
+          "bind": {
+            "c": {
+              "fn": "attribute",
+              "name": "tint",
+              "tupleSize": 3
+            },
+            "r": {
+              "fn": "randomField",
+              "key": "vary"
+            },
+            "v": {
+              "fn": "param",
+              "name": "brickVariation"
+            },
+            "pl": {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "component",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "trim",
+                      "tupleSize": 3
+                    }
+                  ],
+                  "index": 2
+                },
+                {
+                  "fn": "lt",
+                  "args": [
+                    {
+                      "fn": "abs",
+                      "args": [
+                        {
+                          "fn": "sub",
+                          "args": [
+                            {
+                              "fn": "box",
+                              "name": "y0"
+                            },
+                            0.8
+                          ]
+                        }
+                      ]
+                    },
+                    0.1
+                  ]
+                }
+              ]
+            }
+          },
+          "args": [
+            {
+              "fn": "byAttribute",
+              "name": "kind",
+              "cases": {
+                "wall": {
+                  "fn": "select",
+                  "args": [
+                    {
+                      "fn": "var",
+                      "name": "pl"
+                    },
+                    [
+                      0.27,
+                      0.28,
+                      0.3
+                    ],
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "lt",
+                          "args": [
+                            {
+                              "fn": "var",
+                              "name": "r"
+                            },
+                            {
+                              "fn": "var",
+                              "name": "v"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "select",
+                          "args": [
+                            {
+                              "fn": "lt",
+                              "args": [
+                                {
+                                  "fn": "var",
+                                  "name": "r"
+                                },
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    0.5,
+                                    {
+                                      "fn": "var",
+                                      "name": "v"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "mul",
+                              "args": [
+                                0.88,
+                                {
+                                  "fn": "var",
+                                  "name": "c"
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "min",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    1.1,
+                                    {
+                                      "fn": "var",
+                                      "name": "c"
+                                    }
+                                  ]
+                                },
+                                1
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "var",
+                          "name": "c"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              },
+              "default": {
+                "fn": "var",
+                "name": "c"
+              }
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "shownAt",
+      "type": "setAttribute",
+      "params": {
+        "name": "shownAt",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 1,
+        "value": {
+          "fn": "select",
+          "args": [
+            {
+              "fn": "lt",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "step"
+                },
+                0
+              ]
+            },
+            138,
+            {
+              "fn": "attribute",
+              "name": "step"
+            }
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "built",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "le",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "shownAt"
+            },
+            {
+              "fn": "param",
+              "name": "buildStep"
+            }
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "gap",
+      "type": "setAttribute",
+      "params": {
+        "name": "scale",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "sub",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "scale",
+              "tupleSize": 3
+            },
+            0.04
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "bricks",
+      "type": "spawnInstances",
+      "params": {
+        "assetId": "brick",
+        "assetAttr": "",
+        "colorAttr": "tint",
+        "instanceAttrs": []
+      }
+    },
+    {
+      "id": "showing",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "mul",
+          "args": [
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "le",
+                  "args": [
+                    {
+                      "fn": "select",
+                      "args": [
+                        {
+                          "fn": "lt",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "step"
+                            },
+                            0
+                          ]
+                        },
+                        138,
+                        {
+                          "fn": "attribute",
+                          "name": "step"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "param",
+                      "name": "buildStep"
+                    }
+                  ]
+                },
+                {
+                  "fn": "max",
+                  "args": [
+                    {
+                      "fn": "lt",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "brickAbove"
+                        },
+                        0
+                      ]
+                    },
+                    {
+                      "fn": "gt",
+                      "args": [
+                        {
+                          "fn": "select",
+                          "args": [
+                            {
+                              "fn": "lt",
+                              "args": [
+                                {
+                                  "fn": "attribute",
+                                  "name": "stepAbove"
+                                },
+                                0
+                              ]
+                            },
+                            138,
+                            {
+                              "fn": "attribute",
+                              "name": "stepAbove"
+                            }
+                          ]
+                        },
+                        {
+                          "fn": "param",
+                          "name": "buildStep"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "sub",
+              "args": [
+                1,
+                {
+                  "fn": "mul",
+                  "args": [
+                    {
+                      "fn": "attributeIs",
+                      "name": "kind",
+                      "value": "trim"
+                    },
+                    {
+                      "fn": "lt",
+                      "args": [
+                        {
+                          "fn": "attribute",
+                          "name": "brickAbove"
+                        },
+                        0
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "studTint",
+      "type": "transferByIndex",
+      "params": {
+        "index": {
+          "fn": "attribute",
+          "name": "brickId"
+        },
+        "attributes": [
+          "tint"
+        ],
+        "outNames": [],
+        "outOfRange": "clamp",
+        "hitAttr": "",
+        "missCountAttr": ""
+      }
+    },
+    {
+      "id": "studs",
+      "type": "spawnInstances",
+      "params": {
+        "assetId": "stud",
+        "assetAttr": "",
+        "colorAttr": "tint",
+        "instanceAttrs": []
+      }
+    },
+    {
+      "id": "potStuds",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "mul",
+          "args": [
+            {
+              "fn": "attributeIs",
+              "name": "kind",
+              "value": "chimney"
+            },
+            {
+              "fn": "lt",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "brickAbove"
+                },
+                0
+              ]
+            }
+          ]
+        },
+        "seed": 0,
+        "topology": "drop"
+      }
+    },
+    {
+      "id": "potTint",
+      "type": "setAttribute",
+      "params": {
+        "name": "tint",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "vec",
+          "args": [
+            0.85,
+            0.52,
+            0.3
+          ]
+        },
+        "select": 0,
+        "values": [],
+        "weights": [],
+        "stringValue": "",
+        "seed": 0
+      }
+    },
+    {
+      "id": "pots",
+      "type": "spawnInstances",
+      "params": {
+        "assetId": "pot",
+        "assetAttr": "",
+        "colorAttr": "tint",
+        "instanceAttrs": []
+      }
+    },
+    {
+      "id": "brickMesh",
+      "type": "meshPrimitive",
+      "params": {
+        "shape": "box",
+        "size": [
+          1,
+          1,
+          1
+        ],
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "orientation": "xz",
+        "subdivisions": [
+          1,
+          1,
+          1
+        ],
+        "sides": 16,
+        "caps": "both",
+        "flip": false,
+        "normals": false
+      }
+    },
+    {
+      "id": "studMesh",
+      "type": "meshPrimitive",
+      "params": {
+        "shape": "cylinder",
+        "size": [
+          0.6,
+          0.2125,
+          0.6
+        ],
+        "center": [
+          0,
+          0.08625,
+          0
+        ],
+        "orientation": "xz",
+        "subdivisions": [
+          1,
+          1,
+          1
+        ],
+        "sides": 12,
+        "caps": "top",
+        "flip": false,
+        "normals": true
+      }
+    },
+    {
+      "id": "potMesh",
+      "type": "meshPrimitive",
+      "params": {
+        "shape": "cylinder",
+        "size": [
+          0.8,
+          0.8,
+          0.8
+        ],
+        "center": [
+          0,
+          0.38,
+          0
+        ],
+        "orientation": "xz",
+        "subdivisions": [
+          1,
+          1,
+          1
+        ],
+        "sides": 12,
+        "caps": "top",
+        "flip": false,
+        "normals": true
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": [
+        "lotPt",
+        "out"
+      ],
+      "to": [
+        "lotSize",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "lotSize",
+        "out"
+      ],
+      "to": [
+        "lotBox",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "lotBox",
+        "out"
+      ],
+      "to": [
+        "lotPlinth",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "lotPlinth",
+        "out"
+      ],
+      "to": [
+        "lotKind",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "lotKind",
+        "out"
+      ],
+      "to": [
+        "massing",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "massing",
+        "out"
+      ],
+      "to": [
+        "tiers",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "massing",
+        "trail"
+      ],
+      "to": [
+        "chimRoll",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "chimRoll",
+        "out"
+      ],
+      "to": [
+        "chimPick",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "chimPick",
+        "out"
+      ],
+      "to": [
+        "chimBox",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "chimBox",
+        "out"
+      ],
+      "to": [
+        "chimKind",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "chimPick",
+        "out"
+      ],
+      "to": [
+        "chimShadow",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "massing",
+        "out"
+      ],
+      "to": [
+        "occluder",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "chimShadow",
+        "out"
+      ],
+      "to": [
+        "occluder",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "tiers",
+        "out"
+      ],
+      "to": [
+        "facade",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "occluder",
+        "out"
+      ],
+      "to": [
+        "facade",
+        "occluder"
+      ]
+    },
+    {
+      "from": [
+        "lotBox",
+        "out"
+      ],
+      "to": [
+        "gBox",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "gBox",
+        "out"
+      ],
+      "to": [
+        "gKind",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "gKind",
+        "out"
+      ],
+      "to": [
+        "pieces",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "tiers",
+        "rest"
+      ],
+      "to": [
+        "pieces",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "facade",
+        "out"
+      ],
+      "to": [
+        "pieces",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "chimKind",
+        "out"
+      ],
+      "to": [
+        "pieces",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "pieces",
+        "out"
+      ],
+      "to": [
+        "tint",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "tint",
+        "out"
+      ],
+      "to": [
+        "bounds",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "bounds",
+        "out"
+      ],
+      "to": [
+        "pack",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "pack",
+        "out"
+      ],
+      "to": [
+        "connect",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "pack",
+        "studs"
+      ],
+      "to": [
+        "connect",
+        "studs"
+      ]
+    },
+    {
+      "from": [
+        "connect",
+        "out"
+      ],
+      "to": [
+        "vary",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "vary",
+        "out"
+      ],
+      "to": [
+        "shownAt",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "shownAt",
+        "out"
+      ],
+      "to": [
+        "built",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "built",
+        "out"
+      ],
+      "to": [
+        "gap",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "gap",
+        "out"
+      ],
+      "to": [
+        "bricks",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "connect",
+        "studs"
+      ],
+      "to": [
+        "studTint",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "vary",
+        "out"
+      ],
+      "to": [
+        "studTint",
+        "source"
+      ]
+    },
+    {
+      "from": [
+        "studTint",
+        "out"
+      ],
+      "to": [
+        "showing",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "showing",
+        "out"
+      ],
+      "to": [
+        "studs",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "showing",
+        "out"
+      ],
+      "to": [
+        "potStuds",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "potStuds",
+        "out"
+      ],
+      "to": [
+        "potTint",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "potTint",
+        "out"
+      ],
+      "to": [
+        "pots",
+        "in"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "id": "bricks",
+      "pin": "instances",
+      "name": "bricks"
+    },
+    {
+      "id": "studs",
+      "pin": "instances",
+      "name": "studs"
+    },
+    {
+      "id": "brickMesh",
+      "pin": "out",
+      "name": "brick",
+      "role": "asset"
+    },
+    {
+      "id": "studMesh",
+      "pin": "out",
+      "name": "stud",
+      "role": "asset"
+    },
+    {
+      "id": "pots",
+      "pin": "instances",
+      "name": "pots"
+    },
+    {
+      "id": "potMesh",
+      "pin": "out",
+      "name": "pot",
+      "role": "asset"
+    }
+  ]
+}
+`;export{t as n,n as t};

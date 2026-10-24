@@ -6,7 +6,7 @@
  * is read as text at build time and four things are changed on the way
  * into `deserializeGraph`, each named below and each checked, so an edit
  * upstream that moves one is refused here by name instead of drawing a
- * house that plays back wrong. A frozen copy of its 290 KB in this
+ * house that plays back wrong. A frozen copy of its 230 KB in this
  * directory would stop being the corpus house the first time the corpus
  * changed, and nothing would say so.
  *
