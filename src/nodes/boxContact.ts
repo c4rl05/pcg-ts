@@ -39,6 +39,11 @@
  * STRING, and at 160k boxes its lookups were 68% of the cook and grew
  * faster than the count (measured: x2.5 to x3 per doubling); numeric keys
  * in an open-addressed table with the members laid out per cell do not.
+ * KNOWN COST: a query whose reach is far beyond a level's cell (sized from
+ * the MEDIAN query) and which lands inside that level's occupied range
+ * reads every target of the level, so many giant queries among many small
+ * targets are O(giant queries x targets). Over empty space they cost
+ * nothing: the walk is clamped to the occupied cells' range.
  * The grids change what an answer COSTS and never what it is — the
  * prefilter is a bounding-sphere inequality, sound by the triangle
  * inequality, with a slack that only ever admits more candidates.
@@ -122,9 +127,16 @@ const BOUNDARY_REL = 1e-12;
 /**
  * NEAREST-TARGET TIES. Two targets at the same true distance from a rotated
  * query come out of the rotation ~1e-16 apart, so "ties go to the lowest
- * index" needs a band: squared distances within 1e-12 of (the least one
- * plus the squared largest coordinate of the query's centre) count as
- * equal, and the lowest index among them wins.
+ * index" needs a band, and the band is scaled like the error it absorbs. A
+ * centre coordinate of magnitude C carries a rounding error d ~ eps * C, so
+ * a squared distance D = |delta|^2 is off by about 2 * sqrt(D) * d + d^2.
+ * The band is therefore REL * (D + 2 * C * sqrt(D)) + (REL * C)^2, with
+ * D the least squared distance, C the largest coordinate of the query's
+ * centre, and REL = 1e-12, some 4500 times eps. Squared distances inside it
+ * count as equal, and the lowest index among them wins. A band of
+ * REL * (D + C^2) was too wide: it grew with C^2 rather than C * sqrt(D),
+ * so at C = 1000 a target 50% farther, a tenth of a millimetre out, tied
+ * with the nearer one and could win.
  */
 const NEAREST_TIE_REL = 1e-12;
 
@@ -156,6 +168,9 @@ class CellIndex {
   private readonly start: Int32Array;
   private readonly items: Int32Array;
   private readonly cells: number;
+  /** The occupied cells' range per axis: a query block is clamped to it. */
+  private readonly lo: Int32Array;
+  private readonly hi: Int32Array;
 
   constructor(pos: Float64Array, count: number, cell: number) {
     let maxAbs = 0;
@@ -199,6 +214,18 @@ class CellIndex {
       }
     }
     this.cells = cells;
+    const lo = new Int32Array(3).fill(2 ** 31 - 1);
+    const hi = new Int32Array(3).fill(-(2 ** 31));
+    for (let c = 0; c < cells; c++) {
+      lo[0] = Math.min(lo[0], cx[c]);
+      hi[0] = Math.max(hi[0], cx[c]);
+      lo[1] = Math.min(lo[1], cy[c]);
+      hi[1] = Math.max(hi[1], cy[c]);
+      lo[2] = Math.min(lo[2], cz[c]);
+      hi[2] = Math.max(hi[2], cz[c]);
+    }
+    this.lo = lo;
+    this.hi = hi;
     this.cx = cx.slice(0, cells);
     this.cy = cy.slice(0, cells);
     this.cz = cz.slice(0, cells);
@@ -220,21 +247,25 @@ class CellIndex {
     const pos = this.pos;
     // The cells the query sphere's bounding box overlaps — not a symmetric
     // ring around the query's cell, which reads 5 cells an axis as soon as
-    // the radius passes the cell size by a hair.
-    const x0 = Math.floor((x - radius) * this.inv);
-    const x1 = Math.floor((x + radius) * this.inv);
-    const y0 = Math.floor((y - radius) * this.inv);
-    const y1 = Math.floor((y + radius) * this.inv);
-    const z0 = Math.floor((z - radius) * this.inv);
-    const z1 = Math.floor((z + radius) * this.inv);
+    // the radius passes the cell size by a hair — CLAMPED to the occupied
+    // range, so a giant query over empty space costs nothing, and every
+    // coordinate walked is one a point was binned at (inside Int32).
+    const lo = this.lo;
+    const hi = this.hi;
+    const x0 = Math.max(lo[0], Math.floor((x - radius) * this.inv));
+    const x1 = Math.min(hi[0], Math.floor((x + radius) * this.inv));
+    const y0 = Math.max(lo[1], Math.floor((y - radius) * this.inv));
+    const y1 = Math.min(hi[1], Math.floor((y + radius) * this.inv));
+    const z0 = Math.max(lo[2], Math.floor((z - radius) * this.inv));
+    const z1 = Math.min(hi[2], Math.floor((z + radius) * this.inv));
+    if (!(x0 <= x1 && y0 <= y1 && z0 <= z1)) return out;
     const block = (x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1);
-    // A block larger than the occupied cells, or one whose coordinates leave
-    // Int32, reads every point instead: the same set, by a different route.
-    const lim = CELL_COORD_LIMIT * 2;
-    if (
-      !(block <= this.cells) ||
-      !(Math.max(Math.abs(x0), Math.abs(x1), Math.abs(y0), Math.abs(y1), Math.abs(z0), Math.abs(z1)) <= lim)
-    ) {
+    // A block larger than the occupied cells reads every point instead: the
+    // same set, by a different route. That is the one cost this index does
+    // not bound: a query far larger than the level's cells that lands
+    // INSIDE the occupied range (a lot-sized box over a sparse town of
+    // bricks) reads the whole level, O(queries of that kind x targets).
+    if (!(block <= this.cells)) {
       for (let k = 0; k < this.count; k++) {
         const dx = pos[k * 3] - x;
         const dy = pos[k * 3 + 1] - y;
@@ -755,7 +786,7 @@ export const boxContact = standardNode<BoxContactParams, BoxContactInputs, BoxCo
   type: NODE,
   category: "point op",
   description:
-    "Asks, for every BOX on the `in` pin (the QUERIES), whether it meets any box on the `targets` pin, and writes the answer onto the query points as attributes: `hitAttr` a bool (any target met), `countAttr` an i32 (how many distinct targets), `targetAttr` an i32 (the index of the met target whose centre is nearest the centre of the query box as tested, -1 for none). Nothing else changes — same points, same order, same topology, every attribute carried — so the usual next step is a filter or a relabel on the flag. This is the CONTEXT QUERY of a split grammar (the occlusion query of the shape-grammar literature, and the box form of a point-in-volume or group-by-bounding-object test): is this window blocked by a neighbour or a chimney, does this bay cross any box of another set, is this room inside the lot. A BOX is a point's standard `boundsMin`/`boundsMax`, read in one of two FRAMES, chosen per input by `queryFrame` and `targetFrame`: \"world\" (the default) reads the two corners as WORLD coordinates and does not read P, rot or scale — the convention setBounds, splitBox and packBricks write, so grammar cells need nothing done to them; \"local\" reads them in the point's OWN frame, mapped through P, rot and scale exactly as spawnInstances places a mesh (world = P + rot * (scale * corner)), so a rotated box is tested as the ORIENTED box it is (rot is normalized first, so a non-unit quaternion places the box rigidly where spawnInstances' matrix would also scale it). THE MODE (`mode`) is the question: \"overlap\" — the two boxes CROSS: on every separating direction their extents overlap by more than zero, so boxes that only share a face, an edge or a corner do NOT overlap (two neighbouring grammar cells are not overlapping), while a zero-thickness box passing through a solid one does; \"touch\" — the same test closed, so sharing a face, edge or corner COUNTS (the party-wall neighbour); \"contain\" — the target lies wholly inside the query, boundary included; \"inside\" — the query lies wholly inside the target, boundary included. THE TESTS ARE EXACT for oriented boxes too — the separating-axis test on all fifteen axes for overlap and touch, the support extent along the outer box's three axes for contain and inside — with two stated approximations that apply only where a box is ROTATED: a cross axis of two edges within 1e-6 rad of parallel is skipped as rounding noise, which can only turn \"apart\" into \"meet\", across a gap of at most about 1e-6 of the boxes' size; and a gap or an overlap within 1e-12 of the pair's scale (its largest centre coordinate plus both boxes' half-extents), on any axis, is read as EXACT contact in both directions — \"touch\" accepts it and \"overlap\" rejects it — so two boxes under one P and rot that share a face share it under every rotation rather than as rounding decides. Axis-aligned pairs (every \"world\" box, and \"local\" ones with no rotation) are compared exactly. THE MARGINS move the QUERY box's faces before the test, per query point, in world units along the box's own three axes (scale is not applied to them), and leave the point's own bounds untouched. `margin` GROWS BOTH faces of each axis: margin 0.5 with \"touch\" asks \"is any target within half a unit of this box, measured per axis\" — a box-shaped neighbourhood, not a rounded one; a vec3 gives each axis its own reach, and a scalar field broadcasts to all three. `marginMin` and `marginMax` move ONE face each — the face on the boundsMin side and the face on the boundsMax side — signed, so they reach out of one face only (a wall whose outside is -z: marginMin vec(0, 0, 2) looks two units out of the front and not into the house behind it), shift the box (marginMin -d with marginMax +d moves it d), or carve the query down to a probe of its own: the window test is the bay's box with its outward face pushed half a stud out, its inward face pulled to meet it, and its sides and height pulled in to the opening, all as fields reading the bay's box names and attributes. The three add: the min face moves out by margin + marginMin, the max face by margin + marginMax. A NEGATIVE total shrinks the query, which is how a containment test tolerates a sliver (\"inside\" with margin -0.01), and a query shrunk past nothing on any axis is EMPTY and meets nothing in every mode. EXCLUSION: `excludeAttr` names a tuple-1 attribute present on BOTH inputs, and a target whose value EQUALS the query's is skipped — the bay that must not count its own wall carries its wall's id (write one with setAttribute before the split; splitBox carries every attribute onto its pieces), and siblings or one parent are excluded the same way. Numbers compare by value whatever their numeric type (NaN never equals anything); strings compare by text, so the two inputs' string tables may differ. `excludeSelf` skips target i for query i, for one cloud wired to BOTH pins (\"does this box overlap any OTHER box of its set\"); it is refused when the two inputs have different point counts, since they cannot then be one cloud. STAGING: query against an EARLIER stage — another branch's finished output, or an applyRules `trail` (the consumed ancestors, whose boxes are the blocks and storeys a later stage needs) — never against the frontier still being rewritten. DETERMINISM: nothing is drawn, nothing is accumulated, and the nearest target is the LOWEST INDEX among the hits whose squared centre distance is within 1e-12 of the least (relative to it plus the squared largest coordinate of the query's centre), so the answers do not depend on the order the targets arrive in beyond that index, and a rotation's rounding cannot break a true tie. COST: near linear in the two counts for any mix of sizes — the targets are binned by centre into one uniform grid per SIZE CLASS (radii doubling), and each query reads each class's grid within its own half-diagonal plus that class's largest, a bounding-sphere bound (two boxes can meet only if their centres are within the sum of their half-diagonals) that changes the cost, never the answer. Under a partitioned cook it is exact given every target whose centre lies within the query's half-diagonal (margins included, measured from the moved centre) plus the largest target's half-diagonal. ERRORS name the pin and point: a box that is not finite or is inside out (min above max), a missing bounds pair, a frame of \"local\" on points without P. CPU ONLY, and deliberately not a GPU adopter: the margin is a value that decides a contact, and a device-rounded margin one ulp off flips a touching pair — the same reason filterByExpression keeps its predicate on the CPU.",
+    "Asks, for every BOX on the `in` pin (the QUERIES), whether it meets any box on the `targets` pin, and writes the answer onto the query points as attributes: `hitAttr` a bool (any target met), `countAttr` an i32 (how many distinct targets), `targetAttr` an i32 (the index of the met target whose centre is nearest the centre of the query box as tested, -1 for none). Nothing else changes — same points, same order, same topology, every attribute carried — so the usual next step is a filter or a relabel on the flag. This is the CONTEXT QUERY of a split grammar (the occlusion query of the shape-grammar literature, and the box form of a point-in-volume or group-by-bounding-object test): is this window blocked by a neighbour or a chimney, does this bay cross any box of another set, is this room inside the lot. A BOX is a point's standard `boundsMin`/`boundsMax`, read in one of two FRAMES, chosen per input by `queryFrame` and `targetFrame`: \"world\" (the default) reads the two corners as WORLD coordinates and does not read P, rot or scale — the convention setBounds, splitBox and packBricks write, so grammar cells need nothing done to them; \"local\" reads them in the point's OWN frame, mapped through P, rot and scale exactly as spawnInstances places a mesh (world = P + rot * (scale * corner)), so a rotated box is tested as the ORIENTED box it is (rot is normalized first, so a non-unit quaternion places the box rigidly where spawnInstances' matrix would also scale it). THE MODE (`mode`) is the question: \"overlap\" — the two boxes CROSS: on every separating direction their extents overlap by more than zero, so boxes that only share a face, an edge or a corner do NOT overlap (two neighbouring grammar cells are not overlapping), while a zero-thickness box passing through a solid one does; \"touch\" — the same test closed, so sharing a face, edge or corner COUNTS (the party-wall neighbour); \"contain\" — the target lies wholly inside the query, boundary included; \"inside\" — the query lies wholly inside the target, boundary included. THE TESTS ARE EXACT for oriented boxes too — the separating-axis test on all fifteen axes for overlap and touch, the support extent along the outer box's three axes for contain and inside — with two stated approximations that apply only where a box is ROTATED: a cross axis of two edges within 1e-6 rad of parallel is skipped as rounding noise, which can only turn \"apart\" into \"meet\", across a gap of at most about 1e-6 of the boxes' size; and a gap or an overlap within 1e-12 of the pair's scale (its largest centre coordinate plus both boxes' half-extents), on any axis, is read as EXACT contact in both directions — \"touch\" accepts it and \"overlap\" rejects it — so two boxes under one P and rot that share a face share it under every rotation rather than as rounding decides. Axis-aligned pairs (every \"world\" box, and \"local\" ones with no rotation) are compared exactly. THE MARGINS move the QUERY box's faces before the test, per query point, in world units along the box's own three axes (scale is not applied to them), and leave the point's own bounds untouched. `margin` GROWS BOTH faces of each axis: margin 0.5 with \"touch\" asks \"is any target within half a unit of this box, measured per axis\" — a box-shaped neighbourhood, not a rounded one; a vec3 gives each axis its own reach, and a scalar field broadcasts to all three. `marginMin` and `marginMax` move ONE face each — the face on the boundsMin side and the face on the boundsMax side — signed, so they reach out of one face only (a wall whose outside is -z: marginMin vec(0, 0, 2) looks two units out of the front and not into the house behind it), shift the box (marginMin -d with marginMax +d moves it d), or carve the query down to a probe of its own: the window test is the bay's box with its outward face pushed half a stud out, its inward face pulled to meet it, and its sides and height pulled in to the opening, all as fields reading the bay's box names and attributes. The three add: the min face moves out by margin + marginMin, the max face by margin + marginMax. A NEGATIVE total shrinks the query, which is how a containment test tolerates a sliver (\"inside\" with margin -0.01), and a query shrunk past nothing on any axis is EMPTY and meets nothing in every mode. EXCLUSION: `excludeAttr` names a tuple-1 attribute present on BOTH inputs, and a target whose value EQUALS the query's is skipped — the bay that must not count its own wall carries its wall's id (write one with setAttribute before the split; splitBox carries every attribute onto its pieces), and siblings or one parent are excluded the same way. Numbers compare by value whatever their numeric type (NaN never equals anything); strings compare by text, so the two inputs' string tables may differ. `excludeSelf` skips target i for query i, for one cloud wired to BOTH pins (\"does this box overlap any OTHER box of its set\"); it is refused when the two inputs have different point counts, since they cannot then be one cloud. STAGING: query against an EARLIER stage — another branch's finished output, or an applyRules `trail` (the consumed ancestors, whose boxes are the blocks and storeys a later stage needs) — never against the frontier still being rewritten. DETERMINISM: nothing is drawn, nothing is accumulated, and the nearest target is the LOWEST INDEX among the hits whose squared centre distance ties with the least, within a band scaled like the rounding a centre carries (1e-12 of the least squared distance plus 2e-12 of it times the query centre's largest coordinate), so the answers do not depend on the order the targets arrive in beyond that index, and a rotation's rounding cannot break a true tie. COST: near linear in the two counts for any mix of sizes — the targets are binned by centre into one uniform grid per SIZE CLASS (radii doubling), and each query reads each class's grid within its own half-diagonal plus that class's largest, a bounding-sphere bound (two boxes can meet only if their centres are within the sum of their half-diagonals) that changes the cost, never the answer. Under a partitioned cook it is exact given every target whose centre lies within the query's half-diagonal (margins included, measured from the moved centre) plus the largest target's half-diagonal. ERRORS name the pin and point: a box that is not finite or is inside out (min above max), a missing bounds pair, a frame of \"local\" on points without P. CPU ONLY, and deliberately not a GPU adopter: the margin is a value that decides a contact, and a device-rounded margin one ulp off flips a touching pair — the same reason filterByExpression keeps its predicate on the CPU.",
   inputs: [
     { name: "in", kind: "geometry" },
     { name: "targets", kind: "geometry" },
@@ -832,7 +863,7 @@ export const boxContact = standardNode<BoxContactParams, BoxContactInputs, BoxCo
       type: "string",
       default: "",
       description:
-        "OPT-IN: name of the i32 point attribute (tuple 1) receiving the INDEX, in the targets input, of the met target whose box centre is nearest the centre of the query box AS TESTED (after its margins), ties — distances within 1e-12 relative, so a rotation's rounding cannot decide one — to the lowest index, or -1 when none was met. Feed it to transferByIndex as `index` to read that target's own attributes — its label, its id, its colour. A reporting slot on the same terms as hitAttr. Empty (the default) writes none.",
+        "OPT-IN: name of the i32 point attribute (tuple 1) receiving the INDEX, in the targets input, of the met target whose box centre is nearest the centre of the query box AS TESTED (after its margins), ties — distances equal within a band scaled like the centres' rounding (see the node description), so a rotation's rounding cannot decide one — to the lowest index, or -1 when none was met. Feed it to transferByIndex as `index` to read that target's own attributes — its label, its id, its colour. A reporting slot on the same terms as hitAttr. Empty (the default) writes none.",
     },
   },
   execute({ inputs, params, seed, checkCancelled }) {
@@ -1025,7 +1056,8 @@ export const boxContact = standardNode<BoxContactParams, BoxContactInputs, BoxCo
       let dMin = Infinity;
       for (let k = 0; k < c; k++) if (hitD[k] < dMin) dMin = hitD[k];
       const cMax = Math.max(Math.abs(cx), Math.abs(cy), Math.abs(cz));
-      const within = dMin + NEAREST_TIE_REL * (dMin + cMax * cMax);
+      const tieAbs = NEAREST_TIE_REL * cMax;
+      const within = dMin + NEAREST_TIE_REL * (dMin + 2 * cMax * Math.sqrt(dMin)) + tieAbs * tieAbs;
       let best = -1;
       for (let k = 0; k < c; k++) if (hitD[k] <= within && (best < 0 || hitJ[k] < best)) best = hitJ[k];
       nearest[i] = best;

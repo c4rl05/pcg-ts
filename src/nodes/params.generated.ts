@@ -621,10 +621,11 @@ export interface BoxContactParams {
   /**
    * OPT-IN: name of the i32 point attribute (tuple 1) receiving the INDEX, in the targets
    * input, of the met target whose box centre is nearest the centre of the query box AS
-   * TESTED (after its margins), ties — distances within 1e-12 relative, so a rotation's
-   * rounding cannot decide one — to the lowest index, or -1 when none was met. Feed it to
-   * transferByIndex as `index` to read that target's own attributes — its label, its id, its
-   * colour. A reporting slot on the same terms as hitAttr. Empty (the default) writes none.
+   * TESTED (after its margins), ties — distances equal within a band scaled like the
+   * centres' rounding (see the node description), so a rotation's rounding cannot decide one
+   * — to the lowest index, or -1 when none was met. Feed it to transferByIndex as `index` to
+   * read that target's own attributes — its label, its id, its colour. A reporting slot on
+   * the same terms as hitAttr. Empty (the default) writes none.
    *
    * @defaultValue `""`
    */

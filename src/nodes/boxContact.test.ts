@@ -65,6 +65,13 @@ function col(geo: Geometry, name: string): number[] {
 /** f32-exact: the node reads stored f32 bounds, so the reference must too. */
 const f = Math.fround;
 
+/** One f32 ulp at x (x itself f32-exact). */
+function nextUlp(x: number): number {
+  const b = new Float32Array([x]);
+  new Int32Array(b.buffer)[0]++;
+  return b[0] - x;
+}
+
 // ---------------------------------------------------------------------------
 // Reference 1: axis-aligned boxes as intervals (world frame)
 
@@ -511,6 +518,24 @@ describe("boxContact: nearest-target ties under rotation", () => {
     [[0, 0, 2], [2, 2, 3]],
     [[0, 0, -1], [2, 2, 0]],
   ];
+
+  it("the band does not tie distinct distances far from the origin: the nearer point wins at any offset", async () => {
+    // World boxes, so every distance is exact; the nearer target has the
+    // HIGHER index, and is 2 to 16 f32 ulps of X out where the farther is
+    // 50% farther. A band that grew with X^2 tied them and let index 0 win.
+    for (const X of [1e3, 1e4, 1e5]) {
+      const ulp = nextUlp(X);
+      for (const [k1, k2] of [[2, 3], [4, 6], [8, 12], [16, 24]]) {
+        const q = cloud([{ lo: [X - 64 * ulp, -1, -1], hi: [X + 64 * ulp, 1, 1] }]);
+        const t = cloud([
+          { lo: [X + k2 * ulp, 0, 0], hi: [X + k2 * ulp, 0, 0] },
+          { lo: [X + k1 * ulp, 0, 0], hi: [X + k1 * ulp, 0, 0] },
+        ]);
+        const got = await answer(q, t, { mode: "touch" });
+        expect([X, k1, got.count[0], got.target[0]]).toEqual([X, k1, 2, 1]);
+      }
+    }
+  });
 
   it("count 4, and the nearest is the case's first target, for 200 random rotations and every order of the four", async () => {
     const q = cloud(frames.map((fr) => ({ lo: [0, 0, 0], hi: [2, 2, 2], ...fr })));
