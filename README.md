@@ -99,8 +99,8 @@ And nine demos, each one something a single graph cannot be on its own:
 <td><b><a href="https://c4rl05.github.io/pcg-ts/demos/infinite-world/">infinite world</a></b><br>A world streamed around a flying camera, coarse to fine. Drag the cell size and watch the rocks not move.</td>
 <td><b><a href="https://c4rl05.github.io/pcg-ts/demos/galaxy/">galaxy</a></b><br>An unbounded spiral galaxy that is a pure function of its seed. Click a star to visit its planets.</td>
 <td><b><a href="https://c4rl05.github.io/pcg-ts/demos/gpu-world/">gpu world</a></b><br>The same streaming, with every instance matrix composed on the GPU and drawn without ever being read back.</td>
-<td><b><a href="https://c4rl05.github.io/pcg-ts/demos/racetrack/">racetrack</a></b><br>Roadside art placed along a spline the page was handed, to six legibility rules. Every repair says how much it had to do.</td>
-<td><b><a href="https://c4rl05.github.io/pcg-ts/demos/road/">road</a></b><br>The same page with the rules taken out — one evenly spaced row per side. Shot at the same station, so the diff is what the rules added.</td>
+<td><b><a href="https://c4rl05.github.io/pcg-ts/demos/racetrack/">racetrack</a></b><br>Roadside art placed along a spline the page was handed, to legibility rules run to a bounded fixed point. Every repair says how much it had to do.</td>
+<td><b><a href="https://c4rl05.github.io/pcg-ts/demos/road/">road</a></b><br>A handed spline swept into a road with no placement rules — one evenly spaced row per side.</td>
 <td><b><a href="https://c4rl05.github.io/pcg-ts/demos/lanterns/">lanterns</a></b><br>One u32 per instance, drawn. The graph settles where each lantern hangs and the seed it carries; the shader makes colour, pulse and bob out of that integer.</td>
 </tr>
 <tr>
@@ -109,7 +109,7 @@ And nine demos, each one something a single graph cannot be on its own:
 <td width="16%"><a href="https://c4rl05.github.io/pcg-ts/demos/brick-build/"><img alt="The brick build demo, shown small: a short terrace of brick houses in pale yellow and cream, half built on a green baseplate, with one red stepped roof and its chimney on and the courses above the cream block still to come. A controls-and-readout panel fills the left edge, too small at this size to read." src="./docs/thumbs/brick-build.jpg" width="100%"></a></td>
 </tr>
 <tr>
-<td><b><a href="https://c4rl05.github.io/pcg-ts/demos/eiffel/">eiffel</a></b><br>The tower as built in 1889: Eiffel's own plates for the large structure, rules for everything smaller, lit by a low sun. Three depths — skeleton, laced, riveted — each a different graph.</td>
+<td><b><a href="https://c4rl05.github.io/pcg-ts/demos/eiffel/">eiffel</a></b><br>The tower as built in 1889: Eiffel's own plates for the large structure, rules for everything smaller. Three depths — skeleton, laced, riveted — each a different graph.</td>
 <td><b><a href="https://c4rl05.github.io/pcg-ts/demos/cave/">cave</a></b><br>One node with no inputs makes the whole world: a noise contoured into triangles, cell by cubic cell, with no seam between neighbours.</td>
 <td><b><a href="https://c4rl05.github.io/pcg-ts/demos/brick-build/">brick build</a></b><br>A house packed into bricks and given a build order, played back course by course. Cooked once; scrubbing runs on the page's own clock.</td>
 </tr>
@@ -1132,23 +1132,35 @@ only its terminal.
 
 ## Examples
 
-`demos/` holds the five vite pages [pictured at the
+`demos/` holds the nine vite pages [pictured at the
 top](#in-the-browser), each one something a serialized graph cannot be on
-its own: an infinite streaming world
-([live](https://c4rl05.github.io/pcg-ts/demos/infinite-world/)), an
+its own, because what it shows needs a running page around the graph:
+an infinite streaming world
+([live](https://c4rl05.github.io/pcg-ts/demos/infinite-world/)); an
 infinite deterministic spiral galaxy with click-to-visit star systems
-([live](https://c4rl05.github.io/pcg-ts/demos/galaxy/)), a streamed
-world drawing from device-resident instance transforms
-([live](https://c4rl05.github.io/pcg-ts/demos/gpu-world/)), and roadside
+([live](https://c4rl05.github.io/pcg-ts/demos/galaxy/)); a streamed
+world drawing from device-resident instance transforms, composed on the
+GPU and never read back
+([live](https://c4rl05.github.io/pcg-ts/demos/gpu-world/)); roadside
 art placed along a spline the page was handed rather than made
 ([live](https://c4rl05.github.io/pcg-ts/demos/racetrack/)), its legibility
-rules run as a bounded fixed point,
-because a single pass through them cannot satisfy them all. Beside it,
-[`demos/road`](https://c4rl05.github.io/pcg-ts/demos/road/)
-takes a spline the same way and places no rules at all: one evenly
-spaced row per side. The two share a spline module and a naming scheme
-but have diverged in both directions, so a diff between them is not a
-list of what the rules add.
+rules run as a bounded fixed point
+because a single pass through them cannot satisfy them all; a road
+([live](https://c4rl05.github.io/pcg-ts/demos/road/)) that takes a
+spline the same way and places no rules at all, one evenly spaced row
+per side; lanterns whose one `u32` per instance a shader turns into
+colour, pulse and bob on a clock the graph never sees
+([live](https://c4rl05.github.io/pcg-ts/demos/lanterns/)); a cave
+contoured from noise cell by cubic cell, with no seam between
+neighbours ([live](https://c4rl05.github.io/pcg-ts/demos/cave/)); a
+brick house played back course by course on the page's own clock
+without recooking ([live](https://c4rl05.github.io/pcg-ts/demos/brick-build/));
+and the Eiffel tower as built in 1889, its large structure from Eiffel's
+own plates and everything smaller placed by rule
+([live](https://c4rl05.github.io/pcg-ts/demos/eiffel/)).
+Road and racetrack share a spline module and a naming scheme but have
+diverged in both directions, so a diff between them is not a list of
+what the rules add.
 [`editor/`](#the-editor) beside them is a tool rather than a demo, and
 has its own chapter above.
 
