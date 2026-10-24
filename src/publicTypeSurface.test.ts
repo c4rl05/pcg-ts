@@ -127,7 +127,7 @@ const ROOT_TYPE_SURFACE = [
   "SerializedConnection",
   "SerializedExposedParam", "SerializedExposedPin", "SerializedGraph", "SerializedGraphParam",
   "SerializedNode", "SerializedOutput", "SerializedSubgraph", "SerializedSubgraphRef",
-  "SetAttributeParams", "SetBoundsParams", "SmoothNormalsParams", "SpawnInstancesParams",
+  "SetAttributeParams", "SetBoundsParams", "ShellSplitParams", "SmoothNormalsParams", "SpawnInstancesParams",
   "SpecChild",
   "SplineSampleParams", "SplitBoxParams", "SplitPolygonsParams", "StandardPointAttr", "StrandedGraphParamValue", "SubgraphPins",
   "SubgraphRegistrationSpec", "SubgraphSpec", "SuppliedAsset", "SurfaceSampleParams", "SweepProfileParams",

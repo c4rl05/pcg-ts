@@ -5361,6 +5361,160 @@ export type SetBoundsInputs = "in";
 export type SetBoundsOutputs = "out";
 
 /**
+ * Params of the `shellSplit` node type.
+ */
+export interface ShellSplitParams {
+  /**
+   * The shell faces to cut, in the order each cell emits them: any of "floor" (min y),
+   * "south" (min z), "north" (max z), "west" (min x), "east" (max x), "ceiling" (max y),
+   * each at most once. A face NOT listed takes no thickness — the faces beside it run to the
+   * box's side, so ["floor", "south", "north", "west", "east"] is a storey whose walls reach
+   * the top. `labels` and `thickness` are parallel to this list. Decided once per cook. At
+   * least one face.
+   *
+   * @defaultValue `["floor","south","north","west","east","ceiling"]`
+   */
+  faces: readonly string[];
+  /**
+   * One label per entry of `faces`, written to `labelAttr` on that face's piece. Labels may
+   * repeat, and the default gives all four walls "wall" so a single rule (applyRules,
+   * attributeIs("piece", "wall")) serves every wall while `faceAttr` still tells them apart.
+   * An EMPTY label "" makes the face a GAP: it takes its thickness and emits nothing — a
+   * floor slab some other node lays, kept clear of the walls.
+   *
+   * @defaultValue `["floor","wall","wall","wall","wall","ceiling"]`
+   */
+  labels: readonly string[];
+  /**
+   * How deep each face reaches INTO the box, as a length in the box's own units: ONE entry
+   * for every face, or one per entry of `faces`, in its order. AS A FIELD it is resolved on
+   * the PARENT cell and must have one component, or one per face — vec(1, 0.5, 0.5, 0.5,
+   * 0.5, 1) — and the box names read the parent's box, so a wall can be a share of the cell
+   * it bounds: box("sx") * 0.1. Every piece is INSET (carved out of the box), so a negative
+   * thickness counts as 0 — that face is then dropped, and its neighbours reach the side. A
+   * non-finite value is refused naming the cell. A pair of opposite faces thicker than the
+   * span between them is `fit`'s to settle.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[1]`
+   */
+  thickness: FieldParam;
+  /**
+   * The label of the INTERIOR — what the shell encloses, the box less every listed face —
+   * emitted after the faces with face code 6 when this is not empty. Empty (the default)
+   * emits no interior. With it, the pieces tile the cell exactly: their volumes sum to the
+   * box's. A room's floor plan, or the void a roof rule fills, starts here.
+   *
+   * @defaultValue `""`
+   */
+  interiorLabel: string;
+  /**
+   * What happens when two OPPOSITE faces are thicker together than the box between them —
+   * floor + ceiling past its height, south + north past its depth, west + east past its
+   * width (a face not listed counts 0). "error" refuses the cook, naming the cell, the axis,
+   * both faces and the numbers; "clip" lets the min-side face (floor, south, west) keep its
+   * thickness, clipped to the box, and gives the max-side face what is left, which can be
+   * nothing; "scale" shrinks both in proportion so that they meet. A pair that EXACTLY fills
+   * its span fits under every mode and leaves no interior; "exactly" is to f32 precision —
+   * within a millionth of the span, or two f32 steps at the box's coordinates, whichever is
+   * larger, so a box at x = 1e5 (where f32 steps are 1/128) is not refused for its storage.
+   * Decided once per cook.
+   *
+   * - Enum: `"error"` | `"clip"` | `"scale"`
+   *
+   * @defaultValue `"error"`
+   */
+  fit: "error" | "clip" | "scale";
+  /**
+   * Which cells are SPLIT: nonzero splits the cell, 0 PASSES IT THROUGH UNSPLIT — emitted
+   * once, exactly as it arrived, its seed and box unchanged and any value it already carried
+   * in the attributes this node writes kept (a column this node creates gives it the
+   * column's default: "" for the label, -1 for the face and the axis codes, [0, 0, 0] for
+   * the outward normal). As a field it is resolved per cell, e.g. attributeIs("piece",
+   * "storey"). A non-finite value is refused naming the cell. A field `thickness` is still
+   * resolved on EVERY cell, passed-through ones included, so it must be finite there too.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  where: FieldParam;
+  /**
+   * Name of the STRING point attribute (tuple 1) receiving each piece's label — what
+   * applyRules and attributeIs dispatch on; "piece" is theirs and splitBox's too. A
+   * REPORTING SLOT: an input column of the same shape is rewritten on the pieces and kept on
+   * cells `where` passes through, one of another shape is refused, and a standard point
+   * attribute is refused by name. Empty writes no label.
+   *
+   * @defaultValue `"piece"`
+   */
+  labelAttr: string;
+  /**
+   * Name of the i32 point attribute (tuple 1) receiving each piece's FACE CODE: 0 floor, 1
+   * south, 2 north, 3 west, 4 east, 5 ceiling, 6 interior — the face, not its position in
+   * `faces`, so ge(attribute("face"), 1) * le(attribute("face"), 4) is "a wall" whatever the
+   * list. The code is also what the piece's seed is hashed with. A reporting slot on the
+   * same terms as `labelAttr`. Empty writes none.
+   *
+   * @defaultValue `"face"`
+   */
+  faceAttr: string;
+  /**
+   * Name of the i32 point attribute (tuple 1) receiving the axis each piece RUNS along, 0 =
+   * x, 1 = y, 2 = z: x for the south and north walls, the floor, the ceiling and the
+   * interior; z for the west and east walls. It is exactly what splitBox's axisIndex reads
+   * under axis "perCell", so attribute("alongAxis") there cuts every wall along its own run.
+   * A reporting slot on the same terms as `labelAttr`. Empty writes none.
+   *
+   * @defaultValue `"alongAxis"`
+   */
+  alongAxisAttr: string;
+  /**
+   * Name of the i32 point attribute (tuple 1) receiving each piece's second in-face axis, 0
+   * = x, 1 = y, 2 = z: y for the walls and the interior, z for the floor and the ceiling
+   * (whose faces lie flat). With alongAxis it spans the face; a storey or course split up a
+   * wall is a splitBox perCell on attribute("upAxis"). A reporting slot on the same terms as
+   * `labelAttr`. Empty writes none.
+   *
+   * @defaultValue `"upAxis"`
+   */
+  upAxisAttr: string;
+  /**
+   * Name of the i32 point attribute (tuple 1) receiving the axis each piece's THICKNESS runs
+   * along, 0 = x, 1 = y, 2 = z: z for the south and north walls, x for the west and east
+   * walls, y for the floor and the ceiling, z for the interior. A wall cut through its depth
+   * into an inner and an outer leaf is a splitBox perCell on attribute("outAxis"). A
+   * reporting slot on the same terms as `labelAttr`. Empty writes none.
+   *
+   * @defaultValue `"outAxis"`
+   */
+  outAxisAttr: string;
+  /**
+   * Name of the f32 point attribute (tuple 3) receiving each piece's OUTWARD unit normal —
+   * the side of the box it bounds, pointing out: [0, -1, 0] for the floor, [0, 1, 0] for the
+   * ceiling, [0, 0, -1] south, [0, 0, 1] north, [-1, 0, 0] west, [1, 0, 0] east, and [0, 0,
+   * 0] for the interior, which faces nowhere. It is the one signed axis, so it is what moves
+   * something OUT of its face: box("lo") + attribute("outward") * 0.5, or a probe half a
+   * unit outside the wall. A reporting slot on the same terms as `labelAttr`. Empty writes
+   * none.
+   *
+   * @defaultValue `"outward"`
+   */
+  outwardAttr: string;
+}
+
+/**
+ * The input pin names of the `shellSplit` node type.
+ */
+export type ShellSplitInputs = "in";
+
+/**
+ * The output pin names of the `shellSplit` node type.
+ */
+export type ShellSplitOutputs = "out";
+
+/**
  * Params of the `smoothNormals` node type.
  */
 export interface SmoothNormalsParams {

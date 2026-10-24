@@ -32,6 +32,7 @@ import { pointsToPath } from "./paths.js";
 import { transformPoints } from "./pointOps.js";
 import { repeatPoints } from "./repeatPoints.js";
 import { splitBox } from "./splitBox.js";
+import { shellSplit } from "./shellSplit.js";
 import { hasNodeType } from "./registry.js";
 import { surfaceSample } from "./samplers.js";
 import { pointGrid } from "./sources.js";
@@ -65,6 +66,7 @@ const MODULE_WITNESSES: readonly { readonly type: string }[] = [
   transformPoints, // pointOps.ts
   repeatPoints, // repeatPoints.ts
   splitBox, // splitBox.ts
+  shellSplit, // shellSplit.ts
   filterByDensity, // filtering.ts
   setAttribute, // attributes.ts
   valueConstant, // mathNodes.ts

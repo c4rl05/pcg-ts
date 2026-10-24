@@ -176,7 +176,11 @@ const ROOT_SURFACE = [
   "repeatUntilNode",
   "resolveExposedParam",
   "resolveField", "sampleNearestPoint", "select", "selfPrune", "serializeGraph",
-  "setAttribute", "setBounds", "setPolylineTopology", "sign",
+  "setAttribute", "setBounds", "setPolylineTopology",
+  // Breaks each cell's box into floor, walls and ceiling, each with its
+  // own frame -- the component split of a split grammar.
+  "shellSplit",
+  "sign",
   // Cuts each cell's box into labelled pieces along one axis — the split
   // of a split grammar, which only CUTS: recursion is applyRulesNode's.
   "splitBox",
