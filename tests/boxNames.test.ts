@@ -250,9 +250,13 @@ const COUNT = 97;
 // evaluated, 14 compiled — the frozen specs alone, the corpus now writes
 // none of this arithmetic by hand — and reverse 32 expansions of 97 names,
 // 32 evaluated, 31 compiled; the corpus floors sit just under that.
+// Then the brick house's `halve` and `gableEnds` took splitBox's axis
+// "longest" over "xz" for their hand-written select(ge(box("sx"),
+// box("sz")), 0, 2), so reverse is 30 expansions of 93 names, 30
+// evaluated, 29 compiled; the reverse floors sit just under that.
 const FORWARD_FROZEN_COUNTS = { rewritten: 12, names: 80, evaluated: 12, compiled: 12 };
 const FORWARD_COUNTS = { rewritten: 13, names: 89, evaluated: 13, compiled: 13 };
-const REVERSE_COUNTS = { expanded: 31, names: 96, evaluated: 31, compiled: 30 };
+const REVERSE_COUNTS = { expanded: 29, names: 92, evaluated: 29, compiled: 28 };
 
 function ctxFor(spec: FieldSpec): { ctx: EvalContext; layout: FieldKernelLayout } {
   const geo = createPointCloud(COUNT);
