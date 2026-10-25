@@ -35,6 +35,7 @@ import { GRAPHS_DIR, loadGraphs } from "../src/docs/graphIndex.js";
 import { compileFieldSpec } from "../src/gpu/compile.js";
 import type { FieldKernelLayout } from "../src/gpu/types.js";
 import { type FieldSpec, fieldFromJson, parseFieldText, printFieldSpec } from "../src/nodes/index.js";
+import { HAND_SPELLED_BOX_SPECS } from "./support/handSpelledBoxes.js";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 
@@ -110,6 +111,20 @@ for (const entry of loadGraphs(ROOT)) {
   const json = JSON.parse(readFileSync(`${ROOT}${entry.path}`, "utf8")) as { nodes?: GraphNode[] };
   collect(json.nodes, corpus);
 }
+
+/**
+ * The forward direction's sources: the corpus, plus the FROZEN hand-spelled
+ * box arithmetic of the facade and floorplan as they stood before the split
+ * grammar (tests/support/handSpelledBoxes.ts). The corpus keeps moving onto
+ * box names — which is the point of them — so the frozen specs are what
+ * keeps this direction exercised on real author-written arithmetic (an
+ * argmax over spans, a cut coordinate, per-component corners, an area
+ * staircase) whatever the corpus does next.
+ */
+const forwardSources: ReadonlyArray<readonly ["corpus" | "frozen", FieldSpec]> = [
+  ...corpus.map((s) => ["corpus", s] as const),
+  ...HAND_SPELLED_BOX_SPECS.map((s) => ["frozen", s as FieldSpec] as const),
+];
 
 /** Every child position a subexpression can stand in (not `opts.seed`). */
 function mapChildren(node: Json, f: (child: unknown) => unknown): Json {
@@ -205,22 +220,25 @@ function attributesOf(spec: unknown, out = new Map<string, { tupleSize: number; 
 
 const COUNT = 97;
 
-// The vacuity floors, each set a little under what the corpus gave when it
-// was last measured (the numbers are in the guards' comments).
+// The vacuity floors, each set a little under what was last measured.
 // Measured 2026-10-24: forward 30 rewrites holding 170 introduced box
 // names, 30 evaluated, 30 compiled; reverse 33 expansions of 119 box
 // names, 33 evaluated, 32 compiled. Remeasured 2026-10-25, when the brick
-// house's lattice-to-world setBounds (six box names in two corners) became
-// a transformBox, which reads none: reverse 32 expansions of 96 box names,
-// 32 evaluated, 31 compiled. Remeasured 2026-10-25 again, when the facade
-// and the floorplan moved onto applyRules + splitBox: their hand-spelled
-// spans and cut corners (the bulk of the forward direction) are gone and
-// the box names they now write moved to the reverse side — forward 8
-// rewrites of 8 names, 8 evaluated, 8 compiled (what is left is mostly
-// mesh tails spelling a box's centre and size); reverse 34 expansions of
-// 104 names, 34 evaluated, 33 compiled.
-const FORWARD_COUNTS = { rewritten: 6, names: 6, evaluated: 6, compiled: 6 };
-const REVERSE_COUNTS = { expanded: 28, names: 85, evaluated: 28, compiled: 28 };
+// house's lattice-to-world setBounds became a transformBox: reverse 32
+// expansions of 96 names, 32 evaluated, 31 compiled. Remeasured 2026-10-25
+// again, when the facade and the floorplan moved onto applyRules +
+// splitBox and their hand-spelled box arithmetic left the corpus (the
+// corpus alone then gave forward 8 rewrites of 8 names — centre/size mesh
+// tails — and the box names those graphs now write took reverse to 34
+// expansions of 104 names, 34 evaluated, 33 compiled). That arithmetic is
+// now FROZEN in tests/support/handSpelledBoxes.ts and swept here with the
+// corpus: frozen specs alone give 14 rewrites of 90 names, 14 evaluated,
+// 14 compiled — the floor that holds whatever the corpus does next — and
+// with the corpus 22 of 98. The 2026-10-24 30/170 counted the two graphs'
+// verbatim-shared split bodies twice; the frozen set is deduplicated.
+const FORWARD_FROZEN_COUNTS = { rewritten: 12, names: 80, evaluated: 12, compiled: 12 };
+const FORWARD_COUNTS = { rewritten: 20, names: 90, evaluated: 20, compiled: 20 };
+const REVERSE_COUNTS = { expanded: 30, names: 95, evaluated: 30, compiled: 30 };
 
 function ctxFor(spec: FieldSpec): { ctx: EvalContext; layout: FieldKernelLayout } {
   const geo = createPointCloud(COUNT);
@@ -327,17 +345,18 @@ describe("a deliberately wrong expansion is reported as different (control)", ()
   }
 });
 
-describe(`field expressions across ${GRAPHS_DIR}/, rewritten with box names, are unchanged`, () => {
+describe(`field expressions across ${GRAPHS_DIR}/ and the frozen hand-spelled specs, rewritten with box names, are unchanged`, () => {
   let rewritten = 0;
   let names = 0;
   let evaluated = 0;
   let compiled = 0;
+  const frozen = { rewritten: 0, names: 0, evaluated: 0, compiled: 0 };
 
   it("found expressions to rewrite", () => {
     expect(corpus.length).toBeGreaterThan(100);
   });
 
-  for (const [i, raw] of corpus.entries()) {
+  for (const [i, [source, raw]] of forwardSources.entries()) {
     const spec = bindParams(raw) as FieldSpec;
     for (const [how, prepare] of [
       ["in place", (s: FieldSpec) => s],
@@ -349,7 +368,7 @@ describe(`field expressions across ${GRAPHS_DIR}/, rewritten with box names, are
       // with them would otherwise be compared with itself
       const n = countBoxes(out) - countBoxes(before);
       if (n === 0) continue;
-      it(`[${i}] ${how}: ${JSON.stringify(spec).slice(0, 60)}`, () => {
+      it(`[${i}] ${source} ${how}: ${JSON.stringify(spec).slice(0, 60)}`, () => {
         try {
           fieldFromJson(spec);
         } catch {
@@ -359,32 +378,47 @@ describe(`field expressions across ${GRAPHS_DIR}/, rewritten with box names, are
         expect(parseFieldText(printFieldSpec(out))).toStrictEqual(out);
         const v = compare(spec, out);
         expect(v.key, "Field.key").toBe(true);
+        const tally = source === "frozen";
         if (v.cpu !== undefined) {
           expect(v.cpu, "CPU bytes").toBe(true);
           evaluated++;
+          if (tally) frozen.evaluated++;
         }
         if (v.wgsl !== undefined) {
           expect(v.wgsl, "WGSL text and kernel key").toBe(true);
           compiled++;
+          if (tally) frozen.compiled++;
         }
         rewritten++;
         names += n;
+        if (tally) {
+          frozen.rewritten++;
+          frozen.names += n;
+        }
       });
     }
   }
 
   it("rewrote, evaluated and compiled enough of them to mean something", () => {
     console.log(`box names forward: ${rewritten} rewrites, ${names} names, ${evaluated} evaluated, ${compiled} compiled`);
-    // Vacuity guard, set under what the corpus gave on 2026-10-24 once a
+    console.log(
+      `box names forward, frozen specs alone: ${frozen.rewritten} rewrites, ${frozen.names} names, ${frozen.evaluated} evaluated, ${frozen.compiled} compiled`,
+    );
+    // Vacuity guard, set under what was measured (the counts above) once a
     // rewrite counts only where it introduces a box name and graph params
-    // are bound to literals (FORWARD_COUNTS below): every check above is
+    // are bound to literals (FORWARD_COUNTS above): every check above is
     // skippable by a spec that does not stand alone or does not evaluate
     // on this fixture, so the counts must show the sweep did its job. The
     // CPU count is the lower one because the fixture cannot serve every
     // expression's reads (a name read both as a string and as a number
     // gets one column, which serves only one). The brick house no longer
     // feeds this direction -- it writes box names itself -- and is held by
-    // the reverse direction below instead.
+    // the reverse direction below instead, and the facade and floorplan
+    // feed it through their frozen specs, held to a floor of their own.
+    expect(frozen.rewritten).toBeGreaterThan(FORWARD_FROZEN_COUNTS.rewritten);
+    expect(frozen.names).toBeGreaterThan(FORWARD_FROZEN_COUNTS.names);
+    expect(frozen.evaluated).toBeGreaterThan(FORWARD_FROZEN_COUNTS.evaluated);
+    expect(frozen.compiled).toBeGreaterThan(FORWARD_FROZEN_COUNTS.compiled);
     expect(rewritten).toBeGreaterThan(FORWARD_COUNTS.rewritten);
     expect(names).toBeGreaterThan(FORWARD_COUNTS.names);
     expect(evaluated).toBeGreaterThan(FORWARD_COUNTS.evaluated);
@@ -427,8 +461,8 @@ describe(`field expressions across ${GRAPHS_DIR}/ written with box names equal t
 
   it("expanded, evaluated and compiled enough of them to mean something", () => {
     console.log(`box names reverse: ${expanded} expansions, ${names} names, ${evaluated} evaluated, ${compiled} compiled`);
-    // Vacuity guard, set under what the corpus gave on 2026-10-24
-    // (REVERSE_COUNTS below), most of it the brick house.
+    // Vacuity guard, set under what the corpus gave when last measured
+    // (REVERSE_COUNTS above), most of it the brick house.
     expect(expanded).toBeGreaterThan(REVERSE_COUNTS.expanded);
     expect(names).toBeGreaterThan(REVERSE_COUNTS.names);
     expect(evaluated).toBeGreaterThan(REVERSE_COUNTS.evaluated);
