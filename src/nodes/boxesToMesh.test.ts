@@ -296,6 +296,21 @@ describe("boxesToMesh: uv is the face frame", () => {
       expect(area).toBeGreaterThan(0);
     }
   });
+
+  it("is UNMIRRORED seen from inside under flip: u runs the other way, v stays up, every inward-wound triangle counter-clockwise in uv", async () => {
+    const plain = await mesh(cells([[[0, 0, 0], [3, 2, 1]]]), { subdivisions: [3, 2, 2] });
+    const out = await mesh(cells([[[0, 0, 0], [3, 2, 1]]]), { subdivisions: [3, 2, 2], flip: true });
+    const uv = tuples(out, "uv", 2);
+    const uv0 = tuples(plain, "uv", 2);
+    for (let i = 0; i < uv.length; i++) {
+      expect(uv[i][0]).toBeCloseTo(1 - uv0[i][0], 6);
+      expect(uv[i][1]).toBe(uv0[i][1]);
+    }
+    for (const [a, b, c] of tris(out)) {
+      const area = (uv[b][0] - uv[a][0]) * (uv[c][1] - uv[a][1]) - (uv[b][1] - uv[a][1]) * (uv[c][0] - uv[a][0]);
+      expect(area).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe("boxesToMesh: what it carries", () => {

@@ -740,7 +740,9 @@ export interface BoxesToMeshParams {
   subdivisions: FieldParam;
   /**
    * Reverse every triangle's winding (and the written `normal` with it), so every box faces
-   * INWARD — a room seen from inside it. meshPrimitive's `flip`.
+   * INWARD — a room seen from inside it. meshPrimitive's `flip`. The uv's u is mirrored with
+   * it (1 - u), so seen from INSIDE every face still reads left to right and bottom to top;
+   * v is unchanged.
    *
    * @defaultValue `false`
    */
