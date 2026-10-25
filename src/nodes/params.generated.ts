@@ -6549,14 +6549,21 @@ export interface SplitBoxParams {
    * Read ONLY when `axis` is "longest" (ignored otherwise): the axes a cell's longest span
    * is chosen from — "xyz" (the default) all three, "xz" the floor plane (a plan cut across
    * its longer wall whatever its height), "xy" or "yz". A span is boundsMax - boundsMin
-   * along the axis. TIES go to the FIRST axis of the set in x, y, z order, and a tie is to
-   * f32 precision: a candidate whose span is within two f32 steps at its own coordinates,
-   * plus two at the longest one's, of the longest span counts as tied — so a square cell is
-   * cut along x wherever it stands, not along whichever axis its stored corners happen to
-   * round longer (at x = 1e5 an f32 step is 1/128). The slack is in f32 STEPS, not a share
-   * of the span, so a cell only a few steps long far from the origin can be cut along a
-   * shorter axis — a box 1 wide at x = 1e7, where a step is 1, ties with a z span of 3 near
-   * the origin — but f32 cannot place a cut inside such a box anyway. A zero-size box is cut
+   * along the axis. The measured longest wins. A TIE goes to the FIRST axis of the set in x,
+   * y, z order, and a tie is only what f32 storage cannot resolve: a stored span is off its
+   * intended length by at most half an f32 step at each of its two corners, so two spans tie
+   * when they differ by no more than those four half-steps — each span's two from ITS OWN
+   * coordinates. A square cell is therefore cut along x wherever it stands, not along
+   * whichever axis its stored corners happen to round longer, while a span longer by more
+   * than its storage can explain wins anywhere (at z = 1e5, where a step is 1/128, a z span
+   * of 1 + 2/128 beats an x span of 1 at the origin; 1 + 1/128 ties, and goes to x). AN AXIS
+   * THE CUT CANNOT CUT IS PASSED OVER: the cell is laid out along each candidate, and the
+   * first in that order that emits the MOST pieces is taken, so a box only an f32 step or
+   * two long on its preferred axis — 1 wide at x = 1e7, where a step is 1, which the cut
+   * would round onto a corner and hand back whole — is cut along the next candidate instead
+   * (here a z span of 1.9, which ties with it). Only the preferred axis can refuse the cook
+   * (an overflow, say); a candidate that would be refused is not taken. A snap step on one
+   * axis can drop pieces there too, and then counts the same way. A zero-size box is cut
    * along the first axis of the set. A cell whose box is not finite, or is inside out, along
    * any axis of the set is refused naming the cell, since it has no longest span; a cell
    * `where` passes through is not read.

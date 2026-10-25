@@ -595,6 +595,84 @@ describe('splitBox: axis "longest"', () => {
     expect(cutAxes(await split(cells([[[0, 0, 1e5], [4, 1, 1e5 + 4.005]]]), { axis: "longest", ...halves }))).toEqual([0]);
   });
 
+  it("a tie is only what each span's own storage cannot resolve: a longer span far from the origin wins", async () => {
+    // z at 1e5 is stored to 1/128, each corner to half of that, so its span
+    // is known to 1/128; x [0, 1] to 6e-8. A z span of 1 + 2/128 is longer
+    // than both allowances explain: z. One of 1 + 1/128 is not: a tie, x.
+    expect(cutAxes(await split(cells([[[0, 0, 1e5], [1, 0.5, 1e5 + 1 + 2 / 128]]]), { axis: "longest", ...halves }))).toEqual([2]);
+    expect(cutAxes(await split(cells([[[0, 0, 1e5], [1, 0.5, 1e5 + 1 + 1 / 128]]]), { axis: "longest", ...halves }))).toEqual([0]);
+    // Steps of 1/4 near 2.9e6 and 2.3e6: spans 5 and 6 differ by 1, past
+    // the 1/2 their four half-steps allow, so y — once a tie (and x) when
+    // the slack was two whole steps a corner on both sides.
+    const mid = cells([[[2900765, 2274129.25, 4036200.5], [2900770, 2274135.25, 4036205]]]);
+    expect(cutAxes(await split(mid, { axis: "longest", ...halves }))).toEqual([1]);
+    // And a square cell still cuts along x wherever it stands: x
+    // [100000.1, 100004.1] stores a span of exactly 4, z [0.3, 4.3] one of
+    // 4.0000002 — under z's own storage error.
+    const sq = cells([[[100000.1, 0, 0.3], [100004.1, 1, 4.3]]]);
+    const s = col(sq, "boundsMax").map((h, k) => h - col(sq, "boundsMin")[k]);
+    expect(s[2]).toBeGreaterThan(s[0]);
+    expect(cutAxes(await split(sq, { axis: "longest", ...halves }))).toEqual([0]);
+  });
+
+  it("passes over an axis the cut cannot cut: a box one f32 step long there comes back cut along the next candidate", async () => {
+    // x [1e7, 1e7 + 1] is ONE f32 step (steps are 1 there): its span is
+    // known only to 1, so it ties with z's 1.9 and is preferred, being x.
+    // But a cut at 1e7 + 0.5 rounds onto a corner: along x the cell would
+    // come back whole. Along z it halves.
+    const geo = cells([[[1e7, 0, 0], [1e7 + 1, 0.5, 1.9]]]);
+    const out = await split(geo, { axis: "longest", ...halves });
+    expect(out.pointCount).toBe(2);
+    expect(col(out, "boundsMin")).toEqual([1e7, 0, 0, 1e7, 0, Math.fround(0.95)]);
+    expect(col(out, "boundsMax")).toEqual([1e7 + 1, 0.5, Math.fround(0.95), 1e7 + 1, 0.5, Math.fround(1.9)]);
+    // The reviewer's case: z 3 is past the tie outright (1 + 3 / 2 steps).
+    const wide = await split(cells([[[1e7, 0, 0], [1e7 + 1, 0.5, 3]]]), { axis: "longest", ...halves });
+    expect(spans(wide, 2)).toEqual([
+      [0, 1.5],
+      [1.5, 3],
+    ]);
+    // Under a three-way split the same box keeps x only if x can hold the
+    // pieces; it cannot, so the first candidate that emits all three wins.
+    const thirds = await split(geo, { axis: "longest", labels: ["a", "b", "c"], sizes: [1, 1, 1], units: ["relative", "relative", "relative"] });
+    expect(thirds.pointCount).toBe(3);
+    // When NO candidate can be cut, the preferred axis stands and the cell
+    // comes back whole, as it would along any fixed axis.
+    const none = await split(cells([[[1e7, 0, 1e7], [1e7 + 1, 0, 1e7 + 1]]]), { axis: "longest", longestOf: "xz", ...halves });
+    expect(none.pointCount).toBe(1);
+    expect(col(none, "boundsMin")).toEqual([1e7, 0, 1e7]);
+  });
+
+  it("over a sweep of small boxes far from the origin, a cell comes back whole only when no candidate axis can be cut", async () => {
+    const boxes: [number[], number[]][] = [];
+    let s = 99;
+    const rnd = (): number => {
+      s = (Math.imul(s, 1103515245) + 12345) >>> 0;
+      return (s >>> 8) / (1 << 24);
+    };
+    for (let i = 0; i < 2000; i++) {
+      const l = [0, 1, 2].map(() => Math.fround((rnd() - 0.5) * 2 * 10 ** (1 + rnd() * 6.5)));
+      boxes.push([l, l.map((v) => Math.fround(v + rnd() * 3))]);
+    }
+    const geo = cells(boxes);
+    const out = await split(geo, { axis: "longest", ...halves });
+    // Pieces per cell, by seed (each cell's pieces carry hashCombine(100 + i, k)).
+    const seeds = new Set(col(out, "seed"));
+    let whole = 0;
+    for (let i = 0; i < boxes.length; i++) {
+      const [lo, hi] = boxes[i].map((v) => v.map(Math.fround));
+      const n = [0, 1].filter((k) => seeds.has(hashCombine(100 + i, k))).length;
+      // Some axis has an f32 strictly inside it at a cut a half-way share
+      // could land on: then two pieces must come out.
+      const cuttable = [0, 1, 2].some((a) => {
+        const m = Math.fround(lo[a] + 0.5 * (hi[a] - lo[a]));
+        return m > lo[a] && m < hi[a];
+      });
+      if (cuttable) expect(n, `cell ${i}`).toBe(2);
+      else whole++;
+    }
+    expect(whole).toBeLessThan(boxes.length);
+  });
+
   it("is the argmax the graphs spelled by hand, on every cell of a random population", async () => {
     // select(sx >= sy && sx >= sz, 0, select(sy >= sz, 1, 2)): x wins its
     // ties, then y over z. Away from f32 near-ties the two must agree.
