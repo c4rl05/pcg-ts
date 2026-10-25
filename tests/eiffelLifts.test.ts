@@ -524,12 +524,24 @@ describe("eiffel lift runs", () => {
         wells: [slot(10.3, 12.55, 2.02), slot(12.55, 12.97, 2.33), slot(12.97, 16.25, 2.665), slot(16.25, 16.83, 2.1)],
       },
     ] as const;
+    // Most of a run is nowhere near a deck: of the 273 (Roux) and 516
+    // (Otis) steps, 27 and 70 put any of the car in a deck's 0.60 [measured].
+    // So each box is first bounded by its 8 corners, moved: the move is
+    // rigid and a box convex, so every sample of it lies within its moved
+    // corners' heights, and a box whose corners all clear every deck's
+    // slab has no sample that could fail. Only the boxes that reach a
+    // slab are sampled -- the same samples, the same checks: 2,189,044
+    // sample-in-a-slab tests either way [measured]. It took this test from
+    // ~19 s alone (46-77 s in a loaded full run, past the 60 s floor) to
+    // 0.7 s. EPS covers the samples' rounding against the corners'.
+    const EPS = 1e-6;
     for (const c of LEG) {
+      const mine = decks.filter((d) => c.system === "otis" || d.y !== FLOORS.second);
       // Every box sampled through its volume, 11 x 11 x 11.
-      const pts: Vec3[] = [];
-      for (const f of carBoxes.get(c.id) as Vec3[][]) {
+      const cars = (carBoxes.get(c.id) as Vec3[][]).map((f) => {
         const centre = mul3(add3(f[0] as Vec3, f[1] as Vec3), 0.5);
         const ax = [sub3(f[0] as Vec3, centre), sub3(f[2] as Vec3, centre), sub3(f[4] as Vec3, centre)] as const;
+        const pts: Vec3[] = [];
         for (let i = 0; i <= 10; i++) {
           for (let j = 0; j <= 10; j++) {
             for (let l = 0; l <= 10; l++) {
@@ -537,19 +549,30 @@ describe("eiffel lift runs", () => {
             }
           }
         }
-      }
+        const corners: Vec3[] = [];
+        for (const i of [-1, 1]) for (const j of [-1, 1]) for (const l of [-1, 1]) {
+          corners.push(add3(add3(add3(centre, mul3(ax[0], i)), mul3(ax[1], j)), mul3(ax[2], l)));
+        }
+        return { pts, corners };
+      });
       for (let s = c.run.from; s <= c.run.to; s += 0.25) {
         const m = mover(c.run, s);
-        for (const q of pts) {
-          const p = toLeg0(c.k, m(q));
-          const t = (p[0] + p[2]) / Math.SQRT2;
-          const across = Math.abs(p[0] - p[2]) / Math.SQRT2;
-          for (const d of decks) {
-            if (c.system === "roux" && d.y === FLOORS.second) continue;
-            if (p[1] < d.y - 0.6 || p[1] > d.y || t < d.band[0] || t > d.band[1]) continue;
-            if (d.wells.some((w) => t > w.t0 && t < w.t1 && across < w.half)) continue;
-            // Outside every well, inside the deck.
-            expect.fail(`${c.run.name} ${d.y}: at s ${s.toFixed(2)}, t ${t.toFixed(2)}, ${across.toFixed(2)} across, y ${p[1].toFixed(2)}`);
+        for (const box of cars) {
+          // toLeg0 turns about y, so the moved heights are the leg-0 heights.
+          const ys = box.corners.map((q) => m(q)[1]);
+          const lo = Math.min(...ys) - EPS;
+          const hi = Math.max(...ys) + EPS;
+          if (!mine.some((d) => hi >= d.y - 0.6 && lo <= d.y)) continue;
+          for (const q of box.pts) {
+            const p = toLeg0(c.k, m(q));
+            const t = (p[0] + p[2]) / Math.SQRT2;
+            const across = Math.abs(p[0] - p[2]) / Math.SQRT2;
+            for (const d of mine) {
+              if (p[1] < d.y - 0.6 || p[1] > d.y || t < d.band[0] || t > d.band[1]) continue;
+              if (d.wells.some((w) => t > w.t0 && t < w.t1 && across < w.half)) continue;
+              // Outside every well, inside the deck.
+              expect.fail(`${c.run.name} ${d.y}: at s ${s.toFixed(2)}, t ${t.toFixed(2)}, ${across.toFixed(2)} across, y ${p[1].toFixed(2)}`);
+            }
           }
         }
       }
