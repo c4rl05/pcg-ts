@@ -3,7 +3,7 @@ var e=`{
   "seed": 11,
   "meta": {
     "title": "Rewrite boxes by rule",
-    "description": "\`applyRules\` runs a REWRITING GRAMMAR over labelled boxes, one round at a time: the recursion of a split grammar, in a graph that cannot wire a cycle. Three facades stand in a row, each a cell labelled \\"facade\\" with its own width and its own number of 3.2-high floors. A RULE IS A PIN PAIR in the node's one inline body: an exposed input and an exposed output with the SAME name, which is the label it rewrites. Each round the wrapper sorts the cells by their \`piece\` label, feeds every rule the cells carrying its name, cooks only those rules' branches, and the products, whatever they are now labelled, are the next round. A label with no rule — leaf, frame, glass, pane, mullion — is TERMINAL: its cells leave on \`out\`. \`facade\` cuts a facade into floors and \`floor\` cuts a floor into bays of about 4.5, both with splitBox \\"repeat\\". \`panel\` IS THE RECURSION: its products are labelled \`panel\` again. A panel whose longer side is under 1.7 STOPS by relabelling itself — setAttribute string, values [\\"panel\\", \\"leaf\\", \\"window\\"], the index a select on that size test — becoming a window when its roll is under 0.6 and a plain leaf otherwise; every other panel is halved along its longer side (splitBox axis \\"perCell\\", axisIndex picking x or y), at a ratio between 35:65 and 65:35 read off the same roll, and both halves go round again. So the depth tracks the size: nothing counts the splits, and a large bay simply takes more rounds to get small. THE ROLL is \`ruleRoll\`, a number in [0, 1) the wrapper writes on every cell it feeds, hashed from the node seed, the rule and a SCOPE: by default the cell itself, so every panel cuts at its own ratio. \`window\` is scoped to \`facade\` (\`scoped\` [\\"window\\"], \`scopeOf\` [\\"facade\\"]), so every window rolls the number of the facade it descends from, and its one relabel — values [\\"recessed\\", \\"oriel\\"] — gives a whole facade ONE window style: glass set back in a frame, or a pair of panes standing proud on either side of a mullion, each cut by two more splitBox rules. Every relabel costs a round, and \`ruleDepth\` records the round each cell settled in: this grammar runs about ten, well inside \`maxDepth\` 32; had a rule never stopped, \`converged\` would read 0 and the detail attribute \`rulesCutOff\` on \`out\` would name it, one count per rule. The last nodes only draw: \`tint\` colours each piece, every leaf by the roll that made it; \`depth\` is a transformBox that scales each piece's depth about its own centre and moves it on z, so glass is set back and panes and mullions stand proud; \`inset\` is an offsetBox that moves a leaf's four side faces in by 0.03 so the cuts show; and \`boxesToMesh\` builds every box as faces where it stands.",
+    "description": "\`applyRules\` runs a REWRITING GRAMMAR over labelled boxes, one round at a time: the recursion of a split grammar, in a graph that cannot wire a cycle. Three facades stand in a row, each a cell labelled \\"facade\\" with its own width and its own number of 3.2-high floors: \`walls\` is setBounds with \`anchor\` \\"baseCenter\\" and \`size\` vec(8 + 3 * randomField(\\"width\\"), 3.2 * (2 + floor(4 * randomField(\\"floors\\"))), 0.3) — 8 to 11 wide, two to five floors — so each wall STANDS on its row point, centred on it in x and z with its min y at P, and \`axiom\` labels it. A RULE IS A PIN PAIR in the node's one inline body: an exposed input and an exposed output with the SAME name, which is the label it rewrites. Each round the wrapper sorts the cells by their \`piece\` label, feeds every rule the cells carrying its name, cooks only those rules' branches, and the products, whatever they are now labelled, are the next round. A label with no rule — leaf, frame, glass, pane, mullion — is TERMINAL: its cells leave on \`out\`. \`facade\` cuts a facade into floors and \`floor\` cuts a floor into bays of about 4.5, both with splitBox \\"repeat\\". \`panel\` IS THE RECURSION: its products are labelled \`panel\` again. A panel whose longer side is under 1.7 STOPS by relabelling itself — setAttribute string, values [\\"panel\\", \\"leaf\\", \\"window\\"], the index a select on that size test — becoming a window when its roll is under 0.6 and a plain leaf otherwise; every other panel is halved along its longer side (splitBox axis \\"perCell\\", axisIndex picking x or y), at a ratio between 35:65 and 65:35 read off the same roll, and both halves go round again. So the depth tracks the size: nothing counts the splits, and a large bay simply takes more rounds to get small. THE ROLL is \`ruleRoll\`, a number in [0, 1) the wrapper writes on every cell it feeds, hashed from the node seed, the rule and a SCOPE: by default the cell itself, so every panel cuts at its own ratio. \`window\` is scoped to \`facade\` (\`scoped\` [\\"window\\"], \`scopeOf\` [\\"facade\\"]), so every window rolls the number of the facade it descends from, and its one relabel — values [\\"recessed\\", \\"oriel\\"] — gives a whole facade ONE window style: glass set back in a frame, or a pair of panes standing proud on either side of a mullion, each cut by two more splitBox rules. Every relabel costs a round, and \`ruleDepth\` records the round each cell settled in: this grammar runs about ten, well inside \`maxDepth\` 32; had a rule never stopped, \`converged\` would read 0 and the detail attribute \`rulesCutOff\` on \`out\` would name it, one count per rule. The last nodes only draw: \`tint\` colours each piece, every leaf by the roll that made it; \`depth\` is a transformBox that scales each piece's depth about its own centre and moves it on z, so glass is set back and panes and mullions stand proud; \`inset\` is an offsetBox that moves a leaf's four side faces in by 0.03 so the cuts show; and \`boxesToMesh\` builds every box as faces where it stands.",
     "tags": [
       "basics",
       "split",
@@ -35,92 +35,54 @@ var e=`{
       "id": "walls",
       "type": "setBounds",
       "params": {
-        "boundsMin": {
-          "fn": "sub",
+        "anchor": "baseCenter",
+        "size": {
+          "fn": "vec",
           "args": [
             {
-              "fn": "position"
-            },
-            {
-              "fn": "vec",
+              "fn": "add",
               "args": [
-                {
-                  "fn": "add",
-                  "args": [
-                    4,
-                    {
-                      "fn": "mul",
-                      "args": [
-                        1.5,
-                        {
-                          "fn": "randomField",
-                          "key": "width"
-                        }
-                      ]
-                    }
-                  ]
-                },
-                0,
-                0.15
-              ]
-            }
-          ]
-        },
-        "boundsMax": {
-          "fn": "add",
-          "args": [
-            {
-              "fn": "position"
-            },
-            {
-              "fn": "vec",
-              "args": [
-                {
-                  "fn": "add",
-                  "args": [
-                    4,
-                    {
-                      "fn": "mul",
-                      "args": [
-                        1.5,
-                        {
-                          "fn": "randomField",
-                          "key": "width"
-                        }
-                      ]
-                    }
-                  ]
-                },
+                8,
                 {
                   "fn": "mul",
                   "args": [
-                    3.2,
+                    3,
                     {
-                      "fn": "add",
+                      "fn": "randomField",
+                      "key": "width"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "mul",
+              "args": [
+                3.2,
+                {
+                  "fn": "add",
+                  "args": [
+                    2,
+                    {
+                      "fn": "floor",
                       "args": [
-                        2,
                         {
-                          "fn": "floor",
+                          "fn": "mul",
                           "args": [
+                            4,
                             {
-                              "fn": "mul",
-                              "args": [
-                                4,
-                                {
-                                  "fn": "randomField",
-                                  "key": "floors"
-                                }
-                              ]
+                              "fn": "randomField",
+                              "key": "floors"
                             }
                           ]
                         }
                       ]
                     }
                   ]
-                },
-                0.15
+                }
               ]
-            }
+            },
+            0.3
           ]
         }
       }
