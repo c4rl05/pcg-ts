@@ -224,7 +224,7 @@ Asks, for every BOX on the `in` pin (the QUERIES), whether it meets any box on t
 
 **Outputs:** `out` (geometry), `pairs` (geometry)
 
-**Examples:** [examples-brick-house.json](../graphs/examples-brick-house.json) — 1 total (`pcg graphs --node boxContact`)
+**Examples:** [examples-floorplan.json](../graphs/examples-floorplan.json), [examples-brick-house.json](../graphs/examples-brick-house.json) — 2 total (`pcg graphs --node boxContact`)
 
 **Params:**
 
@@ -258,7 +258,7 @@ TURNS every cell's box into MESH FACES, built where the box is: the step from a 
 
 **Outputs:** `out` (geometry)
 
-**Examples:** *(no corpus graph uses it)*
+**Examples:** [basics-split-box.json](../graphs/basics-split-box.json), [basics-apply-rules.json](../graphs/basics-apply-rules.json), [examples-facade.json](../graphs/examples-facade.json) — 4 total (`pcg graphs --node boxesToMesh`)
 
 **Params:**
 
@@ -349,7 +349,7 @@ Connects a point cloud into a NETWORK: one 2-vertex `polyline` primitive per edg
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-filter-primitives-by-attribute.json](../graphs/basics-filter-primitives-by-attribute.json), [basics-connect-by-reach.json](../graphs/basics-connect-by-reach.json), [basics-merge-primitives.json](../graphs/basics-merge-primitives.json) — 11 total (`pcg graphs --node connectPoints`)
+**Examples:** [basics-filter-primitives-by-attribute.json](../graphs/basics-filter-primitives-by-attribute.json), [basics-connect-by-reach.json](../graphs/basics-connect-by-reach.json), [basics-merge-primitives.json](../graphs/basics-merge-primitives.json) — 10 total (`pcg graphs --node connectPoints`)
 
 **Params:**
 
@@ -370,7 +370,7 @@ Copies the source point cloud onto every target point (output count = source poi
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-copy-to-points.json](../graphs/basics-copy-to-points.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 20 total (`pcg graphs --node copyToPoints`)
+**Examples:** [basics-copy-to-points.json](../graphs/basics-copy-to-points.json), [basics-self-similar-frond.json](../graphs/basics-self-similar-frond.json), [basics-spiral-stair.json](../graphs/basics-spiral-stair.json) — 16 total (`pcg graphs --node copyToPoints`)
 
 **Params:**
 
@@ -499,7 +499,7 @@ Keeps points where a field-capable `predicate` evaluates to a non-zero number. T
 
 **Outputs:** `out` (geometry), `rest` (geometry)
 
-**Examples:** [basics-filter-by-expression.json](../graphs/basics-filter-by-expression.json), [basics-worley-cells.json](../graphs/basics-worley-cells.json), [basics-suspension-bridge.json](../graphs/basics-suspension-bridge.json) — 17 total (`pcg graphs --node filterByExpression`)
+**Examples:** [basics-filter-by-expression.json](../graphs/basics-filter-by-expression.json), [basics-worley-cells.json](../graphs/basics-worley-cells.json), [basics-suspension-bridge.json](../graphs/basics-suspension-bridge.json) — 18 total (`pcg graphs --node filterByExpression`)
 
 **Params:**
 
@@ -650,7 +650,7 @@ Builds a parametric triangle mesh with no input: shape 'plane' is one axis-align
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-mesh-primitive.json](../graphs/basics-mesh-primitive.json), [basics-surface-sample.json](../graphs/basics-surface-sample.json), [basics-promote-attribute.json](../graphs/basics-promote-attribute.json) — 22 total (`pcg graphs --node meshPrimitive`)
+**Examples:** [basics-mesh-primitive.json](../graphs/basics-mesh-primitive.json), [basics-surface-sample.json](../graphs/basics-surface-sample.json), [basics-promote-attribute.json](../graphs/basics-promote-attribute.json) — 18 total (`pcg graphs --node meshPrimitive`)
 
 **Params:**
 
@@ -701,7 +701,7 @@ MOVES THE FACES of every cell's box OUT, or IN where the offset is negative — 
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [examples-brick-house.json](../graphs/examples-brick-house.json) — 1 total (`pcg graphs --node offsetBox`)
+**Examples:** [basics-split-box.json](../graphs/basics-split-box.json), [basics-apply-rules.json](../graphs/basics-apply-rules.json), [examples-brick-house.json](../graphs/examples-brick-house.json) — 3 total (`pcg graphs --node offsetBox`)
 
 **Params:**
 
@@ -980,7 +980,7 @@ PLACES ONE BOX INSIDE, OR AGAINST, every cell's own box, by SIZE, ANCHOR and OFF
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [examples-brick-house.json](../graphs/examples-brick-house.json) — 1 total (`pcg graphs --node placeBox`)
+**Examples:** [examples-floorplan.json](../graphs/examples-floorplan.json), [examples-brick-house.json](../graphs/examples-brick-house.json) — 2 total (`pcg graphs --node placeBox`)
 
 **Params:**
 
@@ -1761,7 +1761,7 @@ SCALES every cell's box ABOUT A PIVOT and then MOVES it — the transform of a m
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [examples-brick-house.json](../graphs/examples-brick-house.json) — 1 total (`pcg graphs --node transformBox`)
+**Examples:** [basics-apply-rules.json](../graphs/basics-apply-rules.json), [examples-facade.json](../graphs/examples-facade.json), [examples-floorplan.json](../graphs/examples-floorplan.json) — 4 total (`pcg graphs --node transformBox`)
 
 **Params:**
 
@@ -1783,7 +1783,7 @@ Transforms every point: P' = R * (scale * P) + translate, with R from rotateEule
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-transform-points.json](../graphs/basics-transform-points.json), [basics-inline-field-params.json](../graphs/basics-inline-field-params.json), [basics-reseed-a-noise.json](../graphs/basics-reseed-a-noise.json) — 35 total (`pcg graphs --node transformPoints`)
+**Examples:** [basics-transform-points.json](../graphs/basics-transform-points.json), [basics-inline-field-params.json](../graphs/basics-inline-field-params.json), [basics-reseed-a-noise.json](../graphs/basics-reseed-a-noise.json) — 34 total (`pcg graphs --node transformPoints`)
 
 **Params:**
 

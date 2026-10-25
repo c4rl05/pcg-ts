@@ -1,0 +1,601 @@
+var e=`{
+  "formatVersion": 1,
+  "seed": 2204,
+  "meta": {
+    "title": "Rooms from a split footprint, with a door on every shared wall",
+    "description": "ROOMS FROM A SPLIT FOOTPRINT: the subdivision of \`examples-facade\`, with a different stop rule and labels that mean something. The grammar is the same one rule, \`cell\`, in \`applyRules\`, and the same two nodes inside it: a relabel that stops a cell, and a \`splitBox\` that halves the rest across its longest span at a fraction in [0.34, 0.66) drawn from \`ruleRoll\` on the parent. What differs is exactly what a graph should have to state. THE STOP RULE: a plan stops on a bounded floor AREA, not a bounded size, because a long thin room has a small area while its longest wall says otherwise -- a cell stops once x span times z span is 26 or less (or it is nine splits deep, which never binds here: over seeds 0 to 199 every cell has stopped on area within seven). THE AXIS: \`longestOf\` \\"xz\\", the floor plane, so the cut is never vertical whatever the slab's height -- the root is 28 x 0.25 x 20 -- and each cut falls across whichever floor axis is longer at that cell, which is not the same as alternating. THE LABELS ARE THE ROOM KINDS. The stop relabel does not mark a cell finished with a generic label; it writes the kind straight into \`kind\`, the attribute applyRules dispatches on (\`labelAttr\` \\"kind\\" on both nodes): \`setAttribute\` with values [\\"cell\\", \\"closet\\", \\"room\\", \\"hall\\"] and the index select(stopped, 1 + ge(area, 13) + ge(area, 19), 0). A cell still being split keeps \`cell\`, the one label with a rule; a finished one gets closet, room or hall by how many thresholds its area clears, and since none of those has a rule it leaves on \`out\` carrying it. Summing 0/1 predicates is how a staircase of thresholds is written in the field grammar, which has no switch. The column is a real string attribute: \`byAttribute\` can dispatch on it, \`filterByAttribute\` can cut on it, and \`spawnInstances\` could send each kind to a different asset. THE BANDS MUST SIT INSIDE THE STOP RULE'S RANGE: a cell stops splitting at an area of 26 or less, so a threshold above 26 could never fire and every room would come back the same kind. A child keeps at least 0.34 of a parent larger than 26, so the rooms land between 8.95 and 26.00 square units over seeds 0 to 199 -- 29 to 36 rooms a plan -- and the bands at 13 and 19 are chosen inside that. The rooms tile their footprint exactly, 560 square units of leaves over a 560 square unit root, because \`splitBox\` resolves the cut on the parent and both halves read it. THE DOORS ARE READ FROM THE BOXES. \`contact\` is a \`boxContact\` in mode \\"touch\\" with the rooms on both pins and \`excludeSelf\` on, and its \`pairs\` output is one point per pair of rooms that meet, whose box is the region the two share: for rooms side by side, the wall between them, flat across the axis they touch along and exactly as long as the stretch they have in common, with the face frame of that wall (\`outward\`, \`alongAxis\`, \`alongSign\`) written on it. Every pair comes out twice, once from each room's side, so \`walls\` keeps it once with lt(queryIndex, targetIndex); it also keeps only pairs that meet across exactly one face (\`alongAxis\` of 0 or more -- rooms that meet only at a corner share a point, not a wall) and whose shared wall is at least \`doorWidth\` plus 0.6 long, which leaves 0.3 of wall either side of the door. \`door\` is a \`placeBox\` in the \\"face\\" frame, so one set of numbers serves every wall whichever way it faces: centred along the wall, standing on the floor, \`doorWidth\` wide, 0.4 high and 0.8 deep, enough to bridge the gap the drawn rooms leave between them. \`boxesToMesh\` draws the doors in their own colour and the rooms (\`slab\`, every room scaled to 90% about its own centre, so the walls between them read as gaps) in theirs. Over seeds 0 to 199 a plan has 64 to 84 shared walls and 48 to 65 doors; the 11 to 23 walls too short for a door stay closed. Nothing draws a door by hand or by distance between room centres: a door stands on every shared wall long enough to hold one, and nowhere else.",
+    "tags": [
+      "examples",
+      "structure",
+      "grammar",
+      "split",
+      "topology"
+    ]
+  },
+  "params": [
+    {
+      "name": "doorWidth",
+      "value": 1.2,
+      "min": 0.6,
+      "max": 2,
+      "description": "Width of every door, in plan units (the rooms run 2 to 8 units a side). A door goes only on a shared wall at least this plus 0.6 long, so wider doors leave more of the short walls closed."
+    }
+  ],
+  "nodes": [
+    {
+      "id": "rootPt",
+      "type": "pointLine",
+      "params": {
+        "mode": "endpoints",
+        "count": 1,
+        "start": [
+          0,
+          0,
+          0
+        ],
+        "end": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "rootCell",
+      "type": "setBounds",
+      "params": {
+        "boundsMin": [
+          -14,
+          0,
+          -10
+        ],
+        "boundsMax": [
+          14,
+          0.25,
+          10
+        ]
+      }
+    },
+    {
+      "id": "rootLabel",
+      "type": "setAttribute",
+      "params": {
+        "name": "kind",
+        "domain": "point",
+        "type": "string",
+        "stringValue": "cell"
+      }
+    },
+    {
+      "id": "split",
+      "type": "applyRules",
+      "params": {
+        "maxDepth": 12,
+        "labelAttr": "kind"
+      },
+      "subgraph": {
+        "graph": {
+          "formatVersion": 1,
+          "seed": 0,
+          "nodes": [
+            {
+              "id": "stop",
+              "type": "setAttribute",
+              "params": {
+                "name": "kind",
+                "domain": "point",
+                "type": "string",
+                "values": [
+                  "cell",
+                  "closet",
+                  "room",
+                  "hall"
+                ],
+                "value": {
+                  "fn": "select",
+                  "args": [
+                    {
+                      "fn": "max",
+                      "args": [
+                        {
+                          "fn": "ge",
+                          "args": [
+                            {
+                              "fn": "attribute",
+                              "name": "ruleDepth"
+                            },
+                            9
+                          ]
+                        },
+                        {
+                          "fn": "le",
+                          "args": [
+                            {
+                              "fn": "mul",
+                              "args": [
+                                {
+                                  "fn": "box",
+                                  "name": "sx"
+                                },
+                                {
+                                  "fn": "box",
+                                  "name": "sz"
+                                }
+                              ]
+                            },
+                            26
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "add",
+                      "args": [
+                        1,
+                        {
+                          "fn": "add",
+                          "args": [
+                            {
+                              "fn": "ge",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "box",
+                                      "name": "sx"
+                                    },
+                                    {
+                                      "fn": "box",
+                                      "name": "sz"
+                                    }
+                                  ]
+                                },
+                                13
+                              ]
+                            },
+                            {
+                              "fn": "ge",
+                              "args": [
+                                {
+                                  "fn": "mul",
+                                  "args": [
+                                    {
+                                      "fn": "box",
+                                      "name": "sx"
+                                    },
+                                    {
+                                      "fn": "box",
+                                      "name": "sz"
+                                    }
+                                  ]
+                                },
+                                19
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    0
+                  ]
+                }
+              }
+            },
+            {
+              "id": "halve",
+              "type": "splitBox",
+              "params": {
+                "axis": "longest",
+                "longestOf": "xz",
+                "labels": [
+                  "cell",
+                  "cell"
+                ],
+                "sizes": {
+                  "fn": "vec",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        0.34,
+                        {
+                          "fn": "mul",
+                          "args": [
+                            0.32,
+                            {
+                              "fn": "attribute",
+                              "name": "ruleRoll"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "sub",
+                      "args": [
+                        1,
+                        {
+                          "fn": "add",
+                          "args": [
+                            0.34,
+                            {
+                              "fn": "mul",
+                              "args": [
+                                0.32,
+                                {
+                                  "fn": "attribute",
+                                  "name": "ruleRoll"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "units": [
+                  "relative",
+                  "relative"
+                ],
+                "where": {
+                  "fn": "attributeIs",
+                  "name": "kind",
+                  "value": "cell"
+                },
+                "labelAttr": "kind"
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from": [
+                "stop",
+                "out"
+              ],
+              "to": [
+                "halve",
+                "in"
+              ]
+            }
+          ],
+          "outputs": []
+        },
+        "inputs": [
+          {
+            "name": "cell",
+            "node": "stop",
+            "pin": "in"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "cell",
+            "node": "halve",
+            "pin": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "tint",
+      "type": "setAttribute",
+      "params": {
+        "name": "color",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 4,
+        "value": {
+          "fn": "vec",
+          "args": [
+            0.29,
+            0.39,
+            0.55,
+            1
+          ]
+        }
+      }
+    },
+    {
+      "id": "slab",
+      "type": "transformBox",
+      "params": {
+        "scale": [
+          0.9,
+          0.9,
+          0.9
+        ],
+        "pivotIn": "cell",
+        "pivot": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      }
+    },
+    {
+      "id": "rooms",
+      "type": "boxesToMesh",
+      "params": {}
+    },
+    {
+      "id": "contact",
+      "type": "boxContact",
+      "params": {
+        "mode": "touch",
+        "excludeSelf": true
+      }
+    },
+    {
+      "id": "walls",
+      "type": "filterByExpression",
+      "params": {
+        "predicate": {
+          "fn": "mul",
+          "args": [
+            {
+              "fn": "lt",
+              "args": [
+                {
+                  "fn": "attribute",
+                  "name": "queryIndex"
+                },
+                {
+                  "fn": "attribute",
+                  "name": "targetIndex"
+                }
+              ]
+            },
+            {
+              "fn": "mul",
+              "args": [
+                {
+                  "fn": "ge",
+                  "args": [
+                    {
+                      "fn": "attribute",
+                      "name": "alongAxis"
+                    },
+                    0
+                  ]
+                },
+                {
+                  "fn": "ge",
+                  "args": [
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "box",
+                          "name": "sx"
+                        },
+                        {
+                          "fn": "box",
+                          "name": "sz"
+                        }
+                      ]
+                    },
+                    {
+                      "fn": "add",
+                      "args": [
+                        {
+                          "fn": "param",
+                          "name": "doorWidth"
+                        },
+                        0.6
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "door",
+      "type": "placeBox",
+      "params": {
+        "frame": "face",
+        "size": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "param",
+              "name": "doorWidth"
+            },
+            0.4,
+            0.8
+          ]
+        },
+        "anchor": [
+          0.5,
+          0,
+          0.5
+        ],
+        "fit": "allow"
+      }
+    },
+    {
+      "id": "doorTint",
+      "type": "setAttribute",
+      "params": {
+        "name": "color",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 4,
+        "value": {
+          "fn": "vec",
+          "args": [
+            0.76,
+            0.37,
+            0.07,
+            1
+          ]
+        }
+      }
+    },
+    {
+      "id": "doorMesh",
+      "type": "boxesToMesh",
+      "params": {}
+    },
+    {
+      "id": "plan",
+      "type": "mergePrimitives",
+      "params": {}
+    }
+  ],
+  "connections": [
+    {
+      "from": [
+        "rootPt",
+        "out"
+      ],
+      "to": [
+        "rootCell",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rootCell",
+        "out"
+      ],
+      "to": [
+        "rootLabel",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rootLabel",
+        "out"
+      ],
+      "to": [
+        "split",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "split",
+        "out"
+      ],
+      "to": [
+        "tint",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "tint",
+        "out"
+      ],
+      "to": [
+        "slab",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "slab",
+        "out"
+      ],
+      "to": [
+        "rooms",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "split",
+        "out"
+      ],
+      "to": [
+        "contact",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "split",
+        "out"
+      ],
+      "to": [
+        "contact",
+        "targets"
+      ]
+    },
+    {
+      "from": [
+        "contact",
+        "pairs"
+      ],
+      "to": [
+        "walls",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "walls",
+        "out"
+      ],
+      "to": [
+        "door",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "door",
+        "out"
+      ],
+      "to": [
+        "doorTint",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "doorTint",
+        "out"
+      ],
+      "to": [
+        "doorMesh",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "rooms",
+        "out"
+      ],
+      "to": [
+        "plan",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "doorMesh",
+        "out"
+      ],
+      "to": [
+        "plan",
+        "in"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "id": "plan",
+      "pin": "out",
+      "name": "plan"
+    }
+  ]
+}
+`;export{e as default};
