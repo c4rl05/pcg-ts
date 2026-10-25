@@ -468,6 +468,18 @@ appears, and cost it as two nodes' worth of change rather than as a param.
 
 ### Stretch: a `splitBounds` node — NOT NEEDED, the graph does it, 2026-09-08 (REVERSED for a cut-only `splitBox`, 2026-10-22 — see the last paragraphs)
 
+**Where it stands, 2026-10-25.** Both graphs this entry argues from were
+rebuilt on the grammar: `examples-facade` and `examples-floorplan` are each
+ONE rule in `applyRules` — a setAttribute relabel that is the stop rule,
+then a `splitBox` with `axis: "longest"` (`longestOf` "xy" / "xz") cutting
+at a fraction drawn from `ruleRoll` — 10 and 13 nodes where they were 20
+and 24, and the floorplan's stop relabel writes the room kind itself. With
+a seed-free cut both reproduce the loop versions' leaves to one f32 ulp.
+The `repeatUntil` + argmax + two-slot fan-out + `setBounds` spelling below
+is how they stood until then (c4d0a042 has it); the stop rules, the
+parent-decided cut and the bands-inside-the-stop-range lesson carry over
+unchanged.
+
 Proposed alongside the parent-pointer entry above: a core node that
 recursively splits a box along an axis, emitting cells tagged with depth,
 parent and axis. It would have been the split-grammar primitive, and the
@@ -537,7 +549,8 @@ objection above was to a node that owns the RECURSION, because a node that
 recurses has to own the stop rule, and a stop rule is an expression while a
 node param is a value. That objection still stands, and `splitBox` is shaped
 by it rather than against it: it cuts one level, along one axis, per cook,
-and stops nothing. Recursion is a `repeatUntil` around it, staging is several
+and stops nothing. Recursion is an `applyRules` around it (a `repeatUntil`
+when this was written), staging is several
 of it chained, and the stop rule stays exactly where both consumers above
 put it. What the node takes over is the part they shared VERBATIM — the
 fan-out, the parent-decided cut, the bounds write — which is the part a
