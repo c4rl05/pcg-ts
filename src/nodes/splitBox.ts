@@ -35,7 +35,7 @@ import type {
   SplitBoxParams,
 } from "./params.generated.js";
 import { fitGlossary, fitRefusal } from "./boxFit.js";
-import { type RoundCode, ULP_TOL, f32Ulp, refuseCutSnapMode, roundBy, snapToLattice } from "./latticeSnap.js";
+import { type RoundCode, ULP_TOL, f32HalfUlp, f32Ulp, refuseCutSnapMode, roundBy, snapToLattice } from "./latticeSnap.js";
 import { standardNode } from "./registry.js";
 import {
   CANCEL_STRIDE,
@@ -78,12 +78,6 @@ const FIT_ERROR = 0;
 const FIT_CLIP = 1;
 const FIT_SCALE = 2;
 
-/**
- * A size tolerance: `fit` compares sums of f32-resolved sizes against an
- * f32-stored box, so "exactly fills" has to mean "fills to f32 precision",
- * or `[0.1, 0.2, 0.7]` on a box of 1 would be an overflow of 1.5e-8.
- */
-const FIT_EPS = 1e-6;
 /**
  * The seed of slot `k` of a cell: `hashCombine(cellSeed, k)`, spelled out
  * as repeatPoints spells it so the inner loop does not allocate the
@@ -154,7 +148,7 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       enum: [...ROUNDS],
       default: "floor",
       description:
-        'How a "repeat" segment\'s count rounds: n = max(1, <mode>(rest / module)). A rest within f32 precision of a whole number of modules — a millionth of the box, or two f32 steps at its coordinates, whichever is larger — counts as exactly that many, so two equal walls get the same count wherever they stand (a rest of 4 that the stored box makes 3.9999998 holds two modules of 2, not one). "floor" never makes a piece shorter than the module (as many WHOLE modules as fit, the remainder shared out), "ceil" never makes one longer, "round" is nearest with a half rounding up. A rest of 0 still gives n = 1, a piece of size 0, which is dropped.',
+        'How a "repeat" segment\'s count rounds: n = max(1, <mode>(rest / module)). A rest within f32 precision of a whole number of modules — two f32 steps at the box\'s coordinates, plus half a step of every absolute size and of each module counted, never a quarter module — counts as exactly that many, so two equal walls get the same count wherever they stand (a rest of 4 that the stored box makes 3.9999998 holds two modules of 2, not one). "floor" never makes a piece shorter than the module (as many WHOLE modules as fit, the remainder shared out), "ceil" never makes one longer, "round" is nearest with a half rounding up. A rest of 0 still gives n = 1, a piece of size 0, which is dropped.',
     },
     snap: {
       type: "vec3",
@@ -175,7 +169,7 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       enum: [...FITS],
       default: "error",
       description:
-        'What happens when the absolute sizes do not fit the box. OVERFLOW (absolute sizes past the box length): "error" refuses the cook, naming the cell, the segment where the running total passed the box, and the numbers; "clip" lays the segments from the min side and cuts the one that crosses the max end there, dropping the rest; "scale" scales every absolute size down to fill the box exactly. The relative and repeat segments get nothing either way. UNDERFILL (no relative or repeat segment to take the rest, and the absolute sizes short of the box): "error" refuses, "clip" leaves the rest of the box UNCOVERED at the max end, "scale" scales the absolute sizes up to fill it. Relative segments whose weights are ALL 0 on a cell take nothing, so that cell counts as having no flexible segment. The default is strict because a cut that silently loses area is the defect worth refusing: a relative segment of weight 1 at the end is the usual way to say "and the rest".',
+        'What happens when the absolute sizes do not fit the box. OVERFLOW (absolute sizes past the box length): "error" refuses the cook, naming the cell, the segment where the running total passed the box, and the numbers; "clip" lays the segments from the min side and cuts the one that crosses the max end there, dropping the rest; "scale" scales every absolute size down to fill the box exactly. The relative and repeat segments get nothing either way. UNDERFILL (no relative or repeat segment to take the rest, and the absolute sizes short of the box): "error" refuses, "clip" leaves the rest of the box UNCOVERED at the max end, "scale" scales the absolute sizes up to fill it. Relative segments whose weights are ALL 0 on a cell take nothing, so that cell counts as having no flexible segment. "Fit" is to f32 precision: the two f32 steps at the box\'s coordinates that placeBox and offsetBox hold a face to, plus half a step of each absolute size summed (a sum of sizes errs more than one coordinate), so [0.1, 0.2, 0.7] fills a box of 1 and a box at x = 1e5 (where f32 steps are 1/128) is not refused for its storage — and an absolute run that ends within it ends AT the box\'s far end, leaving any relative or repeat segment after it nothing. The default is strict because a cut that silently loses area is the defect worth refusing: a relative segment of weight 1 at the end is the usual way to say "and the rest".',
     },
     direction: {
       type: "f32",
@@ -459,12 +453,21 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       }
       let absSum = 0;
       let relSum = 0;
+      // "Exactly fills" is to f32 precision: the ULP_TOL ulps at the box's
+      // coordinates that placeBox and offsetBox hold a single face to
+      // (where the box itself is known to), plus half an ulp of every
+      // absolute size summed against it (where each size is known to: a sum
+      // of several sizes errs more than one coordinate; see f32HalfUlp for
+      // the box whose seven equal sizes miss it by 2.5 coordinate ulps).
+      // [0.1, 0.2, 0.7] on a box of 1 is a fill, not an underfill of 7.5e-9.
+      let tol = ULP_TOL * f32Ulp(Math.max(Math.abs(cLo), Math.abs(cHi)));
       for (let j = 0; j < N; j++) {
         const s = Math.max(0, sizeAt(i, j));
-        if (unit[j] === ABS) absSum += s;
-        else if (unit[j] === REL) relSum += s;
+        if (unit[j] === ABS) {
+          absSum += s;
+          tol += f32HalfUlp(s);
+        } else if (unit[j] === REL) relSum += s;
       }
-      const tol = FIT_EPS * Math.max(len, absSum);
       let absScale = 1;
       let clipAbs = false;
       let rest: number;
@@ -489,6 +492,17 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
         rest = 0;
       } else {
         rest = Math.max(0, len - absSum);
+        // Absolute sizes that fill the box to f32 precision leave NO rest:
+        // what is left is storage error, not room, and a relative or repeat
+        // segment after them given it was a sliver piece one or two ulps
+        // long ([-20, -17.88] cut 1.06 | 1.06 | "and the rest"). Only when
+        // the absolute sizes are more than that precision themselves, so a
+        // box narrower than two ulps is still shared out by weight. The
+        // trade: a remainder this small is erased even where it was meant
+        // ([0, 1] cut 1 - 2^-23 absolute | relative is one piece), while the
+        // same length written as an ABSOLUTE piece is kept — a length the
+        // sizes state is laid, a length left over is not.
+        if (absSum > tol && rest <= tol) rest = 0;
       }
       const flexible = repeatSeg >= 0 || relSum > 0;
       if (!flexible && rest > tol) {
@@ -516,12 +530,14 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
         // The quotient is taken as a whole number when the rest is within
         // f32 precision of that many modules: a stored box is only known to
         // a few ulps of its coordinates, so without this slack two equal
-        // walls at different positions got different counts.
+        // walls at different positions got different counts. The rest is
+        // known to the fit tolerance (the box and the absolute sizes taken
+        // out of it), and `whole` modules to half an ulp of the module each.
         let q = rest / m;
         const whole = Math.round(q);
         // Never a quarter module or more: past that the slack would decide
         // the count instead of the sizes.
-        const slack = Math.min(m / 4, Math.max(FIT_EPS * len, ULP_TOL * f32Ulp(Math.max(Math.abs(cLo), Math.abs(cHi)))));
+        const slack = Math.min(m / 4, tol + whole * f32HalfUlp(m));
         if (Math.abs(rest - whole * m) <= slack) q = whole;
         repN = Math.max(1, roundBy(repeatRound, q));
         if (runningTotal + repN > MAX_SPLIT_POINTS) {
@@ -560,19 +576,33 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
         ends[k] = rev ? cHi - cum : cLo + cum;
         segOf[k++] = j;
       }
-      // Then each end made final: an end at the box's max (to f32
-      // precision) IS the max, so the pieces tile the cell exactly; any
-      // other end is snapped, then clamped into the cell and kept monotone.
+      // Then each end made final. The END OF THE LAYOUT — the last slot's
+      // end, and any end with nothing laid after it — within the fit
+      // tolerance of the box's far end IS the far end, so the pieces tile
+      // the cell exactly; any other end is snapped, then clamped into the
+      // cell and kept monotone. An end with a piece still to come is never
+      // moved onto the far end: that swallowed the piece. A 2^22-way repeat
+      // of [0, 1] cuts pieces 2^-22 long, exactly two f32 ulps of 1, so the
+      // second-to-last end sat within the tolerance and the last piece
+      // vanished; [1, 2] lost one at 2^21 pieces the same way.
+      // "Nothing laid after it" is less than half an f32 ulp AT THE FAR END
+      // between the end and the last raw end (the raw ends run monotone
+      // from the start): no piece f32 could store there. At the far end's
+      // own magnitude, not the box's larger one: on [-1000, 0] a piece
+      // [-2^-16, 0] is storable, though 2^-16 is under half an ulp of 1000.
+      // (Absolute sizes that fill the box leave the rest exactly 0, above,
+      // so storage error never reaches this as material.)
       // A piece is emitted when it is not a gap and has length as STORED.
       const step = snap[a];
-      const endTol = ULP_TOL * f32Ulp(Math.max(Math.abs(cLo), Math.abs(cHi)));
+      const last = ends[k - 1];
+      const nothing = f32HalfUlp(rev ? cLo : cHi);
       let emitted = 0;
       if (rev) {
         // Mirrored: from the max side down, the min IS the min.
         let prev = cHi;
         for (let q = 0; q < k; q++) {
           let b = ends[q];
-          if (b <= cLo + endTol) b = cLo;
+          if (b - last < nothing && b <= cLo + tol) b = cLo;
           else if (step > 0) b = snapToLattice(b, step, snapMode);
           if (b < cLo) b = cLo;
           if (b > prev) b = prev;
@@ -586,7 +616,7 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       let prev = cLo;
       for (let q = 0; q < k; q++) {
         let b = ends[q];
-        if (b >= cHi - endTol) b = cHi;
+        if (last - b < nothing && b >= cHi - tol) b = cHi;
         else if (step > 0) b = snapToLattice(b, step, snapMode);
         if (b > cHi) b = cHi;
         if (b < prev) b = prev;

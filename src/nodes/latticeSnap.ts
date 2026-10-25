@@ -38,6 +38,23 @@ export function f32Ulp(x: number): number {
   return Math.pow(2, Math.floor(Math.log2(a)) - 23);
 }
 
+/**
+ * How far an f32-stored SIZE may sit from the number it was written as:
+ * half an f32 ulp at its magnitude. A node that SUMS sizes against a box
+ * (`splitBox`'s absolute segments and repeat modules, `shellSplit`'s two
+ * opposite faces) holds the sum to ULP_TOL ulps of the box's coordinates
+ * PLUS this for every size in the sum, because the sum's error grows with
+ * the count while the box's does not. Without it, a box written as
+ * [-15.73, 12.48] cut into seven absolute 4.03s is 2.5 coordinate ulps
+ * "over" in f32 (each 4.03 stores 2.1e-7 long, the box 9.2e-7 short), and
+ * a repeat of module 4.03 over it counted 6, not 7. Not a fraction of the
+ * span: that widens with the span, and a millionth of a 1000-long box let
+ * an absolute size 8 ulps short pass as a fill and leave the gap uncovered.
+ */
+export function f32HalfUlp(x: number): number {
+  return f32Ulp(x) / 2;
+}
+
 /** Rounding codes (`repeatRound`, `snapMode`), decided once from their strings. */
 export type RoundCode = 0 | 1 | 2; // floor | round | ceil
 

@@ -742,6 +742,25 @@ describe("shellSplit: fit", () => {
     expect(tilingFailures(input, out)).toEqual([]);
   });
 
+  it("an overlap of 8 ulps on a 1000-wide box is refused: the tolerance is f32 ulps, not a millionth of the span", async () => {
+    // f32(500.0005) = 500.00048828125, so west 500 + east 500.0005 is
+    // 4.8828125e-4 over x 0 .. 1000. The tolerance is 2 ulps at the
+    // coordinates (ulp(1000) = 2^-14) plus half an ulp of each thickness
+    // (2^-15 / 2 twice): 1.52587890625e-4. The old rule's millionth of the
+    // span (1e-3) took the pair for an exact fill.
+    const input = cells([[[0, 0, 0], [1000, 1, 1]]]);
+    const run = (fit: string) => shell(input, { faces: ["west", "east"], labels: ["w", "e"], thickness: [500, 500.0005], fit, interiorLabel: "in" });
+    expect(await rejection(run("error"))).toMatch(
+      /cell 0's west and east OVERLAP — together 1000.00048828125 thick \(500 \+ 500.00048828125\) along x, but its box is 1000 across/,
+    );
+    // "clip" lays west first and gives east the rest: the same two pieces
+    // the old rule produced by calling it a fill.
+    expect(boxes(await run("clip"))).toEqual([
+      [[0, 0, 0], [500, 1, 1]],
+      [[500, 0, 0], [1000, 1, 1]],
+    ]);
+  });
+
   it("refuses an unknown fit", async () => {
     expect(await rejection(shell(worked(), { fit: "shrink" }))).toMatch(/param "fit" is "shrink"; valid: error, clip, scale/);
   });

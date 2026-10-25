@@ -5967,9 +5967,10 @@ export interface ShellSplitParams {
    * it, which can leave it nothing (the cut "clip" makes on every box node; the min side
    * keeping its thickness is the order they are laid in); "scale" shrinks both in proportion
    * so that they meet. A pair that EXACTLY fills its span fits under every mode and leaves
-   * no interior; "exactly" is to f32 precision — within a millionth of the span, or two f32
-   * steps at the box's coordinates, whichever is larger, so a box at x = 1e5 (where f32
-   * steps are 1/128) is not refused for its storage. Decided once per cook.
+   * no interior; "exactly" is to f32 precision, as on splitBox — the two f32 steps at the
+   * box's coordinates that placeBox and offsetBox hold a face to, plus half a step of each
+   * of the two thicknesses summed, so a box at x = 1e5 (where f32 steps are 1/128) is not
+   * refused for its storage. Decided once per cook.
    *
    * - Enum: `"error"` | `"clip"` | `"scale"`
    *
@@ -6450,13 +6451,13 @@ export interface SplitBoxParams {
   units: readonly string[];
   /**
    * How a "repeat" segment's count rounds: n = max(1, <mode>(rest / module)). A rest within
-   * f32 precision of a whole number of modules — a millionth of the box, or two f32 steps at
-   * its coordinates, whichever is larger — counts as exactly that many, so two equal walls
-   * get the same count wherever they stand (a rest of 4 that the stored box makes 3.9999998
-   * holds two modules of 2, not one). "floor" never makes a piece shorter than the module
-   * (as many WHOLE modules as fit, the remainder shared out), "ceil" never makes one longer,
-   * "round" is nearest with a half rounding up. A rest of 0 still gives n = 1, a piece of
-   * size 0, which is dropped.
+   * f32 precision of a whole number of modules — two f32 steps at the box's coordinates,
+   * plus half a step of every absolute size and of each module counted, never a quarter
+   * module — counts as exactly that many, so two equal walls get the same count wherever
+   * they stand (a rest of 4 that the stored box makes 3.9999998 holds two modules of 2, not
+   * one). "floor" never makes a piece shorter than the module (as many WHOLE modules as fit,
+   * the remainder shared out), "ceil" never makes one longer, "round" is nearest with a half
+   * rounding up. A rest of 0 still gives n = 1, a piece of size 0, which is dropped.
    *
    * - Enum: `"floor"` | `"round"` | `"ceil"`
    *
@@ -6501,9 +6502,14 @@ export interface SplitBoxParams {
    * absolute sizes short of the box): "error" refuses, "clip" leaves the rest of the box
    * UNCOVERED at the max end, "scale" scales the absolute sizes up to fill it. Relative
    * segments whose weights are ALL 0 on a cell take nothing, so that cell counts as having
-   * no flexible segment. The default is strict because a cut that silently loses area is the
-   * defect worth refusing: a relative segment of weight 1 at the end is the usual way to say
-   * "and the rest".
+   * no flexible segment. "Fit" is to f32 precision: the two f32 steps at the box's
+   * coordinates that placeBox and offsetBox hold a face to, plus half a step of each
+   * absolute size summed (a sum of sizes errs more than one coordinate), so [0.1, 0.2, 0.7]
+   * fills a box of 1 and a box at x = 1e5 (where f32 steps are 1/128) is not refused for its
+   * storage — and an absolute run that ends within it ends AT the box's far end, leaving any
+   * relative or repeat segment after it nothing. The default is strict because a cut that
+   * silently loses area is the defect worth refusing: a relative segment of weight 1 at the
+   * end is the usual way to say "and the rest".
    *
    * - Enum: `"error"` | `"clip"` | `"scale"`
    *

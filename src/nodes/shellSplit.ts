@@ -67,6 +67,7 @@ import type {
   ShellSplitParams,
 } from "./params.generated.js";
 import { fitGlossary, fitRefusal } from "./boxFit.js";
+import { ULP_TOL, f32HalfUlp, f32Ulp } from "./latticeSnap.js";
 import { standardNode } from "./registry.js";
 import {
   CANCEL_STRIDE,
@@ -119,22 +120,6 @@ const OUTWARD: readonly (readonly [number, number, number])[] = [
 ];
 
 /**
- * The tolerance "the thicknesses fit" is held to: thicknesses resolved in
- * f32 against a box stored in f32, so "exactly fills" means "to f32
- * precision" — splitBox's `fit` tolerance, for splitBox's reason.
- */
-const FIT_EPS = 1e-6;
-/** How many f32 ulps of the coordinate two planes may differ by and still meet. */
-const ULP_TOL = 2;
-
-/** One f32 ulp at the magnitude of `x` (the smallest normal's at 0). */
-function f32Ulp(x: number): number {
-  const a = Math.abs(x);
-  if (!(a > 1.1754943508222875e-38)) return 1.401298464324817e-45;
-  return Math.pow(2, Math.floor(Math.log2(a)) - 23);
-}
-
-/**
  * The seed of face code `k` of a cell: `hashCombine(cellSeed, k)`, spelled
  * out so the inner loop does not allocate the variadic form's rest array.
  * `h1` is `hashMix(hashSeed(2), cellSeed)`, folded once per CELL; the test
@@ -184,7 +169,7 @@ export const shellSplit = standardNode<ShellSplitParams, ShellSplitInputs, Shell
       enum: [...FITS],
       default: "error",
       description:
-        'What happens when two OPPOSITE faces are thicker together than the box between them — floor + ceiling past its height, south + north past its depth, west + east past its width (a face not listed counts 0). "error" refuses the cook, naming the cell, the axis, both faces and the numbers; "clip" lays the faces in order, the min-side face (floor, south, west) first, and cuts what passes the limit — the min-side face keeps its thickness, cut at the far side of the box, and the max-side face is cut where it meets it, which can leave it nothing (the cut "clip" makes on every box node; the min side keeping its thickness is the order they are laid in); "scale" shrinks both in proportion so that they meet. A pair that EXACTLY fills its span fits under every mode and leaves no interior; "exactly" is to f32 precision — within a millionth of the span, or two f32 steps at the box\'s coordinates, whichever is larger, so a box at x = 1e5 (where f32 steps are 1/128) is not refused for its storage. Decided once per cook.',
+        'What happens when two OPPOSITE faces are thicker together than the box between them — floor + ceiling past its height, south + north past its depth, west + east past its width (a face not listed counts 0). "error" refuses the cook, naming the cell, the axis, both faces and the numbers; "clip" lays the faces in order, the min-side face (floor, south, west) first, and cuts what passes the limit — the min-side face keeps its thickness, cut at the far side of the box, and the max-side face is cut where it meets it, which can leave it nothing (the cut "clip" makes on every box node; the min side keeping its thickness is the order they are laid in); "scale" shrinks both in proportion so that they meet. A pair that EXACTLY fills its span fits under every mode and leaves no interior; "exactly" is to f32 precision, as on splitBox — the two f32 steps at the box\'s coordinates that placeBox and offsetBox hold a face to, plus half a step of each of the two thicknesses summed, so a box at x = 1e5 (where f32 steps are 1/128) is not refused for its storage. Decided once per cook.',
     },
     where: {
       type: "f32",
@@ -435,11 +420,15 @@ export const shellSplit = standardNode<ShellSplitParams, ShellSplitInputs, Shell
         let tMin = thicknessOf(i, kMin);
         let tMax = thicknessOf(i, kMax);
         const sum = tMin + tMax;
-        // "To f32 precision" is the larger of a relative share and the
-        // f32 spacing AT THE BOX's coordinates: far from the origin a
-        // stored span is only known to a few ulps of where it sits.
+        // "To f32 precision" is splitBox's: the ULP_TOL ulps AT THE BOX's
+        // coordinates that placeBox and offsetBox hold a face to (far from
+        // the origin a stored span is only known to a few ulps of where it
+        // sits), plus half an ulp of each thickness summed against it,
+        // since a sum errs more than one coordinate. Not a share of
+        // the span: a millionth of a 1000-wide box let two faces 8 ulps
+        // too thick pass as an exact fill.
         const eps = ULP_TOL * f32Ulp(Math.max(Math.abs(c0), Math.abs(c1)));
-        const tol = Math.max(FIT_EPS * Math.max(len, sum), eps);
+        const tol = eps + f32HalfUlp(tMin) + f32HalfUlp(tMax);
         if (sum > len + tol) {
           if (fit === FIT_ERROR && (tMin === 0 || tMax === 0)) {
             // One face alone is thicker than the span: there is no pair.

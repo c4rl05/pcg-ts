@@ -1118,3 +1118,167 @@ describe("splitBox: the repeat count has f32 slack", () => {
     expect(strings(out, "piece")).toEqual(["door", "window", "window"]);
   });
 });
+
+describe("splitBox: a piece two f32 ulps long at the far end is kept", () => {
+  // The far-end snap ("an end within f32 precision of the box's max IS the
+  // max") used to apply to EVERY end, so an end with a real piece after it,
+  // no more than two ulps of the box's coordinates from the max, was moved
+  // onto the max and the piece after it vanished. Pieces of exactly
+  // 2^-22 on [0, 1] are two ulps of 1 (2 * 2^-23), and 2^22 of them is
+  // also the output cap, which is why it showed as "one piece short at
+  // 4194304". This holds for pieces that are LAID: absolute pieces, and a
+  // repeat that has the rest to itself. A relative or repeat REMAINDER
+  // after absolute sizes that already fill the box to f32 precision is
+  // storage error, not room, and gets nothing (tested below).
+
+  it("a 2^22-way repeat of [0, 1] emits all 4194304 pieces, the last one 2^-22 long", async () => {
+    const out = await split(unitCell(0, 1), { labels: ["bay"], sizes: [2 ** -22], units: ["repeat"], indexAttr: "", labelAttr: "" });
+    expect(out.pointCount).toBe(4194304);
+    const lo = out.attrs.point.require("boundsMin").data;
+    const hi = out.attrs.point.require("boundsMax").data;
+    const last = out.pointCount - 1;
+    expect([lo[(last - 1) * 3], hi[(last - 1) * 3]]).toEqual([1 - 2 * 2 ** -22, 1 - 2 ** -22]);
+    expect([lo[last * 3], hi[last * 3]]).toEqual([1 - 2 ** -22, 1]);
+  }, 60_000);
+
+  it("it is not about the cap: [1, 2] lost one at 2^21 pieces (2^-21 is two ulps of 2)", async () => {
+    const out = await split(unitCell(1, 2), { labels: ["bay"], sizes: [2 ** -21], units: ["repeat"], indexAttr: "", labelAttr: "" });
+    expect(out.pointCount).toBe(2 ** 21);
+  }, 60_000);
+
+  it("two absolute pieces, the second two ulps long, forward and reversed", async () => {
+    const fwd = await split(unitCell(0, 1), { labels: ["a", "b"], sizes: [1 - 2 ** -22, 2 ** -22], units: ["absolute", "absolute"] });
+    expect(strings(fwd, "piece")).toEqual(["a", "b"]);
+    expect(spans(fwd)).toEqual([
+      [0, 1 - 2 ** -22],
+      [1 - 2 ** -22, 1],
+    ]);
+    // Reversed on [-1, 0]: the far end is -1, and two ulps of 1 is 2^-22.
+    const rev = await split(unitCell(-1, 0), {
+      labels: ["a", "b"],
+      sizes: [1 - 2 ** -22, 2 ** -22],
+      units: ["absolute", "absolute"],
+      direction: -1,
+    });
+    expect(strings(rev, "piece")).toEqual(["a", "b"]);
+    expect(spans(rev)).toEqual([
+      [-1 + 2 ** -22, 0],
+      [-1, -1 + 2 ** -22],
+    ]);
+  });
+
+  it("CONTROL: the end of the layout still snaps, and what follows it with no length is still dropped", async () => {
+    // [-20, 0.56] is stored -20 .. 0.5600000024; two f32(10.28) end at
+    // 0.5599994659, 5.4e-7 short: a different f32 (ulp there 6e-8), but
+    // inside the tolerance 2 * 2^-19 + 2 * (2^-20 / 2) = 4.77e-6. That end IS
+    // the box's max, and the zero-size "c" and the relative "rest" after it
+    // get nothing (the absolute pair filled the box).
+    const out = await split(unitCell(-20, 0.56), {
+      labels: ["a", "b", "c", "rest"],
+      sizes: [10.28, 10.28, 0, 1],
+      units: ["absolute", "absolute", "absolute", "relative"],
+    });
+    expect(strings(out, "piece")).toEqual(["a", "b"]);
+    expect(spans(out)[1][1]).toBe(Math.fround(0.56));
+    // Reversed, the same pair ends AT the min.
+    const rev = await split(unitCell(-20, 0.56), {
+      labels: ["a", "b", "c", "rest"],
+      sizes: [10.28, 10.28, 0, 1],
+      units: ["absolute", "absolute", "absolute", "relative"],
+      direction: -1,
+    });
+    expect(strings(rev, "piece")).toEqual(["a", "b"]);
+    expect(spans(rev)[1][0]).toBe(-20);
+  });
+
+  it("a fill to f32 precision leaves the relative segment after it no sliver", async () => {
+    // [-20, -17.88] stores 2.1200008 long; 1.06 + 1.06 in f32 is 2.1199999:
+    // the 9.5e-7 between them (half an ulp of 17.88, inside the tolerance
+    // 2 * 2^-19 + 2^-23) is storage, not room for "and the rest", which
+    // used to get it as a one-ulp sliver once the 2-ulp far-end snap was
+    // limited to the end of the layout.
+    const out = await split(unitCell(-20, -17.88), { labels: ["a", "a", "rest"], sizes: [1.06, 1.06, 1], units: ["absolute", "absolute", "relative"] });
+    expect(strings(out, "piece")).toEqual(["a", "a"]);
+    expect(spans(out)[1][1]).toBe(Math.fround(-17.88));
+  });
+
+  it("the far end's own precision decides what is nothing: a [-2^-16, 0] piece at the end of [-1000, 0] is kept", async () => {
+    // 2^-16 is under half an ulp of 1000, but 0 is the far end and f32
+    // stores 2^-16 there exactly. (The ends: -2^-14, -2^-16, 0.)
+    const out = await split(unitCell(-1000, 0), {
+      labels: ["a", "b", "c"],
+      sizes: [1000 - 2 ** -14, 2 ** -14 - 2 ** -16, 2 ** -16],
+      units: ["absolute", "absolute", "absolute"],
+    });
+    expect(strings(out, "piece")).toEqual(["a", "b", "c"]);
+    expect(spans(out)).toEqual([
+      [-1000, -(2 ** -14)],
+      [-(2 ** -14), -(2 ** -16)],
+      [-(2 ** -16), 0],
+    ]);
+  });
+});
+
+describe("splitBox: fit and repeat tolerances are f32 ulps, not a share of the span", () => {
+  // The rule: ULP_TOL (2) f32 ulps at the box's coordinates, plus half an
+  // ulp of every absolute size summed (and of each module a repeat counts).
+  // ulp(1000) = 2^-14 = 6.103515625e-5 and ulp(500) = 2^-15, so on [0, 1000]
+  // one size near 1000, two near 500, or four modules near 250 each add
+  // 2^-15 to 2^-13: a tolerance of 1.52587890625e-4. The old rule was a
+  // millionth of the span, 1e-3.
+
+  it("an underfill of 8 ulps on [0, 1000] is refused (it used to pass and leave the gap uncovered)", async () => {
+    // f32(999.9995) = 999.99951171875: 4.8828125e-4 short of 1000, past the
+    // tolerance 2^-13 + 2^-15 = 1.52587890625e-4. Under the old 1e-3 it was
+    // a fill, but the far-end snap (2 ulps) did not reach it, so the one
+    // piece ended at 999.9995 and the box's last 4.9e-4 was covered by
+    // nothing with no complaint.
+    const msg = await rejection(split(unitCell(0, 1000), { labels: ["a"], sizes: [999.9995], units: ["absolute"] }));
+    expect(msg).toMatch(/cell 0 is UNDERFILLED — its segments cover 999.99951171875 of a box 1000 long/);
+    expect(msg).toMatch(/remaining 0.00048828125/);
+  });
+
+  it("an overflow of 8 ulps on [0, 1000] is refused (it used to be called a fill)", async () => {
+    // f32(500.0005) = 500.00048828125: the pair is 4.8828125e-4 over, past
+    // 2^-13 + 2^-16 + 2^-16 = 1.52587890625e-4.
+    const msg = await rejection(split(unitCell(0, 1000), { labels: ["a", "b"], sizes: [500, 500.0005], units: ["absolute", "absolute"] }));
+    expect(msg).toMatch(/cell 0 OVERFLOWS — its absolute segments need 1000.00048828125 along x but its box is 1000 long/);
+  });
+
+  it("a fill to the coordinates' f32 step far from the origin fits (it used to be refused)", async () => {
+    // [100000.1, 100010.2] is stored 100000.1015625 .. 100010.203125 (f32
+    // steps of 1/128 there), 10.1015625 long; one absolute 10.1 is
+    // 1.56e-3 short of it — a fifth of one f32 step, but 155 millionths of
+    // the span, which the old rule refused as an underfill.
+    const out = await split(unitCell(100000.1, 100010.2), { labels: ["a"], sizes: [10.1], units: ["absolute"] });
+    expect(spans(out)).toEqual([[100000.1015625, 100010.203125]]);
+  });
+
+  it("seven equal sizes over a box across the origin: why the sizes' own ulps are in the sum", async () => {
+    // [-15.73, 12.48] stores -15.729999542 .. 12.479999542, 28.2099990845
+    // long; seven f32(4.03) = 4.03000020981 sum to 2.384e-6 over it: 2.5
+    // ulps of 15.73 (ulp 2^-20), past 2 ulps alone (1.907e-6) but inside
+    // 2 ulps + 7 half-ulps of 4.03 (7 * 2^-21 / 2 = 1.669e-6; 3.576e-6 in all).
+    const cell = (): Geometry => unitCell(-15.73, 12.48);
+    const seven = await split(cell(), {
+      labels: Array(7).fill("p"),
+      sizes: Array(7).fill(4.03),
+      units: Array(7).fill("absolute"),
+    });
+    expect(seven.pointCount).toBe(7);
+    expect(spans(seven)[6][1]).toBe(Math.fround(12.48));
+    // The same box as a repeat of module 4.03: rest / module = 6.9999994,
+    // within the slack of 7, so 7 bays (2 ulps alone would floor it to 6).
+    const rep = await split(cell(), { labels: ["bay"], sizes: [4.03], units: ["repeat"] });
+    expect(rep.pointCount).toBe(7);
+  });
+
+  it("a repeat 8 ulps short of a whole number of modules rounds down (it used to count as whole)", async () => {
+    // f32(250.0002) = 250.0001983642578: four of them are 7.93e-4 past
+    // 1000, past the slack 2^-13 + 4 * 2^-16 / 2 = 1.52587890625e-4, so
+    // rest / module = 3.99999683 floors to 3. The old slack (1e-3) made it 4.
+    const out = await split(unitCell(0, 1000), { labels: ["bay"], sizes: [250.0002], units: ["repeat"] });
+    expect(out.pointCount).toBe(3);
+    expect(spans(out)[0][1]).toBe(Math.fround(1000 / 3));
+  });
+});
