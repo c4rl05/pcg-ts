@@ -6557,16 +6557,14 @@ export interface SplitBoxParams {
    * whichever axis its stored corners happen to round longer, while a span longer by more
    * than its storage can explain wins anywhere (at z = 1e5, where a step is 1/128, a z span
    * of 1 + 2/128 beats an x span of 1 at the origin; 1 + 1/128 ties, and goes to x). AN AXIS
-   * THE CUT CANNOT CUT IS PASSED OVER: the cell is laid out along each candidate, and the
-   * first in that order that emits the MOST pieces is taken, so a box only an f32 step or
-   * two long on its preferred axis — 1 wide at x = 1e7, where a step is 1, which the cut
-   * would round onto a corner and hand back whole — is cut along the next candidate instead
-   * (here a z span of 1.9, which ties with it). Only the preferred axis can refuse the cook
-   * (an overflow, say); a candidate that would be refused is not taken. A snap step on one
-   * axis can drop pieces there too, and then counts the same way. A zero-size box is cut
-   * along the first axis of the set. A cell whose box is not finite, or is inside out, along
-   * any axis of the set is refused naming the cell, since it has no longest span; a cell
-   * `where` passes through is not read.
+   * THE CUT CANNOT CUT IS PASSED OVER: if the cut along the preferred axis comes back whole
+   * (fewer than 2 pieces), the other candidates are tried longest first and the first that
+   * cuts is taken, else the preferred stands — so a box 1 wide at x = 1e7, where an f32 step
+   * is 1 and a half-way cut rounds onto a corner, is cut along a tied z span of 1.9 instead;
+   * only the preferred axis can refuse the cook. A zero-size box is cut along the first axis
+   * of the set. A cell whose box is not finite, or is inside out, along any axis of the set
+   * is refused naming the cell, since it has no longest span; a cell `where` passes through
+   * is not read.
    *
    * - Enum: `"xyz"` | `"xy"` | `"xz"` | `"yz"`
    *

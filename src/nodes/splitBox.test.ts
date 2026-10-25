@@ -631,15 +631,42 @@ describe('splitBox: axis "longest"', () => {
       [0, 1.5],
       [1.5, 3],
     ]);
-    // Under a three-way split the same box keeps x only if x can hold the
-    // pieces; it cannot, so the first candidate that emits all three wins.
+    // Under a three-way split x still comes back whole (both cuts round
+    // onto its corners), so z, the next candidate, takes all three.
     const thirds = await split(geo, { axis: "longest", labels: ["a", "b", "c"], sizes: [1, 1, 1], units: ["relative", "relative", "relative"] });
     expect(thirds.pointCount).toBe(3);
+    expect(spans(thirds, 0)).toEqual([
+      [1e7, 1e7 + 1],
+      [1e7, 1e7 + 1],
+      [1e7, 1e7 + 1],
+    ]);
+    const z = spans(thirds, 2);
+    expect([z[0][0], z[0][1] === z[1][0], z[1][1] === z[2][0], z[2][1]]).toEqual([0, true, true, Math.fround(1.9)]);
     // When NO candidate can be cut, the preferred axis stands and the cell
     // comes back whole, as it would along any fixed axis.
     const none = await split(cells([[[1e7, 0, 1e7], [1e7 + 1, 0, 1e7 + 1]]]), { axis: "longest", longestOf: "xz", ...halves });
     expect(none.pointCount).toBe(1);
     expect(col(none, "boundsMin")).toEqual([1e7, 0, 1e7]);
+  });
+
+  it("a preferred axis that cuts is used even where another candidate would give more pieces", async () => {
+    // x [0, 3] is the longest; a 1.5 snap on x moves both thirds' cuts (1
+    // and 2) onto 1.5, so x emits two pieces, the middle one dropped. z
+    // [0, 2.9] would give all three. The fallback is for a cut that comes
+    // back WHOLE, not for a better count: x, two pieces.
+    const geo = cells([[[0, 0, 0], [3, 1, 2.9]]]);
+    const out = await split(geo, {
+      axis: "longest",
+      labels: ["a", "b", "c"],
+      sizes: [1, 1, 1],
+      units: ["relative", "relative", "relative"],
+      snap: [1.5, 0, 0],
+    });
+    expect(spans(out, 0)).toEqual([
+      [0, 1.5],
+      [1.5, 3],
+    ]);
+    expect(strings(out, "piece")).toEqual(["a", "c"]);
   });
 
   it("over a sweep of small boxes far from the origin, a cell comes back whole only when no candidate axis can be cut", async () => {

@@ -105,8 +105,8 @@ function slotSeed(h1: number, k: number): number {
  * coordinates, so two spans tie when they differ by no more than the sum of
  * those two allowances, each from the span's OWN coordinates. Every
  * candidate is measured against the one exact maximum, not pairwise, so the
- * slack cannot chain a ~ b ~ c into a ~ c. The execute loop then passes over
- * an axis on which the cut would emit fewer pieces than another candidate.
+ * slack cannot chain a ~ b ~ c into a ~ c. The execute loop falls back to
+ * the rest only when the cut along the first comes back whole.
  */
 function longestOrderOf(i: number, axes: readonly number[], lo: Float32Array, hi: Float32Array, out: Uint8Array, at: number): number {
   let best = axes[0];
@@ -189,7 +189,7 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       enum: [...LONGEST_OF],
       default: "xyz",
       description:
-        'Read ONLY when `axis` is "longest" (ignored otherwise): the axes a cell\'s longest span is chosen from — "xyz" (the default) all three, "xz" the floor plane (a plan cut across its longer wall whatever its height), "xy" or "yz". A span is boundsMax - boundsMin along the axis. The measured longest wins. A TIE goes to the FIRST axis of the set in x, y, z order, and a tie is only what f32 storage cannot resolve: a stored span is off its intended length by at most half an f32 step at each of its two corners, so two spans tie when they differ by no more than those four half-steps — each span\'s two from ITS OWN coordinates. A square cell is therefore cut along x wherever it stands, not along whichever axis its stored corners happen to round longer, while a span longer by more than its storage can explain wins anywhere (at z = 1e5, where a step is 1/128, a z span of 1 + 2/128 beats an x span of 1 at the origin; 1 + 1/128 ties, and goes to x). AN AXIS THE CUT CANNOT CUT IS PASSED OVER: the cell is laid out along each candidate, and the first in that order that emits the MOST pieces is taken, so a box only an f32 step or two long on its preferred axis — 1 wide at x = 1e7, where a step is 1, which the cut would round onto a corner and hand back whole — is cut along the next candidate instead (here a z span of 1.9, which ties with it). Only the preferred axis can refuse the cook (an overflow, say); a candidate that would be refused is not taken. A snap step on one axis can drop pieces there too, and then counts the same way. A zero-size box is cut along the first axis of the set. A cell whose box is not finite, or is inside out, along any axis of the set is refused naming the cell, since it has no longest span; a cell `where` passes through is not read.',
+        'Read ONLY when `axis` is "longest" (ignored otherwise): the axes a cell\'s longest span is chosen from — "xyz" (the default) all three, "xz" the floor plane (a plan cut across its longer wall whatever its height), "xy" or "yz". A span is boundsMax - boundsMin along the axis. The measured longest wins. A TIE goes to the FIRST axis of the set in x, y, z order, and a tie is only what f32 storage cannot resolve: a stored span is off its intended length by at most half an f32 step at each of its two corners, so two spans tie when they differ by no more than those four half-steps — each span\'s two from ITS OWN coordinates. A square cell is therefore cut along x wherever it stands, not along whichever axis its stored corners happen to round longer, while a span longer by more than its storage can explain wins anywhere (at z = 1e5, where a step is 1/128, a z span of 1 + 2/128 beats an x span of 1 at the origin; 1 + 1/128 ties, and goes to x). AN AXIS THE CUT CANNOT CUT IS PASSED OVER: if the cut along the preferred axis comes back whole (fewer than 2 pieces), the other candidates are tried longest first and the first that cuts is taken, else the preferred stands — so a box 1 wide at x = 1e7, where an f32 step is 1 and a half-way cut rounds onto a corner, is cut along a tied z span of 1.9 instead; only the preferred axis can refuse the cook. A zero-size box is cut along the first axis of the set. A cell whose box is not finite, or is inside out, along any axis of the set is refused naming the cell, since it has no longest span; a cell `where` passes through is not read.',
     },
     axisIndex: {
       type: "f32",
@@ -728,20 +728,21 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
     };
 
     /**
-     * "longest": lay cell i out along its preferred axis, then along each
-     * other candidate, and keep the FIRST in preference order that emits the
-     * most pieces — so an axis only an f32 step or two long, where the cut
-     * rounds onto a corner and the cell comes back whole, is never chosen
-     * over one where it can be cut. The preferred axis is laid out as any
-     * axis is, refusals included; a candidate that would be refused is
-     * simply not taken. Leaves `axisOf[i]` on the choice.
+     * "longest": lay cell i out along its preferred axis. Only if the cut
+     * COLLAPSED there — fewer than 2 pieces, as on an axis an f32 step or
+     * two long, where it rounds onto a corner — try the other candidates in
+     * order (longest first) and take the first that emits 2 or more; if
+     * none does, the preferred axis stands. So an ordinary cell costs one
+     * layout. Only the preferred axis can refuse the cook; a fallback that
+     * would refuse is not taken. Leaves `axisOf[i]` on the choice.
      */
     const layoutLongest = (i: number, runningTotal: number): number => {
       const order = longOrder!;
       const cnt = longCount![i];
-      let bestAxis = order[i * 3];
-      axisOf[i] = bestAxis;
-      let most = layoutCell(i, runningTotal);
+      const preferred = order[i * 3];
+      axisOf[i] = preferred;
+      const first = layoutCell(i, runningTotal);
+      if (first >= 2) return first;
       for (let k = 1; k < cnt; k++) {
         const a = order[i * 3 + k];
         axisOf[i] = a;
@@ -751,13 +752,10 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
         } catch {
           e = -1;
         }
-        if (e > most) {
-          most = e;
-          bestAxis = a;
-        }
+        if (e >= 2) return e;
       }
-      axisOf[i] = bestAxis;
-      return most;
+      axisOf[i] = preferred;
+      return first;
     };
 
     // ---- pass 1: how many pieces each cell emits, whole, so the output is
