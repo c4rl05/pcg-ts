@@ -392,11 +392,6 @@ function pathLike(token) {
   return /[\\/]/.test(t) || /^\.[\w.-]/.test(t) || /^[\w@+-][\w.@+-]*\.[A-Za-z][A-Za-z0-9]{0,7}$/.test(t);
 }
 
-/** Shell segments: a command line split at separators, so each clause is judged on its own. */
-export function commandSegments(command) {
-  return shellClauses(command).map((c) => c.text);
-}
-
 /** The first splitter: every separator character, quoted or not. Kept as the fallback for a line that does not parse. */
 function naiveClauses(command) {
   const parts = String(command).split(/(&&|\|\||[;|\n])/);
@@ -610,12 +605,12 @@ export function inlineCodeFlag(verb, words) {
  * The code an inline-interpreter clause runs (`node -e CODE`, `python -c
  * CODE`), with the shell's quoting removed, and the clause WITHOUT it
  * (`shell`: the interpreter, its flags and any arguments after the code).
- * Null when the clause has no such flag.
+ * `flag` is the one `inlineCodeFlag` found. Null when the clause does not
+ * carry it.
  */
-export function inlineCodeOf(clause, flag = null) {
+export function inlineCodeOf(clause, flag) {
   const text = String(clause);
-  const esc = (f) => f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const m = (flag ? new RegExp(`(?:^|\\s)${esc(flag)}\\s+`) : /(?:^|\s)-(?:e|c|p|-eval|-print)\s+/).exec(text);
+  const m = new RegExp(`(?:^|\\s)${flag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+`).exec(text);
   if (!m) return null;
   const at = m.index + m[0].length;
   const rest = text.slice(at);
@@ -665,6 +660,11 @@ const IO_CALL = callLiteral(String.raw`readFileSync|readFile|readdirSync|readdir
 const EXEC_CALL = callLiteral(String.raw`execSync|exec|execFileSync|execFile|spawnSync|spawn|system|popen|getoutput|getstatusoutput|check_output|check_call|subprocess\.run|subprocess\.call|subprocess\.Popen|os\.system|os\.popen`);
 const unescapeLiteral = (t) => t.replace(/\\(.)/g, "$1");
 
+/** A file whose content is CODE: judged by its string literals, never as shell words. */
+const CODE_FILE = /\.(?:js|mjs|cjs|ts|mts|cts|py|pl|rb|php)$/i;
+/** A string literal in code, double, single or template quoted (groups 1-3), escapes kept. Only ever used through `matchAll`, which copies it. */
+const STRING_LITERAL = /"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g;
+
 /** The literal paths code hands an IO call, whatever their shape: `'notes'`, `'/'`, `'out\\x.json'`. */
 export function codeIoLiterals(code) {
   return [...String(code).matchAll(IO_CALL)].map((m) => unescapeLiteral(m[3])).filter((t) => t && !/\$\{/.test(t));
@@ -684,10 +684,10 @@ export function codeShellCommands(code) {
  * `s.$defs['fieldFn.choose']` (facade-ab-A r1) indexes an object.
  */
 export function codeRelativeLiterals(file, code) {
-  if (!/\.(?:js|mjs|cjs|ts|mts|cts|py|pl|rb|php)$/i.test(file)) return [];
+  if (!CODE_FILE.test(file)) return [];
   const src = String(code);
   const out = [];
-  for (const m of src.matchAll(/"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g)) {
+  for (const m of src.matchAll(STRING_LITERAL)) {
     const t = m[1] ?? m[2] ?? m[3];
     if (!t || /\s|(?<!\\)(?:\\\\)*\\[ntr0]|\$\{|%/.test(t)) continue;
     if (t !== "." && !/[A-Za-z0-9_]/.test(t)) continue;
@@ -800,12 +800,20 @@ const RECURSIVE_SEGMENT = /^(?:\S*[\\/])?(?:find|tree|du|rg|ag|fd|fdfind)\b|^(?:
 const READ_VERBS = new Set(["cat", "head", "tail", "less", "more", "type", "ls", "dir", "grep", "egrep", "fgrep", "rg", "find", "tree", "sed", "awk", "wc", "file", "stat", "cp", "du", "od", "xxd", "strings", "jq", "get-content", "gc", "get-childitem", "gci", "tar", "node"]);
 const PATTERN_FIRST = new Set(["grep", "egrep", "fgrep", "rg", "sed", "awk", "jq"]);
 const RECURSIVE_VERBS = new Set(["find", "tree", "du", "rg"]);
+/** Commands that move the shell. */
+const CD_VERBS = new Set(["cd", "pushd", "popd", "chdir", "set-location", "sl", "push-location", "pop-location"]);
+/** Commands that write their LAST argument (or `-t DIR`): it is not read. */
+const COPY_VERBS = new Set(["cp", "mv", "copy", "move", "copy-item", "move-item"]);
+/** Commands that write EVERY argument: none of them is read. */
+const WRITE_ALL_VERBS = new Set(["mkdir", "md", "touch", "tee"]);
+/** Commands that create every argument as a directory. */
+const MKDIR_VERBS = new Set(["mkdir", "md", "new-item", "ni"]);
 
 /** The body of a script the agent wrote, reduced to what can name a path. */
 export function scriptPathText(file, body) {
-  if (/\.(?:js|mjs|cjs|ts|mts|cts|py|pl|rb|php)$/i.test(file)) {
+  if (CODE_FILE.test(file)) {
     // Code: only string literals can name a path; regexes, comments and operators cannot.
-    const literals = [...String(body).matchAll(/"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g)].map((m) => m[1] ?? m[2] ?? m[3]);
+    const literals = [...String(body).matchAll(STRING_LITERAL)].map((m) => m[1] ?? m[2] ?? m[3]);
     return { text: literals.join("\n"), bareRoot: false };
   }
   // Shell-like: drop comment lines.
@@ -845,6 +853,9 @@ export const HEREDOC_NAMES = {
   ruby: "heredoc.rb",
   php: "heredoc.php",
 };
+
+// Inline code is named from this map too (scanShell), so every interpreter with a code flag needs a CODE name here.
+for (const k of Object.keys(INLINE_CODE_FLAGS)) if (!CODE_FILE.test(HEREDOC_NAMES[k] ?? "")) throw new Error(`HEREDOC_NAMES has no code-file name for "${k}", an interpreter in INLINE_CODE_FLAGS`);
 
 /** What to call a heredoc body so it is read the way its consumer reads it. */
 export function heredocName(h) {
@@ -1206,14 +1217,15 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
    * wherever it runs: the literal paths it hands an IO call are read
    * (`readdirSync('/')` lists the root), the literal command lines it hands a
    * shell are commands (`execSync('cd ~ && cat .npmrc')`), and from a foreign
-   * directory it is judged by `foreignCode` too.
+   * directory it is judged by `foreignCode` too. `child` runs a command line
+   * in a child shell of the one the code runs in.
    */
-  const judgeCode = (file, code, state, depth) => {
-    for (const cmd of codeShellCommands(code)) if (depth < 3) scanShell(cmd, depth + 1, { cwd: state.cwd, prev: state.prev, stack: [...state.stack] });
-    for (const lit of codeIoLiterals(code)) touch(lit, { recursive: true, base: state.cwd });
+  const judgeCode = (file, code, cwd, child) => {
+    for (const cmd of codeShellCommands(code)) child(cmd);
+    for (const lit of codeIoLiterals(code)) touch(lit, { recursive: true, base: cwd });
     // The home directory reached by a call rather than a name (`readdirSync(os.homedir())`, `Path.home()`).
     if (CODE_IO.test(code) && CODE_NAMES_HOME.test(code)) touch(homedir(), { recursive: true });
-    if (!isInside(state.cwd, sandbox)) foreignCode(file, code, state.cwd);
+    if (!isInside(cwd, sandbox)) foreignCode(file, code, cwd);
   };
 
   /** One shell tool call, clause by clause, following `cd`. */
@@ -1250,18 +1262,22 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
     let prevCwd = startState.prev;
     // A `pushd` inside a subshell must not survive it, so the stack is copied.
     const dirStack = [...(startState.stack ?? [])];
+    // A command line run in a child shell of this one, as it stands now. Its end state is discarded.
+    const child = (cmd) => {
+      if (depth < 3) scanShell(cmd, depth + 1, { cwd: vcwd, prev: prevCwd, stack: dirStack });
+    };
     for (const { text: rawSeg, piped, subs, quoted } of shellClauses(command)) {
       const markers = [...rawSeg.matchAll(/__PCGHEREDOC(\d+)__/g)].map((m) => heredocs[Number(m[1])]).filter(Boolean);
-      for (const m of rawSeg.matchAll(/__PCGSUBSHELL(\d+)__/g)) if (depth < 3) scanShell(subshells[Number(m[1])] ?? "", depth + 1, { cwd: vcwd, prev: prevCwd, stack: dirStack });
+      for (const m of rawSeg.matchAll(/__PCGSUBSHELL(\d+)__/g)) child(subshells[Number(m[1])] ?? "");
       // `$(...)` and backticks run first, in a child shell from here: their
       // commands are judged as commands. The clause keeps their text too, so
       // what it names is still read the way it always was.
-      for (const body of subs) if (depth < 3) scanShell(body, depth + 1, { cwd: vcwd, prev: prevCwd, stack: dirStack });
+      for (const body of subs) child(body);
       const seg = rawSeg.replace(/__PCGHEREDOC\d+__|__PCGSUBSHELL\d+__/g, " ");
       const { text, targets, appends } = stripRedirects(seg);
       const words = shellWords(text);
       const verb = (words[0] ?? "").replace(/^.*[\\/]/, "").replace(/\.exe$/i, "").toLowerCase();
-      if (["cd", "pushd", "popd", "chdir", "set-location", "sl", "push-location", "pop-location"].includes(verb)) {
+      if (CD_VERBS.has(verb)) {
         // `-` is `cd`'s ARGUMENT, not a flag: skipping it the way a flag is
         // skipped turns `cd -` into bare `cd`, which goes home.
         const arg = words.slice(1).find((w) => w === "-" || !w.startsWith("-"));
@@ -1283,15 +1299,16 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
       for (const h of markers) {
         if (h.target) touch(h.target, { write: h.append ? "append" : "create", base: vcwd });
         // A body fed to a shell is a script of shell clauses, cd and all; any other body is a file's content.
-        if (h.shell && !h.target && depth < 3) scanShell(h.body, depth + 1, { cwd: vcwd, prev: prevCwd, stack: dirStack });
+        // (Past the depth limit a shell body is read as a script rather than dropped.)
+        if (h.shell && !h.target && depth < 3) child(h.body);
         else scanScript(heredocName(h), h.body, vcwd);
         // Code fed straight to an interpreter runs HERE, and is judged as code run here.
-        if (h.interpreter && !h.target && !h.shell) judgeCode(heredocName(h), h.body, { cwd: vcwd, prev: prevCwd, stack: dirStack }, depth);
+        if (h.interpreter && !h.target && !h.shell) judgeCode(heredocName(h), h.body, vcwd, child);
       }
       const flagless = words.slice(1).filter((x) => !x.startsWith("-"));
       for (const t of targets) touch(t, { write: "create", base: vcwd });
       for (const t of appends) touch(t, { write: "append", base: vcwd });
-      if (["mkdir", "md", "new-item", "ni"].includes(verb)) for (const w of flagless) touch(w, { write: "mkdir", base: vcwd });
+      if (MKDIR_VERBS.has(verb)) for (const w of flagless) touch(w, { write: "mkdir", base: vcwd });
       if (verb === "touch") for (const w of flagless) touch(w, { write: "append", base: vcwd });
       // An output FLAG names a file the command CREATES. Without this,
       // `pcg render graph.json --out /tmp/a.svg` read as a READ of
@@ -1309,7 +1326,7 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
       const tflag = words.findIndex((w) => w === "-t" || w.startsWith("--target-directory"));
       const targetDir = tflag < 0 ? null : words[tflag].includes("=") ? words[tflag].split("=")[1] : words[tflag + 1];
       const copyArgs = tflag < 0 ? flagless : words.slice(1).filter((x, i) => !x.startsWith("-") && i + 1 !== tflag + 1);
-      if (["cp", "mv", "copy", "move", "copy-item", "move-item"].includes(verb) && (targetDir ? copyArgs.length >= 1 : copyArgs.length >= 2)) {
+      if (COPY_VERBS.has(verb) && (targetDir ? copyArgs.length >= 1 : copyArgs.length >= 2)) {
         const dest = targetDir ? `${targetDir}/` : copyArgs[copyArgs.length - 1];
         const sources = targetDir ? copyArgs.filter((x) => x !== targetDir) : copyArgs.slice(0, -1);
         const intoDir = /[\\/]$/.test(dest) || sources.length > 1 || !/\.[A-Za-z0-9]{1,8}$/.test(dest);
@@ -1317,7 +1334,8 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
       }
       // A glob over an outside dir reads everything under it, like a recursive listing.
       // Inline code (`node -e`, `python -c`) can chdir and build paths: its outside paths read like a script's.
-      const codeFlag = inlineCodeFlag(/^python\d(?:\.\d+)?$/.test(verb) ? "python3" : verb, words);
+      const interpreter = /^python\d(?:\.\d+)?$/.test(verb) ? "python3" : verb;
+      const codeFlag = inlineCodeFlag(interpreter, words);
       const inlineCode = codeFlag !== null;
       const inline = inlineCode ? inlineCodeOf(text, codeFlag) : null;
       // A quoted string with a separator in it is a shell program when the
@@ -1326,13 +1344,13 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
       // which commands do. So it is judged as one, from here, in a child
       // shell; inline code is not (it is judged as code). The first splitter
       // got the same coverage by cutting through every quote.
-      if (!inlineCode && depth < 3) for (const qs of quoted) if (/[;&|\n]/.test(qs)) scanShell(qs, depth + 1, { cwd: vcwd, prev: prevCwd, stack: dirStack });
+      if (!inlineCode) for (const qs of quoted) if (/[;&|\n]/.test(qs)) child(qs);
       const recursive = inlineCode || RECURSIVE_SEGMENT.test(text) || /\.\.[\\/]\S*[*?[{]|--recursive|\brecursive\s*:\s*true/.test(text);
       // A bare `/` is the root only as an argument of a filesystem command; elsewhere it divides or splits.
       const bareRoot = /^(?:sudo\s+)?(?:\S*[\\/])?(?:find|ls|dir|tree|du|rg|ag|fd|e?grep|fgrep|Get-ChildItem|gci|cat|cp|tar|zip|stat)\b/i.test(text);
       // Only a truncating redirect hides its target from the clause's reads; `2>> F` beside `grep x F` still reads F.
       const writtenHere = new Set(targets.map((t) => resolveArg(t, vcwd).toLowerCase()));
-      const destHere = ["cp", "mv", "copy", "move", "copy-item", "move-item", "mkdir", "md", "touch", "tee"].includes(verb) ? new Set((verb === "cp" || verb === "mv" || verb.startsWith("co") || verb.startsWith("mo") ? (targetDir ? [targetDir] : flagless.slice(-1)) : flagless).map((w) => resolveArg(w, vcwd).toLowerCase())) : new Set();
+      const destHere = new Set((COPY_VERBS.has(verb) ? (targetDir ? [targetDir] : flagless.slice(-1)) : WRITE_ALL_VERBS.has(verb) ? flagless : []).map((w) => resolveArg(w, vcwd).toLowerCase()));
       // Inline code (`node -e`, `python -c`) writes through fs calls, not
       // through the shell, so its writes are invisible to stripRedirects.
       const codeWrites = scriptWrites(text);
@@ -1355,7 +1373,8 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
         if (codeWrites.has(token)) touch(path, { write: "create", base: vcwd });
         else touch(path, { recursive: recursive || glob, content: CONTENT_VERBS.has(verb), nodeEntry: verb === "node" && token === flagless[0] });
       }
-      if (inline) judgeCode(verb.startsWith("py") ? "inline.py" : "inline.js", inline.code, { cwd: vcwd, prev: prevCwd, stack: dirStack }, depth);
+      // Named like a heredoc into the same interpreter: only the (code) extension is read.
+      if (inline) judgeCode(HEREDOC_NAMES[interpreter], inline.code, vcwd, child);
       if (!isInside(vcwd, sandbox)) {
         // Outside the sandbox, anything that names a file relative to where the shell is names it THERE,
         // whatever the command (xargs, python, diff, base64, a `$(cat ...)` inside echo).
