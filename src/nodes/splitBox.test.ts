@@ -649,6 +649,73 @@ describe('splitBox: axis "longest"', () => {
     expect(col(none, "boundsMin")).toEqual([1e7, 0, 1e7]);
   });
 
+  it("an axis wins only if it could be the longest: a tie with the stored maximum does not let x beat a longer y", async () => {
+    // z [2^23, 2^23 + 2]: a step is 1 there, so z's span 2 is known only to
+    // 1 (half a step a corner) and may be anything in [1, 3]. x [0, 1] is 1
+    // and y [0, 1.5] is 1.5, both to ~6e-8. x and y each tie z — but x is
+    // at most 1 + 6e-8 while y is at least 1.5 - 6e-8, so x cannot be the
+    // longest, y can (1.5 reaches z's 2 - 1), and y is first of the rest.
+    // (Tied to the stored maximum alone this was cut along x.)
+    expect(cutAxes(await split(cells([[[0, 0, 8388608], [1, 1.5, 8388610]]]), { axis: "longest", ...halves }))).toEqual([1]);
+    expect(cutAxes(await split(cells([[[0, 0, 8388608], [1, 1.9, 8388610]]]), { axis: "longest", ...halves }))).toEqual([1]);
+    // Without y in the set, x's 1 still reaches z's 2 - 1: a tie, so x.
+    expect(cutAxes(await split(cells([[[0, 0, 8388608], [1, 1.5, 8388610]]]), { axis: "longest", longestOf: "xz", ...halves }))).toEqual([0]);
+    // And a y past z's reach is z: y 0.9 + 6e-8 < 2 - 1.
+    expect(cutAxes(await split(cells([[[0, 0, 8388608], [0.5, 0.9, 8388610]]]), { axis: "longest", longestOf: "yz", ...halves }))).toEqual([2]);
+  });
+
+  it("spans written as one decimal tie wherever they stand, even where the first axis stores shortest", async () => {
+    // Stored: x [0.1, 2.6] is 2.49999990 (+-1.2e-7), y [0.3, 2.8] is
+    // 2.49999994 (+-1.3e-7), z [1e6 + 0.3, 1e6 + 2.8] is [1000000.3125,
+    // 1000002.8125], exactly 2.5 (+-1/16). x stores the shortest, but its
+    // 2.49999990 + 1.2e-7 reaches both y's 2.49999994 - 1.3e-7 and z's
+    // 2.5 - 1/16: x could be the longest, and is first. Without x, y.
+    const geo = cells([[[0.1, 0.3, 1e6 + 0.3], [2.6, 2.8, 1e6 + 2.8]]]);
+    const s = [0, 1, 2].map((a) => col(geo, "boundsMax")[a] - col(geo, "boundsMin")[a]);
+    expect(s[0] < s[1] && s[1] < s[2]).toBe(true);
+    expect(cutAxes(await split(geo, { axis: "longest", ...halves }))).toEqual([0]);
+    expect(cutAxes(await split(geo, { axis: "longest", longestOf: "yz", ...halves }))).toEqual([1]);
+    // The same with the first axis the FAR one: x [7e6 + 0.3, 7e6 + 2.8]
+    // stores [7000000.5, 7000003], 2.5 to +-1/2; y [0.1, 2.6] 2.49999990.
+    // Each reaches the other: x.
+    expect(cutAxes(await split(cells([[[7e6 + 0.3, 0.1, 0], [7e6 + 2.8, 2.6, 1]]]), { axis: "longest", ...halves }))).toEqual([0]);
+  });
+
+  it("a square made by halving carries two roundings at its cut corner: the documented rare loss of the half-step bound", async () => {
+    // The parent x [0.414, 8.424] stores [0.41400000453, 8.42399978638];
+    // halved, the cut is (0.41400000453 + 8.42399978638) / 2 = 4.41899989546,
+    // stored 4.41899967194 — 3.3e-7 below the intended 4.419, more than the
+    // half step (2.4e-7) a corner rounded once can be off. So the child's x
+    // span 4.00499966741 (+-2.53e-7) and z [-2.966, 1.039]'s 4.00500011444
+    // (+-1.79e-7) differ by 4.47e-7, past the 4.32e-7 both allow: z. A full
+    // step a corner would call it a tie, at the price splitBox.ts measures.
+    const parent = cells([[[0.414, 0, -2.966], [8.424, 0, 1.039]]]);
+    const kids = await split(parent, { axis: "x", ...halves });
+    expect(col(kids, "boundsMax")[0]).toBe(Math.fround(4.41899967194));
+    expect(cutAxes(await split(kids, { axis: "longest", longestOf: "xz", ...halves }))).toEqual([2, 0]);
+    // The same square with its corners stored ONCE ties, and is cut along x.
+    const fresh = cells([[[0.414, 0, -2.966], [4.419, 0, 1.039]]]);
+    expect(cutAxes(await split(fresh, { axis: "longest", longestOf: "xz", ...halves }))).toEqual([0]);
+  });
+
+  it("a fallback the fit refuses is passed over, but the point cap reached along a fallback refuses the cook", async () => {
+    // x [1e7, 1e7 + 1] is one f32 step: it ties z [0, 0.4] (and z [0, 1.9])
+    // and is preferred, being x, but every cut along it rounds onto a corner.
+    // Absolute 0.3 | 0.3 fills x to its tolerance (several units there) and
+    // comes back whole; along z 0.4 the 0.6 OVERFLOWS, a refusal of that
+    // axis only: passed over, and the preferred, whole, stands.
+    const fit = { labels: ["a", "b"], sizes: [0.3, 0.3], units: ["absolute", "absolute"], fit: "error" };
+    const whole = await split(cells([[[1e7, 0, 0], [1e7 + 1, 0, 0.4]]]), { axis: "longest", longestOf: "xz", ...fit });
+    expect(whole.pointCount).toBe(1);
+    // A repeat of module 3e-7: along x it is floor(1 / 3e-7) = 3333333
+    // pieces, under the cap of 4194304, of which one is stored with length;
+    // along z 1.9 it is 6333333, past the cap. The cap is the cook's
+    // whichever axis met it: refused, not passed over.
+    const rep = { labels: ["bay"], sizes: [3e-7], units: ["repeat"] };
+    const msg = await rejection(split(cells([[[1e7, 0, 0], [1e7 + 1, 0, 1.9]]]), { axis: "longest", longestOf: "xz", ...rep }));
+    expect(msg).toMatch(/more than 4194304 points .* repeats 6333333 times at cell 0/);
+  });
+
   it("a preferred axis that cuts is used even where another candidate would give more pieces", async () => {
     // x [0, 3] is the longest; a 1.5 snap on x moves both thirds' cuts (1
     // and 2) onto 1.5, so x emits two pieces, the middle one dropped. z

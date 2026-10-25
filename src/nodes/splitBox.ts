@@ -63,6 +63,14 @@ const NODE = "splitBox";
  */
 const MAX_SPLIT_POINTS = 1 << 22;
 
+/**
+ * A cell's sizes refused by `fit` "error" along the axis being laid out
+ * (OVERFLOWS, UNDERFILLED): the one refusal that depends on the axis, so
+ * the only one axis "longest" may swallow while it tries a fallback axis.
+ * An Error like any other to everything outside this file.
+ */
+class CellRefusal extends Error {}
+
 const AXES = ["x", "y", "z", "perCell", "longest"] as const;
 /** The candidate sets `axis` "longest" may choose from, as axis-index lists. */
 const LONGEST_OF = ["xyz", "xy", "xz", "yz"] as const;
@@ -100,17 +108,39 @@ function slotSeed(h1: number, k: number): number {
  * `axis` "longest": cell i's candidate axes in PREFERENCE order, written to
  * `out` from `at`; returns how many. First the longest span, where a TIE
  * goes to the first axis of the set (listed in x, y, z order); then the
- * rest, longest first. A tie is what f32 storage cannot resolve: a stored
- * span is off its intended length by at most half an ulp at each of its two
- * coordinates, so two spans tie when they differ by no more than the sum of
- * those two allowances, each from the span's OWN coordinates. Every
- * candidate is measured against the one exact maximum, not pairwise, so the
- * slack cannot chain a ~ b ~ c into a ~ c. The execute loop falls back to
- * the rest only when the cut along the first comes back whole.
+ * rest, longest first. The execute loop falls back to the rest only when
+ * the cut along the first comes back whole.
+ *
+ * A tie is what f32 storage cannot resolve. A stored span is off its
+ * intended length by at most half an f32 step at each of its two corners —
+ * its own `err` — so the intended length lies in [span - err, span + err].
+ * An axis is a CANDIDATE when it COULD be the longest: its span + err
+ * reaches the largest span - err over EVERY other axis of the set, so no
+ * candidate is shorter than any other axis by more than the two spans'
+ * storage explains. The first candidate in x, y, z order is preferred. The
+ * longest stored span is always a candidate, and so is every axis whose
+ * intended length is the intended maximum: a square cell, or spans written
+ * as the same decimal, tie wherever they stand and go to the first axis.
+ *
+ * Against every other axis, not only the stored maximum: tied only to the
+ * maximum, x [0, 1] tied z [2^23, 2^23 + 2] (z known to 1 there), y
+ * [0, 1.5] did too, and x won as first of the set though y is plainly the
+ * longer of the two; 202 of 79,000 random boxes went to an axis shorter
+ * than another by more than both spans' storage. Now none do.
+ *
+ * HALF a step a corner, although a cell cut out of a larger one carries
+ * TWO roundings at its cut corner (the parent's corners, then the cut), so
+ * a square made by halving can sit just outside the bound: 9 of 160,000
+ * such squares (halved one to seven times) are cut along z, their spans
+ * differing at the seventh digit. A FULL step a corner takes those 9 to 0
+ * but gives away real differences far from the origin, where a box is a
+ * few steps long: of the same 79,000 random boxes, 1873 then go to an axis
+ * shorter by more than both spans' storage, 1521 of them by over 0.1% (up
+ * to 63%: x 0.28 over y 0.75 at y = 3.2e6); three quarters of a step still
+ * loses 996. A square cut along z keeps its shape, a box cut across its
+ * short side does not, so the half step stands.
  */
 function longestOrderOf(i: number, axes: readonly number[], lo: Float32Array, hi: Float32Array, out: Uint8Array, at: number): number {
-  let best = axes[0];
-  let bestSpan = -1;
   for (const a of axes) {
     const l = lo[i * 3 + a];
     const h = hi[i * 3 + a];
@@ -124,17 +154,15 @@ function longestOrderOf(i: number, axes: readonly number[], lo: Float32Array, hi
         `${NODE}: cell ${i}'s box is inside out along ${AXIS_NAMES[a]} — boundsMin ${l} is above boundsMax ${h} — so axis "longest" has no longest span to cut it across. Fix the setBounds that made it, or pass the cell through with "where".`,
       );
     }
-    if (h - l > bestSpan) {
-      best = a;
-      bestSpan = h - l;
-    }
   }
-  const storage = (a: number): number => f32HalfUlp(lo[i * 3 + a]) + f32HalfUlp(hi[i * 3 + a]);
-  const bestErr = storage(best);
-  let first = best;
+  const span = (a: number): number => hi[i * 3 + a] - lo[i * 3 + a];
+  const err = (a: number): number => f32HalfUlp(lo[i * 3 + a]) + f32HalfUlp(hi[i * 3 + a]);
+  // The longest stored span always qualifies, so the loop always sets it.
+  let first = axes[0];
   for (const a of axes) {
-    if (a === best) break;
-    if (hi[i * 3 + a] - lo[i * 3 + a] >= bestSpan - (storage(a) + bestErr)) {
+    let rival = -Infinity;
+    for (const b of axes) if (b !== a) rival = Math.max(rival, span(b) - err(b));
+    if (span(a) + err(a) >= rival) {
       first = a;
       break;
     }
@@ -189,7 +217,7 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       enum: [...LONGEST_OF],
       default: "xyz",
       description:
-        'Read ONLY when `axis` is "longest" (ignored otherwise): the axes a cell\'s longest span is chosen from — "xyz" (the default) all three, "xz" the floor plane (a plan cut across its longer wall whatever its height), "xy" or "yz". A span is boundsMax - boundsMin along the axis. The measured longest wins. A TIE goes to the FIRST axis of the set in x, y, z order, and a tie is only what f32 storage cannot resolve: a stored span is off its intended length by at most half an f32 step at each of its two corners, so two spans tie when they differ by no more than those four half-steps — each span\'s two from ITS OWN coordinates. A square cell is therefore cut along x wherever it stands, not along whichever axis its stored corners happen to round longer, while a span longer by more than its storage can explain wins anywhere (at z = 1e5, where a step is 1/128, a z span of 1 + 2/128 beats an x span of 1 at the origin; 1 + 1/128 ties, and goes to x). AN AXIS THE CUT CANNOT CUT IS PASSED OVER: if the cut along the preferred axis comes back whole (fewer than 2 pieces), the other candidates are tried longest first and the first that cuts is taken, else the preferred stands — so a box 1 wide at x = 1e7, where an f32 step is 1 and a half-way cut rounds onto a corner, is cut along a tied z span of 1.9 instead; only the preferred axis can refuse the cook. A zero-size box is cut along the first axis of the set. A cell whose box is not finite, or is inside out, along any axis of the set is refused naming the cell, since it has no longest span; a cell `where` passes through is not read.',
+        'Read ONLY when `axis` is "longest" (ignored otherwise): the axes a cell\'s longest span is chosen from — "xyz" (the default) all three, "xz" the floor plane (a plan cut across its longer wall whatever its height), "xy" or "yz". A span is boundsMax - boundsMin along the axis. The measured longest wins. A TIE goes to the FIRST axis of the set in x, y, z order, and a tie is only what f32 storage cannot resolve: a stored span is off its intended length by at most half an f32 step at each of its two corners, its own error, from ITS OWN coordinates. An axis can win when it COULD be the longest — its span plus its error reaches every other axis\' span minus that axis\' error — and the first such axis in x, y, z order does. A square cell, or spans written as the same decimal, are therefore cut along the first axis wherever they stand, not along whichever axis the stored corners happen to round longer, while a span longer than another by more than both their storage can explain always beats it (at z = 1e5, where a step is 1/128, a z span of 1 + 2/128 beats an x span of 1 at the origin; 1 + 1/128 ties, and goes to x; at z = 2^23, where a step is 1, a z span of 2 is known only to 1 and ties both an x of 1 and a y of 1.5, but y is longer than x past both their storage, so x cannot be the longest and y is cut). The bound is half a step for a corner rounded once; a corner an earlier cut made was rounded twice, so a square made by halving can, rarely (about 1 in 18,000), go to its second axis by a difference at the seventh digit — a full step a corner would stop that, but would hand far more boxes far from the origin to a visibly shorter axis. AN AXIS THE CUT CANNOT CUT IS PASSED OVER: if the cut along the preferred axis comes back whole (fewer than 2 pieces), the other candidates are tried longest first and the first that cuts is taken, else the preferred stands — so a box 1 wide at x = 1e7, where an f32 step is 1 and a half-way cut rounds onto a corner, is cut along a tied z span of 1.9 instead. Only the preferred axis can refuse a cell: a fallback whose sizes `fit` "error" refuses (overflow, underfill) is passed over, but the point cap is still the cook\'s, and a fallback that runs into it refuses the cook. A zero-size box is cut along the first axis of the set. A cell whose box is not finite, or is inside out, along any axis of the set is refused naming the cell, since it has no longest span; a cell `where` passes through is not read.',
     },
     axisIndex: {
       type: "f32",
@@ -582,7 +610,7 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
               break;
             }
           }
-          throw new Error(
+          throw new CellRefusal(
             `${NODE}: cell ${i} OVERFLOWS — its absolute segments need ${absSum} along ${AXIS_NAMES[a]} but its box is ${len} long (${cLo} to ${cHi}); segment ${at} ("${labels[at]}", size ${Math.max(0, sizeAt(i, at))}) is where the running total passed the box, at ${run}. Set "fit" to "clip" (cut the pieces at the box's end) or "scale" (shrink them to fit), or bound the sizes, e.g. min(<size>, <the box length>).`,
           );
         }
@@ -609,7 +637,7 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
           const why = anyRel
             ? `its "relative" segments all have weight 0 here, so nothing takes the remaining ${rest}`
             : `no "relative" or "repeat" segment is there to take the remaining ${rest}`;
-          throw new Error(
+          throw new CellRefusal(
             `${NODE}: cell ${i} is UNDERFILLED — its segments cover ${absSum} of a box ${len} long along ${AXIS_NAMES[a]} (${cLo} to ${cHi}), and ${why}. Add a segment that takes the rest (unit "relative", size 1 — label it "" to leave it empty as a gap), or set "fit" to "clip" (leave it uncovered) or "scale" (stretch the pieces to fill).`,
           );
         }
@@ -733,8 +761,11 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
      * two long, where it rounds onto a corner — try the other candidates in
      * order (longest first) and take the first that emits 2 or more; if
      * none does, the preferred axis stands. So an ordinary cell costs one
-     * layout. Only the preferred axis can refuse the cook; a fallback that
-     * would refuse is not taken. Leaves `axisOf[i]` on the choice.
+     * layout. Only the preferred axis can refuse the cell: a fallback whose
+     * sizes the fit refuses along it (a CellRefusal) is not taken. Anything
+     * else a fallback throws — the point cap a repeat runs into along a
+     * longer axis — is the cook's, and propagates. Leaves `axisOf[i]` on
+     * the choice.
      */
     const layoutLongest = (i: number, runningTotal: number): number => {
       const order = longOrder!;
@@ -749,7 +780,8 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
         let e: number;
         try {
           e = layoutCell(i, runningTotal);
-        } catch {
+        } catch (err) {
+          if (!(err instanceof CellRefusal)) throw err;
           e = -1;
         }
         if (e >= 2) return e;
