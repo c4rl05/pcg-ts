@@ -6916,9 +6916,9 @@
             "kind": "geometry",
             "tags": [],
             "counts": {
-              "point": 6408,
-              "vertex": 9612,
-              "primitive": 3204,
+              "point": 6168,
+              "vertex": 9252,
+              "primitive": 3084,
               "detail": 1
             },
             "attrs": {
@@ -6935,13 +6935,13 @@
             },
             "bounds": {
               "min": [
-                -11.9401,
-                0.0441,
+                -11.9352,
+                0.0471,
                 -0.172
               ],
               "max": [
-                11.9485,
-                14.9451,
+                11.9502,
+                14.9512,
                 0.172
               ]
             }
@@ -6956,9 +6956,9 @@
             "kind": "geometry",
             "tags": [],
             "counts": {
-              "point": 775,
-              "vertex": 1202,
-              "primitive": 415,
+              "point": 800,
+              "vertex": 1238,
+              "primitive": 427,
               "detail": 1
             },
             "attrs": {
@@ -6972,12 +6972,11 @@
                 "boundsMin:f32x3",
                 "boundsMax:f32x3",
                 "color:f32x4",
-                "depth:i32",
-                "live:u32",
-                "axis:f32x3",
-                "cutAt:f32",
-                "slot:i32",
                 "kind:string",
+                "ruleDepth:i32",
+                "ruleRoll:f32",
+                "pieceIndex:i32",
+                "ruleParent:i32",
                 "degree:u32"
               ],
               "primitive": [
@@ -6987,14 +6986,14 @@
             },
             "bounds": {
               "min": [
-                -13.8783,
+                -13.8058,
                 0.0125,
-                -9.8759
+                -9.8258
               ],
               "max": [
-                13.7841,
+                13.8377,
                 0.875,
-                9.8169
+                9.8224
               ]
             }
           }

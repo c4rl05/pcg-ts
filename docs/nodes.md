@@ -125,7 +125,7 @@ Composite node that runs a REWRITING GRAMMAR over labelled cells, one ROUND at a
 
 **Outputs:** *(none)*
 
-**Examples:** [basics-apply-rules.json](../graphs/basics-apply-rules.json), [examples-brick-house.json](../graphs/examples-brick-house.json) — 2 total (`pcg graphs --node applyRules`)
+**Examples:** [basics-apply-rules.json](../graphs/basics-apply-rules.json), [examples-facade.json](../graphs/examples-facade.json), [examples-floorplan.json](../graphs/examples-floorplan.json) — 4 total (`pcg graphs --node applyRules`)
 
 **Params:**
 
@@ -177,7 +177,7 @@ Collapses a numeric attribute over a whole domain into a single value on the det
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-repeat-until-settled.json](../graphs/basics-repeat-until-settled.json), [basics-report-to-the-host.json](../graphs/basics-report-to-the-host.json), [examples-coral.json](../graphs/examples-coral.json) — 6 total (`pcg graphs --node attributeReduce`)
+**Examples:** [basics-repeat-until-settled.json](../graphs/basics-repeat-until-settled.json), [basics-report-to-the-host.json](../graphs/basics-report-to-the-host.json), [examples-coral.json](../graphs/examples-coral.json) — 4 total (`pcg graphs --node attributeReduce`)
 
 **Params:**
 
@@ -434,7 +434,7 @@ Keeps points whose named point attribute satisfies a comparison. Numeric attribu
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-filter-by-attribute.json](../graphs/basics-filter-by-attribute.json), [basics-runs-along-a-path.json](../graphs/basics-runs-along-a-path.json), [examples-headless-scatter.json](../graphs/examples-headless-scatter.json) — 8 total (`pcg graphs --node filterByAttribute`)
+**Examples:** [basics-filter-by-attribute.json](../graphs/basics-filter-by-attribute.json), [basics-runs-along-a-path.json](../graphs/basics-runs-along-a-path.json), [examples-headless-scatter.json](../graphs/examples-headless-scatter.json) — 6 total (`pcg graphs --node filterByAttribute`)
 
 **Params:**
 
@@ -599,7 +599,7 @@ Concatenates the points of every connected geometry, in connection order, into o
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-merge-points.json](../graphs/basics-merge-points.json), [basics-curve-shaping.json](../graphs/basics-curve-shaping.json), [basics-field-shaping.json](../graphs/basics-field-shaping.json) — 18 total (`pcg graphs --node mergePoints`)
+**Examples:** [basics-merge-points.json](../graphs/basics-merge-points.json), [basics-curve-shaping.json](../graphs/basics-curve-shaping.json), [basics-field-shaping.json](../graphs/basics-field-shaping.json) — 16 total (`pcg graphs --node mergePoints`)
 
 **Params:** *(none)*
 
@@ -1295,7 +1295,7 @@ Emits every input point `count` times — a PER-POINT number of times when `coun
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-repeat-points.json](../graphs/basics-repeat-points.json), [examples-facade.json](../graphs/examples-facade.json), [examples-floorplan.json](../graphs/examples-floorplan.json) — 3 total (`pcg graphs --node repeatPoints`)
+**Examples:** [basics-repeat-points.json](../graphs/basics-repeat-points.json) — 1 total (`pcg graphs --node repeatPoints`)
 
 **Params:**
 
@@ -1317,7 +1317,7 @@ Composite node that cooks an inner graph REPEATEDLY, feeding each round's output
 
 **Outputs:** *(none)*
 
-**Examples:** [basics-repeat-until-settled.json](../graphs/basics-repeat-until-settled.json), [examples-coral.json](../graphs/examples-coral.json), [examples-tree.json](../graphs/examples-tree.json) — 5 total (`pcg graphs --node repeatUntil`)
+**Examples:** [basics-repeat-until-settled.json](../graphs/basics-repeat-until-settled.json), [examples-coral.json](../graphs/examples-coral.json), [examples-tree.json](../graphs/examples-tree.json) — 3 total (`pcg graphs --node repeatUntil`)
 
 **Params:**
 
@@ -1572,14 +1572,15 @@ CUTS every cell's box along one axis into an ordered list of LABELLED PIECES and
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-split-box.json](../graphs/basics-split-box.json), [basics-apply-rules.json](../graphs/basics-apply-rules.json), [examples-brick-house.json](../graphs/examples-brick-house.json) — 3 total (`pcg graphs --node splitBox`)
+**Examples:** [basics-split-box.json](../graphs/basics-split-box.json), [basics-apply-rules.json](../graphs/basics-apply-rules.json), [examples-facade.json](../graphs/examples-facade.json) — 5 total (`pcg graphs --node splitBox`)
 
 **Params:**
 
 | Param | Type | Default | Range | Enum | Field | Description |
 | --- | --- | --- | --- | --- | --- | --- |
-| `axis` | enum | `"x"` |  | `x`, `y`, `z`, `perCell` |  | The axis every cell is cut along: "x", "y" or "z" — a component of the cell's boundsMin/boundsMax, not a direction in the cell's rotated frame. "perCell" reads the axis PER CELL from `axisIndex` instead, for a split whose direction is the cell's own — a wall cut along its run, which is x for a south wall and z for an east one. Decided once per cook; with "perCell" only numbers are read per cell. |
-| `axisIndex` | f32 | `0` | 0..2 |  | yes | Read ONLY when `axis` is "perCell" (ignored otherwise): the axis each cell is cut along, 0 = x, 1 = y, 2 = z. As a field it is resolved on the input's point domain, ONE AXIS PER CELL, e.g. select(attribute("alongX"), 0, 2) or 2 * lt(<span x>, <span z>) for "the longer floor axis". Rounded to nearest; a value that rounds to anything but 0, 1 or 2, or is not finite, is refused naming the cell. |
+| `axis` | enum | `"x"` |  | `x`, `y`, `z`, `perCell`, `longest` |  | The axis every cell is cut along: "x", "y" or "z" — a component of the cell's boundsMin/boundsMax, not a direction in the cell's rotated frame. "perCell" reads the axis PER CELL from `axisIndex` instead, for a split whose direction is the cell's own — a wall cut along its run, which is x for a south wall and z for an east one. "longest" cuts each cell along ITS LONGEST SPAN among the axes `longestOf` names (all three by default; "xz" for the longer floor axis), the cut of a recursive subdivision that halves a panel or a plan across its long side. Decided once per cook; with "perCell" or "longest" only numbers are read per cell. |
+| `longestOf` | enum | `"xyz"` |  | `xyz`, `xy`, `xz`, `yz` |  | Read ONLY when `axis` is "longest" (ignored otherwise): the axes a cell's longest span is chosen from — "xyz" (the default) all three, "xz" the floor plane (a plan cut across its longer wall whatever its height), "xy" or "yz". A span is boundsMax - boundsMin along the axis. TIES go to the FIRST axis of the set in x, y, z order, and a tie is to f32 precision: a candidate whose span is within two f32 steps at its own coordinates, plus two at the longest one's, of the longest span counts as tied — so a square cell is cut along x wherever it stands, not along whichever axis its stored corners happen to round longer (at x = 1e5 an f32 step is 1/128). The slack is in f32 STEPS, not a share of the span, so a cell only a few steps long far from the origin can be cut along a shorter axis — a box 1 wide at x = 1e7, where a step is 1, ties with a z span of 3 near the origin — but f32 cannot place a cut inside such a box anyway. A zero-size box is cut along the first axis of the set. A cell whose box is not finite, or is inside out, along any axis of the set is refused naming the cell, since it has no longest span; a cell `where` passes through is not read. |
+| `axisIndex` | f32 | `0` | 0..2 |  | yes | Read ONLY when `axis` is "perCell" (ignored otherwise): the axis each cell is cut along, 0 = x, 1 = y, 2 = z. As a field it is resolved on the input's point domain, ONE AXIS PER CELL, e.g. select(attribute("alongX"), 0, 2) — an axis the cell CARRIES; for "the longest span" use axis "longest" instead of spelling the comparison here. Rounded to nearest; a value that rounds to anything but 0, 1 or 2, or is not finite, is refused naming the cell. |
 | `labels` | stringList | `["a","b"]` |  |  |  | One label per SEGMENT, in order from the box's MIN side; the list's length is the segment count, and `sizes` and `units` must have the same length. Each piece is written this label in `labelAttr`; a repeat segment gives all of its pieces the same one. Labels may repeat (["jamb", "opening", "jamb"]). An EMPTY label "" makes the segment a GAP: it takes its space along the axis and emits nothing — a margin, or the ceiling plate a storey split leaves to someone else. At least one segment. |
 | `sizes` | numberList | `[1,1]` |  |  | yes | One size per segment, read by its unit: a LENGTH for "absolute", a WEIGHT for "relative", the MODULE (the length one piece aims for) for "repeat". Plain, a list of numbers: [1, 3, 1]. AS A FIELD it is resolved on the PARENT CELL and must have ONE COMPONENT PER SEGMENT — build it with vec(...), which concatenates any number of components: vec(sub(attribute("sill"), box("y0")), 3, 1). The BOX NAMES (box("y0"), box("sy"), box("center") and the rest) read the box of the PARENT cell here, so a size can be a share of the cell it cuts — vec(box("sy") * 0.25, 1) — and the sizes of a nested split read the piece the split before it made. A field is where a per-cell decision goes, and since it is resolved once per cell before the cut, every piece agrees on it (a randomField drawn here cuts both halves at one coordinate). A NEGATIVE size counts as 0 (nothing, and dropped), like repeatPoints' count; a non-finite one is refused naming the cell; a repeat MODULE must be > 0 and is refused otherwise, since "pieces of size 0" has no count. |
 | `units` | stringList | `["relative","relative"]` |  |  |  | One unit per segment: "absolute" (the size is a length along the axis), "relative" (a weighted share of the REST — the box length less every absolute segment — so sizes [2, 1] with both relative cut the rest 2:1), or "repeat" (the rest cut into n EQUAL pieces, n = max(1, <repeatRound>(rest / size)), so "bays of about 4" on a 10-long wall is 2 bays of 5 with "floor"). At most ONE "repeat" per split, and not together with a "relative": both would claim the rest, so the pair is refused rather than given a rule. Decided once per cook. |
@@ -1782,7 +1783,7 @@ Transforms every point: P' = R * (scale * P) + translate, with R from rotateEule
 
 **Outputs:** `out` (geometry)
 
-**Examples:** [basics-transform-points.json](../graphs/basics-transform-points.json), [basics-inline-field-params.json](../graphs/basics-inline-field-params.json), [basics-reseed-a-noise.json](../graphs/basics-reseed-a-noise.json) — 36 total (`pcg graphs --node transformPoints`)
+**Examples:** [basics-transform-points.json](../graphs/basics-transform-points.json), [basics-inline-field-params.json](../graphs/basics-inline-field-params.json), [basics-reseed-a-noise.json](../graphs/basics-reseed-a-noise.json) — 35 total (`pcg graphs --node transformPoints`)
 
 **Params:**
 

@@ -212,8 +212,14 @@ const COUNT = 97;
 // names, 33 evaluated, 32 compiled. Remeasured 2026-10-25, when the brick
 // house's lattice-to-world setBounds (six box names in two corners) became
 // a transformBox, which reads none: reverse 32 expansions of 96 box names,
-// 32 evaluated, 31 compiled.
-const FORWARD_COUNTS = { rewritten: 25, names: 150, evaluated: 25, compiled: 25 };
+// 32 evaluated, 31 compiled. Remeasured 2026-10-25 again, when the facade
+// and the floorplan moved onto applyRules + splitBox: their hand-spelled
+// spans and cut corners (the bulk of the forward direction) are gone and
+// the box names they now write moved to the reverse side — forward 8
+// rewrites of 8 names, 8 evaluated, 8 compiled (what is left is mostly
+// mesh tails spelling a box's centre and size); reverse 34 expansions of
+// 104 names, 34 evaluated, 33 compiled.
+const FORWARD_COUNTS = { rewritten: 6, names: 6, evaluated: 6, compiled: 6 };
 const REVERSE_COUNTS = { expanded: 28, names: 85, evaluated: 28, compiled: 28 };
 
 function ctxFor(spec: FieldSpec): { ctx: EvalContext; layout: FieldKernelLayout } {
