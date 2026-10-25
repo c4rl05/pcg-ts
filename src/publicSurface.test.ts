@@ -193,6 +193,9 @@ const ROOT_SURFACE = [
   // Moves each face of a box out or in, in world axes or the face frame
   // shellSplit writes -- the scope offset of a shape grammar.
   "offsetBox",
+  // Scales each cell's box about a pivot (a world point, a fraction of
+  // the cell, or of every cell's union) and then moves it.
+  "transformBox",
   "simplexNoise", "sin",
   "smoothNormals", "smoothstep",
   "spawnInstances", "specChildEntries", "splineSample", "sqrt", "standardNode", "step",

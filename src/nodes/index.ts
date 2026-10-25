@@ -94,6 +94,7 @@ export * from "./shellSplit.js";
 export * from "./boxContact.js";
 export * from "./placeBox.js";
 export * from "./offsetBox.js";
+export * from "./transformBox.js";
 export * from "./filtering.js";
 export * from "./visibility.js";
 export * from "./coverage.js";

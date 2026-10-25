@@ -7373,6 +7373,87 @@ export type TransferByIndexInputs = "in" | "source";
 export type TransferByIndexOutputs = "out";
 
 /**
+ * Params of the `transformBox` node type.
+ */
+export interface TransformBoxParams {
+  /**
+   * The scale per WORLD axis [x, y, z], about the pivot: 1 keeps the axis, 0.5 halves it, 2
+   * doubles it, a negative value mirrors the box about the pivot (its faces swapped, so
+   * boundsMin stays the min), and 0 leaves a box of no volume on the pivot. [1, 0.4, 1]
+   * takes a lattice counted in studs across and plates up to world units where a plate is
+   * 0.4 of a stud. As a FIELD it is resolved per cell on the INPUT (box names read the box
+   * as it arrived) and a scalar broadcasts to all three. Must be finite.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[1,1,1]`
+   */
+  scale: FieldParam;
+  /**
+   * The point the scale is about, per WORLD axis, read as `pivotIn` says: under "world" a
+   * point in the boxes' coordinates (the default [0, 0, 0] is the origin); under "cell" a
+   * fraction of the cell's own box (0 the min face, 0.5 the centre, 1 the max face —
+   * placeBox's anchor reading); under "union" the same fraction of the bounding box of every
+   * cell transformed. The pivot does not move: a box face on it stays where it is, whatever
+   * the scale. As a FIELD it is resolved per cell on the input; a scalar broadcasts. Must be
+   * finite.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  pivot: FieldParam;
+  /**
+   * What `pivot` is measured in. "world" (the default): a point in the boxes' own
+   * coordinates. "cell": a 0..1 fraction of each cell's OWN box per axis, so [0.5, 0.5, 0.5]
+   * scales every box about its own centre — which opens (or closes) the gaps between
+   * neighbours. "union": the same fraction of the bounding box of EVERY cell this cook
+   * transforms (those `where` selects), one pivot for the whole assembly, so boxes that
+   * touched still touch — [0.5, 0, 0.5] scales a building about the middle of its footprint,
+   * at ground level. Decided once per cook.
+   *
+   * - Enum: `"world"` | `"cell"` | `"union"`
+   *
+   * @defaultValue `"world"`
+   */
+  pivotIn: "world" | "cell" | "union";
+  /**
+   * How far every box moves AFTER the scale, per WORLD axis, in the output's units: [0, 0,
+   * 0] (the default) leaves it on the pivot's frame. A field reading a per-cell attribute
+   * moves each cell by its own amount — mul(attribute("lot", 3), [-0.5, 0, -0.5]) centres a
+   * lot whose box starts at the origin on x and z. As a FIELD it is resolved per cell on the
+   * input; a scalar broadcasts. Must be finite.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  translate: FieldParam;
+  /**
+   * Which cells are transformed: nonzero transforms the cell, 0 leaves it EXACTLY as it
+   * arrived — no scale, no move, no check of its box (a FIELD param is still resolved, and
+   * refused if not finite, on every cell), and under pivotIn "union" not counted in the box
+   * the pivot is a fraction of. As a field it is resolved per cell, e.g. attributeIs("kind",
+   * "roof"). Must be finite.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  where: FieldParam;
+}
+
+/**
+ * The input pin names of the `transformBox` node type.
+ */
+export type TransformBoxInputs = "in";
+
+/**
+ * The output pin names of the `transformBox` node type.
+ */
+export type TransformBoxOutputs = "out";
+
+/**
  * Params of the `transformPoints` node type.
  */
 export interface TransformPointsParams {

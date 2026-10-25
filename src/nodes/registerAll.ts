@@ -36,6 +36,7 @@ import { shellSplit } from "./shellSplit.js";
 import { boxContact } from "./boxContact.js";
 import { placeBox } from "./placeBox.js";
 import { offsetBox } from "./offsetBox.js";
+import { transformBox } from "./transformBox.js";
 import { hasNodeType } from "./registry.js";
 import { surfaceSample } from "./samplers.js";
 import { pointGrid } from "./sources.js";
@@ -73,6 +74,7 @@ const MODULE_WITNESSES: readonly { readonly type: string }[] = [
   boxContact, // boxContact.ts
   placeBox, // placeBox.ts
   offsetBox, // offsetBox.ts
+  transformBox, // transformBox.ts
   filterByDensity, // filtering.ts
   setAttribute, // attributes.ts
   valueConstant, // mathNodes.ts

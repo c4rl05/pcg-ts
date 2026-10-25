@@ -9250,6 +9250,119 @@
           "if": {
             "properties": {
               "type": {
+                "const": "transformBox"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "description": "SCALES every cell's box ABOUT A PIVOT and then MOVES it — the transform of a modelling package applied to geometry that is a box, and the way a set of boxes goes from one coordinate system to another: a lattice of whole studs and plates to world units, an assembly centred on its lot, a piece shrunk about its own centre. A CELL IS A POINT WITH A BOX, as in splitBox: its standard `boundsMin`/`boundsMax`, read and written in the coordinates they hold. THE MAP, per world axis: x' = (x - pivot) * scale + pivot + translate, applied to BOTH faces, so a box from 2 to 6 scaled by 0.5 about 0 runs from 1 to 3, about its centre (4) from 3 to 5, and with translate -4 after either. A NEGATIVE scale MIRRORS the box about the pivot, its faces swapped so boundsMin stays the min corner; a scale of 0 leaves a box of no volume on the pivot, KEPT, never dropped. `pivotIn` says what `pivot` is, decided once per cook: \"world\" (the default) a point in the boxes' coordinates, [0, 0, 0] the origin; \"cell\" a 0..1 FRACTION of the cell's OWN box per axis, placeBox's anchor reading — 0 the min face, 0.5 the centre, 1 the max face, any value between in proportion, and outside 0..1 past the face — so [0.5, 0.5, 0.5] scales every box about its own centre and [0.5, 0, 0.5] about the middle of its floor; \"union\" the same fraction of the BOUNDING BOX OF EVERY CELL this cook transforms (the cells `where` selects), so one pivot serves a whole assembly and boxes that touched still touch: [0.5, 0, 0.5] scales a house about the middle of its footprint. A scale about one shared pivot (\"world\" or \"union\") keeps a tiling a tiling; a scale about each cell's own pivot opens or closes the gaps between them. `scale`, `pivot` and `translate` are vec3, plain or FIELDS resolved per cell on the INPUT (box names read the box as it arrived; a scalar broadcasts to all three), all in WORLD axes. NO ROTATION: an axis-aligned box stays one only under a map that keeps the axes; a point whose box is a LOCAL extent (an instance) is rotated with transformPoints, which moves P and composes rot and scale. Every param, plain or field, is held as f32 (as every field constant is), so scale 0.4 is f32(0.4) and a plain value past f32's range is refused by name; the boxes are computed in f64 from those f32 numbers and the stored f32 corners and written as f32, a -0 face written +0 (an input face of -0 too). An input box that is inside out or not finite, and a result past what f32 bounds hold, are refused naming the cell — leave such a cell out with `where`, which passes chosen cells through EXACTLY as they arrived (0 = untouched, and under \"union\" not counted in the pivot box). Same points, same order, same SEEDS, every attribute (strings included), the topology and the detail attributes carried; P, rot and scale are neither read nor written. CPU only, as every box node. Use it where a setBounds rebuilt both corners from box(\"lo\") and box(\"hi\") by one scale and one shift: the map is then stated once instead of per corner.",
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "pivot": {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      {
+                        "$ref": "#/$defs/fieldSpec"
+                      }
+                    ],
+                    "default": [
+                      0,
+                      0,
+                      0
+                    ],
+                    "description": "The point the scale is about, per WORLD axis, read as `pivotIn` says: under \"world\" a point in the boxes' coordinates (the default [0, 0, 0] is the origin); under \"cell\" a fraction of the cell's own box (0 the min face, 0.5 the centre, 1 the max face — placeBox's anchor reading); under \"union\" the same fraction of the bounding box of every cell transformed. The pivot does not move: a box face on it stays where it is, whatever the scale. As a FIELD it is resolved per cell on the input; a scalar broadcasts. Must be finite."
+                  },
+                  "pivotIn": {
+                    "default": "world",
+                    "description": "What `pivot` is measured in. \"world\" (the default): a point in the boxes' own coordinates. \"cell\": a 0..1 fraction of each cell's OWN box per axis, so [0.5, 0.5, 0.5] scales every box about its own centre — which opens (or closes) the gaps between neighbours. \"union\": the same fraction of the bounding box of EVERY cell this cook transforms (those `where` selects), one pivot for the whole assembly, so boxes that touched still touch — [0.5, 0, 0.5] scales a building about the middle of its footprint, at ground level. Decided once per cook.",
+                    "enum": [
+                      "world",
+                      "cell",
+                      "union"
+                    ],
+                    "type": "string"
+                  },
+                  "scale": {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      {
+                        "$ref": "#/$defs/fieldSpec"
+                      }
+                    ],
+                    "default": [
+                      1,
+                      1,
+                      1
+                    ],
+                    "description": "The scale per WORLD axis [x, y, z], about the pivot: 1 keeps the axis, 0.5 halves it, 2 doubles it, a negative value mirrors the box about the pivot (its faces swapped, so boundsMin stays the min), and 0 leaves a box of no volume on the pivot. [1, 0.4, 1] takes a lattice counted in studs across and plates up to world units where a plate is 0.4 of a stud. As a FIELD it is resolved per cell on the INPUT (box names read the box as it arrived) and a scalar broadcasts to all three. Must be finite."
+                  },
+                  "translate": {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      {
+                        "$ref": "#/$defs/fieldSpec"
+                      }
+                    ],
+                    "default": [
+                      0,
+                      0,
+                      0
+                    ],
+                    "description": "How far every box moves AFTER the scale, per WORLD axis, in the output's units: [0, 0, 0] (the default) leaves it on the pivot's frame. A field reading a per-cell attribute moves each cell by its own amount — mul(attribute(\"lot\", 3), [-0.5, 0, -0.5]) centres a lot whose box starts at the origin on x and z. As a FIELD it is resolved per cell on the input; a scalar broadcasts. Must be finite."
+                  },
+                  "where": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "$ref": "#/$defs/fieldSpec"
+                      }
+                    ],
+                    "default": 1,
+                    "description": "Which cells are transformed: nonzero transforms the cell, 0 leaves it EXACTLY as it arrived — no scale, no move, no check of its box (a FIELD param is still resolved, and refused if not finite, on every cell), and under pivotIn \"union\" not counted in the box the pivot is a fraction of. As a field it is resolved per cell, e.g. attributeIs(\"kind\", \"roof\"). Must be finite."
+                  }
+                },
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "ref": false,
+              "subgraph": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "transformPoints"
               }
             },
@@ -12954,6 +13067,7 @@
             "transferAlongPath",
             "transferAttribute",
             "transferByIndex",
+            "transformBox",
             "transformPoints",
             "valueConstant",
             "volumeSample",

@@ -209,9 +209,12 @@ const COUNT = 97;
 // was last measured (the numbers are in the guards' comments).
 // Measured 2026-10-24: forward 30 rewrites holding 170 introduced box
 // names, 30 evaluated, 30 compiled; reverse 33 expansions of 119 box
-// names, 33 evaluated, 32 compiled.
+// names, 33 evaluated, 32 compiled. Remeasured 2026-10-25, when the brick
+// house's lattice-to-world setBounds (six box names in two corners) became
+// a transformBox, which reads none: reverse 32 expansions of 96 box names,
+// 32 evaluated, 31 compiled.
 const FORWARD_COUNTS = { rewritten: 25, names: 150, evaluated: 25, compiled: 25 };
-const REVERSE_COUNTS = { expanded: 28, names: 100, evaluated: 28, compiled: 28 };
+const REVERSE_COUNTS = { expanded: 28, names: 85, evaluated: 28, compiled: 28 };
 
 function ctxFor(spec: FieldSpec): { ctx: EvalContext; layout: FieldKernelLayout } {
   const geo = createPointCloud(COUNT);
