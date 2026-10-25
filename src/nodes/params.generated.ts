@@ -6553,10 +6553,13 @@ export interface SplitBoxParams {
    * f32 precision: a candidate whose span is within two f32 steps at its own coordinates,
    * plus two at the longest one's, of the longest span counts as tied — so a square cell is
    * cut along x wherever it stands, not along whichever axis its stored corners happen to
-   * round longer (at x = 1e5 an f32 step is 1/128). A zero-size box is cut along the first
-   * axis of the set. A cell whose box is not finite, or is inside out, along any axis of the
-   * set is refused naming the cell, since it has no longest span; a cell `where` passes
-   * through is not read.
+   * round longer (at x = 1e5 an f32 step is 1/128). The slack is in f32 STEPS, not a share
+   * of the span, so a cell only a few steps long far from the origin can be cut along a
+   * shorter axis — a box 1 wide at x = 1e7, where a step is 1, ties with a z span of 3 near
+   * the origin — but f32 cannot place a cut inside such a box anyway. A zero-size box is cut
+   * along the first axis of the set. A cell whose box is not finite, or is inside out, along
+   * any axis of the set is refused naming the cell, since it has no longest span; a cell
+   * `where` passes through is not read.
    *
    * - Enum: `"xyz"` | `"xy"` | `"xz"` | `"yz"`
    *

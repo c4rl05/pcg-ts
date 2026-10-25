@@ -590,6 +590,9 @@ describe('splitBox: axis "longest"', () => {
     expect(cutAxes(await split(far, { axis: "longest", ...halves }))).toEqual([0, 2]);
     // Near the origin the same 0.005 is far past precision: z.
     expect(cutAxes(await split(cells([[[0, 0, 0], [4, 1, 4.005]]]), { axis: "longest", ...halves }))).toEqual([2]);
+    // The slack counts the LONGEST axis' coordinates too: x near the
+    // origin (steps of 5e-7) against a z 0.005 longer at z = 1e5 is a tie.
+    expect(cutAxes(await split(cells([[[0, 0, 1e5], [4, 1, 1e5 + 4.005]]]), { axis: "longest", ...halves }))).toEqual([0]);
   });
 
   it("is the argmax the graphs spelled by hand, on every cell of a random population", async () => {
