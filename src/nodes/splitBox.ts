@@ -34,6 +34,8 @@ import type {
   SplitBoxOutputs,
   SplitBoxParams,
 } from "./params.generated.js";
+import { fitGlossary, fitRefusal } from "./boxFit.js";
+import { type RoundCode, ULP_TOL, f32Ulp, refuseCutSnapMode, roundBy, snapToLattice } from "./latticeSnap.js";
 import { standardNode } from "./registry.js";
 import {
   CANCEL_STRIDE,
@@ -71,8 +73,6 @@ const AXIS_NAMES = ["x", "y", "z"] as const;
 const ABS = 0;
 const REL = 1;
 const REP = 2;
-/** Rounding codes (`repeatRound`, `snapMode`), decided once. */
-type RoundCode = 0 | 1 | 2; // floor | round | ceil
 /** Fit codes, decided once. */
 const FIT_ERROR = 0;
 const FIT_CLIP = 1;
@@ -84,29 +84,6 @@ const FIT_SCALE = 2;
  * or `[0.1, 0.2, 0.7]` on a box of 1 would be an overflow of 1.5e-8.
  */
 const FIT_EPS = 1e-6;
-/**
- * How many f32 ulps "on a line" or "at the box's end" may be off by. Bounds
- * are stored f32, so a box edge typed as 1.2 is 1.2000000477, and on a 0.4
- * lattice that must snap to 1.2 under `ceil` rather than to 1.6. The
- * tolerance is in ULPS OF THE COORDINATE, not relative to the step count
- * or the coordinate's size: a relative one widened with the distance from
- * the origin until, past 1e6, every cut counted as on a line and floor and
- * ceil both became round, and a real 0.05-long piece at x = 1e5 was taken
- * for the box's end and swallowed.
- */
-const ULP_TOL = 2;
-
-/** One f32 ulp at the magnitude of `x` (the smallest normal's at 0). */
-function f32Ulp(x: number): number {
-  const a = Math.abs(x);
-  if (!(a > 1.1754943508222875e-38)) return 1.401298464324817e-45;
-  return Math.pow(2, Math.floor(Math.log2(a)) - 23);
-}
-
-function roundBy(code: RoundCode, x: number): number {
-  return code === 0 ? Math.floor(x) : code === 1 ? Math.round(x) : Math.ceil(x);
-}
-
 /**
  * The seed of slot `k` of a cell: `hashCombine(cellSeed, k)`, spelled out
  * as repeatPoints spells it so the inner loop does not allocate the
@@ -127,22 +104,13 @@ interface Layout {
   slots: number;
 }
 
-function snapToLattice(b: number, step: number, mode: RoundCode): number {
-  const q = b / step;
-  const r = Math.round(q);
-  // On the line already, to f32 precision — a few ulps of the coordinate,
-  // and never more than a quarter step: no rounding mode may move it.
-  const tol = Math.min(ULP_TOL * f32Ulp(b), step / 4);
-  if (Math.abs(b - r * step) <= tol) return r * step;
-  return roundBy(mode, q) * step;
-}
-
 /** Each cell's box cut along one axis into labelled pieces, every attribute carried. */
 export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOutputs>({
   type: NODE,
   category: "point op",
   description:
-    "CUTS every cell's box along one axis into an ordered list of LABELLED PIECES and emits one point per piece — the split of a split grammar (a block into storeys, a wall into bays, a bay into jamb | opening | jamb). A CELL IS A POINT WITH A BOX: its standard `boundsMin`/`boundsMax`, cut in the coordinates they hold; P, rotation and scale are not read and nothing is moved, so every piece sits where its cell sat and only its box differs. THE PIECES are three parallel lists, one entry per SEGMENT in order from the START of the cut — the box's MIN side, or its MAX side where `direction` is negative: `labels` (the name each piece is given), `sizes` (a number each, or a field of that many components resolved on the parent cell) and `units` — \"absolute\" is that length; \"relative\" is a weighted share of the REST, what the absolute segments leave; \"repeat\" cuts the rest into max(1, <repeatRound>(rest / size)) EQUAL pieces of about `size` each (`repeatRound` is floor, round or ceil; floor by default), so `labels [\"bay\"], sizes [4], units [\"repeat\"]` gives a 10-long wall two bays of 5. A LABEL OF \"\" IS A GAP: it takes its space and emits nothing. A PIECE OF ZERO SIZE IS DROPPED — that is how an absent sill or lintel disappears without a branch. `snap` puts every interior cut on a lattice, `fit` says what happens when absolute sizes do not fit, and `where` passes chosen cells through UNSPLIT, which is how a nested split stays one node per level: split y into under | band | over, then split x WHERE attributeIs(\"piece\", \"band\"), and the under and over pieces ride through untouched. THIS NODE ONLY CUTS, ONE LEVEL: recursion is an applyRules around it (each label a rule, the stop a relabel to a label with no rule), staging is several of it chained, and any decision the children must agree on is made on the PARENT — a field in `sizes` is resolved once per cell, before the cut, so a random cut position drawn there is the same for both halves. Every POINT ATTRIBUTE IS CARRIED onto every piece, strings included, exactly as repeatPoints carries them, and the DETAIL attributes come through unchanged; TOPOLOGY IS DROPPED. OUTPUT ORDER is cell-major, each cell's pieces in slot order from the start of its cut. `direction` says where that start is: positive (the default) the MIN side, NEGATIVE the MAX side (the first label at the max end, slot 0 there), which is how one split cuts a wall from the left as seen from outside whichever way it faces — direction attribute(\"alongSign\") on shellSplit's walls. SEEDS: the piece in slot k of a cell with seed s gets hashCombine(s, k) — repeatPoints' copy-k seed — where k counts EVERY slot of the cell's expanded list, dropped and gap slots included, so a piece's seed does not move when a sibling vanishes, and splitBox is seed-identical to repeatPoints(count = slots) followed by setBounds. No node identity enters a piece's seed; the node's own seed reaches only the fields it resolves (a randomField in `sizes`). A cell can emit NOTHING (a zero-length box, or nothing but gaps), and the output is capped at 4194304 points in all, refused past that naming the cell the total ran out on. The seed identity holds PER LEVEL: a nested split seeds its inner pieces hashCombine(hashCombine(s, j), k), so it is not seed-identical to one flat repeatPoints over all the pieces. CPU only, like repeatPoints: piece counts and drops are comparisons.",
+    "CUTS every cell's box along one axis into an ordered list of LABELLED PIECES and emits one point per piece — the split of a split grammar (a block into storeys, a wall into bays, a bay into jamb | opening | jamb). A CELL IS A POINT WITH A BOX: its standard `boundsMin`/`boundsMax`, cut in the coordinates they hold; P, rotation and scale are not read and nothing is moved, so every piece sits where its cell sat and only its box differs. THE PIECES are three parallel lists, one entry per SEGMENT in order from the START of the cut — the box's MIN side, or its MAX side where `direction` is negative: `labels` (the name each piece is given), `sizes` (a number each, or a field of that many components resolved on the parent cell) and `units` — \"absolute\" is that length; \"relative\" is a weighted share of the REST, what the absolute segments leave; \"repeat\" cuts the rest into max(1, <repeatRound>(rest / size)) EQUAL pieces of about `size` each (`repeatRound` is floor, round or ceil; floor by default), so `labels [\"bay\"], sizes [4], units [\"repeat\"]` gives a 10-long wall two bays of 5. A LABEL OF \"\" IS A GAP: it takes its space and emits nothing. A PIECE OF ZERO SIZE IS DROPPED — that is how an absent sill or lintel disappears without a branch. `snap` puts every interior cut on a lattice, `fit` says what happens when absolute sizes do not fit, and `where` passes chosen cells through UNSPLIT, which is how a nested split stays one node per level: split y into under | band | over, then split x WHERE attributeIs(\"piece\", \"band\"), and the under and over pieces ride through untouched. THIS NODE ONLY CUTS, ONE LEVEL: recursion is an applyRules around it (each label a rule, the stop a relabel to a label with no rule), staging is several of it chained, and any decision the children must agree on is made on the PARENT — a field in `sizes` is resolved once per cell, before the cut, so a random cut position drawn there is the same for both halves. Every POINT ATTRIBUTE IS CARRIED onto every piece, strings included, exactly as repeatPoints carries them, and the DETAIL attributes come through unchanged; TOPOLOGY IS DROPPED. OUTPUT ORDER is cell-major, each cell's pieces in slot order from the start of its cut. `direction` says where that start is: positive (the default) the MIN side, NEGATIVE the MAX side (the first label at the max end, slot 0 there), which is how one split cuts a wall from the left as seen from outside whichever way it faces — direction attribute(\"alongSign\") on shellSplit's walls. SEEDS: the piece in slot k of a cell with seed s gets hashCombine(s, k) — repeatPoints' copy-k seed — where k counts EVERY slot of the cell's expanded list, dropped and gap slots included, so a piece's seed does not move when a sibling vanishes, and splitBox is seed-identical to repeatPoints(count = slots) followed by setBounds. No node identity enters a piece's seed; the node's own seed reaches only the fields it resolves (a randomField in `sizes`). A cell can emit NOTHING (a zero-length box, or nothing but gaps), and the output is capped at 4194304 points in all, refused past that naming the cell the total ran out on. The seed identity holds PER LEVEL: a nested split seeds its inner pieces hashCombine(hashCombine(s, j), k), so it is not seed-identical to one flat repeatPoints over all the pieces. CPU only, like repeatPoints: piece counts and drops are comparisons. " +
+    fitGlossary(FITS),
   inputs: [{ name: "in", kind: "geometry" }],
   outputs: [{ name: "out", kind: "geometry" }],
   params: {
@@ -310,12 +278,17 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
     const repeatRound = (ROUNDS as readonly string[]).indexOf(round) as RoundCode;
     const snapName = canonicalOneOf(ROUNDS, params.snapMode);
     if (snapName === undefined) {
-      throw new Error(`${NODE}: param "snapMode" is ${JSON.stringify(params.snapMode)}; valid: ${ROUNDS.join(", ")}.`);
+      throw new Error(refuseCutSnapMode(NODE, "snapMode", params.snapMode) ?? `${NODE}: param "snapMode" is ${JSON.stringify(params.snapMode)}; valid: ${ROUNDS.join(", ")}.`);
     }
     const snapMode = (ROUNDS as readonly string[]).indexOf(snapName) as RoundCode;
     const fitName = canonicalOneOf(FITS, params.fit);
     if (fitName === undefined) {
-      throw new Error(`${NODE}: param "fit" is ${JSON.stringify(params.fit)}; valid: ${FITS.join(", ")}.`);
+      throw new Error(
+        fitRefusal(NODE, params.fit, FITS, {
+          allow: "pieces that do not fill their box, or overrun it, would not tile it; \"clip\" leaves the rest uncovered or cuts the overrun, \"scale\" stretches or shrinks them to fit",
+          clamp: "a cut has no box of its own to slide; \"clip\" cuts at the box's end",
+        }),
+      );
     }
     const fit = (FITS as readonly string[]).indexOf(fitName);
     const snap = params.snap;

@@ -468,6 +468,8 @@ describe("category metadata", () => {
       splitBox: "point op",
       shellSplit: "point op",
       boxContact: "point op",
+      placeBox: "point op",
+      offsetBox: "point op",
       mergePoints: "point op",
       mergePrimitives: "point op",
       orientAlongVector: "point op",

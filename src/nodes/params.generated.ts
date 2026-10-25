@@ -2426,6 +2426,184 @@ export type OcclusionCullInputs = "in" | "sight";
 export type OcclusionCullOutputs = "out";
 
 /**
+ * Params of the `offsetBox` node type.
+ */
+export interface OffsetBoxParams {
+  /**
+   * How far BOTH faces of each axis move OUT, per component — [x, y, z] under frame "world",
+   * [along, up, out] under "face" — in the box's own units: the uniform shorthand. [1, 1, 1]
+   * pads the box one unit all round, [-1, -1, -1] insets it, [2, 0, 2] grows a footprint two
+   * units each way and leaves its height. As a FIELD it is resolved per cell on the INPUT
+   * (box names read the box as it arrived) and a scalar broadcasts to all three components.
+   * Adds to marginMin and marginMax. Must be finite.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  margin: FieldParam;
+  /**
+   * How far the MIN-SIDE face of each axis moves OUT, on top of `margin`, signed (negative
+   * pulls it in): under frame "world" the face the boundsMin corner is on, so marginMin [0,
+   * 1, 0] lowers the floor one unit; under "face" the end each frame axis runs FROM — the
+   * left end along (as seen from outside, on a shellSplit wall), the bottom up, the INNER
+   * face out. With marginMax it can shift the box (marginMin -d, marginMax +d moves it d).
+   * boxContact's marginMin, with its meaning. As a FIELD it is resolved per cell on the
+   * input, and may read the box names. Must be finite.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  marginMin: FieldParam;
+  /**
+   * How far the MAX-SIDE face of each axis moves OUT, on top of `margin`, signed: under
+   * frame "world" the face the boundsMax corner is on; under "face" the end each frame axis
+   * runs TO — the right end along, the top up, the OUTER face out, so marginMax [0, 0, 1]
+   * stands a sill one unit out of whichever face of its wall is outside. boxContact's
+   * marginMax, with its meaning. As a FIELD it is resolved per cell on the input, and may
+   * read the box names: marginMax vec(0, 1 - box("y1"), 0) puts the top at y = 1. Must be
+   * finite.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  marginMax: FieldParam;
+  /**
+   * What the three components of the margins mean — placeBox's `frame`, with its meaning.
+   * "world": world axes [x, y, z], min side the boundsMin corner — the frame attributes are
+   * not read. "face": the cell's own axes [along, up, out] from the frame shellSplit writes
+   * (`alongAxisAttr`, `alongSignAttr`, `outwardAttr`; up is derived, completing the
+   * right-handed frame along x up = out), min side the end each axis runs from — so one
+   * offset reads the same on every wall, floor and ceiling of a shell. Selected here, never
+   * inferred: under "face" a missing frame attribute is refused, naming every one missing.
+   * Decided once per cook.
+   *
+   * - Enum: `"world"` | `"face"`
+   *
+   * @defaultValue `"world"`
+   */
+  frame: "world" | "face";
+  /**
+   * Read only under frame "face": the tuple-1 numeric point attribute holding each cell's
+   * ALONG axis code, 0 = x, 1 = y, 2 = z — shellSplit's `alongAxisAttr`, carried by splitBox
+   * onto every piece. Any other value, or the out axis itself, is refused naming the cell.
+   *
+   * @defaultValue `"alongAxis"`
+   */
+  alongAxisAttr: string;
+  /**
+   * Read only under frame "face": the tuple-1 numeric point attribute holding the direction
+   * ALONG runs, its sign read (+1 or -1; shellSplit's `alongSignAttr`, left to right as seen
+   * from outside on a wall). Zero — what shellSplit leaves on a cell its `where` passed
+   * through — has no direction and is refused naming the cell, and so is a non-finite value.
+   *
+   * @defaultValue `"alongSign"`
+   */
+  alongSignAttr: string;
+  /**
+   * Read only under frame "face": the tuple-3 numeric point attribute holding each cell's
+   * OUTWARD normal — shellSplit's `outwardAttr`. It must be ONE signed axis (exactly one
+   * nonzero component; its sign is the side), which is what makes the out component of a
+   * margin a face of the box; shellSplit's interior, whose normal is [0, 0, 0], and any
+   * tilted normal, are refused naming the cell.
+   *
+   * @defaultValue `"outward"`
+   */
+  outwardAttr: string;
+  /**
+   * A LATTICE STEP per WORLD axis [x, y, z] — in every frame, since a lattice is the world's
+   * — applied after the offset to every face of each axis whose step is not 0 (0 = no
+   * snapping, the default). How depends on `snapTo` and `snapMode`. splitBox's and
+   * placeBox's snap: snap [1, 0.4, 1] keeps a box on a brick lattice of 1-stud by 1-plate
+   * cells.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  snap: readonly number[];
+  /**
+   * What `snap` rounds — placeBox's `snapTo`. "lattice": each face onto the ABSOLUTE lattice
+   * anchored at 0, as splitBox's snap, so neighbouring boxes share lines. "size": the box's
+   * SIZE on the axis to a whole number of steps, keeping its CENTRE — the box grows (or
+   * shrinks) equally at both faces, which is how a lot padded two studs each way becomes a
+   * stock 8-stud-multiple baseplate centred under it (margin [2, 0, 2], snap [8, 0, 8],
+   * snapTo "size", snapMode "out"). Under "size" an axis whose size is already negative is
+   * left for `fit`, and a size that rounds to no whole step is a box of no volume at its
+   * centre. Decided once per cook.
+   *
+   * - Enum: `"lattice"` | `"size"`
+   *
+   * @defaultValue `"lattice"`
+   */
+  snapTo: "lattice" | "size";
+  /**
+   * Which way a face (or a size) lands on the `snap` lattice — the same five words on every
+   * box node. "round" (the default): the nearest line or size, a half rounding up. "floor" /
+   * "ceil": every face down / up the WORLD axis, both the same way (the size down / up).
+   * "out": the box GROWS onto it — the min face to the line at or below it, the max face to
+   * the line at or above it, the size up — so a padded box never loses what the offset gave
+   * it. "in": it SHRINKS onto it (the reverse), which can cross the faces of a box with no
+   * whole step inside it, for `fit` to settle. Ignored where the step is 0. Decided once per
+   * cook.
+   *
+   * - Enum: `"round"` | `"floor"` | `"ceil"` | `"out"` | `"in"`
+   *
+   * @defaultValue `"round"`
+   */
+  snapMode: "round" | "floor" | "ceil" | "out" | "in";
+  /**
+   * What happens when an inset (or an inward snap) crosses a box's two faces on an axis.
+   * "error" (the default) refuses the cook, naming the cell, the axis, the faces and the
+   * offsets — a box written inside out is refused by every box node downstream, so it is
+   * caught where it is made. "scale" shrinks the INWARD moves of the two faces in proportion
+   * until they meet, which leaves the box no volume on that axis — a symmetric inset past
+   * the middle stops at the centre, and a face that moved OUT keeps its place, so a
+   * one-sided inset past the far face stops on it. "allow" writes the crossed box as
+   * computed, as setBounds would. FIT GLOSSARY, one meaning per word across splitBox,
+   * shellSplit, placeBox and offsetBox: "error" refuses the cook, naming the cell and the
+   * numbers; "allow" writes the result as computed; "scale" rescales what does not fit, in
+   * proportion, until it fits exactly; "clamp" slides the box back inside, keeping its size,
+   * and cuts a box larger than its limit to the limit; "clip" cuts away what passes the
+   * limit and keeps the rest, nothing moved or rescaled. This node takes "error", "scale",
+   * "allow". On an unsnapped axis, faces crossing by no more than two f32 ulps at their
+   * coordinates MEET under "error" and "scale", on one stored number. An input box that is
+   * already inside out or not finite, and an offset that takes a face past what f32 bounds
+   * hold, are refused under "error" and "scale", and written as computed under "allow".
+   * Decided once per cook.
+   *
+   * - Enum: `"error"` | `"scale"` | `"allow"`
+   *
+   * @defaultValue `"error"`
+   */
+  fit: "error" | "scale" | "allow";
+  /**
+   * Which cells are offset: nonzero offsets the cell, 0 leaves it EXACTLY as it arrived — no
+   * offset, no snap, no fit check, and its frame values not read (under frame "face" the
+   * frame attributes must still exist, so their columns can be looked up once). As a field
+   * it is resolved per cell, e.g. attributeIs("piece", "sill"). A non-finite value is
+   * refused naming the cell.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  where: FieldParam;
+}
+
+/**
+ * The input pin names of the `offsetBox` node type.
+ */
+export type OffsetBoxInputs = "in";
+
+/**
+ * The output pin names of the `offsetBox` node type.
+ */
+export type OffsetBoxOutputs = "out";
+
+/**
  * Params of the `orientAlongVector` node type.
  */
 export interface OrientAlongVectorParams {
@@ -3723,6 +3901,225 @@ export type PathShiftInputs = "in";
  * The output pin names of the `pathShift` node type.
  */
 export type PathShiftOutputs = "out";
+
+/**
+ * Params of the `placeBox` node type.
+ */
+export interface PlaceBoxParams {
+  /**
+   * The axes `size`, `anchor`, `offset`, `units` and `offsetUnits` are written in —
+   * offsetBox's `frame`, with its meaning. "world" (the default): [x, y, z], positive up
+   * each axis, min the box's min corner; the frame attributes are not read. "face": [along,
+   * up, out] in each cell's own frame, read from `alongAxisAttr`, `alongSignAttr` and
+   * `outwardAttr` — the frame shellSplit writes on every face — with up derived so that
+   * along x up = out. On a wall that makes component 0 run LEFT TO RIGHT AS SEEN FROM
+   * OUTSIDE, component 1 bottom to top, component 2 from the inner face to the OUTER face,
+   * so anchor 0 is the left, the bottom and the inner face, and anchor 1 the right, the top
+   * and the outer face. Under "face" a missing frame attribute is refused, naming every one
+   * missing. Decided once per cook. `snap` is always the world lattice, whichever frame.
+   *
+   * - Enum: `"world"` | `"face"`
+   *
+   * @defaultValue `"world"`
+   */
+  frame: "world" | "face";
+  /**
+   * Read only with frame "face": the numeric tuple-1 point attribute holding each cell's
+   * ALONG axis code, 0 = x, 1 = y, 2 = z — shellSplit's `alongAxisAttr` default, carried by
+   * splitBox onto every piece. Any other value (shellSplit writes -1 on a cell it passed
+   * through), or the out axis itself, is refused naming the cell; `where` skips cells that
+   * have no frame.
+   *
+   * @defaultValue `"alongAxis"`
+   */
+  alongAxisAttr: string;
+  /**
+   * Read only with frame "face": the numeric tuple-1 point attribute holding the direction
+   * along runs, +1 or -1 (its sign is read; 0 or non-finite is refused naming the cell) —
+   * shellSplit's `alongSignAttr` default, which makes along run left to right as seen from
+   * outside every wall.
+   *
+   * @defaultValue `"alongSign"`
+   */
+  alongSignAttr: string;
+  /**
+   * Read only with frame "face": the numeric tuple-3 point attribute holding each cell's
+   * OUTWARD normal — shellSplit's `outwardAttr` default. It must be ONE signed axis (exactly
+   * one nonzero component, its sign the side): that is the out axis, and up is derived from
+   * it and along. shellSplit's interior, whose normal is [0, 0, 0], and a tilted normal are
+   * refused naming the cell.
+   *
+   * @defaultValue `"outward"`
+   */
+  outwardAttr: string;
+  /**
+   * The placed box's size per axis of the frame, read by `units`: a LENGTH ("absolute") or a
+   * FRACTION of the cell's extent on that axis ("relative"; 1 fills it). AS A FIELD it is
+   * resolved on the CELL, three components or one broadcast to all three, and the box names
+   * read the cell's box: vec(2, box("sy") - 3, 1). A negative size counts as 0, and a box
+   * with no size on an axis is KEPT as a box of no volume there. A non-finite value is
+   * refused naming the cell.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[1,1,1]`
+   */
+  size: FieldParam;
+  /**
+   * How `size` is read: ONE entry for all three axes, or three, one per axis of the frame.
+   * "absolute" is a length; "relative" is a fraction of the cell's extent on that axis — on
+   * a frame axis, the extent along it — so ["relative", "absolute", "relative"] with size
+   * [1, 2, 1] is a slab 2 tall over the cell's whole footprint. Decided once per cook.
+   *
+   * @defaultValue `["absolute"]`
+   */
+  units: readonly string[];
+  /**
+   * Where the placed box sits in the cell, per axis of the frame, as a FRACTION: 0 lines its
+   * MIN side up with the cell's min side, 1 its MAX side with the cell's max side, 0.5 its
+   * centre with the cell's centre (the default: centred), and any fraction between in
+   * proportion — min = cellMin + anchor * (cellLength - size), a min / centre / max justify.
+   * In the "face" frame min is the left seen from outside, the bottom, and the inner face,
+   * so [0, 0, 1] is bottom left, flush to the outer face. A value outside 0..1 extrapolates,
+   * and `fit` settles any overhang. As a FIELD it is resolved on the cell, three components
+   * or one broadcast: vec(select(attribute("back"), 1, 0), 0, 0) hangs a box from the max
+   * side or the min side by a flag. A non-finite value is refused naming the cell.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0.5,0.5,0.5]`
+   */
+  anchor: FieldParam;
+  /**
+   * A move per axis of the frame after the anchor, read by `offsetUnits`, POSITIVE UP THE
+   * FRAME'S SIGNED AXIS — in the "face" frame, rightward seen from outside, upward, and
+   * outward — so "one stud in from the left" is anchor 0 with offset 1, and one stud in from
+   * the right is anchor 1 with offset -1. AS A FIELD it is resolved on the cell, three
+   * components or one broadcast; a placement drawn once upstream (an attribute) or here (a
+   * randomField) lands here. A non-finite value is refused naming the cell.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  offset: FieldParam;
+  /**
+   * How `offset` is read: ONE entry for all three axes, or three. "absolute" is a length;
+   * "relative" a fraction of the cell's extent on that axis; "self" multiples of the PLACED
+   * box's own size there — so anchor 1 with offset 1 "self" stands the box just outside the
+   * cell's max side, touching it, and anchor 0 with -1 "self" just outside the min side:
+   * placing AGAINST the cell rather than in it (with fit "allow"). Decided once per cook.
+   *
+   * @defaultValue `["absolute"]`
+   */
+  offsetUnits: readonly string[];
+  /**
+   * What a placed box past its cell does, axis by axis, after `snap`. "error" (the default)
+   * refuses the cook, naming the cell, the axis (and its frame name), the box and the cell:
+   * a placement that leaves the cell by accident is the defect worth refusing. "allow" keeps
+   * it as placed — a box against the outside, a sill standing out of a wall. "clamp" slides
+   * it back inside keeping its size, and a box larger than the cell on an axis is cut to the
+   * cell's extent there. "clip" cuts away what overhangs and keeps the rest; a box wholly
+   * outside is cut to no volume on the plane it passed, and kept. "Past" is to f32
+   * precision: on an unsnapped axis a corner within two f32 ulps at the cell's coordinates
+   * of a plane is ON the plane; on a snapped one, the stored f32 corner is compared with the
+   * plane. Every box is checked, a box of no volume included. FIT GLOSSARY, one meaning per
+   * word across splitBox, shellSplit, placeBox and offsetBox: "error" refuses the cook,
+   * naming the cell and the numbers; "allow" writes the result as computed; "scale" rescales
+   * what does not fit, in proportion, until it fits exactly; "clamp" slides the box back
+   * inside, keeping its size, and cuts a box larger than its limit to the limit; "clip" cuts
+   * away what passes the limit and keeps the rest, nothing moved or rescaled. This node
+   * takes "error", "allow", "clamp", "clip". Decided once per cook.
+   *
+   * - Enum: `"error"` | `"allow"` | `"clamp"` | `"clip"`
+   *
+   * @defaultValue `"error"`
+   */
+  fit: "error" | "allow" | "clamp" | "clip";
+  /**
+   * A LATTICE STEP per WORLD axis [x, y, z] (whichever `frame`), 0 for none — offsetBox's
+   * `snap`. How the placed box lands on it is `snapTo` and `snapMode`, applied after the
+   * placement and before `fit`; under `snapTo` "lattice" the lattice is the absolute one
+   * anchored at 0 — splitBox's `snap` lattice, so a cut and a placement on the same lattice
+   * share its lines. A corner within f32 precision of a line counts as on it. A snap can
+   * move a corner outside the cell (refused under fit "error"). On an integer lattice whose
+   * cells are integer, anchor 0.5 with snap [1, 1, 1] and snapMode "floor" places a box as
+   * nearly centred as whole units allow.
+   *
+   * - Range: `>= 0`
+   *
+   * @defaultValue `[0,0,0]`
+   */
+  snap: readonly number[];
+  /**
+   * What `snap` rounds — offsetBox's `snapTo`. "lattice" (the default): both corners onto
+   * the ABSOLUTE lattice anchored at 0, so neighbouring boxes share lines. "size": the
+   * placed box's SIZE on the axis to a whole number of steps, keeping its CENTRE, so a
+   * centred box of a stock size stays centred where it was placed. Decided once per cook.
+   *
+   * - Enum: `"lattice"` | `"size"`
+   *
+   * @defaultValue `"lattice"`
+   */
+  snapTo: "lattice" | "size";
+  /**
+   * How the box lands on the `snap` lattice — the same five words on every box node. "round"
+   * (the default): each corner to the nearest line (a half rounds up), or the size to the
+   * nearest whole step. "floor" / "ceil": each corner down / up the WORLD axis, both the
+   * same way, so a box a whole number of steps long keeps its size (the size rounds down /
+   * up). "out": the box GROWS onto the lattice — its min corner down, its max corner up (the
+   * size up). "in": it SHRINKS onto it, the reverse (the size down); a box with no whole
+   * step inside it becomes a box of no volume at its centre. Ignored where the step is 0.
+   * Decided once per cook.
+   *
+   * - Enum: `"round"` | `"floor"` | `"ceil"` | `"out"` | `"in"`
+   *
+   * @defaultValue `"round"`
+   */
+  snapMode: "round" | "floor" | "ceil" | "out" | "in";
+  /**
+   * Which cells are PLACED: nonzero places the box, 0 PASSES THE CELL THROUGH with its box,
+   * and everything else, unchanged (and no label written; a label column this node creates
+   * gives it ""). As a field it is resolved per cell, e.g. attributeIs("piece", "wall").
+   * Under frame "face" the frame attributes must exist, but their values are read only where
+   * it is nonzero, so it is how cells with no frame are skipped. A non-finite value is
+   * refused naming the cell. A field `size`, `anchor` or `offset` is still resolved on EVERY
+   * cell, passed-through ones included, so it must be finite there too.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  where: FieldParam;
+  /**
+   * OPT-IN: name of a STRING point attribute (tuple 1) receiving `label` on every placed box
+   * — the part's name for applyRules, attributeIs or a material. Empty (the default) writes
+   * none. A REPORTING SLOT: an input column of the same shape is rewritten on placed boxes
+   * and kept on cells `where` passes through, one of another shape is refused, and a
+   * standard point attribute is refused by name.
+   *
+   * @defaultValue `""`
+   */
+  labelAttr: string;
+  /**
+   * The label written to `labelAttr` on every placed box (ignored when `labelAttr` is
+   * empty), e.g. "chimney". One string for the node; a label that varies per cell is a
+   * setAttribute with `values` after this.
+   *
+   * @defaultValue `""`
+   */
+  label: string;
+}
+
+/**
+ * The input pin names of the `placeBox` node type.
+ */
+export type PlaceBoxInputs = "in";
+
+/**
+ * The output pin names of the `placeBox` node type.
+ */
+export type PlaceBoxOutputs = "out";
 
 /**
  * Params of the `pointGrid` node type.
@@ -5564,13 +5961,15 @@ export interface ShellSplitParams {
    * What happens when two OPPOSITE faces are thicker together than the box between them —
    * floor + ceiling past its height, south + north past its depth, west + east past its
    * width (a face not listed counts 0). "error" refuses the cook, naming the cell, the axis,
-   * both faces and the numbers; "clip" lets the min-side face (floor, south, west) keep its
-   * thickness, clipped to the box, and gives the max-side face what is left, which can be
-   * nothing; "scale" shrinks both in proportion so that they meet. A pair that EXACTLY fills
-   * its span fits under every mode and leaves no interior; "exactly" is to f32 precision —
-   * within a millionth of the span, or two f32 steps at the box's coordinates, whichever is
-   * larger, so a box at x = 1e5 (where f32 steps are 1/128) is not refused for its storage.
-   * Decided once per cook.
+   * both faces and the numbers; "clip" lays the faces in order, the min-side face (floor,
+   * south, west) first, and cuts what passes the limit — the min-side face keeps its
+   * thickness, cut at the far side of the box, and the max-side face is cut where it meets
+   * it, which can leave it nothing (the cut "clip" makes on every box node; the min side
+   * keeping its thickness is the order they are laid in); "scale" shrinks both in proportion
+   * so that they meet. A pair that EXACTLY fills its span fits under every mode and leaves
+   * no interior; "exactly" is to f32 precision — within a millionth of the span, or two f32
+   * steps at the box's coordinates, whichever is larger, so a box at x = 1e5 (where f32
+   * steps are 1/128) is not refused for its storage. Decided once per cook.
    *
    * - Enum: `"error"` | `"clip"` | `"scale"`
    *

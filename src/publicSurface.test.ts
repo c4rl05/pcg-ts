@@ -187,6 +187,12 @@ const ROOT_SURFACE = [
   // Per-query contact against a second set of boxes: overlap, touch,
   // contain or inside — the context query of a split grammar.
   "boxContact",
+  // Places one box inside, or against, each cell's own box by size, anchor
+  // and offset per axis — for the box no split makes.
+  "placeBox",
+  // Moves each face of a box out or in, in world axes or the face frame
+  // shellSplit writes -- the scope offset of a shape grammar.
+  "offsetBox",
   "simplexNoise", "sin",
   "smoothNormals", "smoothstep",
   "spawnInstances", "specChildEntries", "splineSample", "sqrt", "standardNode", "step",
