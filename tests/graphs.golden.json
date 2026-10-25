@@ -6988,9 +6988,9 @@
             "kind": "geometry",
             "tags": [],
             "counts": {
-              "point": 800,
-              "vertex": 1238,
-              "primitive": 427,
+              "point": 2112,
+              "vertex": 3168,
+              "primitive": 1056,
               "detail": 1
             },
             "attrs": {
@@ -7008,24 +7008,26 @@
                 "ruleParent:i32",
                 "uv:f32x2",
                 "boxSide:i32",
-                "rot:f32x4",
-                "scale:f32x3",
-                "degree:u32"
+                "queryIndex:i32",
+                "targetIndex:i32",
+                "outward:f32x3",
+                "outAxis:i32",
+                "alongAxis:i32",
+                "alongSign:i32"
               ],
               "primitive": [
-                "primtype:string",
-                "doorRun:f32"
+                "primtype:string"
               ]
             },
             "bounds": {
               "min": [
                 -13.8058,
-                0.0125,
+                0,
                 -9.8258
               ],
               "max": [
                 13.8377,
-                0.875,
+                0.4,
                 9.8224
               ]
             }

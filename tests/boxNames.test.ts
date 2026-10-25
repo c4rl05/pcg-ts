@@ -244,9 +244,15 @@ const COUNT = 97;
 // names, 16 evaluated, 16 compiled; reverse 31 expansions of 95 names, 31
 // evaluated, 30 compiled. The corpus floors sit just under that; the
 // frozen floor is unchanged.
+// Then the floorplan's doors: its last centre-from-corners expression went
+// with the proximity net, and the door filter adds box("sx") + box("sz"),
+// so forward with the frozen specs is 14 rewrites of 90 names, 14
+// evaluated, 14 compiled — the frozen specs alone, the corpus now writes
+// none of this arithmetic by hand — and reverse 32 expansions of 97 names,
+// 32 evaluated, 31 compiled; the corpus floors sit just under that.
 const FORWARD_FROZEN_COUNTS = { rewritten: 12, names: 80, evaluated: 12, compiled: 12 };
-const FORWARD_COUNTS = { rewritten: 15, names: 91, evaluated: 15, compiled: 15 };
-const REVERSE_COUNTS = { expanded: 30, names: 94, evaluated: 30, compiled: 29 };
+const FORWARD_COUNTS = { rewritten: 13, names: 89, evaluated: 13, compiled: 13 };
+const REVERSE_COUNTS = { expanded: 31, names: 96, evaluated: 31, compiled: 30 };
 
 function ctxFor(spec: FieldSpec): { ctx: EvalContext; layout: FieldKernelLayout } {
   const geo = createPointCloud(COUNT);
