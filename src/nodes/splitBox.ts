@@ -275,7 +275,7 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
           `${NODE}: param "longestOf" is ${JSON.stringify(params.longestOf)}; valid: ${LONGEST_OF.join(", ")} — the axes "longest" chooses a cell's longest span from (e.g. "xz" for the longer floor axis).`,
         );
       }
-      longestAxes = LONGEST_AXES[LONGEST_OF.indexOf(of)];
+      longestAxes = LONGEST_AXES[(LONGEST_OF as readonly string[]).indexOf(of)];
     }
 
     const labels = params.labels;
