@@ -108,12 +108,12 @@ export function decodeFaceFrame(node: string, cols: FaceFrameColumns, i: number,
   // (-1, 0, [0, 0, 0]), and that is the thing to say about it.
   if (!(av === 0 || av === 1 || av === 2)) {
     throw new Error(
-      `${node}: frame "face" needs cell ${i}'s along axis ("${cols.alongAxisAttr}") to be 0 (x), 1 (y) or 2 (z), and it is ${av}${av === -1 ? " — what shellSplit leaves on a cell its `where` passed through, which has no frame" : ""}. Leave such cells out with "where", e.g. where ge(attribute("${cols.alongAxisAttr}"), 0), or use frame "world".`,
+      `${node}: frame "face" needs cell ${i}'s along axis ("${cols.alongAxisAttr}") to be 0 (x), 1 (y) or 2 (z), and it is ${av}${av === -1 ? " — what shellSplit leaves on a cell its `where` passed through, and what boxContact writes on a pair that touches only along an edge or at a corner: neither has a face, so neither has a frame" : ""}. Leave such cells out with "where", e.g. where ge(attribute("${cols.alongAxisAttr}"), 0), or use frame "world".`,
     );
   }
   if (!(sv > 0 || sv < 0) || !Number.isFinite(sv)) {
     throw new Error(
-      `${node}: frame "face" needs cell ${i}'s along sign ("${cols.alongSignAttr}") to be +1 or -1, and it is ${sv}${sv === 0 ? " — what shellSplit leaves on a cell its `where` passed through, which has no frame" : ""}. Leave such cells out with "where", or use frame "world".`,
+      `${node}: frame "face" needs cell ${i}'s along sign ("${cols.alongSignAttr}") to be +1 or -1, and it is ${sv}${sv === 0 ? " — what shellSplit leaves on a cell its `where` passed through, and what boxContact writes on a pair that touches only along an edge or at a corner: neither has a face, so neither has a frame" : ""}. Leave such cells out with "where", or use frame "world".`,
     );
   }
   const n = cols.outward;
