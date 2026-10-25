@@ -53,11 +53,26 @@
  * its nearest target is the lowest index among the hits within a tie band
  * of the least centre distance (`NEAREST_TIE_REL`), so neither depends on
  * the order the grids hand candidates over.
+ *
+ * THE PAIRS. `targetAttr` names ONE target per query, so a floor plan
+ * cannot ask "which wall do these two rooms share" of it. The `pairs` pin
+ * (on demand: built only when wired or declared, see `PinDef.onDemand`)
+ * is the whole relation, one point per (query, target) hit, sorted by
+ * query and then target index so the grids' order never shows. In the
+ * world frame each pair's box is the intersection of the two boxes as
+ * tested, and under "touch" a contact across exactly one face carries
+ * that face's frame in shellSplit's vocabulary, so placeBox's "face"
+ * frame puts a door on every shared wall (`writePairs`). The local frame
+ * writes no region: two oriented boxes intersect in a convex polytope,
+ * which a box would misstate. `out` is computed before and apart from
+ * any of this, so it is the same bytes whether `pairs` is read or not.
  */
 import { canonicalOneOf } from "../diagnostics/canonical.js";
-import type { Attribute, Geometry } from "../data/index.js";
+import { type Attribute, type Geometry, createPointCloud } from "../data/index.js";
+import { STANDARD_POINT_ATTRS } from "../data/points.js";
 import { deriveGeometry } from "../data/derive.js";
 import { makeGeometryItem } from "../graph/index.js";
+import { hashCombine } from "../random/index.js";
 import type {
   BoxContactInputs,
   BoxContactOutputs,
@@ -142,6 +157,52 @@ const NEAREST_TIE_REL = 1e-12;
 
 /** Cell coordinates past this are folded by widening the cell (cost only). */
 const CELL_COORD_LIMIT = 2 ** 29;
+
+/**
+ * The ceiling on the `pairs` output, segmentCrossings' own for its
+ * one-point-per-pair cloud. A pair point is ~112 bytes (the standard
+ * columns plus the six this node adds), so this is ~120 MB; past it the
+ * query is almost certainly every box against every box — a margin on the
+ * scale of the layout — rather than a relation anyone will read.
+ */
+const MAX_PAIRS = 1_048_576;
+
+/** The `pairs` columns' default names; the frame four are shellSplit's. */
+const PAIR_DEFAULT_NAMES = {
+  pairQueryAttr: "queryIndex",
+  pairTargetAttr: "targetIndex",
+  pairOutwardAttr: "outward",
+  pairOutAxisAttr: "outAxis",
+  pairAlongAxisAttr: "alongAxis",
+  pairAlongSignAttr: "alongSign",
+} as const;
+
+/** A growable i32 column for the pair list (SoA, never per-pair objects). */
+class PairBuffer {
+  q = new Int32Array(1024);
+  t = new Int32Array(1024);
+  count = 0;
+
+  /** Append query `i`'s hits, SORTED by target index: the grids' order never shows. */
+  push(i: number, hits: readonly number[]): void {
+    const c = hits.length;
+    const need = this.count + c;
+    if (need > this.q.length) {
+      let cap = this.q.length;
+      while (cap < need) cap *= 2;
+      const q = new Int32Array(cap);
+      const t = new Int32Array(cap);
+      q.set(this.q.subarray(0, this.count));
+      t.set(this.t.subarray(0, this.count));
+      this.q = q;
+      this.t = t;
+    }
+    for (let k = 0; k < c; k++) this.t[this.count + k] = hits[k];
+    this.t.subarray(this.count, need).sort();
+    this.q.fill(i, this.count, need);
+    this.count = need;
+  }
+}
 
 /**
  * A uniform grid over a fixed set of points with NUMERIC cell keys: each
@@ -781,17 +842,157 @@ function exclusionKeys(
   return { q, t };
 }
 
+/** The pair columns' resolved names; "" writes none (the frame four only). */
+interface PairNames {
+  readonly query: string;
+  readonly target: string;
+  readonly outward: string;
+  readonly outAxis: string;
+  readonly alongAxis: string;
+  readonly alongSign: string;
+}
+
+/**
+ * The `pairs` cloud: one point per (query, target) hit, in the buffer's
+ * order (query index, then target index). Two decisions arrive as
+ * booleans, made once in execute: `region` (both frames "world": every
+ * box is axis-aligned, so the intersection of two is a box) and `frame`
+ * (region under "touch": a contact across one face has a face frame).
+ *
+ * THE REGION is the intersection of the query box AS TESTED (margins
+ * applied) and the target box, per axis [max of the mins, min of the
+ * maxes]. An axis is FLUSH when the test's own comparison sat at equality
+ * there, |d| = ha + hb with ha + hb > 0 (the same numbers the aligned test
+ * compared, so the region and the answer cannot disagree): the boxes meet
+ * on a plane, and the region is put ON the TARGET's face, read from its
+ * stored f32 corner (the target has no margin), so it is flat however
+ * the query's margins rounded. The flush DECISION is the test's rounded
+ * arithmetic, so where the test itself misreads an exact contact (bounds
+ * ~29 bits of magnitude apart on one axis) the frame follows the test and
+ * not the reals. Two flat boxes in one plane (ha + hb = 0)
+ * are not flush there: neither lies beside the other. Rounding a margin
+ * cannot invert a region by more than an ulp, and such an axis collapses
+ * to its midpoint rather than being written inside out.
+ *
+ * THE FACE FRAME exists exactly when ONE axis is flush, the query's face
+ * on that side touching the target across it: outward = the query's face
+ * normal toward the target, and along as shellSplit gives the wall facing
+ * that way (x for the z walls, the floor and the ceiling; z for the x
+ * walls; signed so along x up = outward), so placeBox's "face" frame reads
+ * it as it reads a shellSplit wall. Two or three flush axes are an edge or
+ * a corner, and none is boxes that cross: [0, 0, 0], -1, -1, 0, as
+ * shellSplit writes on a cell with no face.
+ */
+function writePairs(
+  pairs: PairBuffer,
+  names: PairNames,
+  region: boolean,
+  frame: boolean,
+  qc: Float64Array,
+  qh: Float64Array,
+  T: BoxTable,
+  targets: Geometry,
+  seed: number,
+  checkCancelled: () => void,
+): Geometry {
+  // Read under `region` only, where the targets are "world" boxes and these
+  // columns were checked to be f32 tuple 3 by buildBoxes (a non-empty pair
+  // list implies a non-empty target cloud).
+  const tBoundsLo = (region && T.count > 0 ? targets.attrs.point.require("boundsMin").data : new Float32Array(0)) as Float32Array;
+  const tBoundsHi = (region && T.count > 0 ? targets.attrs.point.require("boundsMax").data : new Float32Array(0)) as Float32Array;
+  const k = pairs.count;
+  const geo = createPointCloud(k);
+  const pts = geo.attrs.point;
+  const P = pts.require("P").writable() as Float32Array;
+  const lo = pts.require("boundsMin").writable() as Float32Array;
+  const hi = pts.require("boundsMax").writable() as Float32Array;
+  const seeds = pts.require("seed").writable() as Uint32Array;
+  const qOut = pts.replace(names.query, "i32", 1, -1).writable() as Int32Array;
+  const tOut = pts.replace(names.target, "i32", 1, -1).writable() as Int32Array;
+  const outw = frame && names.outward !== "" ? (pts.replace(names.outward, "f32", 3, [0, 0, 0]).writable() as Float32Array) : null;
+  const oAxis = frame && names.outAxis !== "" ? (pts.replace(names.outAxis, "i32", 1, -1).writable() as Int32Array) : null;
+  const aAxis = frame && names.alongAxis !== "" ? (pts.replace(names.alongAxis, "i32", 1, -1).writable() as Int32Array) : null;
+  const aSign = frame && names.alongSign !== "" ? (pts.replace(names.alongSign, "i32", 1, 0).writable() as Int32Array) : null;
+  const tc = T.centre;
+  const th = T.half;
+  for (let w = 0; w < k; w++) {
+    if ((w & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
+    const i = pairs.q[w];
+    const j = pairs.t[w];
+    qOut[w] = i;
+    tOut[w] = j;
+    seeds[w] = hashCombine(seed, i, j);
+    const i3 = i * 3;
+    const j3 = j * 3;
+    if (!region) {
+      // Oriented boxes: no region. A zero box at the midpoint of the two
+      // centres as tested, so no world-frame reader finds a box elsewhere.
+      for (let a = 0; a < 3; a++) {
+        const p = Math.fround(0.5 * (qc[i3 + a] + tc[j3 + a]));
+        P[w * 3 + a] = p;
+        lo[w * 3 + a] = p;
+        hi[w * 3 + a] = p;
+      }
+      continue;
+    }
+    let flushCount = 0;
+    let faceAxis = -1;
+    let faceSide = 0;
+    for (let a = 0; a < 3; a++) {
+      // The aligned test's own numbers: d = tc - qc and ha + hb.
+      const d = tc[j3 + a] - qc[i3 + a];
+      const ha = qh[i3 + a];
+      const hb = th[j3 + a];
+      const reach = ha + hb;
+      // The target's STORED corners, not tc -/+ hb: lo + hi is not exact in
+      // f64 once the two differ by ~29 bits of magnitude, so the rebuilt
+      // face could miss the stored one (found by the independent review:
+      // x [1e-7, 1000] came back at 9.999996564e-8).
+      const tLo = tBoundsLo[j3 + a];
+      const tHi = tBoundsHi[j3 + a];
+      let l = Math.max(qc[i3 + a] - ha, tLo);
+      let h = Math.min(qc[i3 + a] + ha, tHi);
+      if (reach > 0 && Math.abs(d) === reach) {
+        flushCount++;
+        faceAxis = a;
+        faceSide = d > 0 ? 1 : -1;
+        l = h = d > 0 ? tLo : tHi;
+      } else if (h < l) {
+        l = h = 0.5 * (l + h);
+      }
+      const fl = Math.fround(l);
+      const fh = Math.fround(h);
+      lo[w * 3 + a] = fl;
+      hi[w * 3 + a] = fh;
+      P[w * 3 + a] = Math.fround(0.5 * (fl + fh));
+    }
+    if (!frame) continue;
+    const face = flushCount === 1;
+    if (outw !== null && face) outw[w * 3 + faceAxis] = faceSide;
+    if (oAxis !== null) oAxis[w] = face ? faceAxis : -1;
+    // shellSplit's along: x for the z walls (sign = the side: south -1,
+    // north +1), z for the x walls (west +1, east -1), x for the floor and
+    // the ceiling (+1) — along x up = outward on every face.
+    if (aAxis !== null) aAxis[w] = face ? (faceAxis === 0 ? 2 : 0) : -1;
+    if (aSign !== null) aSign[w] = face ? (faceAxis === 2 ? faceSide : faceAxis === 0 ? -faceSide : 1) : 0;
+  }
+  return geo;
+}
+
 /** Per-query contact with a set of target boxes: hit flag, count, nearest. */
 export const boxContact = standardNode<BoxContactParams, BoxContactInputs, BoxContactOutputs>({
   type: NODE,
   category: "point op",
   description:
-    "Asks, for every BOX on the `in` pin (the QUERIES), whether it meets any box on the `targets` pin, and writes the answer onto the query points as attributes: `hitAttr` a bool (any target met), `countAttr` an i32 (how many distinct targets), `targetAttr` an i32 (the index of the met target whose centre is nearest the centre of the query box as tested, -1 for none). Nothing else changes — same points, same order, same topology, every attribute carried — so the usual next step is a filter or a relabel on the flag. This is the CONTEXT QUERY of a split grammar (the occlusion query of the shape-grammar literature, and the box form of a point-in-volume or group-by-bounding-object test): is this window blocked by a neighbour or a chimney, does this bay cross any box of another set, is this room inside the lot. A BOX is a point's standard `boundsMin`/`boundsMax`, read in one of two FRAMES, chosen per input by `queryFrame` and `targetFrame`: \"world\" (the default) reads the two corners as WORLD coordinates and does not read P, rot or scale — the convention setBounds, splitBox and packBricks write, so grammar cells need nothing done to them; \"local\" reads them in the point's OWN frame, mapped through P, rot and scale exactly as spawnInstances places a mesh (world = P + rot * (scale * corner)), so a rotated box is tested as the ORIENTED box it is (rot is normalized first, so a non-unit quaternion places the box rigidly where spawnInstances' matrix would also scale it). THE MODE (`mode`) is the question: \"overlap\" — the two boxes CROSS: on every separating direction their extents overlap by more than zero, so boxes that only share a face, an edge or a corner do NOT overlap (two neighbouring grammar cells are not overlapping), while a zero-thickness box passing through a solid one does; \"touch\" — the same test closed, so sharing a face, edge or corner COUNTS (the party-wall neighbour); \"contain\" — the target lies wholly inside the query, boundary included; \"inside\" — the query lies wholly inside the target, boundary included. THE TESTS ARE EXACT for oriented boxes too — the separating-axis test on all fifteen axes for overlap and touch, the support extent along the outer box's three axes for contain and inside — with two stated approximations that apply only where a box is ROTATED: a cross axis of two edges within 1e-6 rad of parallel is skipped as rounding noise, which can only turn \"apart\" into \"meet\", across a gap of at most about 1e-6 of the boxes' size; and a gap or an overlap within 1e-12 of the pair's scale (its largest centre coordinate plus both boxes' half-extents), on any axis, is read as EXACT contact in both directions — \"touch\" accepts it and \"overlap\" rejects it — so two boxes under one P and rot that share a face share it under every rotation rather than as rounding decides. Axis-aligned pairs (every \"world\" box, and \"local\" ones with no rotation) are compared exactly. THE MARGINS move the QUERY box's faces before the test, per query point, in world units along the box's own three axes (scale is not applied to them), and leave the point's own bounds untouched. `margin` GROWS BOTH faces of each axis: margin 0.5 with \"touch\" asks \"is any target within half a unit of this box, measured per axis\" — a box-shaped neighbourhood, not a rounded one; a vec3 gives each axis its own reach, and a scalar field broadcasts to all three. `marginMin` and `marginMax` move ONE face each — the face on the boundsMin side and the face on the boundsMax side — signed, so they reach out of one face only (a wall whose outside is -z: marginMin vec(0, 0, 2) looks two units out of the front and not into the house behind it), shift the box (marginMin -d with marginMax +d moves it d), or carve the query down to a probe of its own: the window test is the bay's box with its outward face pushed half a stud out, its inward face pulled to meet it, and its sides and height pulled in to the opening, all as fields reading the bay's box names and attributes. The three add: the min face moves out by margin + marginMin, the max face by margin + marginMax. A NEGATIVE total shrinks the query, which is how a containment test tolerates a sliver (\"inside\" with margin -0.01), and a query shrunk past nothing on any axis is EMPTY and meets nothing in every mode. EXCLUSION: `excludeAttr` names a tuple-1 attribute present on BOTH inputs, and a target whose value EQUALS the query's is skipped — the bay that must not count its own wall carries its wall's id (write one with setAttribute before the split; splitBox carries every attribute onto its pieces), and siblings or one parent are excluded the same way. Numbers compare by value whatever their numeric type (NaN never equals anything); strings compare by text, so the two inputs' string tables may differ. `excludeSelf` skips target i for query i, for one cloud wired to BOTH pins (\"does this box overlap any OTHER box of its set\"); it is refused when the two inputs have different point counts, since they cannot then be one cloud. STAGING: query against an EARLIER stage — another branch's finished output, or an applyRules `trail` (the consumed ancestors, whose boxes are the blocks and storeys a later stage needs) — never against the frontier still being rewritten. DETERMINISM: nothing is drawn, nothing is accumulated, and the nearest target is the LOWEST INDEX among the hits whose squared centre distance ties with the least, within a band scaled like the rounding a centre carries (1e-12 of the least squared distance plus 2e-12 of it times the query centre's largest coordinate), so the answers do not depend on the order the targets arrive in beyond that index, and a rotation's rounding cannot break a true tie. COST: near linear in the two counts for any mix of sizes — the targets are binned by centre into one uniform grid per SIZE CLASS (radii doubling), and each query reads each class's grid within its own half-diagonal plus that class's largest, a bounding-sphere bound (two boxes can meet only if their centres are within the sum of their half-diagonals) that changes the cost, never the answer. Under a partitioned cook it is exact given every target whose centre lies within the query's half-diagonal (margins included, measured from the moved centre) plus the largest target's half-diagonal. ERRORS name the pin and point: a box that is not finite or is inside out (min above max), a missing bounds pair, a frame of \"local\" on points without P. CPU ONLY, and deliberately not a GPU adopter: the margin is a value that decides a contact, and a device-rounded margin one ulp off flips a touching pair — the same reason filterByExpression keeps its predicate on the CPU.",
+    "Asks, for every BOX on the `in` pin (the QUERIES), whether it meets any box on the `targets` pin, and writes the answer onto the query points as attributes: `hitAttr` a bool (any target met), `countAttr` an i32 (how many distinct targets), `targetAttr` an i32 (the index of the met target whose centre is nearest the centre of the query box as tested, -1 for none). Nothing else changes — same points, same order, same topology, every attribute carried — so the usual next step is a filter or a relabel on the flag. This is the CONTEXT QUERY of a split grammar (the occlusion query of the shape-grammar literature, and the box form of a point-in-volume or group-by-bounding-object test): is this window blocked by a neighbour or a chimney, does this bay cross any box of another set, is this room inside the lot. A BOX is a point's standard `boundsMin`/`boundsMax`, read in one of two FRAMES, chosen per input by `queryFrame` and `targetFrame`: \"world\" (the default) reads the two corners as WORLD coordinates and does not read P, rot or scale — the convention setBounds, splitBox and packBricks write, so grammar cells need nothing done to them; \"local\" reads them in the point's OWN frame, mapped through P, rot and scale exactly as spawnInstances places a mesh (world = P + rot * (scale * corner)), so a rotated box is tested as the ORIENTED box it is (rot is normalized first, so a non-unit quaternion places the box rigidly where spawnInstances' matrix would also scale it). THE MODE (`mode`) is the question: \"overlap\" — the two boxes CROSS: on every separating direction their extents overlap by more than zero, so boxes that only share a face, an edge or a corner do NOT overlap (two neighbouring grammar cells are not overlapping), while a zero-thickness box passing through a solid one does; \"touch\" — the same test closed, so sharing a face, edge or corner COUNTS (the party-wall neighbour); \"contain\" — the target lies wholly inside the query, boundary included; \"inside\" — the query lies wholly inside the target, boundary included. THE TESTS ARE EXACT for oriented boxes too — the separating-axis test on all fifteen axes for overlap and touch, the support extent along the outer box's three axes for contain and inside — with two stated approximations that apply only where a box is ROTATED: a cross axis of two edges within 1e-6 rad of parallel is skipped as rounding noise, which can only turn \"apart\" into \"meet\", across a gap of at most about 1e-6 of the boxes' size; and a gap or an overlap within 1e-12 of the pair's scale (its largest centre coordinate plus both boxes' half-extents), on any axis, is read as EXACT contact in both directions — \"touch\" accepts it and \"overlap\" rejects it — so two boxes under one P and rot that share a face share it under every rotation rather than as rounding decides. Axis-aligned pairs (every \"world\" box, and \"local\" ones with no rotation) are compared exactly. THE MARGINS move the QUERY box's faces before the test, per query point, in world units along the box's own three axes (scale is not applied to them), and leave the point's own bounds untouched. `margin` GROWS BOTH faces of each axis: margin 0.5 with \"touch\" asks \"is any target within half a unit of this box, measured per axis\" — a box-shaped neighbourhood, not a rounded one; a vec3 gives each axis its own reach, and a scalar field broadcasts to all three. `marginMin` and `marginMax` move ONE face each — the face on the boundsMin side and the face on the boundsMax side — signed, so they reach out of one face only (a wall whose outside is -z: marginMin vec(0, 0, 2) looks two units out of the front and not into the house behind it), shift the box (marginMin -d with marginMax +d moves it d), or carve the query down to a probe of its own: the window test is the bay's box with its outward face pushed half a stud out, its inward face pulled to meet it, and its sides and height pulled in to the opening, all as fields reading the bay's box names and attributes. The three add: the min face moves out by margin + marginMin, the max face by margin + marginMax. A NEGATIVE total shrinks the query, which is how a containment test tolerates a sliver (\"inside\" with margin -0.01), and a query shrunk past nothing on any axis is EMPTY and meets nothing in every mode. EXCLUSION: `excludeAttr` names a tuple-1 attribute present on BOTH inputs, and a target whose value EQUALS the query's is skipped — the bay that must not count its own wall carries its wall's id (write one with setAttribute before the split; splitBox carries every attribute onto its pieces), and siblings or one parent are excluded the same way. Numbers compare by value whatever their numeric type (NaN never equals anything); strings compare by text, so the two inputs' string tables may differ. `excludeSelf` skips target i for query i, for one cloud wired to BOTH pins (\"does this box overlap any OTHER box of its set\"); it is refused when the two inputs have different point counts, since they cannot then be one cloud. STAGING: query against an EARLIER stage — another branch's finished output, or an applyRules `trail` (the consumed ancestors, whose boxes are the blocks and storeys a later stage needs) — never against the frontier still being rewritten. DETERMINISM: nothing is drawn, nothing is accumulated, and the nearest target is the LOWEST INDEX among the hits whose squared centre distance ties with the least, within a band scaled like the rounding a centre carries (1e-12 of the least squared distance plus 2e-12 of it times the query centre's largest coordinate), so the answers do not depend on the order the targets arrive in beyond that index, and a rotation's rounding cannot break a true tie. COST: near linear in the two counts for any mix of sizes — the targets are binned by centre into one uniform grid per SIZE CLASS (radii doubling), and each query reads each class's grid within its own half-diagonal plus that class's largest, a bounding-sphere bound (two boxes can meet only if their centres are within the sum of their half-diagonals) that changes the cost, never the answer. Under a partitioned cook it is exact given every target whose centre lies within the query's half-diagonal (margins included, measured from the moved centre) plus the largest target's half-diagonal. ERRORS name the pin and point: a box that is not finite or is inside out (min above max), a missing bounds pair, a frame of \"local\" on points without P. CPU ONLY, and deliberately not a GPU adopter: the margin is a value that decides a contact, and a device-rounded margin one ulp off flips a touching pair — the same reason filterByExpression keeps its predicate on the CPU. THE PAIRS: `targetAttr` names ONE met target per query, which cannot say WHICH wall two rooms share; the second output `pairs` is the whole relation — ONE POINT PER (query, target) PAIR that met, exactly the pairs `countAttr` counts (so there are as many as its sum), ORDERED by query index and then target index whatever order the grids found them in, each carrying the two indices as i32 (`pairQueryAttr`, `pairTargetAttr`; transferByIndex with either as its `index` reads that box's own attributes onto the pair) and a `seed` hashed from this node's seed and the two indices. With BOTH frames \"world\" the pair's BOX (boundsMin/boundsMax) is the INTERSECTION of the query box as tested (margins applied) and the target box, and its P the centre of that box: under \"overlap\" the shared volume; under \"touch\" the SHARED REGION — the wall two rooms share comes out as that wall, FLAT on the axis they touch along and placed exactly on the target's face, a shared edge as a segment, a shared corner as a point; under \"contain\" the target's box, under \"inside\" the tested query's. Under \"touch\" (world frames) a pair that meets across exactly ONE face — flush on one axis, by the test's own comparison — also carries that face's frame in shellSplit's vocabulary, FROM THE QUERY'S SIDE: `pairOutwardAttr` the query's outward face normal toward the target ([1, 0, 0] when the target lies on the query's +x side), `pairOutAxisAttr` its axis, and `pairAlongAxisAttr` / `pairAlongSignAttr` the along run shellSplit gives a wall facing that way, so placeBox in its \"face\" frame centres a door on every shared wall; an edge or a corner contact, or boxes that cross, carry [0, 0, 0], -1, -1 and 0, as shellSplit writes on a cell with no face. With either frame \"local\" NO REGION is written — two oriented boxes intersect in a convex polytope, not a box — so boundsMin = boundsMax = P, the midpoint of the two boxes' centres as tested, and no face frame. ONE CLOUD ON BOTH PINS (excludeSelf): under \"overlap\" and \"touch\" each unordered pair appears TWICE, as (i, j) and (j, i), each seen from its own query's side, and filterByExpression on lt(attribute(\"queryIndex\"), attribute(\"targetIndex\")) keeps each once — exact in the world frame with no margins, where the test is one comparison mirrored; under \"contain\" and \"inside\" the relation is one-way, (i, j) without (j, i) unless the two boxes are equal, so that filter would drop every pair with i > j and is not the way to dedupe there. `pairs` is built only when something reads it (a connection or a declared output), and `out` is the same bytes either way. More than 1,048,576 pairs is refused, naming the mode and the margins.",
   inputs: [
     { name: "in", kind: "geometry" },
     { name: "targets", kind: "geometry" },
   ],
-  outputs: [{ name: "out", kind: "geometry" }],
+  outputs: [
+    { name: "out", kind: "geometry" },
+    { name: "pairs", kind: "geometry", onDemand: true },
+  ],
   params: {
     mode: {
       type: "enum",
@@ -865,8 +1066,44 @@ export const boxContact = standardNode<BoxContactParams, BoxContactInputs, BoxCo
       description:
         "OPT-IN: name of the i32 point attribute (tuple 1) receiving the INDEX, in the targets input, of the met target whose box centre is nearest the centre of the query box AS TESTED (after its margins), ties — distances equal within a band scaled like the centres' rounding (see the node description), so a rotation's rounding cannot decide one — to the lowest index, or -1 when none was met. Feed it to transferByIndex as `index` to read that target's own attributes — its label, its id, its colour. A reporting slot on the same terms as hitAttr. Empty (the default) writes none.",
     },
+    pairQueryAttr: {
+      type: "string",
+      default: PAIR_DEFAULT_NAMES.pairQueryAttr,
+      description:
+        "Name of the i32 point attribute on the `pairs` output receiving each pair's QUERY index — the ordinal of its box on the `in` pin. Required: the two indices are what a pair IS. The pairs are sorted by it first. Feed it to transferByIndex as `index`, with the queries as `source`, to read the query's own attributes (a room's label, its id). It may not be one of the standard point columns the cloud already carries (P, rot, scale, density, boundsMin, boundsMax, color, seed), nor a name another pair param uses.",
+    },
+    pairTargetAttr: {
+      type: "string",
+      default: PAIR_DEFAULT_NAMES.pairTargetAttr,
+      description:
+        "Name of the i32 point attribute on the `pairs` output receiving each pair's TARGET index — the ordinal of its box on the `targets` pin; within one query the pairs run in increasing target index. Required, and on the same terms as pairQueryAttr. With one cloud on both pins under \"overlap\" or \"touch\", lt(attribute(\"queryIndex\"), attribute(\"targetIndex\")) in a filterByExpression keeps each unordered pair once (\"contain\" and \"inside\" are one-way, so there it would drop pairs).",
+    },
+    pairOutwardAttr: {
+      type: "string",
+      default: PAIR_DEFAULT_NAMES.pairOutwardAttr,
+      description:
+        "Written under \"touch\" with both frames \"world\" only: name of the f32 tuple-3 point attribute on the `pairs` output receiving the QUERY's outward face normal toward the target when the two meet across exactly one face — one signed axis, [0, 0, 1] when the target lies on the query's +z side — and [0, 0, 0] for an edge or corner contact or boxes that cross. shellSplit's `outwardAttr` default and meaning, so placeBox and offsetBox read it in their \"face\" frame. Empty writes none.",
+    },
+    pairOutAxisAttr: {
+      type: "string",
+      default: PAIR_DEFAULT_NAMES.pairOutAxisAttr,
+      description:
+        "Written under \"touch\" with both frames \"world\" only: name of the i32 point attribute on the `pairs` output receiving the axis the two boxes touch across, 0 = x, 1 = y, 2 = z — the axis the shared region is flat on — or -1 when they do not meet across exactly one face. shellSplit's `outAxisAttr` default: 1 is a floor or a ceiling, so a filter on ne(attribute(\"outAxis\"), 1) * ge(attribute(\"outAxis\"), 0) keeps the walls. Empty writes none.",
+    },
+    pairAlongAxisAttr: {
+      type: "string",
+      default: PAIR_DEFAULT_NAMES.pairAlongAxisAttr,
+      description:
+        "Written under \"touch\" with both frames \"world\" only: name of the i32 point attribute on the `pairs` output receiving the shared face's ALONG axis as shellSplit writes it on a face of that orientation — x for a face across z, a floor or a ceiling; z for a face across x — or -1 with no single face. With pairAlongSignAttr and pairOutwardAttr it is the frame placeBox's \"face\" frame reads. Empty writes none.",
+    },
+    pairAlongSignAttr: {
+      type: "string",
+      default: PAIR_DEFAULT_NAMES.pairAlongSignAttr,
+      description:
+        "Written under \"touch\" with both frames \"world\" only: name of the i32 point attribute on the `pairs` output receiving the sign along runs, +1 or -1, as shellSplit writes it so that along x up = the query's outward — left to right as seen from the TARGET's side of the shared face, looking back at the query — or 0 with no single face. Empty writes none.",
+    },
   },
-  execute({ inputs, params, seed, checkCancelled }) {
+  execute({ inputs, params, seed, checkCancelled, readOutputs }) {
     // ---- params, decided ONCE: every string becomes a code here, and no
     // string reaches the pair loop.
     const modeName = canonicalOneOf(MODES, params.mode);
@@ -913,6 +1150,54 @@ export const boxContact = standardNode<BoxContactParams, BoxContactInputs, BoxCo
         }
       }
     }
+
+    // ---- the pairs, decided once: absent `readOutputs` (a direct execute
+    // call) builds every output, so skipping `pairs` is never the default.
+    // The names are checked whether or not the pin is read, so wiring it
+    // cannot turn a cooking graph into a refusal.
+    const buildPairs = readOutputs === undefined || readOutputs.has("pairs");
+    const pairParams = [
+      ["pairQueryAttr", params.pairQueryAttr],
+      ["pairTargetAttr", params.pairTargetAttr],
+      ["pairOutwardAttr", params.pairOutwardAttr],
+      ["pairOutAxisAttr", params.pairOutAxisAttr],
+      ["pairAlongAxisAttr", params.pairAlongAxisAttr],
+      ["pairAlongSignAttr", params.pairAlongSignAttr],
+    ] as const;
+    for (const [param, name] of pairParams.slice(0, 2)) {
+      if (name === "") {
+        throw new Error(
+          `${NODE}: param "${param}" is empty; the query and target indices are what a pair IS, so both are always written on the "pairs" output — give it a name (the default is "${PAIR_DEFAULT_NAMES[param]}").`,
+        );
+      }
+    }
+    for (let p = 0; p < pairParams.length; p++) {
+      const [param, name] = pairParams[p];
+      if (name !== "" && STANDARD_POINT_ATTRS.some((a) => a.name === name)) {
+        throw new Error(
+          `${NODE}: param "${param}" is "${name}", one of the standard point columns every "pairs" point already carries (${STANDARD_POINT_ATTRS.map((a) => a.name).join(", ")}) — writing the pair's ${param} there would overwrite what "${name}" means to every node downstream. Give it a name of its own, e.g. "${PAIR_DEFAULT_NAMES[param]}".`,
+        );
+      }
+      for (let r = p + 1; r < pairParams.length; r++) {
+        if (name !== "" && name === pairParams[r][1]) {
+          throw new Error(
+            `${NODE}: params "${param}" and "${pairParams[r][0]}" both name "${name}"; they are different columns of the "pairs" output and one name cannot hold both. Give one of them another name, or clear the optional one to write nothing.`,
+          );
+        }
+      }
+    }
+    const pairNames: PairNames = {
+      query: params.pairQueryAttr,
+      target: params.pairTargetAttr,
+      outward: params.pairOutwardAttr,
+      outAxis: params.pairOutAxisAttr,
+      alongAxis: params.pairAlongAxisAttr,
+      alongSign: params.pairAlongSignAttr,
+    };
+    // Both frames "world": every box is axis-aligned, so a pair's
+    // intersection is a box. Under "touch" a one-face contact has a frame.
+    const pairRegion = !qLocal && !tLocal;
+    const pairFrame = pairRegion && mode === TOUCH;
 
     // ---- geometry
     const src = requireGeometry(inputs, "in", NODE);
@@ -1023,6 +1308,7 @@ export const boxContact = standardNode<BoxContactParams, BoxContactInputs, BoxCo
     const cand: number[] = [];
     const hitJ: number[] = [];
     const hitD: number[] = [];
+    const pairs = buildPairs ? new PairBuffer() : null;
     for (let i = 0; i < n; i++) {
       if ((i & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
       if (qEmpty[i] === 1 || m === 0) continue;
@@ -1050,6 +1336,16 @@ export const boxContact = standardNode<BoxContactParams, BoxContactInputs, BoxCo
       hit[i] = c > 0 ? 1 : 0;
       count[i] = c;
       if (c === 0) continue;
+      if (pairs !== null) {
+        if (pairs.count + c > MAX_PAIRS) {
+          throw new Error(
+            `${NODE}: more than ${MAX_PAIRS} (query, target) pairs on the "pairs" output (${n} queries against ${m} targets, mode "${modeName}"); that is close to every box meeting every box, which a margin on the scale of the layout produces. Lower "margin", "marginMin" or "marginMax" to the reach you mean, narrow the sets with "excludeAttr", or leave "pairs" unwired and read "countAttr" / "targetAttr" instead.`,
+          );
+        }
+        // Copied and sorted inside the buffer: hitJ itself is left in the
+        // grids' order, which the nearest pass below reads with hitD.
+        pairs.push(i, hitJ);
+      }
       // Nearest, in two passes so the answer is a function of the SET of
       // hits and never of the order they were found in: the least distance,
       // then the lowest index among the hits within the tie band of it.
@@ -1069,6 +1365,12 @@ export const boxContact = standardNode<BoxContactParams, BoxContactInputs, BoxCo
     if (params.hitAttr !== "") (set.replace(params.hitAttr, "bool", 1, 0).writable() as Uint8Array).set(hit);
     if (params.countAttr !== "") (set.replace(params.countAttr, "i32", 1, 0).writable() as Int32Array).set(count);
     if (params.targetAttr !== "") (set.replace(params.targetAttr, "i32", 1, -1).writable() as Int32Array).set(nearest);
-    return { out: [makeGeometryItem(out)] };
+    return {
+      out: [makeGeometryItem(out)],
+      pairs:
+        pairs === null
+          ? []
+          : [makeGeometryItem(writePairs(pairs, pairNames, pairRegion, pairFrame, qc, qh, T, tgt, seed, checkCancelled))],
+    };
   },
 });

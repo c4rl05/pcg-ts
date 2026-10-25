@@ -630,6 +630,70 @@ export interface BoxContactParams {
    * @defaultValue `""`
    */
   targetAttr: string;
+  /**
+   * Name of the i32 point attribute on the `pairs` output receiving each pair's QUERY index
+   * — the ordinal of its box on the `in` pin. Required: the two indices are what a pair IS.
+   * The pairs are sorted by it first. Feed it to transferByIndex as `index`, with the
+   * queries as `source`, to read the query's own attributes (a room's label, its id). It may
+   * not be one of the standard point columns the cloud already carries (P, rot, scale,
+   * density, boundsMin, boundsMax, color, seed), nor a name another pair param uses.
+   *
+   * @defaultValue `"queryIndex"`
+   */
+  pairQueryAttr: string;
+  /**
+   * Name of the i32 point attribute on the `pairs` output receiving each pair's TARGET index
+   * — the ordinal of its box on the `targets` pin; within one query the pairs run in
+   * increasing target index. Required, and on the same terms as pairQueryAttr. With one
+   * cloud on both pins under "overlap" or "touch", lt(attribute("queryIndex"),
+   * attribute("targetIndex")) in a filterByExpression keeps each unordered pair once
+   * ("contain" and "inside" are one-way, so there it would drop pairs).
+   *
+   * @defaultValue `"targetIndex"`
+   */
+  pairTargetAttr: string;
+  /**
+   * Written under "touch" with both frames "world" only: name of the f32 tuple-3 point
+   * attribute on the `pairs` output receiving the QUERY's outward face normal toward the
+   * target when the two meet across exactly one face — one signed axis, [0, 0, 1] when the
+   * target lies on the query's +z side — and [0, 0, 0] for an edge or corner contact or
+   * boxes that cross. shellSplit's `outwardAttr` default and meaning, so placeBox and
+   * offsetBox read it in their "face" frame. Empty writes none.
+   *
+   * @defaultValue `"outward"`
+   */
+  pairOutwardAttr: string;
+  /**
+   * Written under "touch" with both frames "world" only: name of the i32 point attribute on
+   * the `pairs` output receiving the axis the two boxes touch across, 0 = x, 1 = y, 2 = z —
+   * the axis the shared region is flat on — or -1 when they do not meet across exactly one
+   * face. shellSplit's `outAxisAttr` default: 1 is a floor or a ceiling, so a filter on
+   * ne(attribute("outAxis"), 1) * ge(attribute("outAxis"), 0) keeps the walls. Empty writes
+   * none.
+   *
+   * @defaultValue `"outAxis"`
+   */
+  pairOutAxisAttr: string;
+  /**
+   * Written under "touch" with both frames "world" only: name of the i32 point attribute on
+   * the `pairs` output receiving the shared face's ALONG axis as shellSplit writes it on a
+   * face of that orientation — x for a face across z, a floor or a ceiling; z for a face
+   * across x — or -1 with no single face. With pairAlongSignAttr and pairOutwardAttr it is
+   * the frame placeBox's "face" frame reads. Empty writes none.
+   *
+   * @defaultValue `"alongAxis"`
+   */
+  pairAlongAxisAttr: string;
+  /**
+   * Written under "touch" with both frames "world" only: name of the i32 point attribute on
+   * the `pairs` output receiving the sign along runs, +1 or -1, as shellSplit writes it so
+   * that along x up = the query's outward — left to right as seen from the TARGET's side of
+   * the shared face, looking back at the query — or 0 with no single face. Empty writes
+   * none.
+   *
+   * @defaultValue `"alongSign"`
+   */
+  pairAlongSignAttr: string;
 }
 
 /**
@@ -640,7 +704,7 @@ export type BoxContactInputs = "in" | "targets";
 /**
  * The output pin names of the `boxContact` node type.
  */
-export type BoxContactOutputs = "out";
+export type BoxContactOutputs = "out" | "pairs";
 
 /**
  * Params of the `brickConnectivity` node type.

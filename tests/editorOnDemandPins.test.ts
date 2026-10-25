@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { DataItem, SerializedGraph } from "pcg-ts";
 import { EditorController, type RenderInfo } from "../editor/controller.js";
+import { Graph, boxContact, fieldFromJson, pointGrid, serializeGraph, setBounds } from "../src/index.js";
 
 function corpus(name: string): string {
   return readFileSync(new URL(`../graphs/${name}.json`, import.meta.url), "utf8");
@@ -90,6 +91,44 @@ describe("on-demand pins in the editor's auto policy", () => {
     const { info } = await rendered;
     expect(info.outputs).toContain("twin.out");
     expect(info.outputs).not.toContain("twin.rest");
+  });
+
+  it("boxContact's `pairs` is on demand too: its `out` is declared, its pairs are not, until a file declares them", async () => {
+    // A 2x2 plan of rooms touching itself. Built here rather than taken from
+    // the corpus: the corpus' one boxContact sits inside an applyRules body,
+    // where the auto policy never looks.
+    const g = new Graph(1);
+    const grid = g.add(pointGrid, { countX: 2, countY: 1, countZ: 2, spacing: [4, 4, 4] }, "grid");
+    const rooms = g.add(
+      setBounds,
+      {
+        boundsMin: fieldFromJson({ fn: "position" }),
+        boundsMax: fieldFromJson({ fn: "add", args: [{ fn: "position" }, [4, 3, 4]] }),
+      },
+      "rooms",
+    );
+    const probe = g.add(boxContact, { mode: "touch", excludeSelf: true }, "probe");
+    g.connect(grid, "out", rooms, "in");
+    g.connect(rooms, "out", probe, "in");
+    g.connect(rooms, "out", probe, "targets");
+    const doc = serializeGraph(g);
+
+    const plain = withRender();
+    const rendered = plain.next();
+    expect(plain.c.importText(JSON.stringify(doc))).not.toHaveProperty("error");
+    const first = await rendered;
+    expect(first.info.outputs).toContain("probe.out");
+    expect(first.info.outputs).not.toContain("probe.pairs");
+    expect(points(first.items)).toBe(4);
+
+    // Declared by the file: kept, and the 12 ordered pairs are drawn beside the rooms.
+    const declared = withRender();
+    const again = declared.next();
+    const withPairs = { ...doc, outputs: [...(doc.outputs ?? []), { id: "probe", pin: "pairs", name: "pairs" }] };
+    expect(declared.c.importText(JSON.stringify(withPairs))).not.toHaveProperty("error");
+    const second = await again;
+    expect(second.info.outputs).toContain("pairs");
+    expect(points(second.items)).toBe(4 + 12);
   });
 
   it("a file that declares `rest` itself keeps the declaration, and it is drawn", async () => {
