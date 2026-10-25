@@ -109,8 +109,29 @@ describe("the committed site build covers every graph", () => {
       const ch = text[i];
       if (ch === "`") break;
       if (ch === "\\") {
+        // A template literal's escapes, cooked the way JavaScript cooks
+        // them. The bundler writes a graph saved with CRLF line endings as
+        // `\r\n`; this once re-emitted every escape but \\, \` and \$ as the
+        // literal text "${next}", which broke the JSON, and the chunk was
+        // skipped below as "not a JSON-carrying chunk" -- 48 of them, whose
+        // CURRENT-text check therefore never ran.
         const next = text[++i];
-        out += next === "\\" || next === "`" || next === "$" ? next : `\${next}`;
+        const simple: Record<string, string> = { n: "\n", r: "\r", t: "\t", b: "\b", f: "\f", v: "\v", "0": "\0" };
+        if (next in simple) out += simple[next];
+        else if (next === "\n") continue; // line continuation
+        else if (next === "\r") {
+          if (text[i + 1] === "\n") i++;
+        } else if (next === "x") {
+          out += String.fromCharCode(Number.parseInt(text.slice(i + 1, i + 3), 16));
+          i += 2;
+        } else if (next === "u" && text[i + 1] === "{") {
+          const close = text.indexOf("}", i);
+          out += String.fromCodePoint(Number.parseInt(text.slice(i + 2, close), 16));
+          i = close;
+        } else if (next === "u") {
+          out += String.fromCharCode(Number.parseInt(text.slice(i + 1, i + 5), 16));
+          i += 4;
+        } else out += next; // \\, \`, \$ and any other character stand for themselves
         continue;
       }
       out += ch;
