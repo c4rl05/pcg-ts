@@ -8267,7 +8267,7 @@
             ]
           },
           "then": {
-            "description": "Sets the standard per-point bounds attributes: writes boundsMin and boundsMax (f32 tuple 3, world units) on every point, creating the attributes when missing. Downstream nodes and spawners read these as each point's axis-aligned extent.",
+            "description": "Sets the standard per-point bounds attributes: writes boundsMin and boundsMax (f32 tuple 3, world units) on every point, creating the attributes when missing. Downstream nodes and spawners read these as each point's axis-aligned extent. A GRAMMAR'S FIRST CELL (the box splitBox, shellSplit, placeBox or applyRules starts from) need not come from here: every point a source emits already carries a box, the zero box at the world ORIGIN whatever its P, and offsetBox sizes it directly — `marginMax` [w, h, d] grows it into a w x h x d cell from the origin (how the brick house makes its lot), `margin` [w/2, h/2, d/2] one centred on the origin — and transformBox's `translate` moves it. Use setBounds when it is the two corners you know.",
             "properties": {
               "params": {
                 "additionalProperties": false,
